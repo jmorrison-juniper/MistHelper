@@ -1,0 +1,9 @@
+mistapi
+websocket-client
+pyte
+requests
+prettytable
+tqdm
+sshkeyboard
+numpy
+python-dotenv

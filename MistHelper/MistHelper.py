@@ -152,20 +152,22 @@ def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
     # Log the table as a string
     logging.info("\n" + table.get_string())
 
-def interactive_fetch_device_data_to_csv(fetch_function, filename, description, device_type="all"):
+def interactive_fetch_device_data_to_csv(fetch_function, filename, description, device_type="all", site_id=None, device_id=None):
     """
-    Prompts user to select a site and device, fetches data using the provided function,
-    and writes the result to a CSV file.
+    Fetches data for a specific device (by site_id/device_id if provided, else prompts user),
+    writes the result to a CSV file, and displays it as a PrettyTable.
     """
-    # Prompt user to select a site
-    site_id = prompt_select_site_id_from_csv()
+    # Use provided site_id or prompt user
     if not site_id:
-        return
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            return
 
-    # Prompt user to select a device at the selected site
-    device_id = prompt_select_device_id_from_inventory(site_id, device_type=device_type)
+    # Use provided device_id or prompt user
     if not device_id:
-        return
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type=device_type)
+        if not device_id:
+            return
 
     # Log the action being performed
     logging.info(f"{description} for device ID: {device_id}")
@@ -243,22 +245,30 @@ def process_and_merge_csv_for_sfp_address():
     print(f"✅ Merged data written to {output_file}")
 
 def get_cached_or_prompted_org_id():
+    import os
     global org_id
+    # 1. Check global variable
     if org_id:
         logging.info(f"✅ Using org_id from global variable: {org_id}")
         return org_id
-    # Try to load from .env if not already set
+    # 2. Check environment variable (set by dotenv or OS)
+    org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
+    if org_id_env:
+        org_id = org_id_env
+        logging.info(f"✅ Loaded org_id from environment: {org_id}")
+        return org_id
+    # 3. Fallback: Try to load from .env manually (rarely needed)
     try:
         with open(".env", "r") as f:
             for line in f:
-                if line.strip().startswith("org_id="):  # <-- updated line
+                if line.strip().startswith("org_id="):
                     org_id = line.strip().split("=", 1)[1].strip().strip('"')
         if org_id:
             logging.info(f"✅ Loaded org_id from .env: {org_id}")
             return org_id
     except FileNotFoundError:
         logging.warning("⚠️ .env file not found.")
-    # Prompt if still not set
+    # 4. Prompt if still not set
     logging.info("🔍 No org_id found in .env or CLI. Prompting user...")
     org_id_list = mistapi.cli.select_org(apisession)
     org_id = org_id_list[0]
@@ -269,10 +279,12 @@ def flatten_dict_recursively(d, parent_key='', sep='_'):
     Recursively flattens a nested dictionary, joining keys with `sep`.
     Lists of dicts are flattened with indexed keys.
     Non-dict lists are joined as comma-separated strings.
+    All keys are converted to strings for CSV/JSON compatibility.
     """
     items = []
     for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        k_str = str(k)
+        new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
         # If the value is a dictionary, recurse
         if isinstance(v, dict):
             items.extend(flatten_dict_recursively(v, new_key, sep=sep).items())
@@ -341,14 +353,14 @@ def flatten_nested_fields_in_list(data):
 
 def convert_list_values_to_csv_strings(data):
     """
-    Converts all list values in a list of dictionaries to comma-separated strings.
+    Converts all list, tuple, or set values in a list of dictionaries to comma-separated strings.
     Adds debug logging for each conversion.
     """
     for entry in data:
         for key, value in entry.items():
-            if isinstance(value, list):
+            if isinstance(value, (list, tuple, set)):
                 # Log the conversion for debugging
-                logging.debug(f"Converting list at key '{key}' to string: {value}")
+                logging.debug(f"Converting list/tuple/set at key '{key}' to string: {value}")
                 entry[key] = ','.join(map(str, value))
     return data
 
@@ -363,7 +375,8 @@ def get_all_unique_dict_keys(data):
         fields.update(entry.keys())
     # Log the discovered unique keys for debugging
     logging.debug(f"Discovered unique keys: {fields}")
-    return sorted(fields)
+    # Convert all keys to strings for sorting and CSV compatibility
+    return sorted(str(f) for f in fields)
 
 def escape_multiline_strings_for_csv(data):
     """
@@ -766,16 +779,17 @@ def interactive_display_site_inventory():
     else:
         logging.warning("No site selected or invalid input provided for site selection.")
 
-def interactive_display_device_stats():
+def interactive_display_device_stats(site_id=None, device_id=None):
     """
-    Prompts user to select a device and displays its detailed statistics.
+    Fetches and displays detailed statistics for a specific device (by site_id/device_id if provided, else prompts user).
     """
     logging.info("Prompting user to select a device for detailed statistics view...")
-    # Call the interactive_fetch_device_data_to_csv helper with the appropriate Mist API function
     interactive_fetch_device_data_to_csv(
         fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
         filename="DeviceStats.csv",
-        description="Fetching detailed stats"
+        description="Fetching detailed stats",
+        site_id=site_id,
+        device_id=device_id
     )
     logging.info("Completed interactive_display_device_stats execution.")
 
@@ -1630,6 +1644,7 @@ def run_interactive_shell(shell_url, debug=False):
     threading.Thread(target=_ws_in).start()
 
     # Wake up Juniper SSR prompt
+   
     time.sleep(1)
     ws.send_binary(bytearray(map(ord, "\00\n\n")))
     if debug:
@@ -2502,6 +2517,7 @@ menu_actions = {
     "41": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
 }
 
+
 def main():
     # --- CLI Argument Parsing ---
     parser = argparse.ArgumentParser(description="MistHelper CLI Interface")
@@ -2527,7 +2543,8 @@ def main():
         site_id = None
         if args.site:
             logging.info(f"Resolving site name '{args.site}' to site_id...")
-            sites = mistapi.get_all(mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id), apisession)
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
             site_lookup = {site["name"]: site["id"] for site in sites}
             site_id = site_lookup.get(args.site)
             if not site_id:
@@ -2540,7 +2557,8 @@ def main():
         device_id = None
         if args.device and site_id:
             logging.info(f"Resolving device name '{args.device}' at site_id '{site_id}'...")
-            devices = mistapi.get_all(mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id), apisession)
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id)
+            devices = mistapi.get_all(response=response, mist_session=apisession)
             device_lookup = {dev["name"]: dev["id"] for dev in devices}
             device_id = device_lookup.get(args.device)
             if not device_id:
@@ -2589,6 +2607,7 @@ def main():
         logging.warning(f"Invalid selection '{iwant}' entered by user.")
         print("Invalid selection. Please try again.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
