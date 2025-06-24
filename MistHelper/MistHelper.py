@@ -426,19 +426,35 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     """
     Fetches data using the provided API call, processes it (flattening, sorting, escaping),
     writes it to a CSV file, and displays it in a PrettyTable. Adds detailed logging.
+    Handles API rate limiting (HTTP 429) by saving partial results and exiting gracefully.
     """
+    import http.client
+
     logging.info(f"Starting data fetch: {title}")
     print(title)
     org_id = get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
     smoothed = []
 
+    rawdata = []
     try:
         # Call the API and get all paginated results
         response = api_call(apisession, org_id, **kwargs)
         smoothed, delay = get_rate_limited_delay(smoothed)
         time.sleep(delay)
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        try:
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        except Exception as e:
+            # Handle HTTP 429 (rate limit exceeded)
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
+                if rawdata:
+                    write_dict_list_to_csv(rawdata, filename)
+                    logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
+                return
+            else:
+                raise
 
         if rawdata is None:
             logging.warning(f"⚠️ No data returned from API for {title}. Skipping.")
@@ -482,6 +498,10 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
 
     except Exception as e:
         logging.error(f"❌ Error during data fetch for {title}: {e}")
+        # Always save whatever data was collected so far
+        if rawdata:
+            write_dict_list_to_csv(rawdata, filename)
+            logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
 
 def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
     """
@@ -666,7 +686,7 @@ def export_recent_device_events_to_csv():
     org_id = get_cached_or_prompted_org_id()
     # Call the Mist API to search for device events in the last 24 hours
     response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        apisession, org_id, device_type="all", limit=1000, last_by="-24h"
+        apisession, org_id, device_type="all", limit=1000, duration="24h"
     )
     # Retrieve all paginated results
     rawdata = mistapi.get_all(response=response, mist_session=apisession)
@@ -679,19 +699,69 @@ def export_recent_device_events_to_csv():
     if events:
         logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
 
-def export_audit_logs_to_csv():
+def export_all_org_device_events_52w_to_csv():
+    """
+    Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
+    Fetches all data into memory, then writes to CSV in one operation.
+    """
+    logging.info("Exporting all org device events from the last 52 weeks...")
+    org_id = get_cached_or_prompted_org_id()
+    # Use Mist API to search for device events in the last 52 weeks
+    # Use duration=52w, do NOT use last_by
+    response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+        apisession, org_id, device_type="all", limit=100, duration="52w"
+    )
+    # Retrieve all paginated results into memory
+    events = mistapi.get_all(response=response, mist_session=apisession)
+    logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
+    # Flatten and sanitize for CSV
+    events = flatten_nested_fields_in_list(events)
+    events = escape_multiline_strings_for_csv(events)
+    # Write all data to CSV in one operation
+    write_dict_list_to_csv(events, "OrgDeviceEvents_52w.csv")
+    logging.info("✅ All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+
+def export_audit_logs_to_csv(full_history=False, duration=None):
     """
     Export organization audit logs to OrgAuditLogs.csv.
-    Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+    Fetches all pages using mistapi.get_all.
+    If full_history is True, pulls all audit logs (start=0).
+    If False, pulls only the last 24 hours.
+    If duration is provided, uses it as the duration parameter.
     """
     logging.info("Starting export of organization audit logs...")
-    fetch_and_display_api_data(
-        title="List Audit Logs:",
-        api_call=mistapi.api.v1.orgs.logs.listOrgAuditLogs,
-        filename="OrgAuditLogs.csv",
-        limit=1000
-    )
+    org_id = get_cached_or_prompted_org_id()
+
+    # Always include limit=1000 to reduce number of API calls
+    kwargs = {"limit": 1000}
+
+    if duration:
+        kwargs["duration"] = duration
+        logging.info(f"Exporting audit logs for duration: {duration}")
+    elif not full_history:
+        end_time = int(time.time())
+        start_time = end_time - 24 * 3600
+        kwargs["start"] = start_time
+        kwargs["end"] = end_time
+        logging.info("Exporting only last 24 hours of audit logs.")
+    else:
+        kwargs["start"] = 0
+        logging.info("Exporting full audit log history (start=0).")
+
+    # Call the API and fetch all pages
+    response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
+    rawdata = mistapi.get_all(response=response, mist_session=apisession)
+
+    if not rawdata:
+        logging.warning("⚠️ No audit logs returned from API.")
+        return
+
+    # Flatten and sanitize for CSV
+    data = flatten_nested_fields_in_list(rawdata)
+    data = escape_multiline_strings_for_csv(data)
+    write_dict_list_to_csv(data, "OrgAuditLogs.csv")
     logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
+
 
 def export_all_sites_to_csv():
     """
@@ -1574,6 +1644,7 @@ def create_shell_session(site_id, device_id):
     try:
         resp = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device_id)
         shell_data = resp.data
+
         return shell_data.get("url")
     except Exception as e:
         print(f"❌ Failed to create shell session: {e}")
@@ -1621,7 +1692,7 @@ def run_interactive_shell(shell_url, debug=False):
                 "enter": "\n", "space": " ", "tab": "\t",
                 "up": "\x00\x1b[A", "down": "\x00\x1b[B",
                 "left": "\x00\x1b[D", "right": "\x00\x1b[C",
-                "backspace": "\x08"
+                               "backspace": "\x08"
             }
             if key == "~":
                 print('\n## Exit from shell ##')
@@ -2468,7 +2539,9 @@ menu_actions = {
     "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
     "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
-    "3": (export_audit_logs_to_csv, "Export audit logs for the organization"),
+    "2a": (export_all_org_device_events_52w_to_csv, "Export all org device events from the last 52 weeks"),
+    "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
+    "3a": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "Export ALL audit logs for the organization (last 52 weeks)"),
 
     # 📚 Event & Alarm Definitions
     "4": (export_nac_event_definitions_to_csv, "Export NAC (Network Access Control) event definitions"),

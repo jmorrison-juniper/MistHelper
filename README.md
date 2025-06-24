@@ -32,7 +32,7 @@ MistHelper is a comprehensive Python CLI tool for interacting with the Juniper M
 
 1. Clone this repository:
    ```sh
-   git clone https://github.com/yourusername/MistHelper.git
+   git clone https://github.com/jmorrison-juniper/Code.git
    cd MistHelper
    ```
 2. Create a `.env` file in the project directory with your Mist API credentials:
@@ -79,7 +79,9 @@ python MistHelper.py --menu 1 --org your_org_id
 | 0      | Select a site (used by other functions) |
 | 1      | Export all organization alarms from the past day |
 | 2      | Export all device events from the past 24 hours |
+| 2a     | Export all org device events from the last 52 weeks |
 | 3      | Export audit logs for the organization |
+| 3a     | Export ALL audit logs for the organization (last 52 weeks) |
 | ...    | ... (see script for full list) |
 
 For a full list of options, run the script without arguments.
