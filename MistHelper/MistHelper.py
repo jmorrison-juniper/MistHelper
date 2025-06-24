@@ -684,9 +684,12 @@ def export_recent_device_events_to_csv():
     """
     logging.info("Search Org Device Events:")
     org_id = get_cached_or_prompted_org_id()
+    # Calculate start and end epoch times for the last 24 hours
+    end_time = int(time.time())
+    start_time = end_time - 24 * 3600
     # Call the Mist API to search for device events in the last 24 hours
     response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        apisession, org_id, device_type="all", limit=1000, duration="24h"
+        apisession, org_id, device_type="all", limit=1000, start=start_time, end=end_time
     )
     # Retrieve all paginated results
     rawdata = mistapi.get_all(response=response, mist_session=apisession)
@@ -1615,6 +1618,7 @@ def export_switch_vc_stats_to_csv():
         table = PrettyTable()
         summary_fields = ["name", "mac", "model", "serial", "site_id", "vc_mac", "status", "members_0_vc_role", "members_1_vc_role"]
         table.field_names = [f for f in summary_fields if f in all_vc_stats[0]]
+
         for row in all_vc_stats:
             table.add_row([row.get(f, "") for f in table.field_names])
         logging.info("\n" + table.get_string())
@@ -2539,9 +2543,9 @@ menu_actions = {
     "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
     "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
-    "2a": (export_all_org_device_events_52w_to_csv, "Export all org device events from the last 52 weeks"),
+    "2a": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
     "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
-    "3a": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "Export ALL audit logs for the organization (last 52 weeks)"),
+    "3a": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
 
     # 📚 Event & Alarm Definitions
     "4": (export_nac_event_definitions_to_csv, "Export NAC (Network Access Control) event definitions"),
