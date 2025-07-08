@@ -765,7 +765,6 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
     write_dict_list_to_csv(data, "OrgAuditLogs.csv")
     logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
 
-
 def export_all_sites_to_csv():
     """
     Fetches and exports the list of all sites in the organization to SiteList.csv.
@@ -2083,7 +2082,7 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
         print(f"❌ Error during shell session: {e}")
 
 def export_gateway_templates_to_csv():
-    """
+    """template_lookup = {t["id"]: t.get("name", "Unknown") for t in templates if "id" in t}
     Fetches and exports all gateway templates in the organization to OrgGatewayTemplates.csv.
     """
     logging.info("Starting export of gateway templates...")
@@ -2095,61 +2094,6 @@ def export_gateway_templates_to_csv():
         limit=1000
     )
     logging.info("✅ Gateway templates exported to OrgGatewayTemplates.csv.")
-
-
-def export_gateways_with_wan_overrides_to_csv():
-    """
-    Generates a CSV report of gateways with overridden WAN ports based on
-    non-empty 'port_config_ge-0/0/*' fields in AllSiteGatewayConfigs.csv.
-    Output includes: site name, gateway template name, gateway device name,
-    and a list of overridden ports.
-    """
-    logging.info("🔍 Generating WAN override report from AllSiteGatewayConfigs.csv...")
-
-    # Ensure required CSVs are fresh
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
-    check_and_generate_csv("SiteList_ListAPI.csv", export_all_sites_list_to_csv)
-
-    # Load data
-    with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
-        configs = list(csv.DictReader(f))
-    with open("SiteList_ListAPI.csv", encoding="utf-8") as f:
-        sites = list(csv.DictReader(f))
-
-    # Build lookup for site names and gateway template names
-    site_lookup = {s["id"]: s.get("name", "Unknown") for s in sites if "id" in s}
-    template_lookup = {s["gatewaytemplate_id"]: s.get("gatewaytemplate_id") for s in sites if "gatewaytemplate_id" in s}
-
-    overrides = []
-
-    for row in configs:
-        overridden_ports = [
-            col for col in row
-            if col.startswith("port_config_ge-0/0/") and row[col].strip() not in ["", "null", "None"]
-        ]
-        if overridden_ports:
-            site_id = row.get("site_id")
-            site_name = site_lookup.get(site_id, "Unknown")
-            template_id = row.get("gatewaytemplate_id") or row.get("template_id")
-            template_name = template_lookup.get(template_id, "Unknown")
-            device_name = row.get("name", "Unknown")
-
-            overrides.append({
-                "site_name": site_name,
-                "gateway_template_name": template_name,
-                "gateway_device_name": device_name,
-                "overridden_ports": ", ".join(overridden_ports)
-            })
-
-    # Write to CSV
-    output_file = "GatewaysWithWANOverrides.csv"
-    with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["site_name", "gateway_template_name", "gateway_device_name", "overridden_ports"])
-        writer.writeheader()
-        writer.writerows(overrides)
-
-    logging.info(f"✅ WAN override report written to {output_file} with {len(overrides)} entries.")
-
 
 def show_dhcp_security_binding():
     """
@@ -2654,6 +2598,65 @@ def export_gateway_templates_to_csv():
     logging.info("✅ Gateway templates exported to OrgGatewayTemplates.csv")
     print("✅ Gateway templates exported to OrgGatewayTemplates.csv")
 
+def export_gateways_with_wan_overrides_to_csv(fast=False):
+    """
+    Generates a CSV report of gateways with overridden WAN ports based on
+    non-empty 'port_config_ge-0/0/*' fields in AllSiteGatewayConfigs.csv.
+    Uses SiteList_ListAPI.csv and OrgGatewayTemplates.csv to resolve template names.
+    """
+    logging.info("🔍 Generating WAN override report from AllSiteGatewayConfigs.csv...")
+
+    # Ensure required CSVs are fresh
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
+    check_and_generate_csv("SiteList_ListAPI.csv", export_all_sites_list_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+
+    # Load data
+    with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+        configs = list(csv.DictReader(f))
+    with open("SiteList_ListAPI.csv", encoding="utf-8") as f:
+        sites = list(csv.DictReader(f))
+    with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
+        templates = list(csv.DictReader(f))
+
+    # Build lookup dictionaries
+    site_lookup = {
+        s.get("id", "").strip(): s.get("gatewaytemplate_id", "").strip().lower()
+        for s in sites if s.get("id") and s.get("gatewaytemplate_id")
+    }
+    template_lookup = {
+        t.get("id", "").strip().lower(): t.get("name", "Unknown").strip()
+        for t in templates if t.get("id") and t.get("name")
+    }
+
+    overrides = []
+    for row in configs:
+        overridden_ports = [
+            col for col in row
+            if col.startswith("port_config_ge-0/0/")
+            and row[col].strip().lower() not in ["", "null", "none"]
+        ]
+        if overridden_ports:
+            device_name = row.get("name", "").strip()
+            site_id = row.get("site_id", "").strip()
+            template_id = site_lookup.get(site_id, "").lower()
+            template_name = template_lookup.get(template_id, "Unknown")
+
+            overrides.append({
+                "gateway_device_name": device_name,
+                "gateway_template_name": template_name,
+                "overridden_ports": ", ".join(overridden_ports)
+            })
+
+    # Write to CSV
+    output_file = "GatewaysWithWANOverrides.csv"
+    with open(output_file, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["gateway_device_name", "gateway_template_name", "overridden_ports"])
+        writer.writeheader()
+        writer.writerows(overrides)
+
+    logging.info(f"✅ WAN override report written to {output_file} with {len(overrides)} entries.")
+
 menu_actions = {
     # 🗂️ Setup & Core Logs
     "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
@@ -2710,9 +2713,8 @@ menu_actions = {
     "41": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "42": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
     "43": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
-    "44": (export_gateways_with_wan_overrides_to_csv, "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)"),
+    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)"),
 }
-
 
 def main():
     # --- CLI Argument Parsing ---
@@ -2803,7 +2805,6 @@ def main():
         logging.warning(f"Invalid selection '{iwant}' entered by user.")
         print("Invalid selection. Please try again.")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
