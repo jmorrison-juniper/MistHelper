@@ -6,12 +6,13 @@
 ### If i send you code that is missing comments and you can confidently show me what the code does, please add comments to the code. ##
 ### Keep all functions and classes named whith long descriptive names that are easy to understand and similar to the rest of the names in the codebase. ##
 
-import subprocess
 import sys
+import logging
+import concurrent.futures
 
+# List of required packages (pip names)
 required_packages = [
     "mistapi",
-    "csv",  # built-in, safe to include
     "websocket-client",
     "pyte",
     "requests",
@@ -22,17 +23,67 @@ required_packages = [
     "python-dotenv"
 ]
 
-for package in required_packages:
-    try:
-        if package in {"websocket-client"}:
-            __import__("websocket")
-        elif package == "python-dotenv":
-            __import__("dotenv")
-        else:
-            __import__(package)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# Mapping from pip package name to import name (if different)
+import_name_map = {
+    "websocket-client": "websocket",
+    "python-dotenv": "dotenv",
+    "prettytable": "prettytable",
+    "tqdm": "tqdm",
+    "sshkeyboard": "sshkeyboard",
+    "numpy": "numpy",
+    "mistapi": "mistapi",
+    "pyte": "pyte",
+    "requests": "requests"
+}
 
+def ensure_package(package):
+    """
+    Ensures a single package is installed and up to date.
+    """
+    import_name = import_name_map.get(package, package)
+    try:
+        _ = __import__(import_name)
+        try:
+            from importlib.metadata import version
+            installed_version = version(import_name)
+        except Exception:
+            installed_version = "unknown"
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", package],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def ensure_latest_versions_with_status(packages):
+    """
+    Checks if each package is installed and up to date.
+    Installs or upgrades as needed, showing a status bar.
+    Uses multithreading for faster processing.
+    """
+    print("🔍 Checking and updating dependencies...", end="", flush=True)
+    total = len(packages)
+    completed = [0]
+
+    def update_status():
+        print(f"\r🔍 Checking and updating dependencies... ({completed[0]}/{total})", end="", flush=True)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, total)) as executor:
+        futures = []
+        for package in packages:
+            futures.append(executor.submit(ensure_package, package))
+        for future in concurrent.futures.as_completed(futures):
+            completed[0] += 1
+            update_status()
+    print("\r✅ Dependencies are ready.                      ")
+
+# Run the version check and upgrade for all dependencies with status bar
+import subprocess
+ensure_latest_versions_with_status(required_packages)
+
+# Import all dependencies after ensuring installation
 import mistapi, csv, ast, json, time, logging, os, argparse, sys, websocket, threading, re, sys, shutil, pyte, inspect, requests
 from prettytable import PrettyTable
 from tqdm import tqdm
@@ -445,6 +496,9 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         try:
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
         except Exception as e:
+            # Remove references to device_id and site_id, which are not defined in this scope
+            logging.error(f"Exception occurred during conversion to virtual MAC: {e}")
+            print(f"❌ Exception occurred during conversion: {e}")
             # Handle HTTP 429 (rate limit exceeded)
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
@@ -1595,10 +1649,10 @@ def export_switch_vc_stats_to_csv():
     # Ensure OrgInventory.csv is fresh
     check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv, freshness_minutes=15)
 
-    # Load OrgInventory.csv and filter for switches
+    # Load OrgInventory.csv and filter for switches that are virtual chassis (`vc_mac` present and not empty)
     with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
-        switches = [row for row in reader if row.get("type") == "switch"]
+        switches = [row for row in reader if row.get("type") == "switch" and row.get("vc_mac", "").strip()]
 
     if not switches:
         logging.warning("No switches found in OrgInventory.csv.")
@@ -2657,6 +2711,76 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
 
     logging.info(f"✅ WAN override report written to {output_file} with {len(overrides)} entries.")
 
+def convert_virtual_chassis_to_virtual_mac():
+    """
+    Presents a list of switches that are virtual chassis, lets the user select one,
+    and calls the Mist API to convert the device to a virtual MAC.
+    """
+    # Ensure OrgInventory.csv is fresh
+    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv, freshness_minutes=15)
+
+    # Load OrgInventory.csv and filter for switches with a non-empty id 
+    with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
+        reader = list(csv.DictReader(file))
+        switches = [
+            row for row in reader
+            if row.get("type") == "switch" and row.get("id", "").strip()
+        ]
+
+    if not switches:
+        print("No virtual chassis switches found in OrgInventory.csv.")
+        logging.warning("No virtual chassis switches found in OrgInventory.csv.")
+        return
+
+    # Display indexed list to user
+    print("\nAvailable Virtual Chassis Switches:")
+    index_to_device = {}
+    name_to_device = {}
+    for idx, sw in enumerate(switches):
+        print(f"[{idx}] {sw.get('name', ''):20} MAC: {sw.get('mac', ''):17} Model: {sw.get('model', ''):10} Serial: {sw.get('serial', ''):15} ID: {sw.get('id', '')}")
+        index_to_device[idx] = sw
+        name_to_device[sw.get("name", "")] = sw
+
+    user_input = input("\nEnter the index or switch name to convert to virtual MAC: ").strip()
+
+    # Resolve user input
+    selected = None
+    if user_input.isdigit():
+        idx = int(user_input)
+        selected = index_to_device.get(idx)
+    else:
+        selected = name_to_device.get(user_input)
+
+    if not selected:
+        print("❌ Switch not found by index or name.")
+        logging.warning(f"Switch not found: {user_input}")
+        return
+
+    site_id = selected.get("site_id")
+    device_id = selected.get("id")
+    if not site_id or not device_id:
+        print("❌ Missing site_id or device_id for selected switch.")
+        logging.warning("Missing site_id or device_id for selected switch.")
+        return
+
+    print(f"Converting switch '{selected.get('name', '')}' (device_id: {device_id}) at site_id: {site_id} to virtual MAC...")
+    try:
+        # Call the Mist API to convert to virtual MAC
+        resp = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)
+        # Show the result to the user, including error details if present
+        if hasattr(resp, "status_code") and resp.status_code >= 400:
+            print(f"❌ Conversion failed (HTTP {resp.status_code}): {getattr(resp, 'data', '')}")
+            logging.error(f"Conversion to virtual MAC failed for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
+        elif isinstance(getattr(resp, "data", None), dict) and "detail" in resp.data:
+            print(f"❌ Conversion failed: {resp.data['detail']}")
+            logging.error(f"Conversion to virtual MAC failed for device {device_id} at site {site_id}. Detail: {resp.data['detail']}")
+        else:
+            print("✅ Conversion to virtual MAC triggered.")
+            logging.info(f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
+    except Exception as e:
+        print(f"❌ Failed to convert to virtual MAC: {e}")
+        logging.error(f"Failed to convert to virtual MAC: {e}")
+
 menu_actions = {
     # 🗂️ Setup & Core Logs
     "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
@@ -2714,6 +2838,7 @@ menu_actions = {
     "42": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
     "43": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
     "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)"),
+    "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)"),
 }
 
 def main():
