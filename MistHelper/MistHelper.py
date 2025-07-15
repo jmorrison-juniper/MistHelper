@@ -1,14 +1,7 @@
-### Attention COPILOT: Please always give me the full complete top level copies of each function definition or class that needs replaced by copy and paste.##
-### When using timestamps always use "timestamp": datetime.now(timezone.utc).isoformat() ##
-### Unless i explicitly ask for data to be graphed or plotted, i usually just want you to read the data or logs and understand what is going on. ##
-### We always want to conserve API requests, so if we have a CSV file that is fresh enough, we will use it instead of making an API call. ##
-### When generating code, always add comments inline with the code to explain what each part does. ##
-### If i send you code that is missing comments and you can confidently show me what the code does, please add comments to the code. ##
-### Keep all functions and classes named whith long descriptive names that are easy to understand and similar to the rest of the names in the codebase. ##
-
+import subprocess
 import sys
-import logging
 import concurrent.futures
+from datetime import datetime, timezone
 
 # List of required packages (pip names)
 required_packages = [
@@ -36,63 +29,77 @@ import_name_map = {
     "requests": "requests"
 }
 
-def ensure_package(package):
+def ensure_single_package_is_installed_and_up_to_date(package_name):
     """
     Ensures a single package is installed and up to date.
     """
-    import_name = import_name_map.get(package, package)
+    import_name = import_name_map.get(package_name, package_name)
     try:
-        _ = __import__(import_name)
-        try:
-            from importlib.metadata import version
-            installed_version = version(import_name)
-        except Exception:
-            installed_version = "unknown"
+        # Try importing the package to check if it's already installed
+        __import__(import_name)
     except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package],
+        # Install the package if not found
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", package],
+        # Try upgrading the package to the latest version
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", package_name],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
+        # Silently ignore upgrade errors
         pass
 
-def ensure_latest_versions_with_status(packages):
+def ensure_all_required_packages_are_ready_with_status_bar(package_list):
     """
     Checks if each package is installed and up to date.
     Installs or upgrades as needed, showing a status bar.
     Uses multithreading for faster processing.
     """
     print("🔍 Checking and updating dependencies...", end="", flush=True)
-    total = len(packages)
+    total = len(package_list)
     completed = [0]
 
-    def update_status():
+    def update_status_bar():
         print(f"\r🔍 Checking and updating dependencies... ({completed[0]}/{total})", end="", flush=True)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, total)) as executor:
-        futures = []
-        for package in packages:
-            futures.append(executor.submit(ensure_package, package))
+        futures = [executor.submit(ensure_single_package_is_installed_and_up_to_date, pkg) for pkg in package_list]
         for future in concurrent.futures.as_completed(futures):
             completed[0] += 1
-            update_status()
+            update_status_bar()
+
     print("\r✅ Dependencies are ready.                      ")
 
-# Run the version check and upgrade for all dependencies with status bar
-import subprocess
-ensure_latest_versions_with_status(required_packages)
+# Run the version check and upgrade for all dependencies
+ensure_all_required_packages_are_ready_with_status_bar(required_packages)
 
 # Import all dependencies after ensuring installation
-import mistapi, csv, ast, json, time, logging, os, argparse, sys, websocket, threading, re, sys, shutil, pyte, inspect, requests
+import mistapi
+import csv
+import ast
+import json
+import time
+import logging
+import os
+import argparse
+import websocket
+import threading
+import re
+import shutil
+import pyte
+import requests
+import numpy as np
 from prettytable import PrettyTable
 from tqdm import tqdm
 from datetime import datetime, timedelta, timezone
 from sshkeyboard import listen_keyboard, stop_listening
 from dotenv import load_dotenv
-import numpy as np
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Timestamp example usage
+current_timestamp = {"timestamp": datetime.now(timezone.utc).isoformat()}
+
 
 log_handler = RotatingFileHandler(
     filename='script.log',
@@ -132,11 +139,18 @@ apisession.login()
 
 org_id=None
 
-def check_and_generate_csv(file_name, generate_function, freshness_minutes=15):
+# Load .env variables early so freshness can be set via .env
+load_dotenv()
+CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default to 15 if not set
+
+def check_and_generate_csv(file_name, generate_function, freshness_minutes=None):
     """
     Checks if a CSV file exists and is fresh (modified within the last `freshness_minutes`).
     If not, it runs the `generate_function` to regenerate the file.
+    freshness_minutes is now settable via the .env file as CSV_FRESHNESS_MINUTES.
     """
+    if freshness_minutes is None:
+        freshness_minutes = CSV_FRESHNESS_MINUTES
     # Check if the file already exists
     if os.path.exists(file_name):
         # Get the last modified time of the file
@@ -766,7 +780,7 @@ def export_all_org_device_events_52w_to_csv():
     # Use Mist API to search for device events in the last 52 weeks
     # Use duration=52w, do NOT use last_by
     response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        apisession, org_id, device_type="all", limit=100, duration="52w"
+        apisession, org_id, device_type="all", limit=1000, duration="52w"
     )
     # Retrieve all paginated results into memory
     events = mistapi.get_all(response=response, mist_session=apisession)
@@ -1465,10 +1479,10 @@ def generate_support_package():
     # Ensure all required files are fresh or regenerate them
     for filename, func in required_files:
         logging.debug(f"Checking freshness of {filename}...")
-        check_and_generate_csv(filename, func, freshness_minutes=15)
+        check_and_generate_csv(filename, func)  # freshness_minutes now comes from .env
 
     # Ensure SiteList.csv is generated before loading
-    check_and_generate_csv('SiteList.csv', export_all_sites_to_csv, freshness_minutes=15)
+    check_and_generate_csv('SiteList.csv', export_all_sites_to_csv)
 
     # Load the pulled data into dictionaries
     logging.debug("Loading CSV data into dictionaries for support package assembly...")
@@ -1647,7 +1661,7 @@ def export_switch_vc_stats_to_csv():
     logging.info("Exporting all switch virtual chassis stats...")
 
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv, freshness_minutes=15)
+    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
 
     # Load OrgInventory.csv and filter for switches that are virtual chassis (`vc_mac` present and not empty)
     with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
@@ -2673,39 +2687,55 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
         templates = list(csv.DictReader(f))
 
-    # Build lookup dictionaries
-    site_lookup = {
-        s.get("id", "").strip(): s.get("gatewaytemplate_id", "").strip().lower()
-        for s in sites if s.get("id") and s.get("gatewaytemplate_id")
-    }
-    template_lookup = {
-        t.get("id", "").strip().lower(): t.get("name", "Unknown").strip()
-        for t in templates if t.get("id") and t.get("name")
-    }
+    # Helper to extract required fields from port config
+    def extract_port_info(device_name, port_name, port_data):
+        ip_config = port_data.get("ip_config", {})
+        return {
+            "device_name": device_name,
+            "port_name": port_name,
+            "port_ip_address": ip_config.get("ip", ""),
+            "port_address_type": ip_config.get("type", "")
+        }
 
     overrides = []
     for row in configs:
+        device_name = row.get("name", "").strip()
+        site_id = row.get("site_id", "").strip()
+        device_id = row.get("id", "").strip()
+        # Find overridden port fields in the row (from AllSiteGatewayConfigs.csv)
         overridden_ports = [
             col for col in row
             if col.startswith("port_config_ge-0/0/")
             and row[col].strip().lower() not in ["", "null", "none"]
         ]
-        if overridden_ports:
-            device_name = row.get("name", "").strip()
-            site_id = row.get("site_id", "").strip()
-            template_id = site_lookup.get(site_id, "").lower()
-            template_name = template_lookup.get(template_id, "Unknown")
+        if not overridden_ports:
+            continue
+        # Fetch device info from getSiteDevice
+        try:
+            resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            data = getattr(resp, "data", {})
+            port_configs = data.get("port_config", {})
+        except Exception as e:
+            logging.warning(f"[WARN] Could not fetch WAN port info for device {device_name} ({device_id}): {e}")
+            port_configs = {}
+            data = {}
 
-            overrides.append({
-                "gateway_device_name": device_name,
-                "gateway_template_name": template_name,
-                "overridden_ports": ", ".join(overridden_ports)
-            })
+        # For each overridden port, extract info if present in port_configs
+        for port_field in overridden_ports:
+            # port_field is like 'port_config_ge-0/0/0_usage', extract 'ge-0/0/0'
+            port_match = re.match(r"port_config_(ge-0/0/\d+)_", port_field)
+            port_name = port_match.group(1) if port_match else None
+            if port_name and port_name in port_configs:
+                port_data = port_configs[port_name]
+                ip_config = port_data.get("ip_config", {})
+                if ip_config.get("ip"):
+                    overrides.append(extract_port_info(device_name, port_name, port_data))
 
     # Write to CSV
     output_file = "GatewaysWithWANOverrides.csv"
+    fieldnames = ["device_name", "port_name", "port_ip_address", "port_address_type"]
     with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["gateway_device_name", "gateway_template_name", "overridden_ports"])
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(overrides)
 
@@ -2717,7 +2747,7 @@ def convert_virtual_chassis_to_virtual_mac():
     and calls the Mist API to convert the device to a virtual MAC.
     """
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv, freshness_minutes=15)
+    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
 
     # Load OrgInventory.csv and filter for switches with a non-empty id 
     with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
@@ -2773,13 +2803,165 @@ def convert_virtual_chassis_to_virtual_mac():
             logging.error(f"Conversion to virtual MAC failed for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
         elif isinstance(getattr(resp, "data", None), dict) and "detail" in resp.data:
             print(f"❌ Conversion failed: {resp.data['detail']}")
-            logging.error(f"Conversion to virtual MAC failed for device {device_id} at site {site_id}. Detail: {resp.data['detail']}")
+            logging.error(f"Conversion to virtual MAC failed for device {device_id} at site_id {site_id}. Detail: {resp.data['detail']}")
         else:
             print("✅ Conversion to virtual MAC triggered.")
             logging.info(f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
     except Exception as e:
         print(f"❌ Failed to convert to virtual MAC: {e}")
         logging.error(f"Failed to convert to virtual MAC: {e}")
+
+
+def reboot_devices_by_gateway_template_list():
+    """
+    Reboots all devices associated with branch templates listed in GatewayTemplateRebootList.CSV.
+    Logs the result of each reboot command to GatewayTemplateRebootResults.CSV.
+    """
+    import csv
+    from datetime import datetime, timezone
+    logging.info("[46] Starting reboot_devices_by_gateway_template_list")
+    logging.info("Step 1: Checking freshness of required CSVs")
+    check_and_generate_csv("OrgDevices.csv", export_all_devices_to_csv)
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+
+    logging.info("Step 2: Building device lookup dictionary from OrgDevices.csv")
+    device_lookup = {}
+    with open("OrgDevices.csv", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            device_lookup[row.get("id")] = {
+                "device_name": row.get("name", ""),
+                "site_id": row.get("site_id", "")
+            }
+    logging.info(f"Device lookup loaded: {len(device_lookup)} devices")
+
+    logging.info("Step 3: Building site lookup dictionary from Mist API listOrgSites")
+    org_id = get_cached_or_prompted_org_id()
+    try:
+        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+        sites = mistapi.get_all(response=response, mist_session=apisession)
+        site_lookup = {site.get("id"): site.get("name", "") for site in sites}
+        logging.info(f"Site lookup loaded from API: {len(site_lookup)} sites")
+    except Exception as e:
+        logging.error(f"❌ Failed to load site list from Mist API: {e}")
+        site_lookup = {}
+
+    logging.info("Step 4: Building template lookup dictionaries from OrgGatewayTemplates.csv")
+    template_id_to_name = {}
+    template_name_to_id = {}
+    with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            tid = row.get("id")
+            tname = row.get("name", "")
+            if tid and tname:
+                template_id_to_name[tid] = tname
+                template_name_to_id[tname] = tid
+    logging.info(f"Template lookup loaded: {len(template_id_to_name)} templates")
+
+    logging.info("Step 5: Compiling device-to-template mapping from Mist API per site")
+    template_devices = {}
+    for site_id, site_name in site_lookup.items():
+        try:
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+            devices = mistapi.get_all(response=response, mist_session=apisession)
+            logging.info(f"Fetched {len(devices)} devices for site {site_name} ({site_id})")
+            for device in devices:
+                if device.get("type") == "gateway":
+                    template_id = device.get("template_id")
+                    device_id = device.get("id")
+                    if template_id and device_id:
+                        template_devices.setdefault(template_id, []).append(device_id)
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to fetch devices for site {site_name} ({site_id}): {e}")
+    logging.info(f"Device-to-template mapping loaded: {len(template_devices)} template IDs (from Mist API, gateways only)")
+
+    logging.info("Step 6: Reading GatewayTemplateRebootList.CSV for template names")
+    reboot_template_names = set()
+    try:
+        with open("GatewayTemplateRebootList.CSV", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames if reader.fieldnames else []
+            logging.info(f"Reboot list fieldnames: {fieldnames}")
+            if fieldnames and any(fn.lower() in ["template_name", "template name", "name"] for fn in fieldnames):
+                for row in reader:
+                    tname = row.get("template_name") or row.get("Template Name") or row.get("name")
+                    logging.info(f"Read row from reboot list: {row}")
+                    if tname:
+                        reboot_template_names.add(tname.strip())
+                        logging.info(f"Added template name from header: {tname.strip()}")
+            else:
+                f.seek(0)
+                reader = csv.reader(f)
+                for row in reader:
+                    logging.info(f"Read row from reboot list (no header): {row}")
+                    if row and row[0].strip():
+                        reboot_template_names.add(row[0].strip())
+                        logging.info(f"Added template name from no header: {row[0].strip()}")
+    except FileNotFoundError:
+        logging.error("❌ GatewayTemplateRebootList.CSV not found.")
+        print("❌ GatewayTemplateRebootList.CSV not found.")
+        return
+    logging.info(f"Template names to reboot: {reboot_template_names}")
+
+    logging.info("Step 7: Mapping template names to IDs")
+    reboot_template_ids = set()
+    for tname in reboot_template_names:
+        tid = template_name_to_id.get(tname)
+        if tid:
+            reboot_template_ids.add(tid)
+            logging.info(f"Mapped template name '{tname}' to id '{tid}'")
+        else:
+            logging.warning(f"⚠️ Template name '{tname}' not found in OrgGatewayTemplates.csv.")
+    logging.info(f"Template IDs to reboot: {reboot_template_ids}")
+
+    logging.info("Step 8: Issuing reboot commands for each device")
+    results = []
+    for tid in reboot_template_ids:
+        tname = template_id_to_name.get(tid, "")
+        logging.info(f"Processing template: {tname} ({tid})")
+        for device_id in template_devices.get(tid, []):
+            device_info = device_lookup.get(device_id, {})
+            device_name = device_info.get("device_name", "")
+            site_id = device_info.get("site_id", "")
+            site_name = site_lookup.get(site_id, "")
+            status = ""
+            logging.info(f"Attempting reboot for device: {device_name} ({device_id}) at site: {site_name} ({site_id})")
+            try:
+                resp = mistapi.api.v1.sites.devices.restartSiteDevice(
+                    apisession, site_id, device_id, body={"timestamp": datetime.now(timezone.utc).isoformat()}
+                )
+                if hasattr(resp, "data") and isinstance(resp.data, dict):
+                    status = resp.data.get("status") or resp.data.get("msg") or str(resp.data)
+                else:
+                    status = str(resp)
+                logging.info(f"Rebooted device {device_name} ({device_id}) at site {site_name} ({site_id}) for template {tname} ({tid}): {status}")
+            except Exception as e:
+                status = f"ERROR: {e}"
+                logging.error(f"❌ Failed to reboot device {device_name} ({device_id}) at site {site_name} ({site_id}): {e}")
+            results.append({
+                "Template ID": tid,
+                "Template Name": tname,
+                "Device ID": device_id,
+                "Device Name": device_name,
+                "Site ID": site_id,
+                "Site Name": site_name,
+                "Status": status
+            })
+    logging.info(f"Reboot results collected: {len(results)} rows")
+
+    logging.info("Step 9: Writing results to GatewayTemplateRebootResults.CSV")
+    out_file = "GatewayTemplateRebootResults.CSV"
+    with open(out_file, "w", newline='', encoding="utf-8") as f:
+        fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+    logging.info(f"✅ Reboot results written to {out_file}")
+    print(f"✅ Reboot results written to {out_file}")
+
+
 
 menu_actions = {
     # 🗂️ Setup & Core Logs
@@ -2837,8 +3019,9 @@ menu_actions = {
     "41": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "42": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
     "43": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
-    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)"),
-    "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)"),
+    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)(WIP)"),
+    "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
+    "46": (reboot_devices_by_gateway_template_list, "Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
 }
 
 def main():
