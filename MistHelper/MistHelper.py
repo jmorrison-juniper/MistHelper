@@ -82,6 +82,7 @@ import time
 import logging
 import os
 import argparse
+import inspect
 import websocket
 import threading
 import re
@@ -2811,157 +2812,229 @@ def convert_virtual_chassis_to_virtual_mac():
         print(f"❌ Failed to convert to virtual MAC: {e}")
         logging.error(f"Failed to convert to virtual MAC: {e}")
 
-
 def reboot_devices_by_gateway_template_list():
     """
     Reboots all devices associated with branch templates listed in GatewayTemplateRebootList.CSV.
     Logs the result of each reboot command to GatewayTemplateRebootResults.CSV.
     """
     import csv
+    import os
     from datetime import datetime, timezone
+
     logging.info("[46] Starting reboot_devices_by_gateway_template_list")
-    logging.info("Step 1: Checking freshness of required CSVs")
+
+    # Step 1: Check if the reboot list file exists
+    if not os.path.exists("GatewayTemplateRebootList.CSV"):
+        logging.error("❌ GatewayTemplateRebootList.CSV not found.")
+        print("❌ GatewayTemplateRebootList.CSV not found. Please create this file with template names to reboot.")
+        return
+
+    # Step 2: Ensure required CSVs are fresh
     check_and_generate_csv("OrgDevices.csv", export_all_devices_to_csv)
     check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
     check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=True))
 
-    logging.info("Step 2: Building device lookup dictionary from OrgDevices.csv")
-    device_lookup = {}
-    with open("OrgDevices.csv", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            device_lookup[row.get("id")] = {
-                "device_name": row.get("name", ""),
-                "site_id": row.get("site_id", "")
-            }
-    logging.info(f"Device lookup loaded: {len(device_lookup)} devices")
-
-    logging.info("Step 3: Building site lookup dictionary from Mist API listOrgSites")
-    org_id = get_cached_or_prompted_org_id()
-    try:
-        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_lookup = {site.get("id"): site.get("name", "") for site in sites}
-        logging.info(f"Site lookup loaded from API: {len(site_lookup)} sites")
-    except Exception as e:
-        logging.error(f"❌ Failed to load site list from Mist API: {e}")
-        site_lookup = {}
-
-    logging.info("Step 4: Building template lookup dictionaries from OrgGatewayTemplates.csv")
-    template_id_to_name = {}
+    # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
     template_name_to_id = {}
-    with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            tid = row.get("id")
-            tname = row.get("name", "")
-            if tid and tname:
-                template_id_to_name[tid] = tname
-                template_name_to_id[tname] = tid
-    logging.info(f"Template lookup loaded: {len(template_id_to_name)} templates")
+    try:
+        with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row.get("name", "").strip()
+                tid = row.get("id", "").strip()
+                if name and tid:
+                    template_name_to_id[name] = tid
+        logging.info(f"Loaded {len(template_name_to_id)} gateway templates from OrgGatewayTemplates.csv")
+    except Exception as e:
+        logging.error(f"❌ Failed to load gateway templates: {e}")
+        print(f"❌ Failed to load gateway templates: {e}")
+        return
 
-    logging.info("Step 5: Compiling device-to-template mapping from Mist API per site")
-    template_devices = {}
-    for site_id, site_name in site_lookup.items():
-        try:
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            devices = mistapi.get_all(response=response, mist_session=apisession)
-            logging.info(f"Fetched {len(devices)} devices for site {site_name} ({site_id})")
-            for device in devices:
-                if device.get("type") == "gateway":
-                    template_id = device.get("template_id")
-                    device_id = device.get("id")
-                    if template_id and device_id:
-                        template_devices.setdefault(template_id, []).append(device_id)
-        except Exception as e:
-            logging.warning(f"⚠️ Failed to fetch devices for site {site_name} ({site_id}): {e}")
-    logging.info(f"Device-to-template mapping loaded: {len(template_devices)} template IDs (from Mist API, gateways only)")
+    if not template_name_to_id:
+        logging.warning("⚠️ No gateway templates found in OrgGatewayTemplates.csv")
+        print("⚠️ No gateway templates found in OrgGatewayTemplates.csv")
+        return
 
-    logging.info("Step 6: Reading GatewayTemplateRebootList.CSV for template names")
+    # Step 4: Load reboot list of template names
     reboot_template_names = set()
     try:
         with open("GatewayTemplateRebootList.CSV", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            fieldnames = reader.fieldnames if reader.fieldnames else []
-            logging.info(f"Reboot list fieldnames: {fieldnames}")
-            if fieldnames and any(fn.lower() in ["template_name", "template name", "name"] for fn in fieldnames):
-                for row in reader:
-                    tname = row.get("template_name") or row.get("Template Name") or row.get("name")
-                    logging.info(f"Read row from reboot list: {row}")
-                    if tname:
-                        reboot_template_names.add(tname.strip())
-                        logging.info(f"Added template name from header: {tname.strip()}")
-            else:
-                f.seek(0)
-                reader = csv.reader(f)
-                for row in reader:
-                    logging.info(f"Read row from reboot list (no header): {row}")
-                    if row and row[0].strip():
-                        reboot_template_names.add(row[0].strip())
-                        logging.info(f"Added template name from no header: {row[0].strip()}")
-    except FileNotFoundError:
-        logging.error("❌ GatewayTemplateRebootList.CSV not found.")
-        print("❌ GatewayTemplateRebootList.CSV not found.")
+            reader = csv.reader(f)
+            for row in reader:
+                if row and row[0].strip():
+                    reboot_template_names.add(row[0].strip())
+        logging.info(f"Loaded {len(reboot_template_names)} template names from reboot list: {reboot_template_names}")
+    except Exception as e:
+        logging.error(f"❌ Failed to load reboot template list: {e}")
+        print(f"❌ Failed to load reboot template list: {e}")
         return
-    logging.info(f"Template names to reboot: {reboot_template_names}")
 
-    logging.info("Step 7: Mapping template names to IDs")
+    # Step 5: Map template names to IDs and show matches/mismatches
     reboot_template_ids = set()
-    for tname in reboot_template_names:
-        tid = template_name_to_id.get(tname)
-        if tid:
-            reboot_template_ids.add(tid)
-            logging.info(f"Mapped template name '{tname}' to id '{tid}'")
+    for name in reboot_template_names:
+        if name in template_name_to_id:
+            reboot_template_ids.add(template_name_to_id[name])
+            logging.info(f"✅ Found template '{name}' with ID '{template_name_to_id[name]}'")
         else:
-            logging.warning(f"⚠️ Template name '{tname}' not found in OrgGatewayTemplates.csv.")
-    logging.info(f"Template IDs to reboot: {reboot_template_ids}")
+            logging.warning(f"⚠️ Template '{name}' not found in OrgGatewayTemplates.csv")
+            print(f"⚠️ Template '{name}' not found in available templates")
 
-    logging.info("Step 8: Issuing reboot commands for each device")
+    if not reboot_template_ids:
+        logging.error("❌ No matching template IDs found for reboot")
+        print("❌ No matching template IDs found for reboot")
+        print("Available templates:")
+        for name, tid in template_name_to_id.items():
+            print(f"  - {name} ({tid})")
+        return
+
+    logging.info(f"Proceeding with {len(reboot_template_ids)} template IDs: {reboot_template_ids}")
+
+    # Step 6: First find sites that use the target gateway template IDs and create site-to-template mapping
+    sites_using_templates = set()
+    site_to_template_mapping = {}  # Maps site_id to (template_id, template_name, site_name)
+    template_id_to_name = {tid: name for name, tid in template_name_to_id.items()}  # Reverse lookup
+    
+    try:
+        with open("SiteList.csv", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                gateway_template_id = row.get("gatewaytemplate_id", "").strip()
+                if gateway_template_id in reboot_template_ids:
+                    site_id = row.get("id", "").strip()
+                    site_name = row.get("name", "").strip()
+                    template_name = template_id_to_name.get(gateway_template_id, "Unknown Template")
+                    sites_using_templates.add(site_id)
+                    site_to_template_mapping[site_id] = (gateway_template_id, template_name, site_name)
+                    logging.info(f"Found site '{site_name}' (ID: {site_id}) using gateway template '{template_name}' (ID: {gateway_template_id})")
+    except Exception as e:
+        logging.error(f"❌ Failed to load site list: {e}")
+        print(f"❌ Failed to load site list: {e}")
+        return
+
+    if not sites_using_templates:
+        logging.warning("⚠️ No sites found using the specified gateway templates")
+        print("⚠️ No sites found using the specified gateway templates")
+        return
+
+    logging.info(f"Found {len(sites_using_templates)} sites using target templates: {sites_using_templates}")
+
+    # Step 7: Load AllSiteGatewayConfigs and filter gateway devices by site_id
+    reboot_targets = []
+    try:
+        with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                device_site_id = row.get("site_id", "").strip()
+                device_type = row.get("type", "").strip()
+                device_id = row.get("id", "").strip()
+                device_name = row.get("name", "").strip()
+                
+                # Debug logging for the first few devices
+                logging.debug(f"Checking device '{device_name}' (ID: {device_id}) in site '{device_site_id}' of type '{device_type}'")
+                
+                # Only target gateway devices in sites that use our target templates
+                if device_site_id in sites_using_templates and device_type == "gateway":
+                    template_id, template_name, site_name = site_to_template_mapping.get(device_site_id, ("unknown", "Unknown Template", "Unknown Site"))
+                    reboot_targets.append({
+                        "device_id": device_id,
+                        "device_name": device_name,
+                        "site_id": device_site_id,
+                        "site_name": site_name,
+                        "template_id": template_id,
+                        "template_name": template_name
+                    })
+                    logging.info(f"Found gateway device '{device_name}' (ID: {device_id}) in site '{site_name}' (ID: {device_site_id}) using template '{template_name}' (ID: {template_id})")
+    except Exception as e:
+        logging.error(f"❌ Failed to load gateway configs: {e}")
+        print(f"❌ Failed to load gateway configs: {e}")
+        return
+
+    if not reboot_targets:
+        logging.warning("⚠️ No gateway devices found in sites using the specified templates")
+        print("⚠️ No gateway devices found in sites using the specified templates")
+        
+        # Provide debug information
+        logging.info(f"Sites using target templates: {sites_using_templates}")
+        print(f"Debug: Sites using target templates: {list(sites_using_templates)}")
+        
+        # Count devices by type in target sites
+        device_counts = {}
+        try:
+            with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    device_site_id = row.get("site_id", "").strip()
+                    device_type = row.get("type", "").strip()
+                    if device_site_id in sites_using_templates:
+                        device_counts[device_type] = device_counts.get(device_type, 0) + 1
+            
+            if device_counts:
+                logging.info(f"Device types found in target sites: {device_counts}")
+                print(f"Debug: Device types found in target sites: {device_counts}")
+            else:
+                logging.warning("No devices found in any of the target sites")
+                print("Debug: No devices found in any of the target sites")
+        except Exception as e:
+            logging.error(f"Failed to analyze devices in target sites: {e}")
+        
+        return
+
+    logging.info(f"Found {len(reboot_targets)} gateway devices to reboot")
+    print(f"Found {len(reboot_targets)} gateway devices to reboot:")
+    for target in reboot_targets:
+        print(f"  - {target['device_name']} (ID: {target['device_id']})")
+
+    # Step 8: Reboot each device and log results
     results = []
-    for tid in reboot_template_ids:
-        tname = template_id_to_name.get(tid, "")
-        logging.info(f"Processing template: {tname} ({tid})")
-        for device_id in template_devices.get(tid, []):
-            device_info = device_lookup.get(device_id, {})
-            device_name = device_info.get("device_name", "")
-            site_id = device_info.get("site_id", "")
-            site_name = site_lookup.get(site_id, "")
-            status = ""
-            logging.info(f"Attempting reboot for device: {device_name} ({device_id}) at site: {site_name} ({site_id})")
-            try:
-                resp = mistapi.api.v1.sites.devices.restartSiteDevice(
-                    apisession, site_id, device_id, body={"timestamp": datetime.now(timezone.utc).isoformat()}
-                )
-                if hasattr(resp, "data") and isinstance(resp.data, dict):
-                    status = resp.data.get("status") or resp.data.get("msg") or str(resp.data)
+    for device in reboot_targets:
+        status = ""
+        try:
+            logging.info(f"Rebooting device '{device['device_name']}' (ID: {device['device_id']})")
+            resp = mistapi.api.v1.sites.devices.restartSiteDevice(
+                apisession,
+                device["site_id"],
+                device["device_id"],
+                body={"timestamp": datetime.now(timezone.utc).isoformat()}
+            )
+            # Handle different possible response formats
+            if hasattr(resp, "data") and resp.data:
+                if isinstance(resp.data, dict):
+                    status = resp.data.get("status", f"SUCCESS - Response: {resp.data}")
                 else:
-                    status = str(resp)
-                logging.info(f"Rebooted device {device_name} ({device_id}) at site {site_name} ({site_id}) for template {tname} ({tid}): {status}")
-            except Exception as e:
-                status = f"ERROR: {e}"
-                logging.error(f"❌ Failed to reboot device {device_name} ({device_id}) at site {site_name} ({site_id}): {e}")
-            results.append({
-                "Template ID": tid,
-                "Template Name": tname,
-                "Device ID": device_id,
-                "Device Name": device_name,
-                "Site ID": site_id,
-                "Site Name": site_name,
-                "Status": status
-            })
-    logging.info(f"Reboot results collected: {len(results)} rows")
+                    status = f"SUCCESS - Data: {resp.data}"
+            elif hasattr(resp, "status_code"):
+                status = f"SUCCESS - HTTP {resp.status_code}"
+            else:
+                status = f"SUCCESS - Response: {str(resp)}"
+            logging.info(f"✅ Reboot command sent for '{device['device_name']}': {status}")
+        except Exception as e:
+            status = f"ERROR: {e}"
+            logging.error(f"❌ Failed to reboot '{device['device_name']}': {e}")
 
-    logging.info("Step 9: Writing results to GatewayTemplateRebootResults.CSV")
-    out_file = "GatewayTemplateRebootResults.CSV"
-    with open(out_file, "w", newline='', encoding="utf-8") as f:
-        fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
-    logging.info(f"✅ Reboot results written to {out_file}")
-    print(f"✅ Reboot results written to {out_file}")
+        results.append({
+            "Template ID": device["template_id"],
+            "Template Name": device["template_name"],
+            "Device ID": device["device_id"],
+            "Device Name": device["device_name"],
+            "Site ID": device["site_id"],
+            "Site Name": device["site_name"],
+            "Status": status
+        })
 
-
+    # Step 9: Write results to CSV
+    try:
+        with open("GatewayTemplateRebootResults.CSV", "w", newline='', encoding="utf-8") as f:
+            fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        logging.info(f"✅ Reboot results written to GatewayTemplateRebootResults.CSV ({len(results)} entries)")
+        print(f"✅ Reboot results written to GatewayTemplateRebootResults.CSV ({len(results)} entries)")
+    except Exception as e:
+        logging.error(f"❌ Failed to write results to CSV: {e}")
+        print(f"❌ Failed to write results to CSV: {e}")
 
 menu_actions = {
     # 🗂️ Setup & Core Logs
