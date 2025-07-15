@@ -841,7 +841,7 @@ def export_all_sites_to_csv():
     logging.info("Starting export of organization site list...")
     fetch_and_display_api_data(
         title="Site List:",
-        api_call=mistapi.api.v1.orgs.sites.searchOrgSites,
+        api_call=mistapi.api.v1.orgs.sites.listOrgSites,
         filename="SiteList.csv",
         sort_key="name",  # or "site_id" if preferred
         limit=1000
