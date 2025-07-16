@@ -1,4 +1,4 @@
-import subprocess
+﻿import subprocess
 import sys
 import concurrent.futures
 from datetime import datetime, timezone
@@ -150,29 +150,44 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
     If not, it runs the `generate_function` to regenerate the file.
     freshness_minutes is now settable via the .env file as CSV_FRESHNESS_MINUTES.
     """
+    logging.debug(f"ENTRY: check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})")
+    
     if freshness_minutes is None:
         freshness_minutes = CSV_FRESHNESS_MINUTES
+        
     # Check if the file already exists
     if os.path.exists(file_name):
-        # Get the last modified time of the file
-        file_mtime = datetime.fromtimestamp(os.path.getmtime(file_name))
-        
-        # Check if the file is still fresh
-        if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
-            # Log that the cached file is being used
-            logging.info(f"✅ Using cached {file_name} (fresh)")
-            return
-        else:
-            # Log that the file is stale and will be regenerated
-            logging.info(f"♻️ {file_name} is older than {freshness_minutes} minutes. Regenerating...")
+        try:
+            # Get the last modified time of the file
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(file_name))
+            logging.debug(f"File I/O: Successfully read modification time for {file_name}: {file_mtime}")
+            
+            # Check if the file is still fresh
+            if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
+                # Log that the cached file is being used
+                logging.info(f"✅ Using cached {file_name} (fresh)")
+                logging.debug(f"EXIT: check_and_generate_csv - using cached file")
+                return
+            else:
+                # Log that the file is stale and will be regenerated
+                logging.info(f"♻️ {file_name} is older than {freshness_minutes} minutes. Regenerating...")
+        except OSError as e:
+            logging.error(f"File I/O: Failed to read modification time for {file_name}: {e}")
+            logging.info(f"📄 {file_name} exists but cannot read metadata. Regenerating...")
     else:
         # Log that the file does not exist and will be generated
         logging.info(f"📄 {file_name} not found. Generating...")
 
     # Call the function to generate the file
     logging.info(f"🔄 Running {generate_function.__name__} to generate {file_name}...")
-    generate_function()
-    logging.info(f"✅ {file_name} generated or refreshed.")
+    try:
+        generate_function()
+        logging.info(f"✅ {file_name} generated or refreshed.")
+        logging.debug(f"EXIT: check_and_generate_csv - file generated successfully")
+    except Exception as e:
+        logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {e}")
+        logging.debug(f"EXIT: check_and_generate_csv - generation failed")
+        raise
 
 def prepare_data_and_write_csv(data, filename, sort_key=None):
     """
@@ -257,6 +272,8 @@ def process_and_merge_csv_for_sfp_address():
     with site and device address/location, outputting a new merged CSV.
     Only ports with a non-empty transceiver model are included.
     """
+    logging.debug(f"ENTRY: process_and_merge_csv_for_sfp_address()")
+    
     # Automatically generate missing files if needed
     if not os.path.exists('OrgDevicePortStats.csv'):
         print("⚠️ OrgDevicePortStats.csv not found. Generating it now...")
@@ -268,47 +285,71 @@ def process_and_merge_csv_for_sfp_address():
         logging.info("AllDevicesWithSiteInfo.csv not found. Generating it now...")
         export_devices_with_site_info_to_csv()
 
-    # Load site and device info, keyed by MAC address
-    with open('AllDevicesWithSiteInfo.csv', mode='r', encoding='utf-8') as file:
-        reader = csv.DictReader(file)
-        site_info = {
-            row['mac']: {
-                'site_name': row.get('site_name', ''),
-                'site_address': row.get('site_address', ''),
-                'device_name': row.get('name', '')
-            } for row in reader
-        }
+    try:
+        # Load site and device info, keyed by MAC address
+        logging.debug("File I/O: Reading AllDevicesWithSiteInfo.csv")
+        with open('AllDevicesWithSiteInfo.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            site_info = {
+                row['mac']: {
+                    'site_name': row.get('site_name', ''),
+                    'site_address': row.get('site_address', ''),
+                    'device_name': row.get('name', '')
+                } for row in reader
+            }
+        logging.info(f"File I/O: Successfully loaded {len(site_info)} device entries from AllDevicesWithSiteInfo.csv")
 
-    # Merge with port stats, skipping rows with blank/null transceiver model
-    merged_data = []
-    with open('OrgDevicePortStats.csv', mode='r', encoding='utf-8') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            mac = row.get('mac')
-            transceiver_model = row.get('xcvr_model', '').strip()
-            if mac in site_info and transceiver_model:
-                merged_data.append({
-                    'site_name': site_info[mac]['site_name'],
-                    'site_address': site_info[mac]['site_address'],
-                    'device_name': site_info[mac]['device_name'],
-                    'port_id': row.get('port_id', ''),
-                    'transceiver_part_number': row.get('xcvr_part_number', ''),
-                    'transceiver_model': transceiver_model,
-                    'transceiver_serial_number': row.get('xcvr_serial', '')
-                })
+        # Merge with port stats, skipping rows with blank/null transceiver model
+        merged_data = []
+        logging.debug("File I/O: Reading OrgDevicePortStats.csv")
+        with open('OrgDevicePortStats.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                mac = row.get('mac')
+                transceiver_model = row.get('xcvr_model', '').strip()
+                if mac in site_info and transceiver_model:
+                    merged_data.append({
+                        'site_name': site_info[mac]['site_name'],
+                        'site_address': site_info[mac]['site_address'],
+                        'device_name': site_info[mac]['device_name'],
+                        'port_id': row.get('port_id', ''),
+                        'transceiver_part_number': row.get('xcvr_part_number', ''),
+                        'transceiver_model': transceiver_model,
+                        'transceiver_serial_number': row.get('xcvr_serial', '')
+                    })
+        logging.info(f"File I/O: Successfully processed port stats, found {len(merged_data)} ports with transceivers")
 
-    # Write output to new CSV
-    output_file = 'MergedTransceiverData.csv'
-    with open(output_file, mode='w', newline='', encoding='utf-8') as file:
-        fieldnames = [
-            'site_name', 'site_address', 'device_name', 'port_id',
-            'transceiver_part_number', 'transceiver_model', 'transceiver_serial_number'
-        ]
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(merged_data)
+        # Write output to new CSV
+        output_file = 'MergedTransceiverData.csv'
+        logging.debug(f"File I/O: Writing merged data to {output_file}")
+        with open(output_file, mode='w', newline='', encoding='utf-8') as file:
+            fieldnames = [
+                'site_name', 'site_address', 'device_name', 'port_id',
+                'transceiver_part_number', 'transceiver_model', 'transceiver_serial_number'
+            ]
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(merged_data)
 
-    print(f"✅ Merged data written to {output_file}")
+        logging.info(f"File I/O: Successfully wrote {len(merged_data)} rows to {output_file}")
+        print(f"✅ Merged data written to {output_file}")
+        logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - success")
+        
+    except FileNotFoundError as e:
+        logging.error(f"File I/O: Required CSV file not found: {e}")
+        print(f"❌ Required CSV file not found: {e}")
+        logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - file not found")
+        raise
+    except csv.Error as e:
+        logging.error(f"File I/O: CSV processing error: {e}")
+        print(f"❌ CSV processing error: {e}")
+        logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - CSV error")
+        raise
+    except Exception as e:
+        logging.error(f"File I/O: Unexpected error during CSV merge: {e}")
+        print(f"❌ Unexpected error during CSV merge: {e}")
+        logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - unexpected error")
+        raise
 
 def get_cached_or_prompted_org_id():
     import os
@@ -470,23 +511,46 @@ def write_dict_list_to_csv(data, csv_file):
     - Determines all unique fields for the CSV header.
     - Writes each row, filling missing fields with empty strings.
     """
+    logging.debug(f"ENTRY: write_dict_list_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
+    
+    if not data:
+        logging.warning(f"No data provided to write to {csv_file}")
+        logging.debug(f"EXIT: write_dict_list_to_csv - no data to write")
+        return
+        
     logging.debug(f"Preparing to write {len(data)} rows to {csv_file}...")
     data = escape_multiline_strings_for_csv(data)
     fields = get_all_unique_dict_keys(data)
     logging.debug(f"CSV fields determined: {fields}")
 
     try:
+        logging.debug(f"File I/O: Attempting to open {csv_file} for writing")
         with open(csv_file, 'w', newline='', encoding='utf-8') as file:
             writer = csv.DictWriter(file, fieldnames=fields)
             writer.writeheader()
+            logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file}")
+            
             for idx, row in enumerate(data):
                 writer.writerow({field: row.get(field, "") for field in fields})
                 if idx < 3:  # Log the first few rows for debugging
                     logging.debug(f"Row {idx} written: {row}")
-        logging.info(f"Data saved to {csv_file} ({len(data)} rows)")
+                    
+        logging.info(f"File I/O: Successfully wrote {len(data)} rows to {csv_file}")
+        logging.debug(f"EXIT: write_dict_list_to_csv - success")
+        
     except PermissionError as e:
-        logging.error(f"❌ Permission denied when writing to {csv_file}: {e}")
+        logging.error(f"File I/O: Permission denied when writing to {csv_file}: {e}")
         print(f"❌ Cannot write to {csv_file}. Is it open in another program?")
+        logging.debug(f"EXIT: write_dict_list_to_csv - permission error")
+        raise
+    except OSError as e:
+        logging.error(f"File I/O: OS error when writing to {csv_file}: {e}")
+        logging.debug(f"EXIT: write_dict_list_to_csv - OS error")
+        raise
+    except Exception as e:
+        logging.error(f"File I/O: Unexpected error when writing to {csv_file}: {e}")
+        logging.debug(f"EXIT: write_dict_list_to_csv - unexpected error")
+        raise
 
 def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display_fields=None, **kwargs):
     """
@@ -496,6 +560,8 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     """
     import http.client
 
+    logging.debug(f"ENTRY: fetch_and_display_api_data(title={title}, api_call={api_call.__name__}, filename={filename}, sort_key={sort_key}, display_fields={display_fields}, kwargs={kwargs})")
+    
     logging.info(f"Starting data fetch: {title}")
     print(title)
     org_id = get_cached_or_prompted_org_id()
@@ -505,15 +571,19 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     rawdata = []
     try:
         # Call the API and get all paginated results
+        logging.debug(f"Making API call: {api_call.__name__} with kwargs: {kwargs}")
         response = api_call(apisession, org_id, **kwargs)
         smoothed, delay = get_rate_limited_delay(smoothed)
+        logging.debug(f"Applying rate limit delay: {delay:.2f}s")
         time.sleep(delay)
+        
         try:
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            logging.debug(f"API call successful, retrieved {len(rawdata) if rawdata else 0} raw records")
         except Exception as e:
             # Remove references to device_id and site_id, which are not defined in this scope
-            logging.error(f"Exception occurred during conversion to virtual MAC: {e}")
-            print(f"❌ Exception occurred during conversion: {e}")
+            logging.error(f"Exception occurred during API data retrieval: {e}")
+            print(f"❌ Exception occurred during API call: {e}")
             # Handle HTTP 429 (rate limit exceeded)
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
@@ -521,12 +591,15 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
                 if rawdata:
                     write_dict_list_to_csv(rawdata, filename)
                     logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
+                logging.debug(f"EXIT: fetch_and_display_api_data - rate limited")
                 return
             else:
+                logging.debug(f"EXIT: fetch_and_display_api_data - API error")
                 raise
 
         if rawdata is None:
             logging.warning(f"⚠️ No data returned from API for {title}. Skipping.")
+            logging.debug(f"EXIT: fetch_and_display_api_data - no data")
             return
 
         logging.info(f"Fetched {len(rawdata)} raw records from API.")
@@ -564,6 +637,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
             row = [item.get(field, "") for field in table.field_names]
             table.add_row(row)
         logging.info("\n" + table.get_string())
+        logging.debug(f"EXIT: fetch_and_display_api_data - success")
 
     except Exception as e:
         logging.error(f"❌ Error during data fetch for {title}: {e}")
@@ -571,6 +645,8 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         if rawdata:
             write_dict_list_to_csv(rawdata, filename)
             logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
+        logging.debug(f"EXIT: fetch_and_display_api_data - error")
+        raise
 
 def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
     """
@@ -617,7 +693,7 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
             logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
             return device_id
         else:
-            logging.warning("❌ Invalid index.")
+            logging.error("❌ Invalid index.")
             return None
 
     # Try name selection
@@ -626,7 +702,7 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
         logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
         return device_id
 
-    logging.warning("❌ Device not found by name or index.")
+    logging.error("❌ Device not found by name or index.")
     return None
 
 def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
@@ -730,22 +806,30 @@ def prompt_and_log_site_selection():
         logging.info(f"✅ Selected site ID: {site_id}")
         # You can store or use the selected site_id as needed here
     else:
-        logging.warning("❌ No site selected. User may have entered an invalid value or cancelled the prompt.")
+        logging.error("❌ No site selected. User may have entered an invalid value or cancelled the prompt.")
 
 def export_open_org_alarms_to_csv():
     """
     Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
     """
+    logging.debug("ENTRY: export_open_org_alarms_to_csv()")
     logging.info("Starting search for all open org alarms in the past 24 hours...")
-    fetch_and_display_api_data(
-        title="Search all Org Alarms:",
-        api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
-        filename="OrgAlarms.csv",
-        limit=1000,
-        duration="24h",
-        status="open"
-    )
-    logging.info("Completed export_open_org_alarms_to_csv and wrote results to OrgAlarms.csv.")
+    
+    try:
+        fetch_and_display_api_data(
+            title="Search all Org Alarms:",
+            api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
+            filename="OrgAlarms.csv",
+            limit=1000,
+            duration="24h",
+            status="open"
+        )
+        logging.info("Completed export_open_org_alarms_to_csv and wrote results to OrgAlarms.csv.")
+        logging.debug("EXIT: export_open_org_alarms_to_csv - success")
+    except Exception as e:
+        logging.error(f"Failed to export open org alarms: {e}")
+        logging.debug("EXIT: export_open_org_alarms_to_csv - error")
+        raise
 
 def export_recent_device_events_to_csv():
     """
@@ -801,38 +885,49 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
     If False, pulls only the last 24 hours.
     If duration is provided, uses it as the duration parameter.
     """
+    logging.debug(f"ENTRY: export_audit_logs_to_csv(full_history={full_history}, duration={duration})")
     logging.info("Starting export of organization audit logs...")
-    org_id = get_cached_or_prompted_org_id()
+    
+    try:
+        org_id = get_cached_or_prompted_org_id()
 
-    # Always include limit=1000 to reduce number of API calls
-    kwargs = {"limit": 1000}
+        # Always include limit=1000 to reduce number of API calls
+        kwargs = {"limit": 1000}
 
-    if duration:
-        kwargs["duration"] = duration
-        logging.info(f"Exporting audit logs for duration: {duration}")
-    elif not full_history:
-        end_time = int(time.time())
-        start_time = end_time - 24 * 3600
-        kwargs["start"] = start_time
-        kwargs["end"] = end_time
-        logging.info("Exporting only last 24 hours of audit logs.")
-    else:
-        kwargs["start"] = 0
-        logging.info("Exporting full audit log history (start=0).")
+        if duration:
+            kwargs["duration"] = duration
+            logging.info(f"Exporting audit logs for duration: {duration}")
+        elif not full_history:
+            end_time = int(time.time())
+            start_time = end_time - 24 * 3600
+            kwargs["start"] = start_time
+            kwargs["end"] = end_time
+            logging.info("Exporting only last 24 hours of audit logs.")
+        else:
+            kwargs["start"] = 0
+            logging.info("Exporting full audit log history (start=0).")
 
-    # Call the API and fetch all pages
-    response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
-    rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        # Call the API and fetch all pages
+        logging.debug(f"Making API call with parameters: {kwargs}")
+        response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)
 
-    if not rawdata:
-        logging.warning("⚠️ No audit logs returned from API.")
-        return
+        if not rawdata:
+            logging.warning("⚠️ No audit logs returned from API.")
+            logging.debug("EXIT: export_audit_logs_to_csv - no data")
+            return
 
-    # Flatten and sanitize for CSV
-    data = flatten_nested_fields_in_list(rawdata)
-    data = escape_multiline_strings_for_csv(data)
-    write_dict_list_to_csv(data, "OrgAuditLogs.csv")
-    logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
+        # Flatten and sanitize for CSV
+        data = flatten_nested_fields_in_list(rawdata)
+        data = escape_multiline_strings_for_csv(data)
+        write_dict_list_to_csv(data, "OrgAuditLogs.csv")
+        logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
+        logging.debug("EXIT: export_audit_logs_to_csv - success")
+        
+    except Exception as e:
+        logging.error(f"Failed to export audit logs: {e}")
+        logging.debug("EXIT: export_audit_logs_to_csv - error")
+        raise
 
 def export_all_sites_to_csv():
     """
@@ -1898,10 +1993,11 @@ def listen_for_command_output(mist_host, mist_apitoken, site_id, device_id, sess
         ws.close()
 
 def _handle_ws_message(message, session_id, buffer, output_lines, debug=False):
+    """Handle incoming WebSocket message with comprehensive error logging."""
     last_message_time = time.time()
     try:
         if debug:
-            logging.info(f"🔔 Raw WebSocket message:\n{message}")
+            logging.debug(f"WebSocket raw message received: {message}")
 
         msg = json.loads(message)
         data_str = msg.get("data", "{}")
@@ -1916,12 +2012,21 @@ def _handle_ws_message(message, session_id, buffer, output_lines, debug=False):
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
                 output_lines.append(line)
+            if debug:
+                logging.debug(f"Processed WebSocket data: {len(raw_output)} chars, buffer size: {len(buffer)}")
 
-    except Exception as e:
+    except json.JSONDecodeError as e:
+        logging.error(f"WebSocket message JSON decode error: {e}")
         if debug:
-            logging.exception("⚠️ Error parsing WebSocket message:")
-        else:
-            logging.warning(f"⚠️ Error parsing message: {e}")
+            logging.debug(f"Invalid JSON content: {message}")
+    except KeyError as e:
+        logging.warning(f"WebSocket message missing expected key: {e}")
+        if debug:
+            logging.debug(f"Message structure: {message}")
+    except Exception as e:
+        logging.error(f"Unexpected error parsing WebSocket message: {e}")
+        if debug:
+            logging.exception("Full WebSocket message parsing error:")
 
     return last_message_time, buffer
 
@@ -2065,17 +2170,47 @@ def loop_refresh_core_datasets(delay=None, debug=False):
         logging.info("🛑 Loop interrupted by user (Ctrl+C). Exiting gracefully.")
 
 def load_pid_tuning_data():
+    """Load PID tuning data from file with comprehensive logging."""
+    logging.debug(f"ENTRY: load_pid_tuning_data()")
+    
     if os.path.exists(tuning_data_file):
         try:
+            logging.debug(f"File I/O: Attempting to read PID tuning data from {tuning_data_file}")
             with open(tuning_data_file, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+            logging.debug(f"File I/O: Successfully loaded PID tuning data from {tuning_data_file}")
+            logging.debug(f"EXIT: load_pid_tuning_data - loaded from file")
+            return data
         except json.JSONDecodeError as e:
-            logging.warning(f"⚠️ Failed to parse tuning_data.json: {e}. Using defaults.")
+            logging.error(f"File I/O: Failed to parse JSON in {tuning_data_file}: {e}. Using defaults.")
+        except OSError as e:
+            logging.error(f"File I/O: OS error reading {tuning_data_file}: {e}. Using defaults.")
+        except Exception as e:
+            logging.error(f"File I/O: Unexpected error reading {tuning_data_file}: {e}. Using defaults.")
+    else:
+        logging.debug(f"File I/O: {tuning_data_file} does not exist, using defaults")
+        
+    logging.debug(f"EXIT: load_pid_tuning_data - using defaults")
     return {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}
 
 def save_pid_tuning_data(data):
-    with open(tuning_data_file, 'w') as f:
-        json.dump(data, f, indent=2)
+    """Save PID tuning data to file with comprehensive logging."""
+    logging.debug(f"ENTRY: save_pid_tuning_data(data_keys={list(data.keys()) if data else []})")
+    
+    try:
+        logging.debug(f"File I/O: Attempting to write PID tuning data to {tuning_data_file}")
+        with open(tuning_data_file, 'w') as f:
+            json.dump(data, f, indent=2)
+        logging.debug(f"File I/O: Successfully wrote PID tuning data to {tuning_data_file}")
+        logging.debug(f"EXIT: save_pid_tuning_data - success")
+    except OSError as e:
+        logging.error(f"File I/O: OS error writing to {tuning_data_file}: {e}")
+        logging.debug(f"EXIT: save_pid_tuning_data - OS error")
+        raise
+    except Exception as e:
+        logging.error(f"File I/O: Unexpected error writing to {tuning_data_file}: {e}")
+        logging.debug(f"EXIT: save_pid_tuning_data - unexpected error")
+        raise
 
 def adjust_gains(data):
     """
@@ -2329,18 +2464,28 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
     Appends delay metrics, API cache, and tuning data to a JSON file.
     Each call writes a new line with a timestamped entry.
     """
+    logging.debug(f"ENTRY: append_delay_metrics_log(filename={filename})")
+    
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "delay_metrics": delay_metrics,
         "api_cache": api_cache,
         "tuning_data": tuning_data
     }
+    
     try:
+        logging.debug(f"File I/O: Appending delay metrics to {filename}")
         with open(filename, "a", encoding="utf-8") as f:
             json.dump(log_entry, f)
             f.write("\n")
+        logging.debug(f"File I/O: Successfully appended delay metrics to {filename}")
+        logging.debug(f"EXIT: append_delay_metrics_log - success")
+    except OSError as e:
+        logging.error(f"File I/O: OS error writing delay metrics to {filename}: {e}")
+        logging.debug(f"EXIT: append_delay_metrics_log - OS error")
     except Exception as e:
-        logging.warning(f"⚠️ Failed to write delay metrics to {filename}: {e}")
+        logging.error(f"File I/O: Failed to write delay metrics to {filename}: {e}")
+        logging.debug(f"EXIT: append_delay_metrics_log - error")
 
 def export_gateway_device_configs_to_csv(debug=False, fast=False):
     """
@@ -2469,11 +2614,19 @@ def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_wo
     return all_device_configs
 
 def get_rate_limited_delay(smoothed_delay=None):
+    """
+    Calculates an appropriate delay for API rate limiting using PID control.
+    Includes comprehensive logging for tuning and backoff mechanisms.
+    """
+    logging.debug(f"ENTRY: get_rate_limited_delay(smoothed_delay={smoothed_delay})")
+    
     global _api_usage_cache
     tuning_data = load_pid_tuning_data()
+    logging.debug(f"Loaded PID tuning data: k_p={tuning_data.get('k_p')}, k_i={tuning_data.get('k_i')}, integral={tuning_data.get('integral')}")
 
     # Reset gains if out of bounds
     if tuning_data["k_p"] < 1e-6 or tuning_data["k_i"] < 1e-8 or tuning_data["k_p"] > 1.0 or tuning_data["k_i"] > 0.01:
+        logging.warning(f"PID gains out of bounds, resetting: k_p={tuning_data['k_p']}, k_i={tuning_data['k_i']}")
         tuning_data["k_p"] = 0.1
         tuning_data["k_i"] = 0.001
 
@@ -2489,23 +2642,31 @@ def get_rate_limited_delay(smoothed_delay=None):
         previous_elapsed = _api_usage_cache.get("previous_elapsed", elapsed)
 
         # Hybrid refresh trigger: every 60s, every 100 requests, or top of the hour
-        if (
+        refresh_needed = (
             not _api_usage_cache["initialized"]
             or _api_usage_cache["perceived_requests"] >= 100
             or elapsed > 60
             or (now.minute == 0 and now.second < 5)
-        ):
-            usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data
-            _api_usage_cache["used"] = usage.get("requests", 0)
-            _api_usage_cache["limit"] = usage.get("request_limit", 5000)
-            _api_usage_cache["last_updated"] = current_time
-            _api_usage_cache["perceived_requests"] = 0
-            _api_usage_cache["initialized"] = True
+        )
+        
+        if refresh_needed:
+            logging.debug(f"Refreshing API usage cache - elapsed: {elapsed:.1f}s, perceived_requests: {_api_usage_cache['perceived_requests']}")
+            try:
+                usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data
+                _api_usage_cache["used"] = usage.get("requests", 0)
+                _api_usage_cache["limit"] = usage.get("request_limit", 5000)
+                _api_usage_cache["last_updated"] = current_time
+                _api_usage_cache["perceived_requests"] = 0
+                _api_usage_cache["initialized"] = True
+                logging.debug(f"API usage refreshed: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
+            except Exception as api_e:
+                logging.warning(f"Failed to refresh API usage data: {api_e}. Using cached values.")
         else:
             estimated_growth = round((_api_usage_cache["limit"] / 3600) * elapsed)
             _api_usage_cache["used"] += estimated_growth
             _api_usage_cache["last_updated"] = current_time
             _api_usage_cache["perceived_requests"] += 1
+            logging.debug(f"Using estimated API usage: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
 
         used = min(_api_usage_cache["used"], _api_usage_cache["limit"])
         limit = _api_usage_cache["limit"]
@@ -2528,6 +2689,14 @@ def get_rate_limited_delay(smoothed_delay=None):
         unsat_delay = base_delay + k_p * error + k_i * delay_integral
         sat_delay = max(min(unsat_delay, 10), 0.2)
 
+        # Log backoff calculation details
+        if sat_delay > 2.0:
+            logging.warning(f"High delay calculated: {sat_delay:.3f}s (base: {base_delay:.3f}s, error: {error:.1f}, used: {used}/{limit})")
+        elif sat_delay > 1.0:
+            logging.info(f"Moderate delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
+        else:
+            logging.debug(f"Normal delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
+
         # Adaptive back_calc_gain
         back_calc_gain = min(max(abs(sat_delay - unsat_delay) / 10, 0.01), 0.5)
 
@@ -2542,7 +2711,7 @@ def get_rate_limited_delay(smoothed_delay=None):
         smoothed_delay = sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
         delay_in_seconds = max(smoothed_delay, 0.2)
 
-        logging.info(f"Sleeping for {delay_in_seconds:.3f} seconds")
+        logging.info(f"Rate limiting: sleeping for {delay_in_seconds:.3f} seconds")
 
         # Save updated tuning data
         tuning_data["error"] = error_history[-20:]
@@ -2562,10 +2731,12 @@ def get_rate_limited_delay(smoothed_delay=None):
         }
         append_delay_metrics_log(delay_metrics, _api_usage_cache, tuning_data)
 
+        logging.debug(f"EXIT: get_rate_limited_delay - delay: {delay_in_seconds:.3f}s")
         return smoothed_delay, delay_in_seconds
 
     except Exception as e:
-        logging.warning(f"⚠️ Failed to calculate dynamic delay: {e}. Using default 500 ms delay.")
+        logging.error(f"Failed to calculate dynamic delay: {e}. Using default 500ms fallback delay.")
+        logging.debug(f"EXIT: get_rate_limited_delay - error fallback")
         return smoothed_delay, 0.5
 
 def export_combined_inventory_with_site_info():
@@ -2811,6 +2982,159 @@ def convert_virtual_chassis_to_virtual_mac():
     except Exception as e:
         print(f"❌ Failed to convert to virtual MAC: {e}")
         logging.error(f"Failed to convert to virtual MAC: {e}")
+
+def export_site_wifi_clients_to_csv(site_id=None):
+    """
+    Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
+    Fetches both wireless client data and wireless client session data, then merges them based on MAC address.
+    If site_id is not provided, prompts user to select from site list.
+    
+    The merged data includes:
+    - Current client information (if available)
+    - Session data for each client (prefixed with 'session_')
+    - Session count for clients with multiple sessions
+    - Sessions without corresponding current clients (marked as 'session_only')
+    """
+    logging.info("Starting export of site WiFi clients...")
+    
+    # Ensure required CSVs are fresh
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    # Get site_id if not provided
+    if not site_id:
+        site_id = prompt_select_site_id_from_csv("SiteList.csv")
+        if not site_id:
+            logging.error("❌ No site selected.")
+            print("❌ No site selected.")
+            return
+    
+    # Get site name for display
+    site_name = "Unknown Site"
+    try:
+        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("id") == site_id:
+                    site_name = row.get("name", "Unknown Site")
+                    break
+    except Exception as e:
+        logging.warning(f"⚠️ Failed to load site name from SiteList.csv: {e}")
+    
+    logging.info(f"Fetching WiFi clients for site: {site_name} (ID: {site_id})")
+    print(f"🔍 Fetching WiFi clients for site: {site_name}")
+    
+    try:
+        # Call the Mist API to search for wireless clients at the site
+        logging.info("Fetching wireless clients data...")
+        client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
+        clients = mistapi.get_all(response=client_response, mist_session=apisession)
+        
+        # Call the Mist API to search for wireless client sessions at the site
+        logging.info("Fetching wireless client sessions data...")
+        session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(apisession, site_id, limit=1000)
+        sessions = mistapi.get_all(response=session_response, mist_session=apisession)
+        
+        if not clients and not sessions:
+            logging.warning("⚠️ No WiFi clients or sessions found at this site.")
+            print("⚠️ No WiFi clients or sessions found at this site.")
+            # Create empty CSV with headers
+            with open("SiteWiFiClients.CSV", "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["site_id", "site_name", "message"])
+                writer.writerow([site_id, site_name, "No WiFi clients or sessions found"])
+            return
+        
+        # Create a dictionary to store session data by MAC address for easy lookup
+        sessions_by_mac = {}
+        if sessions:
+            for session in sessions:
+                mac = session.get("mac")
+                if mac:
+                    # If multiple sessions exist for the same MAC, store them in a list
+                    if mac in sessions_by_mac:
+                        if not isinstance(sessions_by_mac[mac], list):
+                            sessions_by_mac[mac] = [sessions_by_mac[mac]]
+                        sessions_by_mac[mac].append(session)
+                    else:
+                        sessions_by_mac[mac] = session
+        
+        # Merge client data with session data based on MAC address
+        enriched_clients = []
+        processed_macs = set()
+        
+        # Process clients and merge with matching sessions
+        if clients:
+            for client in clients:
+                client_mac = client.get("mac")
+                # Add site information
+                client["site_id"] = site_id
+                client["site_name"] = site_name
+                client["data_source"] = "client"
+                
+                # Merge with session data if available
+                if client_mac and client_mac in sessions_by_mac:
+                    session_data = sessions_by_mac[client_mac]
+                    if isinstance(session_data, list):
+                        # Multiple sessions - merge with the most recent one
+                        latest_session = max(session_data, key=lambda x: x.get("start_time", 0))
+                        for key, value in latest_session.items():
+                            if key not in client:  # Don't overwrite client data
+                                client[f"session_{key}"] = value
+                        client["session_count"] = len(session_data)
+                    else:
+                        # Single session
+                        for key, value in session_data.items():
+                            if key not in client:  # Don't overwrite client data
+                                client[f"session_{key}"] = value
+                        client["session_count"] = 1
+                    processed_macs.add(client_mac)
+                else:
+                    client["session_count"] = 0
+                
+                enriched_clients.append(client)
+        
+        # Add any sessions that don't have corresponding client data
+        if sessions:
+            for session in sessions:
+                session_mac = session.get("mac")
+                if session_mac and session_mac not in processed_macs:
+                    # This is a session without a corresponding current client
+                    session["site_id"] = site_id
+                    session["site_name"] = site_name
+                    session["data_source"] = "session_only"
+                    session["session_count"] = 1
+                    # Prefix session-specific fields to avoid conflicts
+                    session_data = {}
+                    for key, value in session.items():
+                        if key not in ["site_id", "site_name", "data_source", "session_count"]:
+                            session_data[f"session_{key}"] = value
+                        else:
+                            session_data[key] = value
+                    enriched_clients.append(session_data)
+        
+        if not enriched_clients:
+            logging.warning("⚠️ No data to export after processing.")
+            print("⚠️ No data to export after processing.")
+            return
+        
+        # Flatten and sanitize the data for CSV
+        flattened = flatten_nested_fields_in_list(enriched_clients)
+        sanitized = escape_multiline_strings_for_csv(flattened)
+        
+        # Write to CSV
+        write_dict_list_to_csv(sanitized, "SiteWiFiClients.CSV")
+        
+        client_count = len(clients) if clients else 0
+        session_count = len(sessions) if sessions else 0
+        total_records = len(enriched_clients)
+        
+        logging.info(f"✅ WiFi data exported to SiteWiFiClients.CSV ({client_count} clients, {session_count} sessions, {total_records} total records)")
+        print(f"✅ WiFi data exported to SiteWiFiClients.CSV")
+        print(f"   📊 {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}")
+        
+    except Exception as e:
+        logging.error(f"❌ Failed to fetch WiFi data for site {site_id}: {e}")
+        print(f"❌ Failed to fetch WiFi data: {e}")
 
 def reboot_devices_by_gateway_template_list():
     """
@@ -3095,9 +3419,13 @@ menu_actions = {
     "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)(WIP)"),
     "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "46": (reboot_devices_by_gateway_template_list, "Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
+    "47": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
 }
 
 def main():
+    """Main entry point for MistHelper CLI application."""
+    logging.debug("ENTRY: main()")
+    
     # --- CLI Argument Parsing ---
     parser = argparse.ArgumentParser(description="MistHelper CLI Interface")
     parser.add_argument("-O", "--org", help="Organization ID")
@@ -3109,13 +3437,20 @@ def main():
     parser.add_argument("--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic.")
     parser.add_argument("--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)")
     args = parser.parse_args()
+    
+    # Enable debug logging if --debug flag is provided
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug("Debug logging enabled via --debug flag")
+    
+    logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}")
 
     global org_id
     if len(sys.argv) > 1:
         logging.info("CLI arguments detected, running in non-interactive mode.")
         if args.org:
             org_id = args.org
-            logging.info(f"Overriding org_id with CLI argument: {org_id}")
+            logging.info(f"Using org_id from CLI argument: {org_id}")
         else:
             org_id = get_cached_or_prompted_org_id()
 
@@ -3168,6 +3503,7 @@ def main():
             sys.exit(1)
 
         logging.info("CLI execution complete. Exiting.")
+        logging.debug("EXIT: main() - CLI success")
         sys.exit(0)
 
     # --- Interactive Menu Fallback ---
@@ -3180,12 +3516,32 @@ def main():
     if selected:
         func, _ = selected
         logging.info(f"User selected menu option '{iwant}'. Executing associated function.")
-        func()
-        sys.exit(0)
+        try:
+            func()
+            logging.info("Interactive menu execution complete.")
+            logging.debug("EXIT: main() - interactive success")
+            sys.exit(0)
+        except Exception as e:
+            logging.error(f"Error executing menu option '{iwant}': {e}")
+            logging.debug("EXIT: main() - interactive error")
+            sys.exit(1)
     else:
-        logging.warning(f"Invalid selection '{iwant}' entered by user.")
+        logging.error(f"Invalid selection '{iwant}' entered by user.")
         print("Invalid selection. Please try again.")
+        logging.debug("EXIT: main() - invalid selection")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        logging.info("=== MistHelper application starting ===")
+        main()
+    except KeyboardInterrupt:
+        logging.info("Application interrupted by user (Ctrl+C)")
+        logging.debug("EXIT: __main__ - user interrupt")
+        sys.exit(130)  # Standard exit code for SIGINT
+    except Exception as e:
+        logging.error(f"Unhandled exception in main application: {e}")
+        logging.debug("EXIT: __main__ - unhandled exception")
+        sys.exit(1)
+    finally:
+        logging.info("=== MistHelper application ending ===")
