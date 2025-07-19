@@ -1,6 +1,8 @@
 ﻿import subprocess
 import sys
 import concurrent.futures
+import sqlite3
+import os
 from datetime import datetime, timezone
 
 # List of required packages (pip names)
@@ -70,8 +72,12 @@ def ensure_all_required_packages_are_ready_with_status_bar(package_list):
 
     print("\r✅ Dependencies are ready.                      ")
 
-# Run the version check and upgrade for all dependencies
-ensure_all_required_packages_are_ready_with_status_bar(required_packages)
+# Check for --skip-deps flag early (before main argument parsing)
+skip_deps = "--skip-deps" in sys.argv or "--help" in sys.argv or "-h" in sys.argv or "--test" in sys.argv
+
+# Run the version check and upgrade for all dependencies (unless skipped)
+if not skip_deps:
+    ensure_all_required_packages_are_ready_with_status_bar(required_packages)
 
 # Import all dependencies after ensuring installation
 import mistapi
@@ -90,6 +96,7 @@ import shutil
 import pyte
 import requests
 import numpy as np
+import math
 from prettytable import PrettyTable
 from tqdm import tqdm
 from datetime import datetime, timedelta, timezone
@@ -143,6 +150,11 @@ org_id=None
 # Load .env variables early so freshness can be set via .env
 load_dotenv()
 CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default to 15 if not set
+
+# Global configuration for output format (CSV or SQLite)
+# Default to CSV for general use, can be overridden by CLI flag
+OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
+DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to SQLite database file
 
 def check_and_generate_csv(file_name, generate_function, freshness_minutes=None):
     """
@@ -204,7 +216,7 @@ def prepare_data_and_write_csv(data, filename, sort_key=None):
         data = sorted(data, key=lambda x: x.get(sort_key, ""))
     
     # Write the processed data to a CSV file
-    write_dict_list_to_csv(data, filename)
+    save_data_to_output(data, filename)
 
 def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
     """
@@ -230,8 +242,8 @@ def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
         row = [item.get(field, "") for field in fields]
         table.add_row(row)
 
-    # Log the table as a string
-    logging.info("\n" + table.get_string())
+    # Log the table as a string (debug mode only)
+    logging.debug("\n" + table.get_string())
 
 def interactive_fetch_device_data_to_csv(fetch_function, filename, description, device_type="all", site_id=None, device_id=None):
     """
@@ -261,7 +273,7 @@ def interactive_fetch_device_data_to_csv(fetch_function, filename, description, 
     stats = escape_multiline_strings_for_csv(stats)
 
     # Write the data to a CSV file
-    write_dict_list_to_csv(stats, filename)
+    save_data_to_output(stats, filename)
 
     # Display the data in a table
     display_dict_list_as_pretty_table(stats)
@@ -552,6 +564,265 @@ def write_dict_list_to_csv(data, csv_file):
         logging.debug(f"EXIT: write_dict_list_to_csv - unexpected error")
         raise
 
+
+def write_dict_list_to_sqlite_database_inside_container(data, table_name):
+    """
+    Writes a list of dictionaries to a SQLite database table inside the container.
+    Follows NASA/JPL coding standards with comprehensive logging and error handling.
+    
+    Args:
+        data (list): List of dictionaries containing the data to write
+        table_name (str): Name of the database table to write to
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Entry logging with input validation
+    timestamp = datetime.now(timezone.utc).isoformat()
+    logging.debug(f"ENTRY: write_dict_list_to_sqlite_database_inside_container(data_rows={len(data) if data else 0}, table_name={table_name}) at {timestamp}")
+    
+    # Input validation - Check if data is provided and is a list
+    if not data:
+        logging.warning(f"No data provided to write to table {table_name} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no data to write")
+        return False
+        
+    if not isinstance(data, list):
+        logging.error(f"Invalid data type: expected list, got {type(data)} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - invalid data type")
+        return False
+        
+    # Input validation - Check table name
+    if not table_name or not isinstance(table_name, str):
+        logging.error(f"Invalid table name: {table_name} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - invalid table name")
+        return False
+        
+    # Sanitize table name to prevent SQL injection (following safety-critical standards)
+    import re
+    table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+    if not table_name or table_name[0].isdigit():
+        table_name = f"table_{table_name}"
+        
+    logging.debug(f"Processing {len(data)} rows for table {table_name} at {timestamp}")
+    
+    # Ensure database directory exists
+    db_dir = os.path.dirname(DATABASE_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+            logging.info(f"Created database directory: {db_dir} at {timestamp}")
+        except OSError as e:
+            logging.error(f"Failed to create database directory {db_dir}: {e} at {timestamp}")
+            logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - directory creation failed")
+            return False
+    
+    # Process data to handle CSV-specific formatting (escape multiline strings)
+    try:
+        processed_data = escape_multiline_strings_for_csv(data)
+        logging.debug(f"Successfully processed data for SQLite compatibility at {timestamp}")
+    except Exception as e:
+        logging.error(f"Failed to process data: {e} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - data processing failed")
+        return False
+    
+    # Get all unique fields for table schema
+    try:
+        fields = get_all_unique_dict_keys(processed_data)
+        if not fields:
+            logging.error(f"No fields found in data for table {table_name} at {timestamp}")
+            logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no fields")
+            return False
+        logging.debug(f"Database fields determined: {fields} at {timestamp}")
+    except Exception as e:
+        logging.error(f"Failed to determine fields: {e} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - field determination failed")
+        return False
+    
+    # Database operations with comprehensive error handling
+    connection = None
+    try:
+        # Connect to SQLite database
+        logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {timestamp}")
+        connection = sqlite3.connect(DATABASE_PATH)
+        cursor = connection.cursor()
+        logging.info(f"Successfully connected to database: {DATABASE_PATH} at {timestamp}")
+        
+        # Create table with all fields as TEXT (following safety-critical principle: simple, predictable)
+        create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT"
+        for field in fields:
+            # Rename fields that conflict with our built-in columns to preserve data
+            if field.lower() == 'id':
+                safe_field = 'api_id'  # Preserve API ID as 'api_id'
+                logging.debug(f"Renaming field '{field}' to 'api_id' to preserve data while avoiding conflict")
+            elif field.lower() == 'timestamp':
+                safe_field = 'api_timestamp'  # Preserve API timestamp as 'api_timestamp'
+                logging.debug(f"Renaming field '{field}' to 'api_timestamp' to preserve data while avoiding conflict")
+            else:
+                # Sanitize field names for SQL safety
+                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            create_table_sql += f", {safe_field} TEXT"
+        create_table_sql += ")"
+        
+        cursor.execute(create_table_sql)
+        logging.debug(f"Table {table_name} created/verified at {timestamp}")
+        
+        # Clear existing data in table (replace mode for consistency with CSV behavior)
+        cursor.execute(f"DELETE FROM {table_name}")
+        logging.debug(f"Cleared existing data from table {table_name} at {timestamp}")
+        
+        # Insert data rows
+        insert_timestamp = datetime.now(timezone.utc).isoformat()
+        for idx, row in enumerate(processed_data):
+            try:
+                # Prepare values for insertion
+                values = [insert_timestamp]  # Add timestamp as first column
+                field_values = []
+                safe_fields = ["timestamp"]
+                
+                for field in fields:
+                    # Rename fields that conflict with our built-in columns to preserve data
+                    if field.lower() == 'id':
+                        safe_field = 'api_id'  # Preserve API ID as 'api_id'
+                    elif field.lower() == 'timestamp':
+                        safe_field = 'api_timestamp'  # Preserve API timestamp as 'api_timestamp'
+                    else:
+                        safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                    
+                    value = row.get(field, "")
+                    # Convert value to string for TEXT storage
+                    if value is None:
+                        value = ""
+                    else:
+                        value = str(value)
+                    values.append(value)
+                    safe_fields.append(safe_field)
+                
+                # Create parameterized query for safety
+                placeholders = ", ".join(["?"] * len(values))
+                insert_sql = f"INSERT INTO {table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
+                
+                cursor.execute(insert_sql, values)
+                
+                # Log first few rows for debugging
+                if idx < 3:
+                    logging.debug(f"Row {idx} inserted into {table_name} at {timestamp}")
+                    
+            except Exception as e:
+                logging.error(f"Failed to insert row {idx} into {table_name}: {e} at {timestamp}")
+                # Continue with other rows rather than failing completely
+                continue
+        
+        # Commit transaction
+        connection.commit()
+        logging.info(f"Successfully wrote {len(processed_data)} rows to table {table_name} in database {DATABASE_PATH} at {timestamp}")
+        
+        # Verify data was written
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        row_count = cursor.fetchone()[0]
+        logging.info(f"Database verification: {row_count} rows confirmed in table {table_name} at {timestamp}")
+        
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - success")
+        return True
+        
+    except sqlite3.Error as e:
+        logging.error(f"SQLite error when writing to {table_name}: {e} at {timestamp}")
+        if connection:
+            try:
+                connection.rollback()
+                logging.debug(f"Transaction rolled back for table {table_name} at {timestamp}")
+            except Exception as rollback_error:
+                logging.error(f"Failed to rollback transaction: {rollback_error} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - SQLite error")
+        return False
+        
+    except Exception as e:
+        logging.error(f"Unexpected error when writing to table {table_name}: {e} at {timestamp}")
+        if connection:
+            try:
+                connection.rollback()
+                logging.debug(f"Transaction rolled back for table {table_name} at {timestamp}")
+            except Exception as rollback_error:
+                logging.error(f"Failed to rollback transaction: {rollback_error} at {timestamp}")
+        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - unexpected error")
+        return False
+        
+    finally:
+        # Always close database connection (safety-critical: resource cleanup)
+        if connection:
+            try:
+                connection.close()
+                logging.debug(f"Database connection closed for table {table_name} at {timestamp}")
+            except Exception as e:
+                logging.error(f"Failed to close database connection: {e} at {timestamp}")
+
+
+def write_data_with_format_selection(data, filename_or_table, format_override=None):
+    """
+    Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
+    Follows NASA/JPL coding standards with comprehensive logging.
+    
+    Args:
+        data (list): List of dictionaries containing the data to write
+        filename_or_table (str): CSV filename or database table name
+        format_override (str): Optional override for output format ("csv" or "sqlite")
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    timestamp = datetime.now(timezone.utc).isoformat()
+    logging.debug(f"ENTRY: write_data_with_format_selection(data_rows={len(data) if data else 0}, filename_or_table={filename_or_table}, format_override={format_override}) at {timestamp}")
+    
+    # Determine output format (format_override takes precedence over global setting)
+    output_format = format_override if format_override else OUTPUT_FORMAT
+    
+    # Input validation
+    if not data:
+        logging.warning(f"No data provided for output to {filename_or_table} at {timestamp}")
+        logging.debug(f"EXIT: write_data_with_format_selection - no data")
+        return False
+        
+    if output_format not in ["csv", "sqlite"]:
+        logging.error(f"Invalid output format: {output_format}. Must be 'csv' or 'sqlite' at {timestamp}")
+        logging.debug(f"EXIT: write_data_with_format_selection - invalid format")
+        return False
+    
+    try:
+        if output_format == "csv":
+            # Ensure CSV files have .csv extension
+            csv_filename = filename_or_table if filename_or_table.endswith('.csv') else f"{filename_or_table}.csv"
+            logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename} at {timestamp}")
+            write_dict_list_to_csv(data, csv_filename)
+            logging.debug(f"EXIT: write_data_with_format_selection - CSV success")
+            return True
+        else:  # sqlite
+            # Convert filename to table name (remove .csv extension if present)
+            table_name = filename_or_table
+            if table_name.endswith('.csv'):
+                table_name = table_name[:-4]  # Remove .csv extension
+            
+            logging.info(f"Writing {len(data)} rows to SQLite table: {table_name} at {timestamp}")
+            result = write_dict_list_to_sqlite_database_inside_container(data, table_name)
+            logging.debug(f"EXIT: write_data_with_format_selection - SQLite {'success' if result else 'failed'}")
+            return result
+            
+    except Exception as e:
+        logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {e} at {timestamp}")
+        logging.debug(f"EXIT: write_data_with_format_selection - exception")
+        return False
+
+
+def save_data_to_output(data, filename):
+    """
+    Wrapper function to replace write_dict_list_to_csv calls.
+    Routes to appropriate output format based on global OUTPUT_FORMAT setting.
+    
+    Args:
+        data (list): List of dictionaries containing the data to write
+        filename (str): CSV filename or database table name
+    """
+    return write_data_with_format_selection(data, filename)
+
 def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display_fields=None, **kwargs):
     """
     Fetches data using the provided API call, processes it (flattening, sorting, escaping),
@@ -566,7 +837,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     print(title)
     org_id = get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
-    smoothed = []
+    smoothed = None
 
     rawdata = []
     try:
@@ -589,7 +860,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
             if status_code == 429:
                 logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
                 if rawdata:
-                    write_dict_list_to_csv(rawdata, filename)
+                    save_data_to_output(rawdata, filename)
                     logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
                 logging.debug(f"EXIT: fetch_and_display_api_data - rate limited")
                 return
@@ -626,7 +897,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         logging.debug(f"Unique fields for CSV/table: {fields}")
 
         # Write processed data to CSV
-        write_dict_list_to_csv(data, filename)
+        save_data_to_output(data, filename)
         logging.info(f"Data written to {filename} ({len(data)} rows).")
 
         # Prepare and display PrettyTable
@@ -636,14 +907,14 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         for item in tqdm(data, desc="Processing", unit="record"):
             row = [item.get(field, "") for field in table.field_names]
             table.add_row(row)
-        logging.info("\n" + table.get_string())
+        logging.debug("\n" + table.get_string())
         logging.debug(f"EXIT: fetch_and_display_api_data - success")
 
     except Exception as e:
         logging.error(f"❌ Error during data fetch for {title}: {e}")
         # Always save whatever data was collected so far
         if rawdata:
-            write_dict_list_to_csv(rawdata, filename)
+            save_data_to_output(rawdata, filename)
             logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
         logging.debug(f"EXIT: fetch_and_display_api_data - error")
         raise
@@ -664,7 +935,7 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
     inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
     inventory = flatten_nested_fields_in_list(inventory)
     inventory = escape_multiline_strings_for_csv(inventory)
-    write_dict_list_to_csv(inventory, csv_filename)
+    save_data_to_output(inventory, csv_filename)
     logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
 
     # Prepare PrettyTable for user selection
@@ -728,7 +999,7 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     # Get all unique fields for CSV/table columns
     fields = get_all_unique_dict_keys(inventory)
     # Write inventory to CSV
-    write_dict_list_to_csv(inventory, csv_filename)
+    save_data_to_output(inventory, csv_filename)
     logging.info(f"Device inventory written to {csv_filename} ({len(inventory)} rows)")
 
     # Prepare PrettyTable for display
@@ -747,8 +1018,8 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
         row = [item.get(field, "") for field in fields]
         table.add_row(row)
 
-    # Log the table output for reference
-    logging.info("\n" + table.get_string())
+    # Log the table output for reference (debug mode only)
+    logging.debug("\n" + table.get_string())
 
 def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
     """
@@ -808,6 +1079,133 @@ def prompt_and_log_site_selection():
     else:
         logging.error("❌ No site selected. User may have entered an invalid value or cancelled the prompt.")
 
+def prompt_site_selection():
+    """
+    Prompts the user to select a site and returns the site_id.
+    Uses the existing CSV-based site selection functionality.
+    """
+    return prompt_select_site_id_from_csv()
+
+def prompt_device_selection(site_id, device_type="all"):
+    """
+    Prompts the user to select a device from the specified site and returns the device_id.
+    
+    Args:
+        site_id (str): The site ID to filter devices by
+        device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
+    
+    Returns:
+        str: The selected device ID or None if no selection made
+    """
+    return prompt_select_device_id_from_inventory(site_id, device_type)
+
+def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
+    """
+    Generic function to export site-specific data to CSV.
+    
+    Args:
+        api_call: The mistapi function to call
+        data_type: Description of the data type (e.g., "port stats", "clients")
+        sort_key: Field to sort results by
+        **api_kwargs: Additional arguments to pass to the API call
+    
+    Returns:
+        None
+    """
+    logging.info(f"Starting export of site {data_type}...")
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        logging.error("No site selected. Exiting.")
+        return
+    
+    # Get site name for display
+    try:
+        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, get_cached_or_prompted_org_id())
+        sites = mistapi.get_all(response=response, mist_session=apisession)
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+    except Exception as e:
+        logging.error(f"Error getting site name: {e}")
+        site_name = site_id
+    
+    logging.info(f"Exporting {data_type} for site: {site_name}")
+    
+    # Create filename from data_type
+    safe_data_type = data_type.replace(" ", "").replace("-", "").title()
+    safe_site_name = site_name.replace(" ", "_").replace("-", "_")
+    filename = f"Site{safe_data_type}_{safe_site_name}.csv"
+    
+    # For site-specific API calls, we need to use a custom approach since
+    # fetch_and_display_api_data expects org_id as the second parameter
+    try:
+        logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
+        response = api_call(apisession, site_id, limit=1000, **api_kwargs)
+        
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        if rawdata is None:
+            logging.warning(f"⚠️ No data returned from API for {data_type} at site {site_name}. Skipping.")
+            return
+
+        logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
+
+        # Sort data if a sort key is provided
+        if sort_key:
+            rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
+
+        # Flatten nested fields for CSV compatibility
+        data = flatten_nested_fields_in_list(rawdata)
+        
+        # Escape multiline strings for CSV
+        data = escape_multiline_strings_for_csv(data)
+
+        # Write processed data to output
+        save_data_to_output(data, filename)
+        logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
+
+        # Display the data in a table
+        fields = get_all_unique_dict_keys(data)
+        table = PrettyTable()
+        table.field_names = fields
+        table.valign = "t"
+        for item in tqdm(data, desc="Processing", unit="record"):
+            row = [item.get(field, "") for field in table.field_names]
+            table.add_row(row)
+        print(table)
+        logging.info("Site data displayed in table format.")
+        
+    except Exception as e:
+        logging.error(f"❌ Error during site {data_type} export for {site_name}: {e}")
+        raise
+
+def export_org_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
+    """
+    Generic function to export organization-specific data to CSV.
+    
+    Args:
+        api_call: The mistapi function to call
+        data_type: Description of the data type (e.g., "licenses", "templates")
+        sort_key: Field to sort results by
+        **api_kwargs: Additional arguments to pass to the API call
+    
+    Returns:
+        None
+    """
+    logging.info(f"Starting export of organization {data_type}...")
+    
+    # Create filename from data_type
+    safe_data_type = data_type.replace(" ", "").replace("-", "").title()
+    filename = f"Org{safe_data_type}.csv"
+    
+    fetch_and_display_api_data(
+        title=f"Organization {data_type.title()}:",
+        api_call=api_call,
+        filename=filename,
+        sort_key=sort_key,
+        limit=1000,
+        **api_kwargs
+    )
+
 def export_open_org_alarms_to_csv():
     """
     Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
@@ -849,7 +1247,7 @@ def export_recent_device_events_to_csv():
     events = rawdata
     logging.info(f"Fetched {len(events)} device events from the past 24 hours.")
     # Write the events to a CSV file
-    write_dict_list_to_csv(events, "OrgDeviceEvents.csv")
+    save_data_to_output(events, "OrgDeviceEvents.csv")
     logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
     # Optionally log the first few events for debugging
     if events:
@@ -874,7 +1272,7 @@ def export_all_org_device_events_52w_to_csv():
     events = flatten_nested_fields_in_list(events)
     events = escape_multiline_strings_for_csv(events)
     # Write all data to CSV in one operation
-    write_dict_list_to_csv(events, "OrgDeviceEvents_52w.csv")
+    save_data_to_output(events, "OrgDeviceEvents_52w.csv")
     logging.info("✅ All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
 
 def export_audit_logs_to_csv(full_history=False, duration=None):
@@ -920,7 +1318,7 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
         # Flatten and sanitize for CSV
         data = flatten_nested_fields_in_list(rawdata)
         data = escape_multiline_strings_for_csv(data)
-        write_dict_list_to_csv(data, "OrgAuditLogs.csv")
+        save_data_to_output(data, "OrgAuditLogs.csv")
         logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
         logging.debug("EXIT: export_audit_logs_to_csv - success")
         
@@ -931,18 +1329,20 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
 
 def export_all_sites_to_csv():
     """
-    Fetches and exports the list of all sites in the organization to SiteList.csv.
-    Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+    Fetches and exports the list of all sites in the organization.
+    Output format determined by global OUTPUT_FORMAT setting.
+    Uses fetch_and_display_api_data to handle API call and output writing.
     """
     logging.info("Starting export of organization site list...")
     fetch_and_display_api_data(
         title="Site List:",
         api_call=mistapi.api.v1.orgs.sites.listOrgSites,
-        filename="SiteList.csv",
+        filename="SiteList",  # Format-agnostic filename (no extension)
         sort_key="name",  # or "site_id" if preferred
         limit=1000
     )
-    logging.info("Completed export_all_sites_to_csv and wrote results to SiteList.csv.")
+    output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
+    logging.info(f"Completed export_all_sites and wrote results to {output_desc}.")
 
 def export_all_sites_list_to_csv():
     """
@@ -967,7 +1367,7 @@ def export_all_sites_list_to_csv():
     # Flatten and sanitize for CSV
     sites = flatten_nested_fields_in_list(sites)
     sites = escape_multiline_strings_for_csv(sites)
-    write_dict_list_to_csv(sites, output_file)
+    save_data_to_output(sites, output_file)
     logging.info(f"✅ Sites exported to {output_file}")
     print(f"✅ Sites exported to {output_file}")
 
@@ -1027,6 +1427,822 @@ def export_vpn_peer_stats_to_csv():
         filename="OrgVPNPeerStats.csv",
         sort_key="mac",
         limit=1000
+    )
+
+def export_site_port_stats_to_csv():
+    """Export port statistics for a specific site to SitePortStats.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.stats.searchSitePortStats,
+        data_type="port stats",
+        sort_key="mac"
+    )
+
+def export_site_device_virtual_chassis_to_csv():
+    """
+    Export virtual chassis information for switches at a specific site.
+    Prompts user to select a site and device, then exports VC details.
+    """
+    logging.info("Starting export of site device virtual chassis information...")
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        logging.error("No site selected. Exiting.")
+        return
+    
+    # Get device selection (filtered for switches)
+    device_id = prompt_device_selection(site_id, device_type="switch")
+    if not device_id:
+        logging.error("No switch device selected. Exiting.")
+        return
+    
+    # Get device name for display
+    response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id)
+    devices = mistapi.get_all(response=response, mist_session=apisession)
+    device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
+    
+    logging.info(f"Exporting virtual chassis information for device: {device_name}")
+    
+    try:
+        # Make API call to get virtual chassis information
+        response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
+        
+        if response.data:
+            # Convert to list format for CSV processing
+            vc_data = [response.data] if isinstance(response.data, dict) else response.data
+            
+            # Process and save the data
+            flattened = flatten_nested_fields_in_list(vc_data)
+            sanitized = escape_multiline_strings_for_csv(flattened)
+            
+            filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
+            save_data_to_output(sanitized, filename)
+            
+            logging.info(f"✅ Virtual chassis information exported to {filename}")
+            
+            # Display summary
+            if sanitized:
+                print(f"\n📊 Virtual Chassis Summary for {device_name}:")
+                print(f"   • Records exported: {len(sanitized)}")
+                if 'members' in sanitized[0]:
+                    print(f"   • VC members: {sanitized[0].get('members', 'N/A')}")
+                if 'preprovisioned' in sanitized[0]:
+                    print(f"   • Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
+                print(f"   • Data saved to: {filename}")
+        else:
+            logging.warning(f"⚠️ No virtual chassis data returned for device {device_name}")
+            print(f"⚠️ No virtual chassis data found for device {device_name}")
+            
+    except Exception as e:
+        logging.error(f"❌ Failed to export virtual chassis information: {e}")
+        print(f"❌ Failed to export virtual chassis information: {e}")
+
+def export_organization_templates_to_csv():
+    """
+    Export all organization templates (gateway, network, RF, site, AP) to CSV files.
+    """
+    logging.info("Starting export of organization templates...")
+    
+    # Gateway templates
+    try:
+        fetch_and_display_api_data(
+            title="Gateway Templates:",
+            api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
+            filename="OrgGatewayTemplates.csv",
+            sort_key="name",
+            limit=1000
+        )
+    except Exception as e:
+        logging.error(f"Failed to export gateway templates: {e}")
+    
+    # Network templates
+    try:
+        fetch_and_display_api_data(
+            title="Network Templates:",
+            api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+            filename="OrgNetworkTemplates.csv",
+            sort_key="name",
+            limit=1000
+        )
+    except Exception as e:
+        logging.error(f"Failed to export network templates: {e}")
+    
+    # RF templates
+    try:
+        fetch_and_display_api_data(
+            title="RF Templates:",
+            api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+            filename="OrgRfTemplates.csv",
+            sort_key="name",
+            limit=1000
+        )
+    except Exception as e:
+        logging.error(f"Failed to export RF templates: {e}")
+    
+    # Site templates
+    try:
+        fetch_and_display_api_data(
+            title="Site Templates:",
+            api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
+            filename="OrgSiteTemplates.csv",
+            sort_key="name",
+            limit=1000
+        )
+    except Exception as e:
+        logging.error(f"Failed to export site templates: {e}")
+    
+    # AP templates
+    try:
+        fetch_and_display_api_data(
+            title="AP Templates:",
+            api_call=mistapi.api.v1.orgs.aptemplates.listOrgApTemplates,
+            filename="OrgApTemplates.csv",
+            sort_key="name",
+            limit=1000
+        )
+    except Exception as e:
+        logging.error(f"Failed to export AP templates: {e}")
+    
+    logging.info("✅ Organization templates export completed")
+
+def export_site_clients_to_csv():
+    """
+    Export client statistics for a specific site to SiteClients.csv.
+    Prompts user to select a site and exports connected client information.
+    """
+    logging.info("Starting export of site client statistics...")
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        logging.error("No site selected. Exiting.")
+        return
+    
+    # Get site name for display
+    response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+    sites = mistapi.get_all(response=response, mist_session=apisession)
+    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+    
+    logging.info(f"Exporting client statistics for site: {site_name}")
+    
+    fetch_and_display_api_data(
+        title=f"Site Clients for {site_name}:",
+        api_call=mistapi.api.v1.sites.stats.searchSiteClientStats,
+        filename=f"SiteClients_{site_name.replace(' ', '_')}.csv",
+        sort_key="mac",
+        site_id=site_id,
+        limit=1000
+    )
+
+def export_site_devices_to_csv():
+    """
+    Export device list for a specific site to SiteDevices.csv.
+    Prompts user to select a site and exports device information.
+    """
+    logging.info("Starting export of site device list...")
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        logging.error("No site selected. Exiting.")
+        return
+    
+    # Get site name for display
+    response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+    sites = mistapi.get_all(response=response, mist_session=apisession)
+    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+    
+    logging.info(f"Exporting device list for site: {site_name}")
+    
+    fetch_and_display_api_data(
+        title=f"Site Devices for {site_name}:",
+        api_call=mistapi.api.v1.sites.devices.listSiteDevices,
+        filename=f"SiteDevices_{site_name.replace(' ', '_')}.csv",
+        sort_key="name",
+        site_id=site_id,
+        limit=1000
+    )
+
+def export_site_device_stats_to_csv():
+    """
+    Export device statistics for a specific site to SiteDeviceStats.csv.
+    Prompts user to select a site and exports device statistics.
+    """
+    logging.info("Starting export of site device statistics...")
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        logging.error("No site selected. Exiting.")
+        return
+    
+    # Get site name for display
+    response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+    sites = mistapi.get_all(response=response, mist_session=apisession)
+    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+    
+    logging.info(f"Exporting device statistics for site: {site_name}")
+    
+    fetch_and_display_api_data(
+        title=f"Site Device Stats for {site_name}:",
+        api_call=mistapi.api.v1.sites.stats.searchSiteDeviceStats,
+        filename=f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv",
+        sort_key="mac",
+        site_id=site_id,
+        limit=1000
+    )
+
+def export_org_wireless_clients_to_csv():
+    """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients,
+        data_type="wireless clients",
+        sort_key="mac"
+    )
+
+def export_org_wired_clients_to_csv():
+    """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients,
+        data_type="wired clients",
+        sort_key="mac"
+    )
+
+def export_org_security_events_to_csv():
+    """Export security policies and site-level rogue events for the organization to OrgSecurityEvents.csv."""
+    logging.info("Starting export of organization security policies and rogue events...")
+    
+    # First export security policies
+    logging.info("Fetching organization security policies...")
+    fetch_and_display_api_data(
+        title="Organization Security Policies:",
+        api_call=mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies,
+        filename="OrgSecurityPolicies",
+        sort_key="name",
+        limit=1000
+    )
+    
+    # Then collect rogue events from all sites
+    logging.info("Fetching rogue events from all sites...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    all_rogue_events = []
+    org_id = get_cached_or_prompted_org_id()
+    
+    try:
+        # Load sites
+        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+            sites = list(csv.DictReader(f))
+            
+        for site in tqdm(sites, desc="Sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unknown Site")
+            
+            if not site_id:
+                continue
+                
+            try:
+                # Get rogue events for this site
+                response = mistapi.api.v1.sites.rogues.searchSiteRogueEvents(
+                    apisession, site_id, duration="7d", limit=1000
+                )
+                events = mistapi.get_all(response=response, mist_session=apisession)
+                
+                # Add site context to each event
+                for event in events:
+                    event["site_id"] = site_id
+                    event["site_name"] = site_name
+                    
+                all_rogue_events.extend(events)
+                logging.info(f"✅ Fetched {len(events)} rogue events from site: {site_name}")
+                
+            except Exception as e:
+                logging.warning(f"⚠️ Failed to fetch rogue events from site {site_name}: {e}")
+                continue
+                
+            # Rate limiting
+            time.sleep(0.5)
+                
+    except Exception as e:
+        logging.error(f"Failed to process sites for rogue events: {e}")
+        
+    # Save rogue events if any were found
+    if all_rogue_events:
+        flattened = flatten_nested_fields_in_list(all_rogue_events)
+        sanitized = escape_multiline_strings_for_csv(flattened)
+        save_data_to_output(sanitized, "OrgRogueEvents")
+        logging.info(f"✅ {len(all_rogue_events)} rogue events exported to OrgRogueEvents")
+        print(f"✅ Security data exported: OrgSecurityPolicies and {len(all_rogue_events)} rogue events")
+    else:
+        logging.info("No rogue events found across all sites")
+        print("✅ Security policies exported, no rogue events found")
+
+def export_org_rogue_clients_to_csv():
+    """Export rogue client detections from all sites to OrgRogueClients.csv."""
+    logging.info("Starting export of rogue clients from all sites...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    all_rogue_clients = []
+    
+    try:
+        # Load sites
+        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+            sites = list(csv.DictReader(f))
+            
+        for site in tqdm(sites, desc="Sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unknown Site")
+            
+            if not site_id:
+                continue
+                
+            try:
+                # Get rogue clients for this site
+                response = mistapi.api.v1.sites.insights.listSiteRogueClients(
+                    apisession, site_id, duration="7d", limit=1000
+                )
+                clients = mistapi.get_all(response=response, mist_session=apisession)
+                
+                # Add site context to each client
+                for client in clients:
+                    client["site_id"] = site_id
+                    client["site_name"] = site_name
+                    
+                all_rogue_clients.extend(clients)
+                logging.info(f"✅ Fetched {len(clients)} rogue clients from site: {site_name}")
+                
+            except Exception as e:
+                logging.warning(f"⚠️ Failed to fetch rogue clients from site {site_name}: {e}")
+                continue
+                
+            # Rate limiting
+            time.sleep(0.5)
+                
+    except Exception as e:
+        logging.error(f"Failed to process sites for rogue clients: {e}")
+        return
+        
+    # Save rogue clients
+    if all_rogue_clients:
+        flattened = flatten_nested_fields_in_list(all_rogue_clients)
+        sanitized = escape_multiline_strings_for_csv(flattened)
+        save_data_to_output(sanitized, "OrgRogueClients")
+        logging.info(f"✅ {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
+        print(f"✅ {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
+    else:
+        logging.info("No rogue clients found across all sites")
+        print("ℹ️ No rogue clients detected across all sites")
+
+def export_org_rogue_aps_to_csv():
+    """Export rogue AP detections from all sites to OrgRogueAPs.csv."""
+    logging.info("Starting export of rogue APs from all sites...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    all_rogue_aps = []
+    
+    try:
+        # Load sites
+        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+            sites = list(csv.DictReader(f))
+            
+        for site in tqdm(sites, desc="Sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unknown Site")
+            
+            if not site_id:
+                continue
+                
+            try:
+                # Get rogue APs for this site
+                response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
+                    apisession, site_id, duration="7d", limit=1000
+                )
+                aps = mistapi.get_all(response=response, mist_session=apisession)
+                
+                # Add site context to each AP
+                for ap in aps:
+                    ap["site_id"] = site_id
+                    ap["site_name"] = site_name
+                    
+                all_rogue_aps.extend(aps)
+                logging.info(f"✅ Fetched {len(aps)} rogue APs from site: {site_name}")
+                
+            except Exception as e:
+                logging.warning(f"⚠️ Failed to fetch rogue APs from site {site_name}: {e}")
+                continue
+                
+            # Rate limiting
+            time.sleep(0.5)
+                
+    except Exception as e:
+        logging.error(f"Failed to process sites for rogue APs: {e}")
+        return
+        
+    # Save rogue APs
+    if all_rogue_aps:
+        flattened = flatten_nested_fields_in_list(all_rogue_aps)
+        sanitized = escape_multiline_strings_for_csv(flattened)
+        save_data_to_output(sanitized, "OrgRogueAPs")
+        logging.info(f"✅ {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
+        print(f"✅ {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
+    else:
+        logging.info("No rogue APs found across all sites")
+        print("ℹ️ No rogue APs detected across all sites")
+
+def export_org_licenses_to_csv():
+    """Export license information for the organization to OrgLicenses.csv."""
+    logging.info("Starting export of organization licenses...")
+    
+    # Create filename from data_type
+    filename = "OrgLicenses.csv"
+    
+    fetch_and_display_api_data(
+        title="Organization Licenses:",
+        api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesSummary,
+        filename=filename,
+        sort_key="type"
+        # Note: no limit parameter as this function doesn't accept it
+    )
+
+def export_org_psks_to_csv():
+    """Export PSK (Pre-Shared Key) information for the organization to OrgPsks.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.psks.listOrgPsks,
+        data_type="psks",
+        sort_key="name"
+    )
+
+def export_org_webhooks_to_csv():
+    """Export webhook configuration for the organization to OrgWebhooks.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks,
+        data_type="webhooks",
+        sort_key="name"
+    )
+
+def export_org_wlans_to_csv():
+    """Export WLAN configuration for the organization to OrgWlans.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.wlans.listOrgWlans,
+        data_type="wlans",
+        sort_key="ssid"
+    )
+
+def export_org_api_tokens_to_csv():
+    """Export API token information for the organization to OrgApiTokens.csv."""
+    logging.info("Starting export of organization api tokens...")
+    
+    # Create filename from data_type
+    filename = "OrgApiTokens.csv"
+    
+    fetch_and_display_api_data(
+        title="Organization Api Tokens:",
+        api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
+        filename=filename,
+        sort_key="name"
+        # Note: no limit parameter as this function doesn't accept it
+    )
+
+def export_org_admins_to_csv():
+    """Export administrator information for the organization to OrgAdmins.csv."""
+    logging.info("Starting export of organization admins...")
+    
+    # Create filename from data_type  
+    filename = "OrgAdmins.csv"
+    
+    fetch_and_display_api_data(
+        title="Organization Admins:",
+        api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
+        filename=filename,
+        sort_key="name"
+        # Note: no limit parameter as this function doesn't accept it
+    )
+
+def export_org_sso_to_csv():
+    """Export SSO (Single Sign-On) information for the organization to OrgSso.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.ssos.listOrgSsos,
+        data_type="sso",
+        sort_key="name"
+    )
+
+def export_org_usage_to_csv():
+    """Export license usage information for the organization to OrgUsage.csv."""
+    logging.info("Starting export of organization license usage...")
+    
+    fetch_and_display_api_data(
+        title="Organization License Usage:",
+        api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
+        filename="OrgUsage",
+        sort_key="site_id"
+    )
+    
+    logging.info("✅ License usage data exported to OrgUsage")
+    print("✅ License usage data exported to OrgUsage")
+
+def export_org_msp_to_csv():
+    """Export MSP (Managed Service Provider) information for the organization to OrgMsp.csv."""
+    logging.warning("ℹ️ MSP data is available only at MSP level, not organization level")
+    print("ℹ️ MSP data is available only at MSP level, not organization level")
+    print("💡 To access MSP data, use the Mist API MSP endpoints directly:")
+    print("   - GET /api/v1/msps (list MSPs)")
+    print("   - GET /api/v1/msps/{msp_id} (get MSP details)")
+    print("   - GET /api/v1/msps/{msp_id}/orgs (list organizations under MSP)")
+    print("   This organization-level export is not applicable for MSP data.")
+
+def export_org_mx_edges_to_csv():
+    """Export MX Edge information for the organization to OrgMxEdges.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges,
+        data_type="mx edges",
+        sort_key="name"
+    )
+
+def export_org_network_templates_to_csv():
+    """Export network template information for the organization to OrgNetworkTemplates.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+        data_type="network templates",
+        sort_key="name"
+    )
+
+def export_org_rf_templates_to_csv():
+    """Export RF template information for the organization to OrgRfTemplates.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+        data_type="rf templates",
+        sort_key="name"
+    )
+
+def export_org_ap_templates_to_csv():
+    """Export AP template information for the organization to OrgApTemplates.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles,
+        data_type="ap templates",
+        sort_key="name",
+        type="ap"
+    )
+
+def export_org_switch_templates_to_csv():
+    """Export switch template information for the organization to OrgSwitchTemplates.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles,
+        data_type="switch templates",
+        sort_key="name",
+        type="switch"
+    )
+
+def export_site_wlans_to_csv():
+    """Export WLAN configuration for a specific site to SiteWlans.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.wlans.listSiteWlans,
+        data_type="wlans",
+        sort_key="ssid"
+    )
+
+def export_site_beacons_to_csv():
+    """Export beacon information for a specific site to SiteBeacons.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.beacons.listSiteBeacons,
+        data_type="beacons",
+        sort_key="name"
+    )
+
+def export_site_maps_to_csv():
+    """Export map information for a specific site to SiteMaps.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.maps.listSiteMaps,
+        data_type="maps",
+        sort_key="name"
+    )
+
+def export_site_zones_to_csv():
+    """Export zone information for a specific site to SiteZones.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.zones.listSiteZones,
+        data_type="zones",
+        sort_key="name"
+    )
+
+def export_site_insights_to_csv():
+    """Export insights information for a specific site to SiteInsights.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.insights.listSiteInsights,
+        data_type="insights",
+        sort_key="timestamp"
+    )
+
+def continuous_data_collection_loop():
+    """
+    Continuously collect core organizational data as specified in script needs.txt.
+    This runs the 5 key API calls in a loop with proper rate limiting:
+    1. Site list
+    2. Organization inventory
+    3. Organization device stats
+    4. Organization device port stats
+    5. VPN peer path stats
+    """
+    logging.info("Starting continuous data collection loop...")
+    print("🔄 Starting continuous data collection loop...")
+    print("   This will collect core organizational data every 5 seconds")
+    print("   Press CTRL+C to stop or create 'stop_loop.txt' file")
+    
+    loop_count = 0
+    
+    try:
+        while True:
+            loop_count += 1
+            print(f"\n📊 Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # Check for stop file
+            if os.path.exists("stop_loop.txt"):
+                print("🛑 Stop file detected. Ending continuous loop.")
+                os.remove("stop_loop.txt")
+                break
+            
+            try:
+                # 1. Site list
+                print("  📍 Collecting site list...")
+                export_all_sites_to_csv()
+                time.sleep(0.75)  # Rate limiting
+                
+                # 2. Organization inventory
+                print("  📦 Collecting organization inventory...")
+                export_device_inventory_to_csv()
+                time.sleep(0.75)
+                
+                # 3. Organization device stats
+                print("  📈 Collecting organization device stats...")
+                export_device_stats_to_csv()
+                time.sleep(0.75)
+                
+                # 4. Organization device port stats
+                print("  🔌 Collecting organization device port stats...")
+                export_device_port_stats_to_csv()
+                time.sleep(0.75)
+                
+                # 5. VPN peer path stats
+                print("  🔗 Collecting VPN peer path stats...")
+                export_vpn_peer_stats_to_csv()
+                time.sleep(0.75)
+                
+                print(f"  ✅ Loop {loop_count} completed successfully")
+                
+            except KeyboardInterrupt:
+                print("\n⚠️  Keyboard interrupt detected. Stopping loop...")
+                break
+            except Exception as e:
+                logging.error(f"Error in continuous loop iteration {loop_count}: {e}")
+                print(f"  ❌ Error in loop {loop_count}: {e}")
+                print("  🔄 Continuing to next iteration...")
+                time.sleep(5)  # Wait longer on error
+                
+    except KeyboardInterrupt:
+        print("\n🛑 Continuous data collection loop stopped by user.")
+    except Exception as e:
+        logging.error(f"Fatal error in continuous loop: {e}")
+        print(f"💥 Fatal error in continuous loop: {e}")
+    
+    print("🏁 Continuous data collection loop ended.")
+
+# === NAC (Network Access Control) Functions ===
+
+def export_org_nac_clients_to_csv():
+    """Export NAC client information for the organization to OrgNacClients.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients,
+        data_type="nac clients",
+        sort_key="mac"
+    )
+
+def export_org_nac_tags_to_csv():
+    """Export NAC tags/policies for the organization to OrgNacTags.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags,
+        data_type="nac tags",
+        sort_key="name"
+    )
+
+def export_org_nac_portals_to_csv():
+    """Export NAC portals configuration for the organization to OrgNacPortals.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals,
+        data_type="nac portals",
+        sort_key="name"
+    )
+
+def export_org_nac_rules_to_csv():
+    """Export NAC rules/policies for the organization to OrgNacRules.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules,
+        data_type="nac rules",
+        sort_key="name"
+    )
+
+def export_org_nac_events_to_csv():
+    """Export NAC events for the organization to OrgNacEvents.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
+        data_type="nac events",
+        sort_key="timestamp",
+        duration="24h"
+    )
+
+# === Statistics & Analytics Functions ===
+
+def export_org_assets_to_csv():
+    """Export asset tracking statistics for the organization to OrgAssets.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.stats.searchOrgAssets,
+        data_type="assets",
+        sort_key="name"
+    )
+
+def export_org_bgp_peers_to_csv():
+    """Export BGP peer statistics for the organization to OrgBgpPeers.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers,
+        data_type="bgp peers",
+        sort_key="peer_ip"
+    )
+
+def export_org_tunnel_stats_to_csv():
+    """Export tunnel statistics for the organization to OrgTunnelStats.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels,
+        data_type="tunnel stats",
+        sort_key="name"
+    )
+
+def export_org_site_stats_to_csv():
+    """Export site-level statistics for the organization to OrgSiteStats.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats,
+        data_type="site stats",
+        sort_key="name"
+    )
+
+def export_org_mxedge_stats_to_csv():
+    """Export MX Edge statistics for the organization to OrgMxEdgeStats.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats,
+        data_type="mx edge stats",
+        sort_key="name"
+    )
+
+# === Configuration & Management Functions ===
+
+def export_org_alarm_templates_to_csv():
+    """Export alarm template configurations for the organization to OrgAlarmTemplates.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
+        data_type="alarm templates",
+        sort_key="name"
+    )
+
+def export_org_security_intel_profiles_to_csv():
+    """Export security intelligence profiles for the organization to OrgSecurityIntelProfiles.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
+        data_type="security intel profiles",
+        sort_key="name"
+    )
+
+def export_org_invites_to_csv():
+    """Export pending admin invitations for the organization to OrgInvites.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.invites.listOrgInvites,
+        data_type="invites",
+        sort_key="email"
+    )
+
+def export_org_events_to_csv():
+    """Export general organization events to OrgEvents.csv."""
+    export_org_specific_data(
+        api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
+        data_type="events",
+        sort_key="timestamp",
+        duration="24h"
+    )
+
+# === Site-Level Functions ===
+
+def export_site_system_events_to_csv():
+    """Export system events for a specific site to SiteSystemEvents.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
+        data_type="system events",
+        sort_key="timestamp",
+        duration="24h"
+    )
+
+def export_site_fast_roam_events_to_csv():
+    """Export fast roam events for a specific site to SiteFastRoamEvents.csv."""
+    export_site_specific_data(
+        api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
+        data_type="fast roam events",
+        sort_key="timestamp",
+        duration="24h"
     )
 
 def interactive_display_site_inventory():
@@ -1150,7 +2366,7 @@ def export_site_settings_to_csv():
         # Escape multiline strings for CSV compatibility
         data = escape_multiline_strings_for_csv(data)
         # Write the processed data to a CSV file
-        write_dict_list_to_csv(data, "AllSiteConfigs.csv")
+        save_data_to_output(data, "AllSiteConfigs.csv")
         logging.info("✅ Site configs saved to AllSiteConfigs.csv")
     else:
         logging.warning("⚠️ No site configs found.")
@@ -1163,7 +2379,7 @@ def export_nac_event_definitions_to_csv():
     print("NAC Event Log Definitions:")
     rawdata = mistapi.api.v1.const.nac_events.listNacEventsDefinitions(apisession).data
     # Write the NAC event definitions to a CSV file
-    write_dict_list_to_csv(rawdata, "NacEventDefinitions.csv")
+    save_data_to_output(rawdata, "NacEventDefinitions.csv")
     logging.info("✅ NAC event definitions exported to NacEventDefinitions.csv")  # Log completion
 
 def export_client_event_definitions_to_csv():
@@ -1173,7 +2389,7 @@ def export_client_event_definitions_to_csv():
     logging.info("Exporting client event log definitions...")  # Log start of function
     print("Client Event Log Definitions:")
     rawdata = mistapi.api.v1.const.client_events.listClientEventsDefinitions(apisession).data
-    write_dict_list_to_csv(rawdata, "ClientEventDefinitions.csv")
+    save_data_to_output(rawdata, "ClientEventDefinitions.csv")
     logging.info("✅ Client event definitions exported to ClientEventDefinitions.csv")  # Log completion
 
 def export_device_event_definitions_to_csv():
@@ -1184,7 +2400,7 @@ def export_device_event_definitions_to_csv():
     print("Device Event Log Definitions:")
     rawdata = mistapi.api.v1.const.device_events.listDeviceEventsDefinitions(apisession).data
     # Write the device event definitions to a CSV file
-    write_dict_list_to_csv(rawdata, "DeviceEventDefinitions.csv")
+    save_data_to_output(rawdata, "DeviceEventDefinitions.csv")
     logging.info("✅ Device event definitions exported to DeviceEventDefinitions.csv")  # Log completion
 
 def export_mist_edge_event_definitions_to_csv():
@@ -1194,7 +2410,7 @@ def export_mist_edge_event_definitions_to_csv():
     logging.info("Exporting Mist Edge event log definitions...")  # Log start of function
     print("Mist Edge Event Log Definitions:")
     rawdata = mistapi.api.v1.const.mxedge_events.listMxEdgeEventsDefinitions(apisession).data
-    write_dict_list_to_csv(rawdata, "MistEdgeEventDefinitions.csv")
+    save_data_to_output(rawdata, "MistEdgeEventDefinitions.csv")
     logging.info("✅ Mist Edge event definitions exported to MistEdgeEventDefinitions.csv")  # Log completion
 
 def export_other_device_event_definitions_to_csv():
@@ -1206,7 +2422,7 @@ def export_other_device_event_definitions_to_csv():
     # Fetch the other device event definitions using the Mist API
     rawdata = mistapi.api.v1.const.otherdevice_events.listOtherDeviceEventsDefinitions(apisession).data
     # Write the event definitions to a CSV file
-    write_dict_list_to_csv(rawdata, "OtherEventDefinitions.csv")
+    save_data_to_output(rawdata, "OtherEventDefinitions.csv")
     logging.info("✅ Other device event definitions exported to OtherEventDefinitions.csv")  # Log completion
 
 def export_system_event_definitions_to_csv():
@@ -1217,7 +2433,7 @@ def export_system_event_definitions_to_csv():
     print("System Event Log Definitions:")
     rawdata = mistapi.api.v1.const.system_events.listSystemEventsDefinitions(apisession).data
     # Write the system event definitions to a CSV file
-    write_dict_list_to_csv(rawdata, "SystemEventDefinitions.csv")
+    save_data_to_output(rawdata, "SystemEventDefinitions.csv")
     logging.info("✅ System event definitions exported to SystemEventDefinitions.csv")  # Log completion
 
 def export_alarm_definitions_to_csv():
@@ -1233,7 +2449,7 @@ def export_alarm_definitions_to_csv():
     # Sort alarm definitions by 'key'
     alarm_defs = sorted(rawdata, key=lambda x: x.get("key", ""))
     # Write alarm definitions to CSV
-    write_dict_list_to_csv(alarm_defs, "AlarmDefinitions.csv")
+    save_data_to_output(alarm_defs, "AlarmDefinitions.csv")
     logging.info("Alarm definitions written to AlarmDefinitions.csv")
     # Prepare PrettyTable for display
     table = PrettyTable()
@@ -1247,7 +2463,7 @@ def export_alarm_definitions_to_csv():
             alarm.get("severity"),
             ", ".join(alarm.get("fields", [])) if isinstance(alarm.get("fields"), list) else alarm.get("fields")
         ])
-    logging.info("\n" + table.get_string())  # Log the table output
+    logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
 def export_gateway_synthetic_tests_to_csv():
     """
@@ -1293,7 +2509,7 @@ def export_gateway_synthetic_tests_to_csv():
         filename = "AllGatewaySyntheticTests.csv"
         flattened = flatten_nested_fields_in_list(all_stats)
         sanitized = escape_multiline_strings_for_csv(flattened)
-        write_dict_list_to_csv(sanitized, filename)
+        save_data_to_output(sanitized, filename)
         logging.info(f"✅ Synthetic test results saved to {filename} ({len(all_stats)} records).")
     else:
         logging.warning("⚠️ No synthetic test results found. CSV not created.")
@@ -1365,7 +2581,7 @@ def export_gateway_test_results_by_site_to_csv():
         # Escape multiline strings for CSV compatibility
         sanitized = escape_multiline_strings_for_csv(flattened)
         # Write the processed data to a CSV file
-        write_dict_list_to_csv(sanitized, filename)
+        save_data_to_output(sanitized, filename)
         logging.info(f"✅ All test results saved to {filename} ({len(all_results)} records).")
     else:
         logging.warning("⚠️ No test results found. CSV not created.")
@@ -1388,7 +2604,7 @@ def export_sites_with_location_to_csv():
     sanitized_sites = escape_multiline_strings_for_csv(flattened_sites)
 
     # Write to CSV
-    write_dict_list_to_csv(sanitized_sites, "SitesWithLocations.csv")
+    save_data_to_output(sanitized_sites, "SitesWithLocations.csv")
     logging.info("✅ Full site data written to SitesWithLocations.csv")
 
 def export_gateways_with_site_info_to_csv():
@@ -1454,7 +2670,7 @@ def export_gateways_with_site_info_to_csv():
     gateways = flatten_nested_fields_in_list(gateways)
     gateways = escape_multiline_strings_for_csv(gateways)
     gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
-    write_dict_list_to_csv(gateways, "GatewaysWithSiteInfo.csv")
+    save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")
     logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
 
     # Display a summary table in logs
@@ -1473,7 +2689,7 @@ def export_gateways_with_site_info_to_csv():
             gw.get("zip_code", ""),
             gw.get("country", "")
         ])
-    logging.info("\n" + table.get_string())
+    logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
 def export_devices_with_site_info_to_csv():
     """
@@ -1536,7 +2752,7 @@ def export_devices_with_site_info_to_csv():
     enriched_devices = flatten_nested_fields_in_list(enriched_devices)
     enriched_devices = escape_multiline_strings_for_csv(enriched_devices)
     enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
-    write_dict_list_to_csv(enriched_devices, "AllDevicesWithSiteInfo.csv")
+    save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")
     logging.info(f"All device data written to AllDevicesWithSiteInfo.csv ({len(enriched_devices)} records).")
 
     # Display a summary table in logs
@@ -1556,7 +2772,7 @@ def export_devices_with_site_info_to_csv():
             dev.get("zip_code", ""),
             dev.get("country", "")
         ])
-    logging.info("\n" + table.get_string())  # Log the table output for reference
+    logging.debug("\n" + table.get_string())  # Log the table output for reference (debug mode only)
 
 def generate_support_package():
     logging.info("Generating support package for each site...")
@@ -1700,7 +2916,7 @@ def poll_marvis_actions():
     logging.debug("Flattened and sanitized open Marvis actions for CSV.")
 
     # Write to CSV
-    write_dict_list_to_csv(data, "OpenMarvisActions.csv")
+    save_data_to_output(data, "OpenMarvisActions.csv")
     logging.info(f"✅ {len(open_actions)} open Marvis actions written to OpenMarvisActions.csv")
     print(f"✅ {len(open_actions)} open Marvis actions written to OpenMarvisActions.csv")
 
@@ -1723,7 +2939,7 @@ def export_current_guest_users_to_csv():
     guests = escape_multiline_strings_for_csv(guests)
 
     # Write the processed data to a CSV file
-    write_dict_list_to_csv(guests, "OrgCurrentGuests.csv")
+    save_data_to_output(guests, "OrgCurrentGuests.csv")
     logging.info("✅ Current guests exported to OrgCurrentGuests.csv")  # Log completion
 
 def export_historical_guest_users_to_csv():
@@ -1747,7 +2963,7 @@ def export_historical_guest_users_to_csv():
     # Escape multiline strings for CSV compatibility
     guests = escape_multiline_strings_for_csv(guests)
     # Write the processed data to a CSV file
-    write_dict_list_to_csv(guests, "OrgHistoricalGuests.csv")
+    save_data_to_output(guests, "OrgHistoricalGuests.csv")
     logging.info("✅ Historical guests exported to OrgHistoricalGuests.csv")  # Log completion
 
 def export_switch_vc_stats_to_csv():
@@ -1799,7 +3015,7 @@ def export_switch_vc_stats_to_csv():
     logging.info(f"Flattening and sanitizing {len(all_vc_stats)} VC stats entries for CSV export.")
     all_vc_stats = flatten_nested_fields_in_list(all_vc_stats)
     all_vc_stats = escape_multiline_strings_for_csv(all_vc_stats)
-    write_dict_list_to_csv(all_vc_stats, "OrgSwitchVCStats.csv")
+    save_data_to_output(all_vc_stats, "OrgSwitchVCStats.csv")
     logging.info(f"✅ Switch VC stats exported to OrgSwitchVCStats.csv ({len(all_vc_stats)} records).")
     # Optionally log a preview of the data
     if all_vc_stats:
@@ -1811,7 +3027,7 @@ def export_switch_vc_stats_to_csv():
 
         for row in all_vc_stats:
             table.add_row([row.get(f, "") for f in table.field_names])
-        logging.info("\n" + table.get_string())
+        logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
 def prompt_select_site_and_device_ids(site_id=None, device_id=None):
     """
@@ -2053,7 +3269,7 @@ def _handle_ws_close(output_lines, debug=False):
         if debug:
             print(table)
             logging.info(f"📥 Compiled ARP Output:\n{compiled_output}")
-            logging.info("\n" + table.get_string())
+            logging.debug("\n" + table.get_string())
         else:
             print(f"✅ ARP output received with {len(parsed_rows)} rows.")
     else:
@@ -2178,6 +3394,17 @@ def load_pid_tuning_data():
             logging.debug(f"File I/O: Attempting to read PID tuning data from {tuning_data_file}")
             with open(tuning_data_file, 'r') as f:
                 data = json.load(f)
+            
+            # Validate and clean error history
+            if "error" in data and isinstance(data["error"], list):
+                cleaned_errors = []
+                for err in data["error"]:
+                    if isinstance(err, (int, float)) and not (math.isnan(err) or math.isinf(err)):
+                        cleaned_errors.append(float(err))
+                data["error"] = cleaned_errors
+            else:
+                data["error"] = []
+                
             logging.debug(f"File I/O: Successfully loaded PID tuning data from {tuning_data_file}")
             logging.debug(f"EXIT: load_pid_tuning_data - loaded from file")
             return data
@@ -2241,10 +3468,19 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
     """
     if len(errors) < 2:
         return 0.3  # default fallback
-    std_dev = np.std(errors[-10:])
-    normalized = min(std_dev / 50, 1.0)  # adjust divisor to control sensitivity
-    alpha = min_alpha + (max_alpha - min_alpha) * normalized
-    return round(alpha, 3)
+    
+    try:
+        # Ensure errors is a list of numbers and convert to numpy array safely
+        recent_errors = errors[-10:]
+        # Convert to float64 explicitly to avoid type conversion issues
+        error_array = np.array(recent_errors, dtype=np.float64)
+        std_dev = np.std(error_array)
+        normalized = min(std_dev / 50, 1.0)  # adjust divisor to control sensitivity
+        alpha = min_alpha + (max_alpha - min_alpha) * normalized
+        return round(alpha, 3)
+    except Exception as e:
+        logging.warning(f"Failed to compute dynamic alpha: {e}. Using fallback value.")
+        return 0.3
 
     """
     Launches a shell session, runs 'show route 0.0.0.0 | display json | no-more',
@@ -2453,18 +3689,19 @@ def extract_json_from_ws_log_to_csv(log_file, output_csv):
 
         # Flatten and write to CSV
         flattened = flatten_nested_fields_in_list([json_data])
-        write_dict_list_to_csv(flattened, output_csv)
+        save_data_to_output(flattened, output_csv)
         print(f"✅ Extracted JSON written to {output_csv}")
 
     except Exception as e:
         print(f"❌ Failed to clean {log_file}: {e}")
 
-def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json"):
+def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100):
     """
     Appends delay metrics, API cache, and tuning data to a JSON file.
     Each call writes a new line with a timestamped entry.
+    Maintains only the last max_entries (default 100) to prevent unlimited file growth.
     """
-    logging.debug(f"ENTRY: append_delay_metrics_log(filename={filename})")
+    logging.debug(f"ENTRY: append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
     
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -2474,11 +3711,34 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
     }
     
     try:
-        logging.debug(f"File I/O: Appending delay metrics to {filename}")
-        with open(filename, "a", encoding="utf-8") as f:
-            json.dump(log_entry, f)
-            f.write("\n")
-        logging.debug(f"File I/O: Successfully appended delay metrics to {filename}")
+        # Read existing entries if file exists
+        existing_entries = []
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            existing_entries.append(json.loads(line))
+                logging.debug(f"File I/O: Loaded {len(existing_entries)} existing entries from {filename}")
+            except (json.JSONDecodeError, OSError) as e:
+                logging.warning(f"File I/O: Failed to read existing entries from {filename}: {e}. Starting fresh.")
+                existing_entries = []
+        
+        # Add new entry and keep only the last max_entries
+        existing_entries.append(log_entry)
+        if len(existing_entries) > max_entries:
+            existing_entries = existing_entries[-max_entries:]
+            logging.debug(f"File I/O: Trimmed to last {max_entries} entries")
+        
+        # Write all entries back to file
+        logging.debug(f"File I/O: Writing {len(existing_entries)} entries to {filename}")
+        with open(filename, "w", encoding="utf-8") as f:
+            for entry in existing_entries:
+                json.dump(entry, f)
+                f.write("\n")
+        
+        logging.debug(f"File I/O: Successfully updated delay metrics in {filename}")
         logging.debug(f"EXIT: append_delay_metrics_log - success")
     except OSError as e:
         logging.error(f"File I/O: OS error writing delay metrics to {filename}: {e}")
@@ -2504,7 +3764,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
     sanitized = escape_multiline_strings_for_csv(flattened)
 
     # Write full dataset to CSV
-    write_dict_list_to_csv(sanitized, "AllSiteGatewayConfigs.csv")
+    save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
     logging.info("✅ Device configs saved to AllSiteGatewayConfigs.csv")
 
     # Identify port config columns (excluding _vpn_paths_)
@@ -2530,7 +3790,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
     else:
         if debug:
             logging.debug(f"Sample filtered row: {filtered_rows[0]}")
-        write_dict_list_to_csv(filtered_rows, "FilteredGatewayPortConfigs.csv")
+        save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")
         logging.info("✅ Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
 
 def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
@@ -2630,16 +3890,16 @@ def get_rate_limited_delay(smoothed_delay=None):
         tuning_data["k_p"] = 0.1
         tuning_data["k_i"] = 0.001
 
-    k_p = tuning_data["k_p"]
-    k_i = tuning_data["k_i"]
-    delay_integral = tuning_data.get("integral", 0.0)
+    k_p = float(tuning_data["k_p"])
+    k_i = float(tuning_data["k_i"])
+    delay_integral = float(tuning_data.get("integral", 0.0))
     error_history = tuning_data.get("error", [])
 
     try:
         now = datetime.now(timezone.utc)
         current_time = time.time()
         elapsed = current_time - _api_usage_cache["last_updated"]
-        previous_elapsed = _api_usage_cache.get("previous_elapsed", elapsed)
+        previous_elapsed = float(_api_usage_cache.get("previous_elapsed", elapsed))
 
         # Hybrid refresh trigger: every 60s, every 100 requests, or top of the hour
         refresh_needed = (
@@ -2679,7 +3939,9 @@ def get_rate_limited_delay(smoothed_delay=None):
         # Detect hour boundary and decay integral
         if seconds_elapsed < previous_elapsed:
             logging.info("🕒 Hour boundary crossed. Resetting integral.")
+            logging.debug(f"Before reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
             delay_integral *= 0.5
+            logging.debug(f"After reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
 
         _api_usage_cache["previous_elapsed"] = seconds_elapsed
 
@@ -2687,7 +3949,7 @@ def get_rate_limited_delay(smoothed_delay=None):
         base_delay = min(seconds_remaining / remaining_requests, 10)
 
         unsat_delay = base_delay + k_p * error + k_i * delay_integral
-        sat_delay = max(min(unsat_delay, 10), 0.2)
+        sat_delay = max(min(unsat_delay, 10), 0.01)
 
         # Log backoff calculation details
         if sat_delay > 2.0:
@@ -2705,16 +3967,37 @@ def get_rate_limited_delay(smoothed_delay=None):
         delay_integral = delay_integral * decay_factor + back_calc_gain * (sat_delay - unsat_delay)
         delay_integral = max(min(delay_integral, 1000), -1000)
 
-        error_history.append(error)
-        alpha = compute_dynamic_alpha(error_history)
+        # Ensure error is a valid number before adding to history
+        if isinstance(error, (int, float)) and not (math.isnan(error) or math.isinf(error)):
+            error_history.append(float(error))
+        else:
+            logging.warning(f"Invalid error value: {error}. Skipping addition to error history.")
+        
+        # Clean error_history before computing alpha to ensure all values are numeric
+        cleaned_error_history = []
+        for err in error_history:
+            try:
+                # Try to convert to float
+                if err is not None:
+                    float_val = float(err)
+                    # Check if it's a valid finite number
+                    if not (math.isnan(float_val) or math.isinf(float_val)):
+                        cleaned_error_history.append(float_val)
+            except (ValueError, TypeError):
+                # Skip values that can't be converted to float
+                continue
+        
+        logging.debug(f"About to call compute_dynamic_alpha with cleaned_error_history={cleaned_error_history} (length: {len(cleaned_error_history)})")
+        alpha = compute_dynamic_alpha(cleaned_error_history)
+        logging.debug(f"compute_dynamic_alpha returned: {alpha} (type: {type(alpha)})")
 
         smoothed_delay = sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
-        delay_in_seconds = max(smoothed_delay, 0.2)
+        delay_in_seconds = max(smoothed_delay, 0.01)
 
         logging.info(f"Rate limiting: sleeping for {delay_in_seconds:.3f} seconds")
 
-        # Save updated tuning data
-        tuning_data["error"] = error_history[-20:]
+        # Save updated tuning data using cleaned error history
+        tuning_data["error"] = cleaned_error_history[-20:]  # Use cleaned history and keep only last 20 entries
         tuning_data["integral"] = delay_integral
         tuning_data["back_calc_gain"] = back_calc_gain
         adjust_gains(tuning_data)
@@ -2834,17 +4117,28 @@ def export_gateway_templates_to_csv():
     # Flatten and sanitize for CSV
     templates = flatten_nested_fields_in_list(templates)
     templates = escape_multiline_strings_for_csv(templates)
-    write_dict_list_to_csv(templates, "OrgGatewayTemplates.csv")
+    save_data_to_output(templates, "OrgGatewayTemplates.csv")
     logging.info("✅ Gateway templates exported to OrgGatewayTemplates.csv")
     print("✅ Gateway templates exported to OrgGatewayTemplates.csv")
 
 def export_gateways_with_wan_overrides_to_csv(fast=False):
     """
-    Generates a CSV report of gateways with overridden WAN ports based on
-    non-empty 'port_config_ge-0/0/*' fields in AllSiteGatewayConfigs.csv.
-    Uses SiteList_ListAPI.csv and OrgGatewayTemplates.csv to resolve template names.
+    Generates a CSV report of gateways with ports that are overridden from their template configuration.
+    This helps identify outliers that need to be corrected back to template compliance.
+    
+    Report includes for OVERRIDDEN ports only:
+    - Gateway Router Device Name  
+    - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2
+    - Port status (up/down)
+    - Port admin status (disabled/enabled)
+    - Port gateway IP address
+    - Port IP address
+    - Port netmask
+    - Port config type (DHCP or STATIC)
+    - Port name/number
+    - Whether port is overridden from template (always "Yes" for filtered results)
     """
-    logging.info("🔍 Generating WAN override report from AllSiteGatewayConfigs.csv...")
+    logging.info("🔍 Identifying gateway ports with template overrides (outliers for compliance correction)...")
 
     # Ensure required CSVs are fresh
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
@@ -2859,59 +4153,245 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
         templates = list(csv.DictReader(f))
 
-    # Helper to extract required fields from port config
-    def extract_port_info(device_name, port_name, port_data):
-        ip_config = port_data.get("ip_config", {})
-        return {
-            "device_name": device_name,
-            "port_name": port_name,
-            "port_ip_address": ip_config.get("ip", ""),
-            "port_address_type": ip_config.get("type", "")
-        }
+    # Create lookups for site and template names
+    site_lookup = {site.get("id"): site.get("name", "Unknown Site") for site in sites}
+    # Create site to gateway template ID mapping from SiteList
+    site_to_template_id = {site.get("id"): site.get("gatewaytemplate_id", "") for site in sites}
+    template_lookup = {t.get("id"): t.get("name", "Unknown Template") for t in templates}
+    
+    # Debug template lookup
+    logging.debug(f"[DEBUG] Created template lookup with {len(template_lookup)} templates")
+    for template_id, template_name in list(template_lookup.items())[:3]:  # Show first 3 for debugging
+        logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
 
-    overrides = []
+    overridden_port_info = []
+    target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
+
+    # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
+    logging.info("📋 First pass: Identifying devices with port overrides...")
+    devices_with_overrides = {}  # device_id -> (device_info, overridden_port_names)
+    
     for row in configs:
         device_name = row.get("name", "").strip()
         site_id = row.get("site_id", "").strip()
         device_id = row.get("id", "").strip()
-        # Find overridden port fields in the row (from AllSiteGatewayConfigs.csv)
-        overridden_ports = [
-            col for col in row
-            if col.startswith("port_config_ge-0/0/")
-            and row[col].strip().lower() not in ["", "null", "none"]
-        ]
-        if not overridden_ports:
+        site_name = site_lookup.get(site_id, "Unknown Site")
+        # Get template ID from site-level gateway template assignment
+        template_id = site_to_template_id.get(site_id, "")
+        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
+        
+        # Debug template lookup for this device
+        if template_id:
+            if template_id in template_lookup:
+                logging.debug(f"[DEBUG] Device {device_name}: site_id='{site_id}' -> template_id='{template_id}' -> template_name='{template_name}'")
+            else:
+                logging.warning(f"[WARN] Device {device_name}: Template ID '{template_id}' not found in gateway templates (orphaned assignment)")
+                template_name = f"Missing Template ({template_id[:8]}...)"
+        else:
+            logging.debug(f"[DEBUG] Device {device_name}: No gatewaytemplate_id found for site {site_id}")
+        
+        if not device_name or not site_id or not device_id:
             continue
-        # Fetch device info from getSiteDevice
+
+        # Check each target port for overrides using CSV data only
+        device_overridden_ports = []
+        for port_name in target_ports:
+            # Check if port is overridden from template by looking for port_config fields in the CSV
+            port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
+            
+            # Check for non-empty values (excluding vpn_paths which are template-inherited)
+            override_fields = []
+            for field in port_config_fields:
+                value = row.get(field, "").strip().lower()
+                if value not in ["", "null", "none"] and "_vpn_paths_" not in field:
+                    override_fields.append(f"{field}={value}")
+            
+            is_overridden = len(override_fields) > 0
+            if is_overridden:
+                device_overridden_ports.append(port_name)
+        
+        # If this device has any overridden ports, mark it for API calls
+        if device_overridden_ports:
+            devices_with_overrides[device_id] = {
+                "device_name": device_name,
+                "site_id": site_id,
+                "site_name": site_name,
+                "template_id": template_id,
+                "template_name": template_name,
+                "row_data": row,
+                "overridden_ports": device_overridden_ports
+            }
+
+    logging.info(f"📊 Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices")
+    
+    if not devices_with_overrides:
+        logging.info("🎉 No template overrides found - all gateways are compliant with their assigned templates!")
+        # Still create empty CSV file
+        output_file = "GatewayOverriddenPorts.csv"
+        fieldnames = [
+            "gateway_device_name", "site_name", "template_name", "port_name", "port_description",
+            "port_status", "port_admin_status", "port_gateway_ip", "port_ip_address", "port_netmask",
+            "port_config_type", "port_usage", "overridden_from_template",
+            "device_id", "site_id", "template_id"
+        ]
+        with open(output_file, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+        print(f"✅ Gateway override report written to {output_file}")
+        print("🎉 No template overrides found - all gateways are compliant with their assigned templates!")
+        return
+
+    # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
+    logging.info(f"🔍 Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides...")
+    device_data_cache = {}  # device_id -> (port_configs, interface_stats)
+    
+    for device_id, device_info in devices_with_overrides.items():
+        device_name = device_info["device_name"]
+        site_id = device_info["site_id"]
+        
+        # Fetch live device info from getSiteDevice API for current config
         try:
             resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            data = getattr(resp, "data", {})
-            port_configs = data.get("port_config", {})
+            device_data = getattr(resp, "data", {})
+            port_configs = device_data.get("port_config", {})
         except Exception as e:
-            logging.warning(f"[WARN] Could not fetch WAN port info for device {device_name} ({device_id}): {e}")
+            logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
             port_configs = {}
-            data = {}
 
-        # For each overridden port, extract info if present in port_configs
-        for port_field in overridden_ports:
-            # port_field is like 'port_config_ge-0/0/0_usage', extract 'ge-0/0/0'
-            port_match = re.match(r"port_config_(ge-0/0/\d+)_", port_field)
-            port_name = port_match.group(1) if port_match else None
-            if port_name and port_name in port_configs:
-                port_data = port_configs[port_name]
-                ip_config = port_data.get("ip_config", {})
-                if ip_config.get("ip"):
-                    overrides.append(extract_port_info(device_name, port_name, port_data))
+        # Fetch live device stats for current port status 
+        try:
+            stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+            stats_data = getattr(stats_resp, "data", {})
+            interface_stats = stats_data.get("if_stat", {})
+        except Exception as e:
+            # Handle 403 Forbidden and other errors gracefully
+            if "403" in str(e) or "Forbidden" in str(e):
+                logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
+            else:
+                logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
+            interface_stats = {}
 
-    # Write to CSV
-    output_file = "GatewaysWithWANOverrides.csv"
-    fieldnames = ["device_name", "port_name", "port_ip_address", "port_address_type"]
+        device_data_cache[device_id] = (port_configs, interface_stats)
+
+    # Third pass: Process only the overridden ports with their stats
+    logging.info("📝 Third pass: Processing overridden ports with live data...")
+    for device_id, device_info in devices_with_overrides.items():
+        device_name = device_info["device_name"]
+        site_id = device_info["site_id"]
+        site_name = device_info["site_name"]
+        template_id = device_info["template_id"]
+        template_name = device_info["template_name"]
+        row = device_info["row_data"]
+        overridden_ports = device_info["overridden_ports"]
+        
+        port_configs, interface_stats = device_data_cache.get(device_id, ({}, {}))
+
+        # Process each overridden port
+        for port_name in overridden_ports:
+            port_config = port_configs.get(port_name, {})
+            interface_stat = interface_stats.get(port_name, {})
+            
+            # Get port config fields from CSV for override details
+            port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
+            
+            # Extract port configuration details
+            ip_config = port_config.get("ip_config", {})
+            usage = port_config.get("usage", "")
+            description = port_config.get("description", "")
+            disabled = port_config.get("disabled", False)
+            
+            # Extract IP configuration details
+            port_ip = ip_config.get("ip", "")
+            netmask = ip_config.get("netmask", "")
+            gateway_ip = ip_config.get("gateway", "")
+            config_type = ip_config.get("type", "")
+            
+            # Convert config type to human readable
+            if config_type == "dhcp":
+                config_type_display = "DHCP"
+            elif config_type == "static":
+                config_type_display = "STATIC"
+            else:
+                config_type_display = config_type.upper() if config_type else "UNKNOWN"
+            
+            # Extract port status from interface stats
+            port_status = "down"
+            if interface_stat:
+                # Check the "up" field from if_stat which is the actual port status
+                if interface_stat.get("up", False):
+                    port_status = "up"
+            
+            # Admin status
+            admin_status = "disabled" if disabled else "enabled"
+            
+            # Create detailed port entry for overridden port
+            port_entry = {
+                "gateway_device_name": device_name,
+                "site_name": site_name,
+                "template_name": template_name,
+                "port_name": port_name,
+                "port_description": description,
+                "port_status": port_status,
+                "port_admin_status": admin_status,
+                "port_gateway_ip": gateway_ip,
+                "port_ip_address": port_ip,
+                "port_netmask": netmask,
+                "port_config_type": config_type_display,
+                "port_usage": usage,
+                "overridden_from_template": "Yes",
+                "device_id": device_id,
+                "site_id": site_id,
+                "template_id": template_id
+            }
+            
+            # Add the overridden port to our results
+            overridden_port_info.append(port_entry)
+
+    # Write to CSV with only overridden port information
+    output_file = "GatewayOverriddenPorts.csv"
+    fieldnames = [
+        "gateway_device_name",
+        "site_name", 
+        "template_name",
+        "port_name",
+        "port_description",
+        "port_status",
+        "port_admin_status", 
+        "port_gateway_ip",
+        "port_ip_address",
+        "port_netmask",
+        "port_config_type",
+        "port_usage",
+        "overridden_from_template",
+        "device_id",
+        "site_id",
+        "template_id"
+    ]
+    
     with open(output_file, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(overrides)
+        writer.writerows(overridden_port_info)
 
-    logging.info(f"✅ WAN override report written to {output_file} with {len(overrides)} entries.")
+    # Calculate summary statistics
+    total_gateways_processed = len(configs)
+    devices_with_overrides_count = len(devices_with_overrides) if 'devices_with_overrides' in locals() else 0
+    if overridden_port_info:
+        gateways_with_overrides = len(set(entry["device_id"] for entry in overridden_port_info))
+    else:
+        gateways_with_overrides = 0
+    total_overridden_ports = len(overridden_port_info)
+
+    logging.info(f"✅ Gateway override report written to {output_file} with {total_overridden_ports} overridden ports from {gateways_with_overrides} gateway devices.")
+    logging.info(f"🚀 API Optimization: Made device config/stats calls for only {devices_with_overrides_count} devices instead of all {total_gateways_processed} devices")
+    print(f"✅ Gateway override report written to {output_file}")
+    print(f"📊 Found {total_overridden_ports} overridden ports across {gateways_with_overrides} of {total_gateways_processed} gateway devices")
+    print(f"🚀 API Optimization: Only fetched live data for {devices_with_overrides_count} devices with overrides (saved {total_gateways_processed - devices_with_overrides_count} unnecessary API calls)")
+    print(f"🔍 Target ports analyzed: {', '.join(target_ports)}")
+    print(f"📋 These are outliers that may need correction to match template configuration")
+    
+    if total_overridden_ports == 0:
+        print("🎉 No template overrides found - all gateways are compliant with their assigned templates!")
 
 def convert_virtual_chassis_to_virtual_mac():
     """
@@ -3122,7 +4602,7 @@ def export_site_wifi_clients_to_csv(site_id=None):
         sanitized = escape_multiline_strings_for_csv(flattened)
         
         # Write to CSV
-        write_dict_list_to_csv(sanitized, "SiteWiFiClients.CSV")
+        save_data_to_output(sanitized, "SiteWiFiClients.CSV")
         
         client_count = len(clients) if clients else 0
         session_count = len(sessions) if sessions else 0
@@ -3416,11 +4896,187 @@ menu_actions = {
     "41": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "42": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
     "43": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
-    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Export gateways with overridden WAN ports (ge-0/0/0, ge-0/0/1, ge-0/0/2)(WIP)"),
+    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "46": (reboot_devices_by_gateway_template_list, "Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
     "47": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
+    
+    # 🏢 Site-Specific Data Exports
+    "48": (export_site_port_stats_to_csv, "Export port statistics for a selected site"),
+    "49": (export_site_clients_to_csv, "Export client statistics for a selected site"),
+    "50": (export_site_devices_to_csv, "Export device list for a selected site"),
+    "51": (export_site_device_stats_to_csv, "Export device statistics for a selected site"),
+    "52": (export_site_device_virtual_chassis_to_csv, "Export virtual chassis information for a selected switch device"),
+    
+    # 📋 Organization Template Exports
+    "53": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
+    
+    # 📊 Organization Statistics & Analytics  
+    "54": (export_org_wireless_clients_to_csv, "Export wireless client statistics for the organization"),
+    "55": (export_org_wired_clients_to_csv, "Export wired client statistics for the organization"),
+    
+    # 🔒 Security & Monitoring
+    "56": (export_org_security_events_to_csv, "Export security events for the organization"),
+    "57": (export_org_rogue_clients_to_csv, "Export rogue client detections for the organization"),
+    "58": (export_org_rogue_aps_to_csv, "Export rogue AP detections for the organization"),
+    
+    # ⚙️ Configuration & Management
+    "59": (export_org_licenses_to_csv, "Export license information for the organization"),
+    "60": (export_org_psks_to_csv, "Export PSK (Pre-Shared Key) information for the organization"),
+    "61": (export_org_webhooks_to_csv, "Export webhook configuration for the organization"),
+    "62": (export_org_wlans_to_csv, "Export WLAN configuration for the organization"),
+    "63": (export_site_wlans_to_csv, "Export WLAN configuration for a selected site"),
+    "64": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
+    "65": (export_site_maps_to_csv, "Export map information for a selected site"),
+    "66": (export_site_zones_to_csv, "Export zone information for a selected site"),
+    "67": (export_site_insights_to_csv, "Export insights information for a selected site"),
+    
+    # 👥 Organization Management
+    "68": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
+    "69": (export_org_admins_to_csv, "Export administrator information for the organization"),
+    "70": (export_org_msp_to_csv, "Export MSP (Managed Service Provider) information for the organization"),
+    "71": (export_org_sso_to_csv, "Export SSO (Single Sign-On) information for the organization"),
+    "72": (export_org_usage_to_csv, "Export license usage information for the organization"),
+    "73": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
+    
+    # 🔄 Continuous Data Collection
+    "74": (continuous_data_collection_loop, "Run continuous data collection loop (5 core API calls with rate limiting)"),
+    
+    # 📋 Additional Template Exports
+    "75": (export_org_network_templates_to_csv, "Export network template information for the organization"),
+    "76": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
+    "77": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
+    "78": (export_org_switch_templates_to_csv, "Export switch template information for the organization")
 }
+
+def run_systematic_test():
+    """
+    Run systematic test of all safe menu options.
+    
+    This function cycles through all menu options that are safe for automated testing:
+    - Only GET operations (no POST/PUT/DELETE)
+    - No interactive functions requiring user input
+    - No websocket operations
+    - No reboot or destructive operations
+    - No continuous loops
+    
+    Unsafe operations are skipped with explanatory messages.
+    
+    Returns:
+        bool: True if all tests passed, False if any failed
+    """
+    start_time = time.time()
+    print("🧪 Starting systematic test of MistHelper menu options...")
+    print("⚠️  Note: This will skip interactive, websocket, POST, and destructive operations")
+    print(f"⏰ Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 80)
+    
+    # Define unsafe menu options that should be skipped during testing
+    unsafe_options = {
+        "0": "Interactive site selection",
+        "2a": "WIP (Work in Progress) - may be unstable", 
+        "3a": "WIP (Work in Progress) - may be unstable",
+        "16": "Interactive site inventory browser",
+        "17": "Interactive device stats viewer", 
+        "18": "Interactive device tests viewer",
+        "19": "Interactive device config viewer",
+        "23": "WIP (Work in Progress) - may be unstable",
+        "29": "Support package generation - potentially resource intensive",
+        "30": "Marvis polling - continuous operation",
+        "31": "Contains lambda with multiple functions",
+        "33": "Interactive CLI shell session",
+        "34": "WebSocket operation",
+        "35": "Continuous loop operation",
+        "38": "Shell command execution via WebSocket",
+        "39": "Shell command execution via WebSocket", 
+        "40": "Shell command execution via WebSocket",
+        "44": "WIP (Work in Progress) - may be unstable",
+        "45": "Interactive virtual chassis conversion - WIP",
+        "46": "Device reboot operation - destructive",
+        "47": "Requires site selection",
+        "48": "Requires site selection",
+        "49": "Requires site selection", 
+        "50": "Requires site selection",
+        "51": "Requires site selection",
+        "52": "Requires site and device selection",
+        "63": "Requires site selection",
+        "64": "Requires site selection", 
+        "65": "Requires site selection",
+        "66": "Requires site selection",
+        "67": "Requires site selection",
+        "68": "Requires site selection",
+        "69": "Requires site selection",
+        "70": "Requires site selection",
+        "78": "Continuous data collection loop"
+    }
+    
+    # Get all available menu options
+    all_options = sorted(menu_actions.keys(), key=lambda x: float(x.replace('a', '.1')))
+    safe_options = [opt for opt in all_options if opt not in unsafe_options]
+    
+    print(f"📊 Found {len(all_options)} total menu options")
+    print(f"✅ {len(safe_options)} safe options will be tested")
+    print(f"⚠️  {len(unsafe_options)} unsafe options will be skipped")
+    print()
+    
+    # Show which options will be skipped and why
+    print("🚫 Skipping unsafe operations:")
+    for opt in sorted(unsafe_options.keys(), key=lambda x: float(x.replace('a', '.1'))):
+        if opt in menu_actions:
+            _, description = menu_actions[opt]
+            reason = unsafe_options[opt]
+            print(f"   {opt:2}: {description[:60]}... (Reason: {reason})")
+    print()
+    
+    # Test safe options
+    print("🧪 Testing safe operations:")
+    success_count = 0
+    error_count = 0
+    
+    global org_id
+    if not org_id:
+        org_id = get_cached_or_prompted_org_id()
+    
+    for i, option in enumerate(safe_options, 1):
+        func, description = menu_actions[option]
+        print(f"   [{i:2}/{len(safe_options)}] Testing option {option:2}: {description[:60]}...")
+        
+        try:
+            # Execute the function
+            logging.info(f"SYSTEMATIC_TEST: Starting test of menu option {option}: {description}")
+            func()
+            print(f"   ✅ Option {option} completed successfully")
+            success_count += 1
+            logging.info(f"SYSTEMATIC_TEST: Successfully completed menu option {option}")
+            
+        except Exception as e:
+            print(f"   ❌ Option {option} failed: {str(e)[:100]}...")
+            error_count += 1
+            logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
+            
+        # Small delay between tests to be respectful to the API
+        time.sleep(1)
+    
+    # Summary
+    total_time = time.time() - start_time
+    print()
+    print("=" * 80)
+    print("🧪 Systematic Test Summary:")
+    print(f"   ✅ Successful operations: {success_count}")
+    print(f"   ❌ Failed operations: {error_count}")
+    print(f"   🚫 Skipped unsafe operations: {len(unsafe_options)}")
+    print(f"   📊 Total coverage: {success_count}/{len(all_options)} ({success_count/len(all_options)*100:.1f}%)")
+    print(f"   ⏱️  Total execution time: {total_time:.2f} seconds")
+    print(f"   📄 Detailed logs in: script.log")
+    
+    if error_count == 0:
+        print("   🎉 All tested operations completed successfully!")
+        logging.info(f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s")
+        return True
+    else:
+        print(f"   ⚠️  {error_count} operations failed - check logs for details")
+        logging.warning(f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested")
+        return False
 
 def main():
     """Main entry point for MistHelper CLI application."""
@@ -3433,17 +5089,36 @@ def main():
     parser.add_argument("-S", "--site", help="Human-readable site name")
     parser.add_argument("-D", "--device", help="Human-readable device name")
     parser.add_argument("-P", "--port", help="Port ID")
-    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)")
     parser.add_argument("--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic.")
     parser.add_argument("--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)")
+    parser.add_argument("--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization")
+    parser.add_argument("--output-format", choices=["csv", "sqlite"], default="csv", 
+                       help="Output format: 'csv' for CSV files (default) or 'sqlite' for embedded database")
+    parser.add_argument("--test", action="store_true", help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)")
     args = parser.parse_args()
+    
+    # Set global output format based on CLI argument
+    global OUTPUT_FORMAT
+    OUTPUT_FORMAT = args.output_format
+    timestamp = datetime.now(timezone.utc).isoformat()
+    logging.info(f"Output format set to: {OUTPUT_FORMAT} at {timestamp}")
     
     # Enable debug logging if --debug flag is provided
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Debug logging enabled via --debug flag")
     
-    logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}")
+    # Handle systematic testing mode
+    if args.test:
+        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")
+        print("🧪 Systematic test mode activated")
+        print("📋 Dependency checks were skipped for faster testing")
+        success = run_systematic_test()
+        logging.info(f"SYSTEMATIC_TEST: Test mode completed with success={success}")
+        sys.exit(0 if success else 1)
+    
+    logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}, skip_deps={args.skip_deps}, output_format={args.output_format}, test={args.test}")
 
     global org_id
     if len(sys.argv) > 1:

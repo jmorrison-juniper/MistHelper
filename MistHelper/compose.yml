@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  misthelper:
+    build: .
+    container_name: misthelper-app
+    volumes:
+      # Mount local data directory to persist SQLite database
+      - ./data:/app/data
+      # Mount .env file for API credentials
+      - ./.env:/app/.env:ro
+    environment:
+      # Container-specific environment variables
+      - OUTPUT_FORMAT=sqlite
+      - DATABASE_PATH=/app/data/mist_data.db
+      - PYTHONUNBUFFERED=1
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+    # Interactive mode for CLI usage
+    stdin_open: true
+    tty: true
+    # Example command overrides (uncomment as needed):
+    # command: ["python", "MistHelper.py", "--menu", "1", "--output-format", "sqlite"]
+    # command: ["python", "MistHelper.py", "--menu", "11", "--output-format", "csv"]
+
+networks:
+  misthelper-network:
+    driver: bridge
+
+volumes:
+  # Named volume for database persistence (alternative to bind mount)
+  misthelper-data:
+    driver: local

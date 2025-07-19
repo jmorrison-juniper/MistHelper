@@ -1,0 +1,76 @@
+# Docker ignore file for MistHelper
+# Excludes unnecessary files from Docker build context
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# CSV output files (not needed in container)
+*.csv
+*.CSV
+
+# Log files
+*.log
+
+# Development and testing files
+.pytest_cache/
+.coverage
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Docker files (avoid recursive copying)
+Dockerfile
+.dockerignore
+
+# Data directory contents (will be mounted as volume)
+data/
+CombinedInventory_ByWeek/
+
+# Temporary files
+tmp/
+temp/
+
+# Database files (will be created in container)
+*.db
+*.sqlite
+
+# JSON tuning data (will be created in container)
+tuning_data.json
+delay_metrics.json
+
+# Windows specific
+desktop.ini

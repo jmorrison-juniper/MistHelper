@@ -1,0 +1,54 @@
+# MistHelper Dockerized Application
+# Base image: Python 3.11 slim for cross-platform compatibility
+FROM python:3.11-slim
+
+# Metadata following NASA/JPL documentation standards
+LABEL maintainer="MistHelper Development Team"
+LABEL description="Dockerized MistHelper with embedded SQLite database"
+LABEL version="1.0.0"
+LABEL created="2025-07-16T00:00:00Z"
+
+# Create application user (following security best practices)
+RUN groupadd -r misthelper && useradd -r -g misthelper misthelper
+
+# Set working directory inside container
+WORKDIR /app
+
+# Create data directory for persistent database storage
+# This directory will be mounted as a volume
+RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
+
+# Copy requirements.txt first (Docker layer caching optimization)
+COPY requirements.txt /app/
+
+# Install Python dependencies
+# Using --no-cache-dir to reduce image size
+# Using --disable-pip-version-check for faster installs
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+
+# Copy application files
+COPY MistHelper.py /app/
+COPY __init__.py /app/
+COPY .env /app/ 
+
+# Change ownership of application files to non-root user
+RUN chown -R misthelper:misthelper /app
+
+# Switch to non-root user (security best practice)
+USER misthelper
+
+# Expose volume mount point for database persistence
+VOLUME ["/app/data"]
+
+# Set environment variables for container operation
+ENV PYTHONUNBUFFERED=1
+ENV OUTPUT_FORMAT=sqlite
+ENV DATABASE_PATH=/app/data/mist_data.db
+
+# Health check to ensure container is running properly
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sqlite3; conn = sqlite3.connect('/app/data/mist_data.db'); conn.close()" || exit 1
+
+# Default command: run MistHelper with SQLite output
+# Users can override with different arguments
+CMD ["python", "MistHelper.py", "--output-format", "sqlite", "--menu", "11"]
