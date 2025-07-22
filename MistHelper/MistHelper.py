@@ -2700,7 +2700,7 @@ def export_devices_with_site_info_to_csv():
     org_id = get_cached_or_prompted_org_id()
 
     # Fetch all sites and build a lookup dictionary for site info
-    site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+    site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
     sites = mistapi.get_all(response=site_response, mist_session=apisession)
     site_lookup = {
         site["id"]: {
@@ -2711,7 +2711,7 @@ def export_devices_with_site_info_to_csv():
     logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
 
     # Fetch org inventory (all devices)
-    inv_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id)
+    inv_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
     inventory = mistapi.get_all(response=inv_response, mist_session=apisession)
     logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
@@ -4101,6 +4101,328 @@ def export_combined_inventory_with_site_info():
 
     print("✅ CombinedInventory_ByWeek folder and summary report have been generated.")
 
+def normalize_zip_code(zip_code):
+    """
+    Normalizes a zip code to compare only the first 5 digits:
+    - Removes everything after and including a dash
+    - If only 4 digits before dash, prepends a '0'
+    - Returns first 5 digits only
+    """
+    if not zip_code:
+        return ""
+    
+    # Convert to string and strip whitespace
+    zip_str = str(zip_code).strip()
+    
+    # Remove everything after and including a dash
+    if '-' in zip_str:
+        zip_str = zip_str.split('-')[0]
+    
+    # Remove any non-digit characters
+    zip_digits = ''.join(filter(str.isdigit, zip_str))
+    
+    # If only 4 digits, prepend a '0'
+    if len(zip_digits) == 4:
+        zip_digits = '0' + zip_digits
+    
+    # Return first 5 digits
+    return zip_digits[:5]
+
+def compare_inventory_with_csv():
+    """
+    Compares combined inventory data with site info against a user-selected CSV file.
+    Shows items where zip code and serial number don't match between the datasets.
+    Skips items that aren't in the comparison CSV file.
+    Normalizes zip codes to compare only first 5 digits with proper formatting.
+    """
+    from collections import defaultdict
+    import glob
+
+    # Load environment variables
+    load_dotenv()
+    END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
+    END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
+
+    print("🔍 Comparing inventory data with external CSV file...")
+    
+    # Always regenerate fresh data (same as option 41)
+    export_devices_with_site_info_to_csv()
+
+    # Load the enriched device + site info
+    with open("AllDevicesWithSiteInfo.csv", mode="r", encoding="utf-8") as f:
+        site_configs = list(csv.DictReader(f))
+
+    # Find all CSV files in the current directory
+    csv_files = glob.glob("*.csv")
+    csv_files = [f for f in csv_files if f != "AllDevicesWithSiteInfo.csv"]  # Exclude our source file
+    
+    if not csv_files:
+        print("❌ No CSV files found in the current directory for comparison.")
+        logging.error("No CSV files found for comparison.")
+        return
+
+    # Present CSV files to user for selection
+    print("\n📋 Available CSV files for comparison:")
+    print("=" * 60)
+    for idx, csv_file in enumerate(csv_files):
+        print(f"[{idx}] {csv_file}")
+    
+    try:
+        user_input = input(f"\nEnter the index (0-{len(csv_files)-1}) of the CSV file to compare against: ").strip()
+        selected_index = int(user_input)
+        
+        if selected_index < 0 or selected_index >= len(csv_files):
+            print("❌ Invalid index selected.")
+            logging.error(f"Invalid CSV file index selected: {selected_index}")
+            return
+            
+        comparison_file = csv_files[selected_index]
+        print(f"✅ Selected comparison file: {comparison_file}")
+        logging.info(f"User selected comparison file: {comparison_file}")
+        
+    except ValueError:
+        print("❌ Invalid input. Please enter a numeric index.")
+        logging.error("Invalid numeric input for CSV file selection.")
+        return
+    except KeyboardInterrupt:
+        print("\n❌ Operation cancelled by user.")
+        logging.info("CSV comparison operation cancelled by user.")
+        return
+
+    # Load the comparison CSV file
+    try:
+        with open(comparison_file, mode="r", encoding="utf-8") as f:
+            comparison_data = list(csv.DictReader(f))
+    except Exception as e:
+        print(f"❌ Error reading comparison file {comparison_file}: {e}")
+        logging.error(f"Error reading comparison file {comparison_file}: {e}")
+        return
+
+    print(f"📊 Loaded {len(site_configs)} devices from AllDevicesWithSiteInfo.csv")
+    print(f"📊 Loaded {len(comparison_data)} records from {comparison_file}")
+
+    # Create lookup dictionaries for comparison data
+    # Try common field names for serial number and zip code
+    comparison_serials = {}
+    comparison_zip_lookup = {}
+    
+    # Detect field names in comparison CSV
+    if not comparison_data:
+        print("❌ Comparison CSV file is empty.")
+        return
+        
+    comparison_headers = comparison_data[0].keys()
+    
+    # Try to find serial number field
+    serial_field = None
+    for header in comparison_headers:
+        if any(term in header.lower() for term in ['serial', 'sn', 'system serial']):
+            serial_field = header
+            break
+    
+    # Try to find zip code field  
+    zip_field = None
+    for header in comparison_headers:
+        if any(term in header.lower() for term in ['zip', 'postal', 'zip code', 'postal code']):
+            zip_field = header
+            break
+
+    # Try to find address fields
+    address_field = None
+    city_field = None
+    state_field = None
+    country_field = None
+    
+    for header in comparison_headers:
+        if any(term in header.lower() for term in ['address', 'street', 'address line']):
+            address_field = header
+        elif any(term in header.lower() for term in ['city']):
+            city_field = header
+        elif any(term in header.lower() for term in ['state']):
+            state_field = header
+        elif any(term in header.lower() for term in ['country']):
+            country_field = header
+
+    if not serial_field:
+        print("❌ Could not find serial number field in comparison CSV.")
+        print("   Looked for fields containing: 'serial', 'sn', 'system serial'")
+        print(f"   Available fields: {list(comparison_headers)}")
+        logging.error(f"Serial field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
+        return
+        
+    if not zip_field:
+        print("❌ Could not find zip code field in comparison CSV.")
+        print("   Looked for fields containing: 'zip', 'postal', 'zip code', 'postal code'")
+        print(f"   Available fields: {list(comparison_headers)}")
+        logging.error(f"Zip field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
+        return
+
+    print(f"✅ Using serial field: '{serial_field}'")
+    print(f"✅ Using zip field: '{zip_field}'")
+    if address_field:
+        print(f"✅ Using address field: '{address_field}'")
+    if city_field:
+        print(f"✅ Using city field: '{city_field}'")
+    if state_field:
+        print(f"✅ Using state field: '{state_field}'")
+    if country_field:
+        print(f"✅ Using country field: '{country_field}'")
+
+    # Build lookup dictionaries from comparison data
+    comparison_address_lookup = {}  # serial -> full address info from comparison CSV
+    for row in comparison_data:
+        serial = row.get(serial_field, "").strip()
+        zip_code = row.get(zip_field, "").strip()
+        if serial:
+            # Normalize zip code for comparison
+            normalized_zip = normalize_zip_code(zip_code)
+            comparison_serials[serial] = normalized_zip
+            # Store full address info for diff report
+            comparison_address_lookup[serial] = {
+                "Address": row.get(address_field, "") if address_field else "",
+                "City": row.get(city_field, "") if city_field else "",
+                "State": row.get(state_field, "") if state_field else "",
+                "Country": row.get(country_field, "") if country_field else "",
+                "Zip": zip_code
+            }
+
+    print(f"📋 Built comparison lookup with {len(comparison_serials)} serial numbers")
+
+    # Process device data and find mismatches
+    mismatched_items = []
+    diff_report_items = []
+    skipped_count = 0
+    
+    for device in site_configs:
+        device_serial = device.get("serial", "").strip()
+        device_zip = device.get("zip_code", "").strip()
+        
+        # Skip if device serial not in comparison file
+        if device_serial not in comparison_serials:
+            skipped_count += 1
+            continue
+            
+        # Get normalized zip code from comparison file
+        comparison_zip = comparison_serials[device_serial]
+        
+        # Normalize device zip code for comparison
+        device_zip_normalized = normalize_zip_code(device_zip)
+        
+        # Check if normalized zip codes don't match
+        if device_zip_normalized != comparison_zip:
+            try:
+                created_time = int(device.get("created_time", 0))
+                created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+                year, week, _ = created_date.isocalendar()
+                week_key = f"{year}_Week_{week:02d}"
+
+                # Standard mismatch item (existing format)
+                mismatched_item = {
+                    "Week": week_key,
+                    "Full Site": device.get("site_name", ""),
+                    "System Serial Number": device_serial,
+                    "System Model Number": device.get("model", ""),
+                    "End Customer Name": END_CUSTOMER_NAME,
+                    "Address Line 1": device.get("street", ""),
+                    "Address Line 2": "",
+                    "City": device.get("city", ""),
+                    "State": device.get("state", ""),
+                    "Country": device.get("country", "US"),
+                    "Current Zip Code": device_zip,
+                    "Current Zip Normalized": device_zip_normalized,
+                    "Comparison Zip Code": comparison_zip,
+                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                    "Mismatch Type": "Zip Code Mismatch"
+                }
+                mismatched_items.append(mismatched_item)
+
+                # Diff report item (showing both address sets)
+                comparison_address = comparison_address_lookup.get(device_serial, {})
+                diff_item = {
+                    "Week": week_key,
+                    "Full Site": device.get("site_name", ""),
+                    "System Serial Number": device_serial,
+                    "System Model Number": device.get("model", ""),
+                    "End Customer Name": END_CUSTOMER_NAME,
+                    "Mist_Address_Line_1": device.get("street", ""),
+                    "Mist_City": device.get("city", ""),
+                    "Mist_State": device.get("state", ""),
+                    "Mist_Country": device.get("country", "US"),
+                    "Mist_Zip_Code": device_zip,
+                    "Mist_Zip_Normalized": device_zip_normalized,
+                    "Comparison_Address": comparison_address.get("Address", ""),
+                    "Comparison_City": comparison_address.get("City", ""),
+                    "Comparison_State": comparison_address.get("State", ""),
+                    "Comparison_Country": comparison_address.get("Country", ""),
+                    "Comparison_Zip_Code": comparison_address.get("Zip", ""),
+                    "Comparison_Zip_Normalized": comparison_zip,
+                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                    "Mismatch Type": "Zip Code Mismatch"
+                }
+                diff_report_items.append(diff_item)
+            except Exception as e:
+                logging.warning(f"⚠️ Skipping device due to error: {e}")
+
+    # Display results
+    print(f"\n📊 Comparison Results:")
+    print(f"   ✅ Devices processed: {len(site_configs)}")
+    print(f"   ⏭️  Devices skipped (not in comparison file): {skipped_count}")
+    print(f"   ❌ Zip code mismatches found: {len(mismatched_items)}")
+
+    if mismatched_items:
+        print(f"\n🔍 Zip Code Mismatches (comparing normalized 5-digit codes):")
+        print("=" * 110)
+        for idx, item in enumerate(mismatched_items[:10]):  # Show first 10
+            print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15} | "
+                  f"Current: {item['Current Zip Code']:<10} | "
+                  f"Normalized: {item['Current Zip Normalized']:<6} | "
+                  f"Expected: {item['Comparison Zip Code']:<6} | "
+                  f"Site: {item['Full Site']}")
+        
+        if len(mismatched_items) > 10:
+            print(f"   ... and {len(mismatched_items) - 10} more mismatches")
+            
+        # Optionally save to CSV
+        save_choice = input(f"\n💾 Save {len(mismatched_items)} mismatched items to CSV files? (y/n): ").strip().lower()
+        if save_choice in ['y', 'yes']:
+            base_filename = comparison_file.replace('.csv', '')
+            
+            # Save standard mismatch report (existing format)
+            output_file1 = f"ZipCodeMismatches_vs_{base_filename}.csv"
+            fieldnames1 = [
+                "Week", "Full Site", "System Serial Number", "System Model Number", 
+                "End Customer Name", "Address Line 1", "Address Line 2", "City", 
+                "State", "Country", "Current Zip Code", "Current Zip Normalized", "Comparison Zip Code", 
+                "End Customer Account ID", "Mismatch Type"
+            ]
+            
+            with open(output_file1, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames1)
+                writer.writeheader()
+                writer.writerows(mismatched_items)
+            
+            # Save diff report (side-by-side address comparison)
+            output_file2 = f"AddressDiff_vs_{base_filename}.csv"
+            fieldnames2 = [
+                "Week", "Full Site", "System Serial Number", "System Model Number", 
+                "End Customer Name", "Mist_Address_Line_1", "Mist_City", "Mist_State", "Mist_Country",
+                "Mist_Zip_Code", "Mist_Zip_Normalized", "Comparison_Address", "Comparison_City", 
+                "Comparison_State", "Comparison_Country", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
+                "End Customer Account ID", "Mismatch Type"
+            ]
+            
+            with open(output_file2, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames2)
+                writer.writeheader()
+                writer.writerows(diff_report_items)
+            
+            print(f"✅ Standard mismatches saved to: {output_file1}")
+            print(f"✅ Address diff report saved to: {output_file2}")
+            logging.info(f"Saved {len(mismatched_items)} mismatched items to {output_file1}")
+            logging.info(f"Saved {len(diff_report_items)} diff items to {output_file2}")
+    else:
+        print("🎉 No zip code mismatches found! All items match the comparison file.")
+
 def export_gateway_templates_to_csv():
     """
     Fetches all gateway templates for the organization and exports them to OrgGatewayTemplates.csv.
@@ -4463,6 +4785,172 @@ def convert_virtual_chassis_to_virtual_mac():
         print(f"❌ Failed to convert to virtual MAC: {e}")
         logging.error(f"Failed to convert to virtual MAC: {e}")
 
+def convert_virtual_chassis_by_site_list():
+    """
+    Reads site names from VCConvert.CSV (no header), finds all virtual chassis switches 
+    in those sites, displays them to the user for confirmation, and converts them all 
+    if the user confirms.
+    """
+    logging.info("Starting bulk virtual chassis to virtual MAC conversion by site list...")
+    
+    # Check if VCConvert.CSV exists
+    csv_file = "VCConvert.CSV"
+    if not os.path.exists(csv_file):
+        print(f"❌ File '{csv_file}' not found. Please create the file with site names (one per line, no header).")
+        logging.error(f"VCConvert.CSV file not found.")
+        return
+
+    # Read site names from CSV (no header)
+    site_names = []
+    try:
+        with open(csv_file, mode="r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row and row[0].strip():  # Skip empty rows
+                    site_names.append(row[0].strip())
+    except Exception as e:
+        print(f"❌ Error reading {csv_file}: {e}")
+        logging.error(f"Error reading VCConvert.CSV: {e}")
+        return
+
+    if not site_names:
+        print(f"❌ No site names found in {csv_file}.")
+        logging.warning("No site names found in VCConvert.CSV.")
+        return
+
+    print(f"📋 Loaded {len(site_names)} site names from {csv_file}:")
+    for idx, site_name in enumerate(site_names):
+        print(f"  [{idx+1}] {site_name}")
+
+    # Ensure required CSVs are fresh
+    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+
+    # Load site list to get site IDs
+    site_name_to_id = {}
+    try:
+        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                site_name_to_id[row.get("name", "")] = row.get("id", "")
+    except Exception as e:
+        print(f"❌ Error reading SiteList.csv: {e}")
+        logging.error(f"Error reading SiteList.csv: {e}")
+        return
+
+    # Find site IDs for the specified site names
+    target_site_ids = []
+    missing_sites = []
+    for site_name in site_names:
+        site_id = site_name_to_id.get(site_name)
+        if site_id:
+            target_site_ids.append(site_id)
+        else:
+            missing_sites.append(site_name)
+
+    if missing_sites:
+        print(f"⚠️ Warning: The following sites were not found in the organization:")
+        for site in missing_sites:
+            print(f"   - {site}")
+
+    if not target_site_ids:
+        print("❌ No valid sites found. Exiting.")
+        logging.error("No valid sites found for VC conversion.")
+        return
+
+    # Load inventory and filter for virtual chassis switches in target sites
+    switches_to_convert = []
+    try:
+        with open("OrgInventory.csv", mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if (row.get("type") == "switch" and 
+                    row.get("site_id") in target_site_ids and 
+                    row.get("id", "").strip()):
+                    
+                    # Get site name for display
+                    site_name = next((name for name, id_ in site_name_to_id.items() if id_ == row.get("site_id")), "Unknown Site")
+                    row["site_name"] = site_name
+                    switches_to_convert.append(row)
+    except Exception as e:
+        print(f"❌ Error reading OrgInventory.csv: {e}")
+        logging.error(f"Error reading OrgInventory.csv: {e}")
+        return
+
+    if not switches_to_convert:
+        print("❌ No virtual chassis switches found in the specified sites.")
+        logging.warning("No virtual chassis switches found in target sites.")
+        return
+
+    # Display switches that will be converted
+    print(f"\n🔍 Found {len(switches_to_convert)} virtual chassis switches to convert:")
+    print("=" * 100)
+    for idx, switch in enumerate(switches_to_convert):
+        print(f"[{idx+1:2}] Site: {switch.get('site_name', ''):25} | "
+              f"Name: {switch.get('name', ''):20} | "
+              f"MAC: {switch.get('mac', ''):17} | "
+              f"Model: {switch.get('model', ''):12} | "
+              f"Serial: {switch.get('serial', '')}")
+
+    # Ask for user confirmation
+    print(f"\n⚠️ This will convert {len(switches_to_convert)} virtual chassis switches to virtual MAC.")
+    print("💡 This operation cannot be undone easily.")
+    
+    confirm = input("\n🤔 Do you want to proceed with the conversion? (yes/no): ").strip().lower()
+    
+    if confirm not in ['yes', 'y']:
+        print("❌ Conversion cancelled by user.")
+        logging.info("Virtual chassis conversion cancelled by user.")
+        return
+
+    # Proceed with conversions
+    print(f"\n🚀 Starting conversion of {len(switches_to_convert)} switches...")
+    successful_conversions = 0
+    failed_conversions = 0
+
+    for idx, switch in enumerate(switches_to_convert):
+        site_id = switch.get("site_id")
+        device_id = switch.get("id")
+        switch_name = switch.get("name", "")
+        site_name = switch.get("site_name", "")
+        
+        print(f"\n[{idx+1}/{len(switches_to_convert)}] Converting '{switch_name}' at site '{site_name}'...")
+        
+        try:
+            # Call the Mist API to convert to virtual MAC
+            resp = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)
+            
+            # Check the response
+            if hasattr(resp, "status_code") and resp.status_code >= 400:
+                print(f"❌ Conversion failed (HTTP {resp.status_code}): {getattr(resp, 'data', '')}")
+                logging.error(f"Conversion failed for {switch_name} at {site_name}. HTTP {resp.status_code}: {getattr(resp, 'data', '')}")
+                failed_conversions += 1
+            elif isinstance(getattr(resp, "data", None), dict) and "detail" in resp.data:
+                print(f"❌ Conversion failed: {resp.data['detail']}")
+                logging.error(f"Conversion failed for {switch_name} at {site_name}. Detail: {resp.data['detail']}")
+                failed_conversions += 1
+            else:
+                print(f"✅ Conversion triggered successfully.")
+                logging.info(f"Conversion triggered for {switch_name} at {site_name}. Response: {getattr(resp, 'data', '')}")
+                successful_conversions += 1
+                
+        except Exception as e:
+            print(f"❌ Exception during conversion: {e}")
+            logging.error(f"Exception during conversion of {switch_name} at {site_name}: {e}")
+            failed_conversions += 1
+
+    # Summary
+    print(f"\n📊 Conversion Summary:")
+    print(f"   ✅ Successful conversions: {successful_conversions}")
+    print(f"   ❌ Failed conversions: {failed_conversions}")
+    print(f"   📊 Total switches processed: {len(switches_to_convert)}")
+    
+    if successful_conversions > 0:
+        print(f"\n💡 Note: Successful conversions may take a few minutes to complete.")
+        print(f"   Monitor the devices in the Mist portal to confirm the conversion status.")
+    
+    logging.info(f"Bulk VC conversion completed: {successful_conversions} successful, {failed_conversions} failed")
+
 def export_site_wifi_clients_to_csv(site_id=None):
     """
     Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
@@ -4785,16 +5273,89 @@ def reboot_devices_by_gateway_template_list():
         return
 
     logging.info(f"Found {len(reboot_targets)} gateway devices to reboot")
-    print(f"Found {len(reboot_targets)} gateway devices to reboot:")
+    
+    # Step 8: Display devices and get user confirmation
+    print("\n" + "=" * 100)
+    print("🚨 DEVICE REBOOT CONFIRMATION REQUIRED 🚨")
+    print("=" * 100)
+    print(f"\n📋 The following {len(reboot_targets)} gateway devices will be REBOOTED:")
+    print("-" * 100)
+    
+    # Group devices by template for better display
+    devices_by_template = {}
     for target in reboot_targets:
-        print(f"  - {target['device_name']} (ID: {target['device_id']})")
+        template_name = target['template_name']
+        if template_name not in devices_by_template:
+            devices_by_template[template_name] = []
+        devices_by_template[template_name].append(target)
+    
+    # Display devices grouped by template
+    for template_name, devices in devices_by_template.items():
+        print(f"\n🔧 Template: {template_name}")
+        print(f"   📊 {len(devices)} devices affected:")
+        for device in devices:
+            print(f"      • {device['device_name']} (ID: {device['device_id']}) at site '{device['site_name']}'")
+    
+    # Display critical warnings in a cleaner format
+    warning_lines = [
+        "🛑 CRITICAL WARNING - READ CAREFULLY:",
+        "• This action will REBOOT network gateway devices",
+        "• Network connectivity will be TEMPORARILY LOST during reboot",
+        "• Users may experience service interruptions",
+        "• Remote sites may become inaccessible during reboot",
+        "• This is a DISRUPTIVE network operation",
+        "• Ensure you have alternative access methods if needed",
+        "• The script owner bears NO LIABILITY for any consequences",
+        "• Proceed only if you understand and accept these risks"
+    ]
+    
+    print("\n" + "⚠️" * 50)
+    for line in warning_lines:
+        print(line)
+    print("⚠️" * 50)
+    
+    print(f"\n📊 Summary:")
+    print(f"   • Total devices to reboot: {len(reboot_targets)}")
+    print(f"   • Templates involved: {len(devices_by_template)}")
+    print(f"   • Sites affected: {len(set(target['site_name'] for target in reboot_targets))}")
+    
+    # Get user confirmation with liability waiver
+    print(f"\n🤔 Do you want to proceed with rebooting {len(reboot_targets)} gateway devices?")
+    print("   Type 'REBOOT' (all caps) to confirm, or anything else to cancel:")
+    print("   By typing 'REBOOT', you acknowledge and accept all risks and liability.")
+    
+    try:
+        user_input = input(">>> ").strip()
+        if user_input != "REBOOT":
+            print("❌ Reboot operation cancelled by user.")
+            logging.info("Gateway reboot operation cancelled by user input")
+            return
+        else:
+            print("✅ User confirmed reboot operation. Proceeding...")
+            logging.info(f"🔥 LIABILITY WAIVER ACCEPTED: User confirmed gateway reboot operation for {len(reboot_targets)} devices")
+            logging.info(f"User input: '{user_input}' - User accepts full responsibility and liability for network disruption")
+            # Log detailed device list for audit trail
+            device_list = [f"{d['device_name']} ({d['device_id']}) at {d['site_name']}" for d in reboot_targets]
+            logging.info(f"Devices to be rebooted: {device_list}")
+    except KeyboardInterrupt:
+        print("\n❌ Reboot operation cancelled by user (Ctrl+C).")
+        logging.info("Gateway reboot operation cancelled by user interrupt")
+        return
+    except Exception as e:
+        print(f"❌ Error getting user input: {e}")
+        logging.error(f"Error getting user input for reboot confirmation: {e}")
+        return
 
-    # Step 8: Reboot each device and log results
+    print("\n🚀 Starting device reboot operations...")
+    print("=" * 50)
+
+    # Step 9: Reboot each device and log results
     results = []
     for device in reboot_targets:
         status = ""
         try:
             logging.info(f"Rebooting device '{device['device_name']}' (ID: {device['device_id']})")
+            print(f"🔄 Rebooting {device['device_name']} at {device['site_name']}...")
             resp = mistapi.api.v1.sites.devices.restartSiteDevice(
                 apisession,
                 device["site_id"],
@@ -4811,9 +5372,11 @@ def reboot_devices_by_gateway_template_list():
                 status = f"SUCCESS - HTTP {resp.status_code}"
             else:
                 status = f"SUCCESS - Response: {str(resp)}"
+            print(f"   ✅ Reboot command sent successfully")
             logging.info(f"✅ Reboot command sent for '{device['device_name']}': {status}")
         except Exception as e:
             status = f"ERROR: {e}"
+            print(f"   ❌ Failed to send reboot command: {e}")
             logging.error(f"❌ Failed to reboot '{device['device_name']}': {e}")
 
         results.append({
@@ -4826,7 +5389,7 @@ def reboot_devices_by_gateway_template_list():
             "Status": status
         })
 
-    # Step 9: Write results to CSV
+    # Step 10: Write results to CSV
     try:
         with open("GatewayTemplateRebootResults.CSV", "w", newline='', encoding="utf-8") as f:
             fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
@@ -4834,8 +5397,10 @@ def reboot_devices_by_gateway_template_list():
             writer.writeheader()
             writer.writerows(results)
         
+        print(f"\n📊 Operation completed!")
+        print(f"   ✅ Reboot commands sent to {len(results)} devices")
+        print(f"   📝 Results logged to GatewayTemplateRebootResults.CSV")
         logging.info(f"✅ Reboot results written to GatewayTemplateRebootResults.CSV ({len(results)} entries)")
-        print(f"✅ Reboot results written to GatewayTemplateRebootResults.CSV ({len(results)} entries)")
     except Exception as e:
         logging.error(f"❌ Failed to write results to CSV: {e}")
         print(f"❌ Failed to write results to CSV: {e}")
@@ -4845,9 +5410,7 @@ menu_actions = {
     "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
     "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
-    "2a": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
     "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
-    "3a": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
 
     # 📚 Event & Alarm Definitions
     "4": (export_nac_event_definitions_to_csv, "Export NAC (Network Access Control) event definitions"),
@@ -4946,7 +5509,13 @@ menu_actions = {
     "75": (export_org_network_templates_to_csv, "Export network template information for the organization"),
     "76": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
     "77": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
-    "78": (export_org_switch_templates_to_csv, "Export switch template information for the organization")
+    "78": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
+    "79": (compare_inventory_with_csv, "Compare inventory data with external CSV file and show zip code mismatches"),
+    
+    # 🚧 Work In Progress Features
+    "80": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
+    "81": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
+    "82": (convert_virtual_chassis_by_site_list, "Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
 }
 
 def run_systematic_test():
@@ -4974,8 +5543,8 @@ def run_systematic_test():
     # Define unsafe menu options that should be skipped during testing
     unsafe_options = {
         "0": "Interactive site selection",
-        "2a": "WIP (Work in Progress) - may be unstable", 
-        "3a": "WIP (Work in Progress) - may be unstable",
+        "80": "WIP (Work in Progress) - may be unstable", 
+        "81": "WIP (Work in Progress) - may be unstable",
         "16": "Interactive site inventory browser",
         "17": "Interactive device stats viewer", 
         "18": "Interactive device tests viewer",
