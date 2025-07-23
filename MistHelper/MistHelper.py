@@ -5405,9 +5405,2073 @@ def reboot_devices_by_gateway_template_list():
         logging.error(f"❌ Failed to write results to CSV: {e}")
         print(f"❌ Failed to write results to CSV: {e}")
 
+
+def check_firmware_upgrade_status():
+    """
+    Check current firmware upgrade status across the organization.
+    
+    This function provides comprehensive upgrade status monitoring with:
+    1. Device-level firmware status from device statistics (fwupdate field)
+    2. Site-level upgrade operations and history
+    3. Organization-wide upgrade tracking
+    4. Current version vs. available version comparison
+    5. Upgrade progress monitoring for active operations
+    6. Failed upgrade identification and retry status
+    7. Bulk status export to CSV for analysis
+    8. Interactive site/device filtering options
+    
+    Reports include:
+    - Current firmware versions and upgrade status per device
+    - Active upgrade operations with progress tracking
+    - Failed upgrades with error details and retry information
+    - Upgrade history and completion statistics
+    - Version mismatch identification across sites
+    """
+    logging.info("Starting firmware upgrade status check...")
+    org_id = get_cached_or_prompted_org_id()
+    
+    print("🔍 Firmware Upgrade Status Check")
+    print("=" * 60)
+    
+    # Step 1: Choose scope (organization-wide or specific site)
+    print("\n📊 Select status check scope:")
+    print("   [1] Organization-wide status (all sites and devices)")
+    print("   [2] Specific site status")
+    print("   [3] Active upgrade operations only")
+    print("   [4] Failed upgrades only")
+    
+    while True:
+        try:
+            scope_choice = input("Select scope (1-4): ").strip()
+            if scope_choice in ['1', '2', '3', '4']:
+                break
+            else:
+                print("❌ Invalid selection. Please choose 1-4.")
+        except KeyboardInterrupt:
+            print("\n❌ Operation cancelled by user.")
+            return
+    
+    site_filter = None
+    if scope_choice == '2':
+        # Get specific site selection
+        site_filter = prompt_site_selection()
+        if not site_filter:
+            print("❌ No site selected. Exiting.")
+            return
+    
+    # Step 2: Fetch device statistics to get current firmware status
+    print(f"\n📡 Fetching device statistics...")
+    all_device_stats = []
+    upgrade_results = []
+    
+    try:
+        if site_filter:
+            # Single site mode
+            print(f"   📍 Fetching stats for selected site...")
+            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                apisession, 
+                site_filter,
+                limit=1000
+            )
+            site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+            all_device_stats.extend(site_stats)
+            
+            print(f"   ✅ Retrieved stats for {len(site_stats)} devices at selected site")
+        else:
+            # Organization-wide mode
+            print(f"   🌐 Fetching organization-wide device statistics...")
+            stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+                apisession, 
+                org_id,
+                limit=1000
+            )
+            org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+            all_device_stats.extend(org_stats)
+            
+            print(f"   ✅ Retrieved stats for {len(org_stats)} devices organization-wide")
+            
+    except Exception as e:
+        print(f"❌ Failed to fetch device statistics: {e}")
+        logging.error(f"Failed to fetch device statistics: {e}")
+        return
+    
+    if not all_device_stats:
+        print("⚠️ No device statistics found.")
+        return
+    
+    # Step 3: Process device firmware status
+    print(f"\n🔍 Analyzing firmware status for {len(all_device_stats)} devices...")
+    
+    firmware_status_summary = {
+        'total_devices': 0,
+        'devices_with_fwupdate': 0,
+        'upgrade_in_progress': 0,
+        'upgrade_failed': 0,
+        'upgrade_completed': 0,
+        'upgrade_unknown': 0,
+        'devices_by_status': {},
+        'devices_by_version': {},
+        'devices_by_model': {}
+    }
+    
+    # Get site information for enrichment
+    print(f"   📋 Fetching site information for device enrichment...")
+    try:
+        sites_resp = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+        all_sites = mistapi.get_all(response=sites_resp, mist_session=apisession)
+        site_lookup = {site.get('id'): site.get('name', 'Unknown') for site in all_sites}
+    except Exception as e:
+        logging.warning(f"Failed to fetch site information: {e}")
+        site_lookup = {}
+    
+    for device_stats in all_device_stats:
+        device_id = device_stats.get('id', 'Unknown')
+        device_name = device_stats.get('name', 'Unnamed')
+        device_mac = device_stats.get('mac', 'Unknown')
+        device_model = device_stats.get('model', 'Unknown')
+        device_type = device_stats.get('type', 'Unknown')
+        device_version = device_stats.get('version', 'Unknown')
+        site_id = device_stats.get('site_id', 'Unknown')
+        site_name = site_lookup.get(site_id, 'Unknown Site')
+        last_seen = device_stats.get('last_seen', 0)
+        
+        # Process fwupdate status
+        fwupdate = device_stats.get('fwupdate', {})
+        if fwupdate:
+            firmware_status_summary['devices_with_fwupdate'] += 1
+            
+            fw_status = fwupdate.get('status', 'unknown')
+            fw_progress = fwupdate.get('progress', 0)
+            fw_timestamp = fwupdate.get('timestamp', 0)
+            fw_status_id = fwupdate.get('status_id', 0)
+            fw_will_retry = fwupdate.get('will_retry', False)
+            
+            # Categorize by status
+            if fw_status == 'inprogress':
+                firmware_status_summary['upgrade_in_progress'] += 1
+            elif fw_status == 'failed':
+                firmware_status_summary['upgrade_failed'] += 1
+            elif fw_status == 'upgraded':
+                firmware_status_summary['upgrade_completed'] += 1
+            else:
+                firmware_status_summary['upgrade_unknown'] += 1
+            
+            # Track status distribution
+            if fw_status not in firmware_status_summary['devices_by_status']:
+                firmware_status_summary['devices_by_status'][fw_status] = 0
+            firmware_status_summary['devices_by_status'][fw_status] += 1
+            
+            # Format timestamps for display
+            fw_time_str = "Unknown"
+            if fw_timestamp:
+                try:
+                    fw_time_str = datetime.fromtimestamp(fw_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    fw_time_str = str(fw_timestamp)
+            
+            last_seen_str = "Unknown"
+            if last_seen:
+                try:
+                    last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    last_seen_str = str(last_seen)
+        else:
+            fw_status = "no_upgrade_info"
+            fw_progress = 0
+            fw_timestamp = 0
+            fw_status_id = 0
+            fw_will_retry = False
+            fw_time_str = "N/A"
+            last_seen_str = "Unknown"
+            if last_seen:
+                try:
+                    last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    last_seen_str = str(last_seen)
+        
+        # Track version distribution
+        if device_version not in firmware_status_summary['devices_by_version']:
+            firmware_status_summary['devices_by_version'][device_version] = 0
+        firmware_status_summary['devices_by_version'][device_version] += 1
+        
+        # Track model distribution
+        if device_model not in firmware_status_summary['devices_by_model']:
+            firmware_status_summary['devices_by_model'][device_model] = 0
+        firmware_status_summary['devices_by_model'][device_model] += 1
+        
+        firmware_status_summary['total_devices'] += 1
+        
+        # Apply scope filtering
+        include_device = True
+        if scope_choice == '3':  # Active upgrades only
+            include_device = fw_status == 'inprogress'
+        elif scope_choice == '4':  # Failed upgrades only
+            include_device = fw_status == 'failed'
+        
+        if include_device:
+            upgrade_results.append({
+                'Site ID': site_id,
+                'Site Name': site_name,
+                'Device ID': device_id,
+                'Device Name': device_name,
+                'Device MAC': device_mac,
+                'Device Model': device_model,
+                'Device Type': device_type,
+                'Current Version': device_version,
+                'Last Seen': last_seen_str,
+                'FW Upgrade Status': fw_status,
+                'FW Progress %': fw_progress,
+                'FW Status ID': fw_status_id,
+                'FW Will Retry': fw_will_retry,
+                'FW Timestamp': fw_time_str,
+                'Timestamp': datetime.now(timezone.utc).isoformat()
+            })
+    
+    # Step 4: Display summary statistics
+    print(f"\n📊 Firmware Status Summary:")
+    print(f"   • Total devices analyzed: {firmware_status_summary['total_devices']}")
+    print(f"   • Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
+    print(f"   • Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
+    print(f"   • Upgrades completed: {firmware_status_summary['upgrade_completed']}")
+    print(f"   • Upgrades failed: {firmware_status_summary['upgrade_failed']}")
+    print(f"   • Unknown status: {firmware_status_summary['upgrade_unknown']}")
+    
+    if firmware_status_summary['devices_by_status']:
+        print(f"\n📋 Status Distribution:")
+        for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
+            print(f"   • {status}: {count} devices")
+    
+    print(f"\n📦 Version Distribution:")
+    sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
+                           key=lambda x: x[1], reverse=True)
+    for version, count in sorted_versions[:10]:  # Show top 10 versions
+        print(f"   • {version}: {count} devices")
+    if len(sorted_versions) > 10:
+        print(f"   ... and {len(sorted_versions) - 10} more versions")
+    
+    print(f"\n🔧 Model Distribution:")
+    sorted_models = sorted(firmware_status_summary['devices_by_model'].items(), 
+                          key=lambda x: x[1], reverse=True)
+    for model, count in sorted_models[:10]:  # Show top 10 models
+        print(f"   • {model}: {count} devices")
+    if len(sorted_models) > 10:
+        print(f"   ... and {len(sorted_models) - 10} more models")
+    
+    # Step 5: Check for active upgrade operations
+    print(f"\n🔍 Checking for active upgrade operations...")
+    active_upgrades = []
+    
+    # Check organization-level upgrades if not filtering by site
+    if not site_filter:
+        try:
+            print(f"   📡 Checking organization-level upgrade operations...")
+            # Note: This would require knowing specific upgrade IDs
+            # For now, we'll skip org-level upgrade checks
+            print(f"   ℹ️ Organization-level upgrade tracking requires specific upgrade IDs")
+        except Exception as e:
+            logging.warning(f"Failed to check org-level upgrades: {e}")
+    
+    # Check site-level upgrades
+    sites_to_check = [site_filter] if site_filter else list(site_lookup.keys())
+    
+    for site_id in sites_to_check[:5]:  # Limit to first 5 sites for performance
+        try:
+            site_name = site_lookup.get(site_id, 'Unknown')
+            print(f"   📍 Checking site '{site_name}' for active upgrades...")
+            
+            upgrades_resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
+            site_upgrades = mistapi.get_all(response=upgrades_resp, mist_session=apisession)
+            
+            if site_upgrades:
+                print(f"      ✅ Found {len(site_upgrades)} upgrade operations")
+                for upgrade in site_upgrades:
+                    upgrade_id = upgrade.get('id', 'Unknown')
+                    upgrade_status = upgrade.get('status', 'Unknown')
+                    upgrade_strategy = upgrade.get('strategy', 'Unknown')
+                    target_version = upgrade.get('target_version', 'Unknown')
+                    start_time = upgrade.get('start_time', 0)
+                    enable_p2p = upgrade.get('enable_p2p', False)
+                    counts = upgrade.get('counts', {})
+                    
+                    start_time_str = "Unknown"
+                    if start_time:
+                        try:
+                            start_time_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+                        except:
+                            start_time_str = str(start_time)
+                    
+                    active_upgrades.append({
+                        'Site ID': site_id,
+                        'Site Name': site_name,
+                        'Upgrade ID': upgrade_id,
+                        'Status': upgrade_status,
+                        'Strategy': upgrade_strategy,
+                        'Target Version': target_version,
+                        'Start Time': start_time_str,
+                        'P2P Enabled': enable_p2p,
+                        'Total Devices': counts.get('total', 0),
+                        'Downloaded': counts.get('downloaded', 0),
+                        'Download Requested': counts.get('download_requested', 0),
+                        'Rebooted': counts.get('rebooted', 0),
+                        'Reboot In Progress': counts.get('reboot_in_progress', 0),
+                        'Failed': counts.get('failed', 0),
+                        'Skipped': counts.get('skipped', 0),
+                        'Timestamp': datetime.now(timezone.utc).isoformat()
+                    })
+            else:
+                print(f"      ℹ️ No upgrade operations found")
+                
+        except Exception as e:
+            print(f"      ❌ Failed to check upgrades for site {site_id}: {e}")
+            logging.warning(f"Failed to check upgrades for site {site_id}: {e}")
+    
+    # Step 6: Export results to CSV
+    timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    if upgrade_results:
+        device_status_file = f"FirmwareUpgradeStatus_{timestamp_suffix}.csv"
+        fieldnames = ['Site ID', 'Site Name', 'Device ID', 'Device Name', 'Device MAC', 
+                     'Device Model', 'Device Type', 'Current Version', 'Last Seen',
+                     'FW Upgrade Status', 'FW Progress %', 'FW Status ID', 'FW Will Retry',
+                     'FW Timestamp', 'Timestamp']
+        
+        try:
+            with open(device_status_file, mode='w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(upgrade_results)
+            
+            print(f"\n✅ Device firmware status exported to: {device_status_file}")
+            print(f"   📊 {len(upgrade_results)} device records exported")
+            logging.info(f"Exported {len(upgrade_results)} device firmware status records to {device_status_file}")
+            
+        except Exception as e:
+            print(f"❌ Failed to export device status: {e}")
+            logging.error(f"Failed to export device status: {e}")
+    
+    if active_upgrades:
+        upgrade_ops_file = f"ActiveUpgradeOperations_{timestamp_suffix}.csv"
+        upgrade_fieldnames = ['Site ID', 'Site Name', 'Upgrade ID', 'Status', 'Strategy',
+                             'Target Version', 'Start Time', 'P2P Enabled', 'Total Devices',
+                             'Downloaded', 'Download Requested', 'Rebooted', 'Reboot In Progress',
+                             'Failed', 'Skipped', 'Timestamp']
+        
+        try:
+            with open(upgrade_ops_file, mode='w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=upgrade_fieldnames)
+                writer.writeheader()
+                writer.writerows(active_upgrades)
+            
+            print(f"✅ Active upgrade operations exported to: {upgrade_ops_file}")
+            print(f"   🔄 {len(active_upgrades)} upgrade operations exported")
+            logging.info(f"Exported {len(active_upgrades)} active upgrade operations to {upgrade_ops_file}")
+            
+        except Exception as e:
+            print(f"❌ Failed to export upgrade operations: {e}")
+            logging.error(f"Failed to export upgrade operations: {e}")
+    
+    # Step 7: Summary and recommendations
+    print(f"\n📋 Summary and Recommendations:")
+    
+    if firmware_status_summary['upgrade_failed'] > 0:
+        print(f"   ⚠️ {firmware_status_summary['upgrade_failed']} devices have failed upgrades")
+        print(f"   💡 Check failed devices for retry eligibility or manual intervention")
+    
+    if firmware_status_summary['upgrade_in_progress'] > 0:
+        print(f"   🔄 {firmware_status_summary['upgrade_in_progress']} devices currently upgrading")
+        print(f"   ⏱️ Monitor progress and avoid disrupting these devices")
+    
+    if len(firmware_status_summary['devices_by_version']) > 3:
+        print(f"   📦 Multiple firmware versions detected ({len(firmware_status_summary['devices_by_version'])} different versions)")
+        print(f"   🎯 Consider standardizing on a consistent firmware version")
+    
+    if active_upgrades:
+        print(f"   🚀 {len(active_upgrades)} active upgrade operations found")
+        print(f"   👀 Monitor upgrade progress in exported CSV files")
+    else:
+        print(f"   ✅ No active upgrade operations detected")
+    
+    print(f"\n🔍 Status check complete. Check exported CSV files for detailed analysis.")
+    logging.info("Firmware upgrade status check completed successfully")
+
+
+def get_auto_upgrade_time_settings():
+    """
+    Helper function to get auto-upgrade time scheduling settings from user input.
+    Returns a dictionary with time_of_day and optionally day_of_week settings.
+    """
+    time_settings = {}
+    
+    # Time of day configuration
+    while True:
+        try:
+            print(f"   🕐 Enter upgrade time (24-hour format, e.g., 02:00, 14:30):")
+            time_input = input("   Time of day (default=02:00): ").strip() or "02:00"
+            
+            # Validate time format
+            try:
+                # Try to parse the time to validate format
+                datetime.strptime(time_input, "%H:%M")
+                time_settings["time_of_day"] = time_input
+                print(f"   ✅ Upgrade time set to: {time_input}")
+                break
+            except ValueError:
+                print(f"   ❌ Invalid time format. Please use HH:MM (24-hour format)")
+                
+        except KeyboardInterrupt:
+            print("\n   ❌ Time configuration cancelled")
+            time_settings["time_of_day"] = "02:00"  # Default fallback
+            break
+    
+    # Day of week configuration
+    print(f"\n   📅 Select upgrade schedule:")
+    print(f"      [1] Every day (recommended for most environments)")
+    print(f"      [2] Specific day of week")
+    
+    try:
+        schedule_choice = input("   Select option (1-2, default=1): ").strip() or "1"
+        
+        if schedule_choice == "2":
+            # Specific day selection
+            days = {
+                "1": ("sun", "Sunday"),
+                "2": ("mon", "Monday"), 
+                "3": ("tue", "Tuesday"),
+                "4": ("wed", "Wednesday"),
+                "5": ("thu", "Thursday"),
+                "6": ("fri", "Friday"),
+                "7": ("sat", "Saturday")
+            }
+            
+            print(f"   📅 Select day of week:")
+            for key, (day_value, day_name) in days.items():
+                print(f"      [{key}] {day_name}")
+            
+            day_choice = input("   Select day (1-7): ").strip()
+            if day_choice in days:
+                day_value, day_name = days[day_choice]
+                time_settings["day_of_week"] = day_value
+                print(f"   ✅ Upgrade day set to: {day_name}")
+            else:
+                print(f"   ⚠️ Invalid selection, defaulting to every day")
+                # Don't set day_of_week (None means every day)
+        else:
+            # Every day (don't set day_of_week)
+            print(f"   ✅ Upgrade schedule: Every day at {time_settings.get('time_of_day', '02:00')}")
+            
+    except KeyboardInterrupt:
+        print("\n   ❌ Schedule configuration cancelled, defaulting to every day")
+    
+    return time_settings
+
+
+def bulk_upgrade_ap_firmware_by_site():
+    """
+    Advanced bulk upgrade AP firmware for APs at selected site(s).
+    
+    This function provides comprehensive firmware upgrade capabilities with:
+    1. Bulk site mode: Reads APUpgradeSiteList.CSV for multi-site upgrades
+    2. Single site mode: Interactive site selection (fallback if CSV not found)
+    3. Automatic site name-to-ID resolution via organization lookup
+    4. Firmware version selection per model across all sites
+    5. Advanced upgrade strategies (big_bang, canary, rrm, serial) - default: RRM
+    6. P2P firmware sharing options (default: enabled)
+    7. Scheduling and failure threshold controls
+    8. Device filtering and selection rules
+    9. Progress monitoring and rollback options
+    10. Comprehensive safety measures and audit logging
+    11. Per-site upgrade execution with unified reporting
+    
+    File Format for APUpgradeSiteList.CSV (headerless, one site name per line):
+    Main Office
+    Branch Office A
+    Remote Site B
+    
+    Note: Site names must exactly match those in the Mist organization.
+    """
+    logging.info("Starting advanced bulk AP firmware upgrade by site...")
+    
+    # Step 0: Ensure org_id is properly set
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Check for bulk site upgrade file or get single site selection
+    bulk_upgrade_file = "APUpgradeSiteList.CSV"
+    sites_to_upgrade = []
+    
+    if os.path.exists(bulk_upgrade_file):
+        print(f"🔍 Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
+        logging.info(f"Found {bulk_upgrade_file} file, proceeding with bulk site upgrade")
+        
+        # First, get all sites in the organization for reverse lookup
+        print(f"   📡 Fetching organization sites for name-to-ID lookup...")
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+            all_org_sites = mistapi.get_all(response=response, mist_session=apisession)
+            
+            # Build lookup dictionary: site_name -> site_id
+            site_name_to_id = {}
+            for site in all_org_sites:
+                site_name = site.get("name", "").strip()
+                site_id = site.get("id", "").strip()
+                if site_name and site_id:
+                    site_name_to_id[site_name] = site_id
+            
+            logging.info(f"Built lookup table for {len(site_name_to_id)} organization sites")
+            
+        except Exception as e:
+            print(f"❌ Failed to fetch organization sites: {e}")
+            logging.error(f"Failed to fetch organization sites for lookup: {e}")
+            return
+        
+        # Read site names from file (headerless format)
+        try:
+            with open(bulk_upgrade_file, 'r', encoding='utf-8') as f:
+                site_names = []
+                for line_num, line in enumerate(f, 1):
+                    site_name = line.strip()
+                    if site_name:  # Skip empty lines
+                        site_names.append(site_name)
+            
+            if not site_names:
+                print(f"❌ No site names found in {bulk_upgrade_file}")
+                logging.error(f"No site names found in {bulk_upgrade_file}")
+                return
+            
+            print(f"   📋 Read {len(site_names)} site names from file")
+            
+            # Resolve site names to site IDs
+            sites_to_upgrade = []
+            missing_sites = []
+            
+            for site_name in site_names:
+                if site_name in site_name_to_id:
+                    site_id = site_name_to_id[site_name]
+                    sites_to_upgrade.append({
+                        'name': site_name,
+                        'id': site_id
+                    })
+                    logging.debug(f"Resolved site '{site_name}' to ID '{site_id}'")
+                else:
+                    missing_sites.append(site_name)
+                    logging.warning(f"Site name '{site_name}' not found in organization")
+            
+            # Report results
+            if missing_sites:
+                print(f"   ⚠️ Warning: {len(missing_sites)} site(s) not found in organization:")
+                for missing_site in missing_sites:
+                    print(f"      • '{missing_site}'")
+                print(f"   💡 Available sites in organization:")
+                available_names = sorted(site_name_to_id.keys())
+                for name in available_names[:10]:  # Show first 10 as examples
+                    print(f"      • '{name}'")
+                if len(available_names) > 10:
+                    print(f"      ... and {len(available_names) - 10} more")
+                    
+            if not sites_to_upgrade:
+                print(f"❌ No valid sites found - none of the names in {bulk_upgrade_file} match organization sites")
+                logging.error(f"No valid sites found in {bulk_upgrade_file}")
+                return
+            
+            print(f"✅ Successfully resolved {len(sites_to_upgrade)} site(s) for bulk upgrade:")
+            for site in sites_to_upgrade:
+                print(f"   • {site['name']} (ID: {site['id']})")
+            
+            logging.info(f"Resolved {len(sites_to_upgrade)} sites for bulk upgrade from {bulk_upgrade_file}")
+            
+        except Exception as e:
+            print(f"❌ Failed to read {bulk_upgrade_file}: {e}")
+            logging.error(f"Failed to read {bulk_upgrade_file}: {e}")
+            return
+    else:
+        print(f"📋 {bulk_upgrade_file} not found - Single site mode")
+        logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
+        
+        # Single site selection (existing behavior)
+        site_id = prompt_site_selection()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            print("❌ No site selected. Exiting.")
+            return
+        
+        # Get site name for display
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+            logging.info(f"Selected site: {site_name} (ID: {site_id})")
+        except Exception as e:
+            logging.error(f"Failed to get site name: {e}")
+            site_name = site_id
+        
+        # Convert single site to list format for unified processing
+        sites_to_upgrade = [{
+            'name': site_name,
+            'id': site_id
+        }]
+    
+    # Step 2: Get all APs across all selected sites
+    all_aps = []
+    all_sites_aps = {}  # Track APs per site
+    
+    print(f"\n🔍 Fetching APs across {len(sites_to_upgrade)} site(s)...")
+    
+    for site_info in sites_to_upgrade:
+        site_id = site_info['id']
+        site_name = site_info['name']
+        
+        try:
+            print(f"   📡 Fetching APs at site '{site_name}'...")
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
+            site_aps = mistapi.get_all(response=response, mist_session=apisession)
+            
+            if site_aps:
+                # Add site info to each AP for tracking
+                for ap in site_aps:
+                    ap['_site_id'] = site_id
+                    ap['_site_name'] = site_name
+                
+                all_aps.extend(site_aps)
+                all_sites_aps[site_id] = {
+                    'name': site_name,
+                    'aps': site_aps,
+                    'count': len(site_aps)
+                }
+                
+                print(f"      ✅ Found {len(site_aps)} APs at '{site_name}'")
+                logging.info(f"Found {len(site_aps)} APs at site {site_name} (ID: {site_id})")
+            else:
+                print(f"      ⚠️ No APs found at site '{site_name}'")
+                logging.warning(f"No APs found at site {site_name} (ID: {site_id})")
+                all_sites_aps[site_id] = {
+                    'name': site_name,
+                    'aps': [],
+                    'count': 0
+                }
+                
+        except Exception as e:
+            print(f"      ❌ Failed to fetch APs for site '{site_name}': {e}")
+            logging.error(f"Failed to fetch APs for site {site_id} ({site_name}): {e}")
+            all_sites_aps[site_id] = {
+                'name': site_name,
+                'aps': [],
+                'count': 0,
+                'error': str(e)
+            }
+    
+    if not all_aps:
+        print("❌ No APs found across any selected sites.")
+        logging.warning("No APs found across any selected sites")
+        return
+    
+    total_aps = len(all_aps)
+    sites_with_aps = len([s for s in all_sites_aps.values() if s['count'] > 0])
+    
+    print(f"\n📊 AP Discovery Summary:")
+    print(f"   • Total APs found: {total_aps}")
+    print(f"   • Sites with APs: {sites_with_aps}/{len(sites_to_upgrade)}")
+    
+    for site_id, site_data in all_sites_aps.items():
+        site_name = site_data['name']
+        ap_count = site_data['count']
+        if 'error' in site_data:
+            print(f"   • {site_name}: {ap_count} APs (Error: {site_data['error']})")
+        else:
+            print(f"   • {site_name}: {ap_count} APs")
+    
+    logging.info(f"Total AP discovery: {total_aps} APs across {sites_with_aps} sites")
+    
+    # Use all_aps for the rest of the processing (existing variable name)
+    aps = all_aps
+    
+    # Debug: Log the structure of the first AP to see available fields
+    if aps and len(aps) > 0:
+        sample_ap = aps[0]
+        available_fields = list(sample_ap.keys()) if isinstance(sample_ap, dict) else []
+        logging.debug(f"Sample AP device structure - Available fields: {available_fields}")
+        
+        # Check if version field exists in device config (it typically doesn't)
+        if 'version' in sample_ap:
+            logging.debug(f"Found version in device config: {sample_ap.get('version')}")
+        else:
+            logging.debug("No version field in device config - will need to use device stats")
+    
+    # Step 3: Group APs by model and get current firmware versions from device stats
+    aps_by_model = {}
+    ap_versions = {}  # Cache for AP versions {device_id: version}
+    
+    print(f"\n🔍 Getting current firmware versions from device statistics...")
+    
+    # For multi-site upgrades, we need to fetch stats per site
+    all_ap_stats = []
+    stats_lookup = {}
+    
+    for site_id, site_data in all_sites_aps.items():
+        if site_data['count'] == 0:
+            continue  # Skip sites with no APs
+            
+        site_name = site_data['name']
+        site_aps = site_data['aps']
+        
+        print(f"   📡 Fetching device statistics for {len(site_aps)} APs at '{site_name}'...")
+        
+        try:
+            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                apisession, 
+                site_id, 
+                type="ap",
+                limit=1000
+            )
+            site_ap_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+            
+            if site_ap_stats:
+                all_ap_stats.extend(site_ap_stats)
+                
+                # Build lookup for this site's devices
+                for stats in site_ap_stats:
+                    device_id = stats.get("id") or stats.get("device_id") or stats.get("mac")
+                    if device_id:
+                        stats_lookup[device_id] = stats
+                
+                logging.info(f"Retrieved stats for {len(site_ap_stats)} devices at site {site_name}")
+            else:
+                logging.warning(f"No device stats returned for site {site_name}")
+                
+        except Exception as e:
+            logging.error(f"Failed to fetch bulk device stats for site {site_name}: {e}")
+            print(f"   ❌ Failed to fetch stats for site '{site_name}': {e}")
+            # Continue with other sites
+    
+    if all_ap_stats:
+        logging.info(f"Retrieved stats for {len(all_ap_stats)} total devices via bulk API calls across {len(sites_to_upgrade)} sites")
+        logging.debug(f"Stats lookup built with {len(stats_lookup)} entries")
+        
+        # Log sample stats structure for debugging
+        if len(all_ap_stats) > 0:
+            sample_stats = all_ap_stats[0]
+            available_fields = list(sample_stats.keys()) if isinstance(sample_stats, dict) else []
+            logging.debug(f"Sample device stats structure - Available fields: {available_fields}")
+            
+            # Look for version-related fields in bulk stats
+            version_fields = [field for field in available_fields if 'version' in field.lower()]
+            if version_fields:
+                logging.debug(f"Version-related fields in bulk stats: {version_fields}")
+            else:
+                logging.debug("No version fields found in bulk stats data")
+    else:
+        logging.warning("No device stats retrieved from any site")
+        print(f"   ⚠️ No device statistics retrieved - falling back to individual calls")
+    
+    # Process each AP device
+    for ap in aps:
+        model = ap.get("model", "Unknown")
+        device_id = ap.get("id")
+        device_mac = ap.get("mac")
+        ap_site_id = ap.get("_site_id")  # Site info added during discovery
+        ap_site_name = ap.get("_site_name")
+        
+        if model not in aps_by_model:
+            aps_by_model[model] = []
+        aps_by_model[model].append(ap)
+        
+        # Get current firmware version from device stats
+        current_version = "Unknown"
+        
+        if device_id:
+            # First try to use the bulk stats lookup
+            stats_data = None
+            for lookup_key in [device_id, device_mac]:  # Try both ID and MAC as keys
+                if lookup_key and lookup_key in stats_lookup:
+                    stats_data = stats_lookup[lookup_key]
+                    logging.debug(f"Found stats for device {ap.get('name', 'Unnamed')} using key {lookup_key}")
+                    break
+            
+            # If bulk lookup failed, fall back to individual API call
+            if not stats_data and ap_site_id:
+                try:
+                    logging.debug(f"Bulk lookup failed for device {device_id}, making individual API call to site {ap_site_name}")
+                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, ap_site_id, device_id)
+                    stats_data = getattr(stats_resp, "data", {})
+                except Exception as e:
+                    logging.warning(f"Could not get individual stats for device {device_id} at site {ap_site_name}: {e}")
+                    stats_data = {}
+            
+            # Extract version from stats data
+            if isinstance(stats_data, dict):
+                # Enhanced debugging for first device only to avoid log spam
+                if ap == aps[0]:  # Only debug first AP device
+                    available_fields = list(stats_data.keys())
+                    logging.debug(f"First device {ap.get('name', 'Unnamed')} (ID: {device_id}) stats fields: {available_fields}")
+                    
+                    # Look for version-related fields
+                    version_fields = [field for field in available_fields if 'version' in field.lower()]
+                    if version_fields:
+                        logging.debug(f"Version-related fields found: {version_fields}")
+                        for field in version_fields:
+                            logging.debug(f"Field '{field}': {stats_data.get(field)}")
+                
+                # Extract version using standard field
+                current_version = stats_data.get("version", "Unknown")
+                logging.debug(f"Device {ap.get('name', 'Unnamed')} (ID: {device_id}) at site {ap_site_name} version: {current_version}")
+            else:
+                logging.debug(f"Stats data for device {device_id} is not a dict: {type(stats_data)}")
+        
+        ap_versions[device_id] = current_version
+    
+    # Summary of API optimization
+    bulk_stats_count = len([v for v in ap_versions.values() if v != "Unknown"])
+    individual_calls_needed = len([v for v in ap_versions.values() if v == "Unknown"])
+    
+    print(f"   ✅ Retrieved {bulk_stats_count} device versions via bulk API call")
+    if individual_calls_needed > 0:
+        print(f"   ⚠️ {individual_calls_needed} devices required individual calls")
+    
+    logging.info(f"API optimization: {bulk_stats_count} versions from bulk call, {individual_calls_needed} individual calls needed")
+    
+    print(f"\n📊 AP Models found across {len(sites_to_upgrade)} site(s):")
+    for model, devices in aps_by_model.items():
+        # Get current versions for this model from our cached stats
+        current_versions = set()
+        for device in devices:
+            device_id = device.get("id")
+            current_version = ap_versions.get(device_id, "Unknown")
+            current_versions.add(current_version)
+        
+        # Format current versions display
+        if current_versions and "Unknown" not in current_versions:
+            current_versions_sorted = sorted(current_versions, reverse=True)
+            versions_text = ", ".join(current_versions_sorted)
+            print(f"   • {model}: {len(devices)} devices (Current versions: {versions_text})")
+        else:
+            print(f"   • {model}: {len(devices)} devices (Current versions: Unknown)")
+            
+        # Show individual device details with site information for better visibility
+        if len(sites_to_upgrade) > 1:
+            # Multi-site mode - show site grouping
+            devices_by_site = {}
+            for device in devices:
+                site_name = device.get("_site_name", "Unknown Site")
+                if site_name not in devices_by_site:
+                    devices_by_site[site_name] = []
+                devices_by_site[site_name].append(device)
+            
+            for site_name, site_devices in devices_by_site.items():
+                print(f"      📍 {site_name} ({len(site_devices)} devices):")
+                for device in site_devices:
+                    device_name = device.get("name", "Unnamed")
+                    device_mac = device.get("mac", "Unknown")
+                    device_id = device.get("id")
+                    device_version = ap_versions.get(device_id, "Unknown")
+                    print(f"         - {device_name} (MAC: {device_mac}): v{device_version}")
+        else:
+            # Single site mode - show devices directly
+            for device in devices:
+                device_name = device.get("name", "Unnamed")
+                device_mac = device.get("mac", "Unknown")
+                device_id = device.get("id")
+                device_version = ap_versions.get(device_id, "Unknown")
+                print(f"      - {device_name} (MAC: {device_mac}): v{device_version}")
+    
+    # Step 4: Get available firmware versions for each model
+    print(f"\n🔍 Fetching available firmware versions...")
+    try:
+        versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, org_id)
+        available_versions = versions_response.data
+        logging.info(f"Retrieved firmware versions for organization")
+        
+        # Log raw response for debugging
+        if available_versions:
+            total_versions = len(available_versions) if isinstance(available_versions, list) else 0
+            logging.debug(f"Raw firmware API response contains {total_versions} version entries")
+            if total_versions > 0 and isinstance(available_versions, list):
+                sample_version = available_versions[0]
+                logging.debug(f"Sample version entry structure: {sample_version}")
+                
+                # Debug: Check if we have "models" vs "model" field
+                has_models = any(v.get("models") for v in available_versions[:5] if isinstance(v, dict))
+                has_model = any(v.get("model") for v in available_versions[:5] if isinstance(v, dict))
+                logging.debug(f"Firmware structure analysis: has_models_field={has_models}, has_model_field={has_model}")
+                
+                # Debug: Check available metadata fields
+                if isinstance(sample_version, dict):
+                    available_fields = list(sample_version.keys())
+                    logging.debug(f"Available firmware metadata fields: {available_fields}")
+        else:
+            logging.warning("No firmware versions returned from API")
+            
+    except Exception as e:
+        logging.error(f"Failed to fetch available firmware versions: {e}")
+        print(f"❌ Failed to fetch available firmware versions: {e}")
+        return
+    
+    # Step 5: Let user select firmware version for each model
+    upgrade_plan = {}
+    print(f"\n🎯 Firmware Version Selection:")
+    print("=" * 60)
+    
+    # Show current version summary across all APs
+    print(f"📋 Current Firmware Status Summary:")
+    all_current_versions = {}
+    for model, devices in aps_by_model.items():
+        for device in devices:
+            device_id = device.get("id")
+            version = ap_versions.get(device_id, "Unknown")
+            
+            if version not in all_current_versions:
+                all_current_versions[version] = []
+            all_current_versions[version].append(f"{device.get('name', 'Unnamed')} ({model})")
+    
+    for version, device_list in sorted(all_current_versions.items(), reverse=True):
+        print(f"   📦 Version {version}: {len(device_list)} devices")
+        for device_info in device_list:
+            print(f"      • {device_info}")
+    print()
+    
+    # Show summary of what was found
+    if available_versions:
+        total_raw_versions = len(available_versions) if isinstance(available_versions, list) else 0
+        print(f"📊 Found {total_raw_versions} firmware entries from API")
+        logging.info(f"Processing {total_raw_versions} raw firmware version entries for {len(aps_by_model)} AP models")
+        
+        # Debug: Show what models are available in firmware data
+        all_firmware_models = set()
+        if isinstance(available_versions, list):
+            for version_info in available_versions:
+                if isinstance(version_info, dict):
+                    # Try both "models" (plural) and "model" (singular) fields
+                    models = version_info.get("models", [])
+                    model = version_info.get("model")
+                    
+                    if models:
+                        all_firmware_models.update(models)
+                    elif model:
+                        all_firmware_models.add(model)
+        
+        site_models = set(aps_by_model.keys())
+        
+        logging.debug(f"Models found at site: {sorted(site_models)}")
+        logging.debug(f"Models with firmware available: {sorted(all_firmware_models)}")
+        
+        # Check for model matches
+        matching_models = site_models.intersection(all_firmware_models)
+        missing_models = site_models - all_firmware_models
+        
+        if matching_models:
+            logging.info(f"Models with firmware available: {sorted(matching_models)}")
+        if missing_models:
+            logging.warning(f"Models without specific firmware versions: {sorted(missing_models)}")
+            print(f"⚠️  Models without specific firmware versions: {', '.join(sorted(missing_models))}")
+    
+    
+    for model, devices in aps_by_model.items():
+        # Filter available versions for this specific model only
+        raw_model_versions = []
+        if available_versions and isinstance(available_versions, list):
+            for version_info in available_versions:
+                if isinstance(version_info, dict):
+                    # Check both "models" (plural) and "model" (singular) fields
+                    models = version_info.get("models", [])
+                    single_model = version_info.get("model")
+                    
+                    # Only include versions that explicitly list this model
+                    if model in models or single_model == model:
+                        raw_model_versions.append(version_info)
+        
+        # Deduplicate versions by version number while preserving metadata
+        version_dict = {}
+        for version_info in raw_model_versions:
+            version_num = version_info.get("version", "Unknown")
+            if version_num not in version_dict:
+                version_dict[version_num] = version_info
+            else:
+                # Merge metadata from duplicate entries, preferring non-empty values
+                existing = version_dict[version_num]
+                for key in ["release_date", "recommended", "package_url"]:
+                    if not existing.get(key) and version_info.get(key):
+                        existing[key] = version_info.get(key)
+        
+        # Convert back to list and sort by version (newest first, assuming semantic versioning)
+        model_versions = list(version_dict.values())
+        try:
+            # Sort by version number (descending) - handle different version formats
+            model_versions.sort(key=lambda x: tuple(map(int, x.get("version", "0.0.0").split("."))), reverse=True)
+        except ValueError:
+            # Fallback to string sorting if version parsing fails
+            model_versions.sort(key=lambda x: x.get("version", ""), reverse=True)
+        
+        if not model_versions:
+            print(f"⚠️  No firmware versions found for model '{model}' - skipping {len(devices)} devices")
+            print(f"   (This model may not have specific firmware versions listed, or no updates available)")
+            logging.warning(f"No firmware versions found for model {model} - checked {len(raw_model_versions)} entries before deduplication")
+            continue
+        
+        logging.debug(f"Model {model}: Found {len(raw_model_versions)} raw entries, {len(model_versions)} unique versions after deduplication")
+        
+        print(f"\n🔧 Model: {model} ({len(devices)} devices)")
+        
+        # Show current versions of devices using cached stats
+        current_versions = set()
+        for device in devices:
+            device_id = device.get("id")
+            current_version = ap_versions.get(device_id, "Unknown")
+            current_versions.add(current_version)
+        
+        if current_versions and "Unknown" not in current_versions:
+            current_versions_sorted = sorted(current_versions, reverse=True)
+            print(f"   Current versions in use: {', '.join(current_versions_sorted)}")
+        else:
+            print(f"   Current versions in use: Unknown")
+        
+        # Display available versions with index - now model-specific and deduplicated
+        print(f"   Available firmware versions for {model} ({len(model_versions)} found):")
+        for idx, version in enumerate(model_versions):
+            version_num = version.get("version", "Unknown")
+            release_date = version.get("release_date", "Unknown")
+            is_recommended = version.get("recommended", False)
+            
+            # Format release date if available
+            date_display = "Unknown"
+            if release_date and release_date != "Unknown":
+                try:
+                    # Try to parse and format the date if it's a timestamp
+                    if isinstance(release_date, (int, float)):
+                        date_display = datetime.fromtimestamp(release_date).strftime('%Y-%m-%d')
+                    elif isinstance(release_date, str) and release_date.isdigit():
+                        date_display = datetime.fromtimestamp(int(release_date)).strftime('%Y-%m-%d')
+                    else:
+                        date_display = str(release_date)
+                except:
+                    date_display = str(release_date)
+            
+            # Build version display with indicators
+            rec_text = " [RECOMMENDED]" if is_recommended else ""
+            
+            # Check if this version is currently in use
+            current_text = " [CURRENT]" if version_num in current_versions else ""
+            
+            print(f"      [{idx}] {version_num} (Released: {date_display}){rec_text}{current_text}")
+            
+            # Log version details for debugging
+            logging.debug(f"Model {model} version {idx}: {version_num}, recommended: {is_recommended}, release_date: {release_date}")
+        
+        print()  # Add blank line for readability
+        
+        # Get user selection
+        while True:
+            try:
+                user_input = input(f"Select firmware version for {model} (0-{len(model_versions)-1}, or 's' to skip): ").strip().lower()
+                
+                if user_input == 's':
+                    print(f"⏭️  Skipping firmware upgrade for {model}")
+                    logging.info(f"User chose to skip firmware upgrade for model {model}")
+                    break
+                
+                version_idx = int(user_input)
+                if 0 <= version_idx < len(model_versions):
+                    selected_version = model_versions[version_idx]
+                    version_num = selected_version.get("version", "Unknown")
+                    is_recommended = selected_version.get("recommended", False)
+                    is_current = version_num in current_versions
+                    
+                    # Provide feedback about the selection
+                    selection_notes = []
+                    if is_recommended:
+                        selection_notes.append("RECOMMENDED")
+                    if is_current:
+                        selection_notes.append("CURRENT")
+                    
+                    notes_text = f" ({', '.join(selection_notes)})" if selection_notes else ""
+                    
+                    upgrade_plan[model] = {
+                        "version": version_num,
+                        "version_info": selected_version,
+                        "devices": devices
+                    }
+                    print(f"✅ Selected version {version_num} for {model}{notes_text}")
+                    logging.info(f"User selected firmware version {version_num} for model {model} (recommended: {is_recommended}, current: {is_current})")
+                    break
+                else:
+                    print(f"❌ Invalid selection. Please enter a number between 0 and {len(model_versions)-1}, or 's' to skip.")
+                    
+            except ValueError:
+                print("❌ Invalid input. Please enter a number or 's' to skip.")
+            except KeyboardInterrupt:
+                print("\n❌ Operation cancelled by user.")
+                logging.info("Bulk AP firmware upgrade cancelled by user interrupt")
+                return
+    
+    if not upgrade_plan:
+        print("❌ No firmware upgrades selected. Exiting.")
+        logging.info("No firmware upgrades selected by user")
+        return
+    
+    # Step 6: Advanced Configuration Options
+    print(f"\n⚙️ Advanced Upgrade Configuration:")
+    print("=" * 60)
+    
+    # Select upgrade strategy
+    strategies = {
+        "1": ("big_bang", "Upgrade all devices at once (fastest, higher risk)"),
+        "2": ("canary", "Phased rollout with configurable phases (safer, slower)"),
+        "3": ("rrm", "Radio Resource Management aware upgrade (AP-only, intelligent)"),
+        "4": ("serial", "One device at a time (safest, slowest)")
+    }
+    
+    print("🎯 Select upgrade strategy:")
+    for key, (strategy, description) in strategies.items():
+        print(f"   [{key}] {strategy.upper()}: {description}")
+    
+    while True:
+        try:
+            strategy_choice = input("Select strategy (1-4, default=3 for rrm): ").strip() or "3"
+            if strategy_choice in strategies:
+                selected_strategy, strategy_desc = strategies[strategy_choice]
+                print(f"✅ Selected strategy: {selected_strategy.upper()}")
+                logging.info(f"User selected upgrade strategy: {selected_strategy}")
+                break
+            else:
+                print("❌ Invalid selection. Please choose 1-4.")
+        except KeyboardInterrupt:
+            print("\n❌ Operation cancelled by user.")
+            logging.info("AP firmware upgrade cancelled during strategy selection")
+            return
+    
+    # Advanced strategy-specific options
+    upgrade_config = {
+        "strategy": selected_strategy,
+        "force": False,
+        "enable_p2p": True,  # Default to enabled
+        "max_failure_percentage": 5,
+        "start_time": None,
+        "canary_phases": [1, 10, 50, 100],
+        "p2p_cluster_size": 10,
+        "reboot": True  # APs auto-reboot, but explicit for clarity
+    }
+    
+    # Strategy-specific configuration
+    if selected_strategy == "canary":
+        print(f"\n🔧 Canary Strategy Configuration:")
+        
+        # Custom phases
+        use_custom_phases = input("Use custom canary phases? (y/N): ").strip().lower()
+        if use_custom_phases in ['y', 'yes']:
+            while True:
+                try:
+                    phases_input = input("Enter comma-separated percentages (e.g., 2,10,25,100): ").strip()
+                    if phases_input:
+                        phases = [int(x.strip()) for x in phases_input.split(',')]
+                        if all(1 <= p <= 100 for p in phases) and phases[-1] == 100:
+                            upgrade_config["canary_phases"] = phases
+                            print(f"✅ Custom phases: {phases}")
+                            break
+                        else:
+                            print("❌ Phases must be 1-100 and end with 100")
+                    else:
+                        break
+                except ValueError:
+                    print("❌ Invalid format. Use comma-separated numbers.")
+        
+        # Failure threshold
+        try:
+            failure_input = input(f"Max failure percentage per phase (default={upgrade_config['max_failure_percentage']}%): ").strip()
+            if failure_input:
+                failure_pct = int(failure_input)
+                if 0 <= failure_pct <= 100:
+                    upgrade_config["max_failure_percentage"] = failure_pct
+                    print(f"✅ Max failures: {failure_pct}%")
+        except ValueError:
+            print("⚠️ Invalid input, using default failure threshold")
+    
+    elif selected_strategy == "rrm":
+        print(f"\n🔧 RRM Strategy Configuration:")
+        
+        # RRM-specific options
+        rrm_options = {
+            "rrm_node_order": "fringe_to_center",
+            "rrm_first_batch_percentage": 2,
+            "rrm_max_batch_percentage": 10,
+            "rrm_slow_ramp": True,
+            "rrm_mesh_upgrade": "sequential"
+        }
+        
+        # Node order selection
+        node_orders = {
+            "1": ("fringe_to_center", "Start from edge APs (recommended)"),
+            "2": ("center_to_fringe", "Start from central APs")
+        }
+        
+        print("Select RRM node order:")
+        for key, (order, desc) in node_orders.items():
+            print(f"   [{key}] {desc}")
+        
+        order_choice = input("Select order (1-2, default=1): ").strip() or "1"
+        if order_choice in node_orders:
+            rrm_options["rrm_node_order"] = node_orders[order_choice][0]
+            print(f"✅ Node order: {node_orders[order_choice][1]}")
+        
+        # Batch size configuration
+        try:
+            first_batch = input(f"First batch percentage (default={rrm_options['rrm_first_batch_percentage']}%): ").strip()
+            if first_batch:
+                rrm_options["rrm_first_batch_percentage"] = int(first_batch)
+            
+            max_batch = input(f"Max batch percentage (default={rrm_options['rrm_max_batch_percentage']}%): ").strip()
+            if max_batch:
+                rrm_options["rrm_max_batch_percentage"] = int(max_batch)
+        except ValueError:
+            print("⚠️ Invalid input, using default batch sizes")
+        
+        upgrade_config.update(rrm_options)
+    
+    # P2P Configuration (all strategies)
+    print(f"\n🔗 Peer-to-Peer (P2P) Configuration:")
+    enable_p2p = input("Enable AP-to-AP firmware sharing? (Y/n): ").strip().lower()
+    if enable_p2p not in ['n', 'no']:
+        upgrade_config["enable_p2p"] = True
+        print("✅ P2P enabled - APs will share firmware locally")
+        
+        try:
+            cluster_size = input(f"P2P cluster size (default={upgrade_config['p2p_cluster_size']}): ").strip()
+            if cluster_size:
+                upgrade_config["p2p_cluster_size"] = int(cluster_size)
+                print(f"✅ P2P cluster size: {upgrade_config['p2p_cluster_size']}")
+        except ValueError:
+            print("⚠️ Invalid input, using default cluster size")
+    else:
+        print("⚠️ P2P disabled - all firmware downloads from cloud")
+    
+    # Scheduling Options
+    print(f"\n📅 Scheduling Options:")
+    schedule_later = input("Schedule upgrade for later? (y/N): ").strip().lower()
+    if schedule_later in ['y', 'yes']:
+        while True:
+            try:
+                time_input = input("Enter start time (YYYY-MM-DD HH:MM or +minutes): ").strip()
+                if time_input.startswith('+'):
+                    # Relative time
+                    minutes = int(time_input[1:])
+                    start_time = int(time.time()) + (minutes * 60)
+                    upgrade_config["start_time"] = start_time
+                    scheduled_time = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M')
+                    print(f"✅ Scheduled for: {scheduled_time}")
+                    break
+                else:
+                    # Absolute time
+                    dt = datetime.strptime(time_input, '%Y-%m-%d %H:%M')
+                    start_time = int(dt.timestamp())
+                    upgrade_config["start_time"] = start_time
+                    print(f"✅ Scheduled for: {time_input}")
+                    break
+            except ValueError:
+                print("❌ Invalid format. Use 'YYYY-MM-DD HH:MM' or '+minutes'")
+                retry = input("Try again? (y/N): ").strip().lower()
+                if retry not in ['y', 'yes']:
+                    break
+    
+    # Force upgrade option
+    force_upgrade = input("Force upgrade even if same version? (y/N): ").strip().lower()
+    if force_upgrade in ['y', 'yes']:
+        upgrade_config["force"] = True
+        print("⚠️ Force upgrade enabled")
+    
+    # Display final configuration
+    print(f"\n📋 Final Upgrade Configuration:")
+    print("=" * 60)
+    print(f"Strategy: {upgrade_config['strategy'].upper()}")
+    if upgrade_config.get('start_time'):
+        scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
+        print(f"Scheduled: {scheduled_time}")
+    else:
+        print("Scheduled: Immediate")
+    print(f"P2P Enabled: {upgrade_config['enable_p2p']}")
+    if upgrade_config['enable_p2p']:
+        print(f"P2P Cluster Size: {upgrade_config['p2p_cluster_size']}")
+    print(f"Force Upgrade: {upgrade_config['force']}")
+    print(f"Max Failure Rate: {upgrade_config['max_failure_percentage']}%")
+    
+    if upgrade_config['strategy'] == 'canary':
+        print(f"Canary Phases: {upgrade_config['canary_phases']}%")
+    elif upgrade_config['strategy'] == 'rrm':
+        print(f"RRM Node Order: {upgrade_config.get('rrm_node_order', 'fringe_to_center')}")
+        print(f"RRM First Batch: {upgrade_config.get('rrm_first_batch_percentage', 2)}%")
+        print(f"RRM Max Batch: {upgrade_config.get('rrm_max_batch_percentage', 10)}%")
+    
+    # Step 7: Display upgrade plan and affected devices
+    total_devices = sum(len(plan["devices"]) for plan in upgrade_plan.values())
+    print(f"\n📋 Final Firmware Upgrade Plan:")
+    print("=" * 60)
+    
+    if len(sites_to_upgrade) > 1:
+        print(f"Bulk Upgrade Mode: {len(sites_to_upgrade)} sites")
+        for site_info in sites_to_upgrade:
+            site_count = sum(1 for plan in upgrade_plan.values() 
+                           for device in plan["devices"] 
+                           if device.get("_site_id") == site_info['id'])
+            print(f"   • {site_info['name']}: {site_count} devices")
+    else:
+        print(f"Site: {sites_to_upgrade[0]['name']}")
+    
+    print(f"Total devices to upgrade: {total_devices}")
+    print(f"Upgrade strategy: {upgrade_config['strategy'].upper()}")
+    
+    for model, plan in upgrade_plan.items():
+        version = plan["version"]
+        devices = plan["devices"]
+        print(f"\n🔧 {model} → Firmware {version} ({len(devices)} devices):")
+        
+        if len(sites_to_upgrade) > 1:
+            # Group devices by site for multi-site display
+            devices_by_site = {}
+            for device in devices:
+                site_name = device.get("_site_name", "Unknown Site")
+                if site_name not in devices_by_site:
+                    devices_by_site[site_name] = []
+                devices_by_site[site_name].append(device)
+            
+            for site_name, site_devices in devices_by_site.items():
+                print(f"   📍 {site_name} ({len(site_devices)} devices):")
+                for device in site_devices:
+                    device_name = device.get("name", "Unnamed")
+                    mac = device.get("mac", "Unknown")
+                    device_id = device.get("id")
+                    current_version = ap_versions.get(device_id, "Unknown")
+                    print(f"      • {device_name} (MAC: {mac}) - Current: {current_version}")
+        else:
+            # Single site display
+            for device in devices:
+                device_name = device.get("name", "Unnamed")
+                mac = device.get("mac", "Unknown")
+                device_id = device.get("id")
+                current_version = ap_versions.get(device_id, "Unknown")
+                print(f"   • {device_name} (MAC: {mac}) - Current: {current_version}")
+    
+    # Step 8: Display warnings and get user confirmation
+    warning_lines = [
+        "🛑 CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE OPERATION:",
+        "• This action will UPGRADE FIRMWARE on Access Point devices",
+        "• APs will REBOOT during the upgrade process",
+        "• Wi-Fi connectivity will be TEMPORARILY LOST during upgrades", 
+        "• Users will experience Wi-Fi service interruptions",
+        "• Firmware upgrades can take 5-15 minutes per device",
+        "• Failed upgrades may require manual recovery",
+        "• This is a DISRUPTIVE network operation",
+        "• Always ensure you have physical access to devices if recovery is needed",
+        f"• Upgrade strategy: {upgrade_config['strategy'].upper()}",
+        f"• Max failure tolerance: {upgrade_config['max_failure_percentage']}%",
+        "• P2P enabled: " + ("Yes" if upgrade_config['enable_p2p'] else "No"),
+        "• The script owner bears NO LIABILITY for any consequences",
+        "• Proceed only if you understand and accept these risks"
+    ]
+    
+    print("\n" + "⚠️" * 50)
+    for line in warning_lines:
+        print(line)
+    print("⚠️" * 50)
+    
+    print(f"\n📊 Summary:")
+    if len(sites_to_upgrade) > 1:
+        print(f"   • Bulk upgrade across {len(sites_to_upgrade)} sites")
+        sites_with_devices = len(set(device.get("_site_name") for plan in upgrade_plan.values() for device in plan["devices"]))
+        print(f"   • Sites with devices to upgrade: {sites_with_devices}")
+    else:
+        print(f"   • Site: {sites_to_upgrade[0]['name']}")
+    print(f"   • Total APs to upgrade: {total_devices}")
+    print(f"   • Models affected: {len(upgrade_plan)}")
+    print(f"   • Strategy: {upgrade_config['strategy'].upper()}")
+    
+    # Show target firmware versions for each model
+    print(f"   • Target firmware versions:")
+    for model, plan in upgrade_plan.items():
+        version = plan["version"]
+        device_count = len(plan["devices"])
+        print(f"      - {model}: v{version} ({device_count} devices)")
+    
+    if upgrade_config.get('start_time'):
+        scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
+        print(f"   • Scheduled: {scheduled_time}")
+    else:
+        print(f"   • Scheduled: Immediate")
+    
+    # Get user confirmation with liability waiver
+    print(f"\n🤔 Do you want to proceed with upgrading {total_devices} AP devices?")
+    print("   Type 'UPGRADE' (all caps) to confirm, or anything else to cancel:")
+    print("   By typing 'UPGRADE', you acknowledge and accept all risks and liability.")
+    
+    try:
+        user_input = input(">>> ").strip()
+        if user_input != "UPGRADE":
+            print("❌ Advanced firmware upgrade operation cancelled by user.")
+            logging.info("Advanced AP firmware upgrade operation cancelled by user input")
+            return
+        else:
+            print("✅ User confirmed advanced firmware upgrade operation. Proceeding...")
+            logging.info(f"🔥 LIABILITY WAIVER ACCEPTED: User confirmed advanced AP firmware upgrade for {total_devices} devices at site {site_name}")
+            logging.info(f"User input: '{user_input}' - User accepts full responsibility for firmware upgrade risks")
+            logging.info(f"Upgrade strategy: {upgrade_config['strategy']}, P2P: {upgrade_config['enable_p2p']}, Max failures: {upgrade_config['max_failure_percentage']}%")
+            # Log detailed upgrade plan for audit trail
+            plan_summary = []
+            for model, plan in upgrade_plan.items():
+                plan_summary.append(f"{model}→{plan['version']} ({len(plan['devices'])} devices)")
+            logging.info(f"Upgrade plan: {'; '.join(plan_summary)}")
+            
+    except KeyboardInterrupt:
+        print("\n❌ Firmware upgrade operation cancelled by user (Ctrl+C).")
+        logging.info("AP firmware upgrade operation cancelled by user interrupt")
+        return
+    except Exception as e:
+        print(f"❌ Error getting user input: {e}")
+        logging.error(f"Error getting user input for upgrade confirmation: {e}")
+        return
+    
+    # Step 9: Execute advanced firmware upgrades
+    print("\n🚀 Starting advanced AP firmware upgrade operations...")
+    print("=" * 60)
+    
+    results = []
+    successful_upgrades = 0
+    failed_upgrades = 0
+    upgrade_ids = []  # Track multiple upgrade IDs for multi-site
+    
+    # Organize devices by site for execution
+    devices_by_site = {}
+    for model, plan in upgrade_plan.items():
+        version = plan["version"]
+        devices = plan["devices"]
+        
+        for device in devices:
+            site_id = device.get("_site_id")
+            site_name = device.get("_site_name")
+            
+            if site_id not in devices_by_site:
+                devices_by_site[site_id] = {
+                    'name': site_name,
+                    'devices': [],
+                    'models': {}
+                }
+            
+            devices_by_site[site_id]['devices'].append(device)
+            
+            # Track model/version per site
+            if model not in devices_by_site[site_id]['models']:
+                devices_by_site[site_id]['models'][model] = {
+                    'version': version,
+                    'devices': []
+                }
+            devices_by_site[site_id]['models'][model]['devices'].append(device)
+    
+    total_sites_to_upgrade = len(devices_by_site)
+    total_devices = sum(len(site_data['devices']) for site_data in devices_by_site.values())
+    
+    print(f"\n🔄 Executing upgrades across {total_sites_to_upgrade} site(s) with {total_devices} devices...")
+    
+    for site_index, (site_id, site_data) in enumerate(devices_by_site.items(), 1):
+        site_name = site_data['name']
+        site_devices = site_data['devices']
+        site_models = site_data['models']
+        
+        print(f"\n   📍 Site {site_index}/{total_sites_to_upgrade}: {site_name} ({len(site_devices)} devices)")
+        print(f"   Strategy: {upgrade_config['strategy'].upper()}")
+        print(f"   P2P Enabled: {upgrade_config['enable_p2p']}")
+        
+        try:
+            # Prepare upgrade request for this site
+            device_ids = [device.get("id") for device in site_devices if device.get("id")]
+            
+            # Check if all devices in this site use the same firmware version
+            site_versions = set(model_info['version'] for model_info in site_models.values())
+            
+            if len(site_versions) == 1:
+                # Single version for this site
+                target_version = list(site_versions)[0]
+                
+                upgrade_body = {
+                    "strategy": upgrade_config["strategy"],
+                    "force": upgrade_config["force"],
+                    "enable_p2p": upgrade_config["enable_p2p"],
+                    "max_failure_percentage": upgrade_config["max_failure_percentage"],
+                    "reboot": upgrade_config["reboot"],
+                    "version": target_version,
+                    "device_ids": device_ids
+                }
+                
+                # Add P2P configuration
+                if upgrade_config["enable_p2p"]:
+                    upgrade_body["p2p_cluster_size"] = upgrade_config["p2p_cluster_size"]
+                
+                # Add strategy-specific options
+                if upgrade_config["strategy"] == "canary":
+                    upgrade_body["canary_phases"] = upgrade_config["canary_phases"]
+                elif upgrade_config["strategy"] == "rrm":
+                    for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage", "rrm_slow_ramp", "rrm_mesh_upgrade"]:
+                        if key in upgrade_config:
+                            upgrade_body[key] = upgrade_config[key]
+                
+                # Add scheduling
+                if upgrade_config.get("start_time"):
+                    upgrade_body["start_time"] = upgrade_config["start_time"]
+                
+                print(f"      📡 Upgrading all devices to version {target_version}...")
+                logging.info(f"Initiating upgrade for site {site_name} with {len(device_ids)} devices to version {target_version}")
+                
+                resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(
+                    apisession,
+                    site_id,
+                    body=upgrade_body
+                )
+                
+                # Handle response
+                upgrade_id = None
+                if hasattr(resp, "data") and resp.data:
+                    if isinstance(resp.data, dict) and "upgrade_id" in resp.data:
+                        upgrade_id = resp.data["upgrade_id"]
+                        upgrade_ids.append(upgrade_id)
+                        print(f"      ✅ Upgrade initiated - ID: {upgrade_id}")
+                    else:
+                        print(f"      ✅ Upgrade command sent successfully")
+                
+                successful_upgrades += len(site_devices)
+                logging.info(f"✅ Site {site_name} upgrade initiated for {len(site_devices)} devices")
+                
+            else:
+                # Multiple versions for this site - separate calls per model
+                print(f"      🔧 Multiple firmware versions for site - executing per model...")
+                
+                for model, model_info in site_models.items():
+                    model_version = model_info['version']
+                    model_devices = model_info['devices']
+                    model_device_ids = [device.get("id") for device in model_devices if device.get("id")]
+                    
+                    print(f"         • {model}: {len(model_devices)} devices → v{model_version}")
+                    
+                    model_upgrade_body = {
+                        "strategy": upgrade_config["strategy"],
+                        "force": upgrade_config["force"],
+                        "enable_p2p": upgrade_config["enable_p2p"],
+                        "max_failure_percentage": upgrade_config["max_failure_percentage"],
+                        "reboot": upgrade_config["reboot"],
+                        "version": model_version,
+                        "device_ids": model_device_ids
+                    }
+                    
+                    # Add P2P and strategy configs
+                    if upgrade_config["enable_p2p"]:
+                        model_upgrade_body["p2p_cluster_size"] = upgrade_config["p2p_cluster_size"]
+                    if upgrade_config["strategy"] == "canary":
+                        model_upgrade_body["canary_phases"] = upgrade_config["canary_phases"]
+                    elif upgrade_config["strategy"] == "rrm":
+                        for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage", "rrm_slow_ramp", "rrm_mesh_upgrade"]:
+                            if key in upgrade_config:
+                                model_upgrade_body[key] = upgrade_config[key]
+                    if upgrade_config.get("start_time"):
+                        model_upgrade_body["start_time"] = upgrade_config["start_time"]
+                    
+                    model_resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(
+                        apisession,
+                        site_id,
+                        body=model_upgrade_body
+                    )
+                    
+                    # Handle model upgrade response
+                    if hasattr(model_resp, "data") and model_resp.data and isinstance(model_resp.data, dict):
+                        if "upgrade_id" in model_resp.data:
+                            model_upgrade_id = model_resp.data["upgrade_id"]
+                            upgrade_ids.append(model_upgrade_id)
+                            print(f"            ✅ {model} upgrade initiated - ID: {model_upgrade_id}")
+                        else:
+                            print(f"            ✅ {model} upgrade command sent")
+                    
+                    successful_upgrades += len(model_devices)
+            
+            # Log each device for audit trail
+            for device in site_devices:
+                device_name = device.get("name", "Unnamed")
+                device_mac = device.get("mac", "Unknown")
+                device_id = device.get("id", "Unknown")
+                device_model = device.get("model", "Unknown")
+                current_version = ap_versions.get(device_id, "Unknown")
+                
+                # Find target version for this device
+                target_version = "Unknown"
+                for model, plan in upgrade_plan.items():
+                    if device in plan["devices"]:
+                        target_version = plan["version"]
+                        break
+                
+                results.append({
+                    "Site ID": site_id,
+                    "Site Name": site_name,
+                    "Device ID": device_id,
+                    "Device Name": device_name,
+                    "Device MAC": device_mac,
+                    "Model": device_model,
+                    "Current Version": current_version,
+                    "Target Version": target_version,
+                    "Strategy": upgrade_config["strategy"],
+                    "P2P Enabled": upgrade_config["enable_p2p"],
+                    "Max Failure %": upgrade_config["max_failure_percentage"],
+                    "Force Upgrade": upgrade_config["force"],
+                    "Upgrade ID": upgrade_id or "Multiple",
+                    "Status": "Advanced Upgrade Initiated",
+                    "Timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                
+        except Exception as e:
+            error_status = f"ERROR: {e}"
+            print(f"      ❌ Failed to initiate upgrade for site {site_name}: {e}")
+            logging.error(f"❌ Failed to initiate upgrade for site {site_name}: {e}")
+            failed_upgrades += len(site_devices)
+            
+            # Log failed devices
+            for device in site_devices:
+                device_name = device.get("name", "Unnamed")
+                device_mac = device.get("mac", "Unknown")
+                device_id = device.get("id", "Unknown")
+                device_model = device.get("model", "Unknown")
+                current_version = ap_versions.get(device_id, "Unknown")
+                
+                # Find target version for this device
+                target_version = "Unknown"
+                for model, plan in upgrade_plan.items():
+                    if device in plan["devices"]:
+                        target_version = plan["version"]
+                        break
+                
+                results.append({
+                    "Site ID": site_id,
+                    "Site Name": site_name,
+                    "Device ID": device_id,
+                    "Device Name": device_name,
+                    "Device MAC": device_mac,
+                    "Model": device_model,
+                    "Current Version": current_version,
+                    "Target Version": target_version,
+                    "Strategy": upgrade_config["strategy"],
+                    "P2P Enabled": upgrade_config["enable_p2p"],
+                    "Max Failure %": upgrade_config["max_failure_percentage"],
+                    "Force Upgrade": upgrade_config["force"],
+                    "Upgrade ID": "Failed",
+                    "Status": error_status,
+                    "Timestamp": datetime.now(timezone.utc).isoformat()
+                })
+    
+    # Step 10: Configure site auto-upgrade settings
+    print(f"\n⚙️ Configuring site auto-upgrade settings...")
+    
+    # Collect unique versions from upgrade plan
+    target_versions = set(plan["version"] for plan in upgrade_plan.values())
+    
+    if len(target_versions) == 1:
+        # Single version - configure auto-upgrade for the site
+        target_version = list(target_versions)[0]
+        
+        auto_upgrade_prompt = input(f"Configure site auto-upgrade settings? (Y/n): ").strip().lower()
+        if auto_upgrade_prompt not in ['n', 'no']:
+            try:
+                print(f"   🔧 Configuring site auto-upgrade settings...")
+                
+                # Get current site settings to check existing auto-upgrade configuration
+                current_auto_upgrade = None
+                current_settings = {}
+                try:
+                    current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
+                    current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
+                    current_auto_upgrade = current_settings.get("auto_upgrade", {}) if isinstance(current_settings, dict) else {}
+                    
+                    # Display current auto-upgrade settings if they exist
+                    if current_auto_upgrade and current_auto_upgrade.get("enabled"):
+                        print(f"   📋 Current auto-upgrade settings:")
+                        print(f"      • Enabled: Yes")
+                        print(f"      • Version: {current_auto_upgrade.get('version', 'Not set')}")
+                        print(f"      • Time of day: {current_auto_upgrade.get('time_of_day', 'Not set')}")
+                        day_of_week = current_auto_upgrade.get('day_of_week')
+                        if day_of_week:
+                            print(f"      • Day of week: {day_of_week}")
+                        else:
+                            print(f"      • Day of week: Every day")
+                    else:
+                        print(f"   📋 Current auto-upgrade: Disabled or not configured")
+                        
+                except Exception as e:
+                    logging.warning(f"Could not retrieve current site settings: {e}")
+                    print(f"   ⚠️ Could not retrieve current settings: {e}")
+                
+                # Auto-upgrade configuration options
+                print(f"\n   ⚙️ Auto-upgrade configuration options:")
+                print(f"      [1] Enable auto-upgrade to version {target_version}")
+                print(f"      [2] Disable auto-upgrade") 
+                print(f"      [3] Skip auto-upgrade configuration")
+                
+                config_choice = input(f"   Select option (1-3, default=1): ").strip() or "1"
+                
+                if config_choice == "2":
+                    # Disable auto-upgrade
+                    new_auto_upgrade = {
+                        "enabled": False
+                    }
+                    print(f"   ✅ Auto-upgrade will be disabled")
+                elif config_choice == "3":
+                    # Skip configuration
+                    print("   ⏭️ Skipping site auto-upgrade configuration")
+                    logging.info("User chose to skip site auto-upgrade configuration")
+                    # Continue without configuring auto-upgrade
+                    pass
+                else:
+                    # Enable auto-upgrade (option 1 or fallback)
+                    new_auto_upgrade = {
+                        "enabled": True,
+                        "version": target_version
+                    }
+                    
+                    # Time scheduling configuration
+                    print(f"\n   ⏰ Auto-upgrade time scheduling:")
+                    
+                    # Check if user wants to maintain current time settings or change them
+                    if current_auto_upgrade and current_auto_upgrade.get("time_of_day"):
+                        current_time = current_auto_upgrade.get("time_of_day")
+                        current_day = current_auto_upgrade.get("day_of_week")
+                        
+                        if current_day:
+                            current_schedule = f"{current_time} on {current_day}"
+                        else:
+                            current_schedule = f"{current_time} every day"
+                        
+                        maintain_time = input(f"   Keep current schedule ({current_schedule})? (Y/n): ").strip().lower()
+                        
+                        if maintain_time not in ['n', 'no']:
+                            # Maintain current time settings
+                            new_auto_upgrade["time_of_day"] = current_time
+                            if current_day:
+                                new_auto_upgrade["day_of_week"] = current_day
+                            print(f"   ✅ Maintaining current schedule: {current_schedule}")
+                        else:
+                            # Configure new time settings
+                            print(f"   🕐 Configure new auto-upgrade schedule:")
+                            new_auto_upgrade.update(get_auto_upgrade_time_settings())
+                    else:
+                        # No current time settings, get new ones
+                        print(f"   🕐 Configure auto-upgrade schedule:")
+                        new_auto_upgrade.update(get_auto_upgrade_time_settings())
+                
+                # Only proceed with site settings update if user didn't choose to skip
+                if config_choice != "3":
+                    # Prepare final site settings update
+                    site_settings_body = {
+                        "auto_upgrade": new_auto_upgrade
+                    }
+                    
+                    # Merge with existing settings to preserve other configurations
+                    if isinstance(current_settings, dict):
+                        current_settings.update(site_settings_body)
+                        site_settings_body = current_settings
+                    
+                    # Update site settings
+                    settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
+                        apisession,
+                        site_id,
+                        body=site_settings_body
+                    )
+                    
+                    if new_auto_upgrade.get("enabled", False):
+                        print(f"   ✅ Site auto-upgrade configured successfully")
+                        print(f"   📋 New/replacement APs will auto-upgrade to version {target_version}")
+                        logging.info(f"Site auto-upgrade configured: site={site_id}, version={target_version}")
+                    else:
+                        print(f"   ✅ Site auto-upgrade disabled successfully")
+                        print(f"   📋 New/replacement APs will NOT auto-upgrade")
+                        logging.info(f"Site auto-upgrade disabled: site={site_id}")
+                    
+                    # Add to results for audit trail
+                    auto_upgrade_result = {
+                        "Site ID": site_id,
+                        "Site Name": site_name,
+                        "Device ID": "SITE_CONFIG",
+                        "Device Name": "Auto-Upgrade Setting",
+                        "Device MAC": "N/A",
+                        "Model": "Site Configuration",
+                        "Current Version": "N/A",
+                        "Target Version": target_version if new_auto_upgrade.get("enabled", False) else "DISABLED",
+                        "Strategy": upgrade_config["strategy"],
+                        "P2P Enabled": upgrade_config["enable_p2p"],
+                        "Max Failure %": upgrade_config["max_failure_percentage"],
+                        "Force Upgrade": upgrade_config["force"],
+                        "Upgrade ID": "SITE_AUTO_UPGRADE",
+                        "Status": "Site Auto-Upgrade Configured" if new_auto_upgrade.get("enabled", False) else "Site Auto-Upgrade Disabled",
+                        "Timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    results.append(auto_upgrade_result)
+                
+            except Exception as e:
+                error_msg = f"Failed to configure site auto-upgrade: {e}"
+                print(f"   ❌ {error_msg}")
+                logging.error(f"❌ {error_msg}")
+                
+                # Add failure to results
+                auto_upgrade_result = {
+                    "Site ID": site_id,
+                    "Site Name": site_name,
+                    "Device ID": "SITE_CONFIG",
+                    "Device Name": "Auto-Upgrade Setting",
+                    "Device MAC": "N/A",
+                    "Model": "Site Configuration",
+                    "Current Version": "N/A",
+                    "Target Version": "ERROR",
+                    "Strategy": upgrade_config["strategy"],
+                    "P2P Enabled": upgrade_config["enable_p2p"],
+                    "Max Failure %": upgrade_config["max_failure_percentage"],
+                    "Force Upgrade": upgrade_config["force"],
+                    "Upgrade ID": "SITE_AUTO_UPGRADE",
+                    "Status": f"ERROR: {e}",
+                    "Timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                results.append(auto_upgrade_result)
+        else:
+            print("   ⏭️ Skipping site auto-upgrade configuration")
+            logging.info("User chose to skip site auto-upgrade configuration")
+    
+    else:
+        # Multiple versions - cannot set single auto-upgrade version
+        print(f"   ⚠️ Multiple firmware versions in upgrade plan:")
+        for version in sorted(target_versions):
+            models_with_version = [model for model, plan in upgrade_plan.items() if plan["version"] == version]
+            print(f"      • Version {version}: {', '.join(models_with_version)}")
+        
+        print(f"   ❓ Site auto-upgrade requires a single version.")
+        
+        # Ask user to choose one version for auto-upgrade or disable
+        print(f"\n   Select version for site auto-upgrade:")
+        version_list = sorted(target_versions)
+        for idx, version in enumerate(version_list):
+            models_with_version = [model for model, plan in upgrade_plan.items() if plan["version"] == version]
+            print(f"      [{idx}] {version} (used by: {', '.join(models_with_version)})")
+        print(f"      [d] Disable auto-upgrade")
+        print(f"      [s] Skip auto-upgrade configuration")
+        
+        try:
+            auto_version_choice = input("   Select auto-upgrade option: ").strip().lower()
+            
+            if auto_version_choice == 's':
+                print("   ⏭️ Skipping site auto-upgrade configuration")
+                logging.info("User chose to skip site auto-upgrade configuration for multi-version upgrade")
+            elif auto_version_choice == 'd':
+                # Disable auto-upgrade
+                try:
+                    print(f"   🔧 Disabling site auto-upgrade...")
+                    
+                    # Configure auto-upgrade disabled
+                    site_settings_body = {
+                        "auto_upgrade": {
+                            "enabled": False
+                        }
+                    }
+                    
+                    # Get and merge current settings
+                    try:
+                        current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
+                        current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
+                        if isinstance(current_settings, dict):
+                            current_settings.update(site_settings_body)
+                            site_settings_body = current_settings
+                    except Exception as e:
+                        logging.warning(f"Could not retrieve current site settings: {e}")
+                    
+                    settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
+                        apisession,
+                        site_id,
+                        body=site_settings_body
+                    )
+                    
+                    print(f"   ✅ Site auto-upgrade disabled successfully")
+                    print(f"   📋 New/replacement APs will NOT auto-upgrade")
+                    logging.info(f"Site auto-upgrade disabled: site={site_id} (user selected disable from multi-version upgrade)")
+                    
+                    # Add to results
+                    auto_upgrade_result = {
+                        "Site ID": site_id,
+                        "Site Name": site_name,
+                        "Device ID": "SITE_CONFIG",
+                        "Device Name": "Auto-Upgrade Setting",
+                        "Device MAC": "N/A",
+                        "Model": "Site Configuration",
+                        "Current Version": "N/A",
+                        "Target Version": "DISABLED",
+                        "Strategy": upgrade_config["strategy"],
+                        "P2P Enabled": upgrade_config["enable_p2p"],
+                        "Max Failure %": upgrade_config["max_failure_percentage"],
+                        "Force Upgrade": upgrade_config["force"],
+                        "Upgrade ID": "SITE_AUTO_UPGRADE",
+                        "Status": "Site Auto-Upgrade Disabled (Multi-Version)",
+                        "Timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    results.append(auto_upgrade_result)
+                    
+                except Exception as e:
+                    error_msg = f"Failed to disable site auto-upgrade: {e}"
+                    print(f"   ❌ {error_msg}")
+                    logging.error(f"❌ {error_msg}")
+            elif auto_version_choice.isdigit():
+                choice_idx = int(auto_version_choice)
+                if 0 <= choice_idx < len(version_list):
+                    selected_auto_version = version_list[choice_idx]
+                    
+                    try:
+                        print(f"   🔧 Setting site auto-upgrade to version {selected_auto_version}...")
+                        
+                        # Configure auto-upgrade with selected version
+                        site_settings_body = {
+                            "auto_upgrade": {
+                                "enabled": True,
+                                "version": selected_auto_version,
+                                "time_of_day": "02:00",
+                                "day_of_week": None
+                            }
+                        }
+                        
+                        # Get and merge current settings
+                        try:
+                            current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
+                            current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
+                            if isinstance(current_settings, dict):
+                                current_settings.update(site_settings_body)
+                                site_settings_body = current_settings
+                        except Exception as e:
+                            logging.warning(f"Could not retrieve current site settings: {e}")
+                        
+                        settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
+                            apisession,
+                            site_id,
+                            body=site_settings_body
+                        )
+                        
+                        print(f"   ✅ Site auto-upgrade configured to version {selected_auto_version}")
+                        logging.info(f"Site auto-upgrade configured: site={site_id}, version={selected_auto_version} (user selected from multi-version upgrade)")
+                        
+                        # Add to results
+                        auto_upgrade_result = {
+                            "Site ID": site_id,
+                            "Site Name": site_name,
+                            "Device ID": "SITE_CONFIG",
+                            "Device Name": "Auto-Upgrade Setting",
+                            "Device MAC": "N/A",
+                            "Model": "Site Configuration",
+                            "Current Version": "N/A",
+                            "Target Version": selected_auto_version,
+                            "Strategy": upgrade_config["strategy"],
+                            "P2P Enabled": upgrade_config["enable_p2p"],
+                            "Max Failure %": upgrade_config["max_failure_percentage"],
+                            "Force Upgrade": upgrade_config["force"],
+                            "Upgrade ID": "SITE_AUTO_UPGRADE",
+                            "Status": "Site Auto-Upgrade Configured (Multi-Version)",
+                            "Timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                        results.append(auto_upgrade_result)
+                        
+                    except Exception as e:
+                        error_msg = f"Failed to configure site auto-upgrade: {e}"
+                        print(f"   ❌ {error_msg}")
+                        logging.error(f"❌ {error_msg}")
+                else:
+                    print("   ❌ Invalid selection, skipping auto-upgrade configuration")
+            else:
+                print("   ❌ Invalid input, skipping auto-upgrade configuration")
+                
+        except Exception as e:
+            print(f"   ❌ Error during auto-upgrade configuration: {e}")
+            logging.error(f"Error during auto-upgrade configuration: {e}")
+
+    # Step 11: Provide upgrade monitoring information
+    if upgrade_ids and successful_upgrades > 0:
+        print(f"\n📊 Upgrade Monitoring Information:")
+        
+        if len(upgrade_ids) == 1:
+            # Single upgrade ID
+            upgrade_id = upgrade_ids[0]
+            print(f"   🆔 Upgrade ID: {upgrade_id}")
+            print(f"   📡 Monitor progress with: mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, '<site_id>', '{upgrade_id}')")
+            print(f"   🔄 Check all upgrades: mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, '<site_id>')")
+            print(f"   ⏹️ Cancel if needed: mistapi.api.v1.sites.devices.cancelSiteDeviceUpgrade(apisession, '<site_id>', '{upgrade_id}')")
+        else:
+            # Multiple upgrade IDs
+            print(f"   🆔 Multiple Upgrade IDs ({len(upgrade_ids)} upgrades):")
+            for i, upgrade_id in enumerate(upgrade_ids, 1):
+                print(f"      {i}. {upgrade_id}")
+            
+            print(f"\n   📡 Monitor progress for each site:")
+            for site_id, site_data in devices_by_site.items():
+                site_name = site_data['name']
+                print(f"      • {site_name}: mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, '{site_id}')")
+        
+        logging.info(f"Upgrade monitoring - {len(upgrade_ids)} upgrade(s) initiated across {len(devices_by_site)} site(s)")
+    
+    elif successful_upgrades > 0:
+        print(f"\n📊 Upgrade Monitoring Information:")
+        print(f"   ℹ️ Upgrades initiated but no specific IDs returned")
+        print(f"   📡 Monitor via Mist portal or check individual sites")
+        
+        if len(sites_to_upgrade) > 1:
+            print(f"   🔍 Check upgrade status for each site:")
+            for site_info in sites_to_upgrade:
+                print(f"      • {site_info['name']}: mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, '{site_info['id']}')")
+        else:
+            site_info = sites_to_upgrade[0]
+            print(f"   🔍 Check upgrade status: mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, '{site_info['id']}')")
+    
+    # Step 12: Write results to CSV
+    try:
+        results_filename = f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        with open(results_filename, "w", newline='', encoding="utf-8") as f:
+            if results:
+                fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC", 
+                            "Model", "Current Version", "Target Version", "Strategy", "P2P Enabled",
+                            "Max Failure %", "Force Upgrade", "Upgrade ID", "Status", "Timestamp"]
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(results)
+        
+        print(f"\n📊 Advanced Firmware Upgrade Operation Completed!")
+        print(f"   ✅ Successful upgrades initiated: {successful_upgrades} devices")
+        print(f"   ❌ Failed upgrade attempts: {failed_upgrades} devices")
+        print(f"   📝 Detailed results logged to: {results_filename}")
+        print(f"   🎯 Strategy used: {upgrade_config['strategy'].upper()}")
+        
+        if upgrade_id:
+            print(f"   🆔 Primary Upgrade ID: {upgrade_id}")
+        
+        print(f"\n💡 Important Notes:")
+        print(f"   • Upgrades will continue in the background")
+        print(f"   • Monitor device status in Mist portal or API")
+        print(f"   • Strategy '{upgrade_config['strategy']}' controls rollout pace")
+        if upgrade_config['enable_p2p']:
+            print(f"   • P2P enabled - APs will share firmware locally")
+        print(f"   • APs will reboot during upgrade process")
+        print(f"   • Full upgrade process may take 5-15 minutes per device")
+        if upgrade_config['strategy'] in ['canary', 'rrm']:
+            print(f"   • Phased rollout will continue automatically based on strategy")
+        if upgrade_config.get('start_time'):
+            scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
+            print(f"   • Upgrade scheduled for: {scheduled_time}")
+        
+        # Check if auto-upgrade was configured or disabled
+        auto_upgrade_configured = any(r.get("Device ID") == "SITE_CONFIG" and "Configured" in r.get("Status", "") for r in results)
+        auto_upgrade_disabled = any(r.get("Device ID") == "SITE_CONFIG" and "Disabled" in r.get("Status", "") for r in results)
+        
+        if auto_upgrade_configured:
+            print(f"   • Site auto-upgrade configured - new APs will auto-upgrade")
+        elif auto_upgrade_disabled:
+            print(f"   • Site auto-upgrade disabled - new APs will NOT auto-upgrade")
+        
+        logging.info(f"✅ Advanced AP firmware upgrade results written to {results_filename} ({len(results)} entries)")
+        logging.info(f"Advanced firmware upgrade summary: {successful_upgrades} successful, {failed_upgrades} failed, strategy: {upgrade_config['strategy']}")
+        
+    except Exception as e:
+        logging.error(f"❌ Failed to write results to CSV: {e}")
+        print(f"❌ Failed to write results to CSV: {e}")
+
+
 menu_actions = {
+    # ==============================
+    # � READ-ONLY OPERATIONS
+    # ==============================
+    
     # 🗂️ Setup & Core Logs
-    "0": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
     "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
     "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
@@ -5428,94 +7492,108 @@ menu_actions = {
     "14": (export_device_port_stats_to_csv, "Export port-level statistics for switches and gateways"),
     "15": (export_vpn_peer_stats_to_csv, "Export VPN peer path statistics for the organization"),
 
-    # 🧭 Interactive Site/Device Exploration
-    "16": (interactive_display_site_inventory, "View device inventory for a selected site"),
-    "17": (interactive_display_device_stats, "View statistics for a selected device at a site"),
-    "18": (interactive_display_device_tests, "View synthetic test stats for a selected gateway device"),
-    "19": (interactive_display_device_config, "View configuration details for a selected device"),
-
     # 🌐 Gateway & Site-Wide Exports
-    "20": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
-    "21": (export_all_devices_to_csv, "Export a list of all devices in the organization"),
-    "22": (export_site_settings_to_csv, "Export configuration settings for all sites"),
-    "23": (export_gateway_device_configs_to_csv, "WIP Export configuration details for all gateway devices across all sites"),
-    "24": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
+    "16": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
+    "17": (export_all_devices_to_csv, "Export a list of all devices in the organization"),
+    "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
+    "19": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
 
     # 🗺️ Location-Enriched Exports
-    "25": (export_sites_with_location_to_csv, "Export a list of sites with location and timezone info"),
-    "26": (export_gateways_with_site_info_to_csv, "Export a list of gateways with associated site and address info"),
-    "27": (export_devices_with_site_info_to_csv, "Export a list of all devices with associated site and address info"),
-    "28": (process_and_merge_csv_for_sfp_address, "Process and merge CSV files of SFP Module locations into a single CSV file"),
-    "29": (generate_support_package, "Generate support package for each site"),
-    "30": (poll_marvis_actions, "Poll Marvis actions and export open actions to CSV"),
-    "31": (lambda: (export_current_guest_users_to_csv(), export_historical_guest_users_to_csv()),"Export all current guest users and last 7 days of historical guests to CSV"),
-    "32": (export_switch_vc_stats_to_csv, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
-    "33": (launch_cli_shell, "Interactively execute a CLI command on a gateway or switch (exit with ~)"),
-    "34": (run_arp_via_websocket, "Run ARP command on an AP and receive output via WebSocket"),
-    "35": (lambda debug=False: loop_refresh_core_datasets(delay=None, debug=debug), "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'"),
-    "38": (lambda: run_shell_command_and_log(command="show route 0.0.0.0 | display json | no-more\nDONE!",log_filename="ws_def_route.log",csv_output="RouteDefault.csv",description="Show default route"), "Run 'show route 0.0.0.0' on a selected device via shell session"),
-    "39": (lambda: run_shell_command_and_log(command="show dhcp-security binding | display json | no-more\nDONE!",log_filename="ws_dhcp.log",csv_output="DhcpSecurityBindings.csv",description="Show DHCP security bindings"), "Run 'show dhcp-security binding' on a selected device via shell session"),
-    "40": (lambda: run_shell_command_and_log(command="show vlans | display json | no-more\nDONE! ",log_filename="ws_vlans.log",csv_output="Vlans.csv",description="Show VLANs"), "Run 'show vlans' on a selected device via shell session"),
-    "41": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
-    "42": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
-    "43": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
-    "44": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
-    "45": (convert_virtual_chassis_to_virtual_mac, "Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
-    "46": (reboot_devices_by_gateway_template_list, "Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
-    "47": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
+    "20": (export_sites_with_location_to_csv, "Export a list of sites with location and timezone info"),
+    "21": (export_gateways_with_site_info_to_csv, "Export a list of gateways with associated site and address info"),
+    "22": (export_devices_with_site_info_to_csv, "Export a list of all devices with associated site and address info"),
+    "23": (lambda: (export_current_guest_users_to_csv(), export_historical_guest_users_to_csv()),"Export all current guest users and last 7 days of historical guests to CSV"),
+    "24": (export_switch_vc_stats_to_csv, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
+    "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
+    "26": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
+    "27": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
+    "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
     # 🏢 Site-Specific Data Exports
-    "48": (export_site_port_stats_to_csv, "Export port statistics for a selected site"),
-    "49": (export_site_clients_to_csv, "Export client statistics for a selected site"),
-    "50": (export_site_devices_to_csv, "Export device list for a selected site"),
-    "51": (export_site_device_stats_to_csv, "Export device statistics for a selected site"),
-    "52": (export_site_device_virtual_chassis_to_csv, "Export virtual chassis information for a selected switch device"),
+    "29": (export_site_port_stats_to_csv, "Export port statistics for a selected site"),
+    "30": (export_site_clients_to_csv, "Export client statistics for a selected site"),
+    "31": (export_site_devices_to_csv, "Export device list for a selected site"),
+    "32": (export_site_device_stats_to_csv, "Export device statistics for a selected site"),
+    "33": (export_site_device_virtual_chassis_to_csv, "Export virtual chassis information for a selected switch device"),
+    "34": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
     
     # 📋 Organization Template Exports
-    "53": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
+    "35": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
+    "36": (export_org_network_templates_to_csv, "Export network template information for the organization"),
+    "37": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
+    "38": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
+    "39": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
     
     # 📊 Organization Statistics & Analytics  
-    "54": (export_org_wireless_clients_to_csv, "Export wireless client statistics for the organization"),
-    "55": (export_org_wired_clients_to_csv, "Export wired client statistics for the organization"),
+    "40": (export_org_wireless_clients_to_csv, "Export wireless client statistics for the organization"),
+    "41": (export_org_wired_clients_to_csv, "Export wired client statistics for the organization"),
     
     # 🔒 Security & Monitoring
-    "56": (export_org_security_events_to_csv, "Export security events for the organization"),
-    "57": (export_org_rogue_clients_to_csv, "Export rogue client detections for the organization"),
-    "58": (export_org_rogue_aps_to_csv, "Export rogue AP detections for the organization"),
+    "42": (export_org_security_events_to_csv, "Export security events for the organization"),
+    "43": (export_org_rogue_clients_to_csv, "Export rogue client detections for the organization"),
+    "44": (export_org_rogue_aps_to_csv, "Export rogue AP detections for the organization"),
     
-    # ⚙️ Configuration & Management
-    "59": (export_org_licenses_to_csv, "Export license information for the organization"),
-    "60": (export_org_psks_to_csv, "Export PSK (Pre-Shared Key) information for the organization"),
-    "61": (export_org_webhooks_to_csv, "Export webhook configuration for the organization"),
-    "62": (export_org_wlans_to_csv, "Export WLAN configuration for the organization"),
-    "63": (export_site_wlans_to_csv, "Export WLAN configuration for a selected site"),
-    "64": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
-    "65": (export_site_maps_to_csv, "Export map information for a selected site"),
-    "66": (export_site_zones_to_csv, "Export zone information for a selected site"),
-    "67": (export_site_insights_to_csv, "Export insights information for a selected site"),
+    # ⚙️ Configuration & Management (Read-Only)
+    "45": (export_org_licenses_to_csv, "Export license information for the organization"),
+    "46": (export_org_psks_to_csv, "Export PSK (Pre-Shared Key) information for the organization"),
+    "47": (export_org_webhooks_to_csv, "Export webhook configuration for the organization"),
+    "48": (export_org_wlans_to_csv, "Export WLAN configuration for the organization"),
+    "49": (export_site_wlans_to_csv, "Export WLAN configuration for a selected site"),
+    "50": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
+    "51": (export_site_maps_to_csv, "Export map information for a selected site"),
+    "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
+    "53": (export_site_insights_to_csv, "Export insights information for a selected site"),
     
-    # 👥 Organization Management
-    "68": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
-    "69": (export_org_admins_to_csv, "Export administrator information for the organization"),
-    "70": (export_org_msp_to_csv, "Export MSP (Managed Service Provider) information for the organization"),
-    "71": (export_org_sso_to_csv, "Export SSO (Single Sign-On) information for the organization"),
-    "72": (export_org_usage_to_csv, "Export license usage information for the organization"),
-    "73": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
+    # 👥 Organization Management (Read-Only)
+    "54": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
+    "55": (export_org_admins_to_csv, "Export administrator information for the organization"),
+    "56": (export_org_msp_to_csv, "Export MSP (Managed Service Provider) information for the organization"),
+    "57": (export_org_sso_to_csv, "Export SSO (Single Sign-On) information for the organization"),
+    "58": (export_org_usage_to_csv, "Export license usage information for the organization"),
+    "59": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
     
-    # 🔄 Continuous Data Collection
-    "74": (continuous_data_collection_loop, "Run continuous data collection loop (5 core API calls with rate limiting)"),
+    # � Status & Monitoring
+    "60": (check_firmware_upgrade_status, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
+    "61": (compare_inventory_with_csv, "Compare inventory data with external CSV file and show zip code mismatches"),
+    "62": (poll_marvis_actions, "Poll Marvis actions and export open actions to CSV"),
     
-    # 📋 Additional Template Exports
-    "75": (export_org_network_templates_to_csv, "Export network template information for the organization"),
-    "76": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
-    "77": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
-    "78": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
-    "79": (compare_inventory_with_csv, "Compare inventory data with external CSV file and show zip code mismatches"),
+    # � Work In Progress Features (Read-Only)
+    "63": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
+    "64": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
+    "65": (export_gateway_device_configs_to_csv, "WIP Export configuration details for all gateway devices across all sites"),
     
-    # 🚧 Work In Progress Features
-    "80": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
-    "81": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
-    "82": (convert_virtual_chassis_by_site_list, "Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
+    
+    # ==============================
+    # ⚠️ UNSAFE/INTERACTIVE OPERATIONS
+    # ==============================
+    
+    # 🎛️ Site Selection & Interactive Tools
+    "70": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
+    "71": (interactive_display_site_inventory, "View device inventory for a selected site"),
+    "72": (interactive_display_device_stats, "View statistics for a selected device at a site"),
+    "73": (interactive_display_device_tests, "View synthetic test stats for a selected gateway device"),
+    "74": (interactive_display_device_config, "View configuration details for a selected device"),
+    
+    # 🔄 Continuous Operations & Monitoring
+    "75": (lambda debug=False: loop_refresh_core_datasets(delay=None, debug=debug), "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'"),
+    "76": (continuous_data_collection_loop, "Run continuous data collection loop (5 core API calls with rate limiting)"),
+    
+    # 🛠️ File Processing & Support Operations
+    "77": (process_and_merge_csv_for_sfp_address, "Process and merge CSV files of SFP Module locations into a single CSV file"),
+    "78": (generate_support_package, "Generate support package for each site"),
+    
+    # � CLI & WebSocket Operations
+    "79": (launch_cli_shell, "Interactively execute a CLI command on a gateway or switch (exit with ~)"),
+    "80": (run_arp_via_websocket, "Run ARP command on an AP and receive output via WebSocket"),
+    "81": (lambda: run_shell_command_and_log(command="show route 0.0.0.0 | display json | no-more\nDONE!",log_filename="ws_def_route.log",csv_output="RouteDefault.csv",description="Show default route"), "Run 'show route 0.0.0.0' on a selected device via shell session"),
+    "82": (lambda: run_shell_command_and_log(command="show dhcp-security binding | display json | no-more\nDONE!",log_filename="ws_dhcp.log",csv_output="DhcpSecurityBindings.csv",description="Show DHCP security bindings"), "Run 'show dhcp-security binding' on a selected device via shell session"),
+    "83": (lambda: run_shell_command_and_log(command="show vlans | display json | no-more\nDONE! ",log_filename="ws_vlans.log",csv_output="Vlans.csv",description="Show VLANs"), "Run 'show vlans' on a selected device via shell session"),
+    
+    # ⚡ DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
+    "90": (bulk_upgrade_ap_firmware_by_site, "🔥 DESTRUCTIVE: Advanced bulk AP firmware upgrade with multiple strategies (big_bang, canary, rrm, serial), P2P sharing, scheduling, and progress monitoring"),
+    "91": (reboot_devices_by_gateway_template_list, "🔥 DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
+    "92": (convert_virtual_chassis_to_virtual_mac, "🔥 DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
+    "93": (convert_virtual_chassis_by_site_list, "🔥 DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
 }
 
 def run_systematic_test():
@@ -5542,41 +7620,51 @@ def run_systematic_test():
     
     # Define unsafe menu options that should be skipped during testing
     unsafe_options = {
-        "0": "Interactive site selection",
-        "80": "WIP (Work in Progress) - may be unstable", 
-        "81": "WIP (Work in Progress) - may be unstable",
-        "16": "Interactive site inventory browser",
-        "17": "Interactive device stats viewer", 
-        "18": "Interactive device tests viewer",
-        "19": "Interactive device config viewer",
-        "23": "WIP (Work in Progress) - may be unstable",
-        "29": "Support package generation - potentially resource intensive",
-        "30": "Marvis polling - continuous operation",
-        "31": "Contains lambda with multiple functions",
-        "33": "Interactive CLI shell session",
-        "34": "WebSocket operation",
-        "35": "Continuous loop operation",
-        "38": "Shell command execution via WebSocket",
-        "39": "Shell command execution via WebSocket", 
-        "40": "Shell command execution via WebSocket",
-        "44": "WIP (Work in Progress) - may be unstable",
-        "45": "Interactive virtual chassis conversion - WIP",
-        "46": "Device reboot operation - destructive",
-        "47": "Requires site selection",
-        "48": "Requires site selection",
-        "49": "Requires site selection", 
-        "50": "Requires site selection",
+        # Site-specific operations requiring site selection
+        "29": "Requires site selection",
+        "30": "Requires site selection", 
+        "31": "Requires site selection",
+        "32": "Requires site selection",
+        "33": "Requires site and device selection",
+        "34": "Requires site selection",
+        "49": "Requires site selection",
+        "50": "Requires site selection", 
         "51": "Requires site selection",
-        "52": "Requires site and device selection",
-        "63": "Requires site selection",
-        "64": "Requires site selection", 
-        "65": "Requires site selection",
-        "66": "Requires site selection",
-        "67": "Requires site selection",
-        "68": "Requires site selection",
-        "69": "Requires site selection",
-        "70": "Requires site selection",
-        "78": "Continuous data collection loop"
+        "52": "Requires site selection",
+        "53": "Requires site selection",
+        
+        # WIP (Work in Progress) - may be unstable
+        "63": "WIP (Work in Progress) - may be unstable", 
+        "64": "WIP (Work in Progress) - may be unstable",
+        "65": "WIP (Work in Progress) - may be unstable",
+        
+        # Interactive operations
+        "70": "Interactive site selection",
+        "71": "Interactive site inventory browser",
+        "72": "Interactive device stats viewer", 
+        "73": "Interactive device tests viewer",
+        "74": "Interactive device config viewer",
+        
+        # Continuous operations
+        "75": "Continuous loop operation",
+        "76": "Continuous data collection loop",
+        
+        # File processing and support operations
+        "77": "File processing operation - potentially resource intensive",
+        "78": "Support package generation - potentially resource intensive",
+        
+        # CLI and WebSocket operations
+        "79": "Interactive CLI shell session",
+        "80": "WebSocket operation",
+        "81": "Shell command execution via WebSocket",
+        "82": "Shell command execution via WebSocket", 
+        "83": "Shell command execution via WebSocket",
+        
+        # DESTRUCTIVE operations - absolutely skip
+        "90": "DESTRUCTIVE: AP firmware upgrade operation",
+        "91": "DESTRUCTIVE: Device reboot operation", 
+        "92": "DESTRUCTIVE: Virtual chassis conversion - WIP",
+        "93": "DESTRUCTIVE: Virtual chassis conversion - bulk operation"
     }
     
     # Get all available menu options
