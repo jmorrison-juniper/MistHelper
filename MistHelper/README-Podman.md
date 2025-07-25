@@ -1,53 +1,29 @@
-# MistHelper with Podman - Setup Guide
+# DEPRECATED: MistHelper with Podman - Setup Guide
 
-## Key Differences Between Docker and Podman
+> **⚠️ NOTICE: This file is deprecated**
+> 
+> This documentation has been consolidated into **PODMAN_SETUP.md** for better organization and maintenance.
+> Please refer to [PODMAN_SETUP.md](PODMAN_SETUP.md) for current Podman setup instructions.
+>
+> This file will be removed in a future release.
 
-| Feature | Docker | Podman |
-|---------|--------|--------|
-| **Daemon** | Requires Docker daemon | Daemonless (runs directly) |
-| **Root Access** | Runs as root by default | Rootless by default |
-| **SELinux** | Basic support | Native SELinux support |
-| **Volume Mounting** | `-v path:/path` | `-v path:/path:Z` (with SELinux labels) |
-| **Compose** | docker-compose | podman-compose or docker-compose |
+## Migration Notice
 
-## Required Changes for Podman
+All information from this file has been merged into `PODMAN_SETUP.md`, which provides:
+- More comprehensive setup instructions
+- Updated troubleshooting information
+- Better cross-platform guidance
+- Integration with the automatic setup scripts
 
-### 1. Volume Mounting with SELinux Labels
-
-**Docker:**
+For the most current and complete Podman setup information, please use:
 ```bash
--v "./data:/app/data"
+# View the current setup guide
+cat PODMAN_SETUP.md
+
+# Use automatic setup
+python setup-podman.py
+python run-misthelper.py
 ```
-
-**Podman:**
-```bash
--v "./data:/app/data:Z"
-```
-
-The `:Z` flag tells Podman to automatically relabel the files with appropriate SELinux labels.
-
-### 2. Command Replacements
-
-Replace all `docker` commands with `podman`:
-
-| Docker Command | Podman Equivalent |
-|----------------|-------------------|
-| `docker build` | `podman build` |
-| `docker run` | `podman run` |
-| `docker ps` | `podman ps` |
-| `docker images` | `podman images` |
-| `docker-compose up` | `podman-compose up` |
-
-### 3. Installation Requirements
-
-**Windows:**
-- Install [Podman Desktop](https://podman-desktop.io/)
-- Ensure WSL2 is enabled
-- Start Podman machine: `podman machine start`
-
-**Linux:**
-```bash
-# RHEL/CentOS/Fedora
 sudo dnf install podman podman-compose
 
 # Ubuntu/Debian  
