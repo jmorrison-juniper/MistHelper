@@ -154,7 +154,214 @@ CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default
 # Global configuration for output format (CSV or SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
 OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
-DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to SQLite database file
+DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
+
+# ============================================================================
+# ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
+# ============================================================================
+# This configuration determines how each API endpoint's data should be stored in SQLite
+# with proper primary keys to eliminate artificial api_id fields and enable efficient queries
+ENDPOINT_PRIMARY_KEY_STRATEGIES = {
+    # Type 1: Natural primary key using API id field (for entity APIs)
+    # These APIs return objects with stable UUID identifiers that make perfect primary keys
+    'getOrgInventory': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'site_id', 'mac', 'serial', 'model', 'type'],
+        'unique_constraints': [],
+        'description': 'Organization device inventory with stable UUID identifiers'
+    },
+    'listOrgSites': {
+        'type': 'natural_pk', 
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name', 'country_code', 'address'],
+        'unique_constraints': [],
+        'description': 'Organization sites with stable UUID identifiers'
+    },
+    'listSiteDevices': {
+        'type': 'natural_pk',
+        'primary_key': ['id'], 
+        'indexes': ['site_id', 'mac', 'serial', 'model', 'type', 'name'],
+        'unique_constraints': [],
+        'description': 'Site devices with stable UUID identifiers'
+    },
+    'getOrgDevices': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'site_id', 'mac', 'serial', 'model', 'type'],
+        'unique_constraints': [],
+        'description': 'Organization devices with stable UUID identifiers'
+    },
+    
+    # Template and configuration entities
+    'listOrgGatewayTemplates': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name', 'type'],
+        'unique_constraints': [],
+        'description': 'Gateway templates with stable UUID identifiers'
+    },
+    'listOrgNetworkTemplates': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name'],
+        'unique_constraints': [],
+        'description': 'Network templates with stable UUID identifiers'
+    },
+    'listOrgRfTemplates': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name', 'band'],
+        'unique_constraints': [],
+        'description': 'RF templates with stable UUID identifiers'
+    },
+    'listOrgSiteTemplates': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name'],
+        'unique_constraints': [],
+        'description': 'Site templates with stable UUID identifiers'
+    },
+    'listOrgAptemplates': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name'],
+        'unique_constraints': [],
+        'description': 'AP templates with stable UUID identifiers'
+    },
+    'listOrgSecPolicies': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name'],
+        'unique_constraints': [],
+        'description': 'Security policies with stable UUID identifiers'
+    },
+    'listOrgPsks': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name', 'ssid'],
+        'unique_constraints': [],
+        'description': 'Pre-shared keys with stable UUID identifiers'
+    },
+    'listOrgWebhooks': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['org_id', 'name', 'type'],
+        'unique_constraints': [],
+        'description': 'Webhooks with stable UUID identifiers'
+    },
+    
+    # Type 2: Composite primary key for event and log APIs
+    # These APIs return time-series data that requires composite keys for uniqueness
+    'searchOrgAlarms': {
+        'type': 'composite_pk',
+        'primary_key': ['id', 'org_id', 'timestamp'],
+        'indexes': ['org_id', 'timestamp', 'severity', 'type', 'site_id'],
+        'unique_constraints': [],
+        'description': 'Organization alarms with composite key for time-series data'
+    },
+    'searchOrgDeviceEvents': {
+        'type': 'composite_pk',
+        'primary_key': ['id', 'device_id', 'timestamp'],
+        'indexes': ['device_id', 'timestamp', 'type', 'org_id', 'site_id'],
+        'unique_constraints': [],
+        'description': 'Device events with composite key for uniqueness'
+    },
+    'searchOrgClientEvents': {
+        'type': 'composite_pk',
+        'primary_key': ['id', 'site_id', 'timestamp'],
+        'indexes': ['site_id', 'timestamp', 'type', 'client_mac', 'device_id'],
+        'unique_constraints': [],
+        'description': 'Client events with composite key for uniqueness'
+    },
+    'searchOrgSystemEvents': {
+        'type': 'composite_pk',
+        'primary_key': ['id', 'org_id', 'timestamp'],
+        'indexes': ['org_id', 'timestamp', 'type'],
+        'unique_constraints': [],
+        'description': 'System events with composite key for uniqueness'
+    },
+    
+    # Type 3: Composite key for statistics and metrics APIs
+    # These APIs return aggregated data that benefits from composite keys
+    'listOrgDevicesStats': {
+        'type': 'composite_pk',
+        'primary_key': ['device_id', 'timestamp'],
+        'indexes': ['device_id', 'timestamp', 'org_id', 'site_id', 'type'],
+        'unique_constraints': [],
+        'description': 'Organization device statistics with composite key for metrics'
+    },
+    'searchSiteDeviceStats': {
+        'type': 'composite_pk',
+        'primary_key': ['device_id', 'timestamp'],
+        'indexes': ['device_id', 'timestamp', 'site_id', 'type'],
+        'unique_constraints': [],
+        'description': 'Site device statistics with composite key for metrics'
+    },
+    'searchSiteClientStats': {
+        'type': 'composite_pk',
+        'primary_key': ['client_mac', 'timestamp'],
+        'indexes': ['client_mac', 'timestamp', 'site_id', 'device_id'],
+        'unique_constraints': [],
+        'description': 'Site client statistics with composite key for metrics'
+    },
+    'searchOrgSwOrGwPorts': {
+        'type': 'composite_pk',
+        'primary_key': ['device_id', 'port_id', 'timestamp'],
+        'indexes': ['device_id', 'port_id', 'timestamp', 'org_id'],
+        'unique_constraints': [],
+        'description': 'Switch/gateway port statistics with composite key'
+    },
+    'searchSitePortStats': {
+        'type': 'composite_pk',
+        'primary_key': ['device_id', 'port_id', 'timestamp'],
+        'indexes': ['device_id', 'port_id', 'timestamp', 'site_id'],
+        'unique_constraints': [],
+        'description': 'Site port statistics with composite key'
+    },
+    'searchOrgPeerPathStats': {
+        'type': 'composite_pk',
+        'primary_key': ['from_device', 'to_device', 'timestamp'],
+        'indexes': ['from_device', 'to_device', 'timestamp', 'org_id'],
+        'unique_constraints': [],
+        'description': 'Peer path statistics with composite key'
+    },
+    
+    # Type 4: Client search APIs (special handling for large datasets)
+    'searchOrgWirelessClients': {
+        'type': 'composite_pk',
+        'primary_key': ['mac', 'timestamp'],
+        'indexes': ['mac', 'timestamp', 'site_id', 'device_id', 'ssid'],
+        'unique_constraints': [],
+        'description': 'Wireless client data with composite key for time-series'
+    },
+    'searchOrgWiredClients': {
+        'type': 'composite_pk',
+        'primary_key': ['mac', 'timestamp'],
+        'indexes': ['mac', 'timestamp', 'site_id', 'device_id', 'port_id'],
+        'unique_constraints': [],
+        'description': 'Wired client data with composite key for time-series'
+    },
+    
+    # Type 5: License and summary APIs (often aggregated data)
+    'getOrgLicensesSummary': {
+        'type': 'auto_increment_with_unique',
+        'primary_key': ['misthelper_internal_id'],
+        'indexes': ['org_id', 'sku', 'type'],
+        'unique_constraints': [],
+        'description': 'License summary data (aggregated, no stable primary key)'
+    },
+    
+    # Default fallback strategy for unclassified endpoints
+    # Uses auto-increment with unique constraint on API id field if present
+    'default': {
+        'type': 'auto_increment_with_unique',
+        'primary_key': ['misthelper_internal_id'],
+        'indexes': [],  # Will be determined at runtime based on available fields
+        'unique_constraints': [],  # Will be applied if 'id' field exists in data
+        'description': 'Fallback strategy with auto-increment primary key and unique constraint on API id'
+    }
+}
 
 def check_and_generate_csv(file_name, generate_function, freshness_minutes=None):
     """
@@ -470,6 +677,109 @@ def flatten_nested_fields_in_list(data):
         flattened.append(new_entry)
     return flattened
 
+def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
+    """
+    Optimized formatter for Marvis API responses to create readable CSV files.
+    
+    Args:
+        api_response_data: Raw API response data from Marvis troubleshoot calls
+        analysis_type: Type of analysis ("client", "device", "network", "sites")
+    
+    Returns:
+        List of dictionaries optimized for CSV readability
+    """
+    try:
+        # Handle different response structures
+        if not api_response_data:
+            logging.warning("Empty Marvis API response received")
+            return []
+        
+        # Ensure we have a list to work with
+        if not isinstance(api_response_data, list):
+            data_list = [api_response_data]
+        else:
+            data_list = api_response_data
+        
+        formatted_data = []
+        
+        for item in data_list:
+            if not isinstance(item, dict):
+                logging.warning(f"Unexpected data type in Marvis response: {type(item)}")
+                continue
+            
+            # Handle organization sites SLE data specially for readability
+            if analysis_type == "sites" and "results" in item and isinstance(item["results"], list):
+                logging.info(f"Processing organization sites SLE data with {len(item['results'])} sites")
+                
+                # Create one row per site instead of flattening all sites into one massive row
+                for idx, site_data in enumerate(item["results"]):
+                    site_row = {}
+                    
+                    # Add metadata from parent response
+                    for meta_key in ["start", "end", "limit", "page", "total"]:
+                        if meta_key in item:
+                            site_row[meta_key] = item[meta_key]
+                    
+                    # Add site index for reference
+                    site_row["site_index"] = idx
+                    
+                    # Add site data with clean column names
+                    if isinstance(site_data, dict):
+                        for key, value in site_data.items():
+                            # Use clean column names instead of results_X_key format
+                            clean_key = key.replace("-", "_")  # Replace hyphens for CSV compatibility
+                            site_row[clean_key] = value
+                    
+                    formatted_data.append(site_row)
+                
+                logging.info(f"Converted {len(item['results'])} sites into {len(formatted_data)} readable rows")
+                
+            else:
+                # Handle single troubleshoot results (client, device, network)
+                formatted_row = {}
+                
+                # Add top-level metadata
+                for key, value in item.items():
+                    if key == "results" and isinstance(value, list):
+                        # Handle results array - flatten each result with cleaner naming
+                        for idx, result in enumerate(value):
+                            if isinstance(result, dict):
+                                for result_key, result_value in result.items():
+                                    # Use clean column names: result_0_category instead of results_0_category
+                                    clean_key = f"result_{idx}_{result_key.replace('-', '_')}"
+                                    formatted_row[clean_key] = result_value
+                            else:
+                                formatted_row[f"result_{idx}"] = str(result)
+                    elif isinstance(value, dict):
+                        # Flatten nested dicts with clean naming
+                        for nested_key, nested_value in value.items():
+                            clean_key = f"{key}_{nested_key}".replace("-", "_")
+                            formatted_row[clean_key] = nested_value
+                    elif isinstance(value, list):
+                        # Join lists as comma-separated values
+                        formatted_row[key] = ",".join(map(str, value))
+                    else:
+                        # Direct assignment for simple values
+                        formatted_row[key] = value
+                
+                if formatted_row:  # Only add if we have data
+                    formatted_data.append(formatted_row)
+        
+        # Apply final CSV-friendly formatting
+        formatted_data = escape_multiline_strings_for_csv(formatted_data)
+        
+        logging.info(f"Marvis data formatting complete: {len(formatted_data)} rows for {analysis_type} analysis")
+        return formatted_data
+        
+    except Exception as e:
+        logging.error(f"Error formatting Marvis data for CSV: {e}")
+        # Fall back to old method if new formatting fails
+        logging.info("Falling back to legacy flattening method")
+        fallback_data = [api_response_data] if not isinstance(api_response_data, list) else api_response_data
+        fallback_data = flatten_nested_fields_in_list(fallback_data)
+        fallback_data = escape_multiline_strings_for_csv(fallback_data)
+        return fallback_data
+
 def convert_list_values_to_csv_strings(data):
     """
     Converts all list, tuple, or set values in a list of dictionaries to comma-separated strings.
@@ -522,6 +832,7 @@ def write_dict_list_to_csv(data, csv_file):
     - Escapes multiline strings for CSV compatibility.
     - Determines all unique fields for the CSV header.
     - Writes each row, filling missing fields with empty strings.
+    - Uses data directory for container persistence.
     """
     logging.debug(f"ENTRY: write_dict_list_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
     
@@ -530,33 +841,43 @@ def write_dict_list_to_csv(data, csv_file):
         logging.debug(f"EXIT: write_dict_list_to_csv - no data to write")
         return
         
-    logging.debug(f"Preparing to write {len(data)} rows to {csv_file}...")
+    # Ensure data directory exists and construct proper file path
+    data_dir = "data"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # If csv_file doesn't already include a path, place it in the data directory
+    if not os.path.dirname(csv_file):
+        csv_file_path = os.path.join(data_dir, csv_file)
+    else:
+        csv_file_path = csv_file
+        
+    logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
     data = escape_multiline_strings_for_csv(data)
     fields = get_all_unique_dict_keys(data)
     logging.debug(f"CSV fields determined: {fields}")
 
     try:
-        logging.debug(f"File I/O: Attempting to open {csv_file} for writing")
-        with open(csv_file, 'w', newline='', encoding='utf-8') as file:
+        logging.debug(f"File I/O: Attempting to open {csv_file_path} for writing")
+        with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
             writer = csv.DictWriter(file, fieldnames=fields)
             writer.writeheader()
-            logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file}")
+            logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file_path}")
             
             for idx, row in enumerate(data):
                 writer.writerow({field: row.get(field, "") for field in fields})
                 if idx < 3:  # Log the first few rows for debugging
                     logging.debug(f"Row {idx} written: {row}")
                     
-        logging.info(f"File I/O: Successfully wrote {len(data)} rows to {csv_file}")
+        logging.info(f"File I/O: Successfully wrote {len(data)} rows to {csv_file_path}")
         logging.debug(f"EXIT: write_dict_list_to_csv - success")
         
     except PermissionError as e:
-        logging.error(f"File I/O: Permission denied when writing to {csv_file}: {e}")
-        print(f"❌ Cannot write to {csv_file}. Is it open in another program?")
+        logging.error(f"File I/O: Permission denied when writing to {csv_file_path}: {e}")
+        print(f"❌ Cannot write to {csv_file_path}. Is it open in another program?")
         logging.debug(f"EXIT: write_dict_list_to_csv - permission error")
         raise
     except OSError as e:
-        logging.error(f"File I/O: OS error when writing to {csv_file}: {e}")
+        logging.error(f"File I/O: OS error when writing to {csv_file_path}: {e}")
         logging.debug(f"EXIT: write_dict_list_to_csv - OS error")
         raise
     except Exception as e:
@@ -565,21 +886,220 @@ def write_dict_list_to_csv(data, csv_file):
         raise
 
 
-def write_dict_list_to_sqlite_database_inside_container(data, table_name):
+def determine_api_function_name_from_context():
     """
-    Writes a list of dictionaries to a SQLite database table inside the container.
+    Attempts to determine the API function name from the current call stack.
+    This helps identify which endpoint strategy to use for table schema.
+    
+    Returns:
+        str: The API function name if found, else 'unknown'
+    """
+    import inspect
+    
+    # Look through the call stack for known API function patterns
+    frame = inspect.currentframe()
+    try:
+        while frame:
+            function_name = frame.f_code.co_name
+            # Check if this looks like an API function name
+            if any(pattern in function_name for pattern in [
+                'getOrg', 'listOrg', 'searchOrg', 'getSite', 'listSite', 'searchSite'
+            ]):
+                logging.debug(f"Detected API function name from stack: {function_name}")
+                return function_name
+            frame = frame.f_back
+    except Exception as e:
+        logging.debug(f"Error determining API function name: {e}")
+    finally:
+        del frame
+    
+    return 'unknown'
+
+def get_endpoint_strategy(api_function_name, data_fields):
+    """
+    Determines the appropriate database schema strategy for an API endpoint.
+    
+    Args:
+        api_function_name (str): Name of the API function being called
+        data_fields (list): List of field names in the data
+    
+    Returns:
+        dict: Strategy configuration including primary key, indexes, etc.
+    """
+    # First check if we have a specific strategy for this endpoint
+    if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
+        logging.debug(f"Using configured strategy for {api_function_name}: {strategy['type']}")
+        return strategy
+    
+    # If no specific strategy, use intelligent defaults based on data structure
+    strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES['default'].copy()
+    
+    # Enhance default strategy based on available fields
+    if 'id' in data_fields:
+        # If data has an 'id' field, use it as unique constraint
+        strategy['unique_constraints'] = ['id']
+        strategy['indexes'] = ['id']
+        logging.debug(f"Enhanced default strategy for {api_function_name}: adding unique constraint on 'id'")
+    
+    # Add common indexes for frequently queried fields
+    common_index_fields = ['org_id', 'site_id', 'device_id', 'timestamp', 'mac', 'serial']
+    for field in common_index_fields:
+        if field in data_fields and field not in strategy['indexes']:
+            strategy['indexes'].append(field)
+    
+    logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
+    return strategy
+
+def build_create_table_sql(table_name, fields, strategy):
+    """
+    Builds the CREATE TABLE SQL statement based on the endpoint strategy.
+    
+    Args:
+        table_name (str): Name of the table to create
+        fields (list): List of field names from the data
+        strategy (dict): Strategy configuration for this endpoint
+    
+    Returns:
+        str: Complete CREATE TABLE SQL statement
+    """
+    timestamp = datetime.now(timezone.utc).isoformat()
+    
+    # Sanitize table name
+    safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+    if not safe_table_name or safe_table_name[0].isdigit():
+        safe_table_name = f"table_{safe_table_name}"
+    
+    # Start building SQL
+    if strategy['type'] == 'natural_pk':
+        # Use API id field(s) as primary key
+        pk_fields = strategy['primary_key']
+        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+        
+        # Add all fields, with primary key fields getting special treatment
+        field_definitions = []
+        for field in fields:
+            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            if field in pk_fields:
+                field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            else:
+                field_definitions.append(f"{safe_field} TEXT")
+        
+        # Add metadata fields
+        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        
+        sql_parts.append(", ".join(field_definitions))
+        
+        # Add primary key constraint
+        pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"
+        sql_parts.append(f", {pk_constraint}")
+        
+        sql_parts.append(")")
+        create_sql = "".join(sql_parts)
+        
+    elif strategy['type'] == 'composite_pk':
+        # Use composite primary key
+        pk_fields = strategy['primary_key']
+        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+        
+        field_definitions = []
+        for field in fields:
+            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            if field in pk_fields:
+                field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            else:
+                field_definitions.append(f"{safe_field} TEXT")
+        
+        # Add metadata fields
+        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        
+        sql_parts.append(", ".join(field_definitions))
+        
+        # Add composite primary key constraint
+        available_pk_fields = [f for f in pk_fields if f in fields]
+        if available_pk_fields:
+            pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"
+            sql_parts.append(f", {pk_constraint}")
+        
+        sql_parts.append(")")
+        create_sql = "".join(sql_parts)
+        
+    else:  # auto_increment_with_unique
+        # Use auto-increment primary key with unique constraints
+        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+        
+        field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]
+        
+        for field in fields:
+            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            field_definitions.append(f"{safe_field} TEXT")
+        
+        # Add metadata fields
+        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        
+        sql_parts.append(", ".join(field_definitions))
+        
+        # Add unique constraints if specified
+        unique_fields = [f for f in strategy['unique_constraints'] if f in fields]
+        if unique_fields:
+            for field in unique_fields:
+                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                sql_parts.append(f", UNIQUE({safe_field})")
+        
+        sql_parts.append(")")
+        create_sql = "".join(sql_parts)
+    
+    logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
+    return create_sql
+
+def build_indexes_sql(table_name, fields, strategy):
+    """
+    Builds CREATE INDEX SQL statements for the specified strategy.
+    
+    Args:
+        table_name (str): Name of the table
+        fields (list): Available fields in the data
+        strategy (dict): Strategy configuration
+    
+    Returns:
+        list: List of CREATE INDEX SQL statements
+    """
+    safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+    if not safe_table_name or safe_table_name[0].isdigit():
+        safe_table_name = f"table_{safe_table_name}"
+    
+    index_sqls = []
+    
+    # Create indexes for fields specified in strategy
+    for field in strategy.get('indexes', []):
+        if field in fields:
+            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            index_name = f"idx_{safe_table_name}_{safe_field}"
+            index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
+            index_sqls.append(index_sql)
+    
+    return index_sqls
+
+def write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=None):
+    """
+    Writes a list of dictionaries to a SQLite database table using hybrid primary key strategies.
+    This new implementation eliminates artificial api_id fields and uses proper business keys.
     Follows NASA/JPL coding standards with comprehensive logging and error handling.
     
     Args:
         data (list): List of dictionaries containing the data to write
         table_name (str): Name of the database table to write to
+        api_function_name (str, optional): Name of the API function for strategy selection
     
     Returns:
         bool: True if successful, False otherwise
     """
-    # Entry logging with input validation
+    # Entry logging with enhanced input validation
     timestamp = datetime.now(timezone.utc).isoformat()
-    logging.debug(f"ENTRY: write_dict_list_to_sqlite_database_inside_container(data_rows={len(data) if data else 0}, table_name={table_name}) at {timestamp}")
+    logging.debug(f"ENTRY: write_dict_list_to_sqlite_database_inside_container(data_rows={len(data) if data else 0}, table_name={table_name}, api_function_name={api_function_name}) at {timestamp}")
     
     # Input validation - Check if data is provided and is a list
     if not data:
@@ -597,14 +1117,12 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
         logging.error(f"Invalid table name: {table_name} at {timestamp}")
         logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - invalid table name")
         return False
+    
+    # Determine API function name if not provided
+    if not api_function_name:
+        api_function_name = determine_api_function_name_from_context()
         
-    # Sanitize table name to prevent SQL injection (following safety-critical standards)
-    import re
-    table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
-    if not table_name or table_name[0].isdigit():
-        table_name = f"table_{table_name}"
-        
-    logging.debug(f"Processing {len(data)} rows for table {table_name} at {timestamp}")
+    logging.debug(f"Processing {len(data)} rows for table {table_name} using API function {api_function_name} at {timestamp}")
     
     # Ensure database directory exists
     db_dir = os.path.dirname(DATABASE_PATH)
@@ -617,7 +1135,7 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
             logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - directory creation failed")
             return False
     
-    # Process data to handle CSV-specific formatting (escape multiline strings)
+    # Process data to handle formatting for database storage
     try:
         processed_data = escape_multiline_strings_for_csv(data)
         logging.debug(f"Successfully processed data for SQLite compatibility at {timestamp}")
@@ -626,16 +1144,21 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
         logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - data processing failed")
         return False
     
-    # Get all unique fields for table schema
+    # Get all unique fields and determine strategy
     try:
         fields = get_all_unique_dict_keys(processed_data)
         if not fields:
             logging.error(f"No fields found in data for table {table_name} at {timestamp}")
             logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no fields")
             return False
+        
+        strategy = get_endpoint_strategy(api_function_name, fields)
+        logging.info(f"Using hybrid SQLite strategy '{strategy['type']}' for table {table_name}: {strategy['description']}")
         logging.debug(f"Database fields determined: {fields} at {timestamp}")
+        logging.debug(f"Endpoint {api_function_name} mapped to {strategy['type']} strategy - eliminates need for artificial api_id fields")
+        
     except Exception as e:
-        logging.error(f"Failed to determine fields: {e} at {timestamp}")
+        logging.error(f"Failed to determine fields and strategy: {e} at {timestamp}")
         logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - field determination failed")
         return False
     
@@ -648,47 +1171,47 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
         cursor = connection.cursor()
         logging.info(f"Successfully connected to database: {DATABASE_PATH} at {timestamp}")
         
-        # Create table with all fields as TEXT (following safety-critical principle: simple, predictable)
-        create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT"
-        for field in fields:
-            # Rename fields that conflict with our built-in columns to preserve data
-            if field.lower() == 'id':
-                safe_field = 'api_id'  # Preserve API ID as 'api_id'
-                logging.debug(f"Renaming field '{field}' to 'api_id' to preserve data while avoiding conflict")
-            elif field.lower() == 'timestamp':
-                safe_field = 'api_timestamp'  # Preserve API timestamp as 'api_timestamp'
-                logging.debug(f"Renaming field '{field}' to 'api_timestamp' to preserve data while avoiding conflict")
-            else:
-                # Sanitize field names for SQL safety
-                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            create_table_sql += f", {safe_field} TEXT"
-        create_table_sql += ")"
-        
+        # Create table with strategy-appropriate schema
+        create_table_sql = build_create_table_sql(table_name, fields, strategy)
         cursor.execute(create_table_sql)
-        logging.debug(f"Table {table_name} created/verified at {timestamp}")
+        logging.debug(f"Table {table_name} created/verified with hybrid {strategy['type']} schema - using natural business keys from API")
         
-        # Clear existing data in table (replace mode for consistency with CSV behavior)
-        cursor.execute(f"DELETE FROM {table_name}")
-        logging.debug(f"Cleared existing data from table {table_name} at {timestamp}")
+        # Create indexes for performance
+        index_sqls = build_indexes_sql(table_name, fields, strategy)
+        for index_sql in index_sqls:
+            cursor.execute(index_sql)
+        if index_sqls:
+            logging.debug(f"Created {len(index_sqls)} performance indexes for table {table_name} with {strategy['type']} strategy")
+        
+        # Determine insert strategy based on schema type
+        if strategy['type'] in ['natural_pk', 'composite_pk']:
+            # Use REPLACE for natural and composite keys to handle updates gracefully
+            insert_mode = "INSERT OR REPLACE"
+            logging.debug(f"Using REPLACE mode for {strategy['type']} strategy - enables efficient upsert operations with natural keys")
+        else:
+            # Clear table for auto-increment strategy (fallback for unclassified endpoints)
+            cursor.execute(f"DELETE FROM {re.sub(r'[^a-zA-Z0-9_]', '_', table_name)}")
+            insert_mode = "INSERT"
+            logging.debug(f"Cleared existing data and using INSERT mode for auto-increment fallback strategy")
+        
+        # Prepare field mapping
+        safe_fields = []
+        for field in fields:
+            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+            safe_fields.append(safe_field)
+        
+        # Add metadata fields
+        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])
         
         # Insert data rows
-        insert_timestamp = datetime.now(timezone.utc).isoformat()
+        current_time = datetime.now(timezone.utc).isoformat()
+        successful_inserts = 0
+        
         for idx, row in enumerate(processed_data):
             try:
                 # Prepare values for insertion
-                values = [insert_timestamp]  # Add timestamp as first column
-                field_values = []
-                safe_fields = ["timestamp"]
-                
+                values = []
                 for field in fields:
-                    # Rename fields that conflict with our built-in columns to preserve data
-                    if field.lower() == 'id':
-                        safe_field = 'api_id'  # Preserve API ID as 'api_id'
-                    elif field.lower() == 'timestamp':
-                        safe_field = 'api_timestamp'  # Preserve API timestamp as 'api_timestamp'
-                    else:
-                        safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-                    
                     value = row.get(field, "")
                     # Convert value to string for TEXT storage
                     if value is None:
@@ -696,17 +1219,24 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
                     else:
                         value = str(value)
                     values.append(value)
-                    safe_fields.append(safe_field)
+                
+                # Add metadata values
+                values.extend([current_time, current_time])
                 
                 # Create parameterized query for safety
                 placeholders = ", ".join(["?"] * len(values))
-                insert_sql = f"INSERT INTO {table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
+                safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+                if not safe_table_name or safe_table_name[0].isdigit():
+                    safe_table_name = f"table_{safe_table_name}"
+                
+                insert_sql = f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
                 
                 cursor.execute(insert_sql, values)
+                successful_inserts += 1
                 
                 # Log first few rows for debugging
                 if idx < 3:
-                    logging.debug(f"Row {idx} inserted into {table_name} at {timestamp}")
+                    logging.debug(f"Row {idx} inserted into {table_name} using {insert_mode} at {timestamp}")
                     
             except Exception as e:
                 logging.error(f"Failed to insert row {idx} into {table_name}: {e} at {timestamp}")
@@ -715,10 +1245,13 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
         
         # Commit transaction
         connection.commit()
-        logging.info(f"Successfully wrote {len(processed_data)} rows to table {table_name} in database {DATABASE_PATH} at {timestamp}")
+        logging.info(f"Successfully wrote {successful_inserts}/{len(processed_data)} rows to table {table_name} in database {DATABASE_PATH} using {strategy['type']} strategy at {timestamp}")
         
         # Verify data was written
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+        if not safe_table_name or safe_table_name[0].isdigit():
+            safe_table_name = f"table_{safe_table_name}"
+        cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")
         row_count = cursor.fetchone()[0]
         logging.info(f"Database verification: {row_count} rows confirmed in table {table_name} at {timestamp}")
         
@@ -757,7 +1290,7 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name):
                 logging.error(f"Failed to close database connection: {e} at {timestamp}")
 
 
-def write_data_with_format_selection(data, filename_or_table, format_override=None):
+def write_data_with_format_selection(data, filename_or_table, format_override=None, api_function_name=None):
     """
     Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
     Follows NASA/JPL coding standards with comprehensive logging.
@@ -766,12 +1299,13 @@ def write_data_with_format_selection(data, filename_or_table, format_override=No
         data (list): List of dictionaries containing the data to write
         filename_or_table (str): CSV filename or database table name
         format_override (str): Optional override for output format ("csv" or "sqlite")
+        api_function_name (str, optional): Name of the API function for SQLite strategy selection
     
     Returns:
         bool: True if successful, False otherwise
     """
     timestamp = datetime.now(timezone.utc).isoformat()
-    logging.debug(f"ENTRY: write_data_with_format_selection(data_rows={len(data) if data else 0}, filename_or_table={filename_or_table}, format_override={format_override}) at {timestamp}")
+    logging.debug(f"ENTRY: write_data_with_format_selection(data_rows={len(data) if data else 0}, filename_or_table={filename_or_table}, format_override={format_override}, api_function_name={api_function_name}) at {timestamp}")
     
     # Determine output format (format_override takes precedence over global setting)
     output_format = format_override if format_override else OUTPUT_FORMAT
@@ -801,8 +1335,8 @@ def write_data_with_format_selection(data, filename_or_table, format_override=No
             if table_name.endswith('.csv'):
                 table_name = table_name[:-4]  # Remove .csv extension
             
-            logging.info(f"Writing {len(data)} rows to SQLite table: {table_name} at {timestamp}")
-            result = write_dict_list_to_sqlite_database_inside_container(data, table_name)
+            logging.info(f"Writing {len(data)} rows to SQLite table: {table_name} using API function {api_function_name} at {timestamp}")
+            result = write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=api_function_name)
             logging.debug(f"EXIT: write_data_with_format_selection - SQLite {'success' if result else 'failed'}")
             return result
             
@@ -812,7 +1346,7 @@ def write_data_with_format_selection(data, filename_or_table, format_override=No
         return False
 
 
-def save_data_to_output(data, filename):
+def save_data_to_output(data, filename, api_function_name=None):
     """
     Wrapper function to replace write_dict_list_to_csv calls.
     Routes to appropriate output format based on global OUTPUT_FORMAT setting.
@@ -820,8 +1354,9 @@ def save_data_to_output(data, filename):
     Args:
         data (list): List of dictionaries containing the data to write
         filename (str): CSV filename or database table name
+        api_function_name (str, optional): Name of the API function for SQLite strategy selection
     """
-    return write_data_with_format_selection(data, filename)
+    return write_data_with_format_selection(data, filename, api_function_name=api_function_name)
 
 def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display_fields=None, **kwargs):
     """
@@ -860,8 +1395,8 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
             if status_code == 429:
                 logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
                 if rawdata:
-                    save_data_to_output(rawdata, filename)
-                    logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
+                    save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
+                    logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
                 logging.debug(f"EXIT: fetch_and_display_api_data - rate limited")
                 return
             else:
@@ -896,9 +1431,9 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         fields = get_all_unique_dict_keys(data)
         logging.debug(f"Unique fields for CSV/table: {fields}")
 
-        # Write processed data to CSV
-        save_data_to_output(data, filename)
-        logging.info(f"Data written to {filename} ({len(data)} rows).")
+        # Write processed data to output with API function name for strategy selection
+        save_data_to_output(data, filename, api_function_name=api_call.__name__)
+        logging.info(f"Data written to {filename} ({len(data)} rows) using {api_call.__name__} strategy.")
 
         # Prepare and display PrettyTable
         table = PrettyTable()
@@ -914,8 +1449,8 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         logging.error(f"❌ Error during data fetch for {title}: {e}")
         # Always save whatever data was collected so far
         if rawdata:
-            save_data_to_output(rawdata, filename)
-            logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows).")
+            save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
+            logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
         logging.debug(f"EXIT: fetch_and_display_api_data - error")
         raise
 
@@ -1555,7 +2090,7 @@ def export_organization_templates_to_csv():
     try:
         fetch_and_display_api_data(
             title="AP Templates:",
-            api_call=mistapi.api.v1.orgs.aptemplates.listOrgApTemplates,
+            api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
             filename="OrgApTemplates.csv",
             sort_key="name",
             limit=1000
@@ -2893,32 +3428,720 @@ def write_support_data_to_csv(data, filename):
 
 def poll_marvis_actions():
     """
-    Polls Marvis actions for the organization, filters for open actions, and writes them to a CSV.
-    Adds logging and comments for traceability.
+    Interactive Marvis (VNA - Virtual Network Assistant) troubleshooting function that allows users to:
+    1. Perform targeted troubleshooting for specific clients
+    2. Perform targeted troubleshooting for specific devices
+    3. Analyze network connectivity issues
+    4. View Marvis insights and recommendations
+    
+    This function guides users through the Marvis troubleshooting process step by step,
+    using guided selection workflows instead of manual MAC address entry.
     """
-    logging.info("🔍 Polling Marvis Actions...")
-    print("🔍 Polling Marvis Actions...")
+    logging.info("🔍 Starting Marvis (VNA) troubleshooting workflow...")
+    logging.debug("MARVIS DEBUG: Entering poll_marvis_actions() function")
+    print("🔍 Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
+    print("=" * 65)
+    print()
+    
     org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id} for Marvis actions polling.")
+    logging.debug(f"MARVIS DEBUG: Using org_id: {org_id} for Marvis troubleshooting")
+    logging.debug(f"MARVIS DEBUG: Session state - authenticated: {apisession is not None}")
 
-    # Call the Mist API to get Marvis actions
-    response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id)
-    rawdata = mistapi.get_all(response=response, mist_session=apisession)
-    logging.info(f"Fetched {len(rawdata)} Marvis actions from API.")
+    print("📋 Marvis AI Troubleshooting Options:")
+    print("1. Troubleshoot client connectivity issues (guided client selection)")
+    print("2. Diagnose device performance problems (guided device selection)") 
+    print("3. Analyze network connectivity issues (site-level analysis)")
+    print("4. View organization Marvis insights and capabilities")
+    print("5. Exit")
+    print()
+    
+    choice = input("Select an option (1-5): ").strip()
+    logging.debug(f"MARVIS DEBUG: User selected option: {choice}")
+    
+    if choice == "1":
+        logging.debug("MARVIS DEBUG: Calling troubleshoot_client_connectivity()")
+        troubleshoot_client_connectivity()
+    elif choice == "2":
+        logging.debug("MARVIS DEBUG: Calling troubleshoot_device_performance()")
+        troubleshoot_device_performance()
+    elif choice == "3":
+        logging.debug("MARVIS DEBUG: Calling troubleshoot_network_connectivity()")
+        troubleshoot_network_connectivity()
+    elif choice == "4":
+        logging.debug("MARVIS DEBUG: Calling view_marvis_insights()")
+        view_marvis_insights()
+    elif choice == "5":
+        logging.debug("MARVIS DEBUG: User chose to exit")
+        print("Exiting Marvis troubleshooting.")
+        return
+    else:
+        print("❌ Invalid option selected.")
+        logging.warning(f"MARVIS DEBUG: Invalid troubleshooting option selected: {choice}")
+        logging.debug("MARVIS DEBUG: Exiting poll_marvis_actions() due to invalid choice")
 
-    # Filter only open actions (state == "open")
-    open_actions = [action for action in rawdata if action.get("state") == "open"]
-    logging.info(f"Filtered {len(open_actions)} open Marvis actions.")
+def prompt_client_selection(site_id=None):
+    """
+    Prompts the user to select a client from available wireless or wired clients.
+    
+    Args:
+        site_id (str, optional): If provided, searches within the specific site.
+                                If None, searches across the entire organization.
+    
+    Returns:
+        tuple: (client_mac, client_type, site_id) or (None, None, None) if no selection made
+    """
+    import time
+    print("\n📱 Client Selection")
+    print("=" * 30)
+    
+    # If no site_id provided, decide between site-specific or org-wide search
+    if not site_id:
+        scope_choice = input("Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ").strip().lower()
+        if scope_choice == 's':
+            site_id = prompt_site_selection()
+            if not site_id:
+                print("❌ No site selected.")
+                return None, None, None
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    try:
+        all_clients = []
+        
+        if site_id:
+            # Site-specific client search
+            print(f"🔍 Searching for clients in selected site...")
+            
+            # Get wireless clients for the site
+            try:
+                wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
+                wireless_clients = mistapi.get_all(response=wireless_response, mist_session=apisession) or []
+                for client in wireless_clients:
+                    client['client_type'] = 'wireless'
+                    client['source_site_id'] = site_id
+                all_clients.extend(wireless_clients)
+                logging.info(f"Found {len(wireless_clients)} wireless clients in site")
+            except Exception as e:
+                logging.warning(f"Could not fetch wireless clients for site: {e}")
+            
+            # Get wired clients for the site (if API supports it)
+            try:
+                wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id, limit=1000)
+                wired_clients = mistapi.get_all(response=wired_response, mist_session=apisession) or []
+                for client in wired_clients:
+                    client['client_type'] = 'wired'
+                    client['source_site_id'] = site_id
+                all_clients.extend(wired_clients)
+                logging.info(f"Found {len(wired_clients)} wired clients in site")
+            except Exception as e:
+                logging.warning(f"Could not fetch wired clients for site (may not be supported): {e}")
+                
+        else:
+            # Organization-wide client search
+            print(f"🔍 Searching for clients across organization...")
+            
+            # Get wireless clients org-wide
+            try:
+                wireless_response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(apisession, org_id, limit=1000)
+                wireless_clients = mistapi.get_all(response=wireless_response, mist_session=apisession) or []
+                for client in wireless_clients:
+                    client['client_type'] = 'wireless'
+                all_clients.extend(wireless_clients)
+                logging.info(f"Found {len(wireless_clients)} wireless clients in organization")
+            except Exception as e:
+                logging.warning(f"Could not fetch wireless clients for org: {e}")
+            
+            # Get wired clients org-wide
+            try:
+                wired_response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(apisession, org_id, limit=1000)
+                wired_clients = mistapi.get_all(response=wired_response, mist_session=apisession) or []
+                for client in wired_clients:
+                    client['client_type'] = 'wired'
+                all_clients.extend(wired_clients)
+                logging.info(f"Found {len(wired_clients)} wired clients in organization")
+            except Exception as e:
+                logging.warning(f"Could not fetch wired clients for org: {e}")
+        
+        if not all_clients:
+            print("❌ No clients found.")
+            return None, None, None
+        
+        # Sort clients by hostname, then MAC
+        all_clients = sorted(all_clients, key=lambda x: (x.get('hostname', ''), x.get('mac', '')))
+        
+        # Prepare table for selection
+        from prettytable import PrettyTable
+        table = PrettyTable()
+        table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
+        table.align["#"] = "r"
+        table.align["Hostname"] = "l"
+        table.align["MAC Address"] = "l"
+        table.align["Type"] = "c"
+        table.align["IP Address"] = "l"
+        table.align["SSID/VLAN"] = "l"
+        table.align["Site"] = "l"
+        table.align["Status"] = "c"
+        # Set max widths for better formatting
+        table.max_width["Hostname"] = 20
+        table.max_width["IP Address"] = 16
+        table.max_width["SSID/VLAN"] = 15
+        table.max_width["Site"] = 15
+        index_to_client = {}
+        
+        # Fetch site list once and cache it
+        sites_cache = {}
+        try:
+            print("📍 Loading site information...")
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+            sites = mistapi.get_all(response=sites_response, mist_session=apisession)
+            sites_cache = {site["id"]: site["name"] for site in sites}
+            logging.info(f"Cached {len(sites_cache)} sites for client display")
+        except Exception as e:
+            logging.warning(f"Could not fetch sites for display: {e}")
+        
+        for idx, client in enumerate(all_clients):
+            # Get site name from cache
+            site_name = ""
+            if 'site_id' in client and client['site_id'] in sites_cache:
+                site_name = sites_cache[client['site_id']]
+            elif 'site_id' in client:
+                site_name = client['site_id']  # Fallback to site ID if name not found
+            
+            # Determine connection status
+            status = "🟢" if client.get('connected', True) else "🔴"
+            if 'last_seen' in client:
+                last_seen = client.get('last_seen', 0)
+                current_time = int(time.time())
+                if current_time - last_seen > 300:  # More than 5 minutes ago
+                    status = "🟡"
+            
+            # Format hostname/name
+            hostname = client.get('hostname', client.get('name', ''))
+            if not hostname or hostname in ['[]', '']:
+                hostname = 'Unknown'
+            if len(hostname) > 20:
+                hostname = hostname[:17] + "..."
+            
+            # Format IP address - handle both strings and arrays
+            ip_address = client.get('ip', '')
+            if isinstance(ip_address, list):
+                if ip_address:
+                    ip_address = ip_address[0]  # Take first IP if multiple
+                else:
+                    ip_address = 'N/A'
+            elif not ip_address or ip_address == '[]':
+                ip_address = 'N/A'
+            
+            # Format SSID/VLAN - handle both strings and arrays
+            ssid_vlan = client.get('ssid', client.get('vlan', ''))
+            if isinstance(ssid_vlan, list):
+                if ssid_vlan:
+                    ssid_vlan = str(ssid_vlan[0])  # Take first value if multiple
+                else:
+                    ssid_vlan = 'N/A'
+            elif not ssid_vlan or ssid_vlan == '[]':
+                ssid_vlan = 'N/A'
+            
+            if len(ssid_vlan) > 15:
+                ssid_vlan = ssid_vlan[:12] + "..."
+            
+            # Format site name with better truncation
+            if len(site_name) > 15:
+                site_name = site_name[:12] + "..."
+            
+            table.add_row([
+                idx,
+                hostname,
+                client.get('mac', 'Unknown'),
+                client.get('client_type', 'unknown')[:8],
+                ip_address,
+                ssid_vlan,
+                site_name,
+                status
+            ])
+            index_to_client[idx] = client
+        
+        print(f"\n📋 Found {len(all_clients)} clients:")
+        print(table)
+        
+        # Show summary statistics
+        wireless_count = sum(1 for c in all_clients if c.get('client_type') == 'wireless')
+        wired_count = sum(1 for c in all_clients if c.get('client_type') == 'wired')
+        print(f"\n📊 Summary: {wireless_count} wireless, {wired_count} wired clients")
+        
+        # Show legend
+        print("\n🟢 = Online  🟡 = Recently seen  🔴 = Offline")
+        print("---" * 20)
+        
+        # Get user selection
+        try:
+            max_index = len(all_clients) - 1
+            user_input = input(f"\n🔍 Enter client index (0-{max_index}) or 'q' to quit: ").strip()
+                
+            if user_input.lower() in ['q', 'quit', 'exit']:
+                print("👋 Exiting client selection...")
+                return None, None, None
+                
+            idx = int(user_input)
+            if 0 <= idx <= max_index:
+                selected_client = index_to_client[idx]
+                client_mac = selected_client.get('mac')
+                client_type = selected_client.get('client_type', 'unknown')
+                client_site_id = selected_client.get('site_id', site_id)
+                hostname = selected_client.get('hostname', selected_client.get('name', 'Unknown'))
+                
+                print(f"\n✅ Selected client:")
+                print(f"   📱 Name: {hostname}")
+                print(f"   🔗 MAC: {client_mac}")
+                print(f"   📡 Type: {client_type}")
+                if client_site_id and client_site_id in sites_cache:
+                    print(f"   🏢 Site: {sites_cache[client_site_id]}")
+                
+                logging.info(f"User selected client: MAC={client_mac}, type={client_type}, site={client_site_id}")
+                return client_mac, client_type, client_site_id
+            else:
+                print(f"❌ Invalid index. Please enter a number between 0 and {max_index}.")
+                return None, None, None
+                
+        except ValueError:
+            print("❌ Please enter a valid number or 'q' to quit.")
+            return None, None, None
+            
+    except Exception as e:
+        logging.error(f"Error during client selection: {e}")
+        print(f"❌ Error searching for clients: {e}")
+        return None, None, None
 
-    # Flatten and clean the data for CSV compatibility
-    data = flatten_nested_fields_in_list(open_actions)
-    data = escape_multiline_strings_for_csv(data)
-    logging.debug("Flattened and sanitized open Marvis actions for CSV.")
+def troubleshoot_client_connectivity():
+    """
+    Troubleshoot client connectivity issues using Marvis AI.
+    Uses guided client selection instead of manual MAC address entry.
+    """
+    print("\n🔍 Client Connectivity Troubleshooting")
+    print("=" * 50)
+    
+    # Use guided client selection
+    client_mac, client_type, site_id = prompt_client_selection()
+    if not client_mac:
+        print("❌ No client selected. Returning to main menu.")
+        return
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    try:
+        print(f"🔍 Running Marvis AI analysis for client {client_mac}...")
+        print(f"   📱 Client Type: {client_type}")
+        if site_id:
+            print(f"   🏢 Site ID: {site_id}")
+        
+        logging.info(f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}")
+        
+        # Prepare parameters for troubleshoot call
+        params = {"mac": client_mac}
+        if site_id:
+            params["site_id"] = site_id
+            
+        # Add client type parameter for proper troubleshooting context
+        if client_type in ["wired", "wireless"]:
+            params["type"] = client_type
+            logging.debug(f"MARVIS DEBUG: Added type parameter: {client_type}")
+        
+        logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with params: {params}")
+        
+        # Call Marvis troubleshoot endpoint
+        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
+        
+        if response.data:
+            print("✅ Marvis AI analysis completed!")
+            print(f"📊 Analysis results available.")
+            
+            # Save results to CSV with optimized formatting
+            data = format_marvis_data_for_csv(response.data, "client")
+            
+            filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
+            save_data_to_output(data, filename)
+            print(f"📄 Results saved to {filename}")
+            
+            # Display summary
+            if isinstance(response.data, dict):
+                if 'results' in response.data:
+                    print("\n🔍 Marvis Analysis Summary:")
+                    for result in response.data.get('results', []):
+                        print(f"  • {result.get('description', 'Analysis result')}")
+                        if result.get('action'):
+                            print(f"    💡 Recommended Action: {result['action']}")
+                elif 'insights' in response.data:
+                    print("\n🤖 Marvis Insights:")
+                    insights = response.data.get('insights', [])
+                    for insight in insights:
+                        print(f"  • {insight.get('description', insight)}")
+                else:
+                    print(f"\n📊 Analysis Data: {len(data)} items processed")
+        else:
+            print("ℹ️ No specific connectivity issues found for this client.")
+            print("💡 This could indicate the client is functioning normally.")
+            
+    except Exception as e:
+        logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
+        print(f"❌ Failed to troubleshoot client: {e}")
+        print("💡 This may indicate:")
+        print("   - Marvis (VNA) is not enabled for your organization")
+        print("   - The client is not currently active or found")
+        print("   - Insufficient permissions for Marvis troubleshooting")
+        print("   - API connectivity issues")
 
-    # Write to CSV
-    save_data_to_output(data, "OpenMarvisActions.csv")
-    logging.info(f"✅ {len(open_actions)} open Marvis actions written to OpenMarvisActions.csv")
-    print(f"✅ {len(open_actions)} open Marvis actions written to OpenMarvisActions.csv")
+def troubleshoot_device_performance():
+    """
+    Troubleshoot device performance issues using Marvis AI.
+    Uses guided site and device selection workflow.
+    """
+    logging.debug("MARVIS DEBUG: Entering troubleshoot_device_performance()")
+    print("\n🔍 Device Performance Troubleshooting")
+    print("=" * 50)
+    
+    # Get site selection first
+    site_id = prompt_site_selection()
+    if not site_id:
+        print("❌ No site selected.")
+        logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
+        return
+    
+    logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
+    
+    # Get device selection
+    device_id = prompt_device_selection(site_id)
+    if not device_id:
+        print("❌ No device selected.")
+        logging.debug("MARVIS DEBUG: No device selected")
+        return
+    
+    logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
+    org_id = get_cached_or_prompted_org_id()
+    logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
+    
+    try:
+        # Get device MAC address from device ID
+        print(f"🔍 Looking up device details...")
+        logging.debug(f"MARVIS DEBUG: About to get device details for device_id: {device_id} in site: {site_id}")
+        
+        device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+        logging.debug(f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}")
+        
+        if not device_response.data:
+            print("❌ Could not retrieve device details.")
+            logging.debug("MARVIS DEBUG: Device response data is None")
+            return
+            
+        logging.debug(f"MARVIS DEBUG: Device data keys: {list(device_response.data.keys()) if isinstance(device_response.data, dict) else 'not a dict'}")
+        
+        device_mac = device_response.data.get('mac')
+        device_name = device_response.data.get('name', 'Unknown Device')
+        
+        logging.debug(f"MARVIS DEBUG: Device MAC: {device_mac}")
+        logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
+        
+        if not device_mac:
+            print("❌ Could not determine device MAC address.")
+            logging.debug("MARVIS DEBUG: Device MAC is None or empty")
+            return
+        
+        print(f"🔍 Running Marvis AI performance analysis...")
+        print(f"   📟 Device: {device_name} ({device_mac})")
+        print(f"   🏢 Site ID: {site_id}")
+        
+        logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
+        logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
+        
+        # Call Marvis troubleshoot endpoint for device using MAC address
+        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
+            apisession, org_id, 
+            mac=device_mac, 
+            site_id=site_id
+        )
+        
+        logging.debug(f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}")
+        logging.debug(f"MARVIS DEBUG: Device response data type: {type(response.data)}")
+        logging.debug(f"MARVIS DEBUG: Device response data is None: {response.data is None}")
+        
+        if response.data:
+            logging.debug(f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
+            logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
+            
+            print("✅ Marvis AI device analysis completed!")
+            
+            # Save results to CSV with optimized formatting
+            data = format_marvis_data_for_csv(response.data, "device")
+            logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
+            
+            filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
+            save_data_to_output(data, filename)
+            print(f"📄 Results saved to {filename}")
+            
+            # Display summary if available
+            if isinstance(response.data, dict):
+                if 'results' in response.data:
+                    results = response.data.get('results', [])
+                    logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
+                    print("\n🔍 Device Performance Analysis:")
+                    for result in results:
+                        print(f"  • {result.get('description', 'Analysis result')}")
+                        if result.get('action'):
+                            print(f"    💡 Recommended Action: {result['action']}")
+                elif 'insights' in response.data:
+                    print("\n🤖 Marvis Device Insights:")
+                    insights = response.data.get('insights', [])
+                    logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
+                    for insight in insights:
+                        print(f"  • {insight.get('description', insight)}")
+                else:
+                    logging.debug("MARVIS DEBUG: No results or insights in device response")
+                    print(f"\n📊 Analysis Data: {len(data)} items processed")
+            
+        else:
+            logging.debug("MARVIS DEBUG: Device response data is None or empty")
+            print("ℹ️ No performance issues detected for this device.")
+            print("💡 This could indicate the device is operating within normal parameters.")
+            
+    except Exception as e:
+        logging.error(f"MARVIS DEBUG: Exception in troubleshoot_device_performance: {e}")
+        logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
+        logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
+        print(f"❌ Failed to troubleshoot device: {e}")
+        print("💡 This may indicate:")
+        print("   - The device is not found or not supported by Marvis")
+        print("   - Marvis (VNA) is not enabled for your organization")
+        print("   - Insufficient permissions for device troubleshooting")
+    
+    logging.debug("MARVIS DEBUG: Exiting troubleshoot_device_performance()")
+
+def troubleshoot_network_connectivity():
+    """
+    Troubleshoot general network connectivity issues using Marvis AI.
+    Provides site-level network analysis and insights.
+    """
+    logging.debug("MARVIS DEBUG: Entering troubleshoot_network_connectivity()")
+    print("\n🔍 Network Connectivity Troubleshooting")
+    print("=" * 50)
+    
+    # Get site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        print("❌ No site selected.")
+        logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
+        return
+    
+    logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
+    org_id = get_cached_or_prompted_org_id()
+    logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
+    
+    try:
+        print(f"🔍 Running Marvis AI network analysis...")
+        print(f"   🌐 Analyzing site-level connectivity")
+        print(f"   🏢 Site ID: {site_id}")
+        
+        logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
+        logging.debug(f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}")
+        
+        # Call Marvis troubleshoot endpoint for site
+        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
+            apisession, org_id, 
+            site_id=site_id
+        )
+        
+        logging.debug(f"MARVIS DEBUG: API response received. Status: {response.status if hasattr(response, 'status') else 'unknown'}")
+        logging.debug(f"MARVIS DEBUG: Response data type: {type(response.data)}")
+        logging.debug(f"MARVIS DEBUG: Response data is None: {response.data is None}")
+        
+        if response.data:
+            logging.debug(f"MARVIS DEBUG: Response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
+            logging.debug(f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}")
+            logging.debug(f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}")
+            
+            print("✅ Marvis AI network analysis completed!")
+            
+            # Save results to CSV with optimized formatting
+            logging.debug("MARVIS DEBUG: About to format data for CSV")
+            data = format_marvis_data_for_csv(response.data, "network")
+            logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
+            logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
+            
+            filename = f"MarvisInsights_Network_{site_id}.csv"
+            save_data_to_output(data, filename)
+            print(f"📄 Results saved to {filename}")
+            logging.debug(f"MARVIS DEBUG: Saved data to {filename}")
+            
+            # Display summary if available
+            if isinstance(response.data, dict):
+                logging.debug("MARVIS DEBUG: Response data is a dict, checking for results/insights")
+                if 'results' in response.data:
+                    results = response.data.get('results', [])
+                    logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
+                    print("\n🔍 Network Connectivity Analysis:")
+                    for idx, result in enumerate(results):
+                        logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
+                        description = result.get('description', 'Analysis result') if isinstance(result, dict) else str(result)
+                        print(f"  • {description}")
+                        if isinstance(result, dict) and result.get('action'):
+                            print(f"    💡 Recommended Action: {result['action']}")
+                elif 'insights' in response.data:
+                    insights = response.data.get('insights', [])
+                    logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
+                    print("\n🤖 Marvis Network Insights:")
+                    for idx, insight in enumerate(insights):
+                        logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
+                        description = insight.get('description', insight) if isinstance(insight, dict) else str(insight)
+                        print(f"  • {description}")
+                else:
+                    logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
+                    logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
+                    print(f"\n📊 Analysis Data: {len(data)} items processed")
+                    if response.data:
+                        print(f"🔍 Raw response keys: {list(response.data.keys())}")
+                        # Show some raw data for debugging
+                        for key, value in list(response.data.items())[:5]:
+                            print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+            else:
+                logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
+                print(f"\n📊 Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
+            
+        else:
+            logging.debug("MARVIS DEBUG: Response data is None or empty")
+            print("ℹ️ No network connectivity issues detected for this site.")
+            print("💡 This indicates the network is operating within normal parameters.")
+            
+    except Exception as e:
+        logging.error(f"MARVIS DEBUG: Exception in troubleshoot_network_connectivity: {e}")
+        logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
+        logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
+        print(f"❌ Failed to troubleshoot network: {e}")
+        print("💡 This may indicate:")
+        print("   - Marvis (VNA) is not enabled for your organization")
+        print("   - The site has no devices or insufficient data for analysis")
+        print("   - Insufficient permissions for network troubleshooting")
+    
+    logging.debug("MARVIS DEBUG: Exiting troubleshoot_network_connectivity()")
+
+def view_marvis_insights():
+    """
+    View available Marvis (VNA) insights and capabilities for the organization.
+    This provides information about Marvis availability and organizational insights.
+    """
+    print("\n📊 Marvis (VNA) Insights & Capabilities")
+    print("=" * 50)
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    try:
+        print("🔍 Checking Marvis availability and organizational insights...")
+        
+        # Try to get organization info to check Marvis capabilities
+        org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
+        
+        if org_response.data:
+            org_info = org_response.data
+            print(f"✅ Organization: {org_info.get('name', 'Unknown')}")
+            
+            # Check for Marvis-related features
+            features = org_info.get('features', [])
+            marvis_features = [f for f in features if any(keyword in f.lower() for keyword in ['marvis', 'vna', 'insight'])]
+            
+            if marvis_features:
+                print("\n🤖 Marvis/VNA Features Available:")
+                for feature in marvis_features:
+                    print(f"  • {feature}")
+            else:
+                print("\nℹ️ No specific Marvis/VNA features detected in organization settings.")
+            
+            # Try to get organization-level insights if available
+            try:
+                print("\n� Attempting to retrieve organization-level insights...")
+                
+                # Try different insight endpoints that might be available
+                insight_endpoints = [
+                    ("Organization SLE Insights", lambda: mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric="ap-availability")),
+                    ("Organization Sites SLE", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id)),
+                    ("Marvis Client Invites", lambda: mistapi.api.v1.orgs.marvisinvites.listOrgMarvisClientInvites(apisession, org_id)),
+                ]
+                
+                insights_found = False
+                for endpoint_name, endpoint_func in insight_endpoints:
+                    try:
+                        logging.debug(f"MARVIS DEBUG: Testing endpoint: {endpoint_name}")
+                        response = endpoint_func()
+                        logging.debug(f"MARVIS DEBUG: {endpoint_name} response status: {response.status if hasattr(response, 'status') else 'unknown'}")
+                        logging.debug(f"MARVIS DEBUG: {endpoint_name} response data type: {type(response.data)}")
+                        logging.debug(f"MARVIS DEBUG: {endpoint_name} response data is None: {response.data is None}")
+                        
+                        if response.data:
+                            insights_data = response.data if isinstance(response.data, list) else [response.data]
+                            logging.debug(f"MARVIS DEBUG: {endpoint_name} insights data length: {len(insights_data)}")
+                            logging.debug(f"MARVIS DEBUG: {endpoint_name} full response: {json.dumps(response.data, indent=2, default=str)[:1000]}...")
+                            
+                            if insights_data:
+                                print(f"\n📊 {endpoint_name}:")
+                                for insight in insights_data[:5]:  # Show first 5 insights
+                                    description = insight.get('description', insight.get('type', insight.get('name', str(insight))))
+                                    print(f"  • {description}")
+                                
+                                if len(insights_data) > 5:
+                                    print(f"  ... and {len(insights_data) - 5} more insights")
+                                
+                                # Save insights to CSV with optimized formatting
+                                if "Sites SLE" in endpoint_name:
+                                    # Use optimized formatting for Sites SLE data
+                                    formatted_insights = format_marvis_data_for_csv(response.data, "sites")
+                                else:
+                                    # Use legacy formatting for other insight types
+                                    formatted_insights = flatten_nested_fields_in_list(insights_data)
+                                    formatted_insights = escape_multiline_strings_for_csv(formatted_insights)
+                                
+                                filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"
+                                save_data_to_output(formatted_insights, filename)
+                                print(f"  📄 Full insights saved to {filename}")
+                                insights_found = True
+                    except Exception as e:
+                        logging.debug(f"Could not fetch {endpoint_name}: {e}")
+                        continue
+                
+                if not insights_found:
+                    print("\nℹ️ No organization-level insights currently available.")
+                
+            except Exception as e:
+                logging.warning(f"Could not retrieve organization insights: {e}")
+                print(f"⚠️ Could not retrieve insights: {e}")
+            
+            print("\n💡 Marvis (VNA - Virtual Network Assistant) Usage Guide:")
+            print("   🎯 Targeted Troubleshooting:")
+            print("     • Use client troubleshooting for specific device connectivity issues")
+            print("     • Use device troubleshooting for AP, switch, or gateway performance")
+            print("     • Use network troubleshooting for site-wide connectivity analysis")
+            print()
+            print("   📋 Requirements:")
+            print("     • Marvis must be enabled for your organization")
+            print("     • Devices must be actively managed and reporting data")
+            print("     • Sufficient data history for meaningful analysis")
+            print()
+            print("   🔧 Best Practices:")
+            print("     • Run troubleshooting when issues are actively occurring")
+            print("     • Provide specific timeframes when prompted")
+            print("     • Review saved CSV files for detailed analysis results")
+            
+        else:
+            print("❌ Could not retrieve organization information.")
+            
+    except Exception as e:
+        logging.error(f"Failed to get Marvis insights: {e}")
+        print(f"❌ Failed to get Marvis insights: {e}")
+        print("💡 This may indicate:")
+        print("   - Marvis (VNA) is not enabled for your organization")
+        print("   - Insufficient permissions to view organization details")
+        print("   - API connectivity issues")
+        print("   - Organization may not have Marvis licensing")
+        print()
+        print("🔗 Contact your Mist administrator to:")
+        print("   • Verify Marvis/VNA licensing and enablement")
+        print("   • Confirm user permissions for AI troubleshooting")
+        print("   • Check organization feature settings")
 
 def export_current_guest_users_to_csv():
     """
@@ -8618,7 +9841,7 @@ menu_actions = {
     # � Status & Monitoring
     "60": (check_firmware_upgrade_status, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
     "61": (compare_inventory_with_csv, "Compare inventory data with external CSV file and show zip code mismatches"),
-    "62": (poll_marvis_actions, "Poll Marvis actions and export open actions to CSV"),
+    "62": (poll_marvis_actions, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
     # � Work In Progress Features (Read-Only)
     "63": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
@@ -8814,7 +10037,7 @@ def main():
     parser.add_argument("--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)")
     parser.add_argument("--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization")
     parser.add_argument("--output-format", choices=["csv", "sqlite"], default="csv", 
-                       help="Output format: 'csv' for CSV files (default) or 'sqlite' for embedded database")
+                       help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys")
     parser.add_argument("--test", action="store_true", help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)")
     args = parser.parse_args()
     

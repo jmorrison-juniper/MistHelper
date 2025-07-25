@@ -11,7 +11,7 @@ from pathlib import Path
 
 PODMAN_EXECUTABLE = r"C:\\Program Files\\RedHat\\Podman\\podman.exe"
 
-def run_misthelper(output_format="sqlite", menu="11"):
+def run_misthelper(output_format=None, menu=None):
     """Run MistHelper in Podman container with detected executable."""
     
     # Ensure data directory exists
@@ -29,18 +29,24 @@ def run_misthelper(output_format="sqlite", menu="11"):
     
     # Run container
     print("🚀 Running MistHelper container...")
-    print(f"📊 Output format: {output_format}")
-    print(f"📋 Menu option: {menu}")
+    if output_format:
+        print(f"📊 Output format: {output_format}")
+    if menu:
+        print(f"📋 Menu option: {menu}")
     
     run_cmd = [
         PODMAN_EXECUTABLE, "run", "--rm", "-it",
         "-v", f"{os.getcwd()}/data:/app/data:Z",
         "-v", f"{os.getcwd()}/.env:/app/.env:Z",
         "misthelper",
-        "python", "MistHelper.py",
-        "--output-format", output_format,
-        "--menu", menu
+        "python", "MistHelper.py"
     ]
+    
+    # Only add arguments if they're provided
+    if output_format:
+        run_cmd.extend(["--output-format", output_format])
+    if menu:
+        run_cmd.extend(["--menu", menu])
     
     result = subprocess.run(run_cmd)
     
@@ -56,10 +62,10 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Cross-platform MistHelper Podman runner")
-    parser.add_argument("--output-format", default="sqlite", choices=["csv", "sqlite"],
-                       help="Output format (default: sqlite)")
-    parser.add_argument("--menu", default="11", 
-                       help="Menu option to execute (default: 11)")
+    parser.add_argument("--output-format", choices=["csv", "sqlite"],
+                       help="Output format (if not specified, runs interactively)")
+    parser.add_argument("--menu", 
+                       help="Menu option to execute (if not specified, shows interactive menu)")
     
     args = parser.parse_args()
     

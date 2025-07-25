@@ -7,7 +7,7 @@ websocket-client>=1.4.0
 # CLI and user interface
 prettytable>=3.5.0
 tqdm>=4.64.0
-sshkeyboard>=2.5.0
+sshkeyboard>=2.3.0
 
 # Data processing
 numpy>=1.24.0

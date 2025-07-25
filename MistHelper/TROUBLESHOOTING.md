@@ -343,6 +343,7 @@ python -c "import os; print('API Token:', 'SET' if os.getenv('MIST_APITOKEN') el
 - Database file missing
 - SQLite errors
 - Empty database tables
+- Schema creation failures
 
 **Solutions:**
 1. **Database Diagnostics**
@@ -354,20 +355,36 @@ python -c "import os; print('API Token:', 'SET' if os.getenv('MIST_APITOKEN') el
    # Test database integrity
    sqlite3 data/mist_data.db "PRAGMA integrity_check;"
    
-   # List tables
+   # List tables and schema
    sqlite3 data/mist_data.db ".tables"
+   sqlite3 data/mist_data.db ".schema OrgInventory"
    ```
 
-2. **Recreate Database**
+2. **Verify Hybrid Schema Implementation**
    ```bash
-   # Remove corrupted database
+   # Check if tables use natural primary keys
+   sqlite3 data/mist_data.db "PRAGMA table_info(OrgInventory);"
+   
+   # Verify composite key tables
+   sqlite3 data/mist_data.db "PRAGMA table_info(OrgAlarms);"
+   
+   # Check for proper indexes
+   sqlite3 data/mist_data.db ".indexes"
+   ```
+
+3. **Recreate Database with New Schema**
+   ```bash
+   # Remove old database to force schema recreation
    rm data/mist_data.db
    
-   # Create fresh database
+   # Create fresh database with hybrid schema
    python MistHelper.py --output-format sqlite --menu 11
+   
+   # Verify new schema uses natural primary keys
+   sqlite3 data/mist_data.db "SELECT sql FROM sqlite_master WHERE type='table' AND name='OrgInventory';"
    ```
 
-3. **Permission Issues**
+4. **Permission Issues**
    ```bash
    # Check directory permissions
    ls -ld data/
@@ -375,6 +392,36 @@ python -c "import os; print('API Token:', 'SET' if os.getenv('MIST_APITOKEN') el
    # Fix permissions
    chmod 755 data/
    chmod 644 data/mist_data.db
+   ```
+
+#### Problem: Primary key conflicts or duplicate entries
+**Symptoms:**
+- UNIQUE constraint failed errors
+- Duplicate data in tables
+- Missing records after upsert operations
+
+**Solutions:**
+1. **Verify Endpoint Strategy Configuration**
+   ```python
+   # Check if endpoint has proper strategy defined
+   from MistHelper import ENDPOINT_PRIMARY_KEY_STRATEGIES
+   print(ENDPOINT_PRIMARY_KEY_STRATEGIES.get('getOrgInventory'))
+   # Should return 'natural_primary_key'
+   ```
+
+2. **Check Data Consistency**
+   ```bash
+   # Find duplicate API IDs (should not exist with natural keys)
+   sqlite3 data/mist_data.db "SELECT id, COUNT(*) FROM OrgInventory GROUP BY id HAVING COUNT(*) > 1;"
+   
+   # Verify composite key uniqueness
+   sqlite3 data/mist_data.db "SELECT id, org_id, timestamp, COUNT(*) FROM OrgAlarms GROUP BY id, org_id, timestamp HAVING COUNT(*) > 1;"
+   ```
+
+3. **Manual Cleanup**
+   ```bash
+   # Remove duplicates if any exist
+   sqlite3 data/mist_data.db "DELETE FROM OrgInventory WHERE rowid NOT IN (SELECT MIN(rowid) FROM OrgInventory GROUP BY id);"
    ```
 
 ### 7. Performance Issues

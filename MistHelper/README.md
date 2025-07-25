@@ -7,7 +7,7 @@ MistHelper provides both interactive menu-driven access and command-line automat
 ## ✨ Key Features
 
 - **Complete API Coverage**: Access to all major Mist API endpoints with 93 distinct operations
-- **Dual Output Formats**: CSV files and SQLite database support with automatic data processing
+- **Dual Output Formats**: CSV files and hybrid SQLite database with natural primary keys
 - **Interactive & Automated**: Menu-driven interface with CLI automation and systematic testing
 - **Container Ready**: Docker and Podman deployment support with cross-platform scripts
 - **Production Safe**: Built-in rate limiting, systematic testing, and comprehensive logging
@@ -267,19 +267,22 @@ done
 
 ## 📄 Output Formats
 
-### SQLite Database (Recommended)
+### Hybrid SQLite Database (Recommended)
 - **File**: `data/mist_data.db`
-- **Structure**: Relational tables with foreign key relationships
+- **Schema**: Natural primary keys using API business identifiers
+- **Strategy**: Endpoint-specific optimization (natural keys, composite keys, auto-increment fallback)
 - **Benefits**: 
-  - Single file storage
-  - SQL query capabilities
-  - Better data integrity
-  - Efficient storage and indexing
+  - No artificial `api_id` fields needed
+  - Proper business key relationships
+  - Efficient upsert operations with `INSERT OR REPLACE`
+  - Optimized indexing for performance
+  - Single file storage with SQL query capabilities
 
 ```bash
-# Access SQLite database
+# Access hybrid SQLite database
 sqlite3 data/mist_data.db
 .tables
+.schema OrgInventory  # View natural primary key schema
 SELECT * FROM SiteList LIMIT 5;
 ```
 

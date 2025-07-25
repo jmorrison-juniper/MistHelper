@@ -736,17 +736,33 @@ Gets organization ID from cache, environment, or user prompt.
 
 ### Database Schema
 
-#### SQLite Tables
+#### Hybrid SQLite Schema Design
+Tables use endpoint-specific primary key strategies for optimal performance:
+
+**Natural Primary Key Tables** (Entities with stable UUIDs):
+- Use API `id` field directly as PRIMARY KEY
+- Examples: `OrgInventory`, `OrgSites`, `OrgDevices`, `OrgGatewayTemplates`
+- Schema: `id TEXT PRIMARY KEY` (no artificial keys needed)
+
+**Composite Primary Key Tables** (Events/Time-series):
+- Use combination of API fields for uniqueness
+- Examples: `OrgAlarms`, `OrgDeviceEvents`, `DeviceStats`
+- Schema: `PRIMARY KEY (id, org_id, timestamp)`
+
+**Auto-increment with Unique Constraint** (Fallback):
+- Use when natural keys are not available
+- Schema: `misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE`
+
+#### Metadata Fields
 All tables include:
-- `id`: Auto-incrementing primary key
-- `timestamp`: Record creation timestamp
-- `api_id`: Original API ID (preserved)
-- `api_timestamp`: Original API timestamp
+- `misthelper_created_time`: Record creation timestamp (CURRENT_TIMESTAMP)
+- `misthelper_updated_time`: Record update timestamp (CURRENT_TIMESTAMP)
 
 #### Field Naming
-- Nested fields use underscore separation
-- API fields are preserved with `api_` prefix
-- All fields are stored as TEXT in SQLite
+- **Natural Fields**: API `id` field used directly without renaming
+- **Nested Fields**: Flattened with underscore separation (e.g., `device_config_wifi_ssid`)
+- **No Field Conflicts**: Hybrid approach eliminates need for artificial `api_id` fields
+- **Data Types**: All fields stored as TEXT in SQLite for maximum flexibility
 
 ## Error Handling
 

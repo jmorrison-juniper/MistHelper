@@ -2,11 +2,18 @@
 
 ## Version History
 
-### Current Version - Major Update (July 2025)
+### Current Version - Majo#### Breaking Changes
+
+#### Current Version (July 2025)
+- **Menu Renumbering**: Menu options reorganized into logical categories (1-93)
+- **Output Format**: Default output format configurable via `--output-format` flag
+- **Database Schema**: New hybrid SQLite schema with natural primary keys, eliminating artificial api_id fields
+- **Container Volumes**: Updated volume mounting requirements for security (`:Z` flags)
+- **Primary Key Strategy**: API endpoints now use natural business keys instead of auto-increment IDse (July 2025)
 
 #### ✅ New Features
 - **Comprehensive Test Suite**: Systematic testing with 54 safe operations tested automatically
-- **SQLite Database Support**: Alternative to CSV with structured data storage and metadata
+- **Hybrid SQLite Database Support**: Advanced database schemas with natural primary keys eliminating artificial api_id fields
 - **Container Deployment**: Docker and Podman support with cross-platform scripts and auto-detection
 - **Enhanced CLI**: Direct menu access with `--menu` and `--output-format` options
 - **Dynamic Rate Limiting**: Built-in API throttling with PID control algorithm and adaptive delays
@@ -38,6 +45,7 @@
 - **Container Security**: Rootless containers with proper permissions and SELinux support
 - **Input Validation**: Comprehensive data sanitization and type checking
 - **SQL Injection Prevention**: Parameterized queries and safe database operations throughout
+- **Natural Primary Keys**: Elimination of artificial fields reduces attack surface and improves data integrity
 
 ### Previous Versions
 
@@ -113,7 +121,7 @@
 
 | Feature | Previous (v1.x) | Current (v2.x) |
 |---------|-----------------|----------------|
-| Output Formats | CSV only | CSV + SQLite with metadata |
+| Output Formats | CSV only | CSV + Hybrid SQLite with natural primary keys |
 | Container Support | None | Docker + Podman with auto-setup |
 | Test Coverage | Manual testing only | 54 automated tests (58% coverage) |
 | Menu Options | ~40 operations | 93 comprehensive operations |
@@ -123,15 +131,16 @@
 | Rate Limiting | Fixed delays | Dynamic PID control algorithm |
 | Data Processing | Simple CSV export | Advanced pipeline with flattening |
 | Security | Basic credential handling | Production-ready security model |
-| Database Support | File-based only | SQLite with proper schema |
+| Database Support | File-based only | Hybrid SQLite with endpoint-specific schemas |
 | API Coverage | Core endpoints | Comprehensive Mist API coverage |
+| Primary Keys | N/A | Natural business keys eliminate artificial fields |
 
 ### Technical Improvements
 
 #### Performance Enhancements
 - **API Efficiency**: Reduced API calls through intelligent caching and batching
 - **Memory Management**: Streaming data processing for large datasets (10,000+ devices)
-- **Database Optimization**: Indexed queries, batch operations, and transaction safety
+- #### Database Optimization**: Advanced hybrid schemas with natural primary keys, indexed queries, and upsert operations
 - **Container Optimization**: Minimal image size (under 500MB) and efficient resource usage
 
 #### Code Quality
@@ -144,7 +153,7 @@
 - **Credential Management**: Secure environment variable handling with permission validation
 - **Container Security**: Rootless execution and minimal attack surface with SELinux support
 - **Input Validation**: Comprehensive sanitization of all user inputs and API responses
-- **Database Security**: Parameterized queries, transaction safety, and data encryption support
+- #### Database Security**: Natural primary keys, parameterized queries, transaction safety, and elimination of artificial field conflicts
 
 #### Architecture Improvements
 - **Modular Design**: Cleanly separated concerns with reusable components

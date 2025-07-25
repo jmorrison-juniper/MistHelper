@@ -83,34 +83,128 @@ MistHelper is a comprehensive Python application designed to interact with the J
 #### Performance Optimization
 - **Dynamic Rate Limiting**: PID control algorithm for API throttling
 - **Memory Management**: Streaming data processing for large datasets
-- **Database Indexing**: Optimized SQLite operations with transactions
-- **Caching**: Intelligent caching of frequently accessed data
+- **Hybrid Database Indexing**: Natural primary keys with optimized SQLite operations
+- **Intelligent Caching**: Context-aware caching of frequently accessed data
 
 ## Technical Implementation Details
 
 ### Database Architecture
 
-#### SQLite Schema Design
+#### Hybrid SQLite Schema Design
+The new implementation uses endpoint-specific strategies for optimal database design:
+
 ```sql
--- Example table structure
-CREATE TABLE OrgAlarms (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-    api_id TEXT,
-    api_timestamp TEXT,
+-- Type 1: Natural Primary Key (Inventory, Sites, Templates)
+CREATE TABLE OrgInventory (
+    id TEXT PRIMARY KEY,                        -- Use API UUID directly
     org_id TEXT,
     site_id TEXT,
+    mac TEXT,
+    serial TEXT,
+    model TEXT,
+    misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP,
+    misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_OrgInventory_org_id (org_id),
+    INDEX idx_OrgInventory_site_id (site_id),
+    INDEX idx_OrgInventory_mac (mac)
+);
+
+-- Type 2: Composite Primary Key (Events, Time-Series Data)
+CREATE TABLE OrgAlarms (
+    id TEXT NOT NULL,                           -- API event ID
+    org_id TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,                 -- API timestamp
     severity TEXT,
     type TEXT,
-    -- Additional flattened fields...
+    site_id TEXT,
+    misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP,
+    misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, org_id, timestamp),
+    INDEX idx_OrgAlarms_org_timestamp (org_id, timestamp),
+    INDEX idx_OrgAlarms_severity (severity)
+);
+
+-- Type 3: Auto-increment with Unique Constraint (Fallback)
+CREATE TABLE UnknownEndpoint (
+    misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT UNIQUE,                             -- API ID if available
+    misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP,
+    misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
+#### Endpoint Primary Key Strategy Classification
+
+**Natural Primary Key Endpoints:**
+- Organization inventory, sites, devices
+- Templates (gateway, network, RF, site, AP)
+- Security policies, PSKs, webhooks
+
+**Composite Primary Key Endpoints:**
+- Events (device, client, system, alarms)
+- Statistics and metrics (device stats, client stats, port stats)
+- Time-series data with temporal uniqueness
+
+**Auto-increment with Unique Constraint:**
+- Summary APIs (license summary)
+- Unclassified endpoints (fallback strategy)
+
+### API Integration Layer
+
+#### Advanced Request Handling
+- **Smart Authentication**: Automatic token refresh with retry logic
+- **Request Optimization**: Batch processing for bulk operations
+- **Error Recovery**: Exponential backoff with jitter for failed requests
+- **Response Validation**: Schema validation against OpenAPI specification
+
+#### Data Processing Pipeline
+```python
+def process_api_response(api_function_name, data):
+    """
+    Process API response using endpoint-specific strategy
+    """
+    strategy = determine_endpoint_strategy(api_function_name)
+    
+    if strategy == "natural_primary_key":
+        # Use API 'id' field directly as primary key
+        return create_natural_key_schema(data)
+    elif strategy == "composite_primary_key":
+        # Create composite key from API fields
+        return create_composite_key_schema(data)
+    else:
+        # Fallback: auto-increment with unique constraint
+        return create_fallback_schema(data)
+```
+
+#### Endpoint Strategy Configuration
+The system uses a comprehensive mapping of API functions to optimal database strategies:
+
+```python
+ENDPOINT_PRIMARY_KEY_STRATEGIES = {
+    # Entity Management - Natural Primary Keys
+    'getOrgInventory': 'natural_primary_key',
+    'listOrgSites': 'natural_primary_key',
+    'listOrgGatewayTemplates': 'natural_primary_key',
+    'listOrgDevices': 'natural_primary_key',
+    
+    # Events & Time-Series - Composite Primary Keys
+    'searchOrgDeviceEvents': 'composite_primary_key',
+    'searchOrgAlarms': 'composite_primary_key',
+    'getOrgDeviceStats': 'composite_primary_key',
+    
+    # Special Cases - Auto-increment with Unique Constraint
+    'getOrgLicensesSummary': 'auto_increment_unique',
+    # Add more endpoints as needed...
+}
+```
+
 #### Field Naming Convention
-- **Original API Fields**: Preserved with `api_` prefix when conflicting
+- **Natural Primary Keys**: API 'id' field used directly without renaming
+- **Composite Keys**: Multiple API fields combined for uniqueness
 - **Nested Structures**: Flattened with underscore separation (`device_config_wifi_ssid`)
-- **Metadata Fields**: Added `id`, `timestamp` for tracking
+- **Metadata Fields**: Added `misthelper_created_time`, `misthelper_updated_time` for tracking
 - **Type Consistency**: All fields stored as TEXT for flexibility
+- **No Field Conflicts**: Eliminated artificial 'api_id' fields through natural key strategy
 
 ### Rate Limiting Algorithm
 
