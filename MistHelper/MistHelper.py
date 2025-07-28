@@ -5940,27 +5940,52 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
 
 def convert_virtual_chassis_to_virtual_mac():
     """
-    Presents a list of switches that are virtual chassis, lets the user select one,
-    and calls the Mist API to convert the device to a virtual MAC.
+    Presents a list of sites first, then shows switches that are virtual chassis at the selected site,
+    lets the user select one, and calls the Mist API to convert the device to a virtual MAC.
     """
+    print("\n🔥 DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
+    print("=" * 60)
+    
+    # First, prompt for site selection
+    site_id = prompt_site_selection()
+    if not site_id:
+        print("❌ No site selected.")
+        return
+    
+    # Get site name for display
+    site_name = "Unknown Site"
+    try:
+        org_id = get_cached_or_prompted_org_id()
+        site_response = mistapi.api.v1.sites.getSite(apisession, site_id)
+        if site_response.data:
+            site_name = site_response.data.get('name', site_id)
+    except Exception as e:
+        logging.warning(f"Could not fetch site name for {site_id}: {e}")
+    
+    print(f"\n📍 Selected Site: {site_name} ({site_id})")
+    
     # Ensure OrgInventory.csv is fresh
     check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
 
-    # Load OrgInventory.csv and filter for switches with a non-empty id 
+    # Load OrgInventory.csv and filter for switches at the selected site with a non-empty id 
     with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
         reader = list(csv.DictReader(file))
         switches = [
             row for row in reader
-            if row.get("type") == "switch" and row.get("id", "").strip()
+            if (row.get("type") == "switch" 
+                and row.get("id", "").strip()
+                and row.get("site_id") == site_id)
         ]
 
     if not switches:
-        print("No virtual chassis switches found in OrgInventory.csv.")
-        logging.warning("No virtual chassis switches found in OrgInventory.csv.")
+        print(f"❌ No virtual chassis switches found at site '{site_name}'.")
+        print("💡 Virtual chassis switches must have a device ID assigned.")
+        logging.warning(f"No virtual chassis switches found at site {site_id}.")
         return
 
     # Display indexed list to user
-    print("\nAvailable Virtual Chassis Switches:")
+    print(f"\n🔌 Available Virtual Chassis Switches at '{site_name}':")
+    print("-" * 80)
     index_to_device = {}
     name_to_device = {}
     for idx, sw in enumerate(switches):
@@ -5968,7 +5993,7 @@ def convert_virtual_chassis_to_virtual_mac():
         index_to_device[idx] = sw
         name_to_device[sw.get("name", "")] = sw
 
-    user_input = input("\nEnter the index or switch name to convert to virtual MAC: ").strip()
+    user_input = input(f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches)-1}]: ").strip()
 
     # Resolve user input
     selected = None
@@ -5983,14 +6008,26 @@ def convert_virtual_chassis_to_virtual_mac():
         logging.warning(f"Switch not found: {user_input}")
         return
 
-    site_id = selected.get("site_id")
     device_id = selected.get("id")
-    if not site_id or not device_id:
-        print("❌ Missing site_id or device_id for selected switch.")
-        logging.warning("Missing site_id or device_id for selected switch.")
+    if not device_id:
+        print("❌ Missing device_id for selected switch.")
+        logging.warning("Missing device_id for selected switch.")
         return
 
-    print(f"Converting switch '{selected.get('name', '')}' (device_id: {device_id}) at site_id: {site_id} to virtual MAC...")
+    # Confirmation prompt for destructive operation
+    print(f"\n⚠️  DESTRUCTIVE OPERATION WARNING ⚠️")
+    print(f"You are about to convert switch '{selected.get('name', '')}' to virtual MAC.")
+    print(f"Site: {site_name}")
+    print(f"Device ID: {device_id}")
+    print(f"MAC: {selected.get('mac', '')}")
+    print(f"This operation cannot be undone!")
+    
+    confirm = input("\nType 'CONVERT' to proceed or anything else to cancel: ").strip()
+    if confirm != "CONVERT":
+        print("❌ Operation cancelled.")
+        return
+
+    print(f"🔄 Converting switch '{selected.get('name', '')}' (device_id: {device_id}) at site '{site_name}' to virtual MAC...")
     try:
         # Call the Mist API to convert to virtual MAC
         resp = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)
@@ -6002,7 +6039,8 @@ def convert_virtual_chassis_to_virtual_mac():
             print(f"❌ Conversion failed: {resp.data['detail']}")
             logging.error(f"Conversion to virtual MAC failed for device {device_id} at site_id {site_id}. Detail: {resp.data['detail']}")
         else:
-            print("✅ Conversion to virtual MAC triggered.")
+            print("✅ Conversion to virtual MAC triggered successfully!")
+            print("💡 Check the device status in the Mist UI to monitor progress.")
             logging.info(f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
     except Exception as e:
         print(f"❌ Failed to convert to virtual MAC: {e}")
