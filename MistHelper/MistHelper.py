@@ -374,24 +374,27 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
     if freshness_minutes is None:
         freshness_minutes = CSV_FRESHNESS_MINUTES
         
+    # Get the full path to the CSV file in the data directory
+    full_file_path = get_csv_file_path(file_name)
+    
     # Check if the file already exists
-    if os.path.exists(file_name):
+    if os.path.exists(full_file_path):
         try:
             # Get the last modified time of the file
-            file_mtime = datetime.fromtimestamp(os.path.getmtime(file_name))
-            logging.debug(f"File I/O: Successfully read modification time for {file_name}: {file_mtime}")
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
+            logging.debug(f"File I/O: Successfully read modification time for {full_file_path}: {file_mtime}")
             
             # Check if the file is still fresh
             if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
                 # Log that the cached file is being used
                 logging.info(f"✅ Using cached {file_name} (fresh)")
                 logging.debug(f"EXIT: check_and_generate_csv - using cached file")
-                return
+                return True
             else:
                 # Log that the file is stale and will be regenerated
                 logging.info(f"♻️ {file_name} is older than {freshness_minutes} minutes. Regenerating...")
         except OSError as e:
-            logging.error(f"File I/O: Failed to read modification time for {file_name}: {e}")
+            logging.error(f"File I/O: Failed to read modification time for {full_file_path}: {e}")
             logging.info(f"📄 {file_name} exists but cannot read metadata. Regenerating...")
     else:
         # Log that the file does not exist and will be generated
@@ -403,10 +406,11 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
         generate_function()
         logging.info(f"✅ {file_name} generated or refreshed.")
         logging.debug(f"EXIT: check_and_generate_csv - file generated successfully")
+        return True
     except Exception as e:
         logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {e}")
         logging.debug(f"EXIT: check_and_generate_csv - generation failed")
-        raise
+        return False
 
 def prepare_data_and_write_csv(data, filename, sort_key=None):
     """
@@ -494,20 +498,23 @@ def process_and_merge_csv_for_sfp_address():
     logging.debug(f"ENTRY: process_and_merge_csv_for_sfp_address()")
     
     # Automatically generate missing files if needed
-    if not os.path.exists('OrgDevicePortStats.csv'):
+    org_port_stats_path = get_csv_file_path('OrgDevicePortStats.csv')
+    devices_with_site_info_path = get_csv_file_path('AllDevicesWithSiteInfo.csv')
+    
+    if not os.path.exists(org_port_stats_path):
         print("⚠️ OrgDevicePortStats.csv not found. Generating it now...")
         logging.info("OrgDevicePortStats.csv not found. Generating it now...")
         export_device_port_stats_to_csv()
 
-    if not os.path.exists('AllDevicesWithSiteInfo.csv'):
+    if not os.path.exists(devices_with_site_info_path):
         print("⚠️ AllDevicesWithSiteInfo.csv not found. Generating it now...")
         logging.info("AllDevicesWithSiteInfo.csv not found. Generating it now...")
         export_devices_with_site_info_to_csv()
 
     try:
         # Load site and device info, keyed by MAC address
-        logging.debug("File I/O: Reading AllDevicesWithSiteInfo.csv")
-        with open('AllDevicesWithSiteInfo.csv', mode='r', encoding='utf-8') as file:
+        logging.debug(f"File I/O: Reading {devices_with_site_info_path}")
+        with open(devices_with_site_info_path, mode='r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
             site_info = {
                 row['mac']: {
@@ -516,12 +523,12 @@ def process_and_merge_csv_for_sfp_address():
                     'device_name': row.get('name', '')
                 } for row in reader
             }
-        logging.info(f"File I/O: Successfully loaded {len(site_info)} device entries from AllDevicesWithSiteInfo.csv")
+        logging.info(f"File I/O: Successfully loaded {len(site_info)} device entries from {devices_with_site_info_path}")
 
         # Merge with port stats, skipping rows with blank/null transceiver model
         merged_data = []
-        logging.debug("File I/O: Reading OrgDevicePortStats.csv")
-        with open('OrgDevicePortStats.csv', mode='r', encoding='utf-8') as file:
+        logging.debug(f"File I/O: Reading {org_port_stats_path}")
+        with open(org_port_stats_path, mode='r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 mac = row.get('mac')
@@ -538,18 +545,9 @@ def process_and_merge_csv_for_sfp_address():
                     })
         logging.info(f"File I/O: Successfully processed port stats, found {len(merged_data)} ports with transceivers")
 
-        # Write output to new CSV
+        # Write output to new CSV (this will automatically go to data folder via save_data_to_output)
         output_file = 'MergedTransceiverData.csv'
-        logging.debug(f"File I/O: Writing merged data to {output_file}")
-        with open(output_file, mode='w', newline='', encoding='utf-8') as file:
-            fieldnames = [
-                'site_name', 'site_address', 'device_name', 'port_id',
-                'transceiver_part_number', 'transceiver_model', 'transceiver_serial_number'
-            ]
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(merged_data)
-
+        save_data_to_output(merged_data, output_file)
         logging.info(f"File I/O: Successfully wrote {len(merged_data)} rows to {output_file}")
         print(f"✅ Merged data written to {output_file}")
         logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - success")
@@ -569,6 +567,27 @@ def process_and_merge_csv_for_sfp_address():
         print(f"❌ Unexpected error during CSV merge: {e}")
         logging.debug(f"EXIT: process_and_merge_csv_for_sfp_address - unexpected error")
         raise
+
+def get_csv_file_path(filename):
+    """
+    Helper function to ensure consistent CSV file paths in the data directory.
+    
+    Args:
+        filename (str): The CSV filename (with or without path)
+    
+    Returns:
+        str: Full path to the CSV file in the data directory
+    """
+    # Ensure data directory exists
+    data_dir = "data"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # If filename already includes a path, use it as-is
+    if os.path.dirname(filename):
+        return filename
+    
+    # Otherwise, place it in the data directory
+    return os.path.join(data_dir, filename)
 
 def get_cached_or_prompted_org_id():
     import os
@@ -1564,8 +1583,11 @@ def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
     # Ensure the site list CSV is fresh or generate it if missing/stale
     check_and_generate_csv(csv_file, export_all_sites_to_csv)
 
+    # Get the full path to the CSV file in the data directory
+    csv_file_path = get_csv_file_path(csv_file)
+    
     # Load the site list from CSV
-    with open(csv_file, mode='r', encoding='utf-8') as file:
+    with open(csv_file_path, mode='r', encoding='utf-8') as file:
         reader = list(csv.DictReader(file))
         index_to_site = {i: row for i, row in enumerate(reader)}
         name_to_site = {row["name"]: row for row in reader if "name" in row}
@@ -2226,7 +2248,8 @@ def export_org_security_events_to_csv():
     
     try:
         # Load sites
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             sites = list(csv.DictReader(f))
             
         for site in tqdm(sites, desc="Sites", unit="site"):
@@ -2281,7 +2304,8 @@ def export_org_rogue_clients_to_csv():
     
     try:
         # Load sites
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             sites = list(csv.DictReader(f))
             
         for site in tqdm(sites, desc="Sites", unit="site"):
@@ -2337,7 +2361,8 @@ def export_org_rogue_aps_to_csv():
     
     try:
         # Load sites
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             sites = list(csv.DictReader(f))
             
         for site in tqdm(sites, desc="Sites", unit="site"):
@@ -3341,7 +3366,8 @@ def generate_support_package():
     port_stats_data = load_csv_grouped_by_key('OrgDevicePortStats.csv', 'site_id')
 
     # Load speedtest data if available
-    if os.path.exists('AllGatewayTestResults.csv'):
+    gateway_test_results_path = get_csv_file_path('AllGatewayTestResults.csv')
+    if os.path.exists(gateway_test_results_path):
         logging.debug("Loading AllGatewayTestResults.csv for speedtest data...")
         speedtest_data = load_csv_grouped_by_key('AllGatewayTestResults.csv', 'site_id')
     else:
@@ -3381,7 +3407,8 @@ def load_csv_grouped_by_key(filename, key):
     Adds logging for file loading and key distribution.
     """
     logging.info(f"Loading CSV file '{filename}' into dictionary keyed by '{key}'...")
-    with open(filename, mode='r', encoding='utf-8') as file:
+    csv_file_path = get_csv_file_path(filename)
+    with open(csv_file_path, mode='r', encoding='utf-8') as file:
         reader = csv.DictReader(file)  # Create a CSV reader
         data_dict = {}  # Initialize an empty dictionary
         row_count = 0
@@ -4199,7 +4226,8 @@ def export_switch_vc_stats_to_csv():
     check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
 
     # Load OrgInventory.csv and filter for switches that are virtual chassis (`vc_mac` present and not empty)
-    with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
+    inventory_path = get_csv_file_path("OrgInventory.csv")
+    with open(inventory_path, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         switches = [row for row in reader if row.get("type") == "switch" and row.get("vc_mac", "").strip()]
 
@@ -5008,7 +5036,8 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
     # Write filtered dataset to CSV
     if not filtered_rows:
         logging.warning("⚠️ No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
-        with open("FilteredGatewayPortConfigs.csv", "w", newline="", encoding="utf-8") as f:
+        filtered_csv_path = get_csv_file_path("FilteredGatewayPortConfigs.csv")
+        with open(filtered_csv_path, "w", newline="", encoding="utf-8") as f:
             f.write("No matching data found.\n")
     else:
         if debug:
@@ -5043,7 +5072,8 @@ def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_wo
     # Load site names from SiteList.csv for enrichment
     site_name_lookup = {}
     try:
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
     except Exception as e:
@@ -5262,7 +5292,8 @@ def export_combined_inventory_with_site_info():
     export_devices_with_site_info_to_csv()
 
     # Load the enriched device + site info
-    with open("AllDevicesWithSiteInfo.csv", mode="r", encoding="utf-8") as f:
+    devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
+    with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
         site_configs = list(csv.DictReader(f))
 
     # Create a subfolder for weekly CSV files
@@ -5372,7 +5403,8 @@ def compare_inventory_with_csv():
     export_devices_with_site_info_to_csv()
 
     # Load the enriched device + site info
-    with open("AllDevicesWithSiteInfo.csv", mode="r", encoding="utf-8") as f:
+    devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
+    with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
         site_configs = list(csv.DictReader(f))
 
     # Find all CSV files in the current directory
@@ -5968,7 +6000,8 @@ def convert_virtual_chassis_to_virtual_mac():
     check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
 
     # Load OrgInventory.csv and filter for switches at the selected site with a non-empty id 
-    with open("OrgInventory.csv", mode="r", encoding="utf-8") as file:
+    inventory_path = get_csv_file_path("OrgInventory.csv")
+    with open(inventory_path, mode="r", encoding="utf-8") as file:
         reader = list(csv.DictReader(file))
         switches = [
             row for row in reader
@@ -6090,7 +6123,8 @@ def convert_virtual_chassis_by_site_list():
     # Load site list to get site IDs
     site_name_to_id = {}
     try:
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 site_name_to_id[row.get("name", "")] = row.get("id", "")
@@ -6122,7 +6156,8 @@ def convert_virtual_chassis_by_site_list():
     # Load inventory and filter for virtual chassis switches in target sites
     switches_to_convert = []
     try:
-        with open("OrgInventory.csv", mode="r", encoding="utf-8") as f:
+        inventory_path = get_csv_file_path("OrgInventory.csv")
+        with open(inventory_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if (row.get("type") == "switch" and 
@@ -6240,7 +6275,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
     # Get site name for display
     site_name = "Unknown Site"
     try:
-        with open("SiteList.csv", mode="r", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row.get("id") == site_id:
@@ -6267,7 +6303,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
             logging.warning("⚠️ No WiFi clients or sessions found at this site.")
             print("⚠️ No WiFi clients or sessions found at this site.")
             # Create empty CSV with headers
-            with open("SiteWiFiClients.CSV", "w", newline="", encoding="utf-8") as f:
+            wifi_clients_path = get_csv_file_path("SiteWiFiClients.CSV")
+            with open(wifi_clients_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["site_id", "site_name", "message"])
                 writer.writerow([site_id, site_name, "No WiFi clients or sessions found"])
@@ -6377,7 +6414,8 @@ def reboot_devices_by_gateway_template_list():
     logging.info("[46] Starting reboot_devices_by_gateway_template_list")
 
     # Step 1: Check if the reboot list file exists
-    if not os.path.exists("GatewayTemplateRebootList.CSV"):
+    reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
+    if not os.path.exists(reboot_list_path):
         logging.error("❌ GatewayTemplateRebootList.CSV not found.")
         print("❌ GatewayTemplateRebootList.CSV not found. Please create this file with template names to reboot.")
         return
@@ -6391,7 +6429,8 @@ def reboot_devices_by_gateway_template_list():
     # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
     template_name_to_id = {}
     try:
-        with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
+        gateway_templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+        with open(gateway_templates_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 name = row.get("name", "").strip()
@@ -6412,7 +6451,8 @@ def reboot_devices_by_gateway_template_list():
     # Step 4: Load reboot list of template names
     reboot_template_names = set()
     try:
-        with open("GatewayTemplateRebootList.CSV", encoding="utf-8") as f:
+        reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
+        with open(reboot_list_path, encoding="utf-8") as f:
             reader = csv.reader(f)
             for row in reader:
                 if row and row[0].strip():
@@ -6449,7 +6489,8 @@ def reboot_devices_by_gateway_template_list():
     template_id_to_name = {tid: name for name, tid in template_name_to_id.items()}  # Reverse lookup
     
     try:
-        with open("SiteList.csv", encoding="utf-8") as f:
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 gateway_template_id = row.get("gatewaytemplate_id", "").strip()
@@ -6475,7 +6516,8 @@ def reboot_devices_by_gateway_template_list():
     # Step 7: Load AllSiteGatewayConfigs and filter gateway devices by site_id
     reboot_targets = []
     try:
-        with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+        gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
+        with open(gateway_configs_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 device_site_id = row.get("site_id", "").strip()
@@ -6652,7 +6694,8 @@ def reboot_devices_by_gateway_template_list():
 
     # Step 10: Write results to CSV
     try:
-        with open("GatewayTemplateRebootResults.CSV", "w", newline='', encoding="utf-8") as f:
+        results_csv_path = get_csv_file_path("GatewayTemplateRebootResults.CSV")
+        with open(results_csv_path, "w", newline='', encoding="utf-8") as f:
             fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
