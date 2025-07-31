@@ -6291,6 +6291,142 @@ def convert_virtual_chassis_by_site_list():
     
     logging.info(f"Bulk VC conversion completed: {successful_conversions} successful, {failed_conversions} failed")
 
+def check_virtual_chassis_conversion_status():
+    """
+    Check all switches in the organization to determine if they have been converted to virtual MAC addresses.
+    Virtual chassis switches that have been converted to virtual MAC will have vc_mac starting with "020003".
+    Non-converted virtual chassis switches will have different vc_mac prefixes.
+    
+    This function:
+    1. Uses cached OrgInventory.csv or generates fresh data
+    2. Filters for switches with vc_mac (virtual chassis candidates)
+    3. Checks vc_mac prefix to determine conversion status
+    4. Exports results to VirtualChassisConversionStatus.csv
+    5. Displays summary statistics
+    """
+    print("\n🔍 Virtual Chassis to Virtual MAC Conversion Status Check")
+    print("=" * 70)
+    print("📋 Checking all switches for virtual chassis conversion status...")
+    print("💡 Converted switches have vc_mac starting with '020003'")
+    
+    logging.info("Starting virtual chassis conversion status check...")
+    
+    # Ensure OrgInventory.csv is fresh
+    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+    
+    # Load inventory and filter for switches with vc_mac (virtual chassis switches)
+    switches_with_vc_mac = []
+    try:
+        inventory_path = get_csv_file_path("OrgInventory.csv")
+        with open(inventory_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if (row.get("type") == "switch" and 
+                    row.get("vc_mac", "").strip()):
+                    switches_with_vc_mac.append(row)
+                    
+    except Exception as e:
+        print(f"❌ Error reading OrgInventory.csv: {e}")
+        logging.error(f"Error reading OrgInventory.csv: {e}")
+        return
+    
+    if not switches_with_vc_mac:
+        print("❌ No switches with vc_mac found in the organization.")
+        print("💡 Only virtual chassis switches have vc_mac assigned.")
+        logging.warning("No switches with vc_mac found.")
+        return
+    
+    # Load site information for display
+    site_id_to_name = {}
+    try:
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        site_list_path = get_csv_file_path("SiteList.csv")
+        with open(site_list_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                site_id_to_name[row.get("id", "")] = row.get("name", "Unknown Site")
+    except Exception as e:
+        logging.warning(f"Could not load site names: {e}")
+    
+    # Analyze conversion status
+    converted_switches = []
+    not_converted_switches = []
+    
+    for switch in switches_with_vc_mac:
+        vc_mac = switch.get("vc_mac", "")
+        site_id = switch.get("site_id", "")
+        site_name = site_id_to_name.get(site_id, "Unknown Site")
+        
+        # Create enhanced switch record with analysis
+        enhanced_switch = switch.copy()
+        enhanced_switch["site_name"] = site_name
+        
+        # Check if vc_mac starts with "020003" (converted to virtual MAC)
+        if vc_mac.startswith("020003"):
+            enhanced_switch["conversion_status"] = "CONVERTED"
+            enhanced_switch["conversion_notes"] = "vc_mac starts with 020003 - converted to virtual MAC"
+            converted_switches.append(enhanced_switch)
+        else:
+            enhanced_switch["conversion_status"] = "NOT_CONVERTED"
+            enhanced_switch["conversion_notes"] = f"vc_mac starts with {vc_mac[:6]} - not converted to virtual MAC"
+            not_converted_switches.append(enhanced_switch)
+    
+    # Combine all switches for export
+    all_switches = converted_switches + not_converted_switches
+    
+    # Display summary
+    total_switches = len(all_switches)
+    converted_count = len(converted_switches)
+    not_converted_count = len(not_converted_switches)
+    
+    print(f"\n📊 Virtual Chassis Conversion Status Summary:")
+    print(f"   🔧 Total virtual chassis switches: {total_switches}")
+    print(f"   ✅ Converted to virtual MAC: {converted_count}")
+    print(f"   ⏳ Not converted: {not_converted_count}")
+    
+    if converted_count > 0:
+        print(f"\n✅ Converted Switches (vc_mac starts with '020003'):")
+        for switch in converted_switches[:10]:  # Show first 10
+            print(f"   • {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
+        if len(converted_switches) > 10:
+            print(f"   ... and {len(converted_switches) - 10} more")
+    
+    if not_converted_count > 0:
+        print(f"\n⏳ Not Converted Switches (vc_mac does NOT start with '020003'):")
+        for switch in not_converted_switches[:10]:  # Show first 10
+            print(f"   • {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
+        if len(not_converted_switches) > 10:
+            print(f"   ... and {len(not_converted_switches) - 10} more")
+    
+    # Export to CSV
+    try:
+        # Flatten any nested fields for CSV export
+        flattened_switches = flatten_nested_fields_in_list(all_switches)
+        sanitized_switches = escape_multiline_strings_for_csv(flattened_switches)
+        
+        # Save to CSV
+        filename = "VirtualChassisConversionStatus.csv"
+        save_data_to_output(sanitized_switches, filename)
+        
+        print(f"\n💾 Results exported to: {filename}")
+        print(f"   📁 Location: {get_csv_file_path(filename)}")
+        
+        # Log results
+        logging.info(f"Virtual chassis conversion status check completed:")
+        logging.info(f"  Total switches: {total_switches}")
+        logging.info(f"  Converted: {converted_count}")
+        logging.info(f"  Not converted: {not_converted_count}")
+        logging.info(f"  Results exported to {filename}")
+        
+    except Exception as e:
+        print(f"❌ Error exporting results: {e}")
+        logging.error(f"Error exporting conversion status results: {e}")
+    
+    print(f"\n💡 Usage Notes:")
+    print(f"   • Use option 92 to convert individual switches")
+    print(f"   • Use option 93 for bulk conversion by site list")
+    print(f"   • Virtual chassis switches without '020003' vc_mac prefix can be converted")
+
 def export_site_wifi_clients_to_csv(site_id=None):
     """
     Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
@@ -10013,6 +10149,7 @@ menu_actions = {
     "91": (reboot_devices_by_gateway_template_list, "🔥 DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
     "92": (convert_virtual_chassis_to_virtual_mac, "🔥 DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (convert_virtual_chassis_by_site_list, "🔥 DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
+    "94": (check_virtual_chassis_conversion_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
     
     # ==============================
     # 📡 POST API OPERATIONS - Device Commands (Starting at 100)
