@@ -1,6 +1,3 @@
-❌ MISSING - Critical POST Operations
-These specific POST API endpoints from the script needs are NOT implemented:
-
 Gateway/SSR Specific:
 ❌ Device Ping - POST /api/v1/sites/:site_id/devices/:device_id/ping
 ❌ Service Ping - POST /api/v1/sites/:site_id/devices/:device_id/service_ping
