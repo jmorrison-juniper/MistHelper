@@ -432,7 +432,7 @@ MistHelper provides 93 distinct operations organized into logical categories. Al
 - **Function**: `check_firmware_upgrade_status()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/stats/devices`
 - **Output**: Current firmware upgrade status across organization with detailed progress monitoring
-- **CSV File**: `FirmwareUpgradeStatus.csv`
+- **CSV File**: `data/FirmwareUpgradeStatus.csv`
 - **SQLite Table**: `FirmwareUpgradeStatus`
 
 #### 61. Compare Inventory

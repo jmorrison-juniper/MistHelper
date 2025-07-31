@@ -9,7 +9,11 @@
 - **Output Format**: Default output format configurable via `--output-format` flag
 - **Database Schema**: New hybrid SQLite schema with natural primary keys, eliminating artificial api_id fields
 - **Container Volumes**: Updated volume mounting requirements for security (`:Z` flags)
-- **Primary Key Strategy**: API endpoints now use natural business keys instead of auto-increment IDse (July 2025)
+- **Primary Key Strategy**: API endpoints now use natural business keys instead of auto-increment IDs
+- **File Path Consistency**: All CSV files now consistently save to `data/` folder with proper path management
+- **API Endpoint Optimization**: Removed non-functional API endpoints to eliminate 404 errors during systematic testing
+- **Enhanced File Comparison**: Comparison functions now properly look in `data/` folder for input files
+- **Validation Improvements**: Added comprehensive site_id and device_id validation to prevent API errorse (July 2025)
 
 #### ✅ New Features
 - **Comprehensive Test Suite**: Systematic testing with 54 safe operations tested automatically

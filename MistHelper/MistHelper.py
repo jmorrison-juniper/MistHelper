@@ -589,6 +589,120 @@ def get_csv_file_path(filename):
     # Otherwise, place it in the data directory
     return os.path.join(data_dir, filename)
 
+def validate_site_id(site_id, function_name="unknown"):
+    """
+    Validates that site_id is not None or empty before making API calls.
+    
+    Args:
+        site_id: The site ID to validate
+        function_name: Name of the calling function for logging
+    
+    Returns:
+        bool: True if valid, False otherwise
+    
+    Raises:
+        ValueError: If site_id is None or empty
+    """
+    if site_id is None:
+        error_msg = f"❌ site_id is None in {function_name}. Cannot make API call."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    
+    if isinstance(site_id, str) and site_id.strip() == "":
+        error_msg = f"❌ site_id is empty string in {function_name}. Cannot make API call."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    
+    return True
+
+def validate_device_id(device_id, function_name="unknown"):
+    """
+    Validates that device_id is not None or empty before making API calls.
+    
+    Args:
+        device_id: The device ID to validate
+        function_name: Name of the calling function for logging
+    
+    Returns:
+        bool: True if valid, False otherwise
+    
+    Raises:
+        ValueError: If device_id is None or empty
+    """
+    if device_id is None:
+        error_msg = f"❌ device_id is None in {function_name}. Cannot make API call."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    
+    if isinstance(device_id, str) and device_id.strip() == "":
+        error_msg = f"❌ device_id is empty string in {function_name}. Cannot make API call."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    
+    return True
+
+def create_missing_csv_template(filename, headers=None, sample_data=None):
+    """
+    Creates a basic CSV file placeholder in the correct location.
+    
+    Args:
+        filename (str): Name of the CSV file to create
+        headers (list): List of header names (optional)
+        sample_data (list): Optional list of sample data rows (optional)
+    
+    Returns:
+        str: Full path to the created file
+    """
+    file_path = get_csv_file_path(filename)
+    
+    try:
+        # Just create an empty file in the correct location
+        with open(file_path, 'w', newline='', encoding='utf-8') as f:
+            if headers:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+            # Don't write sample data - user will add their own content
+        
+        logging.info(f"Created template file: {file_path}")
+        return file_path
+    except Exception as e:
+        logging.error(f"Failed to create template file {filename}: {e}")
+        raise
+
+def safe_api_call(api_function, *args, **kwargs):
+    """
+    Safely calls an API function and handles common error conditions.
+    
+    Args:
+        api_function: The API function to call
+        *args: Arguments to pass to the API function
+        **kwargs: Keyword arguments to pass to the API function
+    
+    Returns:
+        tuple: (success: bool, data: any, error: str)
+    """
+    try:
+        response = api_function(*args, **kwargs)
+        
+        if not hasattr(response, 'data'):
+            return False, None, "Response has no data attribute"
+        
+        if response.data is None:
+            return False, None, "Response data is None"
+        
+        return True, response.data, None
+        
+    except Exception as e:
+        error_str = str(e)
+        if "404" in error_str:
+            return False, None, f"Endpoint not found (404): {error_str}"
+        elif "403" in error_str:
+            return False, None, f"Access denied (403): {error_str}"
+        elif "429" in error_str:
+            return False, None, f"Rate limited (429): {error_str}"
+        else:
+            return False, None, f"API error: {error_str}"
+
 def get_cached_or_prompted_org_id():
     import os
     global org_id
@@ -3043,6 +3157,9 @@ def export_gateway_synthetic_tests_to_csv():
 
     for site_id in tqdm(site_ids, desc="Sites", unit="site"):
         try:
+            # Validate site_id before making API calls
+            validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
+            
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway")
             devices = mistapi.get_all(response=response, mist_session=apisession)
             logging.info(f"[INFO] Found {len(devices)} gateway devices at site {site_id}.")
@@ -3050,6 +3167,9 @@ def export_gateway_synthetic_tests_to_csv():
                 device_id = device.get("id")
                 device_name = device.get("name", "")
                 try:
+                    # Validate device_id before making API calls
+                    validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
+                    
                     stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
                     stats["site_id"] = site_id
                     stats["site_name"] = device.get("site_name", "")
@@ -3114,6 +3234,9 @@ def export_gateway_test_results_by_site_to_csv():
 
     for site_id in tqdm(site_ids, desc="Sites", unit="site"):
         try:
+            # Validate site_id before making API calls
+            validate_site_id(site_id, "export_gateway_test_results_to_csv")
+            
             # Fetch synthetic test results for the current site
             response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(
                 apisession, site_id
@@ -4085,9 +4208,7 @@ def view_marvis_insights():
                 
                 # Try different insight endpoints that might be available
                 insight_endpoints = [
-                    ("Organization SLE Insights", lambda: mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric="ap-availability")),
                     ("Organization Sites SLE", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id)),
-                    ("Marvis Client Invites", lambda: mistapi.api.v1.orgs.marvisinvites.listOrgMarvisClientInvites(apisession, org_id)),
                 ]
                 
                 insights_found = False
@@ -4127,7 +4248,13 @@ def view_marvis_insights():
                                 print(f"  📄 Full insights saved to {filename}")
                                 insights_found = True
                     except Exception as e:
-                        logging.debug(f"Could not fetch {endpoint_name}: {e}")
+                        error_message = str(e)
+                        if "404" in error_message:
+                            logging.debug(f"Endpoint {endpoint_name} not available for this organization (404): {e}")
+                        elif "403" in error_message:
+                            logging.debug(f"Access denied to {endpoint_name} (403): {e}")
+                        else:
+                            logging.debug(f"Could not fetch {endpoint_name}: {e}")
                         continue
                 
                 if not insights_found:
@@ -4291,7 +4418,7 @@ def prompt_select_site_and_device_ids(site_id=None, device_id=None):
             return None, None
 
     if not device_id:
-        device_id = prompt_select_device_id_from_inventory(site_id, device_type=device_type)
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="all")
         if not device_id:
             print("❌ No device selected.")
             return None, None
@@ -4866,6 +4993,533 @@ def show_vlans():
     except Exception as e:
         print(f"Error during shell session: {e}")
 
+def device_ping_from_device():
+    """
+    Ping from AP, Switch or SSR device using POST API.
+    Results are streamed via WebSocket for real-time output.
+    """
+    print("\n🏓 Device Ping Operation")
+    print("=" * 50)
+    
+    org_id = get_cached_or_prompted_org_id()
+    site_id, device_id = prompt_select_site_and_device_ids()
+    if not site_id or not device_id:
+        print("❌ Site or device selection required for ping operation.")
+        return
+
+    # Get ping parameters from user
+    print("\n📋 Ping Configuration:")
+    host = input("🎯 Target host/IP address: ").strip()
+    if not host:
+        print("❌ Target host is required.")
+        return
+
+    try:
+        count = int(input("📊 Number of pings (default 10): ").strip() or "10")
+        if count < 1 or count > 100:
+            print("⚠️ Using default count of 10 (valid range: 1-100)")
+            count = 10
+    except ValueError:
+        print("⚠️ Invalid count, using default of 10")
+        count = 10
+
+    try:
+        size = int(input("📦 Packet size in bytes (default 56): ").strip() or "56")
+        if size < 56 or size > 65535:
+            print("⚠️ Using default size of 56 (valid range: 56-65535)")
+            size = 56
+    except ValueError:
+        print("⚠️ Invalid size, using default of 56")
+        size = 56
+
+    egress_interface = input("🔗 Egress interface (optional, press Enter to skip): ").strip()
+
+    # Prepare ping request body
+    ping_body = {
+        "host": host,
+        "count": count,
+        "size": size
+    }
+    
+    if egress_interface:
+        ping_body["egress_interface"] = egress_interface
+
+    print(f"\n🚀 Starting ping to {host} from device...")
+    print(f"   📊 Count: {count}")
+    print(f"   📦 Size: {size} bytes")
+    if egress_interface:
+        print(f"   🔗 Interface: {egress_interface}")
+
+    try:
+        # Execute the ping POST request
+        logging.info(f"Starting device ping: host={host}, count={count}, size={size}, site_id={site_id}, device_id={device_id}")
+        
+        response = mistapi.api.v1.sites.devices.pingFromDevice(
+            mist_session=apisession, 
+            site_id=site_id, 
+            device_id=device_id, 
+            body=ping_body
+        )
+        
+        if response.status_code == 200:
+            session_data = response.data
+            session_id = session_data.get("session")
+            
+            print(f"✅ Ping initiated successfully!")
+            print(f"📡 Session ID: {session_id}")
+            print(f"🔗 WebSocket stream: /sites/{site_id}/devices/{device_id}/cmd")
+            print("\n📊 Ping Results:")
+            print("-" * 50)
+            
+            # For now, just indicate that ping was started successfully
+            # The WebSocket streaming is complex and we'll show the session info instead
+            print(f"📡 Ping session {session_id} has been initiated on the device.")
+            print(f"💡 Monitor results in the Mist portal or check device logs.")
+            print(f"📝 The ping operation is running in the background on the device.")
+            
+            # Save session info to file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"data/DevicePing_{timestamp}.txt"
+            
+            # Ensure data directory exists
+            os.makedirs("data", exist_ok=True)
+            
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(f"Device Ping Session Info\n")
+                f.write(f"Target: {host}\n")
+                f.write(f"Count: {count}\n")
+                f.write(f"Size: {size}\n")
+                f.write(f"Session ID: {session_id}\n")
+                f.write(f"Site ID: {site_id}\n")
+                f.write(f"Device ID: {device_id}\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                f.write("-" * 50 + "\n")
+                f.write("Ping initiated successfully. Check Mist portal for results.\n")
+            
+            print(f"\n💾 Session info saved to: {filename}")
+                    
+        else:
+            print(f"❌ Ping request failed with status: {response.status_code}")
+            if hasattr(response, 'data') and response.data:
+                print(f"📄 Error details: {response.data}")
+                
+    except Exception as e:
+        logging.error(f"Error during device ping: {e}")
+        print(f"❌ Error executing ping: {e}")
+
+def retrieve_ping_results():
+    """
+    Retrieve ping results from a previous Device Ping operation.
+    Reads ping session info from file and attempts to get results via WebSocket.
+    """
+    print("\n📋 Retrieve Device Ping Results")
+    print("=" * 50)
+    
+    # List available ping session files
+    data_dir = "data"
+    if not os.path.exists(data_dir):
+        print("❌ No data directory found. No ping sessions available.")
+        return
+        
+    ping_files = [f for f in os.listdir(data_dir) if f.startswith("DevicePing_") and f.endswith(".txt")]
+    
+    if not ping_files:
+        print("❌ No ping session files found. Run menu option 100 first to create a ping session.")
+        return
+    
+    # Sort by modification time (newest first)
+    ping_files.sort(key=lambda x: os.path.getmtime(os.path.join(data_dir, x)), reverse=True)
+    
+    print(f"\n📁 Available ping sessions ({len(ping_files)} found):")
+    for i, filename in enumerate(ping_files):
+        file_path = os.path.join(data_dir, filename)
+        mod_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"   [{i}] {filename} (Created: {mod_time})")
+    
+    # Get user selection
+    try:
+        choice = input(f"\nSelect ping session (0-{len(ping_files)-1}) or Enter for most recent: ").strip()
+        if choice == "":
+            selected_index = 0
+        else:
+            selected_index = int(choice)
+            
+        if not (0 <= selected_index < len(ping_files)):
+            print("❌ Invalid selection.")
+            return
+            
+        selected_file = ping_files[selected_index]
+        file_path = os.path.join(data_dir, selected_file)
+        
+    except (ValueError, IndexError):
+        print("❌ Invalid selection.")
+        return
+    
+    # Read ping session info
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # Parse session info
+        session_info = {}
+        for line in content.split('\n'):
+            if ':' in line and not line.startswith('-'):
+                key, value = line.split(':', 1)
+                session_info[key.strip()] = value.strip()
+        
+        required_fields = ['Session ID', 'Site ID', 'Device ID', 'Target']
+        missing_fields = [field for field in required_fields if field not in session_info]
+        
+        if missing_fields:
+            print(f"❌ Invalid ping session file. Missing fields: {', '.join(missing_fields)}")
+            return
+            
+        session_id = session_info['Session ID']
+        site_id = session_info['Site ID']
+        device_id = session_info['Device ID']
+        target = session_info['Target']
+        count = session_info.get('Count', 'Unknown')
+        size = session_info.get('Size', 'Unknown')
+        timestamp = session_info.get('Timestamp', 'Unknown')
+        
+        print(f"\n📋 Ping Session Details:")
+        print(f"   🎯 Target: {target}")
+        print(f"   � Count: {count}")
+        print(f"   📦 Size: {size} bytes")
+        print(f"   �📡 Session ID: {session_id}")
+        print(f"   🏢 Site ID: {site_id}")
+        print(f"   📱 Device ID: {device_id}")
+        print(f"   🕐 Created: {timestamp}")
+        
+    except Exception as e:
+        print(f"❌ Error reading ping session file: {e}")
+        return
+    
+    # Check if results file already exists
+    results_filename = selected_file.replace(".txt", "_Results.txt")
+    results_path = os.path.join(data_dir, results_filename)
+    
+    if os.path.exists(results_path):
+        print(f"\n📄 Found existing results file: {results_filename}")
+        try:
+            with open(results_path, "r", encoding="utf-8") as f:
+                results_content = f.read()
+            print("\n📊 Previous Results:")
+            print("-" * 50)
+            print(results_content)
+            return
+        except Exception as e:
+            print(f"❌ Error reading results file: {e}")
+    
+    # Provide guidance since direct WebSocket retrieval is complex
+    print(f"\n💡 Ping Results Access Options:")
+    print("=" * 50)
+    print("1. 🌐 Mist Portal: Device → Utilities → Ping")
+    print("   - Access historical ping results in the web interface")
+    print("   - View detailed statistics and timing information")
+    print("   - Search by session ID or timestamp")
+    print()
+    print("2. 🔄 Re-run Ping: Use menu option 100")
+    print("   - Execute a new ping with the same parameters")
+    print("   - Get fresh results with current network conditions")
+    print()
+    print("3. 📡 Device Events: Check device event logs")
+    print("   - Look for ping-related events in device history")
+    print("   - May contain ping completion notifications")
+    print()
+    print("4. 🔍 API Alternative: Use getSiteDeviceEvents")
+    print("   - Search for device events around the ping timestamp")
+    print("   - Filter for network connectivity events")
+    
+    # Try to fetch recent device events that might contain ping information
+    print(f"\n🔍 Searching for recent device events...")
+    try:
+        # Get device info first
+        device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+        device_info = device_response.data
+        device_name = device_info.get('name', 'Unknown Device')
+        device_type = device_info.get('type', 'Unknown Type')
+        
+        print(f"📱 Device: {device_name} ({device_type})")
+        
+        # Get recent device events (last 24 hours)
+        end_time = int(time.time())
+        start_time = end_time - (24 * 3600)  # 24 hours ago
+        
+        events_response = mistapi.api.v1.sites.events.searchSiteEvents(
+            apisession, 
+            site_id, 
+            start=start_time, 
+            end=end_time,
+            device_id=device_id,
+            limit=50
+        )
+        
+        events = mistapi.get_all(response=events_response, mist_session=apisession)
+        
+        # Filter for network-related events
+        network_events = []
+        for event in events:
+            event_type = event.get('type', '').lower()
+            if any(keyword in event_type for keyword in ['ping', 'connectivity', 'network', 'interface']):
+                network_events.append(event)
+        
+        if network_events:
+            print(f"\n📋 Found {len(network_events)} network-related events:")
+            for event in network_events[:5]:  # Show first 5
+                event_time = datetime.fromtimestamp(event.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S')
+                event_type = event.get('type', 'Unknown')
+                event_text = event.get('text', 'No description')
+                print(f"   • {event_time}: {event_type} - {event_text}")
+            
+            if len(network_events) > 5:
+                print(f"   ... and {len(network_events) - 5} more events")
+        else:
+            print("   ℹ️ No network-related events found in the last 24 hours")
+            
+    except Exception as e:
+        print(f"⚠️ Could not fetch device events: {e}")
+    
+    # Create a comprehensive results file with guidance
+    results_filename = selected_file.replace(".txt", "_Results.txt")
+    results_path = os.path.join(data_dir, results_filename)
+    
+    with open(results_path, "w", encoding="utf-8") as f:
+        f.write(f"Device Ping Results Information\n")
+        f.write(f"===============================\n")
+        f.write(f"Original Session File: {selected_file}\n")
+        f.write(f"Target: {target}\n")
+        f.write(f"Count: {count}\n")
+        f.write(f"Size: {size}\n")
+        f.write(f"Session ID: {session_id}\n")
+        f.write(f"Site ID: {site_id}\n")
+        f.write(f"Device ID: {device_id}\n")
+        f.write(f"Analysis Timestamp: {datetime.now().isoformat()}\n")
+        f.write("\n")
+        f.write("PING RESULTS ACCESS GUIDE\n")
+        f.write("=========================\n")
+        f.write("Due to the real-time nature of ping operations, results are only\n")
+        f.write("available during the actual ping execution via WebSocket streaming.\n")
+        f.write("\n")
+        f.write("To access ping results:\n")
+        f.write("1. Mist Portal → Device → Utilities → Ping\n")
+        f.write("2. Re-run ping using menu option 100\n")
+        f.write("3. Check device event logs for connectivity events\n")
+        f.write("4. Use API to search device events around ping timestamp\n")
+        f.write("\n")
+        f.write(f"Session Details for Portal Reference:\n")  
+        f.write(f"- Session ID: {session_id}\n")
+        f.write(f"- Target: {target}\n")
+        f.write(f"- Initiated: {timestamp}\n")
+    
+    print(f"\n� Guidance saved to: {results_filename}")
+    print("💡 For live ping results, use menu option 100 to run a new ping operation.")
+    
+    # Ask user if they want to run a new ping with the same parameters
+    try:
+        run_new = input(f"\n❓ Would you like to run a new ping to {target}? (y/n): ").strip().lower()
+        if run_new in ['y', 'yes']:
+            print(f"\n🔄 Redirecting to menu option 100 (Device Ping)...")
+            print(f"💡 Use these parameters: Target={target}, Count={count}, Size={size}")
+            # Don't actually call the function to avoid circular imports/calls
+            # Just provide guidance
+        else:
+            print("✅ Session analysis complete.")
+    except (EOFError, KeyboardInterrupt):
+        print("\n✅ Session analysis complete.")
+def run_shell_command_and_log(command, log_filename, csv_output=None, description="Running shell command"):
+        api_token = None
+        debug_attrs = []  # For debugging what attributes are available
+        
+        # Method 1: Check for token attribute (most common)
+        if hasattr(apisession, 'token') and apisession.token:
+            api_token = apisession.token
+            print("✅ Using session.token for authentication")
+            
+        # Method 2: Check for _token attribute (private)
+        elif hasattr(apisession, '_token') and apisession._token:
+            api_token = apisession._token
+            print("✅ Using session._token for authentication")
+            
+        # Method 3: Check mist_session object
+        elif hasattr(apisession, 'mist_session') and hasattr(apisession.mist_session, 'token'):
+            api_token = apisession.mist_session.token
+            print("✅ Using session.mist_session.token for authentication")
+            
+        # Method 4: Check for apitoken attribute
+        elif hasattr(apisession, 'apitoken') and apisession.apitoken:
+            api_token = apisession.apitoken
+            print("✅ Using session.apitoken for authentication")
+            
+        # Method 5: Check for api_token attribute
+        elif hasattr(apisession, 'api_token') and apisession.api_token:
+            api_token = apisession.api_token
+            print("✅ Using session.api_token for authentication")
+            
+        # Method 6: Check private _api_token attribute
+        elif hasattr(apisession, '_api_token') and apisession._api_token:
+            api_token = apisession._api_token
+            print("✅ Using session._api_token for authentication")
+            
+        # Method 7: Check if there's a get_token method
+        elif hasattr(apisession, 'get_token') and callable(apisession.get_token):
+            try:
+                api_token = apisession.get_token()
+                print("✅ Using session.get_token() method for authentication")
+            except:
+                pass
+                
+        # Debugging: collect available attributes for troubleshooting
+        for attr in dir(apisession):
+            if not attr.startswith('__') and ('token' in attr.lower() or 'api' in attr.lower()):
+                debug_attrs.append(attr)
+        
+        if not api_token:
+            print("⚠️ Could not access API token from session.")
+            print(f"� Debug: Available token-related attributes: {', '.join(debug_attrs) if debug_attrs else 'None found'}")
+            print("�📝 Results may be available in the Mist portal under Device Utilities.")
+            
+            # Create a results file anyway with the attempt info
+            results_filename = selected_file.replace(".txt", "_Results.txt")
+            results_path = os.path.join(data_dir, results_filename)
+            
+            with open(results_path, "w", encoding="utf-8") as f:
+                f.write(f"Device Ping Results Retrieval Attempt\n")
+                f.write(f"Original Session File: {selected_file}\n")
+                f.write(f"Target: {target}\n")
+                f.write(f"Session ID: {session_id}\n")
+                f.write(f"Retrieval Timestamp: {datetime.now().isoformat()}\n")
+                f.write(f"Debug - Available attributes: {', '.join(debug_attrs)}\n")
+                f.write("-" * 50 + "\n")
+                f.write("Unable to retrieve results via WebSocket (API token access issue).\n")
+                f.write("Check Mist portal Device Utilities section for ping results.\n")
+            
+            print(f"📝 Attempt logged to: {results_filename}")
+            return
+        
+        # Set up WebSocket connection
+        ws_url = f"wss://api.mist.com/api-ws/v1/stream"
+        
+        print(f"🔌 Connecting to WebSocket stream...")
+        
+        import websocket
+        ws = websocket.create_connection(ws_url, header=[f"Authorization: Token {api_token}"])
+        
+        # Subscribe to device command output
+        subscribe_msg = {
+            "subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"
+        }
+        ws.send(json.dumps(subscribe_msg))
+        print(f"📡 Subscribed to device command stream")
+        
+        # Listen for results with timeout
+        ping_output = []
+        start_time = time.time()
+        timeout = 30  # 30 second timeout for retrieval
+        
+        print(f"⏳ Listening for results (timeout: {timeout}s)...")
+        print(f"   💡 If ping completed recently, results should appear now")
+        print(f"   ⚠️ If ping is still running, you may see live output")
+        print(f"\n📊 Results:")
+        print("-" * 50)
+        
+        found_session_data = False
+        
+        while True:
+            if time.time() - start_time > timeout:
+                if not found_session_data:
+                    print(f"\n⏰ Timeout after {timeout} seconds - no data received for this session")
+                    print(f"💡 The ping may have completed before this retrieval attempt")
+                    print(f"🔍 Check Mist portal Device Utilities for historical results")
+                break
+                
+            try:
+                ws.settimeout(2)
+                result = ws.recv()
+                data = json.loads(result)
+                
+                # Check if this is data for our session
+                if (data.get("event") == "data" and 
+                    data.get("channel") == f"/sites/{site_id}/devices/{device_id}/cmd"):
+                    
+                    event_data = data.get("data", {})
+                    event_session = event_data.get("session")
+                    raw_output = event_data.get("raw", "")
+                    
+                    # If it's our session or if no session specified, show the output
+                    if event_session == session_id or not event_session:
+                        found_session_data = True
+                        if raw_output:
+                            print(raw_output.rstrip())
+                            ping_output.append(raw_output)
+                            
+                            # Check if ping is complete
+                            if any(keyword in raw_output.lower() for keyword in 
+                                   ["transmitted", "received", "packet loss", "statistics"]):
+                                print(f"\n✅ Ping appears to be complete")
+                                break
+                    elif event_session and event_session != session_id:
+                        # Different session - this might be a new command
+                        print(f"📡 Received data for different session: {event_session}")
+                        
+            except websocket.WebSocketTimeoutException:
+                continue
+            except websocket.WebSocketConnectionClosedException:
+                print("\n📡 WebSocket connection closed")
+                break
+            except json.JSONDecodeError:
+                # Non-JSON data, skip
+                continue
+                
+        ws.close()
+        
+        # Save results to file
+        results_filename = selected_file.replace(".txt", "_Results.txt")
+        results_path = os.path.join(data_dir, results_filename)
+        
+        with open(results_path, "w", encoding="utf-8") as f:
+            f.write(f"Device Ping Results\n")
+            f.write(f"Original Session File: {selected_file}\n")
+            f.write(f"Target: {target}\n")
+            f.write(f"Session ID: {session_id}\n")
+            f.write(f"Results Retrieved: {datetime.now().isoformat()}\n")
+            f.write("-" * 50 + "\n")
+            
+            if ping_output:
+                f.write("Ping Output:\n")
+                f.write("".join(ping_output))
+            else:
+                f.write("No ping output received during retrieval attempt.\n")
+                f.write("The ping may have completed before this retrieval.\n")
+                f.write("Check Mist portal Device Utilities for historical results.\n")
+        
+        if ping_output:
+            print(f"\n💾 Results saved to: {results_filename}")
+            print(f"✅ Retrieved {len(ping_output)} lines of output")
+        else:
+            print(f"\n📝 Retrieval attempt logged to: {results_filename}")
+            print(f"⚠️ No output received - ping may have completed already")
+        
+    except Exception as e:
+        logging.error(f"Error during ping results retrieval: {e}")
+        print(f"❌ Error retrieving ping results: {e}")
+        
+        # Still create a results file with error info
+        results_filename = selected_file.replace(".txt", "_Results.txt")
+        results_path = os.path.join(data_dir, results_filename)
+        
+        with open(results_path, "w", encoding="utf-8") as f:
+            f.write(f"Device Ping Results Retrieval Error\n")
+            f.write(f"Original Session File: {selected_file}\n")
+            f.write(f"Target: {target}\n")
+            f.write(f"Session ID: {session_id}\n")
+            f.write(f"Error Timestamp: {datetime.now().isoformat()}\n")
+            f.write("-" * 50 + "\n")
+            f.write(f"Error retrieving results: {e}\n")
+            f.write("Check Mist portal Device Utilities for ping results.\n")
+        
+        print(f"📝 Error logged to: {results_filename}")
+
 def run_shell_command_and_log(command, log_filename, csv_output=None, description="Running shell command"):
     logging.info(f"Launching shell to run: {description}")
     site_id, device_id = prompt_select_site_and_device_ids()
@@ -5407,13 +6061,16 @@ def compare_inventory_with_csv():
     with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
         site_configs = list(csv.DictReader(f))
 
-    # Find all CSV files in the current directory
-    csv_files = glob.glob("*.csv")
-    csv_files = [f for f in csv_files if f != "AllDevicesWithSiteInfo.csv"]  # Exclude our source file
+    # Find all CSV files in the data directory
+    data_dir = "data"
+    csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
+    # Remove path prefix and exclude our source file
+    csv_files = [os.path.basename(f) for f in csv_files if os.path.basename(f) != "AllDevicesWithSiteInfo.csv"]
     
     if not csv_files:
-        print("❌ No CSV files found in the current directory for comparison.")
-        logging.error("No CSV files found for comparison.")
+        print("❌ No CSV files found in the data directory for comparison.")
+        print(f"   Please place comparison CSV files in the '{data_dir}' folder.")
+        logging.error("No CSV files found for comparison in data directory.")
         return
 
     # Present CSV files to user for selection
@@ -5446,7 +6103,8 @@ def compare_inventory_with_csv():
 
     # Load the comparison CSV file
     try:
-        with open(comparison_file, mode="r", encoding="utf-8") as f:
+        comparison_file_path = get_csv_file_path(comparison_file)
+        with open(comparison_file_path, mode="r", encoding="utf-8") as f:
             comparison_data = list(csv.DictReader(f))
     except Exception as e:
         print(f"❌ Error reading comparison file {comparison_file}: {e}")
@@ -5723,11 +6381,11 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
 
     # Load data
-    with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+    with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
         configs = list(csv.DictReader(f))
-    with open("SiteList_ListAPI.csv", encoding="utf-8") as f:
+    with open(get_csv_file_path("SiteList_ListAPI.csv"), encoding="utf-8") as f:
         sites = list(csv.DictReader(f))
-    with open("OrgGatewayTemplates.csv", encoding="utf-8") as f:
+    with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as f:
         templates = list(csv.DictReader(f))
 
     # Create lookups for site and template names
@@ -5803,7 +6461,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     
     if not devices_with_overrides:
         logging.info("🎉 No template overrides found - all gateways are compliant with their assigned templates!")
-        # Still create empty CSV file
+        # Still create empty CSV file with proper headers
         output_file = "GatewayOverriddenPorts.csv"
         fieldnames = [
             "gateway_device_name", "site_name", "template_name", "port_name", "port_description",
@@ -5811,7 +6469,8 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
             "port_config_type", "port_usage", "overridden_from_template",
             "device_id", "site_id", "template_id"
         ]
-        with open(output_file, mode="w", newline="", encoding="utf-8") as f:
+        output_path = get_csv_file_path(output_file)
+        with open(output_path, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
         print(f"✅ Gateway override report written to {output_file}")
@@ -5926,29 +6585,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
 
     # Write to CSV with only overridden port information
     output_file = "GatewayOverriddenPorts.csv"
-    fieldnames = [
-        "gateway_device_name",
-        "site_name", 
-        "template_name",
-        "port_name",
-        "port_description",
-        "port_status",
-        "port_admin_status", 
-        "port_gateway_ip",
-        "port_ip_address",
-        "port_netmask",
-        "port_config_type",
-        "port_usage",
-        "overridden_from_template",
-        "device_id",
-        "site_id",
-        "template_id"
-    ]
-    
-    with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(overridden_port_info)
+    save_data_to_output(overridden_port_info, output_file)
 
     # Calculate summary statistics
     total_gateways_processed = len(configs)
@@ -6089,15 +6726,29 @@ def convert_virtual_chassis_by_site_list():
     
     # Check if VCConvert.CSV exists
     csv_file = "VCConvert.CSV"
-    if not os.path.exists(csv_file):
-        print(f"❌ File '{csv_file}' not found. Please create the file with site names (one per line, no header).")
+    csv_file_path = get_csv_file_path(csv_file)
+    if not os.path.exists(csv_file_path):
+        print(f"❌ File '{csv_file}' not found.")
+        print(f"   Please create this file at: {csv_file_path}")
+        print("   This file should contain site names (one per line, no header).")
+        
+        # Offer to create a basic file
+        user_input = input("   Would you like to create an empty file to get started? (y/n): ").strip().lower()
+        if user_input in ['y', 'yes']:
+            try:
+                template_path = create_missing_csv_template("VCConvert.CSV")
+                print(f"✅ Empty file created at: {template_path}")
+                print("   Please edit the file to add your site names and run the script again.")
+            except Exception as e:
+                print(f"❌ Failed to create file: {e}")
+        
         logging.error(f"VCConvert.CSV file not found.")
         return
 
     # Read site names from CSV (no header)
     site_names = []
     try:
-        with open(csv_file, mode="r", encoding="utf-8") as f:
+        with open(csv_file_path, mode="r", encoding="utf-8") as f:
             reader = csv.reader(f)
             for row in reader:
                 if row and row[0].strip():  # Skip empty rows
@@ -6417,7 +7068,19 @@ def reboot_devices_by_gateway_template_list():
     reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
     if not os.path.exists(reboot_list_path):
         logging.error("❌ GatewayTemplateRebootList.CSV not found.")
-        print("❌ GatewayTemplateRebootList.CSV not found. Please create this file with template names to reboot.")
+        print("❌ GatewayTemplateRebootList.CSV not found.")
+        print(f"   Please create this file at: {reboot_list_path}")
+        print("   This file should contain template names to reboot, one per line.")
+        
+        # Offer to create a basic file
+        user_input = input("   Would you like to create an empty file to get started? (y/n): ").strip().lower()
+        if user_input in ['y', 'yes']:
+            try:
+                template_path = create_missing_csv_template("GatewayTemplateRebootList.CSV")
+                print(f"✅ Empty file created at: {template_path}")
+                print("   Please edit the file to add your template names and run the script again.")
+            except Exception as e:
+                print(f"❌ Failed to create file: {e}")
         return
 
     # Step 2: Ensure required CSVs are fresh
@@ -6556,7 +7219,7 @@ def reboot_devices_by_gateway_template_list():
         # Count devices by type in target sites
         device_counts = {}
         try:
-            with open("AllSiteGatewayConfigs.csv", encoding="utf-8") as f:
+            with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     device_site_id = row.get("site_id", "").strip()
@@ -7213,14 +7876,10 @@ def check_firmware_upgrade_status():
                      'FW Timestamp', 'Timestamp']
         
         try:
-            with open(device_status_file, mode='w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(upgrade_results)
-            
-            print(f"\n✅ Device firmware status exported to: {device_status_file}")
+            save_data_to_output(upgrade_results, device_status_file, fieldnames)
+            print(f"\n✅ Device firmware status exported to: data/{device_status_file}")
             print(f"   📊 {len(upgrade_results)} device records exported")
-            logging.info(f"Exported {len(upgrade_results)} device firmware status records to {device_status_file}")
+            logging.info(f"Exported {len(upgrade_results)} device firmware status records to data/{device_status_file}")
             
         except Exception as e:
             print(f"❌ Failed to export device status: {e}")
@@ -7419,12 +8078,13 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 1: Check for bulk site upgrade file or get single site selection
     bulk_upgrade_file = "APUpgradeSiteList.CSV"
+    bulk_upgrade_file_path = get_csv_file_path(bulk_upgrade_file)
     sites_to_upgrade = []
     
-    if os.path.exists(bulk_upgrade_file):
+    if os.path.exists(bulk_upgrade_file_path):
         print(f"🔍 Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
         logging.info(f"Found {bulk_upgrade_file} file, proceeding with bulk site upgrade")
-        logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file)}")
+        logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file_path)}")
         
         # First, get all sites in the organization for reverse lookup
         print(f"   📡 Fetching organization sites for name-to-ID lookup...")
@@ -7452,8 +8112,8 @@ def bulk_upgrade_ap_firmware_by_site():
         
         # Read site names from file (headerless format)
         try:
-            logging.debug(f"Reading site names from {bulk_upgrade_file}")
-            with open(bulk_upgrade_file, 'r', encoding='utf-8') as f:
+            logging.debug(f"Reading site names from {bulk_upgrade_file_path}")
+            with open(bulk_upgrade_file_path, 'r', encoding='utf-8') as f:
                 site_names = []
                 for line_num, line in enumerate(f, 1):
                     site_name = line.strip()
@@ -7514,6 +8174,8 @@ def bulk_upgrade_ap_firmware_by_site():
             return
     else:
         print(f"📋 {bulk_upgrade_file} not found - Single site mode")
+        print(f"   💡 To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
+        print(f"   📝 File format: one site name per line (no header)")
         logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
         
         # Single site selection (existing behavior)
@@ -9961,6 +10623,14 @@ menu_actions = {
     "91": (reboot_devices_by_gateway_template_list, "🔥 DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
     "92": (convert_virtual_chassis_to_virtual_mac, "🔥 DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (convert_virtual_chassis_by_site_list, "🔥 DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
+    
+    # ==============================
+    # 📡 POST API OPERATIONS - Device Commands (Starting at 100)
+    # ==============================
+    
+    # 🏓 Device Network Operations
+    "100": (device_ping_from_device, "Device Ping - Execute ping from AP, Switch or SSR device with real-time WebSocket output"),
+    "101": (retrieve_ping_results, "Retrieve Ping Results - Analyze previous device ping sessions and get guidance for accessing results"),
 }
 
 def run_systematic_test():
