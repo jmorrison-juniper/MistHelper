@@ -4,6 +4,8 @@ import concurrent.futures
 import sqlite3
 import os
 from datetime import datetime, timezone
+import difflib
+import re
 
 # List of required packages (pip names)
 required_packages = [
@@ -150,6 +152,18 @@ org_id=None
 # Load .env variables early so freshness can be set via .env
 load_dotenv()
 CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default to 15 if not set
+
+# Fast Mode Configuration from .env
+FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
+FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))
+FAST_MODE_BACKOFF_MULTIPLIER = float(os.getenv("FAST_MODE_BACKOFF_MULTIPLIER", "1.5"))
+FAST_MODE_DEVICES_PER_THREAD = int(os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10"))
+FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))
+FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))
+FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
+FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))
+FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8"))
+FAST_MODE_USE_CONNECTION_AWARE_THREADING = os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
 
 # Global configuration for output format (CSV or SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
@@ -1586,6 +1600,97 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
             logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
         logging.debug(f"EXIT: fetch_and_display_api_data - error")
         raise
+
+def execute_with_connection_pool_management(work_items, worker_function, batch_description="items", retry_function=None):
+    """
+    Execute a list of work items using connection pool management and configurable threading.
+    
+    This is a reusable helper that any function can use to benefit from:
+    - Connection-aware vs CPU-aware threading
+    - Semaphore-based connection limiting 
+    - Configurable batch processing
+    - Automatic retry handling
+    - Progress tracking
+    
+    Args:
+        work_items: List of items to process
+        worker_function: Function to call for each item. Should accept (item, connection_semaphore) parameters
+        batch_description: Description for progress tracking (e.g., "devices", "sites")
+        retry_function: Optional function to call for retry logic. Should accept (failed_items, connection_semaphore) parameters
+        
+    Returns:
+        Tuple of (successful_results, failed_items)
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    
+    if not work_items:
+        logging.info(f"🔍 No {batch_description} to process.")
+        return [], []
+        
+    logging.info(f"🚀 Processing {len(work_items)} {batch_description} with connection pool management...")
+    
+    # Determine threading strategy from environment variables
+    if FAST_MODE_USE_CONNECTION_AWARE_THREADING:
+        # Connection-aware threading: limit threads to connection pool capacity
+        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS
+        threading_mode = "connection-aware"
+        logging.info(f"🔗 Connection-aware threading: Using {max_threads} threads (respects connection pool limit)")
+    else:
+        # CPU-aware threading: use maximum CPU threads available
+        max_threads = os.cpu_count() or FAST_MODE_FALLBACK_THREADS
+        threading_mode = "CPU-aware"
+        logging.info(f"⚡ CPU-aware threading: Using {max_threads} threads (maximum CPU utilization)")
+    
+    # Create a semaphore to limit concurrent API connections
+    connection_semaphore = threading.Semaphore(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)
+    logging.info(f"🛡️ Connection pool protection: Maximum {FAST_MODE_MAX_CONCURRENT_CONNECTIONS} concurrent API calls")
+    
+    # Calculate optimal batch size using configurable devices per thread
+    devices_per_thread = FAST_MODE_DEVICES_PER_THREAD
+    batch_size = max_threads * devices_per_thread
+    successful_results = []
+    failed_items = []
+    
+    # Process items in batches
+    for i in range(0, len(work_items), batch_size):
+        batch = work_items[i:i + batch_size]
+        batch_number = (i // batch_size) + 1
+        total_batches = (len(work_items) + batch_size - 1) // batch_size
+        
+        logging.info(f"📦 Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch)/max_threads:.0f} per thread)")
+        
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            # Submit batch tasks with connection semaphore
+            future_to_item = {
+                executor.submit(worker_function, item, connection_semaphore): item 
+                for item in batch
+            }
+            
+            # Collect results with progress tracking
+            batch_desc = f"Batch {batch_number}/{total_batches}"
+            for future in tqdm(as_completed(future_to_item), total=len(future_to_item), 
+                             desc=batch_desc, unit=batch_description.rstrip('s')):
+                item = future_to_item[future]
+                try:
+                    result = future.result()
+                    if result:
+                        successful_results.append(result)
+                    else:
+                        failed_items.append(item)
+                except Exception as e:
+                    logging.error(f"❌ Future exception for {batch_description.rstrip('s')} {item}: {e}")
+                    failed_items.append(item)
+    
+    # Handle retries if retry function is provided
+    if failed_items and retry_function:
+        logging.info(f"🔄 Retrying {len(failed_items)} failed {batch_description}...")
+        retry_results, still_failed = retry_function(failed_items, connection_semaphore)
+        successful_results.extend(retry_results)
+        failed_items = still_failed
+    
+    logging.info(f"✅ Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed")
+    return successful_results, failed_items
 
 def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
     """
@@ -3139,51 +3244,146 @@ def export_alarm_definitions_to_csv():
         ])
     logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
-def export_gateway_synthetic_tests_to_csv():
+def export_gateway_synthetic_tests_to_csv(fast=False):
     """
     Collects and exports synthetic test stats for all gateways in the organization.
-    Iterates through all sites with gateways, fetches synthetic test stats for each gateway device,
-    and writes the results to AllGatewaySyntheticTests.csv.
+    Optimized to use cached inventory data and concurrent processing when fast=True.
+    
+    Args:
+        fast (bool): If True, enables concurrent processing and uses cached inventory data
+                    to minimize API calls.
     """
     logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
+    if fast:
+        logging.info("🚀 Fast mode enabled: Using cached data and concurrent processing")
+    
     org_id = get_cached_or_prompted_org_id()
-    site_ids = get_site_ids_with_gateway_devices(apisession, org_id)
+    gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
     all_stats = []
-    smoothed = None
 
-    if not site_ids:
-        logging.warning("[WARN] No sites with gateways found. Exiting export_gateway_synthetic_tests_to_csv.")
+    if not gateway_devices:
+        logging.warning("[WARN] No gateway devices found. Exiting export_gateway_synthetic_tests_to_csv.")
         return
 
-    for site_id in tqdm(site_ids, desc="Sites", unit="site"):
-        try:
-            # Validate site_id before making API calls
-            validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
+    def fetch_synthetic_test_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
+        """
+        Fetch synthetic test stats for a single gateway device with retry logic and connection pool management.
+        
+        Args:
+            device_info: Tuple of (site_id, device_id, device_name, site_name)
+            max_retries: Maximum number of retry attempts (uses env var if None)
+            retry_delay: Base delay between retries (uses env var if None)
+            connection_semaphore: Semaphore to limit concurrent connections (optional)
+        """
+        # Use environment variables as defaults if not provided
+        if max_retries is None:
+            max_retries = FAST_MODE_MAX_RETRIES
+        if retry_delay is None:
+            retry_delay = FAST_MODE_RETRY_DELAY
             
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway")
-            devices = mistapi.get_all(response=response, mist_session=apisession)
-            logging.info(f"[INFO] Found {len(devices)} gateway devices at site {site_id}.")
-            for device in tqdm(devices, desc=f"Site {site_id}", unit="device", leave=False):
-                device_id = device.get("id")
-                device_name = device.get("name", "")
-                try:
-                    # Validate device_id before making API calls
-                    validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
-                    
+        site_id, device_id, device_name, site_name = device_info
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Validate inputs before making API calls
+                validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
+                validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
+                
+                # Use semaphore to limit concurrent connections if provided
+                if connection_semaphore:
+                    with connection_semaphore:
+                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
+                else:
                     stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
-                    stats["site_id"] = site_id
-                    stats["site_name"] = device.get("site_name", "")
-                    stats["device_id"] = device_id
-                    stats["device_name"] = device_name
-                    all_stats.append(stats)
-                    logging.info(f"[INFO] Collected synthetic test stats for device {device_name} ({device_id}) at site {site_id}.")
-                except Exception as e:
-                    logging.warning(f"⚠️ Failed to fetch test stats for device {device_id} at site {site_id}: {e}")
-                smoothed, delay = get_rate_limited_delay(smoothed)
-                logging.info(f"[INFO] Sleeping for {delay}.")
-                time.sleep(delay)
-        except Exception as e:
-            logging.warning(f"⚠️ Failed to list devices for site {site_id}: {e}")
+                
+                stats["site_id"] = site_id
+                stats["site_name"] = site_name
+                stats["device_id"] = device_id
+                stats["device_name"] = device_name
+                
+                if attempt > 0:
+                    logging.info(f"✅ Retry {attempt} successful for device {device_name} at site {site_name}")
+                else:
+                    logging.info(f"✅ Collected synthetic test stats for device {device_name} at site {site_name}")
+                return stats
+                
+            except Exception as e:
+                if attempt < max_retries:
+                    # Fast mode: reduced backoff delay for quicker retries
+                    backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)  # Configurable backoff
+                    logging.warning(f"⚠️ Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {e}")
+                    logging.info(f"🔄 Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
+                    time.sleep(backoff_delay)
+                else:
+                    logging.error(f"❌ Final attempt failed for device {device_id} at site {site_id}: {e}")
+                    return None
+        
+        return None
+
+    if fast:
+        # Concurrent processing mode with connection-aware threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        
+        # Define worker function for the connection pool helper
+        def fetch_device_stats(device_info, connection_semaphore):
+            """Worker function that fetches synthetic test stats for a single device."""
+            return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)
+        
+        # Define retry function for failed devices
+        def retry_failed_devices(failed_devices, connection_semaphore):
+            """Retry function for devices that failed in the initial processing."""
+            retry_results = []
+            still_failed = []
+            
+            # Use connection-aware retry thread count (never exceed connection pool limit)
+            retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_devices), FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
+            
+            with ThreadPoolExecutor(max_workers=retry_threads) as executor:
+                retry_futures = {
+                    executor.submit(fetch_synthetic_test_stats_with_retry, device_info, max_retries=FAST_MODE_RETRY_MAX_RETRIES, connection_semaphore=connection_semaphore): device_info
+                    for device_info in failed_devices
+                }
+                
+                for future in tqdm(as_completed(retry_futures), total=len(retry_futures), 
+                                 desc="Retrying Failed", unit="device"):
+                    device_info = retry_futures[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            retry_results.append(result)
+                            logging.info(f"✅ Retry successful for device {device_info[2]}")
+                        else:
+                            still_failed.append(device_info)
+                            logging.error(f"❌ Retry failed for device {device_info[2]}")
+                    except Exception as e:
+                        still_failed.append(device_info)
+                        logging.error(f"❌ Retry exception for device {device_info[2]}: {e}")
+            
+            return retry_results, still_failed
+        
+        # Use the reusable connection pool management helper
+        successful_results, failed_devices = execute_with_connection_pool_management(
+            work_items=gateway_devices,
+            worker_function=fetch_device_stats,
+            batch_description="devices",
+            retry_function=retry_failed_devices
+        )
+        
+        # Add successful results to all_stats
+        all_stats.extend(successful_results)
+    else:
+        # Sequential processing with rate limiting (original behavior)
+        smoothed = None
+        for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):
+            result = fetch_synthetic_test_stats_with_retry(device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES)
+            if result:
+                all_stats.append(result)
+            
+            # Apply rate limiting only in non-fast mode
+            smoothed, delay = get_rate_limited_delay(smoothed)
+            logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
+            time.sleep(delay)
 
     if all_stats:
         filename = "AllGatewaySyntheticTests.csv"
@@ -3191,8 +3391,85 @@ def export_gateway_synthetic_tests_to_csv():
         sanitized = escape_multiline_strings_for_csv(flattened)
         save_data_to_output(sanitized, filename)
         logging.info(f"✅ Synthetic test results saved to {filename} ({len(all_stats)} records).")
+        logging.info(f"🚀 API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory")
     else:
         logging.warning("⚠️ No synthetic test results found. CSV not created.")
+
+def get_gateway_devices_with_sites(apisession, org_id, fast=False):
+    """
+    Efficiently fetches all gateway devices with their site information.
+    Uses cached data when fast=True to minimize API calls.
+
+    Args:
+        apisession: The Mist API session object.
+        org_id: The organization ID.
+        fast (bool): If True, uses cached CSV data instead of making fresh API calls.
+
+    Returns:
+        List of tuples: (site_id, device_id, device_name, site_name) for each gateway device.
+    """
+    logging.info("[INFO] Fetching gateway devices with site information...")
+    
+    if fast:
+        # Use cached data approach
+        try:
+            # Ensure required CSV files exist using caching
+            check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+            check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+            
+            # Load inventory from cached CSV
+            gateway_devices = []
+            inventory_path = get_csv_file_path("OrgInventory.csv")
+            with open(inventory_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                gateways = [row for row in reader if row.get("type") == "gateway" and row.get("site_id") and row.get("id")]
+            
+            # Load site names from cached CSV
+            site_name_lookup = {}
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                site_name_lookup = {row.get("id"): row.get("name", "Unknown Site") for row in reader}
+            
+            # Build device list with site names
+            for device in gateways:
+                site_id = device.get("site_id")
+                device_id = device.get("id")
+                device_name = device.get("name", "")
+                site_name = site_name_lookup.get(site_id, "Unknown Site")
+                gateway_devices.append((site_id, device_id, device_name, site_name))
+            
+            logging.info(f"✅ Fast mode: Loaded {len(gateway_devices)} gateway devices from cached data")
+            return gateway_devices
+            
+        except Exception as e:
+            logging.warning(f"⚠️ Fast mode failed, falling back to API calls: {e}")
+            # Fall through to API mode
+    
+    # Original API-based approach
+    logging.info("[INFO] Fetching org inventory to find gateway devices...")
+    # Fetch the full org inventory (all devices)
+    response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+    devices = mistapi.get_all(response=response, mist_session=apisession)
+    logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
+    
+    # Get site names
+    site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+    sites = mistapi.get_all(response=site_response, mist_session=apisession)
+    site_name_lookup = {site["id"]: site.get("name", "Unknown Site") for site in sites}
+    
+    # Filter for gateway devices and build tuples
+    gateway_devices = []
+    for device in devices:
+        if device.get("type") == "gateway" and device.get("site_id") and device.get("id"):
+            site_id = device.get("site_id")
+            device_id = device.get("id")
+            device_name = device.get("name", "")
+            site_name = site_name_lookup.get(site_id, "Unknown Site")
+            gateway_devices.append((site_id, device_id, device_name, site_name))
+    
+    logging.info(f"[INFO] Found {len(gateway_devices)} gateway devices across the organization.")
+    return gateway_devices
 
 def get_site_ids_with_gateway_devices(apisession, org_id):
     """
@@ -3268,6 +3545,290 @@ def export_gateway_test_results_by_site_to_csv():
         logging.info(f"✅ All test results saved to {filename} ({len(all_results)} records).")
     else:
         logging.warning("⚠️ No test results found. CSV not created.")
+
+def export_gateway_device_stats_to_csv_with_freshness_check(fast=False):
+    """
+    Wrapper function that checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
+    This ensures we don't unnecessarily regenerate data that's already current.
+    """
+    output_file = "AllGatewayDeviceStats.csv"
+    
+    # Check if file exists and is fresh
+    if check_and_generate_csv(output_file, lambda: export_gateway_device_stats_to_csv(fast=fast)):
+        logging.info(f"✅ {output_file} already exists and is fresh - using cached data")
+    else:
+        logging.info(f"🔄 {output_file} was generated or refreshed")
+
+def export_gateway_device_stats_to_csv(fast=False):
+    """
+    Collects and exports detailed device statistics for all gateways in the organization.
+    Makes individual getSiteDeviceStats API calls for each gateway device.
+    Optimized to use cached inventory data and concurrent processing when fast=True.
+    
+    Args:
+        fast (bool): If True, enables concurrent processing and uses cached inventory data
+                    to minimize API calls.
+    """
+    logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
+    if fast:
+        logging.info("🚀 Fast mode enabled: Using cached data and concurrent processing")
+    
+    org_id = get_cached_or_prompted_org_id()
+    gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
+    all_stats = []
+
+    if not gateway_devices:
+        logging.warning("[WARN] No gateway devices found. Exiting export_gateway_device_stats_to_csv.")
+        return
+
+    def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
+        """
+        Fetch device statistics for a single gateway device with retry logic and connection pool management.
+        
+        Args:
+            device_info: Tuple of (site_id, device_id, device_name, site_name)
+            max_retries: Maximum number of retry attempts (uses env var if None)
+            retry_delay: Base delay between retries (uses env var if None)
+            connection_semaphore: Semaphore to limit concurrent connections (optional)
+        """
+        # Use environment variables as defaults if not provided
+        if max_retries is None:
+            max_retries = FAST_MODE_MAX_RETRIES
+        if retry_delay is None:
+            retry_delay = FAST_MODE_RETRY_DELAY
+            
+        site_id, device_id, device_name, site_name = device_info
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Validate inputs before making API calls
+                validate_site_id(site_id, "export_gateway_device_stats_to_csv")
+                validate_device_id(device_id, "export_gateway_device_stats_to_csv")
+                
+                # Use semaphore to limit concurrent connections if provided
+                if connection_semaphore:
+                    with connection_semaphore:
+                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
+                else:
+                    stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
+                
+                # Add contextual information to the stats
+                stats["site_id"] = site_id
+                stats["site_name"] = site_name
+                stats["device_id"] = device_id
+                stats["device_name"] = device_name
+                
+                if attempt > 0:
+                    logging.info(f"✅ Retry {attempt} successful for device {device_name} at site {site_name}")
+                else:
+                    logging.debug(f"✅ Collected device stats for gateway {device_name} at site {site_name}")
+                return stats
+                
+            except Exception as e:
+                if attempt < max_retries:
+                    # Fast mode: reduced backoff delay for quicker retries
+                    backoff_delay = retry_delay * (2 ** attempt) if not fast else retry_delay
+                    logging.warning(f"⚠️ Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {e}")
+                    logging.info(f"🔄 Retrying in {backoff_delay} seconds...")
+                    time.sleep(backoff_delay)
+                else:
+                    logging.error(f"❌ Failed to fetch device stats for {device_name} at site {site_name} after {max_retries + 1} attempts: {e}")
+                    # Return a minimal record with error information
+                    return {
+                        "site_id": site_id,
+                        "site_name": site_name,
+                        "device_id": device_id,
+                        "device_name": device_name,
+                        "error": str(e),
+                        "status": "failed"
+                    }
+
+    # Process devices with appropriate threading based on fast mode
+    if fast and len(gateway_devices) > 10:
+        # Use concurrent processing for large numbers of devices
+        logging.info(f"🚀 Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
+        
+        # Limit concurrent connections to prevent overwhelming the API
+        max_workers = min(10, len(gateway_devices))  # Cap at 10 concurrent requests
+        connection_semaphore = threading.Semaphore(max_workers)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    fetch_device_stats_with_retry, 
+                    device_info, 
+                    connection_semaphore=connection_semaphore
+                ): device_info for device_info in gateway_devices
+            }
+            
+            # Progress bar for concurrent processing
+            for future in tqdm(concurrent.futures.as_completed(futures), 
+                             total=len(futures), 
+                             desc="Gateway Device Stats", 
+                             unit="device"):
+                device_info = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        all_stats.append(result)
+                except Exception as e:
+                    site_id, device_id, device_name, site_name = device_info
+                    logging.error(f"❌ Concurrent processing failed for device {device_name} at site {site_name}: {e}")
+    else:
+        # Sequential processing for smaller datasets or normal mode
+        logging.info(f"📊 Processing {len(gateway_devices)} gateway devices sequentially...")
+        for i, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
+            site_id, device_id, device_name, site_name = device_info
+            logging.debug(f"🔄 Processing device {i}/{len(gateway_devices)}: {device_name} at {site_name}")
+            
+            result = fetch_device_stats_with_retry(device_info)
+            if result:
+                all_stats.append(result)
+
+    # Save results to CSV
+    if all_stats:
+        # Sanitize and flatten nested data structures
+        sanitized = []
+        for stats in all_stats:
+            flat_record = flatten_dict_recursively(stats)
+            sanitized.append(flat_record)
+        
+        filename = "AllGatewayDeviceStats.csv"
+        save_data_to_output(sanitized, filename)
+        logging.info(f"✅ Gateway device statistics saved to {filename} ({len(all_stats)} records).")
+        logging.info(f"🚀 API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
+        
+        # Log summary of successful vs failed requests
+        successful_requests = len([s for s in all_stats if s.get("status") != "failed"])
+        failed_requests = len(all_stats) - successful_requests
+        if failed_requests > 0:
+            logging.warning(f"⚠️ {failed_requests} requests failed out of {len(all_stats)} total")
+        else:
+            logging.info(f"✅ All {successful_requests} requests completed successfully")
+    else:
+        logging.warning("⚠️ No gateway device statistics found. CSV not created.")
+
+def export_gateways_with_wan_port_conflicts_to_csv():
+    """
+    Checks if AllGatewayDeviceStats.csv exists and is fresh. If not, generates it.
+    Then exports a filtered CSV showing gateways that have IP address conflicts WITHIN the same device:
+    - Same IP address assigned to multiple WAN ports (0/0/0, 0/0/1, 0/0/2)
+    
+    Note: Next hop gateway conflicts are not checked since this data is not available in the CSV.
+    """
+    logging.info("🔍 Starting WAN port IP conflict analysis for individual gateway devices...")
+    
+    # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
+    stats_file = "AllGatewayDeviceStats.csv"
+    
+    check_and_generate_csv(stats_file, lambda: export_gateway_device_stats_to_csv(fast=True))
+    
+    # Load the gateway device stats using CSV reader
+    stats_path = get_csv_file_path(stats_file)
+    try:
+        import csv
+        gateway_data = []
+        with open(stats_path, 'r', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            gateway_data = list(reader)
+        
+        logging.info(f"📊 Loaded {len(gateway_data)} gateway device records for analysis")
+    except Exception as e:
+        logging.error(f"❌ Failed to load {stats_file}: {e}")
+        print(f"❌ Failed to load {stats_file}: {e}")
+        return
+    
+    # Define WAN port columns to analyze
+    wan_ports = ['0/0/0', '0/0/1', '0/0/2'] 
+    ip_columns = [f'if_stat_ge-{port}_ips' for port in wan_ports]
+    
+    # Find gateways with internal WAN port IP conflicts
+    logging.info("🔍 Analyzing individual gateways for internal WAN port IP conflicts...")
+    
+    conflicts_found = []
+    
+    for i, row in enumerate(gateway_data):
+        device_name = row.get('device_name', row.get('name', f"Device_{i}"))
+        site_name = row.get('site_name', 'Unknown Site')
+        
+        # Collect IP addresses for this device's WAN ports
+        device_ips = {}  # {ip: [port1, port2, ...]}
+        
+        # Collect IP addresses from WAN ports
+        for col in ip_columns:
+            if col in row and row[col] and str(row[col]).strip():
+                ip_value = str(row[col]).strip()
+                if ip_value not in ['', 'nan', 'None', 'null']:
+                    port = col.replace('if_stat_ge-', '').replace('_ips', '')
+                    
+                    if ip_value not in device_ips:
+                        device_ips[ip_value] = []
+                    device_ips[ip_value].append(port)
+        
+        # Check for IP conflicts within this gateway (same IP on multiple ports)
+        ip_conflicts = []
+        for ip, ports in device_ips.items():
+            if len(ports) > 1:
+                ip_conflicts.append({
+                    'type': 'IP Address Conflict',
+                    'value': ip,
+                    'ports': ports,
+                    'port_count': len(ports)
+                })
+                logging.warning(f"⚠️ IP conflict in {device_name}: {ip} assigned to ports {', '.join(ports)}")
+        
+        # If this gateway has IP conflicts, add simplified records for each conflicted port
+        if ip_conflicts:
+            # Add records for IP conflicts - one line per conflicted port
+            for conflict in ip_conflicts:
+                for port in conflict['ports']:
+                    conflicts_found.append({
+                        'device_name': device_name,
+                        'site_name': site_name,
+                        'port_name': f"ge-{port}",
+                        'port_ip': conflict['value'],
+                        'conflict_type': 'IP Address Conflict',
+                        'conflict_with_ports': ', '.join([p for p in conflict['ports'] if p != port])
+                    })
+    
+    # Export results
+    if conflicts_found:
+        output_file = "GatewayWANPortConflicts.csv"
+        
+        # Sort by device name and port name
+        conflicts_found.sort(key=lambda x: (x.get('device_name', ''), x.get('port_name', '')))
+        
+        # Save to CSV using existing helper
+        save_data_to_output(conflicts_found, output_file)
+        
+        logging.info(f"✅ WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
+        print(f"✅ WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
+        
+        # Display summary
+        unique_gateways = set()
+        ip_conflict_ports = len(conflicts_found)
+        
+        for record in conflicts_found:
+            unique_gateways.add(record.get('device_name', 'Unknown'))
+        
+        logging.info(f"📊 Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
+        print(f"📊 Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
+        
+        # Show sample of conflicted ports
+        print(f"\n🔍 Sample WAN Port IP Conflicts Found:")
+        for i, record in enumerate(conflicts_found[:10], 1):
+            print(f"{i:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
+            print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
+            print(f"    Conflicts with port(s): {record.get('conflict_with_ports', 'Unknown')}")
+            print()
+        
+        if len(conflicts_found) > 10:
+            print(f"... and {len(conflicts_found) - 10} more conflicted ports")
+        
+    else:
+        logging.info("✅ No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+        print("✅ No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+        print("💡 This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
 
 def export_sites_with_location_to_csv():
     """
@@ -3374,29 +3935,84 @@ def export_gateways_with_site_info_to_csv():
         ])
     logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
-def export_devices_with_site_info_to_csv():
+def export_devices_with_site_info_to_csv(fast=False):
     """
     Fetches all devices in the organization, enriches them with site and address info,
     and exports the result to AllDevicesWithSiteInfo.csv. Also logs and displays a summary table.
+    
+    Args:
+        fast (bool): If True, enables optimized processing mode with enhanced caching
+                    and concurrent site lookups where applicable.
     """
     logging.info("Fetching All Devices with Site Info...")  # Log start of function
+    if fast:
+        logging.info("🚀 Fast mode enabled for devices with site info export")
+    
     org_id = get_cached_or_prompted_org_id()
 
-    # Fetch all sites and build a lookup dictionary for site info
-    site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
-    sites = mistapi.get_all(response=site_response, mist_session=apisession)
-    site_lookup = {
-        site["id"]: {
-            "name": site.get("name", ""),
-            "address": site.get("address", "")
-        } for site in sites
-    }
-    logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+    # Ensure required CSV files are available, using caching where possible
+    if fast:
+        # Use cached data when fast mode is enabled
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+        
+        # Load from cached CSV files instead of making API calls
+        site_lookup = {}
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                site_lookup = {
+                    row["id"]: {
+                        "name": row.get("name", ""),
+                        "address": row.get("address", "")
+                    } for row in reader
+                }
+            logging.debug(f"Loaded {len(site_lookup)} sites from cached SiteList.csv")
+        except Exception as e:
+            logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {e}")
+            # Fallback to API if cached data fails
+            site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+            sites = mistapi.get_all(response=site_response, mist_session=apisession)
+            site_lookup = {
+                site["id"]: {
+                    "name": site.get("name", ""),
+                    "address": site.get("address", "")
+                } for site in sites
+            }
+            logging.debug(f"Loaded {len(site_lookup)} sites from API fallback")
 
-    # Fetch org inventory (all devices)
-    inv_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-    inventory = mistapi.get_all(response=inv_response, mist_session=apisession)
-    logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
+        # Load inventory from cached CSV
+        inventory = []
+        try:
+            inventory_path = get_csv_file_path("OrgInventory.csv")
+            with open(inventory_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                inventory = list(reader)
+            logging.debug(f"Loaded {len(inventory)} devices from cached OrgInventory.csv")
+        except Exception as e:
+            logging.warning(f"Failed to load from cached OrgInventory.csv, falling back to API: {e}")
+            # Fallback to API if cached data fails
+            inv_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+            inventory = mistapi.get_all(response=inv_response, mist_session=apisession)
+            logging.debug(f"Loaded {len(inventory)} devices from API fallback")
+    else:
+        # Original behavior: fetch directly from API
+        # Fetch all sites and build a lookup dictionary for site info
+        site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+        sites = mistapi.get_all(response=site_response, mist_session=apisession)
+        site_lookup = {
+            site["id"]: {
+                "name": site.get("name", ""),
+                "address": site.get("address", "")
+            } for site in sites
+        }
+        logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+
+        # Fetch org inventory (all devices)
+        inv_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+        inventory = mistapi.get_all(response=inv_response, mist_session=apisession)
+        logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
     def split_address(address):
         """
@@ -5095,12 +5711,12 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
 def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
     """
     Fetches configuration details for all gateway devices in the org using org inventory.
-    If `fast` is True, fetches each device config concurrently using a thread per device.
+    If `fast` is True, fetches each device config concurrently using connection pool management.
     
     Args:
         apisession: Authenticated Mist API session.
         org_id: Organization ID.
-        fast (bool): If True, enables high-concurrency mode.
+        fast (bool): If True, enables high-concurrency mode with connection pool management.
         max_workers (int): Optional override for number of concurrent threads.
     
     Returns:
@@ -5138,38 +5754,73 @@ def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_wo
 
     logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
 
-    def fetch_config(site_id, device_id, site_name):
-        try:
-            config = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id).data
-            config["site_id"] = site_id
-            config["site_name"] = site_name
-            logging.info(f"✅ Fetched config for device {device_id} at site {site_name}")
-            return config
-        except Exception as e:
-            logging.warning(f"⚠️ Failed to fetch config for device {device_id} at site {site_name}: {e}")
-            return None
-    all_device_configs = []
+    def fetch_config(work_item, connection_semaphore):
+        """Fetch configuration for a single device with retry logic."""
+        site_id, device_id, site_name = work_item
+        
+        with connection_semaphore:  # Limit concurrent connections
+            try:
+                logging.debug(f"Fetching config for {device_id} ({site_name})")
+                response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                config = getattr(response, "data", {})
+                if config:
+                    # Add site metadata for enrichment
+                    config["site_name"] = site_name
+                    config["site_id"] = site_id
+                    logging.debug(f"✅ Config fetched for {device_id}")
+                    return config
+                else:
+                    logging.warning(f"⚠️ Empty config for device {device_id}")
+            except Exception as e:
+                logging.error(f"❌ Failed to fetch config for device {device_id}: {e}")
+                return None
 
+    def retry_fetch_config(failed_items, connection_semaphore):
+        """Retry wrapper for device config fetching."""
+        max_retries = int(os.getenv('FAST_MODE_SEQUENTIAL_MAX_RETRIES', '1'))
+        retry_results = []
+        
+        for work_item in failed_items:
+            site_id, device_id, site_name = work_item
+            
+            for attempt in range(max_retries + 1):
+                result = fetch_config(work_item, connection_semaphore)
+                if result is not None:
+                    retry_results.append(result)
+                    break
+                if attempt < max_retries:
+                    delay = 0.5 * (1.5 ** attempt)  # Exponential backoff
+                    logging.debug(f"Retrying device {device_id} in {delay:.2f}s (attempt {attempt + 2}/{max_retries + 1})")
+                    time.sleep(delay)
+            else:
+                logging.warning(f"⚠️ Failed to fetch config for device {device_id} after {max_retries + 1} attempts")
+        
+        return retry_results
+
+    # Use connection pool management helper if fast mode is enabled
     if fast:
-        max_threads = max_workers or os.cpu_count() or 8
-        logging.info(f"🚀 Fast mode enabled: launching {len(work_items)} tasks with up to {max_threads} threads.")
-        with ThreadPoolExecutor(max_workers=max_threads) as executor:
-            futures = [executor.submit(fetch_config, sid, did, sname) for sid, did, sname in work_items]
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Fetching Configs", unit="device"):
-                result = future.result()
-                if result:
-                    all_device_configs.append(result)
+        successful_results, failed_items = execute_with_connection_pool_management(
+            work_items=work_items,
+            worker_function=fetch_config,
+            batch_description="gateway device configs",
+            retry_function=retry_fetch_config
+        )
+        all_device_configs = successful_results
     else:
-        logging.info("🐢 Fast mode disabled: using sequential rate-limited execution.")
-        smoothed = None
-        for site_id, device_id, site_name in tqdm(work_items, desc="Fetching Configs", unit="device"):
-            smoothed, delay = get_rate_limited_delay(smoothed)
-            logging.info(f"[INFO] Sleeping for {delay:.2f} seconds.")
-            time.sleep(delay)
-            result = fetch_config(site_id, device_id, site_name)
-            if result:
+        # Sequential processing for non-fast mode
+        all_device_configs = []
+        import threading
+        # Create a dummy semaphore for sequential processing
+        dummy_semaphore = threading.Semaphore(1)
+        
+        for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):
+            result = fetch_config(work_item, dummy_semaphore)
+            if result is not None:
                 all_device_configs.append(result)
 
+    # Filter out None results
+    all_device_configs = [config for config in all_device_configs if config is not None]
+    
     logging.info(f"✅ Completed fetching {len(all_device_configs)} gateway device configs.")
     return all_device_configs
 
@@ -5429,25 +6080,807 @@ def normalize_zip_code(zip_code):
     # Return first 5 digits
     return zip_digits[:5]
 
-def compare_inventory_with_csv():
+def normalize_state_name(state_str):
+    """
+    Normalizes state names and abbreviations to a consistent format.
+    Converts both full state names and abbreviations to lowercase abbreviations.
+    """
+    if not state_str:
+        return ""
+    
+    # Convert to lowercase and strip
+    state = state_str.lower().strip()
+    
+    # State name to abbreviation mapping
+    state_mapping = {
+        # Full names to abbreviations
+        'alabama': 'al', 'alaska': 'ak', 'arizona': 'az', 'arkansas': 'ar', 'california': 'ca',
+        'colorado': 'co', 'connecticut': 'ct', 'delaware': 'de', 'florida': 'fl', 'georgia': 'ga',
+        'hawaii': 'hi', 'idaho': 'id', 'illinois': 'il', 'indiana': 'in', 'iowa': 'ia',
+        'kansas': 'ks', 'kentucky': 'ky', 'louisiana': 'la', 'maine': 'me', 'maryland': 'md',
+        'massachusetts': 'ma', 'michigan': 'mi', 'minnesota': 'mn', 'mississippi': 'ms', 'missouri': 'mo',
+        'montana': 'mt', 'nebraska': 'ne', 'nevada': 'nv', 'new hampshire': 'nh', 'new jersey': 'nj',
+        'new mexico': 'nm', 'new york': 'ny', 'north carolina': 'nc', 'north dakota': 'nd', 'ohio': 'oh',
+        'oklahoma': 'ok', 'oregon': 'or', 'pennsylvania': 'pa', 'rhode island': 'ri', 'south carolina': 'sc',
+        'south dakota': 'sd', 'tennessee': 'tn', 'texas': 'tx', 'utah': 'ut', 'vermont': 'vt',
+        'virginia': 'va', 'washington': 'wa', 'west virginia': 'wv', 'wisconsin': 'wi', 'wyoming': 'wy',
+        'district of columbia': 'dc',
+        
+        # Abbreviations to themselves (normalized to lowercase)
+        'al': 'al', 'ak': 'ak', 'az': 'az', 'ar': 'ar', 'ca': 'ca', 'co': 'co', 'ct': 'ct',
+        'de': 'de', 'fl': 'fl', 'ga': 'ga', 'hi': 'hi', 'id': 'id', 'il': 'il', 'in': 'in',
+        'ia': 'ia', 'ks': 'ks', 'ky': 'ky', 'la': 'la', 'me': 'me', 'md': 'md', 'ma': 'ma',
+        'mi': 'mi', 'mn': 'mn', 'ms': 'ms', 'mo': 'mo', 'mt': 'mt', 'ne': 'ne', 'nv': 'nv',
+        'nh': 'nh', 'nj': 'nj', 'nm': 'nm', 'ny': 'ny', 'nc': 'nc', 'nd': 'nd', 'oh': 'oh',
+        'ok': 'ok', 'or': 'or', 'pa': 'pa', 'ri': 'ri', 'sc': 'sc', 'sd': 'sd', 'tn': 'tn',
+        'tx': 'tx', 'ut': 'ut', 'vt': 'vt', 'va': 'va', 'wa': 'wa', 'wv': 'wv', 'wi': 'wi',
+        'wy': 'wy', 'dc': 'dc'
+    }
+    
+    return state_mapping.get(state, state)
+
+def validate_addresses_with_nominatim(mist_address, comparison_address, timeout=5, debug=False, skip_ssl_verify=False, org_name=None, mist_duplicates=None, ref_duplicates=None, site_name=None):
+    """
+    Validate both address sets against Nominatim (OpenStreetMap) geocoding API
+    to determine which is more accurate/complete.
+    
+    Args:
+        mist_address (dict): Mist address data
+        comparison_address (dict): Comparison CSV address data  
+        timeout (int): HTTP request timeout in seconds
+        debug (bool): If True, enables detailed debug logging for API requests and responses
+        org_name (str): Organization name for intelligent tiebreaking
+        mist_duplicates (dict): Dictionary of duplicate Mist addresses {addr_key: [site_names]}
+        ref_duplicates (dict): Dictionary of duplicate reference addresses {addr_key: [site_names]}
+        site_name (str): Current site name being processed
+        
+    Returns:
+        dict: {
+            'mist_validation': {'valid': bool, 'confidence': float, 'lat': float, 'lon': float},
+            'comparison_validation': {'valid': bool, 'confidence': float, 'lat': float, 'lon': float},
+            'recommendation': str  # 'mist', 'comparison', or 'uncertain'
+        }
+    """
+    import requests
+    import time
+    
+    # Suppress SSL warnings if skip_ssl_verify is enabled
+    if skip_ssl_verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        if debug:
+            logging.warning("SSL certificate verification disabled - urllib3 warnings suppressed")
+    
+    if debug:
+        logging.debug("ENTRY: validate_addresses_with_nominatim()")
+        logging.debug(f"  mist_address: {mist_address}")
+        logging.debug(f"  comparison_address: {comparison_address}")
+        logging.debug(f"  timeout: {timeout}")
+        logging.debug(f"  skip_ssl_verify: {skip_ssl_verify}")
+    
+    def geocode_address(address_dict, address_source="unknown"):
+        """Geocode a single address using Nominatim"""
+        try:
+            # Build address string
+            address_parts = []
+            if address_dict.get('address'):
+                address_parts.append(address_dict['address'])
+            if address_dict.get('city'):
+                address_parts.append(address_dict['city'])
+            if address_dict.get('state'):
+                address_parts.append(address_dict['state'])
+            if address_dict.get('zip'):
+                address_parts.append(address_dict['zip'])
+                
+            if not address_parts:
+                if debug:
+                    logging.debug(f"GEOCODE [{address_source}]: No address parts available")
+                return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': 'Empty address'}
+            
+            address_string = ', '.join(address_parts)
+            if debug:
+                logging.debug(f"GEOCODE [{address_source}]: Built address string: '{address_string}'")
+            
+            # Nominatim API call (respect 1 req/sec limit)
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                'format': 'json',
+                'q': address_string,
+                'limit': 1,
+                'addressdetails': 1
+            }
+            headers = {
+                'User-Agent': 'MistHelper/1.0 (address validation)'
+            }
+            
+            if debug:
+                logging.debug(f"GEOCODE [{address_source}]: Making API request to {url}")
+                logging.debug(f"GEOCODE [{address_source}]: Request params: {params}")
+                logging.debug(f"GEOCODE [{address_source}]: Request headers: {headers}")
+                if skip_ssl_verify:
+                    logging.warning(f"GEOCODE [{address_source}]: SSL certificate verification DISABLED for this request")
+            
+            # Configure SSL verification based on parameter
+            verify_ssl = not skip_ssl_verify
+            if skip_ssl_verify and debug:
+                logging.debug(f"GEOCODE [{address_source}]: SSL verification bypassed (verify={verify_ssl})")
+            
+            # Retry logic for timeout errors
+            max_retries = 2
+            retry_delay = 2  # seconds
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    # Increase timeout for better reliability
+                    actual_timeout = timeout + (attempt * 5)  # Increase timeout on retries
+                    if debug and attempt > 0:
+                        logging.debug(f"GEOCODE [{address_source}]: Retry attempt {attempt} with timeout {actual_timeout}s")
+                    
+                    response = requests.get(url, params=params, headers=headers, timeout=actual_timeout, verify=verify_ssl)
+                    
+                    if debug:
+                        logging.debug(f"GEOCODE [{address_source}]: Response status: {response.status_code}")
+                        logging.debug(f"GEOCODE [{address_source}]: Response headers: {dict(response.headers)}")
+                        logging.debug(f"GEOCODE [{address_source}]: Response content length: {len(response.content)} bytes")
+                    
+                    # If we get here, the request succeeded, break out of retry loop
+                    break
+                    
+                except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as timeout_error:
+                    if attempt < max_retries:
+                        if debug:
+                            logging.debug(f"GEOCODE [{address_source}]: Timeout on attempt {attempt + 1}, retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        # Final retry failed, raise the timeout error
+                        if debug:
+                            logging.debug(f"GEOCODE [{address_source}]: All retry attempts failed due to timeout")
+                        raise timeout_error
+                except Exception as e:
+                    # Non-timeout errors should not be retried
+                    raise e
+            
+            if response.status_code == 200:
+                results = response.json()
+                if debug:
+                    logging.debug(f"GEOCODE [{address_source}]: Response JSON: {results}")
+                
+                if results:
+                    result = results[0]
+                    
+                    # Calculate confidence from multiple Nominatim fields
+                    confidence = 0.0
+                    importance = float(result.get('importance', 0.0))
+                    
+                    if debug:
+                        logging.debug(f"GEOCODE [{address_source}]: Raw importance from Nominatim: {importance}")
+                        logging.debug(f"GEOCODE [{address_source}]: Available result fields: {list(result.keys())}")
+                    
+                    # Use importance if available and meaningful, otherwise calculate from match quality
+                    if importance > 0.01:  # Only use importance if it's above a minimal threshold
+                        confidence = min(1.0, importance * 2.0)  # Scale importance up as it's often small
+                        if debug:
+                            logging.debug(f"GEOCODE [{address_source}]: Using scaled importance: {confidence:.3f}")
+                    else:
+                        # Calculate confidence based on address components matched and result quality
+                        display_name = result.get('display_name', '').lower()
+                        address_string_lower = address_string.lower()
+                        
+                        if debug:
+                            logging.debug(f"GEOCODE [{address_source}]: Calculating custom confidence")
+                            logging.debug(f"GEOCODE [{address_source}]: Address string: '{address_string_lower}'")
+                            logging.debug(f"GEOCODE [{address_source}]: Display name: '{display_name}'")
+                        
+                        # Count matching components with partial matching
+                        match_score = 0.0
+                        total_components = len(address_parts)
+                        
+                        for part in address_parts:
+                            part_clean = part.lower().strip()
+                            if len(part_clean) > 2:  # Only check meaningful parts
+                                # Full match gets full point
+                                if part_clean in display_name:
+                                    match_score += 1.0
+                                    if debug:
+                                        logging.debug(f"GEOCODE [{address_source}]: Full match for '{part_clean}'")
+                                # Partial match gets partial point
+                                elif any(word in display_name for word in part_clean.split() if len(word) > 2):
+                                    match_score += 0.5
+                                    if debug:
+                                        logging.debug(f"GEOCODE [{address_source}]: Partial match for '{part_clean}'")
+                        
+                        # Base confidence from component matching
+                        component_conf = match_score / total_components if total_components > 0 else 0.0
+                        
+                        # Quality indicators from Nominatim result
+                        quality_boost = 0.0
+                        
+                        # Place type quality boost
+                        place_type = result.get('type', '').lower()
+                        place_class = result.get('class', '').lower()
+                        
+                        if place_type in ['house', 'building', 'commercial', 'office', 'retail', 'shop']:
+                            quality_boost += 0.3
+                        elif place_type in ['residential', 'industrial', 'public']:
+                            quality_boost += 0.2
+                        elif place_class in ['building', 'place', 'amenity']:
+                            quality_boost += 0.1
+                            
+                        # Address detail quality (more specific = higher confidence)
+                        if result.get('address', {}):
+                            address_details = result.get('address', {})
+                            detail_count = len([v for v in address_details.values() if v])
+                            if detail_count >= 5:  # Street, city, state, postcode, country
+                                quality_boost += 0.2
+                            elif detail_count >= 3:
+                                quality_boost += 0.1
+                        
+                        # Combine component matching with quality indicators
+                        confidence = min(1.0, component_conf + quality_boost)
+                        
+                        if debug:
+                            logging.debug(f"GEOCODE [{address_source}]: Component confidence: {component_conf:.3f}")
+                            logging.debug(f"GEOCODE [{address_source}]: Quality boost: {quality_boost:.3f}")
+                            logging.debug(f"GEOCODE [{address_source}]: Place type: '{place_type}', Class: '{place_class}'")
+                            logging.debug(f"GEOCODE [{address_source}]: Final confidence: {confidence:.3f}")
+                    
+                    geocode_result = {
+                        'valid': True,
+                        'confidence': confidence,
+                        'lat': float(result['lat']),
+                        'lon': float(result['lon']),
+                        'display_name': result.get('display_name', ''),
+                        'place_type': result.get('type', ''),
+                        'place_class': result.get('class', ''),
+                        'address_details': result.get('address', {}),
+                        'error': None
+                    }
+                    if debug:
+                        logging.debug(f"GEOCODE [{address_source}]: SUCCESS - confidence: {confidence:.3f}, lat: {result['lat']}, lon: {result['lon']}")
+                        logging.debug(f"GEOCODE [{address_source}]: Display name: {result.get('display_name', '')}")
+                        logging.debug(f"GEOCODE [{address_source}]: Place type: {result.get('type', '')}")
+                    return geocode_result
+                else:
+                    if debug:
+                        logging.debug(f"GEOCODE [{address_source}]: No results found in API response")
+                    return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': 'No results found'}
+            else:
+                if debug:
+                    logging.debug(f"GEOCODE [{address_source}]: HTTP error {response.status_code}")
+                    logging.debug(f"GEOCODE [{address_source}]: Response content: {response.content[:200]}...")
+                return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': f'HTTP {response.status_code}'}
+                
+        except Exception as e:
+            if debug:
+                logging.debug(f"GEOCODE [{address_source}]: Exception occurred: {str(e)}")
+                import traceback
+                logging.debug(f"GEOCODE [{address_source}]: Full traceback: {traceback.format_exc()}")
+            return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': str(e)}
+    
+    # Validate both addresses (with rate limiting)
+    if debug:
+        logging.debug("Starting mist address validation...")
+    mist_result = geocode_address(mist_address, "MIST")
+    
+    if debug:
+        logging.debug("Applying rate limiting delay (1.1 seconds)...")
+    time.sleep(1.1)  # Respect Nominatim 1 req/sec limit
+    
+    if debug:
+        logging.debug("Starting comparison address validation...")
+    comparison_result = geocode_address(comparison_address, "COMPARISON")
+    
+    if debug:
+        logging.debug(f"Mist validation result: {mist_result}")
+        logging.debug(f"Comparison validation result: {comparison_result}")
+    
+    # Determine recommendation based on validation results
+    recommendation = 'uncertain'
+    recommendation_reason = "Unknown"
+    
+    if mist_result['valid'] and not comparison_result['valid']:
+        recommendation = 'mist'
+        recommendation_reason = f"Only Mist address is valid (confidence: {mist_result['confidence']:.3f})"
+        if debug:
+            logging.debug("Recommendation: MIST (only mist address is valid)")
+    elif comparison_result['valid'] and not mist_result['valid']:
+        recommendation = 'comparison'
+        recommendation_reason = f"Only reference address is valid (confidence: {comparison_result['confidence']:.3f})"
+        if debug:
+            logging.debug("Recommendation: COMPARISON (only comparison address is valid)")
+    elif mist_result['valid'] and comparison_result['valid']:
+        # Both addresses are valid - need intelligent tiebreaker logic
+        if debug:
+            logging.debug("TIEBREAKER: Both addresses validated successfully, applying tiebreaker logic")
+        
+        # Check for duplicate address disqualification first
+        mist_is_duplicate = False
+        ref_is_duplicate = False
+        
+        if mist_duplicates and site_name:
+            # Create address key for Mist address
+            mist_addr_key = f"{mist_address['address'].lower()}|{mist_address['city'].lower()}|{mist_address['state'].lower()}|{mist_address['zip']}"
+            mist_is_duplicate = mist_addr_key in mist_duplicates
+            if debug and mist_is_duplicate:
+                logging.debug(f"TIEBREAKER: Mist address is duplicate - shared by sites: {mist_duplicates[mist_addr_key]}")
+        
+        if ref_duplicates and site_name:
+            # Create address key for reference address
+            ref_addr_key = f"{comparison_address['address'].lower()}|{comparison_address['city'].lower()}|{comparison_address['state'].lower()}|{comparison_address['zip']}"
+            ref_is_duplicate = ref_addr_key in ref_duplicates
+            if debug and ref_is_duplicate:
+                logging.debug(f"TIEBREAKER: Reference address is duplicate - shared by sites: {ref_duplicates[ref_addr_key]}")
+        
+        # Apply duplicate disqualification logic
+        if mist_is_duplicate and ref_is_duplicate:
+            recommendation = 'uncertain' 
+            recommendation_reason = "⚠️  Both addresses are duplicates (shared between multiple sites) - manual review required"
+            if debug:
+                logging.debug("TIEBREAKER: Both addresses are duplicates - flagging as uncertain")
+        elif mist_is_duplicate and not ref_is_duplicate:
+            recommendation = 'comparison'
+            recommendation_reason = "Mist address is duplicate (shared between sites), using reference address"
+            if debug:
+                logging.debug("TIEBREAKER: Mist address is duplicate, recommending reference")
+        elif ref_is_duplicate and not mist_is_duplicate:
+            recommendation = 'mist'
+            recommendation_reason = "Reference address is duplicate (shared between sites), using Mist address"
+            if debug:
+                logging.debug("TIEBREAKER: Reference address is duplicate, recommending Mist")
+        else:
+            # No duplicates detected, proceed with standard tiebreaker logic
+            # Both valid - compare confidence scores
+            if mist_result['confidence'] > comparison_result['confidence'] * 1.1:  # 10% threshold
+                recommendation = 'mist'
+                recommendation_reason = f"Mist address has higher confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
+                if debug:
+                    logging.debug(f"Recommendation: MIST (higher confidence: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
+            elif comparison_result['confidence'] > mist_result['confidence'] * 1.1:
+                recommendation = 'comparison'
+                recommendation_reason = f"Reference address has higher confidence ({comparison_result['confidence']:.3f} vs {mist_result['confidence']:.3f})"
+                if debug:
+                    logging.debug(f"Recommendation: COMPARISON (higher confidence: {comparison_result['confidence']:.3f} vs {mist_result['confidence']:.3f})")
+            else:
+                # Confidence scores are too close - use intelligent tiebreaker
+                recommendation = 'uncertain'
+                recommendation_reason = f"Both addresses have similar confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
+                
+                if org_name and debug:
+                    logging.debug(f"Both addresses valid with similar confidence - applying organization name tiebreaker with org: '{org_name}'")
+                
+                # Intelligent tiebreaker using organization name and business context
+                if org_name:
+                    # Normalize organization name for comparison
+                    normalized_org = normalize_business_name(org_name)
+                    
+                    # Extract business names from validated address display names
+                    mist_display = mist_result.get('display_name', '').lower()
+                    comp_display = comparison_result.get('display_name', '').lower()
+                    
+                    # Calculate organization name similarity with each address
+                    mist_org_similarity = calculate_org_name_similarity(normalized_org, mist_display)
+                    comp_org_similarity = calculate_org_name_similarity(normalized_org, comp_display)
+                    
+                    if debug:
+                        logging.debug(f"Organization name similarity scores: Mist={mist_org_similarity:.3f}, Comparison={comp_org_similarity:.3f}")
+                    
+                    # If there's a clear winner based on organization name similarity
+                    if mist_org_similarity > comp_org_similarity + 0.1:  # 10% threshold
+                        recommendation = 'mist'
+                        recommendation_reason = f"Mist address better matches organization '{org_name}' (similarity: {mist_org_similarity:.3f} vs {comp_org_similarity:.3f})"
+                        if debug:
+                            logging.debug(f"Recommendation: MIST (organization name match: {mist_org_similarity:.3f} vs {comp_org_similarity:.3f})")
+                    elif comp_org_similarity > mist_org_similarity + 0.1:
+                        recommendation = 'comparison'
+                        recommendation_reason = f"Reference address better matches organization '{org_name}' (similarity: {comp_org_similarity:.3f} vs {mist_org_similarity:.3f})"
+                        if debug:
+                            logging.debug(f"Recommendation: COMPARISON (organization name match: {comp_org_similarity:.3f} vs {mist_org_similarity:.3f})")
+                    else:
+                        # Still too close - apply business context rules
+                        business_recommendation = apply_business_context_rules(mist_result, comparison_result, debug)
+                        if business_recommendation == 'mist':
+                            recommendation = 'mist'
+                            recommendation_reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
+                        elif business_recommendation == 'comparison':
+                            recommendation = 'comparison'
+                            recommendation_reason = f"Reference address appears more business-appropriate (type: {comparison_result.get('place_type', 'unknown')})"
+                        else:
+                            recommendation = 'uncertain'
+                            recommendation_reason = f"All tiebreakers inconclusive - similar confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
+                            if debug:
+                                logging.debug(f"Recommendation: UNCERTAIN (all tiebreakers inconclusive - confidence: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
+                else:
+                    # No org name available - apply business context rules only
+                    business_recommendation = apply_business_context_rules(mist_result, comparison_result, debug)
+                    if business_recommendation == 'mist':
+                        recommendation = 'mist'
+                        recommendation_reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
+                    elif business_recommendation == 'comparison':
+                        recommendation = 'comparison'
+                        recommendation_reason = f"Reference address appears more business-appropriate (type: {comparison_result.get('place_type', 'unknown')})"
+                    else:
+                        recommendation = 'uncertain'
+                        recommendation_reason = f"Confidence scores too close and no clear business preference ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
+                        if debug:
+                            logging.debug(f"Recommendation: UNCERTAIN (confidence scores too close: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
+    else:
+        recommendation = 'uncertain'
+        recommendation_reason = "Both addresses failed validation"
+        if debug:
+            logging.debug("Recommendation: UNCERTAIN (both addresses failed validation)")
+    
+    final_result = {
+        'mist_validation': mist_result,
+        'comparison_validation': comparison_result,
+        'recommendation': recommendation,
+        'recommendation_reason': recommendation_reason
+    }
+    
+    if debug:
+        logging.debug(f"EXIT: validate_addresses_with_nominatim() - returning: {final_result}")
+    
+    return final_result
+
+def normalize_business_name(business_name):
+    """
+    Normalize a business name for comparison by:
+    - Converting to lowercase
+    - Removing common business suffixes (Inc, LLC, Corp, etc.)
+    - Removing punctuation and extra whitespace
+    - Standardizing common abbreviations
+    """
+    if not business_name:
+        return ""
+    
+    import re
+    
+    # Convert to lowercase and strip
+    normalized = business_name.lower().strip()
+    
+    # Remove common business suffixes
+    business_suffixes = [
+        r'\binc\.?$', r'\bincorporated$', r'\bllc\.?$', r'\bcorp\.?$', r'\bcorporation$',
+        r'\bltd\.?$', r'\blimited$', r'\bco\.?$', r'\bcompany$', r'\benterprise$',
+        r'\benterprises$', r'\bgroup$', r'\bholdings$', r'\bassociates$', r'\bpartners$',
+        r'\b& co\.?$', r'\b&co\.?$'
+    ]
+    
+    for suffix in business_suffixes:
+        normalized = re.sub(suffix, '', normalized).strip()
+    
+    # Remove punctuation and normalize whitespace
+    normalized = re.sub(r'[^\w\s]', ' ', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    
+    return normalized
+
+def calculate_org_name_similarity(org_name, address_display):
+    """
+    Calculate similarity between organization name and validated address display name.
+    Returns a similarity score between 0.0 and 1.0.
+    """
+    if not org_name or not address_display:
+        return 0.0
+    
+    from difflib import SequenceMatcher
+    import re
+    
+    # Extract potential business names from the address display
+    # Nominatim often includes business names in the display_name field
+    org_words = set(org_name.split())
+    
+    # Check for exact word matches first
+    address_words = set(re.findall(r'\b\w+\b', address_display.lower()))
+    exact_matches = len(org_words.intersection(address_words))
+    
+    if exact_matches > 0:
+        word_similarity = exact_matches / len(org_words)
+    else:
+        word_similarity = 0.0
+    
+    # Calculate overall string similarity
+    string_similarity = SequenceMatcher(None, org_name, address_display).ratio()
+    
+    # Weighted combination: exact word matches are more important
+    combined_similarity = (word_similarity * 0.7) + (string_similarity * 0.3)
+    
+    return min(1.0, combined_similarity)
+
+def apply_business_context_rules(mist_result, comparison_result, debug=False):
+    """
+    Apply business context rules when both addresses are valid but confidence scores are similar.
+    Returns 'mist', 'comparison', or 'uncertain'.
+    """
+    # Business address type preferences based on place_type
+    business_place_types = ['commercial', 'office', 'retail', 'building', 'shop', 'store']
+    residential_place_types = ['house', 'residential', 'apartment']
+    
+    mist_place = mist_result.get('place_type', '').lower()
+    comp_place = comparison_result.get('place_type', '').lower()
+    
+    if debug:
+        logging.debug(f"Business context analysis: Mist place_type='{mist_place}', Comparison place_type='{comp_place}'")
+    
+    # Prefer business/commercial addresses over residential
+    mist_is_business = any(biz_type in mist_place for biz_type in business_place_types)
+    comp_is_business = any(biz_type in comp_place for biz_type in business_place_types)
+    
+    mist_is_residential = any(res_type in mist_place for res_type in residential_place_types)
+    comp_is_residential = any(res_type in comp_place for res_type in residential_place_types)
+    
+    if mist_is_business and comp_is_residential:
+        if debug:
+            logging.debug("Business context rule: Preferring Mist (business over residential)")
+        return 'mist'
+    elif comp_is_business and mist_is_residential:
+        if debug:
+            logging.debug("Business context rule: Preferring Comparison (business over residential)")
+        return 'comparison'
+    
+    # If both are business or both are residential, check confidence again with lower threshold
+    confidence_diff = abs(mist_result['confidence'] - comparison_result['confidence'])
+    if confidence_diff > 0.05:  # 5% threshold for final decision
+        if mist_result['confidence'] > comparison_result['confidence']:
+            if debug:
+                logging.debug(f"Business context rule: Preferring Mist (slightly higher confidence: {mist_result['confidence']:.3f})")
+            return 'mist'
+        else:
+            if debug:
+                logging.debug(f"Business context rule: Preferring Comparison (slightly higher confidence: {comparison_result['confidence']:.3f})")
+            return 'comparison'
+    
+    if debug:
+        logging.debug("Business context rules inconclusive")
+    return 'uncertain'
+
+def normalize_address_string(address_str):
+    """
+    Normalizes an address string for comparison by:
+    - Converting to lowercase
+    - Removing extra whitespace
+    - Standardizing common abbreviations
+    - Removing punctuation
+    """
+    if not address_str:
+        return ""
+    
+    # Convert to lowercase and strip
+    normalized = address_str.lower().strip()
+    
+    # Common address abbreviations standardization
+    abbreviations = {
+        r'\bstreet\b': 'st',
+        r'\bst\b': 'st',
+        r'\bavenue\b': 'ave',
+        r'\bave\b': 'ave',
+        r'\bboulevard\b': 'blvd',
+        r'\bblvd\b': 'blvd',
+        r'\bbuilding\b': 'bldg',
+        r'\bbuilding\b': 'bldg',
+        r'\bsuite\b': 'ste',
+        r'\bsuite\b': 'ste',
+        r'\bnorth\b': 'n',
+        r'\bsouth\b': 's',
+        r'\beast\b': 'e',
+        r'\bwest\b': 'w',
+        r'\bdrive\b': 'dr',
+        r'\bdr\b': 'dr',
+        r'\broad\b': 'rd',
+        r'\brd\b': 'rd',
+        r'\blane\b': 'ln',
+        r'\bln\b': 'ln',
+        r'\bcourt\b': 'ct',
+        r'\bct\b': 'ct',
+        r'\bplace\b': 'pl',
+        r'\bpl\b': 'pl',
+        r'\bparkway\b': 'pkwy',
+        r'\bpkwy\b': 'pkwy',
+        r'\bhighway\b': 'hwy',
+        r'\bhwy\b': 'hwy',
+    }
+    
+    for full_form, abbrev in abbreviations.items():
+        normalized = re.sub(full_form, abbrev, normalized)
+    
+    # Remove punctuation and extra spaces
+    normalized = re.sub(r'[^\w\s]', ' ', normalized)
+    normalized = ' '.join(normalized.split())
+    
+    return normalized
+    """
+    Normalizes an address string for comparison by:
+    - Converting to lowercase
+    - Removing extra whitespace
+    - Standardizing common abbreviations
+    - Removing punctuation
+    """
+    if not address_str:
+        return ""
+    
+    # Convert to lowercase and strip
+    normalized = address_str.lower().strip()
+    
+    # Common address abbreviations standardization
+    abbreviations = {
+        r'\bstreet\b': 'st',
+        r'\bst\b': 'st',
+        r'\bavenue\b': 'ave',
+        r'\bave\b': 'ave',
+        r'\bboulevard\b': 'blvd',
+        r'\bblvd\b': 'blvd',
+        r'\bbuilding\b': 'bldg',
+        r'\bbuilding\b': 'bldg',
+        r'\bsuite\b': 'ste',
+        r'\bsuite\b': 'ste',
+        r'\bnorth\b': 'n',
+        r'\bsouth\b': 's',
+        r'\beast\b': 'e',
+        r'\bwest\b': 'w',
+        r'\bdrive\b': 'dr',
+        r'\bdr\b': 'dr',
+        r'\broad\b': 'rd',
+        r'\brd\b': 'rd',
+        r'\blane\b': 'ln',
+        r'\bln\b': 'ln',
+        r'\bcourt\b': 'ct',
+        r'\bct\b': 'ct',
+        r'\bplace\b': 'pl',
+        r'\bpl\b': 'pl',
+        r'\bparkway\b': 'pkwy',
+        r'\bpkwy\b': 'pkwy',
+        r'\bhighway\b': 'hwy',
+        r'\bhwy\b': 'hwy',
+    }
+    
+    for full_form, abbrev in abbreviations.items():
+        normalized = re.sub(full_form, abbrev, normalized)
+    
+    # Remove punctuation and extra spaces
+    normalized = re.sub(r'[^\w\s]', ' ', normalized)
+    normalized = ' '.join(normalized.split())
+    
+    return normalized
+
+def calculate_string_similarity(str1, str2):
+    """
+    Calculate similarity percentage between two strings using difflib.
+    Returns a percentage from 0-100.
+    """
+    if not str1 and not str2:
+        return 100.0  # Both empty, consider perfect match
+    if not str1 or not str2:
+        return 0.0    # One empty, one not, no match
+    
+    # Normalize both strings
+    norm_str1 = normalize_address_string(str1)
+    norm_str2 = normalize_address_string(str2)
+    
+    # Calculate similarity ratio
+    similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
+    return similarity * 100
+
+def compare_addresses_with_threshold(mist_address, comparison_address, threshold):
+    """
+    Compare two address dictionaries and return overall similarity percentage and field-by-field breakdown.
+    
+    Args:
+        mist_address (dict): Dictionary with keys: address, city, state, zip, country
+        comparison_address (dict): Dictionary with keys: address, city, state, zip, country  
+        threshold (float): Minimum similarity percentage required to be considered a match
+        
+    Returns:
+        dict: {
+            'overall_similarity': float,
+            'is_match': bool,
+            'field_similarities': {
+                'address': float,
+                'city': float, 
+                'state': float,
+                'zip': float
+            },
+            'failed_fields': list
+        }
+    """
+    # Field weights for overall similarity calculation
+    field_weights = {
+        'address': 0.4,    # Street address is most important
+        'city': 0.3,       # City is very important
+        'state': 0.2,      # State is important
+        'zip': 0.1         # Zip is least weighted since we already have zip comparison
+    }
+    
+    field_similarities = {}
+    failed_fields = []
+    
+    # Compare address fields (ignore country as requested)
+    for field, weight in field_weights.items():
+        mist_value = mist_address.get(field, "").strip()
+        comp_value = comparison_address.get(field, "").strip()
+        
+        if field == 'zip':
+            # Use normalized zip comparison
+            mist_norm = normalize_zip_code(mist_value)
+            comp_norm = normalize_zip_code(comp_value)
+            similarity = 100.0 if mist_norm == comp_norm else 0.0
+        elif field == 'state':
+            # Use normalized state comparison (handles abbreviations vs full names)
+            mist_norm = normalize_state_name(mist_value)
+            comp_norm = normalize_state_name(comp_value)
+            similarity = 100.0 if mist_norm == comp_norm else 0.0
+        else:
+            # Use string similarity for address and city fields
+            similarity = calculate_string_similarity(mist_value, comp_value)
+        
+        field_similarities[field] = similarity
+        
+        if similarity < threshold:
+            failed_fields.append(field)
+    
+    # Calculate weighted overall similarity
+    overall_similarity = sum(field_similarities[field] * field_weights[field] 
+                           for field in field_weights.keys())
+    
+    is_match = overall_similarity >= threshold
+    
+    return {
+        'overall_similarity': overall_similarity,
+        'is_match': is_match,
+        'field_similarities': field_similarities,
+        'failed_fields': failed_fields
+    }
+
+def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=False):
     """
     Compares combined inventory data with site info against a user-selected CSV file.
-    Shows items where zip code and serial number don't match between the datasets.
+    Shows items where addresses don't meet the configured similarity threshold.
     Skips items that aren't in the comparison CSV file.
-    Normalizes zip codes to compare only first 5 digits with proper formatting.
+    Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy address matching.
+    
+    Args:
+        fast (bool): If True, enables optimized data generation mode using cached data
+                    and concurrent processing where applicable.
+        address_check (bool): If True, enables external address validation using Nominatim API.
+                             Overrides ENABLE_ADDRESS_VALIDATION setting from .env file.
+        debug (bool): If True, enables detailed debug logging for API requests and responses.
     """
     from collections import defaultdict
     import glob
+    from tqdm import tqdm
 
     # Load environment variables
     load_dotenv()
     END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
     END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
+    
+    # Get configurable address match threshold (default: 75%)
+    ADDRESS_MATCH_THRESHOLD = float(os.getenv("ADDRESS_MATCH_THRESHOLD", "75"))
 
     print("🔍 Comparing inventory data with external CSV file...")
+    print(f"📊 Using address match threshold: {ADDRESS_MATCH_THRESHOLD}% similarity required")
+    if fast:
+        print("🚀 Fast mode enabled: Using optimized data generation and caching")
+    if debug:
+        print("🔧 Debug mode enabled: Detailed API logging active")
+        logging.debug("ENTRY: compare_inventory_with_csv()")
+        logging.debug(f"  Parameters: fast={fast}, address_check={address_check}, debug={debug}")
+        logging.debug(f"  ADDRESS_MATCH_THRESHOLD={ADDRESS_MATCH_THRESHOLD}")
     
-    # Always regenerate fresh data (same as option 41)
-    export_devices_with_site_info_to_csv()
+    # Check if address validation is enabled
+    address_validation_enabled = address_check or os.getenv("ENABLE_ADDRESS_VALIDATION", "false").lower() == "true"
+    
+    if address_validation_enabled:
+        source = "--address-check flag" if address_check else ".env file"
+        print(f"🌐 External address validation enabled via {source}")
+        if debug:
+            logging.debug(f"Address validation enabled via {source}")
+    else:
+        print("⚠️  External address validation disabled (use --address-check flag to enable)")
+        if debug:
+            logging.debug("Address validation disabled")
+    
+    # Use efficient caching instead of always regenerating fresh data
+    check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: export_devices_with_site_info_to_csv(fast=fast))
 
     # Load the enriched device + site info
     devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
@@ -5594,140 +7027,506 @@ def compare_inventory_with_csv():
 
     print(f"📋 Built comparison lookup with {len(comparison_serials)} serial numbers")
 
-    # Process device data and find mismatches
+    # Duplicate address detection between sites
+    print("\n🔍 Checking for duplicate addresses between sites...")
+    
+    # Get unique address per site for Mist data
+    mist_site_addresses = {}  # site_name -> address_key
+    for device in site_configs:
+        site_name = device.get("site_name", "")
+        if not site_name or site_name in mist_site_addresses:
+            continue  # Skip if already processed this site
+            
+        mist_address = {
+            'address': device.get("street", "").strip(),
+            'city': device.get("city", "").strip(),
+            'state': device.get("state", "").strip(),
+            'zip': device.get("zip_code", "").strip()
+        }
+        
+        # Skip empty addresses
+        if not any([mist_address['address'], mist_address['city'], mist_address['state'], mist_address['zip']]):
+            continue
+        
+        # Create normalized address key
+        address_key = f"{mist_address['address'].lower()}|{mist_address['city'].lower()}|{mist_address['state'].lower()}|{mist_address['zip']}"
+        mist_site_addresses[site_name] = {
+            'address_key': address_key,
+            'address': mist_address
+        }
+    
+    # Find duplicate addresses between Mist sites
+    mist_address_to_sites = {}  # address_key -> [list of site names]
+    for site_name, addr_data in mist_site_addresses.items():
+        address_key = addr_data['address_key']
+        if address_key not in mist_address_to_sites:
+            mist_address_to_sites[address_key] = []
+        mist_address_to_sites[address_key].append(site_name)
+    
+    mist_duplicates = {addr_key: sites for addr_key, sites in mist_address_to_sites.items() if len(sites) > 1}
+    
+    # Get unique address per site for reference data
+    ref_site_addresses = {}  # site_name -> address_key
+    for device in site_configs:
+        device_serial = device.get("serial", "").strip()
+        site_name = device.get("site_name", "")
+        
+        if not site_name or site_name in ref_site_addresses or device_serial not in comparison_address_lookup:
+            continue  # Skip if already processed this site or no reference data
+            
+        ref_data = comparison_address_lookup[device_serial]
+        ref_address = {
+            'address': ref_data.get("Address", "").strip(),
+            'city': ref_data.get("City", "").strip(),
+            'state': ref_data.get("State", "").strip(),
+            'zip': ref_data.get("Zip", "").strip()
+        }
+        
+        # Skip empty addresses
+        if not any([ref_address['address'], ref_address['city'], ref_address['state'], ref_address['zip']]):
+            continue
+        
+        # Create normalized address key
+        address_key = f"{ref_address['address'].lower()}|{ref_address['city'].lower()}|{ref_address['state'].lower()}|{ref_address['zip']}"
+        ref_site_addresses[site_name] = {
+            'address_key': address_key,
+            'address': ref_address
+        }
+    
+    # Find duplicate addresses between reference sites
+    ref_address_to_sites = {}  # address_key -> [list of site names]
+    for site_name, addr_data in ref_site_addresses.items():
+        address_key = addr_data['address_key']
+        if address_key not in ref_address_to_sites:
+            ref_address_to_sites[address_key] = []
+        ref_address_to_sites[address_key].append(site_name)
+    
+    ref_duplicates = {addr_key: sites for addr_key, sites in ref_address_to_sites.items() if len(sites) > 1}
+    
+    # Report results
+    if mist_duplicates:
+        print("    🔍 Mist sites sharing the same address:")
+        for addr_key, sites in mist_duplicates.items():
+            # Get the actual address for display
+            sample_site = sites[0]
+            addr = mist_site_addresses[sample_site]['address']
+            print(f"        Address: {addr['address']}, {addr['city']}, {addr['state']} {addr['zip']}")
+            print(f"        Sites ({len(sites)}): {', '.join(sites)}")
+    
+    if ref_duplicates:
+        print("    🔍 Reference sites sharing the same address:")
+        for addr_key, sites in ref_duplicates.items():
+            # Get the actual address for display
+            sample_site = sites[0]
+            addr = ref_site_addresses[sample_site]['address']
+            print(f"        Address: {addr['address']}, {addr['city']}, {addr['state']} {addr['zip']}")
+            print(f"        Sites ({len(sites)}): {', '.join(sites)}")
+    
+    # Summary
+    if not mist_duplicates and not ref_duplicates:
+        print("    ✅ No duplicate addresses found between sites")
+    else:
+        print(f"    ⚠️  Found {len(mist_duplicates)} Mist address duplications affecting {sum(len(sites) for sites in mist_duplicates.values())} sites")
+        print(f"    ⚠️  Found {len(ref_duplicates)} reference address duplications affecting {sum(len(sites) for sites in ref_duplicates.values())} sites")
+        if debug:
+            logging.info(f"DUPLICATE_CHECK: Found {len(mist_duplicates)} Mist duplicates and {len(ref_duplicates)} reference duplicates between sites")
+
+    # Process device data and find address mismatches using configurable threshold
     mismatched_items = []
     diff_report_items = []
     skipped_count = 0
+    validation_count = 0
     
-    for device in site_configs:
-        device_serial = device.get("serial", "").strip()
-        device_zip = device.get("zip_code", "").strip()
-        
-        # Skip if device serial not in comparison file
-        if device_serial not in comparison_serials:
-            skipped_count += 1
-            continue
+    # Count devices that will need validation for progress bar
+    if address_validation_enabled:
+        devices_needing_validation = []
+        for device in site_configs:
+            device_serial = device.get("serial", "").strip()
+            if device_serial not in comparison_serials:
+                continue
+                
+            mist_address = {
+                'address': device.get("street", "").strip(),
+                'city': device.get("city", "").strip(),
+                'state': device.get("state", "").strip(),
+                'zip': device.get("zip_code", "").strip()
+            }
             
-        # Get normalized zip code from comparison file
-        comparison_zip = comparison_serials[device_serial]
+            comparison_address_data = comparison_address_lookup.get(device_serial, {})
+            comparison_address = {
+                'address': comparison_address_data.get("Address", "").strip(),
+                'city': comparison_address_data.get("City", "").strip(),
+                'state': comparison_address_data.get("State", "").strip(),
+                'zip': comparison_address_data.get("Zip", "").strip()
+            }
+            
+            # Quick similarity check to see if validation will be needed
+            comparison_result = compare_addresses_with_threshold(
+                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
+            )
+            
+            if not comparison_result['is_match']:
+                devices_needing_validation.append((device, device_serial, mist_address, comparison_address))
         
-        # Normalize device zip code for comparison
-        device_zip_normalized = normalize_zip_code(device_zip)
+        total_validations = len(devices_needing_validation)
+        if total_validations > 0:
+            print(f"\n🌐 External address validation enabled - {total_validations} devices need validation")
+            print("📡 This may take several minutes due to API rate limiting (1 request/second)...")
+            if debug:
+                logging.debug(f"ADDRESS_VALIDATION: {total_validations} devices require external validation")
+    
+    # Process devices that need validation with proper progress bar
+    if address_check and devices_needing_validation:
+        # Get organization name for intelligent tiebreaker logic
+        org_name = None
+        try:
+            if debug:
+                logging.debug("Fetching organization information for tiebreaker logic...")
+            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
+            if org_response.status_code == 200:
+                org_data = org_response.data
+                org_name = org_data.get('name', '').strip()
+                if debug:
+                    logging.debug(f"Organization name retrieved: '{org_name}'")
+            else:
+                if debug:
+                    logging.warning(f"Failed to retrieve organization info: HTTP {org_response.status_code}")
+        except Exception as e:
+            if debug:
+                logging.warning(f"Could not retrieve organization name for tiebreaker: {e}")
         
-        # Check if normalized zip codes don't match
-        if device_zip_normalized != comparison_zip:
+        print(f"\n🔍 Processing {len(devices_needing_validation)} devices requiring address validation...")
+        
+        for device, device_serial, mist_address, comparison_address in tqdm(devices_needing_validation, desc="Validating Addresses", unit="device"):
+            if debug:
+                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Starting validation process")
+                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Mist address: {mist_address}")
+                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Comparison address: {comparison_address}")
+            
+            # Quick similarity check for consistency
+            comparison_result = compare_addresses_with_threshold(
+                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
+            )
+            
+            if debug:
+                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Similarity result: {comparison_result}")
+            
+            # Perform external address validation
+            validation_result = None
+            validation_count = 0  # Initialize counter
+            validation_count += 1
+            ADDRESS_VALIDATION_TIMEOUT = int(os.getenv("ADDRESS_VALIDATION_TIMEOUT", "10"))
+            
             try:
-                created_time = int(device.get("created_time", 0))
-                created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
-                year, week, _ = created_date.isocalendar()
-                week_key = f"{year}_Week_{week:02d}"
-
-                # Standard mismatch item (existing format)
-                mismatched_item = {
-                    "Week": week_key,
-                    "Full Site": device.get("site_name", ""),
-                    "System Serial Number": device_serial,
-                    "System Model Number": device.get("model", ""),
-                    "End Customer Name": END_CUSTOMER_NAME,
-                    "Address Line 1": device.get("street", ""),
-                    "Address Line 2": "",
-                    "City": device.get("city", ""),
-                    "State": device.get("state", ""),
-                    "Country": device.get("country", "US"),
-                    "Current Zip Code": device_zip,
-                    "Current Zip Normalized": device_zip_normalized,
-                    "Comparison Zip Code": comparison_zip,
-                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                    "Mismatch Type": "Zip Code Mismatch"
-                }
-                mismatched_items.append(mismatched_item)
-
-                # Diff report item (showing both address sets)
-                comparison_address = comparison_address_lookup.get(device_serial, {})
-                diff_item = {
-                    "Week": week_key,
-                    "Full Site": device.get("site_name", ""),
-                    "System Serial Number": device_serial,
-                    "System Model Number": device.get("model", ""),
-                    "End Customer Name": END_CUSTOMER_NAME,
-                    "Mist_Address_Line_1": device.get("street", ""),
-                    "Mist_City": device.get("city", ""),
-                    "Mist_State": device.get("state", ""),
-                    "Mist_Country": device.get("country", "US"),
-                    "Mist_Zip_Code": device_zip,
-                    "Mist_Zip_Normalized": device_zip_normalized,
-                    "Comparison_Address": comparison_address.get("Address", ""),
-                    "Comparison_City": comparison_address.get("City", ""),
-                    "Comparison_State": comparison_address.get("State", ""),
-                    "Comparison_Country": comparison_address.get("Country", ""),
-                    "Comparison_Zip_Code": comparison_address.get("Zip", ""),
-                    "Comparison_Zip_Normalized": comparison_zip,
-                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                    "Mismatch Type": "Zip Code Mismatch"
-                }
-                diff_report_items.append(diff_item)
+                # Create formatted address strings for logging
+                mist_addr_str = f"{mist_address['address']}, {mist_address['city']}, {mist_address['state']} {mist_address['zip']}".replace(", , ", ", ").strip(", ")
+                comp_addr_str = f"{comparison_address['address']}, {comparison_address['city']}, {comparison_address['state']} {comparison_address['zip']}".replace(", , ", ", ").strip(", ")
+                
+                print(f"🔍 [{validation_count}/{total_validations if 'total_validations' in locals() else '?'}] Validating {device_serial}...")
+                print(f"    📍 Mist:       {mist_addr_str}")
+                print(f"    📍 Reference:  {comp_addr_str}")
+                
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Starting validation")
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist address: {mist_addr_str}")
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison address: {comp_addr_str}")
+                
+                validation_result = validate_addresses_with_nominatim(
+                    mist_address, comparison_address, ADDRESS_VALIDATION_TIMEOUT, debug=debug, skip_ssl_verify=skip_ssl_verify, org_name=org_name,
+                    mist_duplicates=mist_duplicates, ref_duplicates=ref_duplicates, site_name=device.get("site_name", "")
+                )
+                
+                # Format results for display
+                mist_status = "✅ Valid" if validation_result['mist_validation']['valid'] else "❌ Invalid"
+                comp_status = "✅ Valid" if validation_result['comparison_validation']['valid'] else "❌ Invalid"
+                
+                mist_conf = f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result['mist_validation']['valid'] else "N/A"
+                comp_conf = f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result['comparison_validation']['valid'] else "N/A"
+                
+                recommendation_icon = {"mist": "👈 Mist", "comparison": "👉 Reference", "uncertain": "🤷 Uncertain"}
+                recommendation_display = recommendation_icon.get(validation_result['recommendation'], validation_result['recommendation'])
+                recommendation_reason = validation_result.get('recommendation_reason', 'No reason provided')
+                
+                print(f"    🌐 Results:    Mist: {mist_status} (conf: {mist_conf}) | Reference: {comp_status} (conf: {comp_conf})")
+                print(f"    🎯 Recommendation: {recommendation_display}")
+                if validation_result['recommendation'] != 'uncertain' or 'inconclusive' not in recommendation_reason.lower():
+                    print(f"    💭 Reason: {recommendation_reason}")
+                
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist validation - valid: {validation_result['mist_validation']['valid']}, confidence: {mist_conf}")
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison validation - valid: {validation_result['comparison_validation']['valid']}, confidence: {comp_conf}")
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Final recommendation: {validation_result['recommendation']}")
+                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Recommendation reason: {recommendation_reason}")
+                
             except Exception as e:
-                logging.warning(f"⚠️ Skipping device due to error: {e}")
+                print(f"    ❌ Validation failed: {str(e)}")
+                logging.warning(f"ADDRESS_VALIDATION [{device_serial}]: Validation failed: {e}")
+                if debug:
+                    import traceback
+                    logging.debug(f"ADDRESS_VALIDATION [{device_serial}]: Full exception traceback: {traceback.format_exc()}")
+                validation_result = None
+            
+            # Process mismatch logic for this device
+            if not comparison_result['is_match']:
+                try:
+                    created_time = int(device.get("created_time", 0))
+                    created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+                    year, week, _ = created_date.isocalendar()
+                    week_key = f"{year}_Week_{week:02d}"
+
+                    # Determine primary mismatch type based on failed fields
+                    failed_fields = comparison_result['failed_fields']
+                    if 'zip' in failed_fields and len(failed_fields) == 1:
+                        mismatch_type = "Zip Code Mismatch"
+                    elif 'address' in failed_fields:
+                        mismatch_type = "Address Mismatch"
+                    elif 'city' in failed_fields:
+                        mismatch_type = "City Mismatch"
+                    elif 'state' in failed_fields:
+                        mismatch_type = "State Mismatch"
+                    else:
+                        mismatch_type = "Multi-field Address Mismatch"
+
+                    # Standard mismatch item (enhanced format)
+                    mismatched_item = {
+                        "Week": week_key,
+                        "Full Site": device.get("site_name", ""),
+                        "System Serial Number": device_serial,
+                        "System Model Number": device.get("model", ""),
+                        "End Customer Name": END_CUSTOMER_NAME,
+                        "Address Line 1": mist_address['address'],
+                        "Address Line 2": "",
+                        "City": mist_address['city'],
+                        "State": mist_address['state'],
+                        "Current Zip Code": mist_address['zip'],
+                        "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
+                        "Comparison Zip Code": comparison_address['zip'],
+                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                        "Mismatch Type": mismatch_type,
+                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                        "Failed Fields": ', '.join(failed_fields),
+                        # Address validation results (if enabled)
+                        "Mist_Validation_Status": validation_result['mist_validation']['valid'] if validation_result else 'N/A',
+                        "Mist_Confidence": f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result and validation_result['mist_validation']['valid'] else 'N/A',
+                        "Comparison_Validation_Status": validation_result['comparison_validation']['valid'] if validation_result else 'N/A',
+                        "Comparison_Confidence": f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result and validation_result['comparison_validation']['valid'] else 'N/A',
+                        "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
+                    }
+                    mismatched_items.append(mismatched_item)
+
+                    # Diff report item (showing both address sets with similarity scores)
+                    diff_item = {
+                        "Week": week_key,
+                        "Full Site": device.get("site_name", ""),
+                        "System Serial Number": device_serial,
+                        "System Model Number": device.get("model", ""),
+                        "End Customer Name": END_CUSTOMER_NAME,
+                        "Mist_Address_Line_1": mist_address['address'],
+                        "Mist_City": mist_address['city'],
+                        "Mist_State": mist_address['state'],
+                        "Mist_Zip_Code": mist_address['zip'],
+                        "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
+                        "Comparison_Address": comparison_address['address'],
+                        "Comparison_City": comparison_address['city'],
+                        "Comparison_State": comparison_address['state'],
+                        "Comparison_Zip_Code": comparison_address['zip'],
+                        "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
+                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                        "Mismatch Type": mismatch_type,
+                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%", 
+                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                        "Failed Fields": ', '.join(failed_fields),
+                        # Address validation results (if enabled)
+                        "Mist_Validation_Status": validation_result['mist_validation']['valid'] if validation_result else 'N/A',
+                        "Mist_Confidence": f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result and validation_result['mist_validation']['valid'] else 'N/A',
+                        "Comparison_Validation_Status": validation_result['comparison_validation']['valid'] if validation_result else 'N/A',
+                        "Comparison_Confidence": f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result and validation_result['comparison_validation']['valid'] else 'N/A',
+                        "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
+                    }
+                    diff_report_items.append(diff_item)
+                except Exception as e:
+                    logging.warning(f"⚠️ Skipping device due to error: {e}")
+    
+    else:
+        # Address validation not enabled - process all devices with basic comparison
+        print(f"\n🔍 Processing {len(site_configs)} total devices for address comparison...")
+        
+        for device in tqdm(site_configs, desc="Processing Devices", unit="device"):
+            device_serial = device.get("serial", "").strip()
+            
+            # Skip if device serial not in comparison file
+            if device_serial not in comparison_serials:
+                skipped_count += 1
+                continue
+                
+            # Prepare address data for comparison
+            mist_address = {
+                'address': device.get("street", "").strip(),
+                'city': device.get("city", "").strip(),
+                'state': device.get("state", "").strip(),
+                'zip': device.get("zip_code", "").strip()
+            }
+            
+            comparison_address_data = comparison_address_lookup.get(device_serial, {})
+            comparison_address = {
+                'address': comparison_address_data.get("Address", "").strip(),
+                'city': comparison_address_data.get("City", "").strip(),
+                'state': comparison_address_data.get("State", "").strip(),
+                'zip': comparison_address_data.get("Zip", "").strip()
+            }
+            
+            if debug:
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Mist address: {mist_address}")
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Comparison address: {comparison_address}")
+            
+            # Compare addresses using configurable threshold
+            comparison_result = compare_addresses_with_threshold(
+                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
+            )
+            
+            if debug:
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Similarity result: {comparison_result}")
+            
+            # If overall similarity is below threshold, mark as mismatch
+            # If overall similarity is below threshold, mark as mismatch
+            if not comparison_result['is_match']:
+                try:
+                    created_time = int(device.get("created_time", 0))
+                    created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+                    year, week, _ = created_date.isocalendar()
+                    week_key = f"{year}_Week_{week:02d}"
+
+                    # Determine primary mismatch type based on failed fields
+                    failed_fields = comparison_result['failed_fields']
+                    if 'zip' in failed_fields and len(failed_fields) == 1:
+                        mismatch_type = "Zip Code Mismatch"
+                    elif 'address' in failed_fields:
+                        mismatch_type = "Address Mismatch"
+                    elif 'city' in failed_fields:
+                        mismatch_type = "City Mismatch"
+                    elif 'state' in failed_fields:
+                        mismatch_type = "State Mismatch"
+                    else:
+                        mismatch_type = "Multi-field Address Mismatch"
+
+                    # Standard mismatch item (enhanced format)
+                    mismatched_item = {
+                        "Week": week_key,
+                        "Full Site": device.get("site_name", ""),
+                        "System Serial Number": device_serial,
+                        "System Model Number": device.get("model", ""),
+                        "End Customer Name": END_CUSTOMER_NAME,
+                        "Address Line 1": mist_address['address'],
+                        "Address Line 2": "",
+                        "City": mist_address['city'],
+                        "State": mist_address['state'],
+                        "Current Zip Code": mist_address['zip'],
+                        "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
+                        "Comparison Zip Code": comparison_address['zip'],
+                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                        "Mismatch Type": mismatch_type,
+                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                        "Failed Fields": ', '.join(failed_fields),
+                        # Address validation results (No validation in basic mode)
+                        "Mist_Validation_Status": 'N/A',
+                        "Mist_Confidence": 'N/A',
+                        "Comparison_Validation_Status": 'N/A',
+                        "Comparison_Confidence": 'N/A',
+                        "Validation_Recommendation": 'N/A'
+                    }
+                    mismatched_items.append(mismatched_item)
+
+                    # Diff report item (showing both address sets with similarity scores)
+                    diff_item = {
+                        "Week": week_key,
+                        "Full Site": device.get("site_name", ""),
+                        "System Serial Number": device_serial,
+                        "System Model Number": device.get("model", ""),
+                        "End Customer Name": END_CUSTOMER_NAME,
+                        "Mist_Address_Line_1": mist_address['address'],
+                        "Mist_City": mist_address['city'],
+                        "Mist_State": mist_address['state'],
+                        "Mist_Zip_Code": mist_address['zip'],
+                        "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
+                        "Comparison_Address": comparison_address['address'],
+                        "Comparison_City": comparison_address['city'],
+                        "Comparison_State": comparison_address['state'],
+                        "Comparison_Zip_Code": comparison_address['zip'],
+                        "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
+                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                        "Mismatch Type": mismatch_type,
+                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%", 
+                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                        "Failed Fields": ', '.join(failed_fields),
+                        # Address validation results (No validation in basic mode)
+                        "Mist_Validation_Status": 'N/A',
+                        "Mist_Confidence": 'N/A',
+                        "Comparison_Validation_Status": 'N/A',
+                        "Comparison_Confidence": 'N/A',
+                        "Validation_Recommendation": 'N/A'
+                    }
+                    diff_report_items.append(diff_item)
+                except Exception as e:
+                    logging.warning(f"⚠️ Skipping device due to error: {e}")
 
     # Display results
     print(f"\n📊 Comparison Results:")
     print(f"   ✅ Devices processed: {len(site_configs)}")
     print(f"   ⏭️  Devices skipped (not in comparison file): {skipped_count}")
-    print(f"   ❌ Zip code mismatches found: {len(mismatched_items)}")
+    print(f"   ❌ Address mismatches found (below {ADDRESS_MATCH_THRESHOLD}% similarity): {len(mismatched_items)}")
 
     if mismatched_items:
-        print(f"\n🔍 Zip Code Mismatches (comparing normalized 5-digit codes):")
-        print("=" * 110)
+        print(f"\n🔍 Address Mismatches (below {ADDRESS_MATCH_THRESHOLD}% similarity threshold):")
+        print("=" * 130)
         for idx, item in enumerate(mismatched_items[:10]):  # Show first 10
             print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15} | "
-                  f"Current: {item['Current Zip Code']:<10} | "
-                  f"Normalized: {item['Current Zip Normalized']:<6} | "
-                  f"Expected: {item['Comparison Zip Code']:<6} | "
+                  f"Overall: {item['Overall Similarity']:<6} | "
+                  f"Type: {item['Mismatch Type']:<25} | "
+                  f"Failed: {item['Failed Fields']:<20} | "
                   f"Site: {item['Full Site']}")
         
         if len(mismatched_items) > 10:
             print(f"   ... and {len(mismatched_items) - 10} more mismatches")
             
-        # Optionally save to CSV
-        save_choice = input(f"\n💾 Save {len(mismatched_items)} mismatched items to CSV files? (y/n): ").strip().lower()
-        if save_choice in ['y', 'yes']:
+        # Always save to CSV (no prompting)
+        if mismatched_items:
             base_filename = comparison_file.replace('.csv', '')
             
-            # Save standard mismatch report (existing format)
-            output_file1 = f"ZipCodeMismatches_vs_{base_filename}.csv"
-            fieldnames1 = [
+            # Save comprehensive address comparison report with both address sets
+            output_file = f"AddressMismatches_vs_{base_filename}.csv"
+            fieldnames = [
                 "Week", "Full Site", "System Serial Number", "System Model Number", 
-                "End Customer Name", "Address Line 1", "Address Line 2", "City", 
-                "State", "Country", "Current Zip Code", "Current Zip Normalized", "Comparison Zip Code", 
-                "End Customer Account ID", "Mismatch Type"
-            ]
-            
-            with open(output_file1, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames1)
-                writer.writeheader()
-                writer.writerows(mismatched_items)
-            
-            # Save diff report (side-by-side address comparison)
-            output_file2 = f"AddressDiff_vs_{base_filename}.csv"
-            fieldnames2 = [
-                "Week", "Full Site", "System Serial Number", "System Model Number", 
-                "End Customer Name", "Mist_Address_Line_1", "Mist_City", "Mist_State", "Mist_Country",
+                "End Customer Name", "Mist_Address_Line_1", "Mist_City", "Mist_State",
                 "Mist_Zip_Code", "Mist_Zip_Normalized", "Comparison_Address", "Comparison_City", 
-                "Comparison_State", "Comparison_Country", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
-                "End Customer Account ID", "Mismatch Type"
+                "Comparison_State", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
+                "End Customer Account ID", "Mismatch Type", "Overall Similarity",
+                "Address Similarity", "City Similarity", "State Similarity", "Zip Similarity", "Failed Fields",
+                "Mist_Validation_Status", "Mist_Confidence", "Comparison_Validation_Status", "Comparison_Confidence", 
+                "Validation_Recommendation"
             ]
             
-            with open(output_file2, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames2)
+            with open(output_file, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(diff_report_items)
             
-            print(f"✅ Standard mismatches saved to: {output_file1}")
-            print(f"✅ Address diff report saved to: {output_file2}")
-            logging.info(f"Saved {len(mismatched_items)} mismatched items to {output_file1}")
-            logging.info(f"Saved {len(diff_report_items)} diff items to {output_file2}")
+            print(f"✅ Address mismatches saved to: {output_file}")
+            print(f"📁 Location: {get_csv_file_path(output_file)}")
+            logging.info(f"Saved {len(diff_report_items)} address mismatches to {output_file}")
     else:
-        print("🎉 No zip code mismatches found! All items match the comparison file.")
+        print(f"🎉 No address mismatches found! All items meet the {ADDRESS_MATCH_THRESHOLD}% similarity threshold.")
 
 def export_gateway_templates_to_csv():
     """
@@ -5872,35 +7671,104 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
 
     # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
     logging.info(f"🔍 Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides...")
-    device_data_cache = {}  # device_id -> (port_configs, interface_stats)
     
-    for device_id, device_info in devices_with_overrides.items():
-        device_name = device_info["device_name"]
-        site_id = device_info["site_id"]
+    if fast and len(devices_with_overrides) > 5:  # Use connection pool management for fast mode with 5+ devices
+        logging.info("🚀 Using fast mode with connection pool management for device data fetching...")
         
-        # Fetch live device info from getSiteDevice API for current config
-        try:
-            resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            device_data = getattr(resp, "data", {})
-            port_configs = device_data.get("port_config", {})
-        except Exception as e:
-            logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
-            port_configs = {}
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        
+        # Define worker function for fetching device configs and stats
+        def fetch_device_data(device_info, connection_semaphore):
+            """Worker function that fetches config and stats for a single device."""
+            device_id = device_info[0]
+            device_data = device_info[1]
+            device_name = device_data["device_name"]
+            site_id = device_data["site_id"]
+            
+            # Acquire connection semaphore before making API calls
+            with connection_semaphore:
+                port_configs = {}
+                interface_stats = {}
+                
+                # Fetch live device info from getSiteDevice API for current config
+                try:
+                    resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                    device_config_data = getattr(resp, "data", {})
+                    port_configs = device_config_data.get("port_config", {})
+                except Exception as e:
+                    logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
+                    port_configs = {}
 
-        # Fetch live device stats for current port status 
-        try:
-            stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            stats_data = getattr(stats_resp, "data", {})
-            interface_stats = stats_data.get("if_stat", {})
-        except Exception as e:
-            # Handle 403 Forbidden and other errors gracefully
-            if "403" in str(e) or "Forbidden" in str(e):
-                logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
-            else:
-                logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
-            interface_stats = {}
+                # Fetch live device stats for current port status 
+                try:
+                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+                    stats_data = getattr(stats_resp, "data", {})
+                    interface_stats = stats_data.get("if_stat", {})
+                except Exception as e:
+                    # Handle 403 Forbidden and other errors gracefully
+                    if "403" in str(e) or "Forbidden" in str(e):
+                        logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
+                    else:
+                        logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
+                    interface_stats = {}
 
-        device_data_cache[device_id] = (port_configs, interface_stats)
+                return (device_id, port_configs, interface_stats)
+        
+        # Prepare work items for the helper
+        work_items = list(devices_with_overrides.items())
+        
+        # Use the reusable connection pool management helper
+        successful_results, failed_devices = execute_with_connection_pool_management(
+            work_items=work_items,
+            worker_function=fetch_device_data,
+            batch_description="override devices",
+            retry_function=None  # No retry for this use case
+        )
+        
+        # Build device_data_cache from successful results
+        device_data_cache = {}
+        for device_id, port_configs, interface_stats in successful_results:
+            device_data_cache[device_id] = (port_configs, interface_stats)
+        
+        # Handle failed devices (fallback to empty configs)
+        for failed_item in failed_devices:
+            device_id = failed_item[0]
+            device_data_cache[device_id] = ({}, {})
+        
+        logging.info(f"✅ Fast mode: Fetched data for {len(successful_results)}/{len(work_items)} devices with connection pool protection")
+        
+    else:
+        # Regular sequential processing for non-fast mode or small datasets
+        device_data_cache = {}  # device_id -> (port_configs, interface_stats)
+        
+        for device_id, device_info in devices_with_overrides.items():
+            device_name = device_info["device_name"]
+            site_id = device_info["site_id"]
+            
+            # Fetch live device info from getSiteDevice API for current config
+            try:
+                resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                device_data = getattr(resp, "data", {})
+                port_configs = device_data.get("port_config", {})
+            except Exception as e:
+                logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
+                port_configs = {}
+
+            # Fetch live device stats for current port status 
+            try:
+                stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+                stats_data = getattr(stats_resp, "data", {})
+                interface_stats = stats_data.get("if_stat", {})
+            except Exception as e:
+                # Handle 403 Forbidden and other errors gracefully
+                if "403" in str(e) or "Forbidden" in str(e):
+                    logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
+                else:
+                    logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
+                interface_stats = {}
+
+            device_data_cache[device_id] = (port_configs, interface_stats)
 
     # Third pass: Process only the overridden ports with their stats
     logging.info("📝 Third pass: Processing overridden ports with live data...")
@@ -10051,7 +11919,7 @@ menu_actions = {
     "15": (export_vpn_peer_stats_to_csv, "Export VPN peer path statistics for the organization"),
 
     # 🌐 Gateway & Site-Wide Exports
-    "16": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
+    "16": (lambda fast=False: export_gateway_synthetic_tests_to_csv(fast=fast), "Export synthetic test results for all gateways"),
     "17": (export_all_devices_to_csv, "Export a list of all devices in the organization"),
     "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
     "19": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
@@ -10112,7 +11980,7 @@ menu_actions = {
     
     # � Status & Monitoring
     "60": (check_firmware_upgrade_status, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
-    "61": (compare_inventory_with_csv, "Compare inventory data with external CSV file and show zip code mismatches"),
+    "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: compare_inventory_with_csv(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
     "62": (poll_marvis_actions, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
     # � Work In Progress Features (Read-Only)
@@ -10150,7 +12018,9 @@ menu_actions = {
     "92": (convert_virtual_chassis_to_virtual_mac, "🔥 DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (convert_virtual_chassis_by_site_list, "🔥 DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
     "94": (check_virtual_chassis_conversion_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
-    
+    "95": (lambda fast=False: export_gateway_device_stats_to_csv_with_freshness_check(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
+    "96": (export_gateways_with_wan_port_conflicts_to_csv, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
+
     # ==============================
     # 📡 POST API OPERATIONS - Device Commands (Starting at 100)
     # ==============================
@@ -10315,6 +12185,8 @@ def main():
     parser.add_argument("--output-format", choices=["csv", "sqlite"], default="csv", 
                        help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys")
     parser.add_argument("--test", action="store_true", help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)")
+    parser.add_argument("--address-check", action="store_true", help="Enable external address validation using Nominatim API for address comparison operations")
+    parser.add_argument("--skip-ssl-verify", action="store_true", help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)")
     args = parser.parse_args()
     
     # Set global output format based on CLI argument
@@ -10337,7 +12209,7 @@ def main():
         logging.info(f"SYSTEMATIC_TEST: Test mode completed with success={success}")
         sys.exit(0 if success else 1)
     
-    logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}, skip_deps={args.skip_deps}, output_format={args.output_format}, test={args.test}")
+    logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}, skip_deps={args.skip_deps}, output_format={args.output_format}, test={args.test}, address_check={args.address_check}")
 
     global org_id
     if len(sys.argv) > 1:
@@ -10386,7 +12258,9 @@ def main():
                 "org_id": org_id,
                 "debug": args.debug,
                 "delay": args.delay,
-                "fast": args.fast
+                "fast": args.fast,
+                "address_check": args.address_check,
+                "skip_ssl_verify": args.skip_ssl_verify
             }
             sig = inspect.signature(func)
             accepted_args = {k: v for k, v in func_args.items() if k in sig.parameters and v is not None}
