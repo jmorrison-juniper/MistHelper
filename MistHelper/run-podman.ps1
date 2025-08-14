@@ -33,6 +33,7 @@ if ($OutputFormat -notin @("csv", "sqlite")) {
 Write-Host "=== MistHelper Podman Automation ===" -ForegroundColor Green
 Write-Host "Output Format: $OutputFormat" -ForegroundColor Cyan
 Write-Host "Menu Option: $Menu" -ForegroundColor Cyan
+Write-Host "Container uses UV package manager for optimized performance" -ForegroundColor Magenta
 
 # Detect Podman executable
 $PodmanExe = $null

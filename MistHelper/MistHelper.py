@@ -7,6 +7,28 @@ from datetime import datetime, timezone
 import difflib
 import re
 
+# Early import of dotenv to load configuration
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Create a no-op function if dotenv is not available
+    def load_dotenv():
+        pass
+    load_dotenv()
+
+# Configuration variables from .env (with defaults)
+CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default to 15 if not set
+
+# Auto-upgrade configuration from .env
+AUTO_UPGRADE_UV = os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"
+AUTO_UPGRADE_DEPENDENCIES = os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"
+UPGRADE_CHECK_TIMEOUT = int(os.getenv("UPGRADE_CHECK_TIMEOUT", "60"))  # Default 60 seconds
+
+# Fast Mode Configuration from .env
+FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
+FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))
+
 # List of required packages (pip names)
 required_packages = [
     "mistapi",
@@ -17,7 +39,9 @@ required_packages = [
     "tqdm",
     "sshkeyboard",
     "numpy",
-    "python-dotenv"
+    "python-dotenv",
+    "usaddress-scourgify>=0.6.0",
+    "rapidfuzz>=3.8.0"
 ]
 
 # Mapping from pip package name to import name (if different)
@@ -30,12 +54,234 @@ import_name_map = {
     "numpy": "numpy",
     "mistapi": "mistapi",
     "pyte": "pyte",
-    "requests": "requests"
+    "requests": "requests",
+    "usaddress-scourgify": "scourgify",
+    "rapidfuzz": "rapidfuzz"
 }
+
+def bootstrap_uv_if_needed():
+    """
+    Automatically installs UV if it's not available on the system.
+    If UV is available, checks for and installs UV updates automatically (if enabled).
+    Provides comprehensive setup including version checking and environment setup.
+    Returns True if UV is available (either was already installed or just installed).
+    """
+    # Check Python version first
+    if sys.version_info < (3, 8):
+        print(f"⚠️ Python 3.8+ recommended. You have {sys.version.split()[0]}")
+        print("   MistHelper will still work but some features may be limited.")
+    
+    try:
+        # Check if UV is already available
+        result = subprocess.run([sys.executable, "-m", "uv", "--version"], 
+                               capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            current_version = result.stdout.strip()
+            print(f"✅ UV detected: {current_version}")
+            
+            # Auto-upgrade UV to latest version (if enabled)
+            if AUTO_UPGRADE_UV:
+                print("🔄 Checking for UV updates...", end="", flush=True)
+                try:
+                    upgrade_result = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "uv"], 
+                                                   capture_output=True, text=True, timeout=UPGRADE_CHECK_TIMEOUT)
+                    if upgrade_result.returncode == 0:
+                        # Check version again to see if it was upgraded
+                        new_result = subprocess.run([sys.executable, "-m", "uv", "--version"], 
+                                                   capture_output=True, text=True, timeout=10)
+                        if new_result.returncode == 0:
+                            new_version = new_result.stdout.strip()
+                            if new_version != current_version:
+                                print(f"\r✅ UV upgraded: {current_version} → {new_version}")
+                            else:
+                                print(f"\r✅ UV is up to date: {current_version}")
+                        else:
+                            print(f"\r✅ UV upgrade completed")
+                    else:
+                        print(f"\r⚠️ UV upgrade check failed, continuing with current version")
+                except Exception as e:
+                    print(f"\r⚠️ UV upgrade check failed ({e}), continuing with current version")
+            else:
+                print("   Auto-upgrade disabled (AUTO_UPGRADE_UV=false)")
+            
+            return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    
+    print("🚀 UV not found. Installing UV for faster dependency management...")
+    print("   This is a one-time setup that will speed up future runs significantly.")
+    
+    try:
+        # Install UV using pip
+        print("   Installing UV package manager...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"], 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Verify UV installation
+        result = subprocess.run([sys.executable, "-m", "uv", "--version"], 
+                               capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print(f"✅ UV successfully installed: {result.stdout.strip()}")
+            print("   Future dependency management will be 10-100x faster!")
+            return True
+        else:
+            print("⚠️ UV installation verification failed, falling back to pip")
+            print("   Performance will be reduced but functionality is maintained.")
+            return False
+    except Exception as e:
+        print(f"⚠️ Failed to install UV ({e}), falling back to pip")
+        print("   This doesn't affect functionality, just installation speed.")
+        return False
+
+def ensure_environment_file_exists():
+    """
+    Ensures that a .env file exists with the necessary configuration template.
+    Creates one from sample.env if available, otherwise creates a basic template.
+    """
+    env_file = ".env"
+    sample_env = "sample.env"
+    
+    if os.path.exists(env_file):
+        return True
+    
+    print("📝 Setting up environment configuration...")
+    
+    if os.path.exists(sample_env):
+        try:
+            with open(sample_env, 'r', encoding='utf-8') as src:
+                content = src.read()
+            with open(env_file, 'w', encoding='utf-8') as dst:
+                dst.write(content)
+            print("✅ Created .env from sample.env template")
+            print("⚠️  Please edit .env with your Mist API credentials before continuing")
+            return True
+        except Exception as e:
+            print(f"⚠️ Could not copy sample.env: {e}")
+    
+    # Create basic template if sample.env doesn't exist
+    try:
+        env_template = """# Mist API Configuration (Required)
+MIST_HOST=api.mist.com
+MIST_APITOKEN=your_api_token_here
+org_id=your_organization_id
+
+# Optional Configuration  
+MIST_USERNAME=your_username@example.com  # For legacy auth
+MIST_PASSWORD=your_password              # For legacy auth
+CSV_FRESHNESS_MINUTES=15                 # Cache duration
+
+# UV Auto-Upgrade Configuration
+AUTO_UPGRADE_UV=true                     # Auto-upgrade UV itself on startup
+AUTO_UPGRADE_DEPENDENCIES=true           # Auto-upgrade all dependencies on startup
+UPGRADE_CHECK_TIMEOUT=60                 # Timeout for upgrade checks (seconds)
+
+# Fast Mode Configuration (Advanced)
+FAST_MODE_MAX_RETRIES=3
+FAST_MODE_RETRY_DELAY=0.5
+FAST_MODE_BACKOFF_MULTIPLIER=1.5
+FAST_MODE_DEVICES_PER_THREAD=10
+FAST_MODE_RETRY_THREADS=4
+FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8
+FAST_MODE_USE_CONNECTION_AWARE_THREADING=true
+"""
+        with open(env_file, 'w', encoding='utf-8') as f:
+            f.write(env_template)
+        print("✅ Created basic .env template")
+        print("⚠️  Please edit .env with your Mist API credentials before continuing")
+        return True
+    except Exception as e:
+        print(f"❌ Could not create .env file: {e}")
+        return False
+
+def ensure_packages_with_uv(package_list):
+    """
+    Install and optionally upgrade packages using UV with fast parallel installation.
+    Respects AUTO_UPGRADE_DEPENDENCIES setting for upgrade behavior.
+    Provides detailed progress information and error handling.
+    """
+    if AUTO_UPGRADE_DEPENDENCIES:
+        print("🔍 Installing/upgrading dependencies with UV (fast parallel mode)...", end="", flush=True)
+        cmd = [sys.executable, "-m", "uv", "pip", "install", "--upgrade"] + package_list
+        action_desc = "installed/upgraded"
+    else:
+        print("🔍 Installing dependencies with UV (fast parallel mode)...", end="", flush=True)
+        cmd = [sys.executable, "-m", "uv", "pip", "install"] + package_list
+        action_desc = "installed"
+    
+    try:
+        # Use UV to install (and optionally upgrade) all packages at once
+        # UV automatically handles parallel downloads and dependency resolution
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0:
+            print(f"\r✅ Dependencies {action_desc} with UV (10-100x faster than pip). ")
+            
+            # Parse and show upgrade information if available
+            stdout_lines = result.stdout.strip().split('\n') if result.stdout else []
+            stderr_lines = result.stderr.strip().split('\n') if result.stderr else []
+            
+            # Look for action information in the output
+            upgrade_count = 0
+            install_count = 0
+            
+            for line in stdout_lines + stderr_lines:
+                if line.strip():
+                    if "Installed" in line or "installed" in line:
+                        install_count += 1
+                    elif "Upgraded" in line or "upgraded" in line or "Updated" in line:
+                        upgrade_count += 1
+            
+            # Show summary of what happened
+            if upgrade_count > 0 or install_count > 0:
+                actions = []
+                if install_count > 0:
+                    actions.append(f"{install_count} installed")
+                if upgrade_count > 0:
+                    actions.append(f"{upgrade_count} upgraded")
+                if actions:
+                    print(f"   📦 Package summary: {', '.join(actions)}")
+            
+            # Show configuration status
+            if AUTO_UPGRADE_DEPENDENCIES:
+                print(f"   🔄 Auto-upgrade enabled (set AUTO_UPGRADE_DEPENDENCIES=false to disable)")
+            else:
+                print(f"   📌 Auto-upgrade disabled (set AUTO_UPGRADE_DEPENDENCIES=true to enable)")
+            
+            # Show last few relevant lines for debugging
+            relevant_lines = []
+            for line in (stdout_lines + stderr_lines)[-5:]:
+                line = line.strip()
+                if line and not line.startswith('WARNING') and len(line) < 100:
+                    relevant_lines.append(line)
+            
+            if relevant_lines:
+                for line in relevant_lines[-2:]:  # Show last 2 relevant lines
+                    if "Resolved" in line or "package" in line.lower():
+                        print(f"   {line}")
+            
+            return True
+        else:
+            print(f"\r⚠️ UV installation had issues, falling back to pip...        ")
+            if result.stderr:
+                # Show first line of error for debugging
+                error_lines = result.stderr.split('\n')
+                for line in error_lines[:3]:  # Show first few error lines
+                    line = line.strip()
+                    if line and not line.startswith('WARNING'):
+                        print(f"   UV error: {line}")
+                        break
+            return False
+    except subprocess.TimeoutExpired:
+        print(f"\r⚠️ UV installation timed out, falling back to pip...           ")
+        return False
+    except Exception as e:
+        print(f"\r⚠️ UV installation error ({e}), falling back to pip...        ")
+        return False
 
 def ensure_single_package_is_installed_and_up_to_date(package_name):
     """
     Ensures a single package is installed and up to date.
+    Legacy fallback function for pip-based installation.
     """
     import_name = import_name_map.get(package_name, package_name)
     try:
@@ -55,11 +301,36 @@ def ensure_single_package_is_installed_and_up_to_date(package_name):
 
 def ensure_all_required_packages_are_ready_with_status_bar(package_list):
     """
-    Checks if each package is installed and up to date.
-    Installs or upgrades as needed, showing a status bar.
-    Uses multithreading for faster processing.
+    Comprehensive setup function that handles:
+    - UV installation and bootstrap
+    - Fast dependency management with UV (fallback to pip)
+    - Environment file creation
+    - User guidance for first-time setup
     """
-    print("🔍 Checking and updating dependencies...", end="", flush=True)
+    # Show startup banner for first-time users
+    if not os.path.exists(".env"):
+        print("🚀 MistHelper - First Time Setup")
+        print("=" * 50)
+    
+    # Ensure environment file exists
+    ensure_environment_file_exists()
+    
+    # First, try to bootstrap UV for faster dependency management
+    use_uv = bootstrap_uv_if_needed()
+    
+    if use_uv:
+        # Use UV for fast parallel installation
+        print("📦 Using UV package manager for optimal performance...")
+        success = ensure_packages_with_uv(package_list)
+        if success:
+            print("🎯 Setup complete! MistHelper is ready with optimized performance.")
+            return
+        else:
+            print("🔄 UV failed, falling back to traditional pip installation...")
+    
+    # Fallback to original pip-based method with threading
+    print("� Using pip with multithreading for dependency management...")
+    print("�🔍 Checking and updating dependencies with pip...", end="", flush=True)
     total = len(package_list)
     completed = [0]
 
@@ -73,13 +344,48 @@ def ensure_all_required_packages_are_ready_with_status_bar(package_list):
             update_status_bar()
 
     print("\r✅ Dependencies are ready.                      ")
+    print("💡 Tip: Install UV with 'pip install uv' for 10-100x faster future runs!")
 
 # Check for --skip-deps flag early (before main argument parsing)
 skip_deps = "--skip-deps" in sys.argv or "--help" in sys.argv or "-h" in sys.argv or "--test" in sys.argv
 
+# Check for upgrade control flags
+if "--no-upgrade" in sys.argv:
+    AUTO_UPGRADE_UV = False
+    AUTO_UPGRADE_DEPENDENCIES = False
+    print("🚫 Auto-upgrade disabled via --no-upgrade flag")
+elif "--force-upgrade" in sys.argv:
+    AUTO_UPGRADE_UV = True
+    AUTO_UPGRADE_DEPENDENCIES = True
+    print("🔄 Auto-upgrade forced via --force-upgrade flag")
+
+def show_first_time_guidance():
+    """Show helpful guidance for first-time users."""
+    print("\n" + "=" * 60)
+    print("🎯 NEXT STEPS:")
+    print("1. Edit .env file with your Mist API credentials:")
+    print("   - MIST_APITOKEN=your_api_token_here")  
+    print("   - org_id=your_organization_id")
+    print("\n2. Get your API token from: https://manage.mist.com/admin/?org_id=<your_org>")
+    print("   Go to Organization > API Tokens > Create New Token")
+    print("\n3. Find your Organization ID in the URL after login")
+    print("\n4. Optional: Configure auto-upgrade behavior in .env:")
+    print("   - AUTO_UPGRADE_UV=true (keeps UV package manager updated)")
+    print("   - AUTO_UPGRADE_DEPENDENCIES=true (keeps all dependencies updated)")
+    print("\n5. Run MistHelper again: python MistHelper.py")
+    print("=" * 60)
+
 # Run the version check and upgrade for all dependencies (unless skipped)
 if not skip_deps:
+    # Check if this is a first-time run (no .env file)
+    is_first_run = not os.path.exists(".env")
+    
     ensure_all_required_packages_are_ready_with_status_bar(required_packages)
+    
+    # Show guidance for first-time users
+    if is_first_run and "--test" not in sys.argv:
+        show_first_time_guidance()
+        # Don't exit, let the user continue if they want to test without API credentials
 
 # Import all dependencies after ensuring installation
 import mistapi
@@ -103,7 +409,6 @@ from prettytable import PrettyTable
 from tqdm import tqdm
 from datetime import datetime, timedelta, timezone
 from sshkeyboard import listen_keyboard, stop_listening
-from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -147,15 +452,42 @@ tuning_data_file = "tuning_data.json"
 apisession = mistapi.APISession(env_file=".env",console_log_level=20,logging_log_level=20)
 apisession.login()
 
+# Enhanced account information logging
+def log_account_information():
+    """Retrieve and log account information for better observability."""
+    try:
+        # Get self information to log account details
+        self_response = mistapi.api.v1.self.getSelf(apisession)
+        if self_response.status_code == 200:
+            self_data = self_response.data
+            account_email = self_data.get('email', 'Unknown')
+            account_name = f"{self_data.get('first_name', '')} {self_data.get('last_name', '')}".strip()
+            if not account_name:
+                account_name = account_email
+            
+            # Log with account context
+            logging.info(f"Account used: {account_name} ({account_email})")
+            logging.debug(f"Account privileges: {self_data.get('privileges', [])}")
+            logging.debug(f"Account session: authenticated and active")
+            
+            return {
+                'email': account_email,
+                'name': account_name,
+                'privileges': self_data.get('privileges', [])
+            }
+        else:
+            logging.warning(f"Could not retrieve account information (HTTP {self_response.status_code})")
+            return None
+    except Exception as e:
+        logging.warning(f"Error retrieving account information: {e}")
+        return None
+
+# Log account information
+account_info = log_account_information()
+
 org_id=None
 
-# Load .env variables early so freshness can be set via .env
-load_dotenv()
-CSV_FRESHNESS_MINUTES = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))  # Default to 15 if not set
-
-# Fast Mode Configuration from .env
-FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
-FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))
+# Additional Fast Mode Configuration from .env (continuing from earlier definitions)
 FAST_MODE_BACKOFF_MULTIPLIER = float(os.getenv("FAST_MODE_BACKOFF_MULTIPLIER", "1.5"))
 FAST_MODE_DEVICES_PER_THREAD = int(os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10"))
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))
@@ -6641,65 +6973,20 @@ def normalize_address_string(address_str):
     - Removing extra whitespace
     - Standardizing common abbreviations
     - Removing punctuation
+    - Unicode normalization for diacritics
     """
+    import unicodedata
+    import re
+    
     if not address_str:
         return ""
     
-    # Convert to lowercase and strip
-    normalized = address_str.lower().strip()
+    # Unicode normalization (NFKD) and casefold for robust comparison
+    normalized = unicodedata.normalize('NFKD', address_str)
+    normalized = normalized.casefold().strip()
     
-    # Common address abbreviations standardization
-    abbreviations = {
-        r'\bstreet\b': 'st',
-        r'\bst\b': 'st',
-        r'\bavenue\b': 'ave',
-        r'\bave\b': 'ave',
-        r'\bboulevard\b': 'blvd',
-        r'\bblvd\b': 'blvd',
-        r'\bbuilding\b': 'bldg',
-        r'\bbuilding\b': 'bldg',
-        r'\bsuite\b': 'ste',
-        r'\bsuite\b': 'ste',
-        r'\bnorth\b': 'n',
-        r'\bsouth\b': 's',
-        r'\beast\b': 'e',
-        r'\bwest\b': 'w',
-        r'\bdrive\b': 'dr',
-        r'\bdr\b': 'dr',
-        r'\broad\b': 'rd',
-        r'\brd\b': 'rd',
-        r'\blane\b': 'ln',
-        r'\bln\b': 'ln',
-        r'\bcourt\b': 'ct',
-        r'\bct\b': 'ct',
-        r'\bplace\b': 'pl',
-        r'\bpl\b': 'pl',
-        r'\bparkway\b': 'pkwy',
-        r'\bpkwy\b': 'pkwy',
-        r'\bhighway\b': 'hwy',
-        r'\bhwy\b': 'hwy',
-    }
-    
-    for full_form, abbrev in abbreviations.items():
-        normalized = re.sub(full_form, abbrev, normalized)
-    
-    # Remove punctuation and extra spaces
-    normalized = re.sub(r'[^\w\s]', ' ', normalized)
-    normalized = ' '.join(normalized.split())
-    
-    return normalized
-    """
-    Normalizes an address string for comparison by:
-    - Converting to lowercase
-    - Removing extra whitespace
-    - Standardizing common abbreviations
-    - Removing punctuation
-    """
-    if not address_str:
-        return ""
-    
-    # Convert to lowercase and strip
-    normalized = address_str.lower().strip()
+    # Remove extra whitespace and collapse multiple spaces
+    normalized = re.sub(r'\s+', ' ', normalized)
     
     # Common address abbreviations standardization
     abbreviations = {
@@ -6742,9 +7029,236 @@ def normalize_address_string(address_str):
     
     return normalized
 
+def parse_address_components(address_string, debug=False):
+    """
+    Parse address components with defensive parsing and robust heuristics.
+    
+    Handles:
+    - Defensive parsing with length checks
+    - "Unknown" address detection  
+    - Puerto Rico US territory mapping
+    - Right-to-left parsing (country, zip, city, street)
+    - Unicode normalization
+    - Graceful error handling
+    
+    Args:
+        address_string (str): Raw address string
+        debug (bool): Enable debug logging
+        
+    Returns:
+        dict: {
+            'address': str,
+            'city': str, 
+            'state': str,
+            'zip': str,
+            'country': str,
+            'is_parseable': bool,
+            'parse_reason': str,
+            'original': str
+        }
+    """
+    import re
+    import unicodedata
+    
+    if debug:
+        logging.debug(f"PARSE_ADDRESS: Input: '{address_string}'")
+    
+    # Initialize default result
+    result = {
+        'address': None,
+        'city': None,
+        'state': None,
+        'zip': None,
+        'country': None,
+        'is_parseable': False,
+        'parse_reason': 'unparsed',
+        'original': address_string or ""
+    }
+    
+    # Handle empty or None input
+    if not address_string or not str(address_string).strip():
+        result['parse_reason'] = 'empty_input'
+        if debug:
+            logging.debug("PARSE_ADDRESS: Empty input")
+        return result
+    
+    # Handle "Unknown" addresses
+    cleaned_input = str(address_string).strip()
+    if cleaned_input.lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+        result['parse_reason'] = 'unknown_address'
+        if debug:
+            logging.debug("PARSE_ADDRESS: Unknown address detected")
+        return result
+    
+    try:
+        # Unicode normalization and defensive cleaning
+        normalized = unicodedata.normalize('NFKD', cleaned_input)
+        
+        # Trim whitespace, collapse repeated commas, remove empty tokens
+        parts = [part.strip() for part in normalized.split(',')]
+        parts = [part for part in parts if part]  # Remove empty parts
+        
+        if not parts:
+            result['parse_reason'] = 'no_parts_after_cleaning'
+            if debug:
+                logging.debug("PARSE_ADDRESS: No parts after cleaning")
+            return result
+        
+        if debug:
+            logging.debug(f"PARSE_ADDRESS: Cleaned parts: {parts}")
+        
+        # Parse from right to left (country, postal/ZIP, city, street)
+        
+        # Step 1: Detect country (last token if recognizable)
+        country = None
+        remaining_parts = parts[:]
+        
+        if len(remaining_parts) > 0:
+            last_part = remaining_parts[-1].strip().lower()
+            
+            # Country detection patterns
+            if last_part in ['usa', 'united states', 'united states of america', 'us']:
+                country = 'US'
+                remaining_parts = remaining_parts[:-1]
+            elif last_part in ['puerto rico', 'pr']:
+                country = 'US'  # Puerto Rico is US territory
+                remaining_parts = remaining_parts[:-1]
+            elif len(last_part) == 2 and last_part.isalpha():
+                # Assume 2-letter country code
+                country = last_part.upper()
+                remaining_parts = remaining_parts[:-1]
+        
+        # Step 2: Detect ZIP/postal code (numeric patterns)
+        zip_code = None
+        if len(remaining_parts) > 0:
+            last_part = remaining_parts[-1].strip()
+            
+            # US ZIP pattern: 5 digits or 5+4 format
+            if re.match(r'^\d{5}(-?\d{4})?$', last_part):
+                zip_code = last_part
+                remaining_parts = remaining_parts[:-1]
+                # If no country detected but ZIP found, assume US
+                if not country:
+                    country = 'US'
+        
+        # Step 3: Handle Puerto Rico special case
+        state = None
+        if len(remaining_parts) > 0:
+            last_part = remaining_parts[-1].strip().lower()
+            
+            # Check for Puerto Rico in various positions
+            if last_part == 'puerto rico':
+                state = 'PR'
+                country = 'US'
+                remaining_parts = remaining_parts[:-1]
+            elif country == 'US' and last_part == 'pr':
+                state = 'PR'
+                remaining_parts = remaining_parts[:-1]
+            elif len(last_part) <= 2 and last_part.isalpha():
+                # Assume state abbreviation
+                state = last_part.upper()
+                remaining_parts = remaining_parts[:-1]
+            elif len(remaining_parts) > 1:
+                # Check if it's a full state name
+                state_normalized = normalize_state_name(last_part)
+                if state_normalized:
+                    state = state_normalized.upper()
+                    remaining_parts = remaining_parts[:-1]
+        
+        # Step 4: Detect city (next remaining part from right)
+        city = None
+        if len(remaining_parts) > 0:
+            city = remaining_parts[-1].strip()
+            remaining_parts = remaining_parts[:-1]
+        
+        # Step 5: Everything else is street address
+        address = None
+        if remaining_parts:
+            address = ', '.join(remaining_parts).strip()
+        
+        # Populate result
+        result.update({
+            'address': address,
+            'city': city,
+            'state': state,
+            'zip': zip_code,
+            'country': country,
+            'is_parseable': True,
+            'parse_reason': 'success'
+        })
+        
+        if debug:
+            logging.debug(f"PARSE_ADDRESS: Parsed result: {result}")
+        
+        return result
+        
+    except Exception as e:
+        result['parse_reason'] = f'exception: {str(e)}'
+        if debug:
+            logging.warning(f"PARSE_ADDRESS: Exception during parsing: {e}")
+        return result
+
+def enhanced_usaddress_parse(address_string, debug=False):
+    """
+    Enhanced address parsing using usaddress-scourgify for US addresses.
+    Falls back to heuristic parsing for non-US or failed cases.
+    
+    Args:
+        address_string (str): Raw address string
+        debug (bool): Enable debug logging
+        
+    Returns:
+        dict: Same format as parse_address_components
+    """
+    try:
+        from scourgify import normalize_address_record
+        
+        if debug:
+            logging.debug(f"USADDRESS_PARSE: Attempting usaddress parsing for: '{address_string}'")
+        
+        # Try usaddress-scourgify first
+        try:
+            parsed = normalize_address_record(address_string)
+            
+            result = {
+                'address': parsed.get('address_line_1', ''),
+                'city': parsed.get('city', ''),
+                'state': parsed.get('state', ''),
+                'zip': parsed.get('postal_code', ''),
+                'country': 'US',  # usaddress is US-focused
+                'is_parseable': True,
+                'parse_reason': 'usaddress_success',
+                'original': address_string or ""
+            }
+            
+            # Handle address_line_2 if present
+            if parsed.get('address_line_2'):
+                # Combine address lines with space
+                address_parts = [parsed.get('address_line_1', ''), parsed.get('address_line_2', '')]
+                result['address'] = ' '.join(part for part in address_parts if part)
+            
+            if debug:
+                logging.debug(f"USADDRESS_PARSE: Success: {result}")
+            
+            return result
+            
+        except Exception as usaddress_error:
+            if debug:
+                logging.debug(f"USADDRESS_PARSE: Failed with: {usaddress_error}")
+            
+            # Fall back to heuristic parsing
+            return parse_address_components(address_string, debug=debug)
+    
+    except ImportError:
+        if debug:
+            logging.debug("USADDRESS_PARSE: usaddress-scourgify not available, using heuristic parsing")
+        return parse_address_components(address_string, debug=debug)
+
 def calculate_string_similarity(str1, str2):
     """
-    Calculate similarity percentage between two strings using difflib.
+    Calculate similarity percentage between two strings using RapidFuzz for better performance.
+    Falls back to difflib if RapidFuzz is not available.
+    
     Returns a percentage from 0-100.
     """
     if not str1 and not str2:
@@ -6756,9 +7270,213 @@ def calculate_string_similarity(str1, str2):
     norm_str1 = normalize_address_string(str1)
     norm_str2 = normalize_address_string(str2)
     
-    # Calculate similarity ratio
-    similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
-    return similarity * 100
+    try:
+        # Try RapidFuzz for better performance and accuracy
+        from rapidfuzz import fuzz
+        
+        # Use token-based similarity for better address matching
+        similarity = fuzz.token_sort_ratio(norm_str1, norm_str2) / 100.0
+        return similarity * 100
+        
+    except ImportError:
+        # Fall back to difflib
+        import difflib
+        similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
+        return similarity * 100
+
+def check_address_should_skip(comparison_address, skip_addresses, debug=False):
+    """
+    Check if a comparison address should be automatically skipped (treating Mist address as correct).
+    
+    Args:
+        comparison_address (dict): Address from comparison CSV to check
+        skip_addresses (list): List of addresses to skip from AddressSkip.csv
+        debug (bool): Enable debug logging
+        
+    Returns:
+        tuple: (should_skip: bool, skip_reason: str)
+    """
+    if not skip_addresses:
+        return False, ""
+    
+    # Normalize comparison address fields for matching
+    comp_addr = str(comparison_address.get('address', '')).strip().upper()
+    comp_city = str(comparison_address.get('city', '')).strip().upper()
+    comp_state = str(comparison_address.get('state', '')).strip().upper()
+    comp_zip = str(comparison_address.get('zip', '')).strip().upper()
+    
+    for skip_entry in skip_addresses:
+        skip_addr = str(skip_entry.get('Skip_Address', '')).strip().upper()
+        skip_city = str(skip_entry.get('Skip_City', '')).strip().upper()
+        skip_state = str(skip_entry.get('Skip_State', '')).strip().upper()
+        skip_zip = str(skip_entry.get('Skip_Zip', '')).strip().upper()
+        skip_reason = skip_entry.get('Reason', 'Address in skip list')
+        
+        # Check for exact matches (case-insensitive)
+        if (comp_addr == skip_addr and 
+            comp_city == skip_city and 
+            comp_state == skip_state and 
+            comp_zip == skip_zip):
+            
+            if debug:
+                logging.debug(f"ADDRESS_SKIP: Found exact match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+            return True, skip_reason
+            
+        # Check for partial matches (any field matches and others are empty in skip list)
+        partial_match = False
+        matching_fields = 0
+        
+        if skip_addr and comp_addr == skip_addr:
+            partial_match = True
+            matching_fields += 1
+        if skip_city and comp_city == skip_city:
+            partial_match = True
+            matching_fields += 1
+        if skip_state and comp_state == skip_state:
+            partial_match = True
+            matching_fields += 1
+        if skip_zip and comp_zip == skip_zip:
+            partial_match = True
+            matching_fields += 1
+            
+        # For wildcard patterns: require at least 3 empty fields AND only 1 matching field
+        # For specific addresses: require at least 2 matching fields
+        empty_fields = sum([1 for f in [skip_addr, skip_city, skip_state, skip_zip] if not f])
+        populated_fields = 4 - empty_fields
+        
+        if partial_match:
+            # Wildcard pattern (mostly empty fields): require exactly 1 match
+            if empty_fields >= 3 and matching_fields == 1:
+                if debug:
+                    logging.debug(f"ADDRESS_SKIP: Found wildcard match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+                return True, skip_reason
+            # Specific address pattern: require at least 50% field match
+            elif populated_fields >= 2 and matching_fields >= max(2, populated_fields // 2):
+                if debug:
+                    logging.debug(f"ADDRESS_SKIP: Found specific address match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+                return True, skip_reason
+    
+    return False, ""
+
+def enhanced_compare_addresses_with_threshold(mist_address, comparison_address, threshold, debug=False):
+    """
+    Enhanced address comparison with robust parsing and better similarity metrics.
+    
+    Args:
+        mist_address (dict): Dictionary with keys: address, city, state, zip, country
+        comparison_address (dict): Dictionary with keys: address, city, state, zip, country  
+        threshold (float): Minimum similarity percentage required to be considered a match
+        debug (bool): Enable debug logging
+        
+    Returns:
+        dict: {
+            'overall_similarity': float,
+            'is_match': bool,
+            'field_similarities': {
+                'address': float,
+                'city': float, 
+                'state': float,
+                'zip': float
+            },
+            'failed_fields': list,
+            'parse_status': dict  # New: parsing status for both addresses
+        }
+    """
+    # Field weights for overall similarity calculation
+    field_weights = {
+        'address': 0.4,    # Street address is most important
+        'city': 0.3,       # City is very important
+        'state': 0.2,      # State is important
+        'zip': 0.1         # Zip is least weighted since we already have zip comparison
+    }
+    
+    field_similarities = {}
+    failed_fields = []
+    parse_status = {
+        'mist_parseable': True,
+        'comparison_parseable': True,
+        'mist_reason': 'valid',
+        'comparison_reason': 'valid'
+    }
+    
+    if debug:
+        logging.debug(f"ENHANCED_COMPARE: Mist address: {mist_address}")
+        logging.debug(f"ENHANCED_COMPARE: Comparison address: {comparison_address}")
+    
+    # Check for unparseable addresses
+    for field in field_weights.keys():
+        mist_value = mist_address.get(field, "")
+        comp_value = comparison_address.get(field, "")
+        
+        # Check if either address appears to be unparseable
+        if str(mist_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+            parse_status['mist_parseable'] = False
+            parse_status['mist_reason'] = 'unknown_address'
+        
+        if str(comp_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+            parse_status['comparison_parseable'] = False
+            parse_status['comparison_reason'] = 'unknown_address'
+    
+    # If either address is unparseable, return early with low similarity
+    if not parse_status['mist_parseable'] or not parse_status['comparison_parseable']:
+        if debug:
+            logging.debug(f"ENHANCED_COMPARE: Unparseable address detected: {parse_status}")
+        
+        return {
+            'overall_similarity': 0.0,
+            'is_match': False,
+            'field_similarities': {field: 0.0 for field in field_weights.keys()},
+            'failed_fields': list(field_weights.keys()),
+            'parse_status': parse_status
+        }
+    
+    # Compare address fields using enhanced similarity
+    for field, weight in field_weights.items():
+        mist_value = str(mist_address.get(field, "")).strip()
+        comp_value = str(comparison_address.get(field, "")).strip()
+        
+        if field == 'zip':
+            # Use normalized zip comparison
+            mist_norm = normalize_zip_code(mist_value)
+            comp_norm = normalize_zip_code(comp_value)
+            similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
+        elif field == 'state':
+            # Use normalized state comparison (handles abbreviations vs full names)
+            mist_norm = normalize_state_name(mist_value)
+            comp_norm = normalize_state_name(comp_value)
+            similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
+        else:
+            # Use enhanced string similarity for address and city fields
+            similarity = calculate_string_similarity(mist_value, comp_value)
+        
+        field_similarities[field] = similarity
+        
+        # Use a more forgiving threshold for individual fields (75% of the overall threshold)
+        field_threshold = threshold * 0.75
+        if similarity < field_threshold:
+            failed_fields.append(field)
+        
+        if debug:
+            logging.debug(f"ENHANCED_COMPARE: {field} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)")
+    
+    # Calculate weighted overall similarity
+    overall_similarity = sum(field_similarities[field] * field_weights[field] 
+                           for field in field_weights.keys())
+    
+    is_match = overall_similarity >= threshold
+    
+    result = {
+        'overall_similarity': overall_similarity,
+        'is_match': is_match,
+        'field_similarities': field_similarities,
+        'failed_fields': failed_fields,
+        'parse_status': parse_status
+    }
+    
+    if debug:
+        logging.debug(f"ENHANCED_COMPARE: Result: {result}")
+    
+    return result
 
 def compare_addresses_with_threshold(mist_address, comparison_address, threshold):
     """
@@ -6830,12 +7548,154 @@ def compare_addresses_with_threshold(mist_address, comparison_address, threshold
         'failed_fields': failed_fields
     }
 
-def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=False):
+class AddressComparisonCounters:
+    """Track comprehensive metrics for address comparison operations."""
+    
+    def __init__(self):
+        self.total_devices = 0
+        self.devices_enriched = 0
+        self.devices_skipped = 0
+        self.parse_failures = 0
+        self.comparison_failures = 0
+        self.validation_attempts = 0
+        self.validation_successes = 0
+        self.validation_failures = 0
+        self.mismatches_found = 0
+        self.perfect_matches = 0
+        self.auto_corrections = 0  # New counter for automatically corrected addresses
+        self.parse_failure_reasons = {}
+        self.start_time = None
+        self.end_time = None
+    
+    def start_timing(self):
+        import time
+        self.start_time = time.time()
+    
+    def end_timing(self):
+        import time
+        self.end_time = time.time()
+    
+    def get_duration(self):
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return 0
+    
+    def increment_parse_failure(self, reason):
+        self.parse_failures += 1
+        self.parse_failure_reasons[reason] = self.parse_failure_reasons.get(reason, 0) + 1
+    
+    def log_summary(self):
+        """Log comprehensive summary of the comparison operation."""
+        duration = self.get_duration()
+        
+        logging.info("=== ADDRESS COMPARISON SUMMARY ===")
+        logging.info(f"Total devices processed: {self.total_devices}")
+        logging.info(f"Devices enriched with site info: {self.devices_enriched}")
+        logging.info(f"Devices skipped (not in comparison CSV): {self.devices_skipped}")
+        logging.info(f"Parse failures: {self.parse_failures}")
+        logging.info(f"Address mismatches found: {self.mismatches_found}")
+        logging.info(f"Perfect matches: {self.perfect_matches}")
+        logging.info(f"Auto-corrections applied: {self.auto_corrections}")
+        
+        if self.validation_attempts > 0:
+            success_rate = (self.validation_successes / self.validation_attempts) * 100
+            logging.info(f"External validation attempts: {self.validation_attempts}")
+            logging.info(f"External validation successes: {self.validation_successes} ({success_rate:.1f}%)")
+            logging.info(f"External validation failures: {self.validation_failures}")
+        
+        if self.parse_failure_reasons:
+            logging.info("Parse failure breakdown:")
+            for reason, count in self.parse_failure_reasons.items():
+                logging.info(f"  {reason}: {count}")
+        
+        if duration > 0:
+            logging.info(f"Total operation duration: {duration:.2f} seconds")
+            devices_per_second = self.total_devices / duration if duration > 0 else 0
+            logging.info(f"Processing rate: {devices_per_second:.2f} devices/second")
+
+def create_address_parse_failures_csv(parse_failures, filename="AddressParseFailures.csv"):
+    """
+    Create a CSV file documenting address parsing failures.
+    
+    Args:
+        parse_failures (list): List of parse failure records
+        filename (str): Output filename
+    """
+    if not parse_failures:
+        logging.info("No address parsing failures to document.")
+        return
+    
+    try:
+        output_path = get_csv_file_path(filename)
+        
+        with open(output_path, "w", newline='', encoding="utf-8") as f:
+            fieldnames = [
+                'site_id', 'site_name', 'device_id', 'device_serial', 'device_name',
+                'original_address', 'parsed_tokens', 'failure_reason', 'timestamp'
+            ]
+            
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for failure in parse_failures:
+                writer.writerow(failure)
+        
+        logging.info(f"Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+        print(f"📝 Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+        
+    except Exception as e:
+        logging.error(f"Failed to create address parse failures CSV: {e}")
+        print(f"❌ Failed to create address parse failures CSV: {e}")
+
+def get_device_identifier(device, warn_on_missing=False):
+    """
+    Get the best available identifier for a device with fallback logic.
+    
+    Args:
+        device (dict): Device record
+        warn_on_missing (bool): Whether to log a warning on first missing name
+        
+    Returns:
+        str: Device identifier (name, serial, or device_id)
+    """
+    # Try name first
+    name = device.get("name", "").strip()
+    if name:
+        return name
+    
+    # Fall back to serial
+    serial = device.get("serial", "").strip()
+    if serial:
+        if warn_on_missing:
+            logging.warning(f"Device {serial} missing name field, using serial as identifier")
+        return serial
+    
+    # Fall back to device_id
+    device_id = device.get("id", "").strip()
+    if device_id:
+        if warn_on_missing:
+            logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
+        return device_id
+    
+    # Last resort
+    if warn_on_missing:
+        logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
+    return "UNKNOWN"
+
+def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=True):
     """
     Compares combined inventory data with site info against a user-selected CSV file.
     Shows items where addresses don't meet the configured similarity threshold.
     Skips items that aren't in the comparison CSV file.
     Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy address matching.
+    
+    Enhanced with:
+    - Hardened address parsing with defensive error handling
+    - Comprehensive metrics and counters
+    - Parse failure artifact generation
+    - Improved logging and observability
+    - Better handling of "Unknown" addresses
+    - Unicode normalization and fuzzy matching improvements
     
     Args:
         fast (bool): If True, enables optimized data generation mode using cached data
@@ -6843,10 +7703,17 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         address_check (bool): If True, enables external address validation using Nominatim API.
                              Overrides ENABLE_ADDRESS_VALIDATION setting from .env file.
         debug (bool): If True, enables detailed debug logging for API requests and responses.
+        skip_ssl_verify (bool): If True, skips SSL certificate verification for external APIs.
     """
     from collections import defaultdict
     import glob
     from tqdm import tqdm
+    from datetime import datetime, timezone
+
+    # Initialize counters for comprehensive tracking
+    counters = AddressComparisonCounters()
+    counters.start_timing()
+    parse_failures = []  # Track parsing failures for artifact generation
 
     # Load environment variables
     load_dotenv()
@@ -6856,12 +7723,13 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     # Get configurable address match threshold (default: 75%)
     ADDRESS_MATCH_THRESHOLD = float(os.getenv("ADDRESS_MATCH_THRESHOLD", "75"))
 
-    print("🔍 Comparing inventory data with external CSV file...")
-    print(f"📊 Using address match threshold: {ADDRESS_MATCH_THRESHOLD}% similarity required")
+    print("🔍 Data Integrity Analysis: Comparing Mist vs Comparison CSV addresses...")
+    print(f"📊 Using address similarity threshold: {ADDRESS_MATCH_THRESHOLD}% (conflicts below this will be flagged)")
+    print(f"🛡️  Enhanced features: defensive parsing, Unicode normalization, fuzzy matching")
     if fast:
         print("🚀 Fast mode enabled: Using optimized data generation and caching")
     if debug:
-        print("🔧 Debug mode enabled: Detailed API logging active")
+        print("🔧 Debug mode enabled: Detailed comparison logging active")
         logging.debug("ENTRY: compare_inventory_with_csv()")
         logging.debug(f"  Parameters: fast={fast}, address_check={address_check}, debug={debug}")
         logging.debug(f"  ADDRESS_MATCH_THRESHOLD={ADDRESS_MATCH_THRESHOLD}")
@@ -6872,10 +7740,12 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     if address_validation_enabled:
         source = "--address-check flag" if address_check else ".env file"
         print(f"🌐 External address validation enabled via {source}")
+        print(f"   🔍 Address conflicts will be validated using Nominatim API")
         if debug:
             logging.debug(f"Address validation enabled via {source}")
     else:
-        print("⚠️  External address validation disabled (use --address-check flag to enable)")
+        print("⚠️  External address validation disabled")
+        print("   💡 Use --address-check flag or set ENABLE_ADDRESS_VALIDATION=true in .env to enable intelligent address recommendations")
         if debug:
             logging.debug("Address validation disabled")
     
@@ -6939,6 +7809,24 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
 
     print(f"📊 Loaded {len(site_configs)} devices from AllDevicesWithSiteInfo.csv")
     print(f"📊 Loaded {len(comparison_data)} records from {comparison_file}")
+
+    # Load the address skip list for automatic corrections
+    skip_addresses = []
+    skip_file_path = get_csv_file_path("AddressSkip.csv")
+    try:
+        with open(skip_file_path, mode="r", encoding="utf-8") as f:
+            skip_data = list(csv.DictReader(f))
+            skip_addresses = skip_data
+        print(f"📋 Loaded {len(skip_addresses)} skip addresses from AddressSkip.csv")
+        if debug:
+            logging.debug(f"Loaded {len(skip_addresses)} addresses to skip from AddressSkip.csv")
+    except FileNotFoundError:
+        print("⚠️  AddressSkip.csv not found - no addresses will be automatically skipped")
+        if debug:
+            logging.debug("AddressSkip.csv not found - continuing without skip list")
+    except Exception as e:
+        print(f"⚠️  Error loading AddressSkip.csv: {e}")
+        logging.warning(f"Error loading AddressSkip.csv: {e}")
 
     # Create lookup dictionaries for comparison data
     # Try common field names for serial number and zip code
@@ -7026,6 +7914,11 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             }
 
     print(f"📋 Built comparison lookup with {len(comparison_serials)} serial numbers")
+    
+    # Show validation count if address validation is enabled
+    if address_validation_enabled:
+        validation_count = len([d for d in site_configs if d.get('serial', '').strip() in comparison_serials])
+        print(f"🌐 Will validate {validation_count} address conflicts using Nominatim API")
 
     # Duplicate address detection between sites
     print("\n🔍 Checking for duplicate addresses between sites...")
@@ -7132,27 +8025,118 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             logging.info(f"DUPLICATE_CHECK: Found {len(mist_duplicates)} Mist duplicates and {len(ref_duplicates)} reference duplicates between sites")
 
     # Process device data and find address mismatches using configurable threshold
+    # IMPROVED ORDER OF OPERATIONS:
+    # 1. Fix both addresses first (normalize, parse, clean up)  
+    # 2. Remove duplicates (addresses that are the same after normalization)
+    # 3. Remove addresses in skip file (known problematic addresses)
+    # 4. Then validate remaining conflicts with external API
+    
     mismatched_items = []
     diff_report_items = []
     skipped_count = 0
     validation_count = 0
+    devices_needing_validation = []  # Will be populated after filtering
     
-    # Count devices that will need validation for progress bar
-    if address_validation_enabled:
-        devices_needing_validation = []
-        for device in site_configs:
-            device_serial = device.get("serial", "").strip()
-            if device_serial not in comparison_serials:
-                continue
-                
-            mist_address = {
-                'address': device.get("street", "").strip(),
-                'city': device.get("city", "").strip(),
-                'state': device.get("state", "").strip(),
-                'zip': device.get("zip_code", "").strip()
-            }
+    print(f"\n🔍 Processing {len(site_configs)} total devices with improved order of operations...")
+    print("📋 Step 1: Parsing and normalizing all addresses...")
+    
+    # Step 1: Process all devices, fix addresses, and identify initial mismatches
+    all_conflicts = []  # Store all conflicts before filtering
+    counters.total_devices = len(site_configs)
+    first_missing_name_warned = False
+    
+    for device in tqdm(site_configs, desc="Step 1: Parsing Addresses", unit="device"):
+        device_serial = device.get("serial", "").strip()
+        device_identifier = get_device_identifier(device, warn_on_missing=not first_missing_name_warned)
+        
+        if not first_missing_name_warned and device_identifier != device.get("name", "").strip():
+            first_missing_name_warned = True
+        
+        # Skip if device serial not in comparison file
+        if device_serial not in comparison_serials:
+            counters.devices_skipped += 1
+            if debug:
+                logging.debug(f"DEVICE_SKIP [{device_serial}]: Not found in comparison CSV (available: {len(comparison_serials)} serials)")
+            continue
+        
+        counters.devices_enriched += 1
+        
+        # Enhanced address parsing with error handling
+        try:
+            # Parse Mist address with enhanced parsing
+            mist_address_raw = device.get("site_address", "").strip()
+            if not mist_address_raw:
+                # Fall back to component parsing if no combined address
+                mist_address = {
+                    'address': device.get("street", "").strip(),
+                    'city': device.get("city", "").strip(),
+                    'state': device.get("state", "").strip(),
+                    'zip': device.get("zip_code", "").strip()
+                }
+            else:
+                # Use enhanced parsing for combined address
+                parsed_mist = enhanced_usaddress_parse(mist_address_raw, debug=debug)
+                if not parsed_mist['is_parseable']:
+                    # Document parsing failure
+                    failure_record = {
+                        'site_id': device.get("site_id", ""),
+                        'site_name': device.get("site_name", ""),
+                        'device_id': device.get("id", ""),
+                        'device_serial': device_serial,
+                        'device_name': device_identifier,
+                        'original_address': mist_address_raw,
+                        'parsed_tokens': str(mist_address_raw.split(',')),
+                        'failure_reason': parsed_mist['parse_reason'],
+                        'timestamp': datetime.now(timezone.utc).isoformat()
+                    }
+                    parse_failures.append(failure_record)
+                    counters.increment_parse_failure(parsed_mist['parse_reason'])
+                    
+                    # Fall back to component parsing
+                    mist_address = {
+                        'address': device.get("street", "").strip(),
+                        'city': device.get("city", "").strip(),
+                        'state': device.get("state", "").strip(),
+                        'zip': device.get("zip_code", "").strip()
+                    }
+                else:
+                    mist_address = {
+                        'address': parsed_mist.get('address') or "",
+                        'city': parsed_mist.get('city') or "",
+                        'state': parsed_mist.get('state') or "",
+                        'zip': parsed_mist.get('zip') or ""
+                    }
             
+            # Parse comparison address
             comparison_address_data = comparison_address_lookup.get(device_serial, {})
+            
+            # Additional safety check: if no comparison data found, skip this device
+            if not comparison_address_data or not any(comparison_address_data.values()):
+                counters.devices_skipped += 1
+                if debug:
+                    logging.debug(f"DEVICE_SKIP [{device_serial}]: No comparison address data found")
+                continue
+            
+            comparison_address_raw = f"{comparison_address_data.get('Address', '')}, {comparison_address_data.get('City', '')}, {comparison_address_data.get('State', '')}, {comparison_address_data.get('Zip', '')}".strip(", ")
+            
+            if comparison_address_raw and comparison_address_raw != "   ":
+                parsed_comp = enhanced_usaddress_parse(comparison_address_raw, debug=debug)
+                if not parsed_comp['is_parseable']:
+                    # Document parsing failure for comparison address
+                    failure_record = {
+                        'site_id': 'COMPARISON_CSV',
+                        'site_name': 'COMPARISON_CSV', 
+                        'device_id': device_serial,
+                        'device_serial': device_serial,
+                        'device_name': device_identifier,
+                        'original_address': comparison_address_raw,
+                        'parsed_tokens': str(comparison_address_raw.split(',')),
+                        'failure_reason': parsed_comp['parse_reason'],
+                        'timestamp': datetime.now(timezone.utc).isoformat()
+                    }
+                    parse_failures.append(failure_record)
+                    counters.increment_parse_failure(f"comparison_{parsed_comp['parse_reason']}")
+            
             comparison_address = {
                 'address': comparison_address_data.get("Address", "").strip(),
                 'city': comparison_address_data.get("City", "").strip(),
@@ -7160,23 +8144,226 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 'zip': comparison_address_data.get("Zip", "").strip()
             }
             
-            # Quick similarity check to see if validation will be needed
-            comparison_result = compare_addresses_with_threshold(
-                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
+            # Validate that we have meaningful comparison data
+            if not any([comparison_address['address'], comparison_address['city'], comparison_address['state'], comparison_address['zip']]):
+                counters.devices_skipped += 1
+                if debug:
+                    logging.debug(f"DEVICE_SKIP [{device_serial}]: Empty comparison address data")
+                continue
+            
+            if debug:
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Mist address: {mist_address}")
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Comparison address: {comparison_address}")
+            
+            # Enhanced address comparison with defensive parsing
+            comparison_result = enhanced_compare_addresses_with_threshold(
+                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD, debug=debug
             )
             
-            if not comparison_result['is_match']:
-                devices_needing_validation.append((device, device_serial, mist_address, comparison_address))
-        
-        total_validations = len(devices_needing_validation)
-        if total_validations > 0:
-            print(f"\n🌐 External address validation enabled - {total_validations} devices need validation")
-            print("📡 This may take several minutes due to API rate limiting (1 request/second)...")
             if debug:
-                logging.debug(f"ADDRESS_VALIDATION: {total_validations} devices require external validation")
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Enhanced similarity result: {comparison_result}")
+            
+            # Track match/mismatch statistics
+            if comparison_result['is_match']:
+                counters.perfect_matches += 1
+            else:
+                counters.mismatches_found += 1
+                # Store conflict for further filtering
+                all_conflicts.append({
+                    'device': device,
+                    'device_serial': device_serial,
+                    'device_identifier': device_identifier,
+                    'mist_address': mist_address,
+                    'comparison_address': comparison_address,
+                    'comparison_result': comparison_result
+                })
+                
+        except Exception as device_error:
+            logging.warning(f"⚠️ Error processing device {device_serial}: {device_error}")
+            counters.comparison_failures += 1
+            
+            # Document this as a parse failure
+            failure_record = {
+                'site_id': device.get("site_id", ""),
+                'site_name': device.get("site_name", ""),
+                'device_id': device.get("id", ""),
+                'device_serial': device_serial,
+                'device_name': device_identifier if 'device_identifier' in locals() else device_serial,
+                'original_address': str(device.get("site_address", "")),
+                'parsed_tokens': 'N/A',
+                'failure_reason': f'device_processing_error: {str(device_error)}',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            parse_failures.append(failure_record)
+            counters.increment_parse_failure('device_processing_error')
+
+    print(f"📊 Step 1 Complete: Found {len(all_conflicts)} address conflicts from {counters.devices_enriched} analyzed devices")
     
-    # Process devices that need validation with proper progress bar
-    if address_check and devices_needing_validation:
+    # Step 2: Remove duplicate addresses (after normalization) 
+    print("📋 Step 2: Removing duplicate addresses...")
+    unique_conflicts = []
+    seen_addresses = set()
+    
+    for conflict in all_conflicts:
+        # Create normalized address key for deduplication
+        mist_addr = conflict['mist_address']
+        comp_addr = conflict['comparison_address']
+        address_key = f"{mist_addr['address'].lower().strip()}|{mist_addr['city'].lower().strip()}|{mist_addr['state'].lower().strip()}|{mist_addr['zip'].strip()}" + \
+                     f"||{comp_addr['address'].lower().strip()}|{comp_addr['city'].lower().strip()}|{comp_addr['state'].lower().strip()}|{comp_addr['zip'].strip()}"
+        
+        if address_key not in seen_addresses:
+            seen_addresses.add(address_key)
+            unique_conflicts.append(conflict)
+        else:
+            if debug:
+                logging.debug(f"DUPLICATE_REMOVED [{conflict['device_serial']}]: Address pair already seen")
+    
+    duplicates_removed = len(all_conflicts) - len(unique_conflicts)
+    print(f"📊 Step 2 Complete: Removed {duplicates_removed} duplicate address pairs, {len(unique_conflicts)} unique conflicts remain")
+    
+    # Step 3: Remove addresses in skip file
+    print("📋 Step 3: Applying address skip filters...")
+    filtered_conflicts = []
+    
+    for conflict in unique_conflicts:
+        comparison_address = conflict['comparison_address']
+        device_serial = conflict['device_serial']
+        
+        # Check if comparison address should be automatically skipped
+        should_skip, skip_reason = check_address_should_skip(comparison_address, skip_addresses, debug=debug)
+        
+        if should_skip:
+            # Automatically treat as a match (Mist address is correct)
+            counters.perfect_matches += 1
+            counters.auto_corrections += 1
+            
+            if debug:
+                logging.debug(f"ADDRESS_SKIP [{device_serial}]: Skipped comparison address due to: {skip_reason}")
+            
+            print(f"    ✅ Auto-corrected: {device_serial} (Skip reason: {skip_reason})")
+        else:
+            filtered_conflicts.append(conflict)
+    
+    skip_filtered = len(unique_conflicts) - len(filtered_conflicts)
+    print(f"📊 Step 3 Complete: Removed {skip_filtered} addresses via skip filters, {len(filtered_conflicts)} conflicts require analysis")
+    
+    # Step 4: Prepare for external validation (only if enabled)
+    if address_validation_enabled and filtered_conflicts:
+        devices_needing_validation = [(c['device'], c['device_serial'], c['mist_address'], c['comparison_address']) for c in filtered_conflicts]
+        total_validations = len(devices_needing_validation)
+        print(f"\n🌐 Step 4: External address validation enabled - {total_validations} remaining conflicts need validation")
+        print("📡 This may take several minutes due to API rate limiting (1 request/second)...")
+        if debug:
+            logging.debug(f"ADDRESS_VALIDATION: {total_validations} devices require external validation after filtering")
+    elif not address_validation_enabled and filtered_conflicts:
+        # Process conflicts without validation
+        print(f"\n📋 Step 4: Processing {len(filtered_conflicts)} conflicts without external validation...")
+        for conflict in filtered_conflicts:
+            device = conflict['device'] 
+            device_serial = conflict['device_serial']
+            comparison_result = conflict['comparison_result']
+            mist_address = conflict['mist_address']
+            comparison_address = conflict['comparison_address']
+            
+            # Generate mismatch records
+            try:
+                created_time = int(device.get("created_time", 0))
+                created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+                year, week, _ = created_date.isocalendar()
+                week_key = f"{year}_Week_{week:02d}"
+
+                # Determine primary mismatch type based on failed fields
+                failed_fields = comparison_result['failed_fields']
+                if 'zip' in failed_fields and len(failed_fields) == 1:
+                    mismatch_type = "Zip Code Mismatch"
+                elif 'address' in failed_fields:
+                    mismatch_type = "Address Mismatch"
+                elif 'city' in failed_fields:
+                    mismatch_type = "City Mismatch"
+                elif 'state' in failed_fields:
+                    mismatch_type = "State Mismatch"
+                else:
+                    mismatch_type = "Multi-field Address Mismatch"
+
+                # Enhanced mismatch item with parse status
+                mismatched_item = {
+                    "Week": week_key,
+                    "Full Site": device.get("site_name", ""),
+                    "System Serial Number": device_serial,
+                    "System Model Number": device.get("model", ""),
+                    "End Customer Name": END_CUSTOMER_NAME,
+                    "Address Line 1": mist_address['address'],
+                    "Address Line 2": "",
+                    "City": mist_address['city'],
+                    "State": mist_address['state'],
+                    "Current Zip Code": mist_address['zip'],
+                    "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
+                    "Comparison Zip Code": comparison_address['zip'],
+                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                    "Mismatch Type": mismatch_type,
+                    "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                    "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                    "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                    "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+                    "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                    "Failed Fields": ', '.join(failed_fields),
+                    # Enhanced fields
+                    "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
+                    "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
+                    "Parse_Issues": f"Mist: {comparison_result['parse_status']['mist_reason']}, Comp: {comparison_result['parse_status']['comparison_reason']}",
+                    # Address validation results (No validation in basic mode)
+                    "Mist_Validation_Status": 'N/A',
+                    "Mist_Confidence": 'N/A',
+                    "Comparison_Validation_Status": 'N/A',
+                    "Comparison_Confidence": 'N/A',
+                    "Validation_Recommendation": 'N/A'
+                }
+                mismatched_items.append(mismatched_item)
+
+                # Enhanced diff report item with parse status
+                diff_item = {
+                    "Week": week_key,
+                    "Full Site": device.get("site_name", ""),
+                    "System Serial Number": device_serial,
+                    "System Model Number": device.get("model", ""),
+                    "End Customer Name": END_CUSTOMER_NAME,
+                    "Mist_Address_Line_1": mist_address['address'],
+                    "Mist_City": mist_address['city'],
+                    "Mist_State": mist_address['state'],
+                    "Mist_Zip_Code": mist_address['zip'],
+                    "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
+                    "Comparison_Address": comparison_address['address'],
+                    "Comparison_City": comparison_address['city'],
+                    "Comparison_State": comparison_address['state'],
+                    "Comparison_Zip_Code": comparison_address['zip'],
+                    "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
+                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
+                    "Mismatch Type": mismatch_type,
+                    "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+                    "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+                    "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+                    "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+                    "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+                    "Failed Fields": ', '.join(failed_fields),
+                    # Enhanced fields
+                    "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
+                    "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
+                    "Parse_Issues": f"Mist: {comparison_result['parse_status']['mist_reason']}, Comp: {comparison_result['parse_status']['comparison_reason']}",
+                    # Address validation results (No validation in basic mode)
+                    "Mist_Validation_Status": 'N/A',
+                    "Mist_Confidence": 'N/A',
+                    "Comparison_Validation_Status": 'N/A',
+                    "Comparison_Confidence": 'N/A',
+                    "Validation_Recommendation": 'N/A'
+                }
+                diff_report_items.append(diff_item)
+                
+            except Exception as mismatch_error:
+                logging.warning(f"⚠️ Error processing mismatch for device {device_serial}: {mismatch_error}")
+                counters.comparison_failures += 1
+    
+    # Step 4 (continued): Process devices that need validation with proper progress bar
+    if address_validation_enabled and devices_needing_validation:
         # Get organization name for intelligent tiebreaker logic
         org_name = None
         try:
@@ -7195,26 +8382,27 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             if debug:
                 logging.warning(f"Could not retrieve organization name for tiebreaker: {e}")
         
-        print(f"\n🔍 Processing {len(devices_needing_validation)} devices requiring address validation...")
-        
-        for device, device_serial, mist_address, comparison_address in tqdm(devices_needing_validation, desc="Validating Addresses", unit="device"):
+        validation_count = 0
+        for device, device_serial, mist_address, comparison_address in tqdm(devices_needing_validation, desc="Step 4: Validating Addresses", unit="device"):
+            validation_count += 1
             if debug:
                 logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Starting validation process")
                 logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Mist address: {mist_address}")
                 logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Comparison address: {comparison_address}")
             
-            # Quick similarity check for consistency
-            comparison_result = compare_addresses_with_threshold(
-                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
-            )
+            # Find the corresponding conflict for this device
+            conflict = next((c for c in filtered_conflicts if c['device_serial'] == device_serial), None)
+            if not conflict:
+                logging.warning(f"Could not find conflict data for device {device_serial}")
+                continue
+                
+            comparison_result = conflict['comparison_result']
             
             if debug:
                 logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Similarity result: {comparison_result}")
             
             # Perform external address validation
             validation_result = None
-            validation_count = 0  # Initialize counter
-            validation_count += 1
             ADDRESS_VALIDATION_TIMEOUT = int(os.getenv("ADDRESS_VALIDATION_TIMEOUT", "10"))
             
             try:
@@ -7222,7 +8410,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 mist_addr_str = f"{mist_address['address']}, {mist_address['city']}, {mist_address['state']} {mist_address['zip']}".replace(", , ", ", ").strip(", ")
                 comp_addr_str = f"{comparison_address['address']}, {comparison_address['city']}, {comparison_address['state']} {comparison_address['zip']}".replace(", , ", ", ").strip(", ")
                 
-                print(f"🔍 [{validation_count}/{total_validations if 'total_validations' in locals() else '?'}] Validating {device_serial}...")
+                print(f"🔍 [{validation_count}/{total_validations}] Validating {device_serial}...")
                 print(f"    📍 Mist:       {mist_addr_str}")
                 print(f"    📍 Reference:  {comp_addr_str}")
                 
@@ -7353,152 +8541,57 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                     logging.warning(f"⚠️ Skipping device due to error: {e}")
     
     else:
-        # Address validation not enabled - process all devices with basic comparison
-        print(f"\n🔍 Processing {len(site_configs)} total devices for address comparison...")
-        
-        for device in tqdm(site_configs, desc="Processing Devices", unit="device"):
-            device_serial = device.get("serial", "").strip()
-            
-            # Skip if device serial not in comparison file
-            if device_serial not in comparison_serials:
-                skipped_count += 1
-                continue
-                
-            # Prepare address data for comparison
-            mist_address = {
-                'address': device.get("street", "").strip(),
-                'city': device.get("city", "").strip(),
-                'state': device.get("state", "").strip(),
-                'zip': device.get("zip_code", "").strip()
-            }
-            
-            comparison_address_data = comparison_address_lookup.get(device_serial, {})
-            comparison_address = {
-                'address': comparison_address_data.get("Address", "").strip(),
-                'city': comparison_address_data.get("City", "").strip(),
-                'state': comparison_address_data.get("State", "").strip(),
-                'zip': comparison_address_data.get("Zip", "").strip()
-            }
-            
-            if debug:
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Mist address: {mist_address}")
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Comparison address: {comparison_address}")
-            
-            # Compare addresses using configurable threshold
-            comparison_result = compare_addresses_with_threshold(
-                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD
-            )
-            
-            if debug:
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Similarity result: {comparison_result}")
-            
-            # If overall similarity is below threshold, mark as mismatch
-            # If overall similarity is below threshold, mark as mismatch
-            if not comparison_result['is_match']:
-                try:
-                    created_time = int(device.get("created_time", 0))
-                    created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
-                    year, week, _ = created_date.isocalendar()
-                    week_key = f"{year}_Week_{week:02d}"
+        # Skip external validation section since it's already handled above in the improved order of operations
+        pass
 
-                    # Determine primary mismatch type based on failed fields
-                    failed_fields = comparison_result['failed_fields']
-                    if 'zip' in failed_fields and len(failed_fields) == 1:
-                        mismatch_type = "Zip Code Mismatch"
-                    elif 'address' in failed_fields:
-                        mismatch_type = "Address Mismatch"
-                    elif 'city' in failed_fields:
-                        mismatch_type = "City Mismatch"
-                    elif 'state' in failed_fields:
-                        mismatch_type = "State Mismatch"
-                    else:
-                        mismatch_type = "Multi-field Address Mismatch"
+    # End timing and generate artifacts
+    counters.end_timing()
+    
+    # Create parse failures artifact if there were any
+    if parse_failures:
+        create_address_parse_failures_csv(parse_failures)
+    
+    # Enhanced results display
+    print(f"\n📊 Data Integrity Analysis Results:")
+    print(f"   ✅ Total devices analyzed: {counters.total_devices}")
+    print(f"   🔧 Devices with comparison data: {counters.devices_enriched}")
+    print(f"   ⏭️  Devices excluded (not in comparison CSV): {counters.devices_skipped}")
+    print(f"   🎯 Address conflicts found: {counters.mismatches_found}")
+    print(f"   ✅ Consistent addresses: {counters.perfect_matches}")
+    print(f"   🔄 Auto-skipped addresses: {counters.auto_corrections}")
+    print(f"   📝 Parse failures: {counters.parse_failures}")
+    
+    if counters.mismatches_found > 0:
+        conflict_rate = (counters.mismatches_found / counters.devices_enriched) * 100
+        print(f"   � Conflict rate: {conflict_rate:.1f}% of analyzed devices have address discrepancies")
+    
+    if counters.parse_failures > 0:
+        print(f"   🔍 Parse failure breakdown:")
+        for reason, count in counters.parse_failure_reasons.items():
+            print(f"      - {reason}: {count}")
+    
+    processing_rate = counters.total_devices / counters.get_duration() if counters.get_duration() > 0 else 0
+    print(f"   ⏱️  Processing rate: {processing_rate:.1f} devices/second")
 
-                    # Standard mismatch item (enhanced format)
-                    mismatched_item = {
-                        "Week": week_key,
-                        "Full Site": device.get("site_name", ""),
-                        "System Serial Number": device_serial,
-                        "System Model Number": device.get("model", ""),
-                        "End Customer Name": END_CUSTOMER_NAME,
-                        "Address Line 1": mist_address['address'],
-                        "Address Line 2": "",
-                        "City": mist_address['city'],
-                        "State": mist_address['state'],
-                        "Current Zip Code": mist_address['zip'],
-                        "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
-                        "Comparison Zip Code": comparison_address['zip'],
-                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                        "Mismatch Type": mismatch_type,
-                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
-                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                        "Failed Fields": ', '.join(failed_fields),
-                        # Address validation results (No validation in basic mode)
-                        "Mist_Validation_Status": 'N/A',
-                        "Mist_Confidence": 'N/A',
-                        "Comparison_Validation_Status": 'N/A',
-                        "Comparison_Confidence": 'N/A',
-                        "Validation_Recommendation": 'N/A'
-                    }
-                    mismatched_items.append(mismatched_item)
-
-                    # Diff report item (showing both address sets with similarity scores)
-                    diff_item = {
-                        "Week": week_key,
-                        "Full Site": device.get("site_name", ""),
-                        "System Serial Number": device_serial,
-                        "System Model Number": device.get("model", ""),
-                        "End Customer Name": END_CUSTOMER_NAME,
-                        "Mist_Address_Line_1": mist_address['address'],
-                        "Mist_City": mist_address['city'],
-                        "Mist_State": mist_address['state'],
-                        "Mist_Zip_Code": mist_address['zip'],
-                        "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
-                        "Comparison_Address": comparison_address['address'],
-                        "Comparison_City": comparison_address['city'],
-                        "Comparison_State": comparison_address['state'],
-                        "Comparison_Zip_Code": comparison_address['zip'],
-                        "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
-                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                        "Mismatch Type": mismatch_type,
-                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%", 
-                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                        "Failed Fields": ', '.join(failed_fields),
-                        # Address validation results (No validation in basic mode)
-                        "Mist_Validation_Status": 'N/A',
-                        "Mist_Confidence": 'N/A',
-                        "Comparison_Validation_Status": 'N/A',
-                        "Comparison_Confidence": 'N/A',
-                        "Validation_Recommendation": 'N/A'
-                    }
-                    diff_report_items.append(diff_item)
-                except Exception as e:
-                    logging.warning(f"⚠️ Skipping device due to error: {e}")
-
-    # Display results
-    print(f"\n📊 Comparison Results:")
-    print(f"   ✅ Devices processed: {len(site_configs)}")
-    print(f"   ⏭️  Devices skipped (not in comparison file): {skipped_count}")
-    print(f"   ❌ Address mismatches found (below {ADDRESS_MATCH_THRESHOLD}% similarity): {len(mismatched_items)}")
+    # Log comprehensive summary
+    counters.log_summary()
 
     if mismatched_items:
-        print(f"\n🔍 Address Mismatches (below {ADDRESS_MATCH_THRESHOLD}% similarity threshold):")
+        print(f"\n🔍 Data Integrity Conflicts (address discrepancies requiring review):")
         print("=" * 130)
         for idx, item in enumerate(mismatched_items[:10]):  # Show first 10
-            print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15} | "
-                  f"Overall: {item['Overall Similarity']:<6} | "
-                  f"Type: {item['Mismatch Type']:<25} | "
-                  f"Failed: {item['Failed Fields']:<20} | "
-                  f"Site: {item['Full Site']}")
+            mist_addr = f"{item.get('Mist_Address_Line_1', '')}, {item.get('Mist_City', '')}, {item.get('Mist_State', '')}"
+            comp_addr = f"{item.get('Comparison_Address', '')}, {item.get('Comparison_City', '')}, {item.get('Comparison_State', '')}"
+            print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15}")
+            print(f"     🏢 Mist:       {mist_addr}")
+            print(f"     📋 Reference:  {comp_addr}")
+            print(f"     📊 Similarity: {item['Overall Similarity']:<6} | Type: {item['Mismatch Type']}")
+            if address_validation_enabled and item.get('Validation_Recommendation', 'N/A') != 'N/A':
+                print(f"     🎯 Recommendation: {item['Validation_Recommendation']}")
+            print()
         
         if len(mismatched_items) > 10:
-            print(f"   ... and {len(mismatched_items) - 10} more mismatches")
+            print(f"   ... and {len(mismatched_items) - 10} more conflicts (see CSV report for complete list)")
             
         # Always save to CSV (no prompting)
         if mismatched_items:
@@ -7513,6 +8606,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 "Comparison_State", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
                 "End Customer Account ID", "Mismatch Type", "Overall Similarity",
                 "Address Similarity", "City Similarity", "State Similarity", "Zip Similarity", "Failed Fields",
+                "Mist_Parse_Status", "Comparison_Parse_Status", "Parse_Issues",
                 "Mist_Validation_Status", "Mist_Confidence", "Comparison_Validation_Status", "Comparison_Confidence", 
                 "Validation_Recommendation"
             ]
@@ -7522,11 +8616,24 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 writer.writeheader()
                 writer.writerows(diff_report_items)
             
-            print(f"✅ Address mismatches saved to: {output_file}")
+            print(f"✅ Data integrity report saved to: {output_file}")
             print(f"📁 Location: {get_csv_file_path(output_file)}")
-            logging.info(f"Saved {len(diff_report_items)} address mismatches to {output_file}")
+            print(f"\n📋 Data Integrity Summary:")
+            print(f"   🔍 Found {len(diff_report_items)} address conflicts requiring review")
+            if address_validation_enabled:
+                print(f"   🌐 External validation recommendations included")
+                print(f"   💡 Check 'Validation_Recommendation' column for guidance")
+            else:
+                print(f"   ⚠️  No external validation performed")
+                print(f"   💡 Run with --address-check for intelligent recommendations")
+            
+            logging.info(f"Saved {len(diff_report_items)} address conflicts to {output_file}")
     else:
-        print(f"🎉 No address mismatches found! All items meet the {ADDRESS_MATCH_THRESHOLD}% similarity threshold.")
+        total_good_addresses = counters.perfect_matches + counters.auto_corrections
+        print(f"🎉 Data integrity check complete! All {total_good_addresses} addresses are consistent.")
+        print(f"   ✅ No conflicts found between Mist and comparison data")
+        if counters.auto_corrections > 0:
+            print(f"   � {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
 
 def export_gateway_templates_to_csv():
     """

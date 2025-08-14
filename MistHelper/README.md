@@ -2,7 +2,54 @@
 
 **A comprehensive Python application for interacting with the Juniper Mist Cloud API to extract, analyze, and manage network infrastructure data.**
 
-MistHelper provides both interactive menu-driven access and command-line automation for network administrators managing Juniper Mist cloud-managed networks. The application supports multiple output formats and deployment options for flexible integration into existing workflows.
+MistHelper provides both interactive menu-driven access and command-line automation for network administrators managing Juniper Mist cloud-managed networks. The application s### Configuration
+
+Create a `.env` file with your API credentials and upgrade preferences:
+
+```env
+# Mist API Configuration (Required)
+MIST_HOST=api.mist.com
+MIST_APITOKEN=your_api_token_here
+org_id=your_organization_id
+
+# UV Auto-Upgrade Configuration
+AUTO_UPGRADE_UV=true                     # Auto-upgrade UV itself on startup
+AUTO_UPGRADE_DEPENDENCIES=true           # Auto-upgrade all dependencies on startup  
+UPGRADE_CHECK_TIMEOUT=60                 # Timeout for upgrade checks (seconds)
+
+# Optional Configuration
+CSV_FRESHNESS_MINUTES=15                 # Cache duration
+```
+
+### Auto-Upgrade Control
+
+MistHelper can automatically keep UV and all dependencies updated:
+
+#### Environment Variables
+```env
+AUTO_UPGRADE_UV=true                     # Keep UV package manager updated
+AUTO_UPGRADE_DEPENDENCIES=true           # Keep all Python packages updated
+UPGRADE_CHECK_TIMEOUT=60                 # Max time for upgrade checks
+```
+
+#### Command Line Flags
+```bash
+# Disable all auto-upgrades for this run
+python MistHelper.py --no-upgrade --menu 11
+
+# Force auto-upgrades even if disabled in .env
+python MistHelper.py --force-upgrade --menu 11
+
+# Skip dependency checks entirely (fastest startup)
+python MistHelper.py --skip-deps --menu 11
+```
+
+#### Upgrade Behavior
+- **UV Auto-Upgrade**: Checks and upgrades UV package manager on startup
+- **Dependency Auto-Upgrade**: Updates all Python packages to latest versions
+- **Smart Fallback**: If UV upgrade fails, continues with current version
+- **Timeout Protection**: Upgrade checks timeout after configurable period
+- **Version Reporting**: Shows before/after versions when upgrades occuroutput formats and deployment options for flexible integration into existing workflows.
 
 ## ✨ Key Features
 
@@ -21,24 +68,69 @@ MistHelper provides both interactive menu-driven access and command-line automat
 - **Juniper Mist API Token** (Organization Admin level recommended)
 - **Organization ID** from your Mist dashboard
 
-### Installation
+### Installation Options
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd MistHelper
-   ```
+#### Option 1: One-Command Setup (Recommended)
+```bash
+# Clone and run - everything auto-installs including UV!
+git clone <repository-url>
+cd MistHelper
+python MistHelper.py  # Auto-installs UV + dependencies + creates .env template
 
-2. **Install dependencies** (automatic on first run):
-   ```bash
-   python MistHelper.py  # Dependencies auto-install with progress bar
-   ```
+# Follow the on-screen guidance to configure your API credentials
+# Then run again: python MistHelper.py
+```
 
-3. **Configure API credentials:**
-   ```bash
-   cp sample.env .env
-   # Edit .env with your API token and organization ID
-   ```
+#### Option 2: Manual UV Installation (For Speed)
+```bash
+# Install UV first for maximum speed
+python -m pip install uv
+
+# Clone and setup
+git clone <repository-url>
+cd MistHelper
+python MistHelper.py  # Detects UV and uses it for ultra-fast setup
+```
+
+#### Option 3: Traditional pip (Works Everywhere)
+```bash
+git clone <repository-url>
+cd MistHelper
+python MistHelper.py  # Falls back to pip if UV installation fails
+```
+
+### First Run Experience
+
+When you run MistHelper for the first time, it will:
+
+1. **Auto-install UV** (if possible) for 10-100x faster dependency management
+2. **Install all dependencies** using the fastest method available
+3. **Create .env template** with all necessary configuration options
+4. **Show setup guidance** with links to get your API credentials
+5. **Ready to use** - just add your API token and run again!
+
+```bash
+# First run output example:
+🚀 MistHelper - First Time Setup
+==================================================
+📝 Setting up environment configuration...
+✅ Created basic .env template
+⚠️  Please edit .env with your Mist API credentials before continuing
+🚀 UV not found. Installing UV for faster dependency management...
+   This is a one-time setup that will speed up future runs significantly.
+✅ UV successfully installed: uv 0.2.18
+📦 Using UV package manager for optimal performance...
+🔍 Installing dependencies with UV (fast parallel mode)...
+✅ Dependencies installed with UV (10-100x faster than pip).
+🎯 Setup complete! MistHelper is ready with optimized performance.
+
+============================================================
+🎯 NEXT STEPS:
+1. Edit .env file with your Mist API credentials
+2. Get your API token from: https://manage.mist.com/...
+3. Run MistHelper again: python MistHelper.py
+============================================================
+```
 
 ### First Run
 
@@ -46,7 +138,7 @@ MistHelper provides both interactive menu-driven access and command-line automat
 # Interactive menu (recommended for first use)
 python MistHelper.py
 
-# Direct execution with SQLite output
+# Direct execution with SQLite output  
 python MistHelper.py --output-format sqlite --menu 11
 
 # CSV output format (legacy)

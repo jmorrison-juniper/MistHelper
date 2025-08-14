@@ -1,12 +1,12 @@
-# MistHelper Dockerized Application
+# MistHelper Dockerized Application with UV Package Manager
 # Base image: Python 3.11 slim for cross-platform compatibility
 FROM python:3.11-slim
 
 # Metadata following NASA/JPL documentation standards
 LABEL maintainer="MistHelper Development Team"
-LABEL description="Dockerized MistHelper with embedded SQLite database"
-LABEL version="1.0.0"
-LABEL created="2025-07-16T00:00:00Z"
+LABEL description="Dockerized MistHelper with embedded SQLite database and UV package manager"
+LABEL version="2.0.0"
+LABEL created="2025-08-13T00:00:00Z"
 
 # Create application user (following security best practices)
 RUN groupadd -r misthelper && useradd -r -g misthelper misthelper
@@ -14,17 +14,23 @@ RUN groupadd -r misthelper && useradd -r -g misthelper misthelper
 # Set working directory inside container
 WORKDIR /app
 
+# Install UV package manager directly using pip
+RUN pip install --no-cache-dir uv
+
+# Set UV to use system Python (no virtual environment needed in container)
+ENV UV_SYSTEM_PYTHON=1
+
 # Create data directory for persistent database storage
 # This directory will be mounted as a volume
 RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
 
-# Copy requirements.txt first (Docker layer caching optimization)
+# Copy dependency files first (Docker layer caching optimization)
 COPY requirements.txt /app/
+COPY pyproject.toml* /app/
 
-# Install Python dependencies
-# Using --no-cache-dir to reduce image size
-# Using --disable-pip-version-check for faster installs
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+# Install Python dependencies using UV (much faster than pip)
+# UV provides parallel downloads and better dependency resolution
+RUN uv pip install -r requirements.txt
 
 # Copy application files
 COPY MistHelper.py /app/

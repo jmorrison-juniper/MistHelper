@@ -20,4 +20,8 @@ pyte>=0.8.0
 # pytest>=7.0.0
 # coverage>=7.0.0
 
+# Address parsing and fuzzy matching
+usaddress-scourgify>=0.6.0
+rapidfuzz>=3.8.0
+
 # Note: SQLite support is built into Python (no additional dependency needed)
