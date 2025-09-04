@@ -1,103 +1,117 @@
 # MistHelper Troubleshooting Guide
 
-## Quick Diagnostics
+## Quick Diagnostic Commands
 
-### Health Check Commands
+### System Health Verification
 ```bash
-# Test basic functionality
+# Test basic application functionality
 python MistHelper.py --help
 
-# Verify API connectivity
+# Verify API connectivity with debug output
 python MistHelper.py --menu 11 --debug
 
-# Run systematic tests
+# Execute comprehensive test suite
 python MistHelper.py --test
 
-# Check environment configuration
-python -c "import os; print('API Token:', 'SET' if os.getenv('MIST_APITOKEN') else 'NOT SET')"
+# Check environment configuration status
+python -c "import os; print('API Token:', 'CONFIGURED' if os.getenv('MIST_APITOKEN') else 'NOT CONFIGURED')"
 ```
 
-## Common Issues and Solutions
+## Common Issues and Resolution Procedures
 
-### 1. Authentication and API Issues
+### Authentication and API Access Issues
 
-#### Problem: "Authentication failed" or "401 Unauthorized"
+#### Issue: HTTP 401 Unauthorized / Authentication Failure
 **Symptoms:**
 - Error message: "Authentication failed"
-- HTTP 401 responses
-- Unable to access any API endpoints
+- HTTP 401 response codes
+- Complete inability to access API endpoints
 
 **Root Causes:**
-- Invalid or expired API token
-- Incorrect organization ID
-- Token permissions insufficient
+- Invalid, expired, or malformed API token
+- Incorrect organization ID specification
+- Insufficient token permissions for requested operations
 
-**Solutions:**
-1. **Verify API Token**
+**Resolution Steps:**
+
+1. **Verify API Token Configuration**
    ```bash
-   # Check .env file exists and contains token
-   cat .env | grep MIST_APITOKEN
+   # Confirm .env file contains valid token
+   grep MIST_APITOKEN .env
    
-   # Test token validity directly
+   # Test token validity using direct API call
    curl -H "Authorization: Token YOUR_TOKEN" https://api.mist.com/api/v1/self
    ```
 
-2. **Generate New Token**
-   - Login to Mist dashboard → Organization → API Tokens
+2. **Generate New API Token**
+   - Access Mist dashboard at https://manage.mist.com
+   - Navigate to Organization → API Tokens
    - Create new token with "Organization Admin" permissions
-   - Update `.env` file with new token
+   - Update MIST_APITOKEN value in `.env` file
 
-3. **Verify Organization ID**
+3. **Validate Organization ID**
    ```bash
-   # List available organizations
+   # List accessible organizations
    curl -H "Authorization: Token YOUR_TOKEN" https://api.mist.com/api/v1/orgs
    
-   # Test with specific org ID
+   # Test with specific organization ID
    python MistHelper.py --org YOUR_ORG_ID --menu 11
    ```
 
-#### Problem: "403 Forbidden" or "Insufficient permissions"
+#### Issue: HTTP 403 Forbidden / Insufficient Permissions
 **Symptoms:**
-- Can authenticate but cannot access specific endpoints
-- Some menu options work, others fail
-- Permission denied errors
+- Authentication succeeds but specific operations fail
+- Selective menu option failures
+- Permission denied responses for certain endpoints
 
-**Solutions:**
-1. **Check Token Scope**
-   - Ensure API token has "Organization Admin" or appropriate permissions
-   - Contact organization admin to verify access rights
-   - Some endpoints require specific permission levels
+**Resolution Steps:**
 
-2. **Verify Organization Membership**
-   - Confirm user account is member of target organization
+1. **Verify Token Permission Scope**
+   - Ensure API token has "Organization Admin" or required permission level
+   - Contact organization administrator to verify access rights
+   - Some operations require elevated permissions beyond basic access
+
+2. **Confirm Organization Membership**
+   - Verify user account membership in target organization
    - Check for multiple organization access conflicts
-   - Verify user role within organization
+   - Validate user role assignment within organization structure
 
-### 2. Installation and Dependency Issues
+### Installation and Dependency Management Issues
 
-#### Problem: "ModuleNotFoundError: No module named 'mistapi'"
+#### Issue: Python Module Import Errors
 **Symptoms:**
-- Import errors on startup
-- Missing module errors
-- Application fails to start
+- `ModuleNotFoundError: No module named 'mistapi'`
+- Import failures during application startup
+- Missing dependency error messages
 
-**Solutions:**
-1. **Install Dependencies**
+**Resolution Steps:**
+
+1. **Install Required Dependencies**
    ```bash
-   # Standard installation
+   # Standard dependency installation
    pip install -r requirements.txt
    
-   # Force reinstall if corrupted
+   # Force reinstall if dependencies are corrupted
    pip install --force-reinstall -r requirements.txt
    
-   # Update specific package
+   # Update specific problematic package
    pip install --upgrade mistapi
    ```
 
-2. **Virtual Environment Issues**
+2. **Virtual Environment Management**
    ```bash
-   # Create fresh virtual environment
+   # Create new virtual environment
    python -m venv .venv
+   
+   # Activate virtual environment
+   # Windows:
+   .venv\Scripts\activate.bat
+   # macOS/Linux:
+   source .venv/bin/activate
+   
+   # Install dependencies in clean environment
+   pip install -r requirements.txt
+   ```
    
    # Windows
    .venv\Scripts\activate

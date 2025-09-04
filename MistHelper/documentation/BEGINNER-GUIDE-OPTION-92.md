@@ -3,21 +3,21 @@
 
 ---
 
-## 🎯 For Junior NOC Engineers
+## For Junior NOC Engineers
 
 This guide walks junior NOC engineers through converting a single virtual chassis switch to virtual MAC configuration. This is typically used for:
-- **Individual device incidents** during maintenance windows
-- **Specific trouble ticket resolution** 
-- **Single-site network modifications**
-- **First-time virtual chassis conversion operations**
+- Individual device incidents during maintenance windows
+- Specific trouble ticket resolution 
+- Single-site network modifications
+- First-time virtual chassis conversion operations
 
-**For overview and decision-making**, see **VIRTUAL-CHASSIS-CONVERSION-OVERVIEW.md** first.
+For overview and decision-making, see **VIRTUAL-CHASSIS-CONVERSION-OVERVIEW.md** first.
 
 ---
 
-## 📚 What This Operation Does
+## What This Operation Does
 
-**Virtual Chassis → Virtual MAC Conversion:**
+**Virtual Chassis to Virtual MAC Conversion:**
 - Changes how switches handle MAC address learning and forwarding
 - Provides more flexibility for certain network configurations  
 - Required for some network designs and integrations

@@ -2,153 +2,155 @@
 
 ## Command Line Interface
 
-### Usage
+### Usage Syntax
 ```bash
 python MistHelper.py [OPTIONS]
 ```
 
-### Options
+### Command Line Parameters
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-O, --org` | Organization ID | Prompted if not in .env |
-| `-M, --menu` | Direct menu access (1-93) | Interactive |
-| `-S, --site` | Human-readable site name | - |
-| `-D, --device` | Human-readable device name | - |
-| `-P, --port` | Port ID | - |
-| `--output-format` | Output format: `csv` or `sqlite` | `csv` |
-| `--debug` | Enable debug output and detailed logging | `false` |
-| `--delay` | Fixed delay between operations (seconds) | Dynamic |
-| `--fast` | Enable fast mode with multithreading | `false` |
-| `--skip-deps` | Skip dependency check for faster startup | `false` |
-| `--test` | Run systematic test of safe operations | `false` |
-| `--help` | Show help message | - |
+| Parameter | Description | Default | Valid Values |
+|-----------|-------------|---------|--------------|
+| `-O, --org` | Organization ID (UUID format) | Prompted if not configured | Valid organization UUID |
+| `-M, --menu` | Direct menu option execution | Interactive mode | 1-96 |
+| `-S, --site` | Site name for site-specific operations | None | Site name string |
+| `-D, --device` | Device name for device-specific operations | None | Device name string |
+| `-P, --port` | Port identifier for port-specific operations | None | Port ID string |
+| `--output-format` | Output data format | `csv` | `csv`, `sqlite` |
+| `--debug` | Enable debug logging and verbose output | `false` | `true`, `false` |
+| `--delay` | Override automatic delay with fixed interval | Dynamic calculation | Positive float (seconds) |
+| `--fast` | Enable multithreaded operations | `false` | `true`, `false` |
+| `--skip-deps` | Skip dependency verification for faster startup | `false` | `true`, `false` |
+| `--test` | Execute systematic testing of safe operations | `false` | `true`, `false` |
+| `--help` | Display usage information | - | - |
 
-### Examples
+### Usage Examples
 
 ```bash
-# Interactive menu (default)
+# Interactive menu interface
 python MistHelper.py
 
-# CSV output with specific menu option
+# Direct execution with CSV output
 python MistHelper.py --output-format csv --menu 1
 
-# SQLite output with device inventory
+# SQLite output with specific menu option
 python MistHelper.py --output-format sqlite --menu 12
 
-# Run systematic testing
-python MistHelper.py --test
+# Systematic testing with debug logging
+python MistHelper.py --test --debug
 
-# Debug mode with organization specified
-python MistHelper.py --debug --org abc123-def456 --menu 11
+# Specify organization and enable fast mode
+python MistHelper.py --org abc123-def456 --menu 11 --fast
 
-# Show help
+# Display help information
 python MistHelper.py --help
 ```
 
-## Menu Options Reference
+## Operation Categories and API Endpoints
 
-MistHelper provides 93 distinct operations organized into logical categories. All operations support both CSV and SQLite output formats.
+MistHelper provides 96 distinct operations covering all major Mist API endpoints. Operations are organized into functional categories for operational clarity.
 
-### Core Data & Diagnostics (1-10)
+### Core Data & Diagnostics (Operations 1-10)
 
 #### 1. Export Organization Alarms
 - **Function**: `export_open_org_alarms_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/alarms/search`
-- **Output**: Active alarms from past 24 hours
-- **CSV File**: `OrgAlarms.csv`
-- **SQLite Table**: `OrgAlarms`
+- **Purpose**: Export active alarms from past 24 hours
+- **Output**: `OrgAlarms.csv` / `OrgAlarms` table
+- **Use Case**: Current alarm monitoring and incident response
 
 #### 2. Export Device Events  
 - **Function**: `export_recent_device_events_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/devices/events/search`
-- **Output**: Device events from past 24 hours
-- **CSV File**: `OrgDeviceEvents.csv`
-- **SQLite Table**: `OrgDeviceEvents`
+- **Purpose**: Export device events from past 24 hours
+- **Output**: `OrgDeviceEvents.csv` / `OrgDeviceEvents` table
+- **Use Case**: Device troubleshooting and event analysis
 
 #### 3. Export Audit Logs
 - **Function**: `export_audit_logs_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/logs/audit`
-- **Output**: Organization audit logs (last 24 hours)
-- **CSV File**: `OrgAuditLogs.csv`
-- **SQLite Table**: `OrgAuditLogs`
+- **Purpose**: Export organizational audit trail (last 24 hours)
+- **Output**: `OrgAuditLogs.csv` / `OrgAuditLogs` table
+- **Use Case**: Security auditing and change tracking
 
 #### 4. Export NAC Event Definitions
 - **Function**: `export_nac_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/nac/events/definitions`
-- **Output**: Network Access Control event definitions
-- **CSV File**: `NacEventDefinitions.csv`
-- **SQLite Table**: `NacEventDefinitions`
+- **Purpose**: Export Network Access Control event definitions
+- **Output**: `NacEventDefinitions.csv` / `NacEventDefinitions` table
+- **Use Case**: Understanding NAC event types and codes
 
 #### 5. Export Client Event Definitions
 - **Function**: `export_client_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/client/events/definitions`
-- **Output**: Client event definitions
-- **CSV File**: `ClientEventDefinitions.csv`
-- **SQLite Table**: `ClientEventDefinitions`
+- **Purpose**: Export client event type definitions
+- **Output**: `ClientEventDefinitions.csv` / `ClientEventDefinitions` table
+- **Use Case**: Client event interpretation and analysis
 
 #### 6. Export Device Event Definitions
 - **Function**: `export_device_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/device/events/definitions`
-- **Output**: Device event definitions
-- **CSV File**: `DeviceEventDefinitions.csv`
-- **SQLite Table**: `DeviceEventDefinitions`
+- **Purpose**: Export device event type definitions
+- **Output**: `DeviceEventDefinitions.csv` / `DeviceEventDefinitions` table
+- **Use Case**: Device event categorization and troubleshooting
 
 #### 7. Export Mist Edge Event Definitions
 - **Function**: `export_mist_edge_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/mist_edge/events/definitions`
-- **Output**: Mist Edge event definitions
-- **CSV File**: `MistEdgeEventDefinitions.csv`
-- **SQLite Table**: `MistEdgeEventDefinitions`
+- **Purpose**: Export Mist Edge event definitions
+- **Output**: `MistEdgeEventDefinitions.csv` / `MistEdgeEventDefinitions` table
+- **Use Case**: Edge infrastructure event analysis
 
 #### 8. Export Other Device Event Definitions
 - **Function**: `export_other_device_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/other_device/events/definitions`
-- **Output**: Other device event definitions
-- **CSV File**: `OtherDeviceEventDefinitions.csv`
-- **SQLite Table**: `OtherDeviceEventDefinitions`
+- **Purpose**: Export other device type event definitions
+- **Output**: `OtherDeviceEventDefinitions.csv` / `OtherDeviceEventDefinitions` table
+- **Use Case**: Comprehensive device event coverage
 
 #### 9. Export System Event Definitions
 - **Function**: `export_system_event_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/system/events/definitions`
-- **Output**: System event definitions
-- **CSV File**: `SystemEventDefinitions.csv`
-- **SQLite Table**: `SystemEventDefinitions`
+- **Purpose**: Export system-level event definitions
+- **Output**: `SystemEventDefinitions.csv` / `SystemEventDefinitions` table
+- **Use Case**: System event interpretation
 
 #### 10. Export Alarm Definitions
 - **Function**: `export_alarm_definitions_to_csv()`
 - **API Endpoint**: `GET /api/v1/const/alarms/definitions`
-- **Output**: Alarm definitions with severity and field info
-- **CSV File**: `AlarmDefinitions.csv`
-- **SQLite Table**: `AlarmDefinitions`
+- **Purpose**: Export alarm definitions with severity and field information
+- **Output**: `AlarmDefinitions.csv` / `AlarmDefinitions` table
+- **Use Case**: Alarm interpretation and severity classification
 
-### Organization-Level Data (11-28)
+### Organization-Level Data (Operations 11-28)
 
 #### 11. Export Site List
 - **Function**: `export_all_sites_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/sites`
-- **Output**: Complete list of all sites in organization
-- **CSV File**: `SiteList.csv`
-- **SQLite Table**: `SiteList`
+- **Purpose**: Export complete organizational site inventory
+- **Output**: `SiteList.csv` / `SiteList` table
+- **Use Case**: Site inventory management and reporting
 
 #### 12. Export Device Inventory
 - **Function**: `export_device_inventory_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/inventory`
-- **Output**: Full inventory of devices in organization
-- **CSV File**: `OrgInventory.csv`
-- **SQLite Table**: `OrgInventory`
+- **Purpose**: Export comprehensive device inventory across organization
+- **Output**: `OrgInventory.csv` / `OrgInventory` table
+- **Use Case**: Asset management and device tracking
 
 #### 13. Export Device Statistics
 - **Function**: `export_device_stats_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/stats/devices`
-- **Output**: Performance statistics for all devices
-- **CSV File**: `OrgDeviceStats.csv`
-- **SQLite Table**: `OrgDeviceStats`
+- **Purpose**: Export performance statistics for all organizational devices
+- **Output**: `OrgDeviceStats.csv` / `OrgDeviceStats` table
+- **Use Case**: Performance monitoring and capacity planning
 
 #### 14. Export Port Statistics
 - **Function**: `export_device_port_stats_to_csv()`
 - **API Endpoint**: `GET /api/v1/orgs/{org_id}/stats/ports/search`
-- **Output**: Port-level statistics for switches and gateways
+- **Purpose**: Export port-level statistics for switches and gateways
+- **Output**: `OrgDevicePortStats.csv` / `OrgDevicePortStats` table
+- **Use Case**: Port utilization analysis and bandwidth monitoring
 - **CSV File**: `OrgDevicePortStats.csv`
 - **SQLite Table**: `OrgDevicePortStats`
 

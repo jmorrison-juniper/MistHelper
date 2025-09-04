@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MistHelper is a comprehensive Python application designed to interact with the Juniper Mist API, providing network administrators with tools to extract, analyze, and manage network infrastructure data. The application offers both interactive menu-driven operation and direct CLI access to 93 distinct operations covering all major aspects of Mist network management.
+MistHelper is a comprehensive Python application designed to interact with the Juniper Mist API, providing network administrators with tools to extract, analyze, and manage network infrastructure data. The application offers both interactive menu-driven operation and direct CLI access to 96 distinct operations covering all major aspects of Mist network management.
 
 ## Architecture Overview
 
@@ -27,7 +27,7 @@ MistHelper is a comprehensive Python application designed to interact with the J
 - **Batch Operations**: Efficient bulk data insertion and processing
 
 #### 4. User Interface
-- **Interactive Menu**: 93 categorized menu options with descriptions
+- **Interactive Menu**: 96 categorized menu options with descriptions
 - **CLI Interface**: Direct command-line access with argument parsing
 - **Progress Tracking**: Real-time progress bars for long operations
 - **Logging System**: Configurable logging with multiple levels

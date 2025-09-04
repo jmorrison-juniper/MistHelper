@@ -3,25 +3,25 @@
 
 ---
 
-## 🎯 For Senior NOC Engineers
+## For Senior NOC Engineers
 
-This guide walks **senior NOC engineers** through bulk virtual chassis to virtual MAC conversion across multiple sites. This is typically used for:
-- **Large-scale network migration projects**
-- **Multi-site infrastructure standardization**
-- **Planned bulk maintenance operations**
-- **Project deployments during extended maintenance windows**
+This guide walks senior NOC engineers through bulk virtual chassis to virtual MAC conversion across multiple sites. This is typically used for:
+- Large-scale network migration projects
+- Multi-site infrastructure standardization
+- Planned bulk maintenance operations
+- Project deployments during extended maintenance windows
 
-**⚠️ This is an ADVANCED operation** - junior NOC engineers should use Option 92 for single switches.
+**WARNING: This is an ADVANCED operation** - junior NOC engineers should use Option 92 for single switches.
 
-**For overview and decision-making**, see **VIRTUAL-CHASSIS-CONVERSION-OVERVIEW.md** first.
+For overview and decision-making, see **VIRTUAL-CHASSIS-CONVERSION-OVERVIEW.md** first.
 
 ---
 
-## 📚 What This Operation Does
+## What This Operation Does
 
-**Bulk Virtual Chassis → Virtual MAC Conversion:**
-- Processes **ALL virtual chassis switches** at **multiple sites** from a predefined list
-- Requires **extensive coordination** with help desk teams and site personnel
+**Bulk Virtual Chassis to Virtual MAC Conversion:**
+- Processes ALL virtual chassis switches at multiple sites from a predefined list
+- Requires extensive coordination with help desk teams and site personnel
 
 **When senior NOC engineers use this:**
 - Multi-site network migration projects with change approval

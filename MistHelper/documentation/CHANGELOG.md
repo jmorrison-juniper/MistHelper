@@ -60,7 +60,7 @@
 - Improved error handling and logging
 
 #### Version 1.5 - Enhanced API Coverage (Late 2024)
-- Expanded menu options to 90+ operations
+- Expanded menu options to 96 operations
 - Added systematic testing framework
 - Improved rate limiting and performance
 - Cross-platform compatibility improvements
@@ -128,7 +128,7 @@
 | Output Formats | CSV only | CSV + Hybrid SQLite with natural primary keys |
 | Container Support | None | Docker + Podman with auto-setup |
 | Test Coverage | Manual testing only | 54 automated tests (58% coverage) |
-| Menu Options | ~40 operations | 93 comprehensive operations |
+| Menu Options | ~40 operations | 96 comprehensive operations |
 | Cross-Platform | Limited Windows support | Full Windows/macOS/Linux support |
 | Documentation | Basic README | 8 comprehensive documentation files |
 | Error Handling | Basic try/catch | Robust recovery with partial saves |

@@ -1,60 +1,76 @@
-# MistHelper Dockerized Application with UV Package Manager
-# Base image: Python 3.11 slim for cross-platform compatibility
+# MistHelper Simple Container with SSL Bypass for Corporate Environments
+# Straightforward approach using pip with trusted hosts
 FROM python:3.11-slim
 
-# Metadata following NASA/JPL documentation standards
+# Metadata
 LABEL maintainer="MistHelper Development Team"
-LABEL description="Dockerized MistHelper with embedded SQLite database and UV package manager"
-LABEL version="2.0.0"
-LABEL created="2025-08-13T00:00:00Z"
+LABEL description="Simplified MistHelper container with SSL bypass for corporate environments"
+LABEL version="2.1.0-simple-ssl"
 
-# Create application user (following security best practices)
+# Install minimal system dependencies
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
 RUN groupadd -r misthelper && useradd -r -g misthelper misthelper
 
-# Set working directory inside container
+# Set working directory
 WORKDIR /app
 
-# Install UV package manager directly using pip
-RUN pip install --no-cache-dir uv
-
-# Set UV to use system Python (no virtual environment needed in container)
-ENV UV_SYSTEM_PYTHON=1
-
-# Create data directory for persistent database storage
-# This directory will be mounted as a volume
+# Create data directory with proper permissions
 RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
 
-# Copy dependency files first (Docker layer caching optimization)
-COPY requirements.txt /app/
-COPY pyproject.toml* /app/
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt ./
+COPY pyproject.toml ./
 
-# Install Python dependencies using UV (much faster than pip)
-# UV provides parallel downloads and better dependency resolution
-RUN uv pip install -r requirements.txt
+# Install Python dependencies with SSL bypass for corporate environments
+RUN echo "🚀 Installing Python dependencies with trusted hosts..." && \
+    pip install --no-cache-dir -r requirements.txt \
+        --trusted-host pypi.org \
+        --trusted-host pypi.python.org \
+        --trusted-host files.pythonhosted.org && \
+    echo "✅ All dependencies installed successfully with pip"
+
+# Copy dependency files
+COPY requirements.txt ./
+COPY pyproject.toml ./
+
+# Install Python dependencies with SSL bypass for corporate environments
+RUN echo "🚀 Installing Python dependencies with trusted hosts..." && \
+    pip install --no-cache-dir -r requirements.txt \
+        --trusted-host pypi.org \
+        --trusted-host pypi.python.org \
+        --trusted-host files.pythonhosted.org && \
+    echo "✅ All dependencies installed successfully with pip"
 
 # Copy application files
-COPY MistHelper.py /app/
-COPY __init__.py /app/
-COPY .env /app/ 
+COPY MistHelper.py __init__.py ./
 
-# Change ownership of application files to non-root user
+# Set ownership and switch to non-root user
 RUN chown -R misthelper:misthelper /app
-
-# Switch to non-root user (security best practice)
 USER misthelper
 
-# Expose volume mount point for database persistence
-VOLUME ["/app/data"]
-
-# Set environment variables for container operation
+# Environment variables for SSL bypass and container-specific configurations
 ENV PYTHONUNBUFFERED=1
 ENV OUTPUT_FORMAT=sqlite
 ENV DATABASE_PATH=/app/data/mist_data.db
+ENV PYTHONHTTPSVERIFY=0
+ENV SSL_VERIFY=false
+ENV REQUESTS_CA_BUNDLE=""
+ENV CURL_CA_BUNDLE=""
+# Container-specific overrides: Disable UV and auto-installation for reliability
+ENV DISABLE_UV_CHECK=true
+ENV DISABLE_AUTO_INSTALL=true
+ENV AUTO_UPGRADE_UV=false
+ENV AUTO_UPGRADE_DEPENDENCIES=false
 
-# Health check to ensure container is running properly
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sqlite3; conn = sqlite3.connect('/app/data/mist_data.db'); conn.close()" || exit 1
+# Volume for data persistence
+VOLUME ["/app/data"]
 
-# Default command: run MistHelper with SQLite output
-# Users can override with different arguments
+# Note: HEALTHCHECK removed for OCI/Podman compatibility
+# For health monitoring, use external tools or docker format
+
+# Default command
 CMD ["python", "MistHelper.py", "--output-format", "sqlite", "--menu", "11"]
