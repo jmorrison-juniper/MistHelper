@@ -1262,12 +1262,12 @@ def clean_unicode_for_logging(message):
     if isinstance(message, str):
         # Replace common Unicode characters with ASCII equivalents
         replacements = {
-            '✓': '[OK]',
-            '✗': '[FAIL]',
-            '⚠': '[WARN]',
-            '•': '*',
-            '‐': '-',
-            '–': '-',
+            'OK': '[OK]',
+            'FAIL': '[FAIL]',
+            'WARN': '[WARN]',
+            '*': '*',
+            '-': '-',
+            '-': '-',
             '—': '-',
             ''': "'",
             ''': "'",
@@ -2999,7 +2999,7 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
             logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
             return device_id
         else:
-            logging.error("? Invalid index.")
+            logging.error(" Invalid index.")
             return None
 
     # Try name selection
@@ -3008,7 +3008,7 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
         logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
         return device_id
 
-    logging.error("? Device not found by name or index.")
+    logging.error(" Device not found by name or index.")
     return None
 
 def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
@@ -3090,7 +3090,7 @@ def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
             logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
             return site_id
         else:
-            print("? Invalid index.")
+            print(" Invalid index.")
             logging.warning(f"Invalid site index entered: {idx}")
             return None
 
@@ -3101,7 +3101,7 @@ def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
         logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
         return site_id
 
-    print("? Site not found by name or index.")
+    print(" Site not found by name or index.")
     logging.warning(f"Site not found by name or index: {user_input}")
     return None
 
@@ -3115,7 +3115,7 @@ def prompt_and_log_site_selection():
         logging.info(f"! Selected site ID: {site_id}")
         # You can store or use the selected site_id as needed here
     else:
-        logging.error("? No site selected. User may have entered an invalid value or cancelled the prompt.")
+        logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
 
 def prompt_site_selection():
     """
@@ -3311,7 +3311,7 @@ def export_all_org_device_events_52w_to_csv():
     events = escape_multiline_strings_for_csv(events)
     # Write all data to CSV in one operation
     DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
-    logging.info("? All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+    logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
 
 def export_audit_logs_to_csv(full_history=False, duration=None):
     """
@@ -3349,7 +3349,7 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
 
         if not rawdata:
-            logging.warning("?? No audit logs returned from API.")
+            logging.warning(" No audit logs returned from API.")
             logging.debug("EXIT: export_audit_logs_to_csv - no data")
             return
 
@@ -3399,8 +3399,8 @@ def export_all_sites_list_to_csv():
     response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
     sites = mistapi.get_all(response=response, mist_session=apisession)
     if not sites:
-        logging.warning("?? No sites returned from API.")
-        print("?? No sites returned from API.")
+        logging.warning(" No sites returned from API.")
+        print(" No sites returned from API.")
         return
     # Flatten and sanitize for CSV
     sites = flatten_nested_fields_in_list(sites)
@@ -3601,7 +3601,7 @@ def export_organization_templates_to_csv():
     except Exception as e:
         logging.error(f"Failed to export AP templates: {e}")
     
-    logging.info("? Organization templates export completed")
+    logging.info(" Organization templates export completed")
 
 def export_site_clients_to_csv():
     """
@@ -3774,7 +3774,7 @@ def export_org_security_events_to_csv():
         print(f"! Security data exported: OrgSecurityPolicies and {len(all_rogue_events)} rogue events")
     else:
         logging.info("No rogue events found across all sites")
-        print("? Security policies exported, no rogue events found")
+        print(" Security policies exported, no rogue events found")
 
 def export_org_rogue_clients_to_csv():
     """Export rogue client detections from all sites to OrgRogueClients.csv."""
@@ -3831,7 +3831,7 @@ def export_org_rogue_clients_to_csv():
         print(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
     else:
         logging.info("No rogue clients found across all sites")
-        print("?? No rogue clients detected across all sites")
+        print(" No rogue clients detected across all sites")
 
 def export_org_rogue_aps_to_csv():
     """Export rogue AP detections from all sites to OrgRogueAPs.csv."""
@@ -3888,7 +3888,7 @@ def export_org_rogue_aps_to_csv():
         print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
     else:
         logging.info("No rogue APs found across all sites")
-        print("?? No rogue APs detected across all sites")
+        print(" No rogue APs detected across all sites")
 
 def export_org_licenses_to_csv():
     """Export license information for the organization to OrgLicenses.csv."""
@@ -3978,14 +3978,14 @@ def export_org_usage_to_csv():
         sort_key="site_id"
     )
     
-    logging.info("? License usage data exported to OrgUsage")
-    print("? License usage data exported to OrgUsage")
+    logging.info(" License usage data exported to OrgUsage")
+    print(" License usage data exported to OrgUsage")
 
 def export_org_msp_to_csv():
     """Export MSP (Managed Service Provider) information for the organization to OrgMsp.csv."""
-    logging.warning("?? MSP data is available only at MSP level, not organization level")
-    print("?? MSP data is available only at MSP level, not organization level")
-    print("?? To access MSP data, use the Mist API MSP endpoints directly:")
+    logging.warning(" MSP data is available only at MSP level, not organization level")
+    print(" MSP data is available only at MSP level, not organization level")
+    print(" To access MSP data, use the Mist API MSP endpoints directly:")
     print("   - GET /api/v1/msps (list MSPs)")
     print("   - GET /api/v1/msps/{msp_id} (get MSP details)")
     print("   - GET /api/v1/msps/{msp_id}/orgs (list organizations under MSP)")
@@ -4084,7 +4084,7 @@ def continuous_data_collection_loop():
     5. VPN peer path stats
     """
     logging.info("Starting continuous data collection loop...")
-    print("?? Starting continuous data collection loop...")
+    print(" Starting continuous data collection loop...")
     print("   This will collect core organizational data every 5 seconds")
     print("   Press CTRL+C to stop or create 'stop_loop.txt' file")
     
@@ -4093,58 +4093,58 @@ def continuous_data_collection_loop():
     try:
         while True:
             loop_count += 1
-            print(f"\n?? Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"\n  Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
             # Check for stop file
             if os.path.exists("stop_loop.txt"):
-                print("?? Stop file detected. Ending continuous loop.")
+                print(" Stop file detected. Ending continuous loop.")
                 os.remove("stop_loop.txt")
                 break
             
             try:
                 # 1. Site list
-                print("  ?? Collecting site list...")
+                print("  Collecting site list...")
                 export_all_sites_to_csv()
                 time.sleep(0.75)  # Rate limiting
                 
                 # 2. Organization inventory
-                print("  ?? Collecting organization inventory...")
+                print("  Collecting organization inventory...")
                 export_device_inventory_to_csv()
                 time.sleep(0.75)
                 
                 # 3. Organization device stats
-                print("  ?? Collecting organization device stats...")
+                print("  Collecting organization device stats...")
                 export_device_stats_to_csv()
                 time.sleep(0.75)
                 
                 # 4. Organization device port stats
-                print("  ?? Collecting organization device port stats...")
+                print("  Collecting organization device port stats...")
                 export_device_port_stats_to_csv()
                 time.sleep(0.75)
                 
                 # 5. VPN peer path stats
-                print("  ?? Collecting VPN peer path stats...")
+                print("  Collecting VPN peer path stats...")
                 export_vpn_peer_stats_to_csv()
                 time.sleep(0.75)
                 
-                print(f"  ? Loop {loop_count} completed successfully")
+                print(f"  Loop {loop_count} completed successfully")
                 
             except KeyboardInterrupt:
-                print("\n??  Keyboard interrupt detected. Stopping loop...")
+                print("\n   Keyboard interrupt detected. Stopping loop...")
                 break
             except Exception as e:
                 logging.error(f"Error in continuous loop iteration {loop_count}: {e}")
-                print(f"  ? Error in loop {loop_count}: {e}")
-                print("  ?? Continuing to next iteration...")
+                print(f"  Error in loop {loop_count}: {e}")
+                print("  Continuing to next iteration...")
                 time.sleep(5)  # Wait longer on error
                 
     except KeyboardInterrupt:
-        print("\n?? Continuous data collection loop stopped by user.")
+        print("\n  Continuous data collection loop stopped by user.")
     except Exception as e:
         logging.error(f"Fatal error in continuous loop: {e}")
         print(f"! Fatal error in continuous loop: {e}")
     
-    print("?? Continuous data collection loop ended.")
+    print(" Continuous data collection loop ended.")
 
 # === NAC (Network Access Control) Functions ===
 
@@ -4408,9 +4408,9 @@ def export_site_settings_to_csv():
         data = escape_multiline_strings_for_csv(data)
         # Write the processed data to a CSV file
         DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")
-        logging.info("? Site configs saved to AllSiteConfigs.csv")
+        logging.info(" Site configs saved to AllSiteConfigs.csv")
     else:
-        logging.warning("?? No site configs found.")
+        logging.warning(" No site configs found.")
 
 def export_nac_event_definitions_to_csv():
     """
@@ -4421,7 +4421,7 @@ def export_nac_event_definitions_to_csv():
     rawdata = mistapi.api.v1.const.nac_events.listNacEventsDefinitions(apisession).data
     # Write the NAC event definitions to a CSV file
     DataExporter.save_data_to_output(rawdata, "NacEventDefinitions.csv")
-    logging.info("? NAC event definitions exported to NacEventDefinitions.csv")  # Log completion
+    logging.info(" NAC event definitions exported to NacEventDefinitions.csv")  # Log completion
 
 def export_client_event_definitions_to_csv():
     """
@@ -4431,7 +4431,7 @@ def export_client_event_definitions_to_csv():
     print("Client Event Log Definitions:")
     rawdata = mistapi.api.v1.const.client_events.listClientEventsDefinitions(apisession).data
     DataExporter.save_data_to_output(rawdata, "ClientEventDefinitions.csv")
-    logging.info("? Client event definitions exported to ClientEventDefinitions.csv")  # Log completion
+    logging.info(" Client event definitions exported to ClientEventDefinitions.csv")  # Log completion
 
 def export_device_event_definitions_to_csv():
     """
@@ -4442,7 +4442,7 @@ def export_device_event_definitions_to_csv():
     rawdata = mistapi.api.v1.const.device_events.listDeviceEventsDefinitions(apisession).data
     # Write the device event definitions to a CSV file
     DataExporter.save_data_to_output(rawdata, "DeviceEventDefinitions.csv")
-    logging.info("? Device event definitions exported to DeviceEventDefinitions.csv")  # Log completion
+    logging.info(" Device event definitions exported to DeviceEventDefinitions.csv")  # Log completion
 
 def export_mist_edge_event_definitions_to_csv():
     """
@@ -4452,7 +4452,7 @@ def export_mist_edge_event_definitions_to_csv():
     print("Mist Edge Event Log Definitions:")
     rawdata = mistapi.api.v1.const.mxedge_events.listMxEdgeEventsDefinitions(apisession).data
     DataExporter.save_data_to_output(rawdata, "MistEdgeEventDefinitions.csv")
-    logging.info("? Mist Edge event definitions exported to MistEdgeEventDefinitions.csv")  # Log completion
+    logging.info(" Mist Edge event definitions exported to MistEdgeEventDefinitions.csv")  # Log completion
 
 def export_other_device_event_definitions_to_csv():
     """
@@ -4464,7 +4464,7 @@ def export_other_device_event_definitions_to_csv():
     rawdata = mistapi.api.v1.const.otherdevice_events.listOtherDeviceEventsDefinitions(apisession).data
     # Write the event definitions to a CSV file
     DataExporter.save_data_to_output(rawdata, "OtherEventDefinitions.csv")
-    logging.info("? Other device event definitions exported to OtherEventDefinitions.csv")  # Log completion
+    logging.info(" Other device event definitions exported to OtherEventDefinitions.csv")  # Log completion
 
 def export_system_event_definitions_to_csv():
     """
@@ -4475,7 +4475,7 @@ def export_system_event_definitions_to_csv():
     rawdata = mistapi.api.v1.const.system_events.listSystemEventsDefinitions(apisession).data
     # Write the system event definitions to a CSV file
     DataExporter.save_data_to_output(rawdata, "SystemEventDefinitions.csv")
-    logging.info("? System event definitions exported to SystemEventDefinitions.csv")  # Log completion
+    logging.info(" System event definitions exported to SystemEventDefinitions.csv")  # Log completion
 
 def export_alarm_definitions_to_csv():
     """
@@ -4517,7 +4517,7 @@ def export_gateway_synthetic_tests_to_csv(fast=False):
     """
     logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
     if fast:
-        logging.info("?? Fast mode enabled: Using cached data and concurrent processing")
+        logging.info(" Fast mode enabled: Using cached data and concurrent processing")
     
     org_id = get_cached_or_prompted_org_id()
     gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
@@ -4653,7 +4653,7 @@ def export_gateway_synthetic_tests_to_csv(fast=False):
         logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
         logging.info(f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory")
     else:
-        logging.warning("?? No synthetic test results found. CSV not created.")
+        logging.warning(" No synthetic test results found. CSV not created.")
 
 def get_gateway_devices_with_sites(apisession, org_id, fast=False):
     """
@@ -4766,7 +4766,7 @@ def export_gateway_test_results_by_site_to_csv():
     smoothed = None  # Initialize smoothed variable for dynamic delay
 
     if not site_ids:
-        logging.warning("?? No sites with gateways found.")
+        logging.warning(" No sites with gateways found.")
         return
 
     for site_id in tqdm(site_ids, desc="Sites", unit="site"):
@@ -4804,7 +4804,7 @@ def export_gateway_test_results_by_site_to_csv():
         DataExporter.save_data_to_output(sanitized, filename)
         logging.info(f"! All test results saved to {filename} ({len(all_results)} records).")
     else:
-        logging.warning("?? No test results found. CSV not created.")
+        logging.warning(" No test results found. CSV not created.")
 
 def export_gateway_device_stats_to_csv_with_freshness_check(fast=False):
     """
@@ -4831,7 +4831,7 @@ def export_gateway_device_stats_to_csv(fast=False):
     """
     logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
     if fast:
-        logging.info("?? Fast mode enabled: Using cached data and concurrent processing")
+        logging.info(" Fast mode enabled: Using cached data and concurrent processing")
     
     org_id = get_cached_or_prompted_org_id()
     gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
@@ -4966,7 +4966,7 @@ def export_gateway_device_stats_to_csv(fast=False):
         else:
             logging.info(f"! All {successful_requests} requests completed successfully")
     else:
-        logging.warning("?? No gateway device statistics found. CSV not created.")
+        logging.warning(" No gateway device statistics found. CSV not created.")
 
 def export_gateways_with_wan_port_conflicts_to_csv():
     """
@@ -4976,7 +4976,7 @@ def export_gateways_with_wan_port_conflicts_to_csv():
     
     Note: Next hop gateway conflicts are not checked since this data is not available in the CSV.
     """
-    logging.info("?? Starting WAN port IP conflict analysis for individual gateway devices...")
+    logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
     
     # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
     stats_file = "AllGatewayDeviceStats.csv"
@@ -5002,7 +5002,7 @@ def export_gateways_with_wan_port_conflicts_to_csv():
     ip_columns = [f'if_stat_ge-{port}_ips' for port in wan_ports]
     
     # Find gateways with internal WAN port IP conflicts
-    logging.info("?? Analyzing individual gateways for internal WAN port IP conflicts...")
+    logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
     
     conflicts_found = []
     
@@ -5074,7 +5074,7 @@ def export_gateways_with_wan_port_conflicts_to_csv():
         print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
         
         # Show sample of conflicted ports
-        print(f"\n?? Sample WAN Port IP Conflicts Found:")
+        print(f"\n  Sample WAN Port IP Conflicts Found:")
         for i, record in enumerate(conflicts_found[:10], 1):
             print(f"{i:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
             print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
@@ -5085,9 +5085,9 @@ def export_gateways_with_wan_port_conflicts_to_csv():
             print(f"... and {len(conflicts_found) - 10} more conflicted ports")
         
     else:
-        logging.info("? No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-        print("? No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-        print("?? This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
+        logging.info(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+        print(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+        print(" This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
 
 def export_sites_with_location_to_csv():
     """
@@ -5108,7 +5108,7 @@ def export_sites_with_location_to_csv():
 
     # Write to CSV
     DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")
-    logging.info("? Full site data written to SitesWithLocations.csv")
+    logging.info(" Full site data written to SitesWithLocations.csv")
 
 def export_gateways_with_site_info_to_csv():
     """
@@ -5205,7 +5205,7 @@ def export_devices_with_site_info_to_csv(fast=False):
     """
     logging.info("Fetching All Devices with Site Info...")  # Log start of function
     if fast:
-        logging.info("?? Fast mode enabled for devices with site info export")
+        logging.info(" Fast mode enabled for devices with site info export")
     
     org_id = get_cached_or_prompted_org_id()
 
@@ -5369,7 +5369,7 @@ def generate_support_package():
         logging.debug("Loading AllGatewayTestResults.csv for speedtest data...")
         speedtest_data = load_csv_grouped_by_key('AllGatewayTestResults.csv', 'site_id')
     else:
-        logging.warning("?? AllGatewayTestResults.csv not found. Skipping speedtest data.")
+        logging.warning(" AllGatewayTestResults.csv not found. Skipping speedtest data.")
         speedtest_data = {}
 
     # Create a support package for each site with alarms or events
@@ -5395,8 +5395,8 @@ def generate_support_package():
         write_support_data_to_csv(support_data, support_package_filename)
         logging.info(f"Support package written for site {site_id}.")
 
-    logging.info("? Support packages generated for applicable sites.")
-    logging.info("? Support packages generated for all sites!")
+    logging.info(" Support packages generated for applicable sites.")
+    logging.info(" Support packages generated for all sites!")
 
 def load_csv_grouped_by_key(filename, key):
     """
@@ -5462,9 +5462,9 @@ def poll_marvis_actions():
     This function guides users through the Marvis troubleshooting process step by step,
     using guided selection workflows instead of manual MAC address entry.
     """
-    logging.info("?? Starting Marvis (VNA) troubleshooting workflow...")
+    logging.info(" Starting Marvis (VNA) troubleshooting workflow...")
     logging.debug("MARVIS DEBUG: Entering poll_marvis_actions() function")
-    print("?? Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
+    print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
     print("=" * 65)
     print()
     
@@ -5472,7 +5472,7 @@ def poll_marvis_actions():
     logging.debug(f"MARVIS DEBUG: Using org_id: {org_id} for Marvis troubleshooting")
     logging.debug(f"MARVIS DEBUG: Session state - authenticated: {apisession is not None}")
 
-    print("?? Marvis AI Troubleshooting Options:")
+    print(" Marvis AI Troubleshooting Options:")
     print("1. Troubleshoot client connectivity issues (guided client selection)")
     print("2. Diagnose device performance problems (guided device selection)") 
     print("3. Analyze network connectivity issues (site-level analysis)")
@@ -5500,7 +5500,7 @@ def poll_marvis_actions():
         print("Exiting Marvis troubleshooting.")
         return
     else:
-        print("? Invalid option selected.")
+        print(" Invalid option selected.")
         logging.warning(f"MARVIS DEBUG: Invalid troubleshooting option selected: {choice}")
         logging.debug("MARVIS DEBUG: Exiting poll_marvis_actions() due to invalid choice")
 
@@ -5515,7 +5515,7 @@ def prompt_client_selection(site_id=None):
     Returns:
         tuple: (client_mac, client_type, site_id) or (None, None, None) if no selection made
     """
-    print("\n?? Client Selection")
+    print("\n  Client Selection")
     print("=" * 30)
     
     # If no site_id provided, decide between site-specific or org-wide search
@@ -5524,7 +5524,7 @@ def prompt_client_selection(site_id=None):
         if scope_choice == 's':
             site_id = prompt_site_selection()
             if not site_id:
-                print("? No site selected.")
+                print(" No site selected.")
                 return None, None, None
     
     org_id = get_cached_or_prompted_org_id()
@@ -5587,7 +5587,7 @@ def prompt_client_selection(site_id=None):
                 logging.warning(f"Could not fetch wired clients for org: {e}")
         
         if not all_clients:
-            print("? No clients found.")
+            print(" No clients found.")
             return None, None, None
         
         # Sort clients by hostname, then MAC
@@ -5614,7 +5614,7 @@ def prompt_client_selection(site_id=None):
         # Fetch site list once and cache it
         sites_cache = {}
         try:
-            print("?? Loading site information...")
+            print(" Loading site information...")
             sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
             sites = mistapi.get_all(response=sites_response, mist_session=apisession)
             sites_cache = {site["id"]: site["name"] for site in sites}
@@ -5684,25 +5684,25 @@ def prompt_client_selection(site_id=None):
             ])
             index_to_client[idx] = client
         
-        print(f"\n?? Found {len(all_clients)} clients:")
+        print(f"\n  Found {len(all_clients)} clients:")
         print(table)
         
         # Show summary statistics
         wireless_count = sum(1 for c in all_clients if c.get('client_type') == 'wireless')
         wired_count = sum(1 for c in all_clients if c.get('client_type') == 'wired')
-        print(f"\n?? Summary: {wireless_count} wireless, {wired_count} wired clients")
+        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")
         
         # Show legend
-        print("\n?? = Online  ?? = Recently seen  ?? = Offline")
+        print("\n  = Online  = Recently seen  = Offline")
         print("---" * 20)
         
         # Get user selection
         try:
             max_index = len(all_clients) - 1
-            user_input = input(f"\n?? Enter client index (0-{max_index}) or 'q' to quit: ").strip()
+            user_input = input(f"\n  Enter client index (0-{max_index}) or 'q' to quit: ").strip()
                 
             if user_input.lower() in ['q', 'quit', 'exit']:
-                print("?? Exiting client selection...")
+                print(" Exiting client selection...")
                 return None, None, None
                 
             idx = int(user_input)
@@ -5713,12 +5713,12 @@ def prompt_client_selection(site_id=None):
                 client_site_id = selected_client.get('site_id', site_id)
                 hostname = selected_client.get('hostname', selected_client.get('name', 'Unknown'))
                 
-                print(f"\n? Selected client:")
-                print(f"   ?? Name: {hostname}")
-                print(f"   ?? MAC: {client_mac}")
-                print(f"   ?? Type: {client_type}")
+                print(f"\n Selected client:")
+                print(f"   Name: {hostname}")
+                print(f"   MAC: {client_mac}")
+                print(f"   Type: {client_type}")
                 if client_site_id and client_site_id in sites_cache:
-                    print(f"   ?? Site: {sites_cache[client_site_id]}")
+                    print(f"   Site: {sites_cache[client_site_id]}")
                 
                 logging.info(f"User selected client: MAC={client_mac}, type={client_type}, site={client_site_id}")
                 return client_mac, client_type, client_site_id
@@ -5727,7 +5727,7 @@ def prompt_client_selection(site_id=None):
                 return None, None, None
                 
         except ValueError:
-            print("? Please enter a valid number or 'q' to quit.")
+            print(" Please enter a valid number or 'q' to quit.")
             return None, None, None
             
     except Exception as e:
@@ -5740,22 +5740,22 @@ def troubleshoot_client_connectivity():
     Troubleshoot client connectivity issues using Marvis AI.
     Uses guided client selection instead of manual MAC address entry.
     """
-    print("\n?? Client Connectivity Troubleshooting")
+    print("\n  Client Connectivity Troubleshooting")
     print("=" * 50)
     
     # Use guided client selection
     client_mac, client_type, site_id = prompt_client_selection()
     if not client_mac:
-        print("? No client selected. Returning to main menu.")
+        print(" No client selected. Returning to main menu.")
         return
     
     org_id = get_cached_or_prompted_org_id()
     
     try:
         print(f"! Running Marvis AI analysis for client {client_mac}...")
-        print(f"   ?? Client Type: {client_type}")
+        print(f"   Client Type: {client_type}")
         if site_id:
-            print(f"   ?? Site ID: {site_id}")
+            print(f"   Site ID: {site_id}")
         
         logging.info(f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}")
         
@@ -5775,7 +5775,7 @@ def troubleshoot_client_connectivity():
         response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
         
         if response.data:
-            print("? Marvis AI analysis completed!")
+            print(" Marvis AI analysis completed!")
             print(f"! Analysis results available.")
             
             # Save results to CSV with optimized formatting
@@ -5788,26 +5788,26 @@ def troubleshoot_client_connectivity():
             # Display summary
             if isinstance(response.data, dict):
                 if 'results' in response.data:
-                    print("\n?? Marvis Analysis Summary:")
+                    print("\n  Marvis Analysis Summary:")
                     for result in response.data.get('results', []):
                         print(f"  � {result.get('description', 'Analysis result')}")
                         if result.get('action'):
-                            print(f"    ?? Recommended Action: {result['action']}")
+                            print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
-                    print("\n?? Marvis Insights:")
+                    print("\n  Marvis Insights:")
                     insights = response.data.get('insights', [])
                     for insight in insights:
                         print(f"  � {insight.get('description', insight)}")
                 else:
-                    print(f"\n?? Analysis Data: {len(data)} items processed")
+                    print(f"\n  Analysis Data: {len(data)} items processed")
         else:
-            print("?? No specific connectivity issues found for this client.")
-            print("?? This could indicate the client is functioning normally.")
+            print(" No specific connectivity issues found for this client.")
+            print(" This could indicate the client is functioning normally.")
             
     except Exception as e:
         logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
         print(f"! Failed to troubleshoot client: {e}")
-        print("?? This may indicate:")
+        print(" This may indicate:")
         print("   - Marvis (VNA) is not enabled for your organization")
         print("   - The client is not currently active or found")
         print("   - Insufficient permissions for Marvis troubleshooting")
@@ -5819,13 +5819,13 @@ def troubleshoot_device_performance():
     Uses guided site and device selection workflow.
     """
     logging.debug("MARVIS DEBUG: Entering troubleshoot_device_performance()")
-    print("\n?? Device Performance Troubleshooting")
+    print("\n  Device Performance Troubleshooting")
     print("=" * 50)
     
     # Get site selection first
     site_id = prompt_site_selection()
     if not site_id:
-        print("? No site selected.")
+        print(" No site selected.")
         logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
         return
     
@@ -5834,7 +5834,7 @@ def troubleshoot_device_performance():
     # Get device selection
     device_id = prompt_device_selection(site_id)
     if not device_id:
-        print("? No device selected.")
+        print(" No device selected.")
         logging.debug("MARVIS DEBUG: No device selected")
         return
     
@@ -5851,7 +5851,7 @@ def troubleshoot_device_performance():
         logging.debug(f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}")
         
         if not device_response.data:
-            print("? Could not retrieve device details.")
+            print(" Could not retrieve device details.")
             logging.debug("MARVIS DEBUG: Device response data is None")
             return
             
@@ -5864,13 +5864,13 @@ def troubleshoot_device_performance():
         logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
         
         if not device_mac:
-            print("? Could not determine device MAC address.")
+            print(" Could not determine device MAC address.")
             logging.debug("MARVIS DEBUG: Device MAC is None or empty")
             return
         
         print(f"! Running Marvis AI performance analysis...")
-        print(f"   ?? Device: {device_name} ({device_mac})")
-        print(f"   ?? Site ID: {site_id}")
+        print(f"   Device: {device_name} ({device_mac})")
+        print(f"   Site ID: {site_id}")
         
         logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
         logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
@@ -5890,7 +5890,7 @@ def troubleshoot_device_performance():
             logging.debug(f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
             logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
             
-            print("? Marvis AI device analysis completed!")
+            print(" Marvis AI device analysis completed!")
             
             # Save results to CSV with optimized formatting
             data = format_marvis_data_for_csv(response.data, "device")
@@ -5905,32 +5905,32 @@ def troubleshoot_device_performance():
                 if 'results' in response.data:
                     results = response.data.get('results', [])
                     logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
-                    print("\n?? Device Performance Analysis:")
+                    print("\n  Device Performance Analysis:")
                     for result in results:
                         print(f"  � {result.get('description', 'Analysis result')}")
                         if result.get('action'):
-                            print(f"    ?? Recommended Action: {result['action']}")
+                            print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
-                    print("\n?? Marvis Device Insights:")
+                    print("\n  Marvis Device Insights:")
                     insights = response.data.get('insights', [])
                     logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
                     for insight in insights:
                         print(f"  � {insight.get('description', insight)}")
                 else:
                     logging.debug("MARVIS DEBUG: No results or insights in device response")
-                    print(f"\n?? Analysis Data: {len(data)} items processed")
+                    print(f"\n  Analysis Data: {len(data)} items processed")
             
         else:
             logging.debug("MARVIS DEBUG: Device response data is None or empty")
-            print("?? No performance issues detected for this device.")
-            print("?? This could indicate the device is operating within normal parameters.")
+            print(" No performance issues detected for this device.")
+            print(" This could indicate the device is operating within normal parameters.")
             
     except Exception as e:
         logging.error(f"MARVIS DEBUG: Exception in troubleshoot_device_performance: {e}")
         logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
         logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
         print(f"! Failed to troubleshoot device: {e}")
-        print("?? This may indicate:")
+        print(" This may indicate:")
         print("   - The device is not found or not supported by Marvis")
         print("   - Marvis (VNA) is not enabled for your organization")
         print("   - Insufficient permissions for device troubleshooting")
@@ -5943,13 +5943,13 @@ def troubleshoot_network_connectivity():
     Provides site-level network analysis and insights.
     """
     logging.debug("MARVIS DEBUG: Entering troubleshoot_network_connectivity()")
-    print("\n?? Network Connectivity Troubleshooting")
+    print("\n  Network Connectivity Troubleshooting")
     print("=" * 50)
     
     # Get site selection
     site_id = prompt_site_selection()
     if not site_id:
-        print("? No site selected.")
+        print(" No site selected.")
         logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
         return
     
@@ -5959,8 +5959,8 @@ def troubleshoot_network_connectivity():
     
     try:
         print(f"! Running Marvis AI network analysis...")
-        print(f"   ?? Analyzing site-level connectivity")
-        print(f"   ?? Site ID: {site_id}")
+        print(f"   Analyzing site-level connectivity")
+        print(f"   Site ID: {site_id}")
         
         logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
         logging.debug(f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}")
@@ -5980,7 +5980,7 @@ def troubleshoot_network_connectivity():
             logging.debug(f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}")
             logging.debug(f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}")
             
-            print("? Marvis AI network analysis completed!")
+            print(" Marvis AI network analysis completed!")
             
             # Save results to CSV with optimized formatting
             logging.debug("MARVIS DEBUG: About to format data for CSV")
@@ -5999,17 +5999,17 @@ def troubleshoot_network_connectivity():
                 if 'results' in response.data:
                     results = response.data.get('results', [])
                     logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
-                    print("\n?? Network Connectivity Analysis:")
+                    print("\n  Network Connectivity Analysis:")
                     for idx, result in enumerate(results):
                         logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
                         description = result.get('description', 'Analysis result') if isinstance(result, dict) else str(result)
                         print(f"  � {description}")
                         if isinstance(result, dict) and result.get('action'):
-                            print(f"    ?? Recommended Action: {result['action']}")
+                            print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
                     insights = response.data.get('insights', [])
                     logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
-                    print("\n?? Marvis Network Insights:")
+                    print("\n  Marvis Network Insights:")
                     for idx, insight in enumerate(insights):
                         logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
                         description = insight.get('description', insight) if isinstance(insight, dict) else str(insight)
@@ -6017,7 +6017,7 @@ def troubleshoot_network_connectivity():
                 else:
                     logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
                     logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
-                    print(f"\n?? Analysis Data: {len(data)} items processed")
+                    print(f"\n  Analysis Data: {len(data)} items processed")
                     if response.data:
                         print(f"! Raw response keys: {list(response.data.keys())}")
                         # Show some raw data for debugging
@@ -6025,19 +6025,19 @@ def troubleshoot_network_connectivity():
                             print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
             else:
                 logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
-                print(f"\n?? Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
+                print(f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
             
         else:
             logging.debug("MARVIS DEBUG: Response data is None or empty")
-            print("?? No network connectivity issues detected for this site.")
-            print("?? This indicates the network is operating within normal parameters.")
+            print(" No network connectivity issues detected for this site.")
+            print(" This indicates the network is operating within normal parameters.")
             
     except Exception as e:
         logging.error(f"MARVIS DEBUG: Exception in troubleshoot_network_connectivity: {e}")
         logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
         logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
         print(f"! Failed to troubleshoot network: {e}")
-        print("?? This may indicate:")
+        print(" This may indicate:")
         print("   - Marvis (VNA) is not enabled for your organization")
         print("   - The site has no devices or insufficient data for analysis")
         print("   - Insufficient permissions for network troubleshooting")
@@ -6049,13 +6049,13 @@ def view_marvis_insights():
     View available Marvis (VNA) insights and capabilities for the organization.
     This provides information about Marvis availability and organizational insights.
     """
-    print("\n?? Marvis (VNA) Insights & Capabilities")
+    print("\n  Marvis (VNA) Insights & Capabilities")
     print("=" * 50)
     
     org_id = get_cached_or_prompted_org_id()
     
     try:
-        print("?? Checking Marvis availability and organizational insights...")
+        print(" Checking Marvis availability and organizational insights...")
         
         # Try to get organization info to check Marvis capabilities
         org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
@@ -6069,15 +6069,15 @@ def view_marvis_insights():
             marvis_features = [f for f in features if any(keyword in f.lower() for keyword in ['marvis', 'vna', 'insight'])]
             
             if marvis_features:
-                print("\n?? Marvis/VNA Features Available:")
+                print("\n  Marvis/VNA Features Available:")
                 for feature in marvis_features:
                     print(f"  � {feature}")
             else:
-                print("\n?? No specific Marvis/VNA features detected in organization settings.")
+                print("\n  No specific Marvis/VNA features detected in organization settings.")
             
             # Try to get organization-level insights if available
             try:
-                print("\n? Attempting to retrieve organization-level insights...")
+                print("\n Attempting to retrieve organization-level insights...")
                 
                 # Try different insight endpoints that might be available
                 insight_endpoints = [
@@ -6099,7 +6099,7 @@ def view_marvis_insights():
                             logging.debug(f"MARVIS DEBUG: {endpoint_name} full response: {json.dumps(response.data, indent=2, default=str)[:1000]}...")
                             
                             if insights_data:
-                                print(f"\n?? {endpoint_name}:")
+                                print(f"\n  {endpoint_name}:")
                                 for insight in insights_data[:5]:  # Show first 5 insights
                                     description = insight.get('description', insight.get('type', insight.get('name', str(insight))))
                                     print(f"  � {description}")
@@ -6118,7 +6118,7 @@ def view_marvis_insights():
                                 
                                 filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"
                                 DataExporter.save_data_to_output(formatted_insights, filename)
-                                print(f"  ?? Full insights saved to {filename}")
+                                print(f"  Full insights saved to {filename}")
                                 insights_found = True
                     except Exception as e:
                         error_message = str(e)
@@ -6131,41 +6131,41 @@ def view_marvis_insights():
                         continue
                 
                 if not insights_found:
-                    print("\n?? No organization-level insights currently available.")
+                    print("\n  No organization-level insights currently available.")
                 
             except Exception as e:
                 logging.warning(f"Could not retrieve organization insights: {e}")
                 print(f"! Could not retrieve insights: {e}")
             
-            print("\n?? Marvis (VNA - Virtual Network Assistant) Usage Guide:")
-            print("   ?? Targeted Troubleshooting:")
+            print("\n  Marvis (VNA - Virtual Network Assistant) Usage Guide:")
+            print("   Targeted Troubleshooting:")
             print("     � Use client troubleshooting for specific device connectivity issues")
             print("     � Use device troubleshooting for AP, switch, or gateway performance")
             print("     � Use network troubleshooting for site-wide connectivity analysis")
             print()
-            print("   ?? Requirements:")
+            print("   Requirements:")
             print("     � Marvis must be enabled for your organization")
             print("     � Devices must be actively managed and reporting data")
             print("     � Sufficient data history for meaningful analysis")
             print()
-            print("   ?? Best Practices:")
+            print("   Best Practices:")
             print("     � Run troubleshooting when issues are actively occurring")
             print("     � Provide specific timeframes when prompted")
             print("     � Review saved CSV files for detailed analysis results")
             
         else:
-            print("? Could not retrieve organization information.")
+            print(" Could not retrieve organization information.")
             
     except Exception as e:
         logging.error(f"Failed to get Marvis insights: {e}")
         print(f"! Failed to get Marvis insights: {e}")
-        print("?? This may indicate:")
+        print(" This may indicate:")
         print("   - Marvis (VNA) is not enabled for your organization")
         print("   - Insufficient permissions to view organization details")
         print("   - API connectivity issues")
         print("   - Organization may not have Marvis licensing")
         print()
-        print("?? Contact your Mist administrator to:")
+        print(" Contact your Mist administrator to:")
         print("   � Verify Marvis/VNA licensing and enablement")
         print("   � Confirm user permissions for AI troubleshooting")
         print("   � Check organization feature settings")
@@ -6190,7 +6190,7 @@ def export_current_guest_users_to_csv():
 
     # Write the processed data to a CSV file
     DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")
-    logging.info("? Current guests exported to OrgCurrentGuests.csv")  # Log completion
+    logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log completion
 
 def export_historical_guest_users_to_csv():
     """
@@ -6214,7 +6214,7 @@ def export_historical_guest_users_to_csv():
     guests = escape_multiline_strings_for_csv(guests)
     # Write the processed data to a CSV file
     DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")
-    logging.info("? Historical guests exported to OrgHistoricalGuests.csv")  # Log completion
+    logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log completion
 
 def export_switch_vc_stats_to_csv():
     """
@@ -6287,13 +6287,13 @@ def prompt_select_site_and_device_ids(site_id=None, device_id=None):
     if not site_id:
         site_id = prompt_select_site_id_from_csv()
         if not site_id:
-            print("? No site selected.")
+            print(" No site selected.")
             return None, None
 
     if not device_id:
         device_id = prompt_select_device_id_from_inventory(site_id, device_type="all")
         if not device_id:
-            print("? No device selected.")
+            print(" No device selected.")
             return None, None
 
     return site_id, device_id
@@ -6315,9 +6315,9 @@ def run_interactive_shell(shell_url, debug=False):
     if debug:
         websocket.enableTrace(True)
 
-    print("?? Connecting to WebSocket shell...")
+    print(" Connecting to WebSocket shell...")
     ws = websocket.create_connection(shell_url)
-    print("?? Connected.")
+    print(" Connected.")
 
     screen = pyte.Screen(80, 40)
     stream = pyte.Stream(screen)
@@ -6429,7 +6429,7 @@ def listen_for_command_output(mist_host, mist_apitoken, site_id, device_id, sess
         logging.error(f"! WebSocket error: {error}")
 
     def on_open(ws):
-        logging.info("?? WebSocket opened. Subscribing...")
+        logging.info(" WebSocket opened. Subscribing...")
         ws.send(json.dumps(subscribe_msg))
 
     ws = websocket.WebSocketApp(
@@ -6451,12 +6451,12 @@ def listen_for_command_output(mist_host, mist_apitoken, site_id, device_id, sess
     while time.time() - start_time < timeout:
         time.sleep(1)
         if time.time() - last_message_time > idle_timeout and output_lines:
-            logging.info("?? Idle timeout reached. Closing WebSocket.")
+            logging.info(" Idle timeout reached. Closing WebSocket.")
             ws.close()
             break
 
     if ws.keep_running:
-        logging.warning("?? Timeout waiting for ARP output.")
+        logging.warning(" Timeout waiting for ARP output.")
         ws.close()
 
 def _handle_ws_message(message, session_id, buffer, output_lines, debug=False):
@@ -6498,14 +6498,14 @@ def _handle_ws_message(message, session_id, buffer, output_lines, debug=False):
     return last_message_time, buffer
 
 def _handle_ws_close(output_lines, debug=False):
-    logging.info("?? WebSocket closed.")
+    logging.info(" WebSocket closed.")
     if output_lines:
         compiled_output = "\n".join(output_lines)
         _save_output_to_file(compiled_output)
         export_arp_output_to_csv("arp_output_raw.txt")
 
 
-        print("\n?? ARP Output Received:\n")
+        print("\n  ARP Output Received:\n")
         rows = compiled_output.split("\n")
         parsed_rows = [row.split("\t") for row in rows if row.strip()]
         max_cols = max(len(row) for row in parsed_rows)
@@ -6524,8 +6524,8 @@ def _handle_ws_close(output_lines, debug=False):
         else:
             print(f"! ARP output received with {len(parsed_rows)} rows.")
     else:
-        print("?? No ARP output received for this session.")
-        logging.warning("?? No ARP output received for this session.")
+        print(" No ARP output received for this session.")
+        logging.warning(" No ARP output received for this session.")
 
 def export_arp_output_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
     try:
@@ -6593,10 +6593,10 @@ def run_arp_via_websocket(site_id=None, device_id=None):
     mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
 
     if not mist_host or not mist_apitoken:
-        print("? Mist host or API token not found in session or environment.")
+        print(" Mist host or API token not found in session or environment.")
         return
 
-    print("?? Subscribing to WebSocket stream...")
+    print(" Subscribing to WebSocket stream...")
     session_id = trigger_arp_command(mist_host, mist_apitoken, site_id, device_id)
     if session_id:
         listen_for_command_output(mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id)
@@ -6607,14 +6607,14 @@ def loop_refresh_core_datasets(delay=None, debug=False):
     If delay is None, it will be calculated dynamically to avoid exceeding API limits.
     Loop can be stopped gracefully by creating a file named 'stop_loop.txt'.
     """
-    logging.info("?? Starting continuous data refresh loop...")
+    logging.info(" Starting continuous data refresh loop...")
     smoothed = None  # Initialize smoothed delay tracker
     get_cached_or_prompted_org_id()  # Ensure org_id is loaded from .env if not already
 
     try:
         while True:
             if os.path.exists("stop_loop.txt"):
-                logging.info("?? Stop signal detected (stop_loop.txt). Exiting loop.")
+                logging.info(" Stop signal detected (stop_loop.txt). Exiting loop.")
                 break
 
             export_all_sites_to_csv()
@@ -6622,7 +6622,7 @@ def loop_refresh_core_datasets(delay=None, debug=False):
             export_device_stats_to_csv()
             export_device_port_stats_to_csv()
             export_vpn_peer_stats_to_csv()
-            logging.info("? All datasets refreshed.")
+            logging.info(" All datasets refreshed.")
 
             # Determine delay
             if delay is not None:
@@ -6634,7 +6634,7 @@ def loop_refresh_core_datasets(delay=None, debug=False):
             time.sleep(actual_delay)
 
     except KeyboardInterrupt:
-        logging.info("?? Loop interrupted by user (Ctrl+C). Exiting gracefully.")
+        logging.info(" Loop interrupted by user (Ctrl+C). Exiting gracefully.")
 
 def load_pid_tuning_data():
     """Load PID tuning data from file with comprehensive logging."""
@@ -6744,12 +6744,12 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
 
     shell_url = create_shell_session(site_id, device_id)
     if not shell_url:
-        logging.error("? Could not create shell session.")
+        logging.error(" Could not create shell session.")
         return
 
     try:
         ws = websocket.create_connection(shell_url)
-        print("?? Connected to shell session.")
+        print(" Connected to shell session.")
         time.sleep(1)
         command = "show route 0.0.0.0 | display json | no-more\n"
         ws.send_binary(bytearray(map(ord, f"\00{command}")))
@@ -6767,7 +6767,7 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
 
         with open("ws.log", "w", encoding="utf-8") as f:
             f.write("".join(output_lines))
-        print("? WebSocket output saved to ws.log")
+        print(" WebSocket output saved to ws.log")
 
     except Exception as e:
         print(f"! Error during shell session: {e}")
@@ -6784,7 +6784,7 @@ def export_gateway_templates_to_csv():
         sort_key="name",
         limit=1000
     )
-    logging.info("? Gateway templates exported to OrgGatewayTemplates.csv.")
+    logging.info(" Gateway templates exported to OrgGatewayTemplates.csv.")
 
 def show_dhcp_security_binding():
     """
@@ -6798,12 +6798,12 @@ def show_dhcp_security_binding():
 
     shell_url = create_shell_session(site_id, device_id)
     if not shell_url:
-        logging.error("? Could not create shell session.")
+        logging.error(" Could not create shell session.")
         return
 
     try:
         ws = websocket.create_connection(shell_url)
-        print("?? Connected to shell session.")
+        print(" Connected to shell session.")
         time.sleep(1)
         command = "show dhcp-security binding | display json | no-more\nDONE!"
         ws.send_binary(bytearray(map(ord, f"\00{command}")))
@@ -6821,7 +6821,7 @@ def show_dhcp_security_binding():
 
         with open("ws_dhcp.log", "w", encoding="utf-8") as f:
             f.write("".join(output_lines))
-        print("? DHCP security binding output saved to ws_dhcp.log")
+        print(" DHCP security binding output saved to ws_dhcp.log")
 
     except Exception as e:
         print(f"! Error during shell session: {e}")
@@ -6927,7 +6927,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
     org_id = get_cached_or_prompted_org_id()
     data = fetch_gateway_device_configs_from_api(apisession, org_id, fast=fast)
     if not data:
-        logging.warning("?? No device configs found.")
+        logging.warning(" No device configs found.")
         return
 
     # Flatten and sanitize the data
@@ -6936,7 +6936,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
 
     # Write full dataset to CSV
     DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
-    logging.info("? Device configs saved to AllSiteGatewayConfigs.csv")
+    logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
 
     # Identify port config columns (excluding _vpn_paths_)
     base_columns = ["mac", "name"]
@@ -6955,7 +6955,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
 
     # Write filtered dataset to CSV
     if not filtered_rows:
-        logging.warning("?? No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
+        logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
         filtered_csv_path = get_csv_file_path("FilteredGatewayPortConfigs.csv")
         with open(filtered_csv_path, "w", newline="", encoding="utf-8") as f:
             f.write("No matching data found.\n")
@@ -6963,7 +6963,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
         if debug:
             logging.debug(f"Sample filtered row: {filtered_rows[0]}")
         DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")
-        logging.info("? Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
+        logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
 
 def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
     """
@@ -7145,7 +7145,7 @@ def get_rate_limited_delay(smoothed_delay=None):
 
         # Detect hour boundary and decay integral
         if seconds_elapsed < previous_elapsed:
-            logging.info("?? Hour boundary crossed. Resetting integral.")
+            logging.info(" Hour boundary crossed. Resetting integral.")
             logging.debug(f"Before reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
             delay_integral *= 0.5
             logging.debug(f"After reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
@@ -7306,7 +7306,7 @@ def export_combined_inventory_with_site_info():
         for (year, week), count in sorted(summary_data.items()):
             writer.writerow([year, week, count])
 
-    print("? CombinedInventory_ByWeek folder and summary report have been generated.")
+    print(" CombinedInventory_ByWeek folder and summary report have been generated.")
 
 def normalize_zip_code(zip_code):
     """
@@ -7666,7 +7666,7 @@ def validate_addresses_with_nominatim(mist_address, comparison_address, timeout=
         # Apply duplicate disqualification logic
         if mist_is_duplicate and ref_is_duplicate:
             recommendation = 'uncertain' 
-            recommendation_reason = "??  Both addresses are duplicates (shared between multiple sites) - manual review required"
+            recommendation_reason = "  Both addresses are duplicates (shared between multiple sites) - manual review required"
             if debug:
                 logging.debug("TIEBREAKER: Both addresses are duplicates - flagging as uncertain")
         elif mist_is_duplicate and not ref_is_duplicate:
@@ -8629,7 +8629,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     if fast:
         print("* Fast mode enabled: Using optimized data generation and caching")
     if debug:
-        print("?? Debug mode enabled: Detailed comparison logging active")
+        print(" Debug mode enabled: Detailed comparison logging active")
         logging.debug("ENTRY: compare_inventory_with_csv()")
         logging.debug(f"  Parameters: fast={fast}, address_check={address_check}, debug={debug}")
         logging.debug(f"  ADDRESS_MATCH_THRESHOLD={ADDRESS_MATCH_THRESHOLD}")
@@ -8640,12 +8640,12 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     if address_validation_enabled:
         source = "--address-check flag" if address_check else ".env file"
         print(f"! External address validation enabled via {source}")
-        print(f"   ?? Address conflicts will be validated using Nominatim API")
+        print(f"   Address conflicts will be validated using Nominatim API")
         if debug:
             logging.debug(f"Address validation enabled via {source}")
     else:
-        print("??  External address validation disabled")
-        print("   ?? Use --address-check flag or set ENABLE_ADDRESS_VALIDATION=true in .env to enable intelligent address recommendations")
+        print("  External address validation disabled")
+        print("   Use --address-check flag or set ENABLE_ADDRESS_VALIDATION=true in .env to enable intelligent address recommendations")
         if debug:
             logging.debug("Address validation disabled")
     
@@ -8664,13 +8664,13 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     csv_files = [os.path.basename(f) for f in csv_files if os.path.basename(f) != "AllDevicesWithSiteInfo.csv"]
     
     if not csv_files:
-        print("? No CSV files found in the data directory for comparison.")
+        print(" No CSV files found in the data directory for comparison.")
         print(f"   Please place comparison CSV files in the '{data_dir}' folder.")
         logging.error("No CSV files found for comparison in data directory.")
         return
 
     # Present CSV files to user for selection
-    print("\n?? Available CSV files for comparison:")
+    print("\n  Available CSV files for comparison:")
     print("=" * 60)
     for idx, csv_file in enumerate(csv_files):
         print(f"[{idx}] {csv_file}")
@@ -8680,7 +8680,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         selected_index = int(user_input)
         
         if selected_index < 0 or selected_index >= len(csv_files):
-            print("? Invalid index selected.")
+            print(" Invalid index selected.")
             logging.error(f"Invalid CSV file index selected: {selected_index}")
             return
             
@@ -8689,11 +8689,11 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         logging.info(f"User selected comparison file: {comparison_file}")
         
     except ValueError:
-        print("? Invalid input. Please enter a numeric index.")
+        print(" Invalid input. Please enter a numeric index.")
         logging.error("Invalid numeric input for CSV file selection.")
         return
     except KeyboardInterrupt:
-        print("\n? Operation cancelled by user.")
+        print("\n Operation cancelled by user.")
         logging.info("CSV comparison operation cancelled by user.")
         return
 
@@ -8721,7 +8721,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         if debug:
             logging.debug(f"Loaded {len(skip_addresses)} addresses to skip from AddressSkip.csv")
     except FileNotFoundError:
-        print("??  AddressSkip.csv not found - no addresses will be automatically skipped")
+        print("  AddressSkip.csv not found - no addresses will be automatically skipped")
         if debug:
             logging.debug("AddressSkip.csv not found - continuing without skip list")
     except Exception as e:
@@ -8735,7 +8735,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     
     # Detect field names in comparison CSV
     if not comparison_data:
-        print("? Comparison CSV file is empty.")
+        print(" Comparison CSV file is empty.")
         return
         
     comparison_headers = comparison_data[0].keys()
@@ -8771,14 +8771,14 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             country_field = header
 
     if not serial_field:
-        print("? Could not find serial number field in comparison CSV.")
+        print(" Could not find serial number field in comparison CSV.")
         print("   Looked for fields containing: 'serial', 'sn', 'system serial'")
         print(f"   Available fields: {list(comparison_headers)}")
         logging.error(f"Serial field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
         return
         
     if not zip_field:
-        print("? Could not find zip code field in comparison CSV.")
+        print(" Could not find zip code field in comparison CSV.")
         print("   Looked for fields containing: 'zip', 'postal', 'zip code', 'postal code'")
         print(f"   Available fields: {list(comparison_headers)}")
         logging.error(f"Zip field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
@@ -8821,7 +8821,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         print(f"! Will validate {validation_count} address conflicts using Nominatim API")
 
     # Duplicate address detection between sites
-    print("\n?? Checking for duplicate addresses between sites...")
+    print("\n  Checking for duplicate addresses between sites...")
     
     # Get unique address per site for Mist data
     mist_site_addresses = {}  # site_name -> address_key
@@ -8898,7 +8898,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     
     # Report results
     if mist_duplicates:
-        print("    ?? Mist sites sharing the same address:")
+        print("    Mist sites sharing the same address:")
         for addr_key, sites in mist_duplicates.items():
             # Get the actual address for display
             sample_site = sites[0]
@@ -8907,7 +8907,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             print(f"        Sites ({len(sites)}): {', '.join(sites)}")
     
     if ref_duplicates:
-        print("    ?? Reference sites sharing the same address:")
+        print("    Reference sites sharing the same address:")
         for addr_key, sites in ref_duplicates.items():
             # Get the actual address for display
             sample_site = sites[0]
@@ -8917,10 +8917,10 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     
     # Summary
     if not mist_duplicates and not ref_duplicates:
-        print("    ? No duplicate addresses found between sites")
+        print("    No duplicate addresses found between sites")
     else:
-        print(f"    ??  Found {len(mist_duplicates)} Mist address duplications affecting {sum(len(sites) for sites in mist_duplicates.values())} sites")
-        print(f"    ??  Found {len(ref_duplicates)} reference address duplications affecting {sum(len(sites) for sites in ref_duplicates.values())} sites")
+        print(f"     Found {len(mist_duplicates)} Mist address duplications affecting {sum(len(sites) for sites in mist_duplicates.values())} sites")
+        print(f"     Found {len(ref_duplicates)} reference address duplications affecting {sum(len(sites) for sites in ref_duplicates.values())} sites")
         if debug:
             logging.info(f"DUPLICATE_CHECK: Found {len(mist_duplicates)} Mist duplicates and {len(ref_duplicates)} reference duplicates between sites")
 
@@ -8937,8 +8937,8 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     validation_count = 0
     devices_needing_validation = []  # Will be populated after filtering
     
-    print(f"\n?? Processing {len(site_configs)} total devices with improved order of operations...")
-    print("?? Step 1: Parsing and normalizing all addresses...")
+    print(f"\n  Processing {len(site_configs)} total devices with improved order of operations...")
+    print(" Step 1: Parsing and normalizing all addresses...")
     
     # Step 1: Process all devices, fix addresses, and identify initial mismatches
     all_conflicts = []  # Store all conflicts before filtering
@@ -9100,7 +9100,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     print(f"! Step 1 Complete: Found {len(all_conflicts)} address conflicts from {counters.devices_enriched} analyzed devices")
     
     # Step 2: Remove duplicate addresses (after normalization) 
-    print("?? Step 2: Removing duplicate addresses...")
+    print(" Step 2: Removing duplicate addresses...")
     unique_conflicts = []
     seen_addresses = set()
     
@@ -9122,7 +9122,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     print(f"! Step 2 Complete: Removed {duplicates_removed} duplicate address pairs, {len(unique_conflicts)} unique conflicts remain")
     
     # Step 3: Remove addresses in skip file
-    print("?? Step 3: Applying address skip filters...")
+    print(" Step 3: Applying address skip filters...")
     filtered_conflicts = []
     
     for conflict in unique_conflicts:
@@ -9140,7 +9140,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             if debug:
                 logging.debug(f"ADDRESS_SKIP [{device_serial}]: Skipped comparison address due to: {skip_reason}")
             
-            print(f"    ? Auto-corrected: {device_serial} (Skip reason: {skip_reason})")
+            print(f"    Auto-corrected: {device_serial} (Skip reason: {skip_reason})")
         else:
             filtered_conflicts.append(conflict)
     
@@ -9151,13 +9151,13 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     if address_validation_enabled and filtered_conflicts:
         devices_needing_validation = [(c['device'], c['device_serial'], c['mist_address'], c['comparison_address']) for c in filtered_conflicts]
         total_validations = len(devices_needing_validation)
-        print(f"\n?? Step 4: External address validation enabled - {total_validations} remaining conflicts need validation")
-        print("?? This may take several minutes due to API rate limiting (1 request/second)...")
+        print(f"\n  Step 4: External address validation enabled - {total_validations} remaining conflicts need validation")
+        print(" This may take several minutes due to API rate limiting (1 request/second)...")
         if debug:
             logging.debug(f"ADDRESS_VALIDATION: {total_validations} devices require external validation after filtering")
     elif not address_validation_enabled and filtered_conflicts:
         # Process conflicts without validation
-        print(f"\n?? Step 4: Processing {len(filtered_conflicts)} conflicts without external validation...")
+        print(f"\n  Step 4: Processing {len(filtered_conflicts)} conflicts without external validation...")
         for conflict in filtered_conflicts:
             device = conflict['device'] 
             device_serial = conflict['device_serial']
@@ -9311,8 +9311,8 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 comp_addr_str = f"{comparison_address['address']}, {comparison_address['city']}, {comparison_address['state']} {comparison_address['zip']}".replace(", , ", ", ").strip(", ")
                 
                 print(f"! [{validation_count}/{total_validations}] Validating {device_serial}...")
-                print(f"    ?? Mist:       {mist_addr_str}")
-                print(f"    ?? Reference:  {comp_addr_str}")
+                print(f"    Mist:       {mist_addr_str}")
+                print(f"    Reference:  {comp_addr_str}")
                 
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Starting validation")
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist address: {mist_addr_str}")
@@ -9324,20 +9324,20 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 )
                 
                 # Format results for display
-                mist_status = "? Valid" if validation_result['mist_validation']['valid'] else "? Invalid"
-                comp_status = "? Valid" if validation_result['comparison_validation']['valid'] else "? Invalid"
+                mist_status = " Valid" if validation_result['mist_validation']['valid'] else " Invalid"
+                comp_status = " Valid" if validation_result['comparison_validation']['valid'] else " Invalid"
                 
                 mist_conf = f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result['mist_validation']['valid'] else "N/A"
                 comp_conf = f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result['comparison_validation']['valid'] else "N/A"
                 
-                recommendation_icon = {"mist": "?? Mist", "comparison": "?? Reference", "uncertain": "?? Uncertain"}
+                recommendation_icon = {"mist": " Mist", "comparison": " Reference", "uncertain": " Uncertain"}
                 recommendation_display = recommendation_icon.get(validation_result['recommendation'], validation_result['recommendation'])
                 recommendation_reason = validation_result.get('recommendation_reason', 'No reason provided')
                 
-                print(f"    ?? Results:    Mist: {mist_status} (conf: {mist_conf}) | Reference: {comp_status} (conf: {comp_conf})")
-                print(f"    ?? Recommendation: {recommendation_display}")
+                print(f"    Results:    Mist: {mist_status} (conf: {mist_conf}) | Reference: {comp_status} (conf: {comp_conf})")
+                print(f"    Recommendation: {recommendation_display}")
                 if validation_result['recommendation'] != 'uncertain' or 'inconclusive' not in recommendation_reason.lower():
-                    print(f"    ?? Reason: {recommendation_reason}")
+                    print(f"    Reason: {recommendation_reason}")
                 
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist validation - valid: {validation_result['mist_validation']['valid']}, confidence: {mist_conf}")
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison validation - valid: {validation_result['comparison_validation']['valid']}, confidence: {comp_conf}")
@@ -9345,7 +9345,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Recommendation reason: {recommendation_reason}")
                 
             except Exception as e:
-                print(f"    ? Validation failed: {str(e)}")
+                print(f"    Validation failed: {str(e)}")
                 logging.warning(f"ADDRESS_VALIDATION [{device_serial}]: Validation failed: {e}")
                 if debug:
                     logging.debug(f"ADDRESS_VALIDATION [{device_serial}]: Full exception traceback: {traceback.format_exc()}")
@@ -9451,42 +9451,42 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         create_address_parse_failures_csv(parse_failures)
     
     # Enhanced results display
-    print(f"\n?? Data Integrity Analysis Results:")
-    print(f"   ? Total devices analyzed: {counters.total_devices}")
-    print(f"   ?? Devices with comparison data: {counters.devices_enriched}")
-    print(f"   ??  Devices excluded (not in comparison CSV): {counters.devices_skipped}")
-    print(f"   ?? Address conflicts found: {counters.mismatches_found}")
-    print(f"   ? Consistent addresses: {counters.perfect_matches}")
-    print(f"   ?? Auto-skipped addresses: {counters.auto_corrections}")
-    print(f"   ?? Parse failures: {counters.parse_failures}")
+    print(f"\n  Data Integrity Analysis Results:")
+    print(f"   Total devices analyzed: {counters.total_devices}")
+    print(f"   Devices with comparison data: {counters.devices_enriched}")
+    print(f"    Devices excluded (not in comparison CSV): {counters.devices_skipped}")
+    print(f"   Address conflicts found: {counters.mismatches_found}")
+    print(f"   Consistent addresses: {counters.perfect_matches}")
+    print(f"   Auto-skipped addresses: {counters.auto_corrections}")
+    print(f"   Parse failures: {counters.parse_failures}")
     
     if counters.mismatches_found > 0:
         conflict_rate = (counters.mismatches_found / counters.devices_enriched) * 100
-        print(f"   ? Conflict rate: {conflict_rate:.1f}% of analyzed devices have address discrepancies")
+        print(f"   Conflict rate: {conflict_rate:.1f}% of analyzed devices have address discrepancies")
     
     if counters.parse_failures > 0:
-        print(f"   ?? Parse failure breakdown:")
+        print(f"   Parse failure breakdown:")
         for reason, count in counters.parse_failure_reasons.items():
             print(f"      - {reason}: {count}")
     
     processing_rate = counters.total_devices / counters.get_duration() if counters.get_duration() > 0 else 0
-    print(f"   ??  Processing rate: {processing_rate:.1f} devices/second")
+    print(f"    Processing rate: {processing_rate:.1f} devices/second")
 
     # Log comprehensive summary
     counters.log_summary()
 
     if mismatched_items:
-        print(f"\n?? Data Integrity Conflicts (address discrepancies requiring review):")
+        print(f"\n  Data Integrity Conflicts (address discrepancies requiring review):")
         print("=" * 130)
         for idx, item in enumerate(mismatched_items[:10]):  # Show first 10
             mist_addr = f"{item.get('Mist_Address_Line_1', '')}, {item.get('Mist_City', '')}, {item.get('Mist_State', '')}"
             comp_addr = f"{item.get('Comparison_Address', '')}, {item.get('Comparison_City', '')}, {item.get('Comparison_State', '')}"
             print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15}")
-            print(f"     ?? Mist:       {mist_addr}")
-            print(f"     ?? Reference:  {comp_addr}")
-            print(f"     ?? Similarity: {item['Overall Similarity']:<6} | Type: {item['Mismatch Type']}")
+            print(f"     Mist:       {mist_addr}")
+            print(f"     Reference:  {comp_addr}")
+            print(f"     Similarity: {item['Overall Similarity']:<6} | Type: {item['Mismatch Type']}")
             if address_validation_enabled and item.get('Validation_Recommendation', 'N/A') != 'N/A':
-                print(f"     ?? Recommendation: {item['Validation_Recommendation']}")
+                print(f"     Recommendation: {item['Validation_Recommendation']}")
             print()
         
         if len(mismatched_items) > 10:
@@ -9517,22 +9517,22 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             
             print(f"! Data integrity report saved to: {output_file}")
             print(f"! Location: {get_csv_file_path(output_file)}")
-            print(f"\n?? Data Integrity Summary:")
-            print(f"   ?? Found {len(diff_report_items)} address conflicts requiring review")
+            print(f"\n  Data Integrity Summary:")
+            print(f"   Found {len(diff_report_items)} address conflicts requiring review")
             if address_validation_enabled:
-                print(f"   ?? External validation recommendations included")
-                print(f"   ?? Check 'Validation_Recommendation' column for guidance")
+                print(f"   External validation recommendations included")
+                print(f"   Check 'Validation_Recommendation' column for guidance")
             else:
-                print(f"   ??  No external validation performed")
-                print(f"   ?? Run with --address-check for intelligent recommendations")
+                print(f"    No external validation performed")
+                print(f"   Run with --address-check for intelligent recommendations")
             
             logging.info(f"Saved {len(diff_report_items)} address conflicts to {output_file}")
     else:
         total_good_addresses = counters.perfect_matches + counters.auto_corrections
         print(f"! Data integrity check complete! All {total_good_addresses} addresses are consistent.")
-        print(f"   ? No conflicts found between Mist and comparison data")
+        print(f"   No conflicts found between Mist and comparison data")
         if counters.auto_corrections > 0:
-            print(f"   ? {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
+            print(f"   {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
 
 def export_gateway_templates_to_csv():
     """
@@ -9551,8 +9551,8 @@ def export_gateway_templates_to_csv():
     templates = flatten_nested_fields_in_list(templates)
     templates = escape_multiline_strings_for_csv(templates)
     DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")
-    logging.info("? Gateway templates exported to OrgGatewayTemplates.csv")
-    print("? Gateway templates exported to OrgGatewayTemplates.csv")
+    logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
+    print(" Gateway templates exported to OrgGatewayTemplates.csv")
 
 def export_gateways_with_wan_overrides_to_csv(fast=False):
     """
@@ -9571,7 +9571,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     - Port name/number
     - Whether port is overridden from template (always "Yes" for filtered results)
     """
-    logging.info("?? Identifying gateway ports with template overrides (outliers for compliance correction)...")
+    logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
 
     # Ensure required CSVs are fresh
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
@@ -9601,7 +9601,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
 
     # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
-    logging.info("?? First pass: Identifying devices with port overrides...")
+    logging.info(" First pass: Identifying devices with port overrides...")
     devices_with_overrides = {}  # device_id -> (device_info, overridden_port_names)
     
     for row in configs:
@@ -9658,7 +9658,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     logging.info(f"! Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices")
     
     if not devices_with_overrides:
-        logging.info("?? No template overrides found - all gateways are compliant with their assigned templates!")
+        logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
         # Still create empty CSV file with proper headers
         output_file = "GatewayOverriddenPorts.csv"
         fieldnames = [
@@ -9672,14 +9672,14 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
         print(f"! Gateway override report written to {output_file}")
-        print("?? No template overrides found - all gateways are compliant with their assigned templates!")
+        print(" No template overrides found - all gateways are compliant with their assigned templates!")
         return
 
     # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
     logging.info(f"! Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides...")
     
     if fast and len(devices_with_overrides) > 5:  # Use connection pool management for fast mode with 5+ devices
-        logging.info("?? Using fast mode with connection pool management for device data fetching...")
+        logging.info(" Using fast mode with connection pool management for device data fetching...")
         
         # Define worker function for fetching device configs and stats
         def fetch_device_data(device_info, connection_semaphore):
@@ -9774,7 +9774,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
             device_data_cache[device_id] = (port_configs, interface_stats)
 
     # Third pass: Process only the overridden ports with their stats
-    logging.info("?? Third pass: Processing overridden ports with live data...")
+    logging.info(" Third pass: Processing overridden ports with live data...")
     for device_id, device_info in devices_with_overrides.items():
         device_name = device_info["device_name"]
         site_id = device_info["site_id"]
@@ -9869,20 +9869,20 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     print(f"! These are outliers that may need correction to match template configuration")
     
     if total_overridden_ports == 0:
-        print("?? No template overrides found - all gateways are compliant with their assigned templates!")
+        print(" No template overrides found - all gateways are compliant with their assigned templates!")
 
 def convert_virtual_chassis_to_virtual_mac():
     """
     Presents a list of sites first, then shows switches that are virtual chassis at the selected site,
     lets the user select one, and calls the Mist API to convert the device to a virtual MAC.
     """
-    print("\n?? DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
+    print("\n  DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
     print("=" * 60)
     
     # First, prompt for site selection
     site_id = prompt_site_selection()
     if not site_id:
-        print("? No site selected.")
+        print(" No site selected.")
         return
     
     # Get site name for display
@@ -9895,7 +9895,7 @@ def convert_virtual_chassis_to_virtual_mac():
     except Exception as e:
         logging.warning(f"Could not fetch site name for {site_id}: {e}")
     
-    print(f"\n?? Selected Site: {site_name} ({site_id})")
+    print(f"\n  Selected Site: {site_name} ({site_id})")
     
     # Ensure OrgInventory.csv is fresh
     check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
@@ -9913,12 +9913,12 @@ def convert_virtual_chassis_to_virtual_mac():
 
     if not switches:
         print(f"! No virtual chassis switches found at site '{site_name}'.")
-        print("?? Virtual chassis switches must have a device ID assigned.")
+        print(" Virtual chassis switches must have a device ID assigned.")
         logging.warning(f"No virtual chassis switches found at site {site_id}.")
         return
 
     # Display indexed list to user
-    print(f"\n?? Available Virtual Chassis Switches at '{site_name}':")
+    print(f"\n  Available Virtual Chassis Switches at '{site_name}':")
     print("-" * 80)
     index_to_device = {}
     name_to_device = {}
@@ -9938,18 +9938,18 @@ def convert_virtual_chassis_to_virtual_mac():
         selected = name_to_device.get(user_input)
 
     if not selected:
-        print("? Switch not found by index or name.")
+        print(" Switch not found by index or name.")
         logging.warning(f"Switch not found: {user_input}")
         return
 
     device_id = selected.get("id")
     if not device_id:
-        print("? Missing device_id for selected switch.")
+        print(" Missing device_id for selected switch.")
         logging.warning("Missing device_id for selected switch.")
         return
 
     # Confirmation prompt for destructive operation
-    print(f"\n??  DESTRUCTIVE OPERATION WARNING ??")
+    print(f"\n   DESTRUCTIVE OPERATION WARNING ")
     print(f"You are about to convert switch '{selected.get('name', '')}' to virtual MAC.")
     print(f"Site: {site_name}")
     print(f"Device ID: {device_id}")
@@ -9958,7 +9958,7 @@ def convert_virtual_chassis_to_virtual_mac():
     
     confirm = input("\nType 'CONVERT' to proceed or anything else to cancel: ").strip()
     if confirm != "CONVERT":
-        print("? Operation cancelled.")
+        print(" Operation cancelled.")
         return
 
     print(f"! Converting switch '{selected.get('name', '')}' (device_id: {device_id}) at site '{site_name}' to virtual MAC...")
@@ -9973,8 +9973,8 @@ def convert_virtual_chassis_to_virtual_mac():
             print(f"! Conversion failed: {resp.data['detail']}")
             logging.error(f"Conversion to virtual MAC failed for device {device_id} at site_id {site_id}. Detail: {resp.data['detail']}")
         else:
-            print("? Conversion to virtual MAC triggered successfully!")
-            print("?? Check the device status in the Mist UI to monitor progress.")
+            print(" Conversion to virtual MAC triggered successfully!")
+            print(" Check the device status in the Mist UI to monitor progress.")
             logging.info(f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(resp, 'data', '')}")
     except Exception as e:
         print(f"! Failed to convert to virtual MAC: {e}")
@@ -10064,7 +10064,7 @@ def convert_virtual_chassis_by_site_list():
             print(f"   - {site}")
 
     if not target_site_ids:
-        print("? No valid sites found. Exiting.")
+        print(" No valid sites found. Exiting.")
         logging.error("No valid sites found for VC conversion.")
         return
 
@@ -10089,12 +10089,12 @@ def convert_virtual_chassis_by_site_list():
         return
 
     if not switches_to_convert:
-        print("? No virtual chassis switches found in the specified sites.")
+        print(" No virtual chassis switches found in the specified sites.")
         logging.warning("No virtual chassis switches found in target sites.")
         return
 
     # Display switches that will be converted
-    print(f"\n?? Found {len(switches_to_convert)} virtual chassis switches to convert:")
+    print(f"\n  Found {len(switches_to_convert)} virtual chassis switches to convert:")
     print("=" * 100)
     for idx, switch in enumerate(switches_to_convert):
         print(f"[{idx+1:2}] Site: {switch.get('site_name', ''):25} | "
@@ -10104,18 +10104,18 @@ def convert_virtual_chassis_by_site_list():
               f"Serial: {switch.get('serial', '')}")
 
     # Ask for user confirmation
-    print(f"\n?? This will convert {len(switches_to_convert)} virtual chassis switches to virtual MAC.")
-    print("?? This operation cannot be undone easily.")
+    print(f"\n  This will convert {len(switches_to_convert)} virtual chassis switches to virtual MAC.")
+    print(" This operation cannot be undone easily.")
     
-    confirm = input("\n?? Do you want to proceed with the conversion? (yes/no): ").strip().lower()
+    confirm = input("\n  Do you want to proceed with the conversion? (yes/no): ").strip().lower()
     
     if confirm not in ['yes', 'y']:
-        print("? Conversion cancelled by user.")
+        print(" Conversion cancelled by user.")
         logging.info("Virtual chassis conversion cancelled by user.")
         return
 
     # Proceed with conversions
-    print(f"\n?? Starting conversion of {len(switches_to_convert)} switches...")
+    print(f"\n  Starting conversion of {len(switches_to_convert)} switches...")
     successful_conversions = 0
     failed_conversions = 0
 
@@ -10151,13 +10151,13 @@ def convert_virtual_chassis_by_site_list():
             failed_conversions += 1
 
     # Summary
-    print(f"\n?? Conversion Summary:")
-    print(f"   ? Successful conversions: {successful_conversions}")
-    print(f"   ? Failed conversions: {failed_conversions}")
-    print(f"   ?? Total switches processed: {len(switches_to_convert)}")
+    print(f"\n  Conversion Summary:")
+    print(f"   Successful conversions: {successful_conversions}")
+    print(f"   Failed conversions: {failed_conversions}")
+    print(f"   Total switches processed: {len(switches_to_convert)}")
     
     if successful_conversions > 0:
-        print(f"\n?? Note: Successful conversions may take a few minutes to complete.")
+        print(f"\n  Note: Successful conversions may take a few minutes to complete.")
         print(f"   Monitor the devices in the Mist portal to confirm the conversion status.")
     
     logging.info(f"Bulk VC conversion completed: {successful_conversions} successful, {failed_conversions} failed")
@@ -10175,10 +10175,10 @@ def check_virtual_chassis_conversion_status():
     4. Exports results to VirtualChassisConversionStatus.csv
     5. Displays summary statistics
     """
-    print("\n?? Virtual Chassis to Virtual MAC Conversion Status Check")
+    print("\n  Virtual Chassis to Virtual MAC Conversion Status Check")
     print("=" * 70)
-    print("?? Checking all switches for virtual chassis conversion status...")
-    print("?? Converted switches have vc_mac starting with '020003'")
+    print(" Checking all switches for virtual chassis conversion status...")
+    print(" Converted switches have vc_mac starting with '020003'")
     
     logging.info("Starting virtual chassis conversion status check...")
     
@@ -10202,8 +10202,8 @@ def check_virtual_chassis_conversion_status():
         return
     
     if not switches_with_vc_mac:
-        print("? No switches with vc_mac found in the organization.")
-        print("?? Only virtual chassis switches have vc_mac assigned.")
+        print(" No switches with vc_mac found in the organization.")
+        print(" Only virtual chassis switches have vc_mac assigned.")
         logging.warning("No switches with vc_mac found.")
         return
     
@@ -10250,20 +10250,20 @@ def check_virtual_chassis_conversion_status():
     converted_count = len(converted_switches)
     not_converted_count = len(not_converted_switches)
     
-    print(f"\n?? Virtual Chassis Conversion Status Summary:")
-    print(f"   ?? Total virtual chassis switches: {total_switches}")
-    print(f"   ? Converted to virtual MAC: {converted_count}")
-    print(f"   ? Not converted: {not_converted_count}")
+    print(f"\n  Virtual Chassis Conversion Status Summary:")
+    print(f"   Total virtual chassis switches: {total_switches}")
+    print(f"   Converted to virtual MAC: {converted_count}")
+    print(f"   Not converted: {not_converted_count}")
     
     if converted_count > 0:
-        print(f"\n? Converted Switches (vc_mac starts with '020003'):")
+        print(f"\n Converted Switches (vc_mac starts with '020003'):")
         for switch in converted_switches[:10]:  # Show first 10
             print(f"   � {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
         if len(converted_switches) > 10:
             print(f"   ... and {len(converted_switches) - 10} more")
     
     if not_converted_count > 0:
-        print(f"\n? Not Converted Switches (vc_mac does NOT start with '020003'):")
+        print(f"\n Not Converted Switches (vc_mac does NOT start with '020003'):")
         for switch in not_converted_switches[:10]:  # Show first 10
             print(f"   � {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
         if len(not_converted_switches) > 10:
@@ -10279,8 +10279,8 @@ def check_virtual_chassis_conversion_status():
         filename = "VirtualChassisConversionStatus.csv"
         DataExporter.save_data_to_output(sanitized_switches, filename)
         
-        print(f"\n?? Results exported to: {filename}")
-        print(f"   ?? Location: {get_csv_file_path(filename)}")
+        print(f"\n  Results exported to: {filename}")
+        print(f"   Location: {get_csv_file_path(filename)}")
         
         # Log results
         logging.info(f"Virtual chassis conversion status check completed:")
@@ -10293,7 +10293,7 @@ def check_virtual_chassis_conversion_status():
         print(f"! Error exporting results: {e}")
         logging.error(f"Error exporting conversion status results: {e}")
     
-    print(f"\n?? Usage Notes:")
+    print(f"\n  Usage Notes:")
     print(f"   � Use option 92 to convert individual switches")
     print(f"   � Use option 93 for bulk conversion by site list")
     print(f"   � Virtual chassis switches without '020003' vc_mac prefix can be converted")
@@ -10319,8 +10319,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
     if not site_id:
         site_id = prompt_select_site_id_from_csv("SiteList.csv")
         if not site_id:
-            logging.error("? No site selected.")
-            print("? No site selected.")
+            logging.error(" No site selected.")
+            print(" No site selected.")
             return
     
     # Get site name for display
@@ -10351,8 +10351,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
         sessions = mistapi.get_all(response=session_response, mist_session=apisession)
         
         if not clients and not sessions:
-            logging.warning("?? No WiFi clients or sessions found at this site.")
-            print("?? No WiFi clients or sessions found at this site.")
+            logging.warning(" No WiFi clients or sessions found at this site.")
+            print(" No WiFi clients or sessions found at this site.")
             # Create empty CSV with headers
             wifi_clients_path = get_csv_file_path("SiteWiFiClients.CSV")
             with open(wifi_clients_path, "w", newline="", encoding="utf-8") as f:
@@ -10430,8 +10430,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
                     enriched_clients.append(session_data)
         
         if not enriched_clients:
-            logging.warning("?? No data to export after processing.")
-            print("?? No data to export after processing.")
+            logging.warning(" No data to export after processing.")
+            print(" No data to export after processing.")
             return
         
         # Flatten and sanitize the data for CSV
@@ -10447,7 +10447,7 @@ def export_site_wifi_clients_to_csv(site_id=None):
         
         logging.info(f"! WiFi data exported to SiteWiFiClients.CSV ({client_count} clients, {session_count} sessions, {total_records} total records)")
         print(f"! WiFi data exported to SiteWiFiClients.CSV")
-        print(f"   ?? {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}")
+        print(f"   {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}")
         
     except Exception as e:
         logging.error(f"! Failed to fetch WiFi data for site {site_id}: {e}")
@@ -10464,8 +10464,8 @@ def reboot_devices_by_gateway_template_list():
     # Step 1: Check if the reboot list file exists
     reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
     if not os.path.exists(reboot_list_path):
-        logging.error("? GatewayTemplateRebootList.CSV not found.")
-        print("? GatewayTemplateRebootList.CSV not found.")
+        logging.error(" GatewayTemplateRebootList.CSV not found.")
+        print(" GatewayTemplateRebootList.CSV not found.")
         print(f"   Please create this file at: {reboot_list_path}")
         print("   This file should contain template names to reboot, one per line.")
         
@@ -10504,8 +10504,8 @@ def reboot_devices_by_gateway_template_list():
         return
 
     if not template_name_to_id:
-        logging.warning("?? No gateway templates found in OrgGatewayTemplates.csv")
-        print("?? No gateway templates found in OrgGatewayTemplates.csv")
+        logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")
+        print(" No gateway templates found in OrgGatewayTemplates.csv")
         return
 
     # Step 4: Load reboot list of template names
@@ -10534,8 +10534,8 @@ def reboot_devices_by_gateway_template_list():
             print(f"! Template '{name}' not found in available templates")
 
     if not reboot_template_ids:
-        logging.error("? No matching template IDs found for reboot")
-        print("? No matching template IDs found for reboot")
+        logging.error(" No matching template IDs found for reboot")
+        print(" No matching template IDs found for reboot")
         print("Available templates:")
         for name, tid in template_name_to_id.items():
             print(f"  - {name} ({tid})")
@@ -10567,8 +10567,8 @@ def reboot_devices_by_gateway_template_list():
         return
 
     if not sites_using_templates:
-        logging.warning("?? No sites found using the specified gateway templates")
-        print("?? No sites found using the specified gateway templates")
+        logging.warning(" No sites found using the specified gateway templates")
+        print(" No sites found using the specified gateway templates")
         return
 
     logging.info(f"Found {len(sites_using_templates)} sites using target templates: {sites_using_templates}")
@@ -10606,8 +10606,8 @@ def reboot_devices_by_gateway_template_list():
         return
 
     if not reboot_targets:
-        logging.warning("?? No gateway devices found in sites using the specified templates")
-        print("?? No gateway devices found in sites using the specified templates")
+        logging.warning(" No gateway devices found in sites using the specified templates")
+        print(" No gateway devices found in sites using the specified templates")
         
         # Provide debug information
         logging.info(f"Sites using target templates: {sites_using_templates}")
@@ -10639,9 +10639,9 @@ def reboot_devices_by_gateway_template_list():
     
     # Step 8: Display devices and get user confirmation
     print("\n" + "=" * 100)
-    print("?? DEVICE REBOOT CONFIRMATION REQUIRED ??")
+    print(" DEVICE REBOOT CONFIRMATION REQUIRED ")
     print("=" * 100)
-    print(f"\n?? The following {len(reboot_targets)} gateway devices will be REBOOTED:")
+    print(f"\n  The following {len(reboot_targets)} gateway devices will be REBOOTED:")
     print("-" * 100)
     
     # Group devices by template for better display
@@ -10654,14 +10654,14 @@ def reboot_devices_by_gateway_template_list():
     
     # Display devices grouped by template
     for template_name, devices in devices_by_template.items():
-        print(f"\n?? Template: {template_name}")
-        print(f"   ?? {len(devices)} devices affected:")
+        print(f"\n  Template: {template_name}")
+        print(f"   {len(devices)} devices affected:")
         for device in devices:
             print(f"      � {device['device_name']} (ID: {device['device_id']}) at site '{device['site_name']}'")
     
     # Display critical warnings in a cleaner format
     warning_lines = [
-        "?? CRITICAL WARNING - READ CAREFULLY:",
+        " CRITICAL WARNING - READ CAREFULLY:",
         "� This action will REBOOT network gateway devices",
         "� Network connectivity will be TEMPORARILY LOST during reboot",
         "� Users may experience service interruptions",
@@ -10677,31 +10677,31 @@ def reboot_devices_by_gateway_template_list():
         print(line)
     print("??" * 50)
     
-    print(f"\n?? Summary:")
+    print(f"\n  Summary:")
     print(f"   � Total devices to reboot: {len(reboot_targets)}")
     print(f"   � Templates involved: {len(devices_by_template)}")
     print(f"   � Sites affected: {len(set(target['site_name'] for target in reboot_targets))}")
     
     # Get user confirmation with liability waiver
-    print(f"\n?? Do you want to proceed with rebooting {len(reboot_targets)} gateway devices?")
+    print(f"\n  Do you want to proceed with rebooting {len(reboot_targets)} gateway devices?")
     print("   Type 'REBOOT' (all caps) to confirm, or anything else to cancel:")
     print("   By typing 'REBOOT', you acknowledge and accept all risks and liability.")
     
     try:
         user_input = input(">>> ").strip()
         if user_input != "REBOOT":
-            print("? Reboot operation cancelled by user.")
+            print(" Reboot operation cancelled by user.")
             logging.info("Gateway reboot operation cancelled by user input")
             return
         else:
-            print("? User confirmed reboot operation. Proceeding...")
+            print(" User confirmed reboot operation. Proceeding...")
             logging.info(f"! LIABILITY WAIVER ACCEPTED: User confirmed gateway reboot operation for {len(reboot_targets)} devices")
             logging.info(f"User input: '{user_input}' - User accepts full responsibility and liability for network disruption")
             # Log detailed device list for audit trail
             device_list = [f"{d['device_name']} ({d['device_id']}) at {d['site_name']}" for d in reboot_targets]
             logging.info(f"Devices to be rebooted: {device_list}")
     except KeyboardInterrupt:
-        print("\n? Reboot operation cancelled by user (Ctrl+C).")
+        print("\n Reboot operation cancelled by user (Ctrl+C).")
         logging.info("Gateway reboot operation cancelled by user interrupt")
         return
     except Exception as e:
@@ -10709,7 +10709,7 @@ def reboot_devices_by_gateway_template_list():
         logging.error(f"Error getting user input for reboot confirmation: {e}")
         return
 
-    print("\n?? Starting device reboot operations...")
+    print("\n  Starting device reboot operations...")
     print("=" * 50)
 
     # Step 9: Reboot each device and log results
@@ -10735,11 +10735,11 @@ def reboot_devices_by_gateway_template_list():
                 status = f"SUCCESS - HTTP {resp.status_code}"
             else:
                 status = f"SUCCESS - Response: {str(resp)}"
-            print(f"   ? Reboot command sent successfully")
+            print(f"   Reboot command sent successfully")
             logging.info(f"! Reboot command sent for '{device['device_name']}': {status}")
         except Exception as e:
             status = f"ERROR: {e}"
-            print(f"   ? Failed to send reboot command: {e}")
+            print(f"   Failed to send reboot command: {e}")
             logging.error(f"! Failed to reboot '{device['device_name']}': {e}")
 
         results.append({
@@ -10761,9 +10761,9 @@ def reboot_devices_by_gateway_template_list():
             writer.writeheader()
             writer.writerows(results)
         
-        print(f"\n?? Operation completed!")
-        print(f"   ? Reboot commands sent to {len(results)} devices")
-        print(f"   ?? Results logged to GatewayTemplateRebootResults.CSV")
+        print(f"\n  Operation completed!")
+        print(f"   Reboot commands sent to {len(results)} devices")
+        print(f"   Results logged to GatewayTemplateRebootResults.CSV")
         logging.info(f"! Reboot results written to GatewayTemplateRebootResults.CSV ({len(results)} entries)")
     except Exception as e:
         logging.error(f"! Failed to write results to CSV: {e}")
@@ -10796,11 +10796,11 @@ def check_firmware_upgrade_status():
     org_id = get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
     
-    print("?? Firmware Upgrade Status Check")
+    print(" Firmware Upgrade Status Check")
     print("=" * 60)
     
     # Step 1: Choose scope (organization-wide or specific site)
-    print("\n?? Select status check scope:")
+    print("\n  Select status check scope:")
     print("   [1] Organization-wide status (all sites and devices)")
     print("   [2] Specific site status")
     print("   [3] Active upgrade operations only")
@@ -10813,10 +10813,10 @@ def check_firmware_upgrade_status():
                 logging.debug(f"User selected scope: {scope_choice}")
                 break
             else:
-                print("? Invalid selection. Please choose 1-4.")
+                print(" Invalid selection. Please choose 1-4.")
                 logging.debug(f"Invalid scope selection: {scope_choice}")
         except KeyboardInterrupt:
-            print("\n? Operation cancelled by user.")
+            print("\n Operation cancelled by user.")
             return
     
     site_filter = None
@@ -10825,13 +10825,13 @@ def check_firmware_upgrade_status():
         logging.debug("User selected specific site mode")
         site_filter = prompt_site_selection()
         if not site_filter:
-            print("? No site selected. Exiting.")
+            print(" No site selected. Exiting.")
             logging.warning("No site selected in specific site mode")
             return
         logging.debug(f"Selected site filter: {site_filter}")
     
     # Step 2: Fetch device statistics to get current firmware status
-    print(f"\n?? Fetching device statistics...")
+    print(f"\n  Fetching device statistics...")
     logging.debug(f"Fetching device statistics with scope: {scope_choice}, site_filter: {site_filter}")
     all_device_stats = []
     upgrade_results = []
@@ -10839,7 +10839,7 @@ def check_firmware_upgrade_status():
     try:
         if site_filter:
             # Single site mode
-            print(f"   ?? Fetching stats for selected site...")
+            print(f"   Fetching stats for selected site...")
             logging.debug(f"Fetching stats for single site: {site_filter}")
             stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
                 apisession, 
@@ -10849,11 +10849,11 @@ def check_firmware_upgrade_status():
             site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
             all_device_stats.extend(site_stats)
             
-            print(f"   ? Retrieved stats for {len(site_stats)} devices at selected site")
+            print(f"   Retrieved stats for {len(site_stats)} devices at selected site")
             logging.info(f"Retrieved stats for {len(site_stats)} devices at site {site_filter}")
         else:
             # Organization-wide mode
-            print(f"   ?? Fetching organization-wide device statistics...")
+            print(f"   Fetching organization-wide device statistics...")
             logging.debug(f"Fetching organization-wide stats for org: {org_id}")
             stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
                 apisession, 
@@ -10863,7 +10863,7 @@ def check_firmware_upgrade_status():
             org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
             all_device_stats.extend(org_stats)
             
-            print(f"   ? Retrieved stats for {len(org_stats)} devices organization-wide")
+            print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")
             logging.info(f"Retrieved stats for {len(org_stats)} devices organization-wide")
             
     except Exception as e:
@@ -10872,11 +10872,11 @@ def check_firmware_upgrade_status():
         return
     
     if not all_device_stats:
-        print("?? No device statistics found.")
+        print(" No device statistics found.")
         return
     
     # Step 3: Process device firmware status
-    print(f"\n?? Analyzing firmware status for {len(all_device_stats)} devices...")
+    print(f"\n  Analyzing firmware status for {len(all_device_stats)} devices...")
     
     firmware_status_summary = {
         'total_devices': 0,
@@ -10891,7 +10891,7 @@ def check_firmware_upgrade_status():
     }
     
     # Get site information for enrichment
-    print(f"   ?? Fetching site information for device enrichment...")
+    print(f"   Fetching site information for device enrichment...")
     try:
         sites_resp = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         all_sites = mistapi.get_all(response=sites_resp, mist_session=apisession)
@@ -11004,7 +11004,7 @@ def check_firmware_upgrade_status():
             })
     
     # Step 4: Display summary statistics
-    print(f"\n?? Firmware Status Summary:")
+    print(f"\n  Firmware Status Summary:")
     print(f"   � Total devices analyzed: {firmware_status_summary['total_devices']}")
     print(f"   � Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
     print(f"   � Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
@@ -11013,11 +11013,11 @@ def check_firmware_upgrade_status():
     print(f"   � Unknown status: {firmware_status_summary['upgrade_unknown']}")
     
     if firmware_status_summary['devices_by_status']:
-        print(f"\n?? Status Distribution:")
+        print(f"\n  Status Distribution:")
         for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
             print(f"   � {status}: {count} devices")
     
-    print(f"\n?? Version Distribution:")
+    print(f"\n  Version Distribution:")
     sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
                            key=lambda x: x[1], reverse=True)
     for version, count in sorted_versions[:10]:  # Show top 10 versions
@@ -11025,7 +11025,7 @@ def check_firmware_upgrade_status():
     if len(sorted_versions) > 10:
         print(f"   ... and {len(sorted_versions) - 10} more versions")
     
-    print(f"\n?? Model Distribution:")
+    print(f"\n  Model Distribution:")
     sorted_models = sorted(firmware_status_summary['devices_by_model'].items(), 
                           key=lambda x: x[1], reverse=True)
     for model, count in sorted_models[:10]:  # Show top 10 models
@@ -11034,7 +11034,7 @@ def check_firmware_upgrade_status():
         print(f"   ... and {len(sorted_models) - 10} more models")
     
     # Step 5: Check for active upgrade operations
-    print(f"\n?? Checking for active upgrade operations...")
+    print(f"\n  Checking for active upgrade operations...")
     active_upgrades = []
     
     # Check stored upgrade IDs from option 90
@@ -11047,12 +11047,12 @@ def check_firmware_upgrade_status():
                 stored_upgrades = json.load(f)
             
             if stored_upgrades:
-                print(f"   ?? Found {len(stored_upgrades)} stored upgrade operations from ActiveUpgrades.json")
+                print(f"   Found {len(stored_upgrades)} stored upgrade operations from ActiveUpgrades.json")
                 
                 # Filter to current org_id
                 org_upgrades = [u for u in stored_upgrades if u.get('org_id') == org_id]
                 if org_upgrades:
-                    print(f"   ?? {len(org_upgrades)} upgrades match current organization")
+                    print(f"   {len(org_upgrades)} upgrades match current organization")
                     
                     # Check status of each stored upgrade
                     for upgrade_record in org_upgrades:
@@ -11073,7 +11073,7 @@ def check_firmware_upgrade_status():
                                     strategy = upgrade_details.get('strategy', 'Unknown')
                                     target_version = upgrade_details.get('target_version', 'Unknown')
                                     
-                                    print(f"      ? Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {status}")
+                                    print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {status}")
                                     
                                     active_upgrades.append({
                                         'upgrade_id': upgrade_id,
@@ -11086,22 +11086,22 @@ def check_firmware_upgrade_status():
                                         'details': upgrade_details
                                     })
                                 else:
-                                    print(f"      ?? Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active or not found")
+                                    print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active or not found")
                                     
                             except Exception as e:
-                                print(f"      ? Failed to check upgrade {upgrade_id[:8]}... at site '{site_name}': {e}")
+                                print(f"      Failed to check upgrade {upgrade_id[:8]}... at site '{site_name}': {e}")
                                 logging.warning(f"Failed to check stored upgrade {upgrade_id}: {e}")
                 else:
-                    print(f"   ?? No stored upgrades match current organization ID")
+                    print(f"   No stored upgrades match current organization ID")
         except Exception as e:
-            print(f"   ?? Failed to read stored upgrade tracking data: {e}")
+            print(f"   Failed to read stored upgrade tracking data: {e}")
             logging.warning(f"Failed to read stored upgrade tracking: {e}")
     else:
-        print(f"   ? No stored upgrade tracking file found (ActiveUpgrades.json)")
+        print(f"   No stored upgrade tracking file found (ActiveUpgrades.json)")
     
     # Check organization audit logs for recent upgrade events
     try:
-        print(f"   ?? Searching organization audit logs for recent upgrade events...")
+        print(f"   Searching organization audit logs for recent upgrade events...")
         
         # Search for upgrade-related audit events in the last 24 hours
         end_time = int(time.time())
@@ -11125,7 +11125,7 @@ def check_firmware_upgrade_status():
                     upgrade_events.append(log_entry)
             
             if upgrade_events:
-                print(f"      ? Found {len(upgrade_events)} upgrade-related audit events in last 24 hours")
+                print(f"      Found {len(upgrade_events)} upgrade-related audit events in last 24 hours")
                 
                 # Show recent upgrade events
                 for event in upgrade_events[-5:]:  # Show last 5 events
@@ -11141,17 +11141,17 @@ def check_firmware_upgrade_status():
                     
                     print(f"         � {event_time} | {admin_name} | {site_name}: {message}")
             else:
-                print(f"      ?? No upgrade-related events found in recent audit logs")
+                print(f"      No upgrade-related events found in recent audit logs")
         else:
-            print(f"      ?? No audit logs retrieved for the last 24 hours")
+            print(f"      No audit logs retrieved for the last 24 hours")
             
     except Exception as e:
-        print(f"   ?? Failed to search organization audit logs: {e}")
+        print(f"   Failed to search organization audit logs: {e}")
         logging.warning(f"Failed to search org audit logs for upgrades: {e}")
     
     # Check organization-level device events for upgrade activity
     try:
-        print(f"   ?? Searching organization device events for upgrade activity...")
+        print(f"   Searching organization device events for upgrade activity...")
         
         # Search for device upgrade events
         device_events_resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
@@ -11166,7 +11166,7 @@ def check_firmware_upgrade_status():
         device_events = mistapi.get_all(response=device_events_resp, mist_session=apisession)
         
         if device_events:
-            print(f"      ? Found {len(device_events)} device upgrade events in last 24 hours")
+            print(f"      Found {len(device_events)} device upgrade events in last 24 hours")
             
             # Group events by type
             events_by_type = {}
@@ -11192,16 +11192,16 @@ def check_firmware_upgrade_status():
                     
                     print(f"           - {event_time} | {device_name} at {site_name}")
         else:
-            print(f"      ?? No device upgrade events found in last 24 hours")
+            print(f"      No device upgrade events found in last 24 hours")
             
     except Exception as e:
-        print(f"   ?? Failed to search device upgrade events: {e}")
+        print(f"   Failed to search device upgrade events: {e}")
         logging.warning(f"Failed to search device upgrade events: {e}")
     
     # Check organization-level upgrades if not filtering by site (legacy approach)
     if not site_filter and not active_upgrades:
         try:
-            print(f"   ?? Note: Organization-level upgrade tracking requires specific upgrade IDs")
+            print(f"   Note: Organization-level upgrade tracking requires specific upgrade IDs")
             print(f"        � Use the stored upgrade tracking above for ongoing operations")
             print(f"        � Or check individual sites below for comprehensive status")
         except Exception as e:
@@ -11213,13 +11213,13 @@ def check_firmware_upgrade_status():
     for site_id in sites_to_check[:5]:  # Limit to first 5 sites for performance
         try:
             site_name = site_lookup.get(site_id, 'Unknown')
-            print(f"   ?? Checking site '{site_name}' for active upgrades...")
+            print(f"   Checking site '{site_name}' for active upgrades...")
             
             upgrades_resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
             site_upgrades = mistapi.get_all(response=upgrades_resp, mist_session=apisession)
             
             if site_upgrades:
-                print(f"      ? Found {len(site_upgrades)} upgrade operations")
+                print(f"      Found {len(site_upgrades)} upgrade operations")
                 for upgrade in site_upgrades:
                     upgrade_id = upgrade.get('id', 'Unknown')
                     upgrade_status = upgrade.get('status', 'Unknown')
@@ -11256,10 +11256,10 @@ def check_firmware_upgrade_status():
                         'timestamp': datetime.now(timezone.utc).isoformat()
                     })
             else:
-                print(f"      ?? No upgrade operations found")
+                print(f"      No upgrade operations found")
                 
         except Exception as e:
-            print(f"      ? Failed to check upgrades for site {site_id}: {e}")
+            print(f"      Failed to check upgrades for site {site_id}: {e}")
             logging.warning(f"Failed to check upgrades for site {site_id}: {e}")
     
     # Step 6: Export results to CSV
@@ -11274,8 +11274,8 @@ def check_firmware_upgrade_status():
         
         try:
             DataExporter.save_data_to_output(upgrade_results, device_status_file)
-            print(f"\n✅ Device firmware status exported to: data/{device_status_file}")
-            print(f"   📊 {len(upgrade_results)} device records exported")
+            print(f"\n[SUCCESS] Device firmware status exported to: data/{device_status_file}")
+            print(f"   [DATA] {len(upgrade_results)} device records exported")
             logging.info(f"Exported {len(upgrade_results)} device firmware status records to data/{device_status_file}")
             
         except Exception as e:
@@ -11340,7 +11340,7 @@ def check_firmware_upgrade_status():
                 writer.writerows(mapped_upgrades)
             
             print(f"! Active upgrade operations exported to: {upgrade_ops_file}")
-            print(f"   ?? {len(active_upgrades)} upgrade operations exported")
+            print(f"   {len(active_upgrades)} upgrade operations exported")
             logging.info(f"Exported {len(active_upgrades)} active upgrade operations to {upgrade_ops_file}")
             
         except Exception as e:
@@ -11348,27 +11348,27 @@ def check_firmware_upgrade_status():
             logging.error(f"Failed to export upgrade operations: {e}")
     
     # Step 7: Summary and recommendations
-    print(f"\n?? Summary and Recommendations:")
+    print(f"\n  Summary and Recommendations:")
     
     if firmware_status_summary['upgrade_failed'] > 0:
-        print(f"   ?? {firmware_status_summary['upgrade_failed']} devices have failed upgrades")
-        print(f"   ?? Check failed devices for retry eligibility or manual intervention")
+        print(f"   {firmware_status_summary['upgrade_failed']} devices have failed upgrades")
+        print(f"   Check failed devices for retry eligibility or manual intervention")
     
     if firmware_status_summary['upgrade_in_progress'] > 0:
-        print(f"   ?? {firmware_status_summary['upgrade_in_progress']} devices currently upgrading")
-        print(f"   ?? Monitor progress and avoid disrupting these devices")
+        print(f"   {firmware_status_summary['upgrade_in_progress']} devices currently upgrading")
+        print(f"   Monitor progress and avoid disrupting these devices")
     
     if len(firmware_status_summary['devices_by_version']) > 3:
-        print(f"   ?? Multiple firmware versions detected ({len(firmware_status_summary['devices_by_version'])} different versions)")
-        print(f"   ?? Consider standardizing on a consistent firmware version")
+        print(f"   Multiple firmware versions detected ({len(firmware_status_summary['devices_by_version'])} different versions)")
+        print(f"   Consider standardizing on a consistent firmware version")
     
     if active_upgrades:
-        print(f"   ?? {len(active_upgrades)} active upgrade operations found")
-        print(f"   ?? Monitor upgrade progress in exported CSV files")
+        print(f"   {len(active_upgrades)} active upgrade operations found")
+        print(f"   Monitor upgrade progress in exported CSV files")
     else:
-        print(f"   ? No active upgrade operations detected")
+        print(f"   No active upgrade operations detected")
     
-    print(f"\n?? Status check complete. Check exported CSV files for detailed analysis.")
+    print(f"\n  Status check complete. Check exported CSV files for detailed analysis.")
     logging.info("Firmware upgrade status check completed successfully")
 
 
@@ -11382,7 +11382,7 @@ def get_auto_upgrade_time_settings():
     # Time of day configuration
     while True:
         try:
-            print(f"   ?? Enter upgrade time (24-hour format, e.g., 02:00, 14:30):")
+            print(f"   Enter upgrade time (24-hour format, e.g., 02:00, 14:30):")
             time_input = input("   Time of day (default=02:00): ").strip() or "02:00"
             
             # Validate time format
@@ -11390,18 +11390,18 @@ def get_auto_upgrade_time_settings():
                 # Try to parse the time to validate format
                 datetime.strptime(time_input, "%H:%M")
                 time_settings["time_of_day"] = time_input
-                print(f"   ? Upgrade time set to: {time_input}")
+                print(f"   Upgrade time set to: {time_input}")
                 break
             except ValueError:
-                print(f"   ? Invalid time format. Please use HH:MM (24-hour format)")
+                print(f"   Invalid time format. Please use HH:MM (24-hour format)")
                 
         except KeyboardInterrupt:
-            print("\n   ? Time configuration cancelled")
+            print("\n   Time configuration cancelled")
             time_settings["time_of_day"] = "02:00"  # Default fallback
             break
     
     # Day of week configuration
-    print(f"\n   ?? Select upgrade schedule:")
+    print(f"\n   Select upgrade schedule:")
     print(f"      [1] Every day (recommended for most environments)")
     print(f"      [2] Specific day of week")
     
@@ -11420,7 +11420,7 @@ def get_auto_upgrade_time_settings():
                 "7": ("sat", "Saturday")
             }
             
-            print(f"   ?? Select day of week:")
+            print(f"   Select day of week:")
             for key, (day_value, day_name) in days.items():
                 print(f"      [{key}] {day_name}")
             
@@ -11428,16 +11428,16 @@ def get_auto_upgrade_time_settings():
             if day_choice in days:
                 day_value, day_name = days[day_choice]
                 time_settings["day_of_week"] = day_value
-                print(f"   ? Upgrade day set to: {day_name}")
+                print(f"   Upgrade day set to: {day_name}")
             else:
-                print(f"   ?? Invalid selection, defaulting to every day")
+                print(f"   Invalid selection, defaulting to every day")
                 # Don't set day_of_week (None means every day)
         else:
             # Every day (don't set day_of_week)
-            print(f"   ? Upgrade schedule: Every day at {time_settings.get('time_of_day', '02:00')}")
+            print(f"   Upgrade schedule: Every day at {time_settings.get('time_of_day', '02:00')}")
             
     except KeyboardInterrupt:
-        print("\n   ? Schedule configuration cancelled, defaulting to every day")
+        print("\n   Schedule configuration cancelled, defaulting to every day")
     
     return time_settings
 
@@ -11484,7 +11484,7 @@ def bulk_upgrade_ap_firmware_by_site():
         logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file_path)}")
         
         # First, get all sites in the organization for reverse lookup
-        print(f"   ?? Fetching organization sites for name-to-ID lookup...")
+        print(f"   Fetching organization sites for name-to-ID lookup...")
         logging.debug("Fetching organization sites for name-to-ID mapping")
         try:
             response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
@@ -11523,7 +11523,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 logging.error(f"No site names found in {bulk_upgrade_file}")
                 return
             
-            print(f"   ?? Read {len(site_names)} site names from file")
+            print(f"   Read {len(site_names)} site names from file")
             logging.info(f"Read {len(site_names)} site names from file: {site_names}")
             
             # Resolve site names to site IDs
@@ -11544,10 +11544,10 @@ def bulk_upgrade_ap_firmware_by_site():
             
             # Report results
             if missing_sites:
-                print(f"   ?? Warning: {len(missing_sites)} site(s) not found in organization:")
+                print(f"   Warning: {len(missing_sites)} site(s) not found in organization:")
                 for missing_site in missing_sites:
                     print(f"      � '{missing_site}'")
-                print(f"   ?? Available sites in organization:")
+                print(f"   Available sites in organization:")
                 available_names = sorted(site_name_to_id.keys())
                 for name in available_names[:10]:  # Show first 10 as examples
                     print(f"      � '{name}'")
@@ -11571,15 +11571,15 @@ def bulk_upgrade_ap_firmware_by_site():
             return
     else:
         print(f"! {bulk_upgrade_file} not found - Single site mode")
-        print(f"   ?? To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
-        print(f"   ?? File format: one site name per line (no header)")
+        print(f"   To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
+        print(f"   File format: one site name per line (no header)")
         logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
         
         # Single site selection (existing behavior)
         site_id = prompt_site_selection()
         if not site_id:
             logging.error("No site selected. Exiting.")
-            print("? No site selected. Exiting.")
+            print(" No site selected. Exiting.")
             return
         
         # Get site name for display
@@ -11602,7 +11602,7 @@ def bulk_upgrade_ap_firmware_by_site():
     all_aps = []
     all_sites_aps = {}  # Track APs per site
     
-    print(f"\n?? Fetching APs across {len(sites_to_upgrade)} site(s)...")
+    print(f"\n  Fetching APs across {len(sites_to_upgrade)} site(s)...")
     logging.debug(f"Starting AP discovery across {len(sites_to_upgrade)} sites")
     
     for site_info in sites_to_upgrade:
@@ -11610,7 +11610,7 @@ def bulk_upgrade_ap_firmware_by_site():
         site_name = site_info['name']
         
         try:
-            print(f"   ?? Fetching APs at site '{site_name}'...")
+            print(f"   Fetching APs at site '{site_name}'...")
             logging.debug(f"Fetching APs for site: {site_name} (ID: {site_id})")
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
             site_aps = mistapi.get_all(response=response, mist_session=apisession)
@@ -11628,11 +11628,11 @@ def bulk_upgrade_ap_firmware_by_site():
                     'count': len(site_aps)
                 }
                 
-                print(f"      ? Found {len(site_aps)} APs at '{site_name}'")
+                print(f"      Found {len(site_aps)} APs at '{site_name}'")
                 logging.info(f"Found {len(site_aps)} APs at site {site_name} (ID: {site_id})")
                 logging.debug(f"AP models at {site_name}: {list(set(ap.get('model', 'Unknown') for ap in site_aps))}")
             else:
-                print(f"      ?? No APs found at site '{site_name}'")
+                print(f"      No APs found at site '{site_name}'")
                 logging.warning(f"No APs found at site {site_name} (ID: {site_id})")
                 all_sites_aps[site_id] = {
                     'name': site_name,
@@ -11641,7 +11641,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 }
                 
         except Exception as e:
-            print(f"      ? Failed to fetch APs for site '{site_name}': {e}")
+            print(f"      Failed to fetch APs for site '{site_name}': {e}")
             logging.error(f"Failed to fetch APs for site {site_id} ({site_name}): {e}")
             all_sites_aps[site_id] = {
                 'name': site_name,
@@ -11651,14 +11651,14 @@ def bulk_upgrade_ap_firmware_by_site():
             }
     
     if not all_aps:
-        print("? No APs found across any selected sites.")
+        print(" No APs found across any selected sites.")
         logging.warning("No APs found across any selected sites")
         return
     
     total_aps = len(all_aps)
     sites_with_aps = len([s for s in all_sites_aps.values() if s['count'] > 0])
     
-    print(f"\n?? AP Discovery Summary:")
+    print(f"\n  AP Discovery Summary:")
     print(f"   � Total APs found: {total_aps}")
     print(f"   � Sites with APs: {sites_with_aps}/{len(sites_to_upgrade)}")
     
@@ -11691,7 +11691,7 @@ def bulk_upgrade_ap_firmware_by_site():
     aps_by_model = {}
     ap_versions = {}  # Cache for AP versions {device_id: version}
     
-    print(f"\n?? Getting current firmware versions from device statistics...")
+    print(f"\n  Getting current firmware versions from device statistics...")
     
     # For multi-site upgrades, we need to fetch stats per site
     all_ap_stats = []
@@ -11704,7 +11704,7 @@ def bulk_upgrade_ap_firmware_by_site():
         site_name = site_data['name']
         site_aps = site_data['aps']
         
-        print(f"   ?? Fetching device statistics for {len(site_aps)} APs at '{site_name}'...")
+        print(f"   Fetching device statistics for {len(site_aps)} APs at '{site_name}'...")
         
         try:
             stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
@@ -11730,7 +11730,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 
         except Exception as e:
             logging.error(f"Failed to fetch bulk device stats for site {site_name}: {e}")
-            print(f"   ? Failed to fetch stats for site '{site_name}': {e}")
+            print(f"   Failed to fetch stats for site '{site_name}': {e}")
             # Continue with other sites
     
     if all_ap_stats:
@@ -11751,7 +11751,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 logging.debug("No version fields found in bulk stats data")
     else:
         logging.warning("No device stats retrieved from any site")
-        print(f"   ?? No device statistics retrieved - falling back to individual calls")
+        print(f"   No device statistics retrieved - falling back to individual calls")
     
     # Process each AP device
     for ap in aps:
@@ -11813,13 +11813,13 @@ def bulk_upgrade_ap_firmware_by_site():
     bulk_stats_count = len([v for v in ap_versions.values() if v != "Unknown"])
     individual_calls_needed = len([v for v in ap_versions.values() if v == "Unknown"])
     
-    print(f"   ? Retrieved {bulk_stats_count} device versions via bulk API call")
+    print(f"   Retrieved {bulk_stats_count} device versions via bulk API call")
     if individual_calls_needed > 0:
-        print(f"   ?? {individual_calls_needed} devices required individual calls")
+        print(f"   {individual_calls_needed} devices required individual calls")
     
     logging.info(f"API optimization: {bulk_stats_count} versions from bulk call, {individual_calls_needed} individual calls needed")
     
-    print(f"\n?? AP Models found across {len(sites_to_upgrade)} site(s):")
+    print(f"\n  AP Models found across {len(sites_to_upgrade)} site(s):")
     for model, devices in aps_by_model.items():
         # Get current versions for this model from our cached stats
         current_versions = set()
@@ -11847,7 +11847,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 devices_by_site[site_name].append(device)
             
             for site_name, site_devices in devices_by_site.items():
-                print(f"      ?? {site_name} ({len(site_devices)} devices):")
+                print(f"      {site_name} ({len(site_devices)} devices):")
                 for device in site_devices:
                     device_name = device.get("name", "Unnamed")
                     device_mac = device.get("mac", "Unknown")
@@ -11864,7 +11864,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 print(f"      - {device_name} (MAC: {device_mac}): v{device_version}")
     
     # Step 4: Get available firmware versions for each model
-    print(f"\n?? Fetching available firmware versions...")
+    print(f"\n  Fetching available firmware versions...")
     logging.debug("Fetching available firmware versions from API")
     try:
         versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, org_id)
@@ -11898,7 +11898,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 5: Let user select firmware version for each model
     upgrade_plan = {}
-    print(f"\n?? Firmware Version Selection:")
+    print(f"\n  Firmware Version Selection:")
     print("=" * 60)
     
     # Show current version summary across all APs
@@ -11914,7 +11914,7 @@ def bulk_upgrade_ap_firmware_by_site():
             all_current_versions[version].append(f"{device.get('name', 'Unnamed')} ({model})")
     
     for version, device_list in sorted(all_current_versions.items(), reverse=True):
-        print(f"   ?? Version {version}: {len(device_list)} devices")
+        print(f"   Version {version}: {len(device_list)} devices")
         for device_info in device_list:
             print(f"      � {device_info}")
     print()
@@ -11964,7 +11964,7 @@ def bulk_upgrade_ap_firmware_by_site():
         
         # Analyze version compatibility across models using API data
         if len(matching_models) > 1:
-            print(f"\n?? Version Compatibility Analysis (API-based):")
+            print(f"\n  Version Compatibility Analysis (API-based):")
             print(f"   Analyzing firmware compatibility across {len(matching_models)} AP models...")
             
             # Build comprehensive model-to-versions mapping from API data
@@ -11997,35 +11997,35 @@ def bulk_upgrade_ap_firmware_by_site():
                     reverse=True
                 )
                 
-                print(f"   ?? Cross-compatible versions (work with multiple models):")
+                print(f"   Cross-compatible versions (work with multiple models):")
                 for version, compatible_models in sorted_by_compatibility[:10]:  # Show top 10
                     model_list = ", ".join(sorted(compatible_models))
                     coverage = f"{len(compatible_models)}/{len(matching_models)}"
                     if len(compatible_models) == len(matching_models):
-                        print(f"      ? {version}: ALL models ({model_list}) - UNIVERSAL")
+                        print(f"      {version}: ALL models ({model_list}) - UNIVERSAL")
                     elif len(compatible_models) >= len(matching_models) * 0.7:  # 70%+ coverage
-                        print(f"      ? {version}: {coverage} models ({model_list}) - HIGH COMPATIBILITY")
+                        print(f"      {version}: {coverage} models ({model_list}) - HIGH COMPATIBILITY")
                     else:
-                        print(f"      ?? {version}: {coverage} models ({model_list})")
+                        print(f"      {version}: {coverage} models ({model_list})")
                 
                 # Highlight universal versions
                 universal_versions = [v for v, models in version_compatibility.items() if len(models) == len(matching_models)]
                 if universal_versions:
                     sorted_universal = sorted(universal_versions, key=lambda x: tuple(map(int, x.split("."))) if x.replace(".", "").isdigit() else (0,), reverse=True)
-                    print(f"\n   ?? UNIVERSAL versions (compatible with ALL {len(matching_models)} models):")
+                    print(f"\n   UNIVERSAL versions (compatible with ALL {len(matching_models)} models):")
                     print(f"      {', '.join(sorted_universal[:5])}{' ...' if len(sorted_universal) > 5 else ''}")
-                    print(f"   ?? Recommendation: Use universal version for simplified management")
+                    print(f"   Recommendation: Use universal version for simplified management")
                     logging.info(f"Found {len(universal_versions)} universal versions across all models")
                 else:
-                    print(f"\n   ??  NO universal versions found - mixed-version upgrade required")
-                    print(f"   ?? Recommendation: Select optimal version per model based on compatibility matrix above")
+                    print(f"\n    NO universal versions found - mixed-version upgrade required")
+                    print(f"   Recommendation: Select optimal version per model based on compatibility matrix above")
                     logging.warning("No universal firmware versions found across all AP models")
             else:
-                print(f"   ??  NO cross-compatible versions found - each model has unique firmware options")
+                print(f"    NO cross-compatible versions found - each model has unique firmware options")
                 logging.warning("No cross-compatible versions found between models")
             
             # Show model-specific version counts for context
-            print(f"\n   ?? Model-specific firmware availability:")
+            print(f"\n   Model-specific firmware availability:")
             for model in sorted(matching_models):
                 if model in api_model_versions:
                     versions = api_model_versions[model]
@@ -12042,12 +12042,12 @@ def bulk_upgrade_ap_firmware_by_site():
         
         elif len(matching_models) == 1:
             model = list(matching_models)[0]
-            print(f"\n?? Single model environment: {model}")
+            print(f"\n  Single model environment: {model}")
             if model in model_version_ranges:
                 versions = model_version_ranges[model]
-                print(f"   ?? {len(versions)} firmware versions available for {model}")
+                print(f"   {len(versions)} firmware versions available for {model}")
             else:
-                print(f"   ??  No specific firmware versions found for {model}")
+                print(f"    No specific firmware versions found for {model}")
     
     
     for model, devices in aps_by_model.items():
@@ -12094,7 +12094,7 @@ def bulk_upgrade_ap_firmware_by_site():
         
         logging.debug(f"Model {model}: Found {len(raw_model_versions)} raw entries, {len(model_versions)} unique versions after deduplication")
         
-        print(f"\n?? Model: {model} ({len(devices)} devices)")
+        print(f"\n  Model: {model} ({len(devices)} devices)")
         
         # Show current versions of devices using cached stats
         current_versions = set()
@@ -12124,7 +12124,7 @@ def bulk_upgrade_ap_firmware_by_site():
             if compatibility_note:
                 print(f"   Model compatibility: {model_version_count} versions available{compatibility_note}")
                 if len(all_other_models) > 0:
-                    print(f"   ?? Note: Different models may support different version ranges")
+                    print(f"   Note: Different models may support different version ranges")
         
         # Display available versions with index - now model-specific and deduplicated
         print(f"   Available firmware versions for {model} ({len(model_versions)} found):")
@@ -12193,11 +12193,11 @@ def bulk_upgrade_ap_firmware_by_site():
         if other_models and cross_compatibility:
             universal_versions = [v for v, models in cross_compatibility.items() if len(models) == len(other_models)]
             if universal_versions:
-                print(f"   ?? UNIVERSAL versions work with all models: {', '.join(universal_versions[:3])}")
+                print(f"   UNIVERSAL versions work with all models: {', '.join(universal_versions[:3])}")
             else:
                 high_compat_versions = [v for v, models in cross_compatibility.items() if len(models) >= len(other_models) * 0.7]
                 if high_compat_versions:
-                    print(f"   ?? HIGH COMPATIBILITY versions work with most models: {', '.join(high_compat_versions[:3])}")
+                    print(f"   HIGH COMPATIBILITY versions work with most models: {', '.join(high_compat_versions[:3])}")
         
         print()  # Add blank line for readability
         
@@ -12239,19 +12239,19 @@ def bulk_upgrade_ap_firmware_by_site():
                     print(f"! Invalid selection. Please enter a number between 0 and {len(model_versions)-1}, or 's' to skip.")
                     
             except ValueError:
-                print("? Invalid input. Please enter a number or 's' to skip.")
+                print(" Invalid input. Please enter a number or 's' to skip.")
             except KeyboardInterrupt:
-                print("\n? Operation cancelled by user.")
+                print("\n Operation cancelled by user.")
                 logging.info("Bulk AP firmware upgrade cancelled by user interrupt")
                 return
     
     if not upgrade_plan:
-        print("? No firmware upgrades selected. Exiting.")
+        print(" No firmware upgrades selected. Exiting.")
         logging.info("No firmware upgrades selected by user")
         return
     
     # Step 5.5: Upgrade Plan Summary and Compatibility Validation
-    print(f"\n?? Upgrade Plan Summary:")
+    print(f"\n  Upgrade Plan Summary:")
     print("=" * 60)
     
     total_devices_to_upgrade = 0
@@ -12264,9 +12264,9 @@ def bulk_upgrade_ap_firmware_by_site():
         total_devices_to_upgrade += device_count
         selected_versions.add(version)
         
-        print(f"   ?? {model}: {device_count} devices ? firmware {version}")
+        print(f"   {model}: {device_count} devices firmware {version}")
     
-    print(f"\n?? Summary:")
+    print(f"\n  Summary:")
     print(f"   � Total models: {len(upgrade_plan)}")
     print(f"   � Total devices: {total_devices_to_upgrade}")
     print(f"   � Firmware versions: {len(selected_versions)}")
@@ -12274,8 +12274,8 @@ def bulk_upgrade_ap_firmware_by_site():
     # Highlight coordination considerations for mixed-version upgrades
     if len(selected_versions) > 1:
         sorted_versions = sorted(selected_versions, key=lambda x: tuple(map(int, x.split("."))) if x.replace(".", "").isdigit() else (0,), reverse=True)
-        print(f"\n??  Multi-Version Upgrade Detected:")
-        print(f"   ?? Versions selected: {', '.join(sorted_versions)}")
+        print(f"\n   Multi-Version Upgrade Detected:")
+        print(f"   Versions selected: {', '.join(sorted_versions)}")
         
         # Analyze if any selected versions are cross-compatible
         if 'model_version_ranges' in locals():
@@ -12291,14 +12291,14 @@ def bulk_upgrade_ap_firmware_by_site():
                     could_be_universal.append(version)
             
             if could_be_universal:
-                print(f"   ?? Analysis: Version(s) {', '.join(could_be_universal)} could work with ALL models")
-                print(f"   ?? Consider: You chose model-specific versions despite universal options available")
+                print(f"   Analysis: Version(s) {', '.join(could_be_universal)} could work with ALL models")
+                print(f"   Consider: You chose model-specific versions despite universal options available")
                 print(f"      This may be optimal for performance/features per model")
             else:
-                print(f"   ?? Analysis: No single version compatible with all selected models")
-                print(f"   ?? Multi-version upgrade is necessary due to model firmware constraints")
+                print(f"   Analysis: No single version compatible with all selected models")
+                print(f"   Multi-version upgrade is necessary due to model firmware constraints")
         
-        print(f"\n   ?? Coordination considerations:")
+        print(f"\n   Coordination considerations:")
         print(f"      � Each model will upgrade to its optimal version")
         print(f"      � Network features may vary between firmware versions")
         print(f"      � Monitor compatibility for shared network functions")
@@ -12307,18 +12307,18 @@ def bulk_upgrade_ap_firmware_by_site():
         logging.info(f"Multi-version upgrade plan: {len(selected_versions)} different versions across {len(models_in_plan)} models")
         
         # Ask user for confirmation on mixed-version upgrade
-        print(f"\n?? Proceed with multi-version upgrade plan?")
+        print(f"\n  Proceed with multi-version upgrade plan?")
         confirm_mixed = input("   Continue? (y/n, default=y): ").strip().lower() or "y"
         if confirm_mixed not in ['y', 'yes']:
-            print("? Mixed-version upgrade cancelled by user.")
+            print(" Mixed-version upgrade cancelled by user.")
             logging.info("Mixed-version upgrade cancelled by user")
             return
         else:
-            print("? Multi-version upgrade plan confirmed.")
+            print(" Multi-version upgrade plan confirmed.")
     else:
         single_version = list(selected_versions)[0]
-        print(f"\n? Single-Version Upgrade:")
-        print(f"   ?? All {len(models_in_plan)} model(s) will upgrade to firmware {single_version}")
+        print(f"\n Single-Version Upgrade:")
+        print(f"   All {len(models_in_plan)} model(s) will upgrade to firmware {single_version}")
         
         # Analyze if this version is truly universal or if users just happened to select the same version
         if len(models_in_plan) > 1 and 'model_version_ranges' in locals():
@@ -12329,21 +12329,21 @@ def bulk_upgrade_ap_firmware_by_site():
                     break
             
             if universal_compatibility:
-                print(f"   ?? Excellent choice: {single_version} is UNIVERSAL (compatible with all models)")
-                print(f"   ?? Unified firmware version simplifies management and ensures feature consistency")
+                print(f"   Excellent choice: {single_version} is UNIVERSAL (compatible with all models)")
+                print(f"   Unified firmware version simplifies management and ensures feature consistency")
             else:
-                print(f"   ??  Note: Selected version may not be verified as compatible with all models")
-                print(f"   ?? Proceed with caution and monitor compatibility during upgrade")
+                print(f"    Note: Selected version may not be verified as compatible with all models")
+                print(f"   Proceed with caution and monitor compatibility during upgrade")
         else:
-            print(f"   ?? Consistent firmware version across all AP models")
+            print(f"   Consistent firmware version across all AP models")
         
         logging.info(f"Single-version upgrade plan: all models upgrading to {single_version}")
     
-    print(f"\n?? Ready to proceed with advanced configuration...")
+    print(f"\n  Ready to proceed with advanced configuration...")
     logging.info(f"Upgrade plan validated: {total_devices_to_upgrade} devices across {len(models_in_plan)} models")
     
     # Step 6: Advanced Configuration Options
-    print(f"\n?? Advanced Upgrade Configuration:")
+    print(f"\n  Advanced Upgrade Configuration:")
     print("=" * 60)
     
     # Select upgrade strategy
@@ -12354,7 +12354,7 @@ def bulk_upgrade_ap_firmware_by_site():
         "4": ("serial", "One device at a time (safest, slowest)")
     }
     
-    print("?? Select upgrade strategy:")
+    print(" Select upgrade strategy:")
     for key, (strategy, description) in strategies.items():
         print(f"   [{key}] {strategy.upper()}: {description}")
     
@@ -12367,9 +12367,9 @@ def bulk_upgrade_ap_firmware_by_site():
                 logging.info(f"User selected upgrade strategy: {selected_strategy}")
                 break
             else:
-                print("? Invalid selection. Please choose 1-4.")
+                print(" Invalid selection. Please choose 1-4.")
         except KeyboardInterrupt:
-            print("\n? Operation cancelled by user.")
+            print("\n Operation cancelled by user.")
             logging.info("AP firmware upgrade cancelled during strategy selection")
             return
     
@@ -12387,7 +12387,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Strategy-specific configuration
     if selected_strategy == "canary":
-        print(f"\n?? Canary Strategy Configuration:")
+        print(f"\n  Canary Strategy Configuration:")
         
         # Custom phases
         use_custom_phases = input("Use custom canary phases? (y/N): ").strip().lower()
@@ -12402,11 +12402,11 @@ def bulk_upgrade_ap_firmware_by_site():
                             print(f"! Custom phases: {phases}")
                             break
                         else:
-                            print("? Phases must be 1-100 and end with 100")
+                            print(" Phases must be 1-100 and end with 100")
                     else:
                         break
                 except ValueError:
-                    print("? Invalid format. Use comma-separated numbers.")
+                    print(" Invalid format. Use comma-separated numbers.")
         
         # Failure threshold
         try:
@@ -12417,10 +12417,10 @@ def bulk_upgrade_ap_firmware_by_site():
                     upgrade_config["max_failure_percentage"] = failure_pct
                     print(f"! Max failures: {failure_pct}%")
         except ValueError:
-            print("?? Invalid input, using default failure threshold")
+            print(" Invalid input, using default failure threshold")
     
     elif selected_strategy == "rrm":
-        print(f"\n?? RRM Strategy Configuration:")
+        print(f"\n  RRM Strategy Configuration:")
         
         # RRM-specific options
         rrm_options = {
@@ -12456,16 +12456,16 @@ def bulk_upgrade_ap_firmware_by_site():
             if max_batch:
                 rrm_options["rrm_max_batch_percentage"] = int(max_batch)
         except ValueError:
-            print("?? Invalid input, using default batch sizes")
+            print(" Invalid input, using default batch sizes")
         
         upgrade_config.update(rrm_options)
     
     # P2P Configuration (all strategies)
-    print(f"\n?? Peer-to-Peer (P2P) Configuration:")
+    print(f"\n  Peer-to-Peer (P2P) Configuration:")
     enable_p2p = input("Enable AP-to-AP firmware sharing? (Y/n): ").strip().lower()
     if enable_p2p not in ['n', 'no']:
         upgrade_config["enable_p2p"] = True
-        print("? P2P enabled - APs will share firmware locally")
+        print(" P2P enabled - APs will share firmware locally")
         
         try:
             cluster_size = input(f"P2P cluster size (default={upgrade_config['p2p_cluster_size']}): ").strip()
@@ -12473,12 +12473,12 @@ def bulk_upgrade_ap_firmware_by_site():
                 upgrade_config["p2p_cluster_size"] = int(cluster_size)
                 print(f"! P2P cluster size: {upgrade_config['p2p_cluster_size']}")
         except ValueError:
-            print("?? Invalid input, using default cluster size")
+            print(" Invalid input, using default cluster size")
     else:
-        print("?? P2P disabled - all firmware downloads from cloud")
+        print(" P2P disabled - all firmware downloads from cloud")
     
     # Scheduling Options
-    print(f"\n?? Scheduling Options:")
+    print(f"\n  Scheduling Options:")
     schedule_later = input("Schedule upgrade for later? (y/N): ").strip().lower()
     if schedule_later in ['y', 'yes']:
         while True:
@@ -12500,7 +12500,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     print(f"! Scheduled for: {time_input}")
                     break
             except ValueError:
-                print("? Invalid format. Use 'YYYY-MM-DD HH:MM' or '+minutes'")
+                print(" Invalid format. Use 'YYYY-MM-DD HH:MM' or '+minutes'")
                 retry = input("Try again? (y/N): ").strip().lower()
                 if retry not in ['y', 'yes']:
                     break
@@ -12509,10 +12509,10 @@ def bulk_upgrade_ap_firmware_by_site():
     force_upgrade = input("Force upgrade even if same version? (y/N): ").strip().lower()
     if force_upgrade in ['y', 'yes']:
         upgrade_config["force"] = True
-        print("?? Force upgrade enabled")
+        print(" Force upgrade enabled")
     
     # Display final configuration
-    print(f"\n?? Final Upgrade Configuration:")
+    print(f"\n  Final Upgrade Configuration:")
     print("=" * 60)
     print(f"Strategy: {upgrade_config['strategy'].upper()}")
     if upgrade_config.get('start_time'):
@@ -12535,7 +12535,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 7: Display upgrade plan and affected devices
     total_devices = sum(len(plan["devices"]) for plan in upgrade_plan.values())
-    print(f"\n?? Final Firmware Upgrade Plan:")
+    print(f"\n  Final Firmware Upgrade Plan:")
     print("=" * 60)
     
     if len(sites_to_upgrade) > 1:
@@ -12554,7 +12554,7 @@ def bulk_upgrade_ap_firmware_by_site():
     for model, plan in upgrade_plan.items():
         version = plan["version"]
         devices = plan["devices"]
-        print(f"\n?? {model} ? Firmware {version} ({len(devices)} devices):")
+        print(f"\n  {model} Firmware {version} ({len(devices)} devices):")
         
         if len(sites_to_upgrade) > 1:
             # Group devices by site for multi-site display
@@ -12566,7 +12566,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 devices_by_site[site_name].append(device)
             
             for site_name, site_devices in devices_by_site.items():
-                print(f"   ?? {site_name} ({len(site_devices)} devices):")
+                print(f"   {site_name} ({len(site_devices)} devices):")
                 for device in site_devices:
                     device_name = device.get("name", "Unnamed")
                     mac = device.get("mac", "Unknown")
@@ -12584,7 +12584,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 8: Display warnings and get user confirmation
     warning_lines = [
-        "?? CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE OPERATION:",
+        " CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE OPERATION:",
         "� This action will UPGRADE FIRMWARE on Access Point devices",
         "� APs will REBOOT during the upgrade process",
         "� Wi-Fi connectivity will be TEMPORARILY LOST during upgrades", 
@@ -12605,7 +12605,7 @@ def bulk_upgrade_ap_firmware_by_site():
         print(line)
     print("??" * 50)
     
-    print(f"\n?? Summary:")
+    print(f"\n  Summary:")
     if len(sites_to_upgrade) > 1:
         print(f"   � Bulk upgrade across {len(sites_to_upgrade)} sites")
         sites_with_devices = len(set(device.get("_site_name") for plan in upgrade_plan.values() for device in plan["devices"]))
@@ -12630,18 +12630,18 @@ def bulk_upgrade_ap_firmware_by_site():
         print(f"   � Scheduled: Immediate")
     
     # Get user confirmation with liability waiver
-    print(f"\n?? Do you want to proceed with upgrading {total_devices} AP devices?")
+    print(f"\n  Do you want to proceed with upgrading {total_devices} AP devices?")
     print("   Type 'UPGRADE' (all caps) to confirm, or anything else to cancel:")
     print("   By typing 'UPGRADE', you acknowledge and accept all risks and liability.")
     
     try:
         user_input = input(">>> ").strip()
         if user_input != "UPGRADE":
-            print("? Advanced firmware upgrade operation cancelled by user.")
+            print(" Advanced firmware upgrade operation cancelled by user.")
             logging.info("Advanced AP firmware upgrade operation cancelled by user input")
             return
         else:
-            print("? User confirmed advanced firmware upgrade operation. Proceeding...")
+            print(" User confirmed advanced firmware upgrade operation. Proceeding...")
             logging.info(f"! LIABILITY WAIVER ACCEPTED: User confirmed advanced AP firmware upgrade for {total_devices} devices at site {site_name}")
             logging.info(f"User input: '{user_input}' - User accepts full responsibility for firmware upgrade risks")
             logging.info(f"Upgrade strategy: {upgrade_config['strategy']}, P2P: {upgrade_config['enable_p2p']}, Max failures: {upgrade_config['max_failure_percentage']}%")
@@ -12652,7 +12652,7 @@ def bulk_upgrade_ap_firmware_by_site():
             logging.info(f"Upgrade plan: {'; '.join(plan_summary)}")
             
     except KeyboardInterrupt:
-        print("\n? Firmware upgrade operation cancelled by user (Ctrl+C).")
+        print("\n Firmware upgrade operation cancelled by user (Ctrl+C).")
         logging.info("AP firmware upgrade operation cancelled by user interrupt")
         return
     except Exception as e:
@@ -12661,7 +12661,7 @@ def bulk_upgrade_ap_firmware_by_site():
         return
     
     # Step 9: Execute advanced firmware upgrades
-    print("\n?? Starting advanced AP firmware upgrade operations...")
+    print("\n  Starting advanced AP firmware upgrade operations...")
     print("=" * 60)
     logging.info("Starting firmware upgrade execution phase")
     logging.debug(f"Upgrade strategy: {upgrade_config['strategy']}, P2P: {upgrade_config['enable_p2p']}, Max failures: {upgrade_config['max_failure_percentage']}%")
@@ -12677,7 +12677,7 @@ def bulk_upgrade_ap_firmware_by_site():
     for model, plan in upgrade_plan.items():
         version = plan["version"]
         devices = plan["devices"]
-        logging.debug(f"Processing {len(devices)} devices for model {model} ? firmware {version}")
+        logging.debug(f"Processing {len(devices)} devices for model {model} firmware {version}")
         
         for device in devices:
             site_id = device.get("_site_id")
@@ -12709,7 +12709,7 @@ def bulk_upgrade_ap_firmware_by_site():
     total_devices = sum(len(site_data['devices']) for site_data in devices_by_site.values())
     logging.debug(f"Upgrade execution will process {total_devices} devices across {total_sites_to_upgrade} sites")
     
-    print(f"\n?? Executing upgrades across {total_sites_to_upgrade} site(s) with {total_devices} devices...")
+    print(f"\n  Executing upgrades across {total_sites_to_upgrade} site(s) with {total_devices} devices...")
     
     for site_index, (site_id, site_data) in enumerate(devices_by_site.items(), 1):
         site_name = site_data['name']
@@ -12717,7 +12717,7 @@ def bulk_upgrade_ap_firmware_by_site():
         site_models = site_data['models']
         
         logging.debug(f"Starting upgrade execution for site {site_index}/{total_sites_to_upgrade}: {site_name}")
-        print(f"\n   ?? Site {site_index}/{total_sites_to_upgrade}: {site_name} ({len(site_devices)} devices)")
+        print(f"\n   Site {site_index}/{total_sites_to_upgrade}: {site_name} ({len(site_devices)} devices)")
         print(f"   Strategy: {upgrade_config['strategy'].upper()}")
         print(f"   P2P Enabled: {upgrade_config['enable_p2p']}")
         
@@ -12759,7 +12759,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     upgrade_body["start_time"] = upgrade_config["start_time"]
                 
                 logging.debug(f"Prepared upgrade body for site {site_name}: {upgrade_body}")
-                print(f"      ?? Upgrading all devices to version {target_version}...")
+                print(f"      Upgrading all devices to version {target_version}...")
                 logging.info(f"Initiating upgrade for site {site_name} with {len(device_ids)} devices to version {target_version}")
                 
                 logging.debug(f"Calling upgradeSiteDevices API for site {site_id}")
@@ -12778,10 +12778,10 @@ def bulk_upgrade_ap_firmware_by_site():
                         upgrade_id = resp.data["upgrade_id"]
                         upgrade_ids.append(upgrade_id)
                         logging.debug(f"Upgrade ID captured: {upgrade_id}")
-                        print(f"      ? Upgrade initiated - ID: {upgrade_id}")
+                        print(f"      Upgrade initiated - ID: {upgrade_id}")
                     else:
                         logging.debug(f"Upgrade initiated without specific upgrade ID")
-                        print(f"      ? Upgrade command sent successfully")
+                        print(f"      Upgrade command sent successfully")
                 else:
                     logging.warning(f"Upgrade response missing data for site {site_name}")
                 
@@ -12790,14 +12790,14 @@ def bulk_upgrade_ap_firmware_by_site():
                 
             else:
                 # Multiple versions for this site - separate calls per model
-                print(f"      ?? Multiple firmware versions for site - executing per model...")
+                print(f"      Multiple firmware versions for site - executing per model...")
                 
                 for model, model_info in site_models.items():
                     model_version = model_info['version']
                     model_devices = model_info['devices']
                     model_device_ids = [device.get("id") for device in model_devices if device.get("id")]
                     
-                    print(f"         � {model}: {len(model_devices)} devices ? v{model_version}")
+                    print(f"         � {model}: {len(model_devices)} devices v{model_version}")
                     
                     model_upgrade_body = {
                         "strategy": upgrade_config["strategy"],
@@ -12837,10 +12837,10 @@ def bulk_upgrade_ap_firmware_by_site():
                             model_upgrade_id = model_resp.data["upgrade_id"]
                             upgrade_ids.append(model_upgrade_id)
                             logging.debug(f"Per-model upgrade ID captured for {model}: {model_upgrade_id}")
-                            print(f"            ? {model} upgrade initiated - ID: {model_upgrade_id}")
+                            print(f"            {model} upgrade initiated - ID: {model_upgrade_id}")
                         else:
                             logging.debug(f"Per-model upgrade initiated for {model} without specific upgrade ID")
-                            print(f"            ? {model} upgrade command sent")
+                            print(f"            {model} upgrade command sent")
                     else:
                         logging.warning(f"Per-model upgrade response missing data for {model} in site {site_name}")
                     
@@ -12881,7 +12881,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 
         except Exception as e:
             error_status = f"ERROR: {e}"
-            print(f"      ? Failed to initiate upgrade for site {site_name}: {e}")
+            print(f"      Failed to initiate upgrade for site {site_name}: {e}")
             logging.error(f"! Failed to initiate upgrade for site {site_name}: {e}")
             failed_upgrades += len(site_devices)
             
@@ -12920,7 +12920,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 10: Configure site auto-upgrade settings
     logging.debug(f"Starting auto-upgrade configuration for site {site_name} (ID: {site_id})")
-    print(f"\n?? Configuring site auto-upgrade settings...")
+    print(f"\n  Configuring site auto-upgrade settings...")
     
     # Collect unique versions from upgrade plan
     target_versions = set(plan["version"] for plan in upgrade_plan.values())
@@ -12936,7 +12936,7 @@ def bulk_upgrade_ap_firmware_by_site():
         if auto_upgrade_prompt not in ['n', 'no']:
             try:
                 logging.debug(f"Proceeding with auto-upgrade configuration for site {site_name}")
-                print(f"   ?? Configuring site auto-upgrade settings...")
+                print(f"   Configuring site auto-upgrade settings...")
                 
                 # Get current site settings to check existing auto-upgrade configuration
                 logging.debug(f"Retrieving current auto-upgrade settings for site {site_name}")
@@ -12953,7 +12953,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     # Display current auto-upgrade settings if they exist
                     if current_auto_upgrade and current_auto_upgrade.get("enabled"):
                         logging.debug(f"Auto-upgrade currently enabled for site {site_name}")
-                        print(f"   ?? Current auto-upgrade settings:")
+                        print(f"   Current auto-upgrade settings:")
                         print(f"      � Enabled: Yes")
                         print(f"      � Version: {current_auto_upgrade.get('version', 'Not set')}")
                         print(f"      � Time of day: {current_auto_upgrade.get('time_of_day', 'Not set')}")
@@ -12964,15 +12964,15 @@ def bulk_upgrade_ap_firmware_by_site():
                             print(f"      � Day of week: Every day")
                     else:
                         logging.debug(f"Auto-upgrade currently disabled or not configured for site {site_name}")
-                        print(f"   ?? Current auto-upgrade: Disabled or not configured")
+                        print(f"   Current auto-upgrade: Disabled or not configured")
                         
                 except Exception as e:
                     logging.warning(f"Could not retrieve current site settings: {e}")
-                    print(f"   ?? Could not retrieve current settings: {e}")
+                    print(f"   Could not retrieve current settings: {e}")
                 
                 # Auto-upgrade configuration options
                 logging.debug(f"Presenting auto-upgrade configuration options for target version {target_version}")
-                print(f"\n   ?? Auto-upgrade configuration options:")
+                print(f"\n   Auto-upgrade configuration options:")
                 print(f"      [1] Enable auto-upgrade to version {target_version}")
                 print(f"      [2] Disable auto-upgrade") 
                 print(f"      [3] Skip auto-upgrade configuration")
@@ -12986,19 +12986,19 @@ def bulk_upgrade_ap_firmware_by_site():
                     new_auto_upgrade = {
                         "enabled": False
                     }
-                    print(f"   ? Auto-upgrade will be disabled")
+                    print(f"   Auto-upgrade will be disabled")
                 elif config_choice == "3":
                     # Skip configuration
                     logging.debug(f"Skipping auto-upgrade configuration for site {site_name}")
-                    print("   ?? Skipping site auto-upgrade configuration")
+                    print("   Skipping site auto-upgrade configuration")
                     logging.info("User chose to skip site auto-upgrade configuration")
                     # Continue without configuring auto-upgrade
                     pass
                 else:
                     # Enable auto-upgrade (option 1 or fallback)
                     logging.debug(f"Enabling comprehensive auto-upgrade for site {site_name} with target version {target_version}")
-                    print(f"   ?? Configuring comprehensive auto-upgrade settings...")
-                    print(f"   ?? This ensures all AP models get appropriate firmware automatically")
+                    print(f"   Configuring comprehensive auto-upgrade settings...")
+                    print(f"   This ensures all AP models get appropriate firmware automatically")
                     
                     # Build custom_versions dictionary starting with models from the upgrade plan
                     custom_versions = {}
@@ -13010,10 +13010,10 @@ def bulk_upgrade_ap_firmware_by_site():
                         model_version = plan["version"]
                         custom_versions[model] = model_version
                         logging.debug(f"Setting custom version for {model}: {model_version}")
-                        print(f"      ? {model}: {model_version} (from upgrade plan)")
+                        print(f"      {model}: {model_version} (from upgrade plan)")
                     
                     logging.debug(f"Starting AP model family analysis for comprehensive auto-upgrade coverage")
-                    print(f"\n   ?? Analyzing all available AP models for comprehensive auto-upgrade coverage...")
+                    print(f"\n   Analyzing all available AP models for comprehensive auto-upgrade coverage...")
                     
                     # Get all available models from the firmware API
                     all_available_models = set()
@@ -13048,7 +13048,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     
                     if models_not_in_plan:
                         logging.debug(f"Processing {len(models_not_in_plan)} additional AP models for auto-upgrade configuration")
-                        print(f"\n   ?? Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
+                        print(f"\n   Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
                         
                         # Group models by their available firmware versions (AP families)
                         def get_version_signature(model_versions):
@@ -13075,7 +13075,7 @@ def bulk_upgrade_ap_firmware_by_site():
                             else:
                                 print(f"      � {models[0]} ({len(signature)} firmware versions)")
                         
-                        print(f"\n   ?? Configure auto-upgrade for additional models:")
+                        print(f"\n   Configure auto-upgrade for additional models:")
                         print(f"   Models with identical firmware versions are grouped together as families.")
                         print(f"   This ensures new APs of ANY model will auto-upgrade to appropriate firmware.")
                         
@@ -13084,7 +13084,7 @@ def bulk_upgrade_ap_firmware_by_site():
                         
                         if configure_additional not in ['n', 'no']:
                             logging.debug(f"Proceeding with firmware version selection for {len(model_families)} model families")
-                            print(f"\n   ?? Selecting firmware versions for additional model families...")
+                            print(f"\n   Selecting firmware versions for additional model families...")
                             print(f"   Strategy: Highest version per major revision (e.g., highest 0.12.x, highest 0.14.x)")
                             
                             # Process each family group
@@ -13099,7 +13099,7 @@ def bulk_upgrade_ap_firmware_by_site():
                                 representative_model = models[0]
                                 if representative_model not in model_version_ranges:
                                     logging.warning(f"No firmware versions found for representative model {representative_model} in family {models}")
-                                    print(f"      ?? No firmware versions found for model family {models}")
+                                    print(f"      No firmware versions found for model family {models}")
                                     continue
                                 
                                 family_versions = model_version_ranges[representative_model]
@@ -13141,17 +13141,17 @@ def bulk_upgrade_ap_firmware_by_site():
                                 
                                 # Display family information
                                 if len(models) > 1:
-                                    print(f"\n      ?? AP Family {family_idx}: {', '.join(sorted(models))}")
+                                    print(f"\n      AP Family {family_idx}: {', '.join(sorted(models))}")
                                     print(f"         These models share identical firmware version compatibility")
                                 else:
-                                    print(f"\n      ?? Model: {models[0]}")
+                                    print(f"\n      Model: {models[0]}")
                                     
                                 print(f"         Available major revisions with highest versions:")
                                 
                                 # Display options for this family
                                 major_options = {}
                                 for idx, (major_minor, highest_version) in enumerate(sorted(highest_per_major.items()), 1):
-                                    print(f"            [{idx}] {major_minor}.x ? {highest_version}")
+                                    print(f"            [{idx}] {major_minor}.x {highest_version}")
                                     major_options[str(idx)] = highest_version
                                 
                                 print(f"            [s] Skip this family")
@@ -13163,20 +13163,20 @@ def bulk_upgrade_ap_firmware_by_site():
                                         user_choice = input(f"         Select firmware for {family_name} (1-{len(major_options)}, s): ").strip().lower()
                                         
                                         if user_choice == 's':
-                                            print(f"         ?? Skipping {family_name}")
+                                            print(f"         Skipping {family_name}")
                                             break
                                         elif user_choice in major_options:
                                             selected_version = major_options[user_choice]
                                             # Apply the selected version to all models in this family
                                             for model in models:
                                                 custom_versions[model] = selected_version
-                                            print(f"         ? {family_name} ? firmware {selected_version}")
+                                            print(f"         {family_name} firmware {selected_version}")
                                             print(f"            Applied to: {', '.join(sorted(models))}")
                                             break
                                         else:
-                                            print(f"         ? Invalid selection. Please choose 1-{len(major_options)} or 's'.")
+                                            print(f"         Invalid selection. Please choose 1-{len(major_options)} or 's'.")
                                     except KeyboardInterrupt:
-                                        print("\n         ? Configuration cancelled.")
+                                        print("\n         Configuration cancelled.")
                                         break
                     
                     # Validate that we have comprehensive model coverage
@@ -13184,16 +13184,16 @@ def bulk_upgrade_ap_firmware_by_site():
                     models_from_plan = len(models_in_upgrade_plan)
                     models_additionally_configured = total_models_configured - models_from_plan
                     
-                    print(f"\n   ? Auto-upgrade coverage summary:")
+                    print(f"\n   Auto-upgrade coverage summary:")
                     print(f"      � Models from upgrade plan: {models_from_plan}")
                     print(f"      � Additional models configured: {models_additionally_configured}")
                     print(f"      � Total models configured: {total_models_configured}")
                     
                     if total_models_configured > 0:
-                        print(f"\n   ?? Complete auto-upgrade model configuration:")
+                        print(f"\n   Complete auto-upgrade model configuration:")
                         for model, version in sorted(custom_versions.items()):
                             status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                            print(f"      � {model} ? firmware {version} ({status})")
+                            print(f"      � {model} firmware {version} ({status})")
 
                     new_auto_upgrade = {
                         "enabled": True,
@@ -13202,7 +13202,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     }
                     
                     # Time scheduling configuration
-                    print(f"\n   ? Auto-upgrade time scheduling:")
+                    print(f"\n   Auto-upgrade time scheduling:")
                     
                     # Check if user wants to maintain current time settings or change them
                     if current_auto_upgrade and current_auto_upgrade.get("time_of_day"):
@@ -13221,14 +13221,14 @@ def bulk_upgrade_ap_firmware_by_site():
                             new_auto_upgrade["time_of_day"] = current_time
                             if current_day:
                                 new_auto_upgrade["day_of_week"] = current_day
-                            print(f"   ? Maintaining current schedule: {current_schedule}")
+                            print(f"   Maintaining current schedule: {current_schedule}")
                         else:
                             # Configure new time settings
-                            print(f"   ?? Configure new auto-upgrade schedule:")
+                            print(f"   Configure new auto-upgrade schedule:")
                             new_auto_upgrade.update(get_auto_upgrade_time_settings())
                     else:
                         # No current time settings, get new ones
-                        print(f"   ?? Configure auto-upgrade schedule:")
+                        print(f"   Configure auto-upgrade schedule:")
                         new_auto_upgrade.update(get_auto_upgrade_time_settings())
                 
                 # Only proceed with site settings update if user didn't choose to skip
@@ -13257,11 +13257,11 @@ def bulk_upgrade_ap_firmware_by_site():
                     
                     if new_auto_upgrade.get("enabled", False):
                         logging.info(f"Site auto-upgrade configured successfully for {site_name}")
-                        print(f"   ? Site auto-upgrade configured successfully")
+                        print(f"   Site auto-upgrade configured successfully")
                         custom_versions = new_auto_upgrade.get("custom_versions", {})
                         if custom_versions:
                             logging.debug(f"Auto-upgrade configured with {len(custom_versions)} custom model versions")
-                            print(f"   ?? New/replacement APs will auto-upgrade per model:")
+                            print(f"   New/replacement APs will auto-upgrade per model:")
                             for model, version in custom_versions.items():
                                 print(f"      � {model}: {version}")
                             
@@ -13270,12 +13270,12 @@ def bulk_upgrade_ap_firmware_by_site():
                             logging.info(f"Site auto-upgrade configured: site={site_id}, custom_versions={version_summary}")
                         else:
                             logging.debug(f"Auto-upgrade configured with standard version {target_version}")
-                            print(f"   ?? New/replacement APs will auto-upgrade to configured version")
+                            print(f"   New/replacement APs will auto-upgrade to configured version")
                             logging.info(f"Site auto-upgrade configured: site={site_id}")
                     else:
                         logging.info(f"Site auto-upgrade disabled for {site_name}")
-                        print(f"   ? Site auto-upgrade disabled successfully")
-                        print(f"   ?? New/replacement APs will NOT auto-upgrade")
+                        print(f"   Site auto-upgrade disabled successfully")
+                        print(f"   New/replacement APs will NOT auto-upgrade")
                         logging.info(f"Site auto-upgrade disabled: site={site_id}")
                     
                     # Add to results for audit trail
@@ -13316,7 +13316,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 
             except Exception as e:
                 error_msg = f"Failed to configure site auto-upgrade: {e}"
-                print(f"   ? {error_msg}")
+                print(f"   {error_msg}")
                 logging.error(f"! {error_msg}")
                 
                 # Add failure to results
@@ -13339,25 +13339,25 @@ def bulk_upgrade_ap_firmware_by_site():
                 }
                 results.append(auto_upgrade_result)
         else:
-            print("   ?? Skipping site auto-upgrade configuration")
+            print("   Skipping site auto-upgrade configuration")
             logging.info("User chose to skip site auto-upgrade configuration")
     
     else:
         # Multiple versions - need careful auto-upgrade configuration
-        print(f"   ?? Multiple firmware versions in upgrade plan:")
+        print(f"   Multiple firmware versions in upgrade plan:")
         for version in sorted(target_versions):
             models_with_version = [model for model, plan in upgrade_plan.items() if plan["version"] == version]
             print(f"      � Version {version}: {', '.join(models_with_version)}")
         
-        print(f"\n   ?? Auto-Upgrade Configuration for Mixed-Model Environment:")
+        print(f"\n   Auto-Upgrade Configuration for Mixed-Model Environment:")
         print(f"   Site auto-upgrade must handle different AP models with different firmware capabilities.")
         
         # Analyze what models exist in the upgrade plan
         all_models_in_plan = set(upgrade_plan.keys())
-        print(f"\n   ?? AP Models in this upgrade plan: {', '.join(sorted(all_models_in_plan))}")
+        print(f"\n   AP Models in this upgrade plan: {', '.join(sorted(all_models_in_plan))}")
         
         # Provide enhanced options for mixed-model auto-upgrade
-        print(f"\n   ?? Auto-upgrade options for mixed-model environment:")
+        print(f"\n   Auto-upgrade options for mixed-model environment:")
         print(f"      [1] Configure custom versions per model (RECOMMENDED)")
         print(f"         � Each AP model gets its optimal firmware version")
         print(f"         � New APs will auto-upgrade to model-appropriate firmware")
@@ -13372,12 +13372,12 @@ def bulk_upgrade_ap_firmware_by_site():
         
         try:
             if auto_upgrade_choice == "3":
-                print("   ?? Skipping site auto-upgrade configuration")
+                print("   Skipping site auto-upgrade configuration")
                 logging.info("User chose to skip site auto-upgrade configuration for multi-version upgrade")
                 
             elif auto_upgrade_choice == "2":
                 # Disable auto-upgrade
-                print(f"   ?? Disabling site auto-upgrade...")
+                print(f"   Disabling site auto-upgrade...")
                 
                 # Configure auto-upgrade disabled
                 site_settings_body = {
@@ -13402,9 +13402,9 @@ def bulk_upgrade_ap_firmware_by_site():
                     body=site_settings_body
                 )
                 
-                print(f"   ? Site auto-upgrade disabled successfully")
-                print(f"   ?? New/replacement APs will NOT auto-upgrade")
-                print(f"   ?? Manual firmware management will be required for new devices")
+                print(f"   Site auto-upgrade disabled successfully")
+                print(f"   New/replacement APs will NOT auto-upgrade")
+                print(f"   Manual firmware management will be required for new devices")
                 logging.info(f"Site auto-upgrade disabled: site={site_id} (user selected disable from multi-version upgrade)")
                 
                 # Add to results
@@ -13429,8 +13429,8 @@ def bulk_upgrade_ap_firmware_by_site():
                 
             else:
                 # Option 1 (default): Configure custom versions per model
-                print(f"   ?? Configuring model-specific auto-upgrade versions...")
-                print(f"   ?? This ensures each AP model gets compatible firmware automatically")
+                print(f"   Configuring model-specific auto-upgrade versions...")
+                print(f"   This ensures each AP model gets compatible firmware automatically")
                 
                 # Build custom_versions dictionary starting with models from the upgrade plan
                 custom_versions = {}
@@ -13439,9 +13439,9 @@ def bulk_upgrade_ap_firmware_by_site():
                 for model, plan in upgrade_plan.items():
                     model_version = plan["version"]
                     custom_versions[model] = model_version
-                    print(f"      ? {model} ? firmware {model_version} (from upgrade plan)")
+                    print(f"      {model} firmware {model_version} (from upgrade plan)")
                 
-                print(f"\n   ?? Analyzing all available AP models for comprehensive auto-upgrade coverage...")
+                print(f"\n   Analyzing all available AP models for comprehensive auto-upgrade coverage...")
                 
                 # Get all available models from the firmware API
                 all_available_models = set()
@@ -13470,7 +13470,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 models_not_in_plan = all_available_models - models_in_upgrade_plan
                 
                 if models_not_in_plan:
-                    print(f"\n   ?? Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
+                    print(f"\n   Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
                     
                     # Group models by their available firmware versions (AP families)
                     def get_version_signature(model_versions):
@@ -13494,14 +13494,14 @@ def bulk_upgrade_ap_firmware_by_site():
                         else:
                             print(f"      � {models[0]} ({len(signature)} firmware versions)")
                     
-                    print(f"\n   ?? Configure auto-upgrade for additional models:")
+                    print(f"\n   Configure auto-upgrade for additional models:")
                     print(f"   Models with identical firmware versions are grouped together as families.")
                     print(f"   This ensures new APs of ANY model will auto-upgrade to appropriate firmware.")
                     
                     configure_additional = input(f"   Configure auto-upgrade for additional models? (Y/n): ").strip().lower()
                     
                     if configure_additional not in ['n', 'no']:
-                        print(f"\n   ?? Selecting firmware versions for additional model families...")
+                        print(f"\n   Selecting firmware versions for additional model families...")
                         print(f"   Strategy: Highest version per major revision (e.g., highest 0.12.x, highest 0.14.x)")
                         
                         # Process each family group
@@ -13512,7 +13512,7 @@ def bulk_upgrade_ap_firmware_by_site():
                             # Get firmware versions for this family (all models have the same versions)
                             representative_model = models[0]
                             if representative_model not in model_version_ranges:
-                                print(f"      ?? No firmware versions found for model family {models}")
+                                print(f"      No firmware versions found for model family {models}")
                                 continue
                             
                             family_versions = model_version_ranges[representative_model]
@@ -13549,17 +13549,17 @@ def bulk_upgrade_ap_firmware_by_site():
                             
                             # Display family information
                             if len(models) > 1:
-                                print(f"\n      ?? AP Family {family_idx}: {', '.join(sorted(models))}")
+                                print(f"\n      AP Family {family_idx}: {', '.join(sorted(models))}")
                                 print(f"         These models share identical firmware version compatibility")
                             else:
-                                print(f"\n      ?? Model: {models[0]}")
+                                print(f"\n      Model: {models[0]}")
                                 
                             print(f"         Available major revisions with highest versions:")
                             
                             # Display options for this family
                             major_options = {}
                             for idx, (major_minor, highest_version) in enumerate(sorted(highest_per_major.items()), 1):
-                                print(f"            [{idx}] {major_minor}.x ? {highest_version}")
+                                print(f"            [{idx}] {major_minor}.x {highest_version}")
                                 major_options[str(idx)] = highest_version
                             
                             print(f"            [s] Skip this family")
@@ -13571,20 +13571,20 @@ def bulk_upgrade_ap_firmware_by_site():
                                     user_choice = input(f"         Select firmware for {family_name} (1-{len(major_options)}, s): ").strip().lower()
                                     
                                     if user_choice == 's':
-                                        print(f"         ?? Skipping {family_name}")
+                                        print(f"         Skipping {family_name}")
                                         break
                                     elif user_choice in major_options:
                                         selected_version = major_options[user_choice]
                                         # Apply the selected version to all models in this family
                                         for model in models:
                                             custom_versions[model] = selected_version
-                                        print(f"         ? {family_name} ? firmware {selected_version}")
+                                        print(f"         {family_name} firmware {selected_version}")
                                         print(f"            Applied to: {', '.join(sorted(models))}")
                                         break
                                     else:
-                                        print(f"         ? Invalid selection. Please choose 1-{len(major_options)} or 's'.")
+                                        print(f"         Invalid selection. Please choose 1-{len(major_options)} or 's'.")
                                 except KeyboardInterrupt:
-                                    print("\n         ? Configuration cancelled.")
+                                    print("\n         Configuration cancelled.")
                                     break
                 
                 # Validate that we have comprehensive model coverage
@@ -13592,16 +13592,16 @@ def bulk_upgrade_ap_firmware_by_site():
                 models_from_plan = len(models_in_upgrade_plan)
                 models_additionally_configured = total_models_configured - models_from_plan
                 
-                print(f"\n   ? Auto-upgrade coverage summary:")
+                print(f"\n   Auto-upgrade coverage summary:")
                 print(f"      � Models from upgrade plan: {models_from_plan}")
                 print(f"      � Additional models configured: {models_additionally_configured}")
                 print(f"      � Total models configured: {total_models_configured}")
                 
                 if total_models_configured > 0:
-                    print(f"\n   ?? Complete auto-upgrade model configuration:")
+                    print(f"\n   Complete auto-upgrade model configuration:")
                     for model, version in sorted(custom_versions.items()):
                         status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                        print(f"      � {model} ? firmware {version} ({status})")
+                        print(f"      � {model} firmware {version} ({status})")
                 
                 # Configure auto-upgrade with comprehensive model-specific versions
                 new_auto_upgrade = {
@@ -13611,7 +13611,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 }
                 
                 # Time scheduling configuration for comprehensive auto-upgrade
-                print(f"\n   ? Auto-upgrade time scheduling:")
+                print(f"\n   Auto-upgrade time scheduling:")
                 print(f"   Configure when new APs should automatically upgrade their firmware.")
                 
                 # Get time settings (reuse existing function)
@@ -13640,12 +13640,12 @@ def bulk_upgrade_ap_firmware_by_site():
                     body=site_settings_body
                 )
                 
-                print(f"   ? Site auto-upgrade configured with model-specific versions")
-                print(f"   ?? New APs will auto-upgrade to model-appropriate firmware:")
+                print(f"   Site auto-upgrade configured with model-specific versions")
+                print(f"   New APs will auto-upgrade to model-appropriate firmware:")
                 
                 # Show the configured versions
                 for model, version in custom_versions.items():
-                    print(f"      � New {model} APs ? firmware {version}")
+                    print(f"      � New {model} APs firmware {version}")
                 
                 # Show time schedule
                 time_of_day = new_auto_upgrade.get("time_of_day", "02:00")
@@ -13655,7 +13655,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 else:
                     schedule_text = f"daily at {time_of_day}"
                     
-                print(f"   ? Schedule: {schedule_text}")
+                print(f"   Schedule: {schedule_text}")
                 print(f"   + Model compatibility: Protected - each model gets appropriate firmware")
                 
                 logging.info(f"Site auto-upgrade configured with custom versions: {custom_versions}")
@@ -13685,13 +13685,13 @@ def bulk_upgrade_ap_firmware_by_site():
                 results.append(auto_upgrade_result)
                 
         except Exception as e:
-            print(f"   ? Error during auto-upgrade configuration: {e}")
+            print(f"   Error during auto-upgrade configuration: {e}")
             logging.error(f"Error during auto-upgrade configuration: {e}")
 
     # Step 11: Offer to check upgrade status
     if successful_upgrades > 0:
-        print(f"\n? Firmware upgrade{'s' if successful_upgrades > 1 else ''} initiated successfully!")
-        print(f"   ? {successful_upgrades} upgrade{'s' if successful_upgrades > 1 else ''} started across {len(devices_by_site)} site{'s' if len(devices_by_site) > 1 else ''}")
+        print(f"\n Firmware upgrade{'s' if successful_upgrades > 1 else ''} initiated successfully!")
+        print(f"   {successful_upgrades} upgrade{'s' if successful_upgrades > 1 else ''} started across {len(devices_by_site)} site{'s' if len(devices_by_site) > 1 else ''}")
         
         if upgrade_ids:
             logging.info(f"Upgrade monitoring - {len(upgrade_ids)} upgrade(s) initiated across {len(devices_by_site)} site(s)")
@@ -13758,7 +13758,7 @@ def bulk_upgrade_ap_firmware_by_site():
                     if upgrade_type == "single_model":
                         # Single model - use the version directly
                         model_name = next(iter(upgrade_models.keys()))
-                        version_summary = f"{model_name} ? {upgrade_models[model_name]['version']}"
+                        version_summary = f"{model_name} {upgrade_models[model_name]['version']}"
                     else:
                         # Multiple models - create summary
                         model_summaries = []
@@ -13795,26 +13795,26 @@ def bulk_upgrade_ap_firmware_by_site():
                 with open(upgrade_tracking_file, 'w', encoding='utf-8') as f:
                     json.dump(upgrade_tracking_data, f, indent=2, ensure_ascii=False)
                 
-                print(f"   ?? Upgrade tracking data saved to {upgrade_tracking_file}")
+                print(f"   Upgrade tracking data saved to {upgrade_tracking_file}")
                 logging.info(f"Saved {len(upgrade_ids)} upgrade IDs to tracking file {upgrade_tracking_file}")
                 
             except Exception as e:
-                print(f"   ?? Warning: Failed to save upgrade tracking data: {e}")
+                print(f"   Warning: Failed to save upgrade tracking data: {e}")
                 logging.warning(f"Failed to save upgrade tracking data: {e}")
         
         # Offer to check upgrade status now
-        print(f"\n? Reminder: You can monitor upgrade progress using menu option 60")
-        print(f"   ?? Option 60: Check current firmware upgrade status across organization")
+        print(f"\n Reminder: You can monitor upgrade progress using menu option 60")
+        print(f"   Option 60: Check current firmware upgrade status across organization")
         
         try:
-            check_now = input(f"\n? Would you like to check the upgrade status now? (y/n): ").strip().lower()
+            check_now = input(f"\n Would you like to check the upgrade status now? (y/n): ").strip().lower()
             if check_now in ['y', 'yes']:
-                print(f"\n? Checking upgrade status...")
+                print(f"\n Checking upgrade status...")
                 check_firmware_upgrade_status()
             else:
-                print(f"   ?? You can check upgrade status anytime using menu option 60")
+                print(f"   You can check upgrade status anytime using menu option 60")
         except (EOFError, KeyboardInterrupt):
-            print(f"\n   ?? You can check upgrade status anytime using menu option 60")
+            print(f"\n   You can check upgrade status anytime using menu option 60")
     
     # Step 12: Write results to CSV
     try:
@@ -13828,11 +13828,11 @@ def bulk_upgrade_ap_firmware_by_site():
                 writer.writeheader()
                 writer.writerows(results)
         
-        print(f"\n?? Advanced Firmware Upgrade Operation Completed!")
-        print(f"   ? Successful upgrades initiated: {successful_upgrades} devices")
-        print(f"   ? Failed upgrade attempts: {failed_upgrades} devices")
-        print(f"   ?? Detailed results logged to: {results_filename}")
-        print(f"   ?? Strategy used: {upgrade_config['strategy'].upper()}")
+        print(f"\n  Advanced Firmware Upgrade Operation Completed!")
+        print(f"   Successful upgrades initiated: {successful_upgrades} devices")
+        print(f"   Failed upgrade attempts: {failed_upgrades} devices")
+        print(f"   Detailed results logged to: {results_filename}")
+        print(f"   Strategy used: {upgrade_config['strategy'].upper()}")
         
         # Show mixed-model upgrade summary if applicable
         unique_versions_used = set()
@@ -13843,7 +13843,7 @@ def bulk_upgrade_ap_firmware_by_site():
                 models_upgraded.add(result.get("Model", "Unknown"))
         
         if len(unique_versions_used) > 1:
-            print(f"   ?? Mixed-Model Upgrade: {len(models_upgraded)} models, {len(unique_versions_used)} firmware versions")
+            print(f"   Mixed-Model Upgrade: {len(models_upgraded)} models, {len(unique_versions_used)} firmware versions")
             for model in sorted(models_upgraded):
                 # Find the version for this model
                 model_version = "Unknown"
@@ -13852,16 +13852,16 @@ def bulk_upgrade_ap_firmware_by_site():
                         model_version = result.get("Target Version", "Unknown")
                         break
                 model_device_count = sum(1 for r in results if r.get("Model") == model and r.get("Status") != "ERROR")
-                print(f"      � {model}: {model_device_count} devices ? firmware {model_version}")
-            print(f"   ?? This is normal behavior when different AP models support different firmware ranges")
+                print(f"      � {model}: {model_device_count} devices firmware {model_version}")
+            print(f"   This is normal behavior when different AP models support different firmware ranges")
         else:
             single_version = list(unique_versions_used)[0] if unique_versions_used else "Unknown"
-            print(f"   ?? Unified Upgrade: All {len(models_upgraded)} model(s) upgrading to firmware {single_version}")
+            print(f"   Unified Upgrade: All {len(models_upgraded)} model(s) upgrading to firmware {single_version}")
         
         if upgrade_id:
-            print(f"   ?? Primary Upgrade ID: {upgrade_id}")
+            print(f"   Primary Upgrade ID: {upgrade_id}")
         
-        print(f"\n?? Important Notes:")
+        print(f"\n  Important Notes:")
         print(f"   � Upgrades will continue in the background")
         print(f"   � Monitor device status in Mist portal or API")
         print(f"   � Strategy '{upgrade_config['strategy']}' controls rollout pace")
@@ -13894,7 +13894,7 @@ def bulk_upgrade_ap_firmware_by_site():
 
 menu_actions = {
     # ==============================
-    # ? READ-ONLY OPERATIONS
+    # READ-ONLY OPERATIONS
     # ==============================
     
     # > Setup & Core Logs
@@ -13911,14 +13911,14 @@ menu_actions = {
     "9": (export_system_event_definitions_to_csv, "Export system event definitions"),
     "10": (export_alarm_definitions_to_csv, "Export alarm definitions with severity and field info"),
 
-    # ?? Organization-Level Exports
+    # Organization-Level Exports
     "11": (export_all_sites_to_csv, "Export a list of all sites in the organization"),
     "12": (export_device_inventory_to_csv, "Export the full inventory of devices in the organization"),
     "13": (export_device_stats_to_csv, "Export statistics for all devices in the organization"),
     "14": (export_device_port_stats_to_csv, "Export port-level statistics for switches and gateways"),
     "15": (export_vpn_peer_stats_to_csv, "Export VPN peer path statistics for the organization"),
 
-    # ?? Gateway & Site-Wide Exports
+    # Gateway & Site-Wide Exports
     "16": (lambda fast=False: export_gateway_synthetic_tests_to_csv(fast=fast), "Export synthetic test results for all gateways"),
     "17": (export_all_devices_to_csv, "Export a list of all devices in the organization"),
     "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
@@ -13935,7 +13935,7 @@ menu_actions = {
     "27": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
     "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
-    # ?? Site-Specific Data Exports
+    # Site-Specific Data Exports
     "29": (export_site_port_stats_to_csv, "Export port statistics for a selected site"),
     "30": (export_site_clients_to_csv, "Export client statistics for a selected site"),
     "31": (export_site_devices_to_csv, "Export device list for a selected site"),
@@ -13943,23 +13943,23 @@ menu_actions = {
     "33": (export_site_device_virtual_chassis_to_csv, "Export virtual chassis information for a selected switch device"),
     "34": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
     
-    # ?? Organization Template Exports
+    # Organization Template Exports
     "35": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
     "36": (export_org_network_templates_to_csv, "Export network template information for the organization"),
     "37": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
     "38": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
     "39": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
     
-    # ?? Organization Statistics & Analytics  
+    # Organization Statistics & Analytics  
     "40": (export_org_wireless_clients_to_csv, "Export wireless client statistics for the organization"),
     "41": (export_org_wired_clients_to_csv, "Export wired client statistics for the organization"),
     
-    # ?? Security & Monitoring
+    # Security & Monitoring
     "42": (export_org_security_events_to_csv, "Export security events for the organization"),
     "43": (export_org_rogue_clients_to_csv, "Export rogue client detections for the organization"),
     "44": (export_org_rogue_aps_to_csv, "Export rogue AP detections for the organization"),
     
-    # ?? Configuration & Management (Read-Only)
+    # Configuration & Management (Read-Only)
     "45": (export_org_licenses_to_csv, "Export license information for the organization"),
     "46": (export_org_psks_to_csv, "Export PSK (Pre-Shared Key) information for the organization"),
     "47": (export_org_webhooks_to_csv, "Export webhook configuration for the organization"),
@@ -13970,7 +13970,7 @@ menu_actions = {
     "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
     "53": (export_site_insights_to_csv, "Export insights information for a selected site"),
     
-    # ?? Organization Management (Read-Only)
+    # Organization Management (Read-Only)
     "54": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
     "55": (export_org_admins_to_csv, "Export administrator information for the organization"),
     "56": (export_org_msp_to_csv, "Export MSP (Managed Service Provider) information for the organization"),
@@ -13978,19 +13978,19 @@ menu_actions = {
     "58": (export_org_usage_to_csv, "Export license usage information for the organization"),
     "59": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
     
-    # ? Status & Monitoring
+    # Status & Monitoring
     "60": (check_firmware_upgrade_status, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
     "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: compare_inventory_with_csv(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
     "62": (poll_marvis_actions, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
-    # ? Work In Progress Features (Read-Only)
+    # Work In Progress Features (Read-Only)
     "63": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
     "64": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
     "65": (export_gateway_device_configs_to_csv, "WIP Export configuration details for all gateway devices across all sites"),
     
     
     # ==============================
-    # ?? UNSAFE/INTERACTIVE OPERATIONS
+    # UNSAFE/INTERACTIVE OPERATIONS
     # ==============================
     
     # > Site Selection & Interactive Tools
@@ -14013,19 +14013,19 @@ menu_actions = {
     "80": (run_arp_via_websocket, "Run ARP command on an AP and receive output via WebSocket"),
 
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
-    "90": (bulk_upgrade_ap_firmware_by_site, "?? DESTRUCTIVE: Advanced bulk AP firmware upgrade with multiple strategies (big_bang, canary, rrm, serial), P2P sharing, scheduling, and progress monitoring"),
-    "91": (reboot_devices_by_gateway_template_list, "?? DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
-    "92": (convert_virtual_chassis_to_virtual_mac, "?? DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
-    "93": (convert_virtual_chassis_by_site_list, "?? DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
+    "90": (bulk_upgrade_ap_firmware_by_site, " DESTRUCTIVE: Advanced bulk AP firmware upgrade with multiple strategies (big_bang, canary, rrm, serial), P2P sharing, scheduling, and progress monitoring"),
+    "91": (reboot_devices_by_gateway_template_list, " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
+    "92": (convert_virtual_chassis_to_virtual_mac, " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
+    "93": (convert_virtual_chassis_by_site_list, " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
     "94": (check_virtual_chassis_conversion_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
     "95": (lambda fast=False: export_gateway_device_stats_to_csv_with_freshness_check(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
     "96": (export_gateways_with_wan_port_conflicts_to_csv, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
 
     # ==============================
-    # ?? POST API OPERATIONS - Device Commands (Starting at 100)
+    # POST API OPERATIONS - Device Commands (Starting at 100)
     # ==============================
     
-    # ?? Device Network Operations removed (options 100, 101)
+    # Device Network Operations removed (options 100, 101)
 }
 
 def run_systematic_test():
@@ -14045,13 +14045,22 @@ def run_systematic_test():
         bool: True if all tests passed, False if any failed
     """
     start_time = time.time()
-    print("?? Starting systematic test of MistHelper menu options...")
-    print("??  Note: This will skip interactive, websocket, POST, and destructive operations")
+    print(" Starting systematic test of MistHelper menu options...")
+    print("  Note: This will skip interactive, websocket, POST, and destructive operations")
     print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     
     # Define unsafe menu options that should be skipped during testing
     unsafe_options = {
+        # Resource-intensive operations that consistently fail or take excessive time
+        "14": "Port-level statistics - extremely resource intensive (8+ hours, often fails)",
+        "18": "Site configurations - hits API rate limits after 7+ hours",
+        
+        # Interactive operations requiring user input
+        "60": "Firmware upgrade status - requires interactive scope selection",
+        "61": "CSV comparison - requires interactive file selection",
+        "62": "Marvis troubleshooting - requires interactive option selection",
+        
         # Site-specific operations requiring site selection
         "29": "Requires site selection",
         "30": "Requires site selection", 
@@ -14101,7 +14110,52 @@ def run_systematic_test():
     
     # Get all available menu options
     all_options = sorted(menu_actions.keys(), key=lambda x: float(x.replace('a', '.1')))
-    safe_options = [opt for opt in all_options if opt not in unsafe_options]
+    
+    # Define optimized test order based on execution time analysis (shortest to longest)
+    # This ordering minimizes total test time by running quick tests first
+    optimized_test_order = [
+        # Very fast tests (~0.1-0.2 seconds)
+        "5",   # Client Event Definitions (~0.1s)
+        "7",   # Mist Edge Event Definitions (~0.1s) 
+        "8",   # Other Device Event Definitions (~0.1s)
+        "9",   # System Event Definitions (~0.1s)
+        "10",  # Alarm Definitions (~0.1s)
+        "4",   # NAC Event Definitions (~0.2s)
+        "6",   # Device Event Definitions (~0.2s)
+        
+        # Fast tests (~0.6-3.5 seconds)
+        "3",   # Audit Logs (~0.6s)
+        "17",  # All Devices List (~3s)
+        "11",  # All Sites List (~3.5s)
+        
+        # Medium tests (~18-30 seconds)
+        "12",  # Device Inventory (~18s)
+        "1",   # Organization Alarms (~30s)
+        
+        # Slower tests (~1-5 minutes)
+        "13",  # Device Stats (~97s)
+        "15",  # VPN Peer Stats (~257s)
+        
+        # Slow tests (~8+ minutes)
+        "2",   # Device Events (~485s)
+        "16",  # Gateway Synthetic Tests (~1115s)
+        
+        # Note: Options 14 (Port-level Statistics) and 18 (Site Configurations) 
+        # have been moved to unsafe_options due to excessive resource consumption
+    ]
+    
+    # Create optimized safe options list, preserving any additional options not in the predefined order
+    safe_options_set = set(opt for opt in all_options if opt not in unsafe_options)
+    safe_options = []
+    
+    # Add options in optimized order first
+    for opt in optimized_test_order:
+        if opt in safe_options_set:
+            safe_options.append(opt)
+            safe_options_set.remove(opt)
+    
+    # Add any remaining safe options at the end (for future additions)
+    safe_options.extend(sorted(safe_options_set, key=lambda x: float(x.replace('a', '.1'))))
     
     print(f"! Found {len(all_options)} total menu options")
     print(f"! {len(safe_options)} safe options will be tested")
@@ -14109,7 +14163,7 @@ def run_systematic_test():
     print()
     
     # Show which options will be skipped and why
-    print("?? Skipping unsafe operations:")
+    print(" Skipping unsafe operations:")
     for opt in sorted(unsafe_options.keys(), key=lambda x: float(x.replace('a', '.1'))):
         if opt in menu_actions:
             _, description = menu_actions[opt]
@@ -14118,7 +14172,7 @@ def run_systematic_test():
     print()
     
     # Test safe options
-    print("?? Testing safe operations:")
+    print(" Testing safe operations:")
     success_count = 0
     error_count = 0
     
@@ -14134,12 +14188,12 @@ def run_systematic_test():
             # Execute the function
             logging.info(f"SYSTEMATIC_TEST: Starting test of menu option {option}: {description}")
             func()
-            print(f"   ? Option {option} completed successfully")
+            print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
             logging.info(f"SYSTEMATIC_TEST: Successfully completed menu option {option}")
             
         except Exception as e:
-            print(f"   ? Option {option} failed: {str(e)[:100]}...")
+            print(f"   [FAILED]  Option {option} failed: {str(e)[:100]}...")
             error_count += 1
             logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
             
@@ -14150,20 +14204,20 @@ def run_systematic_test():
     total_time = time.time() - start_time
     print()
     print("=" * 80)
-    print("?? Systematic Test Summary:")
-    print(f"   ? Successful operations: {success_count}")
-    print(f"   ? Failed operations: {error_count}")
-    print(f"   ?? Skipped unsafe operations: {len(unsafe_options)}")
-    print(f"   ?? Total coverage: {success_count}/{len(all_options)} ({success_count/len(all_options)*100:.1f}%)")
-    print(f"   ??  Total execution time: {total_time:.2f} seconds")
-    print(f"   ?? Detailed logs in: script.log")
+    print(" Systematic Test Summary:")
+    print(f"   Successful operations: {success_count}")
+    print(f"   Failed operations: {error_count}")
+    print(f"   Skipped unsafe operations: {len(unsafe_options)}")
+    print(f"   Total coverage: {success_count}/{len(all_options)} ({success_count/len(all_options)*100:.1f}%)")
+    print(f"    Total execution time: {total_time:.2f} seconds")
+    print(f"   Detailed logs in: script.log")
     
     if error_count == 0:
-        print("   ?? All tested operations completed successfully!")
+        print("   All tested operations completed successfully!")
         logging.info(f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s")
         return True
     else:
-        print(f"   ??  {error_count} operations failed - check logs for details")
+        print(f"    {error_count} operations failed - check logs for details")
         logging.warning(f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested")
         return False
 
@@ -14256,7 +14310,7 @@ def main():
     # Initialize Mist API session after dependencies are available
     if not initialize_mist_session():
         logging.error("Failed to initialize Mist API session")
-        print("? Failed to initialize Mist API session. Check your credentials.")
+        print(" Failed to initialize Mist API session. Check your credentials.")
         sys.exit(1)
     
     # Set global output format based on CLI argument
