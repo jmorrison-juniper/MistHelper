@@ -21,6 +21,7 @@ import os
 import re
 import ipaddress
 import multiprocessing
+import csv
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -38,210 +39,7 @@ except ImportError:
     print("   .env file support will be limited to basic parsing")
 
 
-def parse_host_list(hosts_str: str) -> list:
-    """
-    Parse comma-separated host list from .env file with validation
-    
-    Args:
-        hosts_str: String containing comma-separated hosts (e.g., '192.168.1.1,192.168.1.2')
-        
-    Returns:
-        list: List of validated hostnames/IPs
-    """
-    return EnhancedSSHRunner.parse_host_list(hosts_str)
 
-
-def load_ssh_config_from_env(env_file: str = ".env") -> dict:
-    """
-    Load SSH configuration from .env file with comprehensive validation
-    
-    Args:
-        env_file: Path to the .env file (default: ".env")
-        
-    Returns:
-        dict: SSH configuration with keys: hosts, username, password, commands
-    """
-    config = {
-        'hosts': [],
-        'username': None, 
-        'password': None,
-        'commands': []
-    }
-    
-    # Validate env_file path to prevent directory traversal
-    if not env_file or '..' in env_file or env_file.startswith('/') or '\\' in env_file:
-        print(f"⚠️  Invalid .env file path: {env_file}")
-        return config
-    
-    if not os.path.exists(env_file):
-        return config
-    
-    # Check file size to prevent DoS
-    try:
-        file_size = os.path.getsize(env_file)
-        if file_size > 1024 * 1024:  # 1MB limit
-            print(f"⚠️  .env file too large ({file_size} bytes), skipping")
-            return config
-    except OSError as e:
-        print(f"⚠️  Cannot access .env file: {e}")
-        return config
-    
-    if DOTENV_AVAILABLE:
-        # Use python-dotenv for proper parsing
-        try:
-            load_dotenv(env_file)
-            ssh_host = os.getenv('SSH_HOST')
-            if ssh_host:
-                config['hosts'] = parse_host_list(ssh_host)
-            
-            # Validate username
-            username = os.getenv('SSH_USER')
-            if username and EnhancedSSHRunner.validate_username(username):
-                config['username'] = username
-            elif username:
-                print(f"⚠️  Invalid username format in .env file: {username}")
-            
-            config['password'] = os.getenv('SSH_PASSWORD')
-            
-            # Parse SSH_COMMANDS
-            ssh_commands = os.getenv('SSH_COMMANDS')
-            if ssh_commands:
-                config['commands'] = parse_command_list(ssh_commands)
-        except Exception as e:
-            print(f"⚠️  Error loading .env with python-dotenv: {e}")
-    else:
-        # Basic manual parsing for .env files with enhanced validation
-        try:
-            with open(env_file, 'r', encoding='utf-8', errors='ignore') as f:
-                line_count = 0
-                for line in f:
-                    line_count += 1
-                    
-                    # Prevent processing too many lines
-                    if line_count > 1000:
-                        print("⚠️  .env file has too many lines, stopping at 1000")
-                        break
-                    
-                    line = line.strip()
-                    
-                    # Skip empty lines and comments
-                    if not line or line.startswith('#'):
-                        continue
-                    
-                    # Skip lines without equals sign
-                    if '=' not in line:
-                        continue
-                    
-                    # Handle multiple = signs correctly
-                    parts = line.split('=', 1)
-                    if len(parts) != 2:
-                        continue
-                    
-                    key = parts[0].strip()
-                    value = parts[1].strip()
-                    
-                    # Remove quotes if present
-                    if value.startswith('"') and value.endswith('"'):
-                        value = value[1:-1]
-                    elif value.startswith("'") and value.endswith("'"):
-                        value = value[1:-1]
-                    
-                    # Process known keys with validation
-                    if key == 'SSH_HOST':
-                        config['hosts'] = parse_host_list(value)
-                    elif key == 'SSH_USER':
-                        if EnhancedSSHRunner.validate_username(value):
-                            config['username'] = value
-                        else:
-                            print(f"⚠️  Invalid username format in .env file: {value}")
-                    elif key == 'SSH_PASSWORD':
-                        config['password'] = value
-                    elif key == 'SSH_COMMANDS':
-                        config['commands'] = parse_command_list(value)
-                        
-        except UnicodeDecodeError as e:
-            print(f"⚠️  .env file encoding error: {e}")
-        except IOError as e:
-            print(f"⚠️  Error reading {env_file}: {e}")
-        except Exception as e:
-            print(f"⚠️  Unexpected error reading {env_file}: {e}")
-    
-    return config
-
-
-def parse_command_list(commands_str: str) -> list:
-    """
-    Parse comma-separated command list from .env file with validation
-    
-    Args:
-        commands_str: String containing comma-separated commands (e.g., 'show ver,show route' or '"show ver","show route"')
-        
-    Returns:
-        list: List of validated commands
-    """
-    return EnhancedSSHRunner.parse_command_list(commands_str)
-
-
-def setup_logging(log_level: str = 'INFO') -> logging.Logger:
-    """
-    Setup comprehensive logging configuration with syslog-style levels
-    
-    Args:
-        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        
-    Returns:
-        logging.Logger: Configured logger instance
-    """
-    # Create logger
-    logger = logging.getLogger('ssh_runner_v2')
-    logger.setLevel(getattr(logging, log_level.upper()))
-    
-    # Avoid duplicate handlers
-    if logger.handlers:
-        return logger
-    
-    # Create formatters - RFC3164 syslog-style format
-    # File logging: detailed format with all syslog fields
-    detailed_formatter = logging.Formatter(
-        '%(asctime)s %(name)s[%(process)d]: %(levelname)s: %(funcName)s:%(lineno)d - %(message)s',
-        datefmt='%b %d %H:%M:%S'
-    )
-    
-    # Console logging: simplified format, minimal for per-host operations
-    console_formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S'
-    )
-    
-    # File handler with rotation - captures all debug info
-    try:
-        file_handler = logging.handlers.RotatingFileHandler(
-            'ssh_runner_v2.log', 
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5,
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.DEBUG)  # Always capture debug in file
-        file_handler.setFormatter(detailed_formatter)
-        logger.addHandler(file_handler)
-    except Exception as e:
-        print(f"WARNING: Could not setup file logging: {e}")
-    
-    # Console handler - only for summary info, not per-host details
-    console_handler = logging.StreamHandler(sys.stdout)
-    # Set console level higher to reduce noise (WARNING+ unless debug mode)
-    console_level = logging.DEBUG if log_level == 'DEBUG' else logging.WARNING
-    console_handler.setLevel(console_level)
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    # Log startup at appropriate level
-    if log_level == 'DEBUG':
-        logger.debug("Enhanced SSH Runner v2 - DEBUG logging initialized")
-    else:
-        logger.info("Enhanced SSH Runner v2 logging initialized")
-    
-    return logger
 
 
 
@@ -1179,528 +977,859 @@ class EnhancedSSHRunner:
             print("🔌 SSH connection closed")
         else:
             self.logger.debug("No SSH connection to close")
-
-
-def run_multiple_ssh_commands(hostname: str, username: str, password: str, commands: list, 
-                             port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
-    """
-    Connect via SSH and execute multiple commands sequentially
     
-    Args:
-        hostname: IP address or hostname
-        username: SSH username
-        password: SSH password
-        commands: List of commands to execute
-        port: SSH port (default 22)
-        timeout: Connection timeout
-        use_shell: Use interactive shell mode (better for network devices)
+    @staticmethod
+    def load_ssh_config_from_env(env_file: str = ".env") -> dict:
+        """
+        Load SSH configuration from .env file with comprehensive validation
         
-    Returns:
-        bool: True if all commands successful, False otherwise
-    """
-    # Get the already-configured logger
-    logger = logging.getLogger('ssh_runner_v2')
-    logger.debug(f"Starting SSH multi-command execution: {hostname}:{port} - {len(commands)} commands (shell={use_shell})")
-    logger.debug(f"Commands to execute: {commands}")
-    
-    # Create per-host log file in subfolder with proper sanitization
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
-    
-    # Ensure per-host-logs directory exists and is secure
-    log_dir = "per-host-logs"
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        # Set secure permissions on directory (owner read/write/execute only)
-        if hasattr(os, 'chmod'):
-            os.chmod(log_dir, 0o700)
-    except OSError as e:
-        logger.error(f"Failed to create log directory {log_dir}: {e}")
-        # Fallback to current directory
-        log_dir = "."
-        safe_hostname = f"fallback_{safe_hostname}"
-    
-    host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-    print(f"🌐 [{hostname}] Logging to: {host_log_file}")
-    
-    def write_to_host_log(message: str):
-        """Write message to host-specific log file only (not console)"""
-        if not message:
-            return
-        
-        try:
-            # Sanitize message to prevent log injection
-            safe_message = message.replace('\x00', '').replace('\r\n', '\n')
+        Args:
+            env_file: Path to the .env file (default: ".env")
             
-            with open(host_log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{safe_message}\n")
-                f.flush()  # Ensure data is written immediately
-        except IOError as e:
-            logger.error(f"IO error writing to host log {host_log_file}: {e}")
-        except UnicodeEncodeError as e:
-            logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
-            # Try writing a sanitized version
+        Returns:
+            dict: SSH configuration with keys: hosts, username, password, commands
+        """
+        config = {
+            'hosts': [],
+            'username': None, 
+            'password': None,
+            'commands': []
+        }
+        
+        # Validate env_file path to prevent directory traversal
+        if not env_file or '..' in env_file or env_file.startswith('/') or '\\' in env_file:
+            print(f"⚠️  Invalid .env file path: {env_file}")
+            return config
+        
+        if not os.path.exists(env_file):
+            return config
+        
+        # Check file size to prevent DoS
+        try:
+            file_size = os.path.getsize(env_file)
+            if file_size > 1024 * 1024:  # 1MB limit
+                print(f"⚠️  .env file too large ({file_size} bytes), skipping")
+                return config
+        except OSError as e:
+            print(f"⚠️  Cannot access .env file: {e}")
+            return config
+        
+        if DOTENV_AVAILABLE:
+            # Use python-dotenv for proper parsing
             try:
-                safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                load_dotenv(env_file)
+                ssh_host = os.getenv('SSH_HOST')
+                if ssh_host:
+                    config['hosts'] = EnhancedSSHRunner.parse_host_list(ssh_host)
+                
+                # Validate username
+                username = os.getenv('SSH_USER')
+                if username and EnhancedSSHRunner.validate_username(username):
+                    config['username'] = username
+                elif username:
+                    print(f"⚠️  Invalid username format in .env file: {username}")
+                
+                config['password'] = os.getenv('SSH_PASSWORD')
+                
+                # Parse SSH_COMMANDS
+                ssh_commands = os.getenv('SSH_COMMANDS')
+                if ssh_commands:
+                    config['commands'] = EnhancedSSHRunner.parse_command_list(ssh_commands)
+            except Exception as e:
+                print(f"⚠️  Error loading .env with python-dotenv: {e}")
+        else:
+            # Basic manual parsing for .env files with enhanced validation
+            try:
+                with open(env_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    line_count = 0
+                    for line in f:
+                        line_count += 1
+                        
+                        # Prevent processing too many lines
+                        if line_count > 1000:
+                            print("⚠️  .env file has too many lines, stopping at 1000")
+                            break
+                        
+                        line = line.strip()
+                        
+                        # Skip empty lines and comments
+                        if not line or line.startswith('#'):
+                            continue
+                        
+                        # Skip lines without equals sign
+                        if '=' not in line:
+                            continue
+                        
+                        # Handle multiple = signs correctly
+                        parts = line.split('=', 1)
+                        if len(parts) != 2:
+                            continue
+                        
+                        key = parts[0].strip()
+                        value = parts[1].strip()
+                        
+                        # Remove quotes if present
+                        if value.startswith('"') and value.endswith('"'):
+                            value = value[1:-1]
+                        elif value.startswith("'") and value.endswith("'"):
+                            value = value[1:-1]
+                        
+                        # Process known keys with validation
+                        if key == 'SSH_HOST':
+                            config['hosts'] = EnhancedSSHRunner.parse_host_list(value)
+                        elif key == 'SSH_USER':
+                            if EnhancedSSHRunner.validate_username(value):
+                                config['username'] = value
+                            else:
+                                print(f"⚠️  Invalid username format in .env file: {value}")
+                        elif key == 'SSH_PASSWORD':
+                            config['password'] = value
+                        elif key == 'SSH_COMMANDS':
+                            config['commands'] = EnhancedSSHRunner.parse_command_list(value)
+                            
+            except UnicodeDecodeError as e:
+                print(f"⚠️  .env file encoding error: {e}")
+            except IOError as e:
+                print(f"⚠️  Error reading {env_file}: {e}")
+            except Exception as e:
+                print(f"⚠️  Unexpected error reading {env_file}: {e}")
+        
+        return config
+    
+    @staticmethod
+    def setup_logging(log_level: str = 'INFO') -> logging.Logger:
+        """
+        Setup comprehensive logging configuration with syslog-style levels
+        
+        Args:
+            log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            
+        Returns:
+            logging.Logger: Configured logger instance
+        """
+        # Create logger
+        logger = logging.getLogger('ssh_runner_v2')
+        logger.setLevel(getattr(logging, log_level.upper()))
+        
+        # Avoid duplicate handlers
+        if logger.handlers:
+            return logger
+        
+        # Create formatters - RFC3164 syslog-style format
+        # File logging: detailed format with all syslog fields
+        detailed_formatter = logging.Formatter(
+            '%(asctime)s %(name)s[%(process)d]: %(levelname)s: %(funcName)s:%(lineno)d - %(message)s',
+            datefmt='%b %d %H:%M:%S'
+        )
+        
+        # Console logging: simplified format, minimal for per-host operations
+        console_formatter = logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        
+        # File handler with rotation - captures all debug info
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                'ssh_runner_v2.log', 
+                maxBytes=10*1024*1024,  # 10MB
+                backupCount=5,
+                encoding='utf-8'
+            )
+            file_handler.setLevel(logging.DEBUG)  # Always capture debug in file
+            file_handler.setFormatter(detailed_formatter)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            print(f"WARNING: Could not setup file logging: {e}")
+        
+        # Console handler - only for summary info, not per-host details
+        console_handler = logging.StreamHandler(sys.stdout)
+        # Set console level higher to reduce noise (WARNING+ unless debug mode)
+        console_level = logging.DEBUG if log_level == 'DEBUG' else logging.WARNING
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+        
+        # Log startup at appropriate level
+        if log_level == 'DEBUG':
+            logger.debug("Enhanced SSH Runner v2 - DEBUG logging initialized")
+        else:
+            logger.info("Enhanced SSH Runner v2 logging initialized")
+        
+        return logger
+    
+    @staticmethod
+    def run_multiple_ssh_commands(hostname: str, username: str, password: str, commands: list, 
+                                 port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
+        """
+        Connect via SSH and execute multiple commands sequentially
+        
+        Args:
+            hostname: IP address or hostname
+            username: SSH username
+            password: SSH password
+            commands: List of commands to execute
+            port: SSH port (default 22)
+            timeout: Connection timeout
+            use_shell: Use interactive shell mode (better for network devices)
+            
+        Returns:
+            bool: True if all commands successful, False otherwise
+        """
+        # Get the already-configured logger
+        logger = logging.getLogger('ssh_runner_v2')
+        logger.debug(f"Starting SSH multi-command execution: {hostname}:{port} - {len(commands)} commands (shell={use_shell})")
+        logger.debug(f"Commands to execute: {commands}")
+        
+        # Create per-host log file in subfolder with proper sanitization
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
+        
+        # Ensure per-host-logs directory exists and is secure
+        log_dir = "per-host-logs"
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            # Set secure permissions on directory (owner read/write/execute only)
+            if hasattr(os, 'chmod'):
+                os.chmod(log_dir, 0o700)
+        except OSError as e:
+            logger.error(f"Failed to create log directory {log_dir}: {e}")
+            # Fallback to current directory
+            log_dir = "."
+            safe_hostname = f"fallback_{safe_hostname}"
+        
+        host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
+        print(f"🌐 [{hostname}] Logging to: {host_log_file}")
+        
+        def write_to_host_log(message: str):
+            """Write message to host-specific log file only (not console)"""
+            if not message:
+                return
+            
+            try:
+                # Sanitize message to prevent log injection
+                safe_message = message.replace('\x00', '').replace('\r\n', '\n')
+                
                 with open(host_log_file, 'a', encoding='utf-8') as f:
                     f.write(f"{safe_message}\n")
-                    f.flush()
-            except Exception:
-                logger.error(f"Failed to write sanitized message to host log")
-        except Exception as e:
-            logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
-    
-    runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
-    overall_success = True
-    
-    # Initialize host log with header
-    header = f"""
+                    f.flush()  # Ensure data is written immediately
+            except IOError as e:
+                logger.error(f"IO error writing to host log {host_log_file}: {e}")
+            except UnicodeEncodeError as e:
+                logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
+                # Try writing a sanitized version
+                try:
+                    safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                    with open(host_log_file, 'a', encoding='utf-8') as f:
+                        f.write(f"{safe_message}\n")
+                        f.flush()
+                except Exception:
+                    logger.error(f"Failed to write sanitized message to host log")
+            except Exception as e:
+                logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
+        
+        runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
+        overall_success = True
+        
+        # Initialize host log with header
+        header = f"""
 {'='*80}
 SSH Session Log for Host: {hostname}
 Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Commands to execute: {len(commands)}
 {'='*80}"""
-    write_to_host_log(header)
-    
-    try:
-        # Connect once for all commands
-        if not runner.connect(hostname, username, password, port):
-            error_msg = f"Failed to connect to {hostname}"
-            logger.error(f"SSH connection failed: {hostname}:{port}")
-            write_to_host_log(f"❌ {error_msg}")
-            return False
+        write_to_host_log(header)
         
-        logger.debug(f"SSH connected to {hostname}, executing {len(commands)} commands")
-        connection_msg = f"\n🚀 Executing {len(commands)} commands sequentially..."
-        write_to_host_log(connection_msg)
-        
-        # Execute each command with keyboard interrupt handling
-        for i, command in enumerate(commands, 1):
-            try:
-                separator = f"\n{'='*60}"
-                command_header = f"📝 Command {i}/{len(commands)}: {command}"
-                separator_line = '='*60
-                
-                write_to_host_log(separator)
-                write_to_host_log(command_header)
-                write_to_host_log(separator_line)
-                
-                print(f"⚡ [{hostname}] Executing command: {command}")
-                success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
-                
-                if stdout:
-                    write_to_host_log("📤 OUTPUT:")
-                    write_to_host_log(stdout)
-                
-                if stderr:
-                    write_to_host_log("📤 ERRORS:")
-                    write_to_host_log(stderr)
-                
-                if success:
-                    logger.debug(f"[{hostname}] Command {i}/{len(commands)} completed: {command}")
-                    success_msg = f"✅ Command {i} executed successfully"
-                    write_to_host_log(success_msg)
-                else:
-                    logger.warning(f"[{hostname}] Command {i}/{len(commands)} failed: {command[:50]}...")
-                    failure_msg = f"❌ Command {i} failed"
-                    write_to_host_log(failure_msg)
-                    overall_success = False
-                
-                # Small delay between commands for network devices
-                if i < len(commands):
-                    time.sleep(0.5)
+        try:
+            # Connect once for all commands
+            if not runner.connect(hostname, username, password, port):
+                error_msg = f"Failed to connect to {hostname}"
+                logger.error(f"SSH connection failed: {hostname}:{port}")
+                write_to_host_log(f"❌ {error_msg}")
+                return False
+            
+            logger.debug(f"SSH connected to {hostname}, executing {len(commands)} commands")
+            connection_msg = f"\n🚀 Executing {len(commands)} commands sequentially..."
+            write_to_host_log(connection_msg)
+            
+            # Execute each command with keyboard interrupt handling
+            for i, command in enumerate(commands, 1):
+                try:
+                    separator = f"\n{'='*60}"
+                    command_header = f"📝 Command {i}/{len(commands)}: {command}"
+                    separator_line = '='*60
                     
-            except KeyboardInterrupt:
-                print(f"\n💥 [{hostname}] Ctrl+C detected! Skipping remaining commands...")
-                interrupt_msg = f"\n❌ Command {i} interrupted by user (Ctrl+C)\n⏭️ Skipping remaining {len(commands) - i} commands"
-                write_to_host_log(interrupt_msg)
-                logger.warning(f"[{hostname}] Command execution interrupted by user at command {i}/{len(commands)}")
-                overall_success = False
-                break
-        
-        final_separator = f"\n{'='*60}"
-        write_to_host_log(final_separator)
-        
-        if overall_success:
-            logger.info(f"[{hostname}] All {len(commands)} commands completed successfully")
-            final_msg = "✅ All commands executed successfully"
-            write_to_host_log(final_msg)
-        else:
-            logger.warning(f"[{hostname}] Some commands failed during execution")
-            final_msg = "⚠️  Some commands failed - check output above"
-            write_to_host_log(final_msg)
-        
-        return overall_success
-        
-    except Exception as e:
-        logger.error(f"[{hostname}] Unexpected error during multi-command execution: {type(e).__name__}: {e}", exc_info=True)
-        error_msg = f"❌ Unexpected error: {e}"
-        write_to_host_log(error_msg)
-        return False
-    finally:
-        runner.disconnect()
-        logger.debug(f"[{hostname}] SSH multi-command session completed")
-        
-        # Write session footer to host log
-        footer = f"""
+                    write_to_host_log(separator)
+                    write_to_host_log(command_header)
+                    write_to_host_log(separator_line)
+                    
+                    print(f"⚡ [{hostname}] Executing command: {command}")
+                    success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
+                    
+                    if stdout:
+                        write_to_host_log("📤 OUTPUT:")
+                        write_to_host_log(stdout)
+                    
+                    if stderr:
+                        write_to_host_log("📤 ERRORS:")
+                        write_to_host_log(stderr)
+                    
+                    if success:
+                        logger.debug(f"[{hostname}] Command {i}/{len(commands)} completed: {command}")
+                        success_msg = f"✅ Command {i} executed successfully"
+                        write_to_host_log(success_msg)
+                    else:
+                        logger.warning(f"[{hostname}] Command {i}/{len(commands)} failed: {command[:50]}...")
+                        failure_msg = f"❌ Command {i} failed"
+                        write_to_host_log(failure_msg)
+                        overall_success = False
+                    
+                    # Small delay between commands for network devices
+                    if i < len(commands):
+                        time.sleep(0.5)
+                        
+                except KeyboardInterrupt:
+                    print(f"\n💥 [{hostname}] Ctrl+C detected! Skipping remaining commands...")
+                    interrupt_msg = f"\n❌ Command {i} interrupted by user (Ctrl+C)\n⏭️ Skipping remaining {len(commands) - i} commands"
+                    write_to_host_log(interrupt_msg)
+                    logger.warning(f"[{hostname}] Command execution interrupted by user at command {i}/{len(commands)}")
+                    overall_success = False
+                    break
+            
+            final_separator = f"\n{'='*60}"
+            write_to_host_log(final_separator)
+            
+            if overall_success:
+                logger.info(f"[{hostname}] All {len(commands)} commands completed successfully")
+                final_msg = "✅ All commands executed successfully"
+                write_to_host_log(final_msg)
+            else:
+                logger.warning(f"[{hostname}] Some commands failed during execution")
+                final_msg = "⚠️  Some commands failed - check output above"
+                write_to_host_log(final_msg)
+            
+            return overall_success
+            
+        except Exception as e:
+            logger.error(f"[{hostname}] Unexpected error during multi-command execution: {type(e).__name__}: {e}", exc_info=True)
+            error_msg = f"❌ Unexpected error: {e}"
+            write_to_host_log(error_msg)
+            return False
+        finally:
+            runner.disconnect()
+            logger.debug(f"[{hostname}] SSH multi-command session completed")
+            
+            # Write session footer to host log
+            footer = f"""
 {'='*80}
 SSH Session Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Status: {'SUCCESS' if overall_success else 'FAILED'}
 Log file: {host_log_file}
 {'='*80}"""
-        write_to_host_log(footer)
-
-
-def run_ssh_command(hostname: str, username: str, password: str, command: str, 
-                   port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
-    """
-    Connect via SSH and execute a command
+            write_to_host_log(footer)
     
-    Args:
-        hostname: IP address or hostname
-        username: SSH username
-        password: SSH password
-        command: Command to execute
-        port: SSH port (default 22)
-        timeout: Connection timeout
-        use_shell: Use interactive shell mode (better for network devices)
+    @staticmethod
+    def run_ssh_command(hostname: str, username: str, password: str, command: str, 
+                       port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
+        """
+        Connect via SSH and execute a command
         
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    # Get the already-configured logger
-    logger = logging.getLogger('ssh_runner_v2')
-    logger.debug(f"Starting SSH command execution: {hostname}:{port} - '{command}' (shell={use_shell})")
-    logger.debug(f"Single command details: timeout={timeout}, use_shell={use_shell}")
-    
-    # Create per-host log file in subfolder with proper sanitization
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
-    
-    # Ensure per-host-logs directory exists and is secure
-    log_dir = "per-host-logs"
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        # Set secure permissions on directory (owner read/write/execute only)
-        if hasattr(os, 'chmod'):
-            os.chmod(log_dir, 0o700)
-    except OSError as e:
-        logger.error(f"Failed to create log directory {log_dir}: {e}")
-        # Fallback to current directory
-        log_dir = "."
-        safe_hostname = f"fallback_{safe_hostname}"
-    
-    host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-    print(f"🌐 [{hostname}] Logging to: {host_log_file}")
-    
-    def write_to_host_log(message: str):
-        """Write message to host-specific log file only (not console)"""
-        if not message:
-            return
-        
-        try:
-            # Sanitize message to prevent log injection
-            safe_message = message.replace('\x00', '').replace('\r\n', '\n')
+        Args:
+            hostname: IP address or hostname
+            username: SSH username
+            password: SSH password
+            command: Command to execute
+            port: SSH port (default 22)
+            timeout: Connection timeout
+            use_shell: Use interactive shell mode (better for network devices)
             
-            with open(host_log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{safe_message}\n")
-                f.flush()  # Ensure data is written immediately
-        except IOError as e:
-            logger.error(f"IO error writing to host log {host_log_file}: {e}")
-        except UnicodeEncodeError as e:
-            logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
-            # Try writing a sanitized version
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Get the already-configured logger
+        logger = logging.getLogger('ssh_runner_v2')
+        logger.debug(f"Starting SSH command execution: {hostname}:{port} - '{command}' (shell={use_shell})")
+        logger.debug(f"Single command details: timeout={timeout}, use_shell={use_shell}")
+        
+        # Create per-host log file in subfolder with proper sanitization
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
+        
+        # Ensure per-host-logs directory exists and is secure
+        log_dir = "per-host-logs"
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            # Set secure permissions on directory (owner read/write/execute only)
+            if hasattr(os, 'chmod'):
+                os.chmod(log_dir, 0o700)
+        except OSError as e:
+            logger.error(f"Failed to create log directory {log_dir}: {e}")
+            # Fallback to current directory
+            log_dir = "."
+            safe_hostname = f"fallback_{safe_hostname}"
+        
+        host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
+        print(f"🌐 [{hostname}] Logging to: {host_log_file}")
+        
+        def write_to_host_log(message: str):
+            """Write message to host-specific log file only (not console)"""
+            if not message:
+                return
+            
             try:
-                safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                # Sanitize message to prevent log injection
+                safe_message = message.replace('\x00', '').replace('\r\n', '\n')
+                
                 with open(host_log_file, 'a', encoding='utf-8') as f:
                     f.write(f"{safe_message}\n")
-                    f.flush()
-            except Exception:
-                logger.error(f"Failed to write sanitized message to host log")
-        except Exception as e:
-            logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
-    
-    runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
-    
-    # Initialize host log with header
-    header = f"""
+                    f.flush()  # Ensure data is written immediately
+            except IOError as e:
+                logger.error(f"IO error writing to host log {host_log_file}: {e}")
+            except UnicodeEncodeError as e:
+                logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
+                # Try writing a sanitized version
+                try:
+                    safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                    with open(host_log_file, 'a', encoding='utf-8') as f:
+                        f.write(f"{safe_message}\n")
+                        f.flush()
+                except Exception:
+                    logger.error(f"Failed to write sanitized message to host log")
+            except Exception as e:
+                logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
+        
+        runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
+        
+        # Initialize host log with header
+        header = f"""
 {'='*80}
 SSH Single Command Log for Host: {hostname}
 Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Command: {command}
 {'='*80}"""
-    write_to_host_log(header)
-    
-    try:
-        # Connect
-        if not runner.connect(hostname, username, password, port):
-            error_msg = f"Failed to connect to {hostname}"
-            logger.error(f"SSH connection failed: {hostname}:{port}")
-            write_to_host_log(f"❌ {error_msg}")
+        write_to_host_log(header)
+        
+        try:
+            # Connect
+            if not runner.connect(hostname, username, password, port):
+                error_msg = f"Failed to connect to {hostname}"
+                logger.error(f"SSH connection failed: {hostname}:{port}")
+                write_to_host_log(f"❌ {error_msg}")
+                return False
+            
+            logger.debug(f"SSH connected to {hostname}, executing single command")
+            
+            # Execute command
+            success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
+            
+            # Display results
+            separator = "\n" + "=" * 60
+            output_header = "📋 COMMAND OUTPUT"
+            separator_line = "=" * 60
+            
+            write_to_host_log(separator)
+            write_to_host_log(output_header)
+            write_to_host_log(separator_line)
+            
+            if stdout:
+                write_to_host_log("📤 STDOUT:")
+                write_to_host_log(stdout)
+            
+            if stderr:
+                write_to_host_log("📤 STDERR:")
+                write_to_host_log(stderr)
+            
+            if not stdout and not stderr:
+                write_to_host_log("📝 No output returned")
+            
+            write_to_host_log(separator_line)
+            
+            if success:
+                logger.info(f"[{hostname}] Command completed successfully")
+                success_msg = "✅ Command executed successfully"
+                write_to_host_log(success_msg)
+            else:
+                logger.warning(f"[{hostname}] Command failed: {command[:50]}...")
+                failure_msg = "❌ Command execution failed or returned non-zero exit status"
+                write_to_host_log(failure_msg)
+                    
+            return success
+            
+        except Exception as e:
+            logger.error(f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True)
+            error_msg = f"❌ Unexpected error: {e}"
+            write_to_host_log(error_msg)
             return False
-        
-        logger.debug(f"SSH connected to {hostname}, executing single command")
-        
-        # Execute command
-        success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
-        
-        # Display results
-        separator = "\n" + "=" * 60
-        output_header = "📋 COMMAND OUTPUT"
-        separator_line = "=" * 60
-        
-        write_to_host_log(separator)
-        write_to_host_log(output_header)
-        write_to_host_log(separator_line)
-        
-        if stdout:
-            write_to_host_log("📤 STDOUT:")
-            write_to_host_log(stdout)
-        
-        if stderr:
-            write_to_host_log("📤 STDERR:")
-            write_to_host_log(stderr)
-        
-        if not stdout and not stderr:
-            write_to_host_log("📝 No output returned")
-        
-        write_to_host_log(separator_line)
-        
-        if success:
-            logger.info(f"[{hostname}] Command completed successfully")
-            success_msg = "✅ Command executed successfully"
-            write_to_host_log(success_msg)
-        else:
-            logger.warning(f"[{hostname}] Command failed: {command[:50]}...")
-            failure_msg = "❌ Command execution failed or returned non-zero exit status"
-            write_to_host_log(failure_msg)
-                
-        return success
-        
-    except Exception as e:
-        logger.error(f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True)
-        error_msg = f"❌ Unexpected error: {e}"
-        write_to_host_log(error_msg)
-        return False
-    finally:
-        runner.disconnect()
-        logger.debug(f"[{hostname}] SSH single command session completed")
-        
-        # Write session footer to host log
-        footer = f"""
+        finally:
+            runner.disconnect()
+            logger.debug(f"[{hostname}] SSH single command session completed")
+            
+            # Write session footer to host log
+            footer = f"""
 {'='*80}
 SSH Single Command Session Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Status: {'SUCCESS' if 'success' in locals() and success else 'FAILED'}
 Log file: {host_log_file}
 {'='*80}"""
-        write_to_host_log(footer)
-
-
-def run_ssh_command_on_host(hostname: str, username: str, password: str, commands: list, 
-                           port: int = 22, timeout: int = 30, use_shell: bool = True) -> tuple:
-    """
-    Run SSH commands on a single host (for multi-threading)
+            write_to_host_log(footer)
     
-    Args:
-        hostname: IP address or hostname
-        username: SSH username  
-        password: SSH password
-        commands: List of commands to execute
-        port: SSH port
-        timeout: Connection timeout
-        use_shell: Whether to use shell mode
+    @staticmethod
+    def run_ssh_command_on_host(hostname: str, username: str, password: str, commands: list, 
+                               port: int = 22, timeout: int = 30, use_shell: bool = True) -> tuple:
+        """
+        Run SSH commands on a single host (for multi-threading)
         
-    Returns:
-        tuple: (hostname, success, results_summary)
-    """
-    logger = logging.getLogger(__name__)
-    
-    try:
-        logger.debug(f"[{hostname}] Starting SSH session...")
-        
-        if len(commands) == 1:
-            # Single command
-            success = run_ssh_command(hostname, username, password, commands[0], port, timeout, use_shell)
-            return (hostname, success, f"Single command: {commands[0]}")
-        else:
-            # Multiple commands
-            success = run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
-            return (hostname, success, f"{len(commands)} commands executed")
+        Args:
+            hostname: IP address or hostname
+            username: SSH username  
+            password: SSH password
+            commands: List of commands to execute
+            port: SSH port
+            timeout: Connection timeout
+            use_shell: Whether to use shell mode
             
-    except Exception as e:
-        logger.error(f"[{hostname}] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
-        return (hostname, False, f"Error: {e}")
-
-
-def run_ssh_commands_multi_host(hosts: list, username: str, password: str, commands: list,
-                               port: int = 22, timeout: int = 30, use_shell: bool = True,
-                               max_threads: int = 5) -> dict:
-    """
-    Run SSH commands on multiple hosts concurrently using threading
-    
-    Args:
-        hosts: List of hostnames/IPs
-        username: SSH username
-        password: SSH password  
-        commands: List of commands to execute on each host
-        port: SSH port
-        timeout: Connection timeout
-        use_shell: Whether to use shell mode
-        max_threads: Maximum number of concurrent threads
+        Returns:
+            tuple: (hostname, success, results_summary)
+        """
+        logger = logging.getLogger(__name__)
         
-    Returns:
-        dict: Results summary with success/failure counts per host
-    """
-    logger = logging.getLogger(__name__)
+        try:
+            logger.debug(f"[{hostname}] Starting SSH session...")
+            
+            if len(commands) == 1:
+                # Single command
+                success = EnhancedSSHRunner.run_ssh_command(hostname, username, password, commands[0], port, timeout, use_shell)
+                return (hostname, success, f"Single command: {commands[0]}")
+            else:
+                # Multiple commands
+                success = EnhancedSSHRunner.run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
+                return (hostname, success, f"{len(commands)} commands executed")
+                
+        except Exception as e:
+            logger.error(f"[{hostname}] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+            return (hostname, False, f"Error: {e}")
     
-    print(f"\n🚀 Starting SSH execution on {len(hosts)} hosts ({max_threads} threads)")
-    logger.info(f"Multi-host SSH execution: {len(hosts)} hosts, {len(commands)} commands, {max_threads} threads")
-    logger.debug(f"Target hosts: {hosts}")
-    logger.debug(f"Commands: {commands}")
-    logger.debug(f"Connection parameters: port={port}, timeout={timeout}, use_shell={use_shell}")
-    
-    results = {}
-    successful_hosts = []
-    failed_hosts = []
-    
-    # Use ThreadPoolExecutor for thread management
-    with ThreadPoolExecutor(max_workers=max_threads, thread_name_prefix="SSH") as executor:
-        # Submit all host tasks
-        future_to_host = {
-            executor.submit(run_ssh_command_on_host, host, username, password, commands, 
-                           port, timeout, use_shell): host 
-            for host in hosts
-        }
+    @staticmethod
+    def run_ssh_commands_multi_host(hosts: list, username: str, password: str, commands: list,
+                                   port: int = 22, timeout: int = 30, use_shell: bool = True,
+                                   max_threads: int = 5) -> dict:
+        """
+        Run SSH commands on multiple hosts concurrently using threading
         
-        # Process completed tasks
-        for future in as_completed(future_to_host):
-            hostname, success, summary = future.result()
-            results[hostname] = {
-                'success': success,
-                'summary': summary
+        Args:
+            hosts: List of hostnames/IPs
+            username: SSH username
+            password: SSH password  
+            commands: List of commands to execute on each host
+            port: SSH port
+            timeout: Connection timeout
+            use_shell: Whether to use shell mode
+            max_threads: Maximum number of concurrent threads
+            
+        Returns:
+            dict: Results summary with success/failure counts per host
+        """
+        logger = logging.getLogger(__name__)
+        
+        print(f"\n🚀 Starting SSH execution on {len(hosts)} hosts ({max_threads} threads)")
+        logger.info(f"Multi-host SSH execution: {len(hosts)} hosts, {len(commands)} commands, {max_threads} threads")
+        logger.debug(f"Target hosts: {hosts}")
+        logger.debug(f"Commands: {commands}")
+        logger.debug(f"Connection parameters: port={port}, timeout={timeout}, use_shell={use_shell}")
+        
+        results = {}
+        successful_hosts = []
+        failed_hosts = []
+        
+        # Use ThreadPoolExecutor for thread management
+        with ThreadPoolExecutor(max_workers=max_threads, thread_name_prefix="SSH") as executor:
+            # Submit all host tasks
+            future_to_host = {
+                executor.submit(EnhancedSSHRunner.run_ssh_command_on_host, host, username, password, commands, 
+                               port, timeout, use_shell): host 
+                for host in hosts
             }
             
-            if success:
-                successful_hosts.append(hostname)
-                logger.debug(f"[{hostname}] Completed successfully: {summary}")
+            # Process completed tasks
+            for future in as_completed(future_to_host):
+                hostname, success, summary = future.result()
+                results[hostname] = {
+                    'success': success,
+                    'summary': summary
+                }
+                
+                if success:
+                    successful_hosts.append(hostname)
+                    logger.debug(f"[{hostname}] Completed successfully: {summary}")
+                else:
+                    failed_hosts.append(hostname)
+                    logger.error(f"[{hostname}] Failed: {summary}")
+        
+        # Summary report
+        print(f"\n{'='*60}")
+        print(f"📊 EXECUTION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total hosts: {len(hosts)}")
+        print(f"Successful: {len(successful_hosts)} ✅")
+        print(f"Failed: {len(failed_hosts)} ❌")
+        print(f"Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")
+        
+        if successful_hosts:
+            print(f"\n✅ Successful hosts: {', '.join(successful_hosts)}")
+        
+        if failed_hosts:
+            print(f"\n❌ Failed hosts: {', '.join(failed_hosts)}")
+        
+        logger.info(f"Multi-host execution completed: {len(successful_hosts)}/{len(hosts)} successful")
+        
+        return {
+            'total': len(hosts),
+            'successful': len(successful_hosts),
+            'failed': len(failed_hosts),
+            'successful_hosts': successful_hosts,
+            'failed_hosts': failed_hosts,
+            'results': results
+        }
+    
+    @staticmethod
+    def run_application(args):
+        """Main application logic - handles all the SSH runner functionality"""
+        # Determine logging level (--debug flag overrides --log-level)
+        log_level = 'DEBUG' if args.debug else args.log_level
+        
+        # Setup logging with specified level
+        logger = EnhancedSSHRunner.setup_logging(log_level)
+        
+        # Interactive mode
+        if args.interactive:
+            return EnhancedSSHRunner.interactive_mode()
+        
+        # Determine if we should use .env file (default behavior unless --no-env is specified)
+        use_env = not args.no_env
+        
+        # Try to load .env configuration
+        env_config = {}
+        if use_env:
+            logger.info("Loading SSH credentials from .env file (default behavior)")
+            env_config = EnhancedSSHRunner.load_ssh_config_from_env()
+            if any([env_config.get('hosts'), env_config['username'], env_config['password']]):
+                host_count = len(env_config.get('hosts', []))
+                hosts_str = ', '.join(env_config.get('hosts', [])) if host_count <= 3 else f"{host_count} hosts"
+                logger.info(f"Found .env credentials - Hosts: {hosts_str}, User: {env_config['username']}, Commands: {len(env_config['commands'])}")
+        
+        # Determine final connection parameters (command line overrides .env)
+        final_hosts = []
+        if args.hostname:
+            final_hosts = [args.hostname]  # Single host from command line
+        elif env_config.get('hosts'):
+            final_hosts = env_config['hosts']  # Multiple hosts from .env
+        
+        final_username = args.username or env_config.get('username') 
+        final_password = env_config.get('password')  # Only from .env, never from command line
+        
+        # Handle secure password input if needed
+        if not final_password and not args.secure:
+            if final_username and final_hosts:
+                host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
+                final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
             else:
-                failed_hosts.append(hostname)
-                logger.error(f"[{hostname}] Failed: {summary}")
-    
-    # Summary report
-    print(f"\n{'='*60}")
-    print(f"📊 EXECUTION SUMMARY")
-    print(f"{'='*60}")
-    print(f"Total hosts: {len(hosts)}")
-    print(f"Successful: {len(successful_hosts)} ✅")
-    print(f"Failed: {len(failed_hosts)} ❌")
-    print(f"Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")
-    
-    if successful_hosts:
-        print(f"\n✅ Successful hosts: {', '.join(successful_hosts)}")
-    
-    if failed_hosts:
-        print(f"\n❌ Failed hosts: {', '.join(failed_hosts)}")
-    
-    logger.info(f"Multi-host execution completed: {len(successful_hosts)}/{len(hosts)} successful")
-    
-    return {
-        'total': len(hosts),
-        'successful': len(successful_hosts),
-        'failed': len(failed_hosts),
-        'successful_hosts': successful_hosts,
-        'failed_hosts': failed_hosts,
-        'results': results
-    }
-
-
-def interactive_mode():
-    """Interactive mode for SSH command execution with input validation"""
-    print("🖥️  Enhanced SSH Command Runner v2 - Interactive Mode")
-    print("=" * 60)
-    
-    # Get connection details with validation
-    while True:
-        hostname = input("🌐 Enter hostname or IP address: ").strip()
-        if not hostname:
-            print("❌ Hostname is required")
-            continue
-        if not EnhancedSSHRunner.validate_hostname(hostname):
-            print("❌ Invalid hostname or IP address format")
-            continue
-        break
-    
-    while True:
-        username = input("👤 Enter username: ").strip()
-        if not username:
-            print("❌ Username is required")
-            continue
-        if not EnhancedSSHRunner.validate_username(username):
-            print("❌ Invalid username format (alphanumeric, underscore, hyphen, dot only)")
-            continue
-        break
-    
-    password = getpass.getpass("🔒 Enter password: ")
-    if not password:
-        print("❌ Password is required")
-        return False
-    
-    # Optional settings with validation
-    while True:
+                print("❌ Password required but not provided")
+                return False
+        elif args.secure and not final_password:
+            host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
+            final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
+        # SECURITY: Password argument removed - this code block is no longer needed
+        
+        # Validate final parameters
+        validated_hosts = []
+        invalid_hosts = []
+        
+        for host in final_hosts:
+            if EnhancedSSHRunner.validate_hostname(host):
+                validated_hosts.append(host)
+            else:
+                invalid_hosts.append(host)
+        
+        if invalid_hosts:
+            print(f"❌ Invalid hosts detected: {', '.join(invalid_hosts)}")
+            if not validated_hosts:
+                print("❌ No valid hosts remaining")
+                return False
+            else:
+                print(f"⚠️  Proceeding with {len(validated_hosts)} valid hosts")
+                final_hosts = validated_hosts
+        
+        # Validate username
+        if final_username and not EnhancedSSHRunner.validate_username(final_username):
+            print(f"❌ Invalid username format: {final_username}")
+            return False
+        
+        # Check if we have minimum required parameters
+        if not all([final_hosts, final_username, final_password]):
+            missing = []
+            if not final_hosts: missing.append("hostname/SSH_HOST")
+            if not final_username: missing.append("username/SSH_USER") 
+            if not final_password: missing.append("password/SSH_PASSWORD")
+            
+            print(f"❌ Error: Missing required parameters: {', '.join(missing)}")
+            if use_env:
+                print("💡 Add these to your .env file or provide as command line arguments")
+                print("💡 Use --no-env flag to disable .env file loading")
+            else:
+                print("💡 Provide as command line arguments or remove --no-env flag to use .env file")
+                # Since we can't access the parser here, we'll let the caller handle help display
+            return False
+        
+        # Determine commands to execute
+        commands_to_run = []
+        
+        # Priority 1: Command line argument
+        if args.command:
+            commands_to_run = [args.command]
+            logger.info(f"Using command from command line: {args.command}")
+        # Priority 2: SSH_COMMANDS from .env file
+        elif use_env and env_config.get('commands'):
+            commands_to_run = env_config['commands']
+            logger.info(f"Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+        # Priority 3: SSH_COMMANDS.CSV file as fallback
+        elif not args.command:
+            csv_commands = EnhancedSSHRunner.load_commands_from_csv()
+            if csv_commands:
+                commands_to_run = csv_commands
+                logger.info(f"Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
+                print(f"💡 Loaded {len(commands_to_run)} commands from SSH_COMMANDS.CSV")
+        # Priority 4: Interactive input
+        else:
+            # Check what command sources are available
+            env_commands = env_config.get('commands', []) if use_env else []
+            csv_commands = EnhancedSSHRunner.load_commands_from_csv() if not commands_to_run else []
+            
+            if env_commands and csv_commands:
+                command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env, or 'csv' for {len(csv_commands)} commands from CSV): ").strip()
+                if not command:
+                    commands_to_run = env_commands
+                    print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                elif command.lower() == 'csv':
+                    commands_to_run = csv_commands
+                    print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
+                else:
+                    commands_to_run = [command]
+            elif env_commands:
+                command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
+                if not command:
+                    commands_to_run = env_commands
+                    print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                else:
+                    commands_to_run = [command]
+            elif csv_commands:
+                command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from SSH_COMMANDS.CSV): ").strip()
+                if not command:
+                    commands_to_run = csv_commands
+                    print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
+                else:
+                    commands_to_run = [command]
+            else:
+                command = input("⚡ Enter command to execute: ").strip()
+                if not command:
+                    print("❌ No commands specified")
+                    return False
+                commands_to_run = [command]
+        
+        # Validate commands
+        validated_commands = []
+        invalid_commands = []
+        
+        for cmd in commands_to_run:
+            if EnhancedSSHRunner.validate_command(cmd):
+                validated_commands.append(cmd)
+            else:
+                invalid_cmd = cmd[:50] + "..." if len(cmd) > 50 else cmd
+                invalid_commands.append(invalid_cmd)
+        
+        if invalid_commands:
+            print(f"❌ Invalid commands detected: {', '.join(invalid_commands)}")
+            if not validated_commands:
+                print("❌ No valid commands remaining")
+                return False
+            else:
+                print(f"⚠️  Proceeding with {len(validated_commands)} valid commands")
+                commands_to_run = validated_commands
+        
+        if not commands_to_run:
+            print("❌ No commands to execute")
+            return False
+        
+        # Determine shell mode (default is True unless --no-shell is specified)
+        use_shell_mode = args.shell and not args.no_shell
+        
+        # Execute SSH commands
         try:
-            port_input = input("🔌 Enter SSH port (default 22): ").strip()
-            if not port_input:
-                port = 22
-                break
-            port = int(port_input)
-            if not EnhancedSSHRunner.validate_port(port):
-                print("❌ Port must be between 1 and 65535")
-                continue
-            break
-        except ValueError:
-            print("❌ Port must be a valid number")
-    
-    while True:
-        try:
-            timeout_input = input("⏱️  Enter timeout in seconds (default 30): ").strip()
-            if not timeout_input:
-                timeout = 30
-                break
-            timeout = int(timeout_input)
-            if not EnhancedSSHRunner.validate_timeout(timeout):
-                print("❌ Timeout must be between 1 and 3600 seconds")
-                continue
-            break
-        except ValueError:
-            print("❌ Timeout must be a valid number")
-    
-    # Execution mode
-    shell_mode = input("🐚 Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
-    use_shell = shell_mode in ['y', 'yes', 'true', '1']
-    
-    # Get command with validation
-    while True:
-        command = input("⚡ Enter command to execute: ").strip()
-        if not command:
-            print("❌ Command is required")
-            continue
-        if not EnhancedSSHRunner.validate_command(command):
-            print("❌ Invalid command (too long or contains null bytes)")
-            continue
-        break
-    
-    print(f"\n🚀 Starting SSH session (shell_mode={use_shell})...")
-    
-    # Execute
-    return run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
+            if len(final_hosts) == 1:
+                # Single host execution
+                hostname = final_hosts[0]
+                if len(commands_to_run) == 1:
+                    # Single command on single host
+                    success = EnhancedSSHRunner.run_ssh_command(
+                        hostname,
+                        final_username,
+                        final_password,
+                        commands_to_run[0],
+                        args.port,
+                        args.timeout,
+                        use_shell_mode
+                    )
+                else:
+                    # Multiple commands on single host
+                    success = EnhancedSSHRunner.run_multiple_ssh_commands(
+                        hostname,
+                        final_username,
+                        final_password,
+                        commands_to_run,
+                        args.port,
+                        args.timeout,
+                        use_shell_mode
+                    )
+                
+                return success
+                
+            else:
+                # Multiple host execution (multi-threaded)
+                default_threads = multiprocessing.cpu_count()
+                requested_threads = args.max_threads or default_threads
+                max_threads = EnhancedSSHRunner.validate_thread_count(requested_threads, len(final_hosts))
+                
+                if max_threads != requested_threads:
+                    print(f"⚠️  Adjusted thread count from {requested_threads} to {max_threads}")
+                
+                results = EnhancedSSHRunner.run_ssh_commands_multi_host(
+                    final_hosts,
+                    final_username,
+                    final_password,
+                    commands_to_run,
+                    args.port,
+                    args.timeout,
+                    use_shell_mode,
+                    max_threads
+                )
+                
+                # Return success if all hosts succeeded
+                return results['failed'] == 0
+            
+        except KeyboardInterrupt:
+            print("\n🛑 Operation cancelled by user")
+            return False
+        except Exception as e:
+            logger.error(f"Fatal error: {e}")
+            print(f"❌ Fatal error: {e}")
+            return False
 
-
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser(
-        description="Enhanced SSH Command Runner v2 - Execute commands on remote hosts via SSH",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+    @staticmethod
+    def create_argument_parser():
+        """Create and configure the argument parser"""
+        parser = argparse.ArgumentParser(
+            description="Enhanced SSH Command Runner v2 - Execute commands on remote hosts via SSH",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
 Examples:
     # Default: Uses .env file and shell mode (recommended)
     python ssh_runner_v2.py
@@ -1734,296 +1863,175 @@ SECURITY NOTES:
     - Use secure password prompts (--secure flag) when possible
     - Consider using SSH keys instead of passwords for better security
     - Add .env to your .gitignore file
-        """
-    )
-    
-    # Interactive mode
-    parser.add_argument("--interactive", "-i", action="store_true",
-                       help="Run in interactive mode")
-    
-    # .env file mode controls
-    parser.add_argument("--no-env", action="store_true",
-                       help="Disable automatic .env file loading (use manual credentials)")
-    
-    # Connection parameters
-    parser.add_argument("hostname", nargs="?", help="Hostname or IP address (overrides SSH_HOST)")
-    parser.add_argument("username", nargs="?", help="SSH username (overrides SSH_USER)") 
-    parser.add_argument("password", nargs="?", help="SSH password (overrides SSH_PASSWORD)")
-    parser.add_argument("command", nargs="?", help="Command to execute (overrides SSH_COMMANDS)")
-    
-    # Optional parameters with validation
-    def validate_port_arg(value):
-        ivalue = int(value)
-        if not EnhancedSSHRunner.validate_port(ivalue):
-            raise argparse.ArgumentTypeError(f"Port must be between 1 and 65535, got {ivalue}")
-        return ivalue
-    
-    def validate_timeout_arg(value):
-        ivalue = int(value)
-        if not EnhancedSSHRunner.validate_timeout(ivalue):
-            raise argparse.ArgumentTypeError(f"Timeout must be between 1 and 3600 seconds, got {ivalue}")
-        return ivalue
-    
-    def validate_threads_arg(value):
-        ivalue = int(value)
-        if ivalue <= 0 or ivalue > 100:
-            raise argparse.ArgumentTypeError(f"Thread count must be between 1 and 100, got {ivalue}")
-        return ivalue
-    
-    parser.add_argument("--port", "-p", type=validate_port_arg, default=22,
-                       help="SSH port (default: 22)")
-    parser.add_argument("--timeout", "-t", type=validate_timeout_arg, default=30,
-                       help="Connection timeout in seconds (default: 30)")
-    parser.add_argument("--secure", "-s", action="store_true",
-                       help="Prompt for password securely instead of command line")
-    parser.add_argument("--shell", action="store_true", default=True,
-                       help="Use interactive shell mode (default, recommended for network devices)")
-    parser.add_argument("--no-shell", action="store_true",
-                       help="Disable shell mode and use exec_command instead")
-    parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                       default='INFO', help="Set logging level (default: INFO)")
-    parser.add_argument("--debug", "-d", action="store_true",
-                       help="Enable debug logging (equivalent to --log-level DEBUG)")
-    parser.add_argument("--max-threads", type=validate_threads_arg, default=None,
-                       help=f"Maximum threads for multi-host execution (default: {multiprocessing.cpu_count()} cores)")
-    
+            """
+        )
+        
+        # Interactive mode
+        parser.add_argument("--interactive", "-i", action="store_true",
+                           help="Run in interactive mode")
+        
+        # .env file mode controls
+        parser.add_argument("--no-env", action="store_true",
+                           help="Disable automatic .env file loading (use manual credentials)")
+        
+        # Connection parameters
+        parser.add_argument("hostname", nargs="?", help="Hostname or IP address (overrides SSH_HOST)")
+        parser.add_argument("username", nargs="?", help="SSH username (overrides SSH_USER)") 
+        parser.add_argument("password", nargs="?", help="SSH password (overrides SSH_PASSWORD)")
+        parser.add_argument("command", nargs="?", help="Command to execute (overrides SSH_COMMANDS)")
+        
+        # Optional parameters with validation
+        def validate_port_arg(value):
+            ivalue = int(value)
+            if not EnhancedSSHRunner.validate_port(ivalue):
+                raise argparse.ArgumentTypeError(f"Port must be between 1 and 65535, got {ivalue}")
+            return ivalue
+        
+        def validate_timeout_arg(value):
+            ivalue = int(value)
+            if not EnhancedSSHRunner.validate_timeout(ivalue):
+                raise argparse.ArgumentTypeError(f"Timeout must be between 1 and 3600 seconds, got {ivalue}")
+            return ivalue
+        
+        def validate_threads_arg(value):
+            ivalue = int(value)
+            if ivalue <= 0 or ivalue > 100:
+                raise argparse.ArgumentTypeError(f"Thread count must be between 1 and 100, got {ivalue}")
+            return ivalue
+        
+        parser.add_argument("--port", "-p", type=validate_port_arg, default=22,
+                           help="SSH port (default: 22)")
+        parser.add_argument("--timeout", "-t", type=validate_timeout_arg, default=30,
+                           help="Connection timeout in seconds (default: 30)")
+        parser.add_argument("--secure", "-s", action="store_true",
+                           help="Prompt for password securely instead of command line")
+        parser.add_argument("--shell", action="store_true", default=True,
+                           help="Use interactive shell mode (default, recommended for network devices)")
+        parser.add_argument("--no-shell", action="store_true",
+                           help="Disable shell mode and use exec_command instead")
+        parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                           default='INFO', help="Set logging level (default: INFO)")
+        parser.add_argument("--debug", "-d", action="store_true",
+                           help="Enable debug logging (equivalent to --log-level DEBUG)")
+        parser.add_argument("--max-threads", type=validate_threads_arg, default=None,
+                           help=f"Maximum threads for multi-host execution (default: {multiprocessing.cpu_count()} cores)")
+        
+        return parser
+
+    @staticmethod
+    def interactive_mode():
+        """Interactive mode for SSH command execution with input validation"""
+        print("🖥️  Enhanced SSH Command Runner v2 - Interactive Mode")
+        print("=" * 60)
+        
+        # Get connection details with validation
+        while True:
+            hostname = input("🌐 Enter hostname or IP address: ").strip()
+            if not hostname:
+                print("❌ Hostname is required")
+                continue
+            if not EnhancedSSHRunner.validate_hostname(hostname):
+                print("❌ Invalid hostname or IP address format")
+                continue
+            break
+        
+        while True:
+            username = input("👤 Enter username: ").strip()
+            if not username:
+                print("❌ Username is required")
+                continue
+            if not EnhancedSSHRunner.validate_username(username):
+                print("❌ Invalid username format (alphanumeric, underscore, hyphen, dot only)")
+                continue
+            break
+        
+        password = getpass.getpass("🔒 Enter password: ")
+        if not password:
+            print("❌ Password is required")
+            return False
+        
+        # Optional settings with validation
+        while True:
+            try:
+                port_input = input("🔌 Enter SSH port (default 22): ").strip()
+                if not port_input:
+                    port = 22
+                    break
+                port = int(port_input)
+                if not EnhancedSSHRunner.validate_port(port):
+                    print("❌ Port must be between 1 and 65535")
+                    continue
+                break
+            except ValueError:
+                print("❌ Port must be a valid number")
+        
+        while True:
+            try:
+                timeout_input = input("⏱️  Enter timeout in seconds (default 30): ").strip()
+                if not timeout_input:
+                    timeout = 30
+                    break
+                timeout = int(timeout_input)
+                if not EnhancedSSHRunner.validate_timeout(timeout):
+                    print("❌ Timeout must be between 1 and 3600 seconds")
+                    continue
+                break
+            except ValueError:
+                print("❌ Timeout must be a valid number")
+        
+        # Execution mode
+        shell_mode = input("🐚 Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
+        use_shell = shell_mode in ['y', 'yes', 'true', '1']
+        
+        # Get command with validation
+        while True:
+            command = input("⚡ Enter command to execute: ").strip()
+            if not command:
+                print("❌ Command is required")
+                continue
+            if not EnhancedSSHRunner.validate_command(command):
+                print("❌ Invalid command (too long or contains null bytes)")
+                continue
+            break
+        
+        print(f"\n🚀 Starting SSH session (shell_mode={use_shell})...")
+        
+        # Execute
+        return EnhancedSSHRunner.run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
+
+
+
+def ssh_runner_main():
+    """SSH Runner entry point - delegates to class-based application logic"""
     try:
+        # Create argument parser
+        parser = EnhancedSSHRunner.create_argument_parser()
+        
+        # Parse arguments
         args = parser.parse_args()
+        
+        # Run the application
+        success = EnhancedSSHRunner.run_application(args)
+        
+        # If application returns False and it's likely due to missing parameters, show help
+        if not success:
+            # Check if we have the basic requirements that would indicate help is needed
+            if not any([args.hostname, args.interactive]):
+                parser.print_help()
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
     except argparse.ArgumentTypeError as e:
         print(f"❌ Invalid argument: {e}")
         sys.exit(1)
-    
-    # Determine logging level (--debug flag overrides --log-level)
-    log_level = 'DEBUG' if args.debug else args.log_level
-    
-    # Setup logging with specified level
-    logger = setup_logging(log_level)
-    
-    # Interactive mode
-    if args.interactive:
-        success = interactive_mode()
-        sys.exit(0 if success else 1)
-    
-    # Determine if we should use .env file (default behavior unless --no-env is specified)
-    use_env = not args.no_env
-    
-    # Try to load .env configuration
-    env_config = {}
-    if use_env:
-        logger.info("Loading SSH credentials from .env file (default behavior)")
-        env_config = load_ssh_config_from_env()
-        if any([env_config.get('hosts'), env_config['username'], env_config['password']]):
-            host_count = len(env_config.get('hosts', []))
-            hosts_str = ', '.join(env_config.get('hosts', [])) if host_count <= 3 else f"{host_count} hosts"
-            logger.info(f"Found .env credentials - Hosts: {hosts_str}, User: {env_config['username']}, Commands: {len(env_config['commands'])}")
-    
-    # Determine final connection parameters (command line overrides .env)
-    final_hosts = []
-    if args.hostname:
-        final_hosts = [args.hostname]  # Single host from command line
-    elif env_config.get('hosts'):
-        final_hosts = env_config['hosts']  # Multiple hosts from .env
-    
-    final_username = args.username or env_config.get('username') 
-    final_password = env_config.get('password')  # Only from .env, never from command line
-    
-    # Handle secure password input if needed
-    if not final_password and not args.secure:
-        if final_username and final_hosts:
-            host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-            final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
-        else:
-            print("❌ Password required but not provided")
-            sys.exit(1)
-    elif args.secure and not final_password:
-        host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-        final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
-    # SECURITY: Password argument removed - this code block is no longer needed
-    
-    # Validate final parameters
-    validated_hosts = []
-    invalid_hosts = []
-    
-    for host in final_hosts:
-        if EnhancedSSHRunner.validate_hostname(host):
-            validated_hosts.append(host)
-        else:
-            invalid_hosts.append(host)
-    
-    if invalid_hosts:
-        print(f"❌ Invalid hosts detected: {', '.join(invalid_hosts)}")
-        if not validated_hosts:
-            print("❌ No valid hosts remaining")
-            sys.exit(1)
-        else:
-            print(f"⚠️  Proceeding with {len(validated_hosts)} valid hosts")
-            final_hosts = validated_hosts
-    
-    # Validate username
-    if final_username and not EnhancedSSHRunner.validate_username(final_username):
-        print(f"❌ Invalid username format: {final_username}")
-        sys.exit(1)
-    
-    # Check if we have minimum required parameters
-    if not all([final_hosts, final_username, final_password]):
-        missing = []
-        if not final_hosts: missing.append("hostname/SSH_HOST")
-        if not final_username: missing.append("username/SSH_USER") 
-        if not final_password: missing.append("password/SSH_PASSWORD")
-        
-        print(f"❌ Error: Missing required parameters: {', '.join(missing)}")
-        if use_env:
-            print("💡 Add these to your .env file or provide as command line arguments")
-            print("💡 Use --no-env flag to disable .env file loading")
-        else:
-            print("💡 Provide as command line arguments or remove --no-env flag to use .env file")
-        parser.print_help()
-        sys.exit(1)
-    
-    # Determine commands to execute
-    commands_to_run = []
-    
-    # Priority 1: Command line argument
-    if args.command:
-        commands_to_run = [args.command]
-        logger.info(f"Using command from command line: {args.command}")
-    # Priority 2: SSH_COMMANDS from .env file
-    elif use_env and env_config.get('commands'):
-        commands_to_run = env_config['commands']
-        logger.info(f"Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
-    # Priority 3: SSH_COMMANDS.CSV file as fallback
-    elif not args.command:
-        csv_commands = EnhancedSSHRunner.load_commands_from_csv()
-        if csv_commands:
-            commands_to_run = csv_commands
-            logger.info(f"Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
-            print(f"💡 Loaded {len(commands_to_run)} commands from SSH_COMMANDS.CSV")
-    # Priority 4: Interactive input
-    else:
-        # Check what command sources are available
-        env_commands = env_config.get('commands', []) if use_env else []
-        csv_commands = EnhancedSSHRunner.load_commands_from_csv() if not commands_to_run else []
-        
-        if env_commands and csv_commands:
-            command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env, or 'csv' for {len(csv_commands)} commands from CSV): ").strip()
-            if not command:
-                commands_to_run = env_commands
-                print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
-            elif command.lower() == 'csv':
-                commands_to_run = csv_commands
-                print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
-            else:
-                commands_to_run = [command]
-        elif env_commands:
-            command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
-            if not command:
-                commands_to_run = env_commands
-                print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
-            else:
-                commands_to_run = [command]
-        elif csv_commands:
-            command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from SSH_COMMANDS.CSV): ").strip()
-            if not command:
-                commands_to_run = csv_commands
-                print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
-            else:
-                commands_to_run = [command]
-        else:
-            command = input("⚡ Enter command to execute: ").strip()
-            if not command:
-                print("❌ No commands specified")
-                sys.exit(1)
-            commands_to_run = [command]
-    
-    # Validate commands
-    validated_commands = []
-    invalid_commands = []
-    
-    for cmd in commands_to_run:
-        if EnhancedSSHRunner.validate_command(cmd):
-            validated_commands.append(cmd)
-        else:
-            invalid_cmd = cmd[:50] + "..." if len(cmd) > 50 else cmd
-            invalid_commands.append(invalid_cmd)
-    
-    if invalid_commands:
-        print(f"❌ Invalid commands detected: {', '.join(invalid_commands)}")
-        if not validated_commands:
-            print("❌ No valid commands remaining")
-            sys.exit(1)
-        else:
-            print(f"⚠️  Proceeding with {len(validated_commands)} valid commands")
-            commands_to_run = validated_commands
-    
-    if not commands_to_run:
-        print("❌ No commands to execute")
-        sys.exit(1)
-    
-    # Determine shell mode (default is True unless --no-shell is specified)
-    use_shell_mode = args.shell and not args.no_shell
-    
-    # Execute SSH commands
-    try:
-        if len(final_hosts) == 1:
-            # Single host execution
-            hostname = final_hosts[0]
-            if len(commands_to_run) == 1:
-                # Single command on single host
-                success = run_ssh_command(
-                    hostname,
-                    final_username,
-                    final_password,
-                    commands_to_run[0],
-                    args.port,
-                    args.timeout,
-                    use_shell_mode
-                )
-            else:
-                # Multiple commands on single host
-                success = run_multiple_ssh_commands(
-                    hostname,
-                    final_username,
-                    final_password,
-                    commands_to_run,
-                    args.port,
-                    args.timeout,
-                    use_shell_mode
-                )
-            
-            sys.exit(0 if success else 1)
-            
-        else:
-            # Multiple host execution (multi-threaded)
-            default_threads = multiprocessing.cpu_count()
-            requested_threads = args.max_threads or default_threads
-            max_threads = EnhancedSSHRunner.validate_thread_count(requested_threads, len(final_hosts))
-            
-            if max_threads != requested_threads:
-                print(f"⚠️  Adjusted thread count from {requested_threads} to {max_threads}")
-            
-            results = run_ssh_commands_multi_host(
-                final_hosts,
-                final_username,
-                final_password,
-                commands_to_run,
-                args.port,
-                args.timeout,
-                use_shell_mode,
-                max_threads
-            )
-            
-            # Exit with success if all hosts succeeded
-            overall_success = results['failed'] == 0
-            sys.exit(0 if overall_success else 1)
-        
     except KeyboardInterrupt:
         print("\n🛑 Operation cancelled by user")
         sys.exit(130)
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
         print(f"❌ Fatal error: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    ssh_runner_main()
