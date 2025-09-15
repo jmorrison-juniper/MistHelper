@@ -14602,7 +14602,7 @@ class EnhancedSSHRunner:
         return commands
     
     @staticmethod
-    def load_commands_from_csv(csv_file_path: str = "SSH_COMMANDS.CSV") -> list:
+    def load_commands_from_csv(csv_file_path: str = "data/SSH_COMMANDS.CSV") -> list:
         """
         Load SSH commands from a CSV file as fallback when .env has no commands.
         
@@ -14619,7 +14619,7 @@ class EnhancedSSHRunner:
         show route,Routing table
         
         Args:
-            csv_file_path (str): Path to the CSV file (default: SSH_COMMANDS.CSV)
+            csv_file_path (str): Path to the CSV file (default: data/SSH_COMMANDS.CSV)
             
         Returns:
             list: List of validated commands loaded from the CSV file
@@ -14629,7 +14629,19 @@ class EnhancedSSHRunner:
         commands = []
         
         if not os.path.exists(csv_file_path):
-            return commands
+            # Legacy fallback: check previous root location if default data path missing
+            if csv_file_path.startswith("data/"):
+                legacy_path = csv_file_path.replace("data/", "")
+                if os.path.exists(legacy_path):
+                    try:
+                        print(f"ℹ️  Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
+                        csv_file_path = legacy_path
+                    except Exception:
+                        return commands
+                else:
+                    return commands
+            else:
+                return commands
             
         try:
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
@@ -16012,13 +16024,13 @@ Log file: {host_log_file}
         elif use_env and env_config.get('commands'):
             commands_to_run = env_config['commands']
             logger.info(f"Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
-        # Priority 3: SSH_COMMANDS.CSV file as fallback
+    # Priority 3: data/SSH_COMMANDS.CSV file as fallback
         elif not args.command:
             csv_commands = EnhancedSSHRunner.load_commands_from_csv()
             if csv_commands:
                 commands_to_run = csv_commands
-                logger.info(f"Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
-                print(f"💡 Loaded {len(commands_to_run)} commands from SSH_COMMANDS.CSV")
+                logger.info(f"Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
+                print(f"💡 Loaded {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV")
         # Priority 4: Interactive input
         else:
             # Check what command sources are available
@@ -16032,7 +16044,7 @@ Log file: {host_log_file}
                     print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
                 elif command.lower() == 'csv':
                     commands_to_run = csv_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"💡 Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             elif env_commands:
@@ -16043,10 +16055,10 @@ Log file: {host_log_file}
                 else:
                     commands_to_run = [command]
             elif csv_commands:
-                command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from SSH_COMMANDS.CSV): ").strip()
+                command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from data/SSH_COMMANDS.CSV): ").strip()
                 if not command:
                     commands_to_run = csv_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"💡 Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             else:

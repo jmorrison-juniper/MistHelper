@@ -1,0 +1,265 @@
+# Agents Guide for MistHelper
+
+Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maintainers) to safely extend, refactor, and diagnose the MistHelper codebase without breaking production conventions or security guarantees. 
+
+Friendly note (new/junior engineers): This guide is meant to be calm and confidence‑building. Most operations are read-only unless clearly marked DESTRUCTIVE. If unsure, read the function header, log what you plan, then proceed in small steps.
+
+Target audience is always a Junior NOC engineer. Language needs to match that of a business professional—avoiding abbreviations or technical jargon—while still making correct Junior NOC level references in the style of Fred Rogers (Mr. Rogers) or Bob Ross (the painter).
+
+Coding standards need to match that of NASA/JPL and their coding guidelines for human safety.
+---
+## 1. Quick Orientation
+- Primary entrypoint: `MistHelper.py` (large monolithic script implementing many operations)
+- Data output locations:
+  - SQLite DB: `data/mist_data.db`
+  - CSV outputs: `data` subfolder
+  - Per-host SSH logs: `per-host-logs/`
+- Main Log file: `script.log`
+- Configuration: `.env` (never commit credentials) – supports Mist API + SSH credentials + tuning flags.
+- Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). Always activate a Python virtual environment before local runs.
+- Always read the documentation folder contents when starting on changes.
+- Always read the entire script contents fromt he root directory in full, without skipping, before making edits.
+
+### High-Level Functional Domains
+1. Mist Cloud API data extraction (menu operations).  
+2. Data persistence (CSV + SQLite).  
+3. SSH automation (EnhancedSSHRunner class).  
+4. Rate limiting + stability (PID-like adaptive control + persisted tuning).  
+5. Advanced address normalization & similarity (multi-stage parsing + optional external validation).  
+6. Firmware lifecycle tooling (status audit, multi-strategy upgrade, auto-upgrade model mapping).  
+7. Interactive + CLI modes (argument parser + menu + systematic `--test` harness).  
+
+---
+## 2. Architectural Concepts
+| Area | Pattern | Notes |
+|------|---------|-------|
+| API Operations | Menu-based dispatch | Each menu option corresponds to a data retrieval/export routine. |
+| Data Storage | Dual format output | CSV (human) + SQLite (relational queries). |
+| Key Strategy | Natural/Composite keys | Avoid synthetic IDs where feasible. |
+| SSH Execution | `EnhancedSSHRunner` | Supports shell vs exec modes, validation heavy, per-host logs. |
+| Logging | Unified root logger and `ssh_runner_v2` for ssh sessions | Debug traces gated by level; emojis avoided and replaced where found with ASCII. |
+| Validation | Static utility methods | `validate_hostname`, `validate_port`, `validate_command`, `sanitize_filename`, etc. |
+| Concurrency | `ThreadPoolExecutor` | Thread count bounded to host CPU logical cores; avoid oversubscription. |
+| Fallback Data | CSV command file | Now located at `data/SSH_COMMANDS.CSV`. |
+| Security | Input/path sanitization | Block path traversal, restricted filenames, sensitive values not echoed. |
+| Firmware Upgrades | Strategy orchestration | big_bang, canary, rrm, serial + P2P sharing + scheduling + auto-upgrade config. |
+| Address Intelligence | Multi-pass normalization | Unicode cleanup, parsing, similarity scoring, optional Nominatim validation. |
+
+---
+## 3. Coding Style & Conventions
+- Prefer explicit, human readable names; no cryptic abbreviations, or single letter variables or placeholders.
+- Use f-strings for formatting.
+- Early-return on validation failures with clear error/log messages.
+- Console output uses terminal friendly ASCII for status clarity; retain consistency.
+- Logging: Always log internal detail via `logger.debug()`; user-facing prints remain concise.
+- Validation: Always validate external inputs (hostnames, ports, commands, thread counts) before acting.
+- Resource Limits: Enforce boundaries (max hosts, max commands, output size truncation logic, timeouts for loops/shell reads).
+- Safety Prompts: Destructive workflows (firmware upgrades, reboots, virtual chassis conversions) enforce uppercase confirmation tokens—never bypass these.
+
+---
+## 4. Security & Safety Principles
+| Concern | Practice |
+|---------|----------|
+| Credentials | Loaded from `.env`; never hardcode or print sensitive tokens/passwords. |
+| File Paths | Reject traversal (`..`, absolute paths for restricted calls). |
+| Filenames | Sanitize + avoid Windows reserved names. |
+| SSH Host Keys | Auto-add only for trusted internal network (explicit comment present). |
+| Command Injection | Only execute commands provided through validated, user-intended sources. |
+| Log Hygiene | Avoid writing secrets to logs; redact if adding new sensitive fields. |
+| Destructive Safeguards | Explicit waiver prompts | Firmware upgrades, reboots, chassis conversions require banner + confirmation keyword. |
+| External APIs | Optional address validation | Nominatim lookups only when user enables `--address-check`. |
+
+If adding new features: include similar inline SECURITY comments for potentially risky behavior.
+
+---
+## 5. Logging Model
+- Root/application logger writes to `script.log` (already configured externally in startup logic).  
+- SSH subsystem uses logger name: `ssh_runner_v2` (propagates upward).  
+- DO: Use `logger.debug` for granular tracing; keep user prints minimal.  
+- DO NOT: Add second file handlers in utilities (avoid duplicate log lines).  
+- When adding heavy loops, provide periodic progress debug lines rather than per-item if >1000 items.
+
+---
+## 6. Data Output & File Layout
+| Path | Purpose |
+|------|---------|
+| `data/mist_data.db` | Central SQLite database. |
+| `data/SSH_COMMANDS.CSV` | SSH fallback commands (moved from root). |
+| `CombinedInventory_ByWeek/` | Weekly inventory time-series CSVs (naming: `YYYY_Week_##.csv`). |
+| `per-host-logs/` | Isolated SSH session logs: `ssh_output_<sanitized-host>_<timestamp>.log`. |
+| Root CSVs | One-off export artifacts (operation-specific). |
+
+If introducing new persistent artifacts, prefer storing them under `data/` unless they are time-series or operational logs (then use a dedicated folder).
+
+---
+## 7. EnhancedSSHRunner Design Notes
+Key behaviors:
+- Input validation for host, user, port, command, thread counts.
+- Two execution modes: direct (`exec_command`) and shell (`invoke_shell`) with adaptive reading loop.
+- Output sanitation: removes prompt artifacts and ephemeral cleanup noise.
+- Per-host log writer closure encapsulated with safe encoding + truncation handling.
+- Threaded multi-host execution collects structured summary dict.
+- Line-level tracer (debug-only) uses `sys.settrace` within bounded line region—avoid expanding its scope casually.
+- Per-host secure log files use sanitized filenames and restrictive permissions.
+
+When modifying:
+- Keep timeouts adjustable through existing arguments.
+- Preserve output cleaning pipeline; add new artifact filters only if necessary and justified.
+- Validate new configuration via existing static validators or add companion methods.
+
+---
+## 8. Adding a New Menu Operation (Pattern)
+1. Determine API endpoint + data shape.  
+2. Implement fetch function with retry logic, rate-limit friendliness, and logging.  
+3. Normalize/flatten JSON: maintain consistent field naming; avoid nested raw JSON unless justified; reuse existing helpers.  
+4. Persist to both CSV & SQLite (if output format chosen).  
+5. Use natural primary keys (business identifiers) for DB table—fallback to composite or autoincrement only if no stable key.  
+6. Update README tables (operation number, description, output file) upon definition or modification.  
+7. If operation is DESTRUCTIVE or disruptive, add uppercase warning banner + explicit confirmation phrase.  
+8. Add to systematic test inclusion if read-only.  
+9. Flag destructive operations clearly with `DESTRUCTIVE` label and require explicit user confirmation.
+
+Checklist for DB table creation:
+- Unique constraint or primary key defined.  
+- Indices on frequently filtered columns (IDs, timestamps).  
+- Consistent timestamp format (ISO 8601 preferred if present).  
+
+---
+## 9. Adding / Modifying SSH Features
+| Task | Guidance |
+|------|----------|
+| New SSH command source | Integrate after .env and CLI parsing; fallback order must remain explicit. |
+| Additional validation | Use staticmethod style; return bool; log detailed validation failures at debug level. |
+| New output formatting | Write through per-host log closure; avoid direct file open to keep uniform error handling. |
+| Parallel execution changes | Use `validate_thread_count` before altering executor sizes. |
+| Persistent artifacts | Place reference data in `data/`; update docstrings accordingly. |
+
+---
+## 10. Validation & Resource Limits Summary
+Bullet summary:
+- Thread count: Max CPU thread count.
+- Shell read no-data timeout: Approximately 3 seconds after last data; total maximum 120 seconds.
+- Output size (shell): Truncation safeguards (100MB cap).
+
+Maintain or lower limits unless there's a measured requirement; justify increases.
+
+---
+## 11. Performance & Stability Considerations
+- Avoid blocking UI/CLI with long synchronous loops without progress indication.
+- For large API enumerations: batch requests + respect rate limiting.
+- For multi-host SSH: ensure executor shutdown always occurs (use context manager as current code does).
+- Memory: stream large outputs instead of accumulating if adding huge exports (>100MB) unless compression planned.
+
+---
+## 12. Dependency Management
+- Dependencies declared in `requirements.txt`—retain version lower bounds. 
+- Avoid adding heavy dependencies unless critical (risk: container build complexity).
+- Use UV to install or update if update is availible. Use pip to install UV if UV is missing.
+- If adding: update README (Installation + Advanced Features) and note any platform caveats.
+
+---
+## 13. Testing Strategy (Current State & Suggestions)
+Current: Manual/systematic `--test` mode for non-destructive operations.  
+Suggested enhancements (agents MAY implement gradually):
+- Add lightweight unit tests for validators (hostname, port, command parsing).  
+
+---
+## 14. Common Error Patterns & Handling
+Structured list (add entries as they are discovered; keep concise and action focused):
+- Scenario: (Example placeholder) API rate limit exceeded.
+  - Current Handling: Adaptive delay logic increases wait based on recent failures.
+  - Recommended Agent Action: Inspect `delay_metrics.json`; avoid adding parallel burst calls; reuse existing rate limiter.
+- Scenario: (Placeholder) SQLite unique constraint error during bulk insert.
+  - Current Handling: Exception logged; operation continues for remaining rows.
+  - Recommended Agent Action: Confirm natural key choice; if legitimate duplicates, consider UPSERT pattern (document before implementing).
+- Scenario: (Placeholder) SSH command timeout in shell mode.
+  - Current Handling: Read loop times out after configured idle period; partial output saved.
+  - Recommended Agent Action: Review timeout constants before extending; add progress debug logs instead of lengthening broadly.
+- Scenario: (Placeholder) Missing environment variable (e.g., API token).
+  - Current Handling: Script logs error and aborts relevant operation.
+  - Recommended Agent Action: Add explicit validation helper if expanding required variables; never print secret value.
+
+Add new scenarios following the same three-line pattern for clarity and consistency.
+
+
+---
+## 15. Do's and Don'ts
+| Do | Don't |
+|----|-------|
+| Use existing validators and logging patterns | Don't print raw exceptions without context |
+| Keep destructive features isolated & labeled | Don't auto-run destructive code in tests |
+| Sanitize filenames & paths | Don't assume OS-specific safe names |
+| Update README when adding menu ops | Don't let documentation drift or stagnate |
+| Respect concurrency limits | Don't spawn unbounded threads |
+| Provide clear user console feedback | Don't overwhelm with verbose raw logs unless debugging |
+
+---
+## 16. Glossary
+- "Natural Key": Business meaningful primary key (e.g., device ID from API).  
+- "Fallback CSV": The `data/SSH_COMMANDS.CSV` list used if no command specified.  
+- "Shell Mode": Paramiko interactive channel for network devices requiring paginated output handling.  
+- "Direct Mode": `exec_command` execution without interactive shell.  
+
+---
+## 17. Agent Action Checklist
+Before starting a change:
+- [ ] Identify all references (use project-wide search) for symbols you're modifying.
+- [ ] Confirm no secrets will be exposed.
+- [ ] Note any file moves (update paths + docstrings + README if user-facing).
+
+When adding feature:
+- [ ] Implement function with logging + validation.
+- [ ] Support both CSV and SQLite outputs if data export.
+- [ ] Choose natural primary keys; add indices if large tables expected.
+- [ ] Provide user-friendly console messages with emojis.
+- [ ] Update README operation table or a dedicated section.
+
+After change:
+- [ ] Run grep for old names/paths (e.g., previous file path).
+- [ ] Verify no accidental debug artifacts left (temporary prints, tracer expansions).
+- [ ] Ensure new folders created are added to `.gitignore` if volatile.
+- [ ] Confirm moved resource exists in new location (`data/...`).
+
+---
+## 18. Open Improvement Opportunities (Safe Targets for Agents)
+Bullet list of safe enhancement targets:
+- Testing: Introduce `tests/` with validator unit tests.
+- SSH: Abstract shell parsing heuristics to configurable patterns file.
+- Rate Limiting: Externalize tuning data structure documentation.
+- Config: Add schema validation for `.env` with helpful diagnostics.
+- CLI: Provide `--list-operations` to enumerate menu items programmatically.
+- Logging: Add structured JSON log option for automation contexts.
+- Modularity: Gradually split `MistHelper.py` into domains: `api_ops/`, `output/`, `ssh/`.
+- Firmware: Abstract upgrade strategy & auto-upgrade planner into dedicated module with tests.
+- Address Engine: Extract normalization + comparison pipeline into `address/` package with unit tests.
+
+---
+## 19. Change Log Annotations (Recommended Practice)
+When committing notable structural changes (file moves, new ops), annotate commit messages with tags:
+- `[ARCH]` Architecture level adjustments
+- `[FEAT]` New feature / menu option
+- `[SEC]` Security relevant change
+- `[FIX]` Bug fix
+- `[DOC]` Documentation only
+- `[REF]` Refactor (no behavior change)
+
+---
+
+---
+## 21. Safe Refactor Strategy
+Incremental “measure twice, cut once” approach:
+1. Isolate: Extract a cohesive group (e.g., address parsing) into a new module; preserve public signatures.
+2. Cover: Add minimal tests (happy path + 1 edge case) before changing logic.
+3. Annotate: Add docstrings + SECURITY comments at IO & user input seams.
+4. Replace: Update imports; optionally keep a thin wrapper for compatibility until all callers updated.
+5. Verify: Run `--test` mode plus targeted manual menu option; inspect `script.log` for anomalies.
+One intent per PR: do not mix feature + refactor.
+
+---
+## 22. Contact & Escalation (Placeholder)
+
+---
+## 23. Summary
+Follow checklists above to maintain reliability. Emphasize clarity, explicit safety prompts, and minimal surface area changes. If uncertain: log intent, add a narrow TODO, proceed conservatively.
+
+End of agents guide.

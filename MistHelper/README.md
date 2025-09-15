@@ -1,565 +1,297 @@
+docker --version
+<div align="center">
+
 # MistHelper
 
-**Network Operations Tool for Juniper Mist Cloud Infrastructure Management**
+Network Operations & Data Export Tool for Juniper Mist Cloud
 
-MistHelper is a production-ready Python application that provides comprehensive access to the Juniper Mist Cloud API for network infrastructure data extraction, analysis, and management operations. The tool supports both interactive menu-driven operations and automated command-line execution, making it suitable for both ad-hoc analysis and integration into existing NOC workflows.
+</div>
 
-The application provides 96 distinct operations covering all major Mist API endpoints with dual output formats (CSV and SQLite) for flexible integration into monitoring and management workflows.
+MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
-## Core Capabilities
+---
+## 1. Why This Rewrite?
+The previous README was partially outdated. Key discrepancies corrected here:
+1. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–97) – not a fixed “96” set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
+2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
+3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
+4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
+5. WIP Operations: 63–65 are explicitly flagged in code as work‑in‑progress and may change schema/output without notice.
 
-- **Complete API Coverage**: Access to all major Mist API endpoints with 96 operations
-- **Dual Output Formats**: CSV files and SQLite database with optimized schemas  
-- **Advanced Architecture**: GlobalImportManager with UV/pip integration and natural primary keys
-- **Enterprise Features**: PID-controlled rate limiting, connection pool management, and comprehensive error handling
-- **Operational Modes**: Interactive menu interface and direct CLI automation
-- **Container Support**: Docker and Podman deployment with cross-platform scripts
-- **Production Features**: Systematic testing framework, comprehensive logging, and audit trails
-- **Cross-Platform**: Windows, macOS, and Linux compatibility
+This README reflects the current actual logic inside `MistHelper.py` (≈16k lines) as of 2025‑09‑15.
 
-## Quick Start
+---
+## 2. Core Capabilities
+* Multi‑mode execution: interactive menu or direct CLI (`--menu <id>`)
+* Dual output backends: CSV (simple exchange) or SQLite (`data/mist_data.db`) with adaptive schema strategies
+* Hybrid primary key strategy: natural keys when stable IDs exist, composite keys for time‑series, and guarded fallback
+* Adaptive dependency and import system (`GlobalImportManager`) with UV→pip fallback and optional auto‑upgrade (disable in containers)
+* Intelligent rate limiting & pacing (delay metrics + tuning persistence via `delay_metrics.json`, `tuning_data.json`)
+* Robust flattening + sanitization pipeline for nested API JSON
+* Optional fuzzy address normalization (scourgify + rapidfuzz; safe fallbacks if not installed)
+* Enhanced SSH execution framework (Paramiko) with validation, shell mode, per‑host logging stubs (option 97)
+* Systematic safe‑operation test harness (`--test`) with skip logic for unsafe / interactive / destructive items
+* Container ready (Podman first, Docker compatible) with two build profiles (`Containerfile` simple, `Dockerfile` with HEALTHCHECK + UV logic)
+* Defensive logging: `script.log` plus targeted debug gating
 
-### Prerequisites
+---
+## 3. Directory & Runtime Layout
+| Path | Purpose |
+|------|---------|
+| `MistHelper.py` | Primary monolithic implementation (menu, exports, SSH, persistence) |
+| `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts |
+| `CombinedInventory_ByWeek/` | Time‑series weekly inventory snapshots |
+| `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
+| `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
+| `script.log` | Unified runtime log |
+| `run-misthelper.py` | Podman helper wrapper (auto builds & runs container) |
+| `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified SSL‑bypass) |
+| `compose.yml` | Orchestrated service definition (uses `Containerfile` by default) |
+| `agents.md` | Internal “Agents Guide” (style, safety, refactor guidance) |
 
-- **Python 3.8+** with pip
-- **Juniper Mist API Token** (Organization Admin privileges recommended)
-- **Organization ID** from Mist dashboard
+All export CSVs are now written inside `data/` (the code enforces a data directory even if a legacy doc claims root CSV placement).
 
-### Installation Options
+---
+## 4. Installation (Local)
+Choose one path:
 
-#### Option 1: Automated Setup (Recommended)
+### Option A: Quick Start (pip)
 ```bash
-git clone <repository-url>
+git clone https://github.com/jmorrison-juniper/MistHelper.git
 cd MistHelper
-python MistHelper.py  # Auto-installs dependencies and creates configuration template
-```
-
-#### Option 2: Manual UV Installation
-```bash
-python -m pip install uv  # Install UV package manager for faster operations
-git clone <repository-url>
-cd MistHelper
-python MistHelper.py
-```
-
-#### Option 3: Traditional Installation
-```bash
-git clone <repository-url>
-cd MistHelper
+python -m venv .venv
+./.venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install --upgrade pip
 pip install -r requirements.txt
 python MistHelper.py
 ```
 
-### Initial Configuration
-
-On first run, MistHelper will:
-1. Install required dependencies using fastest available method (UV or pip)
-2. Create `.env` configuration template
-3. Display setup instructions with API credential requirements
-4. Provide links for obtaining necessary API tokens
-
-### First Execution
-
+### Option B: Prefer UV (If Allowed)
 ```bash
-# Interactive menu interface
-python MistHelper.py
-
-# Direct execution with SQLite output  
-python MistHelper.py --output-format sqlite --menu 11
-
-# CSV output format
-python MistHelper.py --output-format csv --menu 1
-
-# Systematic testing of all safe operations
-python MistHelper.py --test
-```
-
-## Operation Categories
-
-MistHelper provides 96 distinct operations organized into functional categories. All operations support both CSV and SQLite output formats.
-
-### Core Data & Diagnostics (Options 1-10)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **1** | Organization Alarms | Export all active alarms from past 24 hours | `OrgAlarms.csv` |
-| **2** | Device Events | Export all device events from past 24 hours | `OrgDeviceEvents.csv` |
-| **3** | Audit Logs | Export audit logs (last 24 hours) | `OrgAuditLogs.csv` |
-| **4** | NAC Event Definitions | Export Network Access Control event definitions | `NacEventDefinitions.csv` |
-| **5** | Client Event Definitions | Export client event definitions | `ClientEventDefinitions.csv` |
-| **6** | Device Event Definitions | Export device event definitions | `DeviceEventDefinitions.csv` |
-| **7** | Mist Edge Event Definitions | Export Mist Edge event definitions | `MistEdgeEventDefinitions.csv` |
-| **8** | Other Device Event Definitions | Export other device event definitions | `OtherDeviceEventDefinitions.csv` |
-| **9** | System Event Definitions | Export system event definitions | `SystemEventDefinitions.csv` |
-| **10** | Alarm Definitions | Export alarm definitions with severity info | `AlarmDefinitions.csv` |
-
-### Organization-Level Data (Options 11-28)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **11** | Site List | Export complete list of all sites | `SiteList.csv` |
-| **12** | Device Inventory | Export full device inventory | `OrgInventory.csv` |
-| **13** | Device Statistics | Export performance stats for all devices | `OrgDeviceStats.csv` |
-| **14** | Port Statistics | Export port-level statistics for switches/gateways | `OrgDevicePortStats.csv` |
-| **15** | VPN Peer Statistics | Export VPN peer path statistics | `OrgVPNPeerStats.csv` |
-| **16** | Gateway Synthetic Tests | Export synthetic test results for gateways | `GatewaySyntheticTests.csv` |
-| **17** | All Devices List | Export comprehensive device list | `AllDevices.csv` |
-| **18** | Site Settings | Export configuration settings for all sites | `AllSiteConfigs.csv` |
-| **19** | Gateway Test Results | Export all synthetic test results by site | `GatewayTestResults.csv` |
-| **20** | Sites with Location | Export sites with GPS coordinates and timezone | `SitesWithLocation.csv` |
-| **21** | Gateways with Site Info | Export gateways with site and address details | `GatewaysWithSiteInfo.csv` |
-| **22** | Devices with Site Info | Export all devices with site and address details | `AllDevicesWithSiteInfo.csv` |
-| **23** | Guest Users | Export current and historical guest users | `CurrentGuestUsers.csv`, `HistoricalGuestUsers.csv` |
-| **24** | Switch VC Statistics | Export virtual chassis (stacking) statistics | `SwitchVCStats.csv` |
-| **25** | Combined Inventory | Export inventory by calendar week with site info | `CombinedInventory_ByWeek/` |
-| **26** | Gateway Templates | Export gateway templates | `GatewayTemplates.csv` |
-| **27** | Sites List API | Export sites using list API endpoint | `SiteList_ListAPI.csv` |
-| **28** | Gateway WAN Overrides | Find gateway ports overridden from template | `GatewaysWithWANOverrides.csv` |
-
-### Site-Specific Data (Options 29-34)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **29** | Site Port Statistics | Export port statistics for selected site | `SitePortStats.csv` |
-| **30** | Site Clients | Export client statistics for selected site | `SiteClients.csv` |
-| **31** | Site Devices | Export device list for selected site | `SiteDevices.csv` |
-| **32** | Site Device Statistics | Export device statistics for selected site | `SiteDeviceStats.csv` |
-| **33** | Virtual Chassis Info | Export virtual chassis info for selected switch | `VirtualChassisInfo.csv` |
-| **34** | WiFi Clients | Export current WiFi clients and sessions | `SiteWiFiClients.csv` |
-
-### Templates & Configuration (Options 35-39)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **35** | Organization Templates | Export all org templates (gateway, network, RF, etc.) | `OrgTemplates.csv` |
-| **36** | Network Templates | Export network template information | `NetworkTemplates.csv` |
-| **37** | RF Templates | Export RF template information | `RFTemplates.csv` |
-| **38** | AP Templates | Export AP template information | `APTemplates.csv` |
-| **39** | Switch Templates | Export switch template information | `SwitchTemplates.csv` |
-
-### Analytics & Client Data (Options 40-41)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **40** | Wireless Clients | Export wireless client statistics | `OrgWirelessClients.csv` |
-| **41** | Wired Clients | Export wired client statistics | `OrgWiredClients.csv` |
-
-### Security & Monitoring (Options 42-44)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **42** | Security Events | Export organization security events | `OrgSecurityEvents.csv` |
-| **43** | Rogue Clients | Export rogue client detections | `OrgRogueClients.csv` |
-| **44** | Rogue APs | Export rogue AP detections | `OrgRogueAPs.csv` |
-
-### Configuration Management (Options 45-59)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **45** | Licenses | Export license information | `OrgLicenses.csv` |
-| **46** | PSK Information | Export Pre-Shared Key configurations | `OrgPSKs.csv` |
-| **47** | Webhooks | Export webhook configurations | `OrgWebhooks.csv` |
-| **48** | Organization WLANs | Export WLAN configurations | `OrgWLANs.csv` |
-| **49** | Site WLANs | Export WLAN configuration for selected site | `SiteWLANs.csv` |
-| **50** | Site Beacons | Export beacon information for selected site | `SiteBeacons.csv` |
-| **51** | Site Maps | Export map information for selected site | `SiteMaps.csv` |
-| **52** | Site Zones | Export zone information for selected site | `SiteZones.csv` |
-| **53** | Site Insights | Export insights for selected site | `SiteInsights.csv` |
-| **54** | API Tokens | Export API token information | `OrgAPITokens.csv` |
-| **55** | Administrators | Export administrator information | `OrgAdmins.csv` |
-| **56** | MSP Information | Export Managed Service Provider details | `OrgMSP.csv` |
-| **57** | SSO Configuration | Export Single Sign-On information | `OrgSSO.csv` |
-| **58** | License Usage | Export license usage information | `OrgUsage.csv` |
-| **59** | MX Edges | Export MX Edge information | `OrgMXEdges.csv` |
-
-### Status & Monitoring (Options 60-62)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **60** | Firmware Upgrade Status | Check current firmware upgrade progress | `FirmwareUpgradeStatus.csv` |
-| **61** | Inventory Comparison | Compare inventory with external CSV | Console output |
-| **62** | Marvis Actions | Poll Marvis actions and export open items | `MarvisActions.csv` |
-
-### Extended Features (Options 63-65)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **63** | 52-Week Device Events | Export device events from last 52 weeks | `OrgDeviceEvents52w.csv` |
-| **64** | 52-Week Audit Logs | Export audit logs from last 52 weeks | `OrgAuditLogs52w.csv` |
-| **65** | Gateway Device Configs | Export configuration details for all gateways | `GatewayDeviceConfigs.csv` |
-
-### Interactive Tools (Options 70-74)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **70** | Site Selection | Select a site for other functions | Interactive only |
-| **71** | Site Inventory Browser | Interactive device inventory viewer | `SiteInventory.csv` |
-| **72** | Device Statistics Viewer | Interactive device statistics browser | `DeviceStats.csv` |
-| **73** | Device Tests Viewer | Interactive synthetic test results viewer | `DeviceTestResults.csv` |
-| **74** | Device Config Viewer | Interactive device configuration viewer | `DeviceConfig.csv` |
-
-### Continuous Operations (Options 75-76)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **75** | Loop Refresh | Continuous refresh of core datasets | Multiple files |
-| **76** | Data Collection Loop | Continuous data collection with rate limiting | Multiple files |
-
-### File Processing & Support (Options 77-78)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **77** | SFP Data Merge | Process and merge SFP module location data | `MergedTransceiverData.csv` |
-| **78** | Support Package | Generate support package for each site | Site-specific packages |
-
-### CLI & WebSocket Operations (Options 79-83)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **79** | CLI Shell | Interactive CLI shell for gateway/switch | Interactive session |
-| **80** | ARP via WebSocket | Run ARP command on AP via WebSocket | `arp_output_raw.txt` |
-| **81** | Show Default Route | Run 'show route 0.0.0.0' via shell session | `RouteDefault.csv` |
-| **82** | DHCP Security Bindings | Run 'show dhcp-security binding' via shell | `DhcpSecurityBindings.csv` |
-| **83** | Show VLANs | Run 'show vlans' via shell session | `Vlans.csv` |
-
-### Advanced Operations (Options 90-96)
-
-| Option | Function | Description | Output Files |
-|--------|----------|-------------|--------------|
-| **90** | **DESTRUCTIVE** | Bulk AP firmware upgrade with multiple strategies | Upgrade logs |
-| **91** | **DESTRUCTIVE** | Reboot devices by template list | Reboot logs |
-| **92** | **DESTRUCTIVE** | Convert virtual chassis to virtual MAC | Conversion logs |
-| **93** | **DESTRUCTIVE** | Bulk virtual chassis conversion by site list | Conversion logs |
-| **94** | Virtual Chassis Status | Check virtual chassis to virtual MAC conversion status | `VirtualChassisConversionStatus.csv` |
-| **95** | Gateway Device Statistics | Export detailed device statistics for all gateways with freshness check | `GatewayDeviceStats.csv` |
-| **96** | WAN Port Conflict Detection | Check and export gateways with duplicate WAN port IP addresses | `GatewayWANPortConflicts.csv` |
-
-## Usage Examples
-
-### Data Collection Operations
-
-```bash
-# Export comprehensive site and device information
-python MistHelper.py --menu 20 --output-format sqlite  # Sites with location data
-python MistHelper.py --menu 22 --output-format sqlite  # All devices with site info
-
-# Collect device statistics and port information
-python MistHelper.py --menu 13 --output-format sqlite  # Device statistics
-python MistHelper.py --menu 14 --output-format sqlite  # Port statistics
-
-# Security and monitoring data collection
-python MistHelper.py --menu 42 --output-format sqlite  # Security events
-python MistHelper.py --menu 43 --output-format sqlite  # Rogue clients
-python MistHelper.py --menu 1 --output-format sqlite   # Active alarms
-```
-
-### Container Deployment
-
-```bash
-# Podman deployment (recommended)
-python setup-podman.py  # Detect and configure Podman
-python run-misthelper.py --output-format sqlite --menu 11
-
-# Docker deployment
-docker-compose up --build
-docker-compose run --rm misthelper python MistHelper.py --menu 11
-
-# Platform-specific container scripts
-run-podman.bat 11                              # Windows batch
-.\run-podman.ps1 -OutputFormat sqlite -Menu 11 # PowerShell
-python run-misthelper.py --menu 11             # Cross-platform
-```
-
-### Automation and Testing
-
-```bash
-# Systematic testing of all safe operations
-python MistHelper.py --test
-
-# Debug mode for troubleshooting
-python MistHelper.py --test --debug
-
-# Batch data collection for multiple operations
-for menu in 11 12 13 14 15; do
-    python MistHelper.py --menu $menu --output-format sqlite
-done
-```
-
-## Output Formats
-
-### SQLite Database (Recommended)
-- **Location**: `data/mist_data.db`
-- **Schema Design**: Natural primary keys using API business identifiers
-- **Key Strategy**: Endpoint-specific optimization with natural keys, composite keys, or auto-increment fallback
-- **Advantages**: 
-  - Business-meaningful primary keys without artificial identifiers
-  - Proper relational structure for joins and queries
-  - Efficient upsert operations using `INSERT OR REPLACE`
-  - Optimized indexing for query performance
-  - Single-file database with full SQL capabilities
-
-```bash
-# Access SQLite database
-sqlite3 data/mist_data.db
-.tables                         # List all tables
-.schema OrgInventory           # View table structure
-SELECT * FROM SiteList LIMIT 5; # Query data
-```
-
-### CSV Files
-- **Location**: Project root directory
-- **Format**: Standard CSV with headers
-- **Advantages**: 
-  - Direct Excel compatibility
-  - Simple data sharing and import
-  - Human-readable text format
-
-## Configuration
-
-### Environment Configuration
-
-Create a `.env` file with API credentials and operational parameters:
-
-```env
-# Mist API Configuration (Required)
-MIST_HOST=api.mist.com
-MIST_APITOKEN=your_api_token_here
-org_id=your_organization_id
-
-# Auto-Upgrade Configuration
-AUTO_UPGRADE_UV=true                     # Auto-upgrade UV package manager
-AUTO_UPGRADE_DEPENDENCIES=true           # Auto-upgrade dependencies
-UPGRADE_CHECK_TIMEOUT=60                 # Upgrade timeout in seconds
-
-# Operational Parameters
-CSV_FRESHNESS_MINUTES=15                 # Data cache duration
-```
-
-### API Token Setup
-
-1. Access Mist dashboard at https://manage.mist.com
-2. Navigate to **Organization > API Tokens**
-3. Create new token with **Organization Admin** privileges
-4. Copy token value to `.env` file
-
-### Organization ID Location
-
-Organization ID is visible in Mist dashboard URL:
-```
-https://manage.mist.com/admin/?org_id=12345678-1234-1234-1234-123456789abc
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-```
-
-## Deployment Options
-
-### Local Installation
-
-```bash
-git clone <repository-url>
+python -m pip install uv
+git clone https://github.com/jmorrison-juniper/MistHelper.git
 cd MistHelper
-python MistHelper.py  # Dependencies install automatically
+uv pip install -r requirements.txt
+python MistHelper.py
 ```
-
-### Docker Deployment
-
-```bash
-# Using docker-compose
-docker-compose up --build
-
-# Manual Docker build
-docker build -t misthelper .
-docker run -it --rm -v ./data:/app/data -v ./.env:/app/.env misthelper
-```
-
-### Podman Deployment
-
-```bash
-# Automated setup
-python setup-podman.py        # Configure Podman environment
-python run-misthelper.py --menu 11
-
-# Manual Podman deployment
-podman build -t misthelper .
-podman run -it --rm -v ./data:/app/data:Z -v ./.env:/app/.env:ro,Z misthelper
-```
-
-### Cross-Platform Container Scripts
-
-| Platform | Script | Usage Example |
-|----------|--------|---------------|
-| **Windows Batch** | `run-podman.bat` | `run-podman.bat 11` |
-| **PowerShell** | `run-podman.ps1` | `.\run-podman.ps1 -Menu 11` |
-| **Python** | `run-misthelper.py` | `python run-misthelper.py --menu 11` |
-
-## Advanced Features
-
-### Systematic Testing
-
-MistHelper provides comprehensive testing of all safe operations with intelligent operation filtering:
-
-```bash
-# Test all read-only operations (54 operations tested)
-python MistHelper.py --test
-
-# Test with fast mode enabled
-python MistHelper.py --test --fast
-
-# Test with debug logging
-python MistHelper.py --test --debug
-```
-
-**Testing Categories:**
-- **Tested Operations (54)**: All read-only data export functions, configuration exports, statistics, and reference data
-- **Excluded Operations (32)**: Interactive functions, WebSocket operations, destructive operations, continuous loops, and WIP features
-- **API Rate Limit Aware**: Automatically handles rate limiting during large test runs
-- **Production Validation**: Confirms all core functionality works correctly with live API data
-
-**Test Results Analysis:**
-The systematic test validates core functionality by executing operations like:
-- Organization alarms and device events (Options 1-2) 
-- Complete site and device inventory (Options 11-12)
-- Performance statistics and port data (Options 13-14)
-- VPN peer statistics and gateway tests (Options 15-16)
-
-Test execution continues until API rate limits are reached (expected behavior for large organizations), confirming proper rate limiting implementation.
-
-### Data Processing Capabilities
-
-- **Advanced Dependency Management**: GlobalImportManager with UV package manager integration and intelligent fallbacks
-- **Natural Primary Keys**: Business-meaningful identifiers eliminating artificial database keys
-- **Nested JSON Flattening**: Complex API responses converted to flat table structures with intelligent field mapping
-- **PID-Controlled Rate Limiting**: Dynamic API throttling with tuning data persistence and connection pool management
-- **Marvis AI Integration**: Native support for Marvis troubleshooting workflows and intelligent network analysis
-- **Address Validation**: External API integration with Nominatim for intelligent address comparison and validation
-- **Error Handling**: Comprehensive exception handling with automatic retry logic and detailed logging
-- **Data Sanitization**: Clean formatting for Excel and database compatibility with Unicode normalization
-- **Progress Tracking**: Real-time progress indicators with tqdm integration for long-running operations
-
-### Logging and Debugging
-
-```bash
-# Enable debug logging
-python MistHelper.py --debug
-
-# Monitor log files
-tail -f script.log
-
-# Search specific operations
-grep "menu option" script.log
-```
-
-## Development Integration
-
-### API Integration Features
-
-- **Complete Endpoint Coverage**: All major Mist API endpoints supported
-- **Authentication Methods**: Token-based and legacy username/password authentication
-- **Rate Limiting Compliance**: Automatic throttling to prevent API rate limit violations
-- **Error Resilience**: Automatic retry logic with exponential backoff
-
-### Custom Development Support
-
-```python
-# Import MistHelper functions for custom applications
-from MistHelper import export_all_sites_to_csv, save_data_to_output
-
-# Use core functions in custom scripts
-sites_data = export_all_sites_to_csv()
-save_data_to_output(custom_data, 'custom_output.csv')
-```
-
-### Testing Framework
-
-```bash
-# Run comprehensive test suite
-python test_misthelper.py
-
-# Database integrity verification
-python verify_db.py
-
-# Dependency verification
-python MistHelper.py --help  # Triggers dependency check
-```
-
-## Documentation Reference
-
-Comprehensive documentation is available in the `documentation/` directory:
-
-- **[Installation Guide](documentation/INSTALLATION-GUIDE.md)**: Detailed setup procedures
-- **[API Reference](documentation/API-REFERENCE.md)**: Complete function and endpoint documentation  
-- **[Troubleshooting Guide](documentation/TROUBLESHOOTING.md)**: Common issues and solutions
-- **[Container Setup](documentation/PODMAN_SETUP.md)**: Docker and Podman deployment details
-- **[Implementation Summary](documentation/IMPLEMENTATION_SUMMARY.md)**: Technical architecture overview
-
-## Security Considerations
-
-- **Credential Security**: API tokens stored in `.env` files, never in source code
-- **Network Requirements**: HTTPS access to api.mist.com required
-- **Data Handling**: All data processing occurs locally, no third-party transmission
-- **Permission Model**: Read-only operations by default, destructive operations clearly identified
-- **Safe Defaults**: All destructive operations require explicit confirmation
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-**Authentication Failures:**
-```bash
-# Test API connectivity
-python MistHelper.py --menu 11  # Basic site list test
-```
-
-**Dependency Issues:**
-```bash
-# Force dependency reinstall
-python MistHelper.py --skip-deps  # Skip initial check
-python MistHelper.py              # Normal run will reinstall dependencies
-```
-
-**Container Deployment Issues:**
-```bash
-# Verify container runtime
-podman --version
-docker --version
-
-# Rebuild container environment
-python setup-podman.py  # Re-detect and configure
-```
-
-**Database Integrity Issues:**
-```bash
-# Verify database structure and data
-python verify_db.py
-
-# Examine database contents
-sqlite3 data/mist_data.db ".tables"
-```
-
-### Support Resources
-
-1. **Log Analysis**: `script.log` contains detailed operation logs
-2. **Comprehensive Documentation**: All features documented with examples
-3. **Systematic Testing**: Use `--test` flag to verify functionality
-4. **Container Deployment**: Often resolves environment-specific issues
-
-## Contributing
-
-Development contributions should follow these guidelines:
-
-1. **Repository Management**: Fork repository and create feature branches
-2. **Code Standards**: Maintain comprehensive function documentation and error handling
-3. **Testing Requirements**: Include both unit tests and integration tests
-4. **Documentation Updates**: Update API reference and user documentation
-5. **Cross-Platform Compatibility**: Ensure Windows, macOS, and Linux support
-
-## Technical Support
-
-For technical assistance:
-1. Review the **[Troubleshooting Guide](documentation/TROUBLESHOOTING.md)**
-2. Consult the **[API Reference](documentation/API-REFERENCE.md)** for function details
-3. Execute systematic testing: `python MistHelper.py --test`
-4. Examine detailed logs in `script.log` for error diagnostics
 
 ---
+## 5. Environment Configuration (`.env`)
+Minimal required variables:
+```env
+MIST_HOST=api.mist.com
+MIST_APITOKEN=replace_with_org_admin_token
+org_id=replace_with_org_uuid
 
-**MistHelper** - Production network operations tool for Juniper Mist infrastructure management and monitoring.
+# Optional Tuning (defaults shown)
+CSV_FRESHNESS_MINUTES=15
+AUTO_UPGRADE_UV=true
+AUTO_UPGRADE_DEPENDENCIES=true
+UPGRADE_CHECK_TIMEOUT=30
+FAST_MODE_MAX_RETRIES=3
+FAST_MODE_DEVICES_PER_THREAD=10
+FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8
+FAST_MODE_USE_CONNECTION_AWARE_THREADING=true
+```
+Security note: Never commit `.env`. The code auto‑loads using `python-dotenv` if present, else a manual fallback parser.
+
+Organization ID can be copied from the Mist UI URL (`org_id=<uuid>`). If omitted, some paths invoke interactive selection via `mistapi.cli.select_org`.
+
+---
+## 6. Command Line Interface
+Primary flags (from argparse block near end of file):
+| Flag | Purpose |
+|------|---------|
+| `--menu/-M <id>` | Execute a single menu action non‑interactively |
+| `--output-format {csv,sqlite}` | Select output backend (default csv) |
+| `--test` | Run systematic safe‑operation test suite |
+| `--fast` | Enable fast mode heuristics (threading & reduced retries) |
+| `--skip-deps` | Skip dependency auto‑install / upgrade phase |
+| `--debug` | Elevate logging for troubleshooting |
+| `--address-check` | (If implemented) enable address normalization checks |
+
+Examples (PowerShell friendly):
+```powershell
+python .\MistHelper.py --menu 11 --output-format sqlite
+python .\MistHelper.py --menu 13 --output-format sqlite --fast
+python .\MistHelper.py --test --output-format sqlite --debug
+```
+
+Interactive fallback occurs if no `--menu` is supplied.
+
+---
+## 7. Output & Data Model
+### CSV
+* Written under `data/` automatically (code ensures directory exists)
+* Multiline fields sanitized (line breaks replaced with `\n`)
+* Nested structures flattened: dotted / hierarchical keys converted with underscores + index suffixes
+
+### SQLite (set `--output-format sqlite` or `OUTPUT_FORMAT=sqlite` env)
+Adaptive strategy (see `ENDPOINT_PRIMARY_KEY_STRATEGIES` mapping):
+1. Natural Primary Key: Entities with stable `id` (sites, devices, templates)
+2. Composite Primary Key: Event/time‑series metrics (e.g., `device_id + timestamp`)
+3. Auto‑Increment w/ Unique Constraint: Aggregated license or summary endpoints lacking stable composite identity
+
+Upserts use `INSERT OR REPLACE` when natural/composite keys are in effect. Index selection is dynamic per endpoint (org/site/device/time fields prioritized). Metadata fields `misthelper_created_time` & `misthelper_updated_time` are appended for auditing.
+
+Inspecting the DB:
+```bash
+sqlite3 data/mist_data.db
+.tables
+.schema getOrgInventory
+SELECT COUNT(*) FROM listOrgSites;
+```
+
+---
+## 8. Menu Actions (Current Truth)
+Below is the authoritative (condensed) list derived directly from `menu_actions` in code. WIP = unstable schema, DESTRUCTIVE = requires explicit user confirmation & caution.
+
+| Range | Focus | Highlights |
+|-------|-------|-----------|
+| 1–10 | Alarms & Definitions | Org alarms, audit logs (24h), event definition catalogs |
+| 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
+| 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
+| 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
+| 40–44 | Clients & Security | Wired/wireless clients, rogue entities, security policies + events aggregation |
+| 45–59 | Configuration & Admin | Licenses, PSKs, webhooks, WLANs (org/site), admins, MSP, SSO, usage, MX Edge |
+| 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI actions |
+| 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway config extraction (heavy) |
+| 70–74 | Interactive Views | Selection, inventory browser, device stats/tests/config views |
+| 75–76 | Continuous Loops | Core dataset refresh + continuous collection cycle |
+| 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
+| 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
+| 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
+| 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
+| 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
+
+Important Notes:
+* Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
+* 63–65 intentionally marked WIP; expect evolution.
+* 90–93 should never be scripted unattended without explicit review.
+
+---
+## 9. Systematic Test Mode (`--test`)
+Behavior:
+* Dynamically enumerates safe menu items (GET, non‑interactive, non‑destructive)
+* Skips heavy, WIP, interactive, WebSocket, continuous, destructive operations (documented inline in code)
+* Executes in optimized order (fastest endpoints first) to minimize cumulative runtime
+* Saves partial results even on rate limiting or exceptions
+
+You can combine with `--output-format sqlite` and `--fast`:
+```bash
+python MistHelper.py --test --output-format sqlite --fast
+```
+
+---
+## 10. Enhanced SSH Command Runner (Option 97)
+Features:
+* Auto‑detects hostname, username, password from `.env` (if supplied)
+* Falls back to a CSV command list when no explicit `--command` passed (preferred path: `data/SSH_COMMANDS.CSV`, legacy root file still supported)
+* Shell mode with adaptive reading & timeout safeguards
+* Structured logging (per‑host log concept; ensure directory creation if extending)
+
+Note: Legacy root `SSH_COMMANDS.CSV` is auto-detected if the `data/` copy is absent; you will see an informational message. Migrate to `data/` to suppress it.
+
+---
+## 11. Rate Limiting & Performance
+* Adaptive delays stored in `delay_metrics.json`
+* Safe concurrency mediated by semaphores + environment‑driven thread limits (`FAST_MODE_MAX_CONCURRENT_CONNECTIONS`)
+* Heavy operations log progress early, large loops chunked
+* Fallback strategies engage when optional performance libraries are unavailable
+
+---
+## 12. Address Normalization & Similarity
+If `usaddress-scourgify` and `rapidfuzz` are installed, address comparison for inventory reconciliation (menu 61) uses:
+* Normalization pipeline (parse & canonicalize fields)
+* Token sort ratio fuzzy scoring fallback (difflib fallback if rapidfuzz absent)
+* Threshold configurable via future `.env` variable (documented in Agents Guide; ensure to add if implementing enhancement)
+
+---
+## 13. Security & Safety
+| Area | Practice |
+|------|---------|
+| Credentials | Loaded from `.env`, never logged in cleartext |
+| Destructive Ops | Uppercase warnings + explicit invocation required |
+| File Output | Filenames sanitized; path traversal blocked in helpers |
+| SSH | Paramiko host key auto‑add restricted to trusted internal contexts (document inline if expanding) |
+| Logging | Secrets & tokens excluded; debug gating prevents noisy stdout |
+| Data Integrity | Natural/composite PK strategies avoid silent duplication |
+
+Before extending destructive workflows, replicate existing confirmation pattern and add SECURITY comments as per `agents.md`.
+
+---
+## 14. Containers
+Two build strategies:
+1. `Containerfile` (simple, pip only, SSL bypass env overrides for constrained corporate PKI)
+2. `Dockerfile` (multi‑path UV attempt + HEALTHCHECK)
+
+Compose example (interactive shell):
+```bash
+docker compose build
+docker compose run --rm misthelper python MistHelper.py
+```
+
+Podman helper (auto build + run):
+```powershell
+python .\run-misthelper.py
+```
+
+Persisted artifacts appear under local `data/` bind mount.
+
+---
+## 15. Development Notes
+Recommended incremental refactor targets (mirrors Agents Guide Section 18):
+* Extract API domain modules: `api_ops/`, `output/`, `ssh/`
+* Add unit tests for validators (hostname, port, command sanitation)
+* Migrate SSH command CSV → structured JSON + schema validation
+* Introduce optional structured JSON logging mode (feature flag)
+* Implement `--list-operations` CLI flag (enumerate menu descriptors machine‑readably)
+
+Coding Style Essentials:
+* Explicit naming, early validation + early return
+* All network calls wrapped with logging context and coarse-grained exception handling
+* Restrict broad except clauses; log with context
+
+---
+## 16. Troubleshooting Quick Table
+| Symptom | Likely Cause | Action |
+|---------|--------------|--------|
+| Empty CSV | Missing org_id / expired token | Verify `.env`, re-run |
+| Slow runs / many 429s | Hitting rate limits | Space requests, enable `--fast`, avoid heavy options concurrently |
+| SQLite table missing | First run not completed or permission issue | Re-run with `--output-format sqlite` and check write perms on `data/` |
+| SSH runner fails | Missing `paramiko` or creds | Ensure `paramiko` installed; add SSH vars to `.env` |
+| WIP export fails | Endpoint schema drift | Treat 63–65 as non-stable; review code before relying |
+
+---
+## 17. Contributing
+1. Fork & branch (`feat/<topic>` or `fix/<issue>`)  
+2. Add/adjust tests where logic changes (start with validators)  
+3. Keep commits focused; annotate with tags (`[FEAT]`, `[FIX]`, `[REF]`, `[DOC]`)  
+4. Update this README if public behavior or filenames change  
+5. Run `--test` (when feasible) before submitting PR  
+
+License: MIT (see `pyproject.toml`).
+
+---
+## 18. Roadmap (Short Horizon)
+* Structured operation registry + `--list-operations`
+* Modular extraction of SSH runner + validators
+* Optional JSON log output mode
+* Test harness for primary key strategy correctness
+* Address verification toggle documented (when externally validated)
+
+---
+## 19. Support Flow
+1. Run with `--debug` and reproduce
+2. Inspect `script.log` (search for failing menu ID)
+3. Confirm token validity (menu 11 success?)
+4. Try alternate output backend (`--output-format csv` vs `sqlite`)
+5. Open issue with log excerpt (redact org/site/device IDs if required by policy)
+
+---
+## 20. Attribution
+Built for operational reliability and clarity in large enterprise / NOC contexts. See `agents.md` for internal safety and refactor guidance.
+
+---
+**MistHelper** – Practical, transparent data operations for Juniper Mist Cloud.
+
