@@ -1,4 +1,4 @@
-docker --version
+docker --versi1. Operation Count: The code currently defines 87 actionable menu entries (1–3, 11–86, 90–97) – not a fixed "96" set. Some gaps exist in numbering (4–10, 87–89) for future expansion.n
 <div align="center">
 
 # MistHelper
@@ -18,7 +18,7 @@ The previous README was partially outdated. Key discrepancies corrected here:
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
 5. WIP Operations: 63–65 are explicitly flagged in code as work‑in‑progress and may change schema/output without notice.
 
-This README reflects the current actual logic inside `MistHelper.py` (≈16k lines) as of 2025‑09‑15.
+This README reflects the current actual logic inside `MistHelper.py` (≈19k lines) as of 2025‑09‑18.
 
 ---
 ## 2. Core Capabilities
@@ -148,7 +148,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 
 | Range | Focus | Highlights |
 |-------|-------|-----------|
-| 1–10 | Alarms & Definitions | Org alarms, audit logs (24h), event definition catalogs |
+| 1–3 | Alarms & Definitions | Org alarms, device events, audit logs (24h) |
 | 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
 | 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
 | 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
@@ -156,10 +156,12 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 45–59 | Configuration & Admin | Licenses, PSKs, webhooks, WLANs (org/site), admins, MSP, SSO, usage, MX Edge |
 | 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI actions |
 | 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway config extraction (heavy) |
+| 66–69 | Insights API Operations | Organization & site SLE metrics, client insights, general insight metrics |
 | 70–74 | Interactive Views | Selection, inventory browser, device stats/tests/config views |
 | 75–76 | Continuous Loops | Core dataset refresh + continuous collection cycle |
 | 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
 | 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
+| 81–86 | Advanced Insights | Device insights, const definitions, organization insights, anomaly metrics |
 | 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
 | 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |

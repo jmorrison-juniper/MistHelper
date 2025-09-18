@@ -7,29 +7,55 @@ Friendly note (new/junior engineers): This guide is meant to be calm and confide
 Target audience is always a Junior NOC engineer. Language needs to match that of a business professional—avoiding abbreviations or technical jargon—while still making correct Junior NOC level references in the style of Fred Rogers (Mr. Rogers) or Bob Ross (the painter).
 
 Coding standards need to match that of NASA/JPL and their coding guidelines for human safety.
+
+Never use emojis, only ASCII. If emojis are found, swap them out for the nearest equivilant ASCII symbol or art.
+
+Warnings and logs need to be accurate and valid, nothing can be presented to the user or logs if it is not 100% true. Ignoring false positive warnings or messages is unacceptable.
+
+When searching or listing devices , the Mist API defaults to just AP's unless we specify the "type=all" flag.
+
+During development we will be using a windows 11 machine on VS-code and always testing in  a python virtual enviroment, make sure command syntax during testing is correct.
+
+Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). 
+
+Always activate a Python virtual environment before local runs.
+
+Always read the documentation folder contents when starting on changes.
+
+Always read the entire script contents from the root directory in full, without skipping, before making edits.
+
+Never use shorthand or abbreviations in function, loop, or variable naming. Example, never use "for i in images" or similar shorthand.
+
+Do not use double ellipses or any other give-away that the code might have been written by an AI agent.
+
+If adding new features: include similar inline SECURITY comments for potentially risky behavior.
+
+If introducing new persistent artifacts, prefer storing them under `data/` unless they are time-series or operational logs (then use a dedicated folder).
+
 ---
-## 1. Quick Orientation
-- Primary entrypoint: `MistHelper.py` (large monolithic script implementing many operations)
+## 15. Do's and Don'ts
+| Do | Don't |
+|----|-------|
+| Use existing validators and logging patterns | Don't print raw exceptions without context |
+| Keep destructive features isolated & labeled | Don't auto-run destructive code in tests |
+| Sanitize filenames & paths | Don't assume OS-specific safe names |
+| Update README when adding menu ops | Don't let documentation drift or stagnate |
+| Respect concurrency limits | Don't spawn unbounded threads |
+| Provide clear user console feedback | Don't overwhelm with verbose raw logs unless debugging |
+
+
+- Primary entrypoint: `MistHelper.py`
+
 - Data output locations:
   - SQLite DB: `data/mist_data.db`
   - CSV outputs: `data` subfolder
   - Per-host SSH logs: `per-host-logs/`
+
 - Main Log file: `script.log`
+
 - Configuration: `.env` (never commit credentials) – supports Mist API + SSH credentials + tuning flags.
-- Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). Always activate a Python virtual environment before local runs.
-- Always read the documentation folder contents when starting on changes.
-- Always read the entire script contents fromt he root directory in full, without skipping, before making edits.
 
-### High-Level Functional Domains
-1. Mist Cloud API data extraction (menu operations).  
-2. Data persistence (CSV + SQLite).  
-3. SSH automation (EnhancedSSHRunner class).  
-4. Rate limiting + stability (PID-like adaptive control + persisted tuning).  
-5. Advanced address normalization & similarity (multi-stage parsing + optional external validation).  
-6. Firmware lifecycle tooling (status audit, multi-strategy upgrade, auto-upgrade model mapping).  
-7. Interactive + CLI modes (argument parser + menu + systematic `--test` harness).  
 
----
 ## 2. Architectural Concepts
 | Area | Pattern | Notes |
 |------|---------|-------|
@@ -69,7 +95,6 @@ Coding standards need to match that of NASA/JPL and their coding guidelines for 
 | Destructive Safeguards | Explicit waiver prompts | Firmware upgrades, reboots, chassis conversions require banner + confirmation keyword. |
 | External APIs | Optional address validation | Nominatim lookups only when user enables `--address-check`. |
 
-If adding new features: include similar inline SECURITY comments for potentially risky behavior.
 
 ---
 ## 5. Logging Model
@@ -77,7 +102,7 @@ If adding new features: include similar inline SECURITY comments for potentially
 - SSH subsystem uses logger name: `ssh_runner_v2` (propagates upward).  
 - DO: Use `logger.debug` for granular tracing; keep user prints minimal.  
 - DO NOT: Add second file handlers in utilities (avoid duplicate log lines).  
-- When adding heavy loops, provide periodic progress debug lines rather than per-item if >1000 items.
+- When adding heavy loops, provide periodic progress debug lines rather than per-item if >100 items.
 
 ---
 ## 6. Data Output & File Layout
@@ -88,8 +113,6 @@ If adding new features: include similar inline SECURITY comments for potentially
 | `CombinedInventory_ByWeek/` | Weekly inventory time-series CSVs (naming: `YYYY_Week_##.csv`). |
 | `per-host-logs/` | Isolated SSH session logs: `ssh_output_<sanitized-host>_<timestamp>.log`. |
 | Root CSVs | One-off export artifacts (operation-specific). |
-
-If introducing new persistent artifacts, prefer storing them under `data/` unless they are time-series or operational logs (then use a dedicated folder).
 
 ---
 ## 7. EnhancedSSHRunner Design Notes
@@ -124,17 +147,7 @@ Checklist for DB table creation:
 - Indices on frequently filtered columns (IDs, timestamps).  
 - Consistent timestamp format (ISO 8601 preferred if present).  
 
----
-## 9. Adding / Modifying SSH Features
-| Task | Guidance |
-|------|----------|
-| New SSH command source | Integrate after .env and CLI parsing; fallback order must remain explicit. |
-| Additional validation | Use staticmethod style; return bool; log detailed validation failures at debug level. |
-| New output formatting | Write through per-host log closure; avoid direct file open to keep uniform error handling. |
-| Parallel execution changes | Use `validate_thread_count` before altering executor sizes. |
-| Persistent artifacts | Place reference data in `data/`; update docstrings accordingly. |
 
----
 ## 10. Validation & Resource Limits Summary
 Bullet summary:
 - Thread count: Max CPU thread count.
@@ -182,16 +195,6 @@ Structured list (add entries as they are discovered; keep concise and action foc
 Add new scenarios following the same three-line pattern for clarity and consistency.
 
 
----
-## 15. Do's and Don'ts
-| Do | Don't |
-|----|-------|
-| Use existing validators and logging patterns | Don't print raw exceptions without context |
-| Keep destructive features isolated & labeled | Don't auto-run destructive code in tests |
-| Sanitize filenames & paths | Don't assume OS-specific safe names |
-| Update README when adding menu ops | Don't let documentation drift or stagnate |
-| Respect concurrency limits | Don't spawn unbounded threads |
-| Provide clear user console feedback | Don't overwhelm with verbose raw logs unless debugging |
 
 ---
 ## 16. Glossary
@@ -208,58 +211,36 @@ Before starting a change:
 - [ ] Note any file moves (update paths + docstrings + README if user-facing).
 
 When adding feature:
-- [ ] Implement function with logging + validation.
-- [ ] Support both CSV and SQLite outputs if data export.
-- [ ] Choose natural primary keys; add indices if large tables expected.
-- [ ] Provide user-friendly console messages with emojis.
-- [ ] Update README operation table or a dedicated section.
+- Implement function with logging + validation.
+- Support both CSV and SQLite outputs if data export.
+- Choose natural primary keys; add indices if large tables expected.
+- Provide user-friendly console messages with ASCII.
+- Update README operation table or a dedicated section.
 
 After change:
-- [ ] Run grep for old names/paths (e.g., previous file path).
-- [ ] Verify no accidental debug artifacts left (temporary prints, tracer expansions).
-- [ ] Ensure new folders created are added to `.gitignore` if volatile.
-- [ ] Confirm moved resource exists in new location (`data/...`).
+- Run grep for old names/paths (e.g., previous file path).
+- Verify no accidental debug artifacts left (temporary prints, tracer expansions).
+- Ensure new folders created are added to `.gitignore` if volatile.
+- Confirm moved resource exists in new location (`data/...`).
 
----
-## 18. Open Improvement Opportunities (Safe Targets for Agents)
-Bullet list of safe enhancement targets:
-- Testing: Introduce `tests/` with validator unit tests.
-- SSH: Abstract shell parsing heuristics to configurable patterns file.
-- Rate Limiting: Externalize tuning data structure documentation.
-- Config: Add schema validation for `.env` with helpful diagnostics.
-- CLI: Provide `--list-operations` to enumerate menu items programmatically.
+
 - Logging: Add structured JSON log option for automation contexts.
-- Modularity: Gradually split `MistHelper.py` into domains: `api_ops/`, `output/`, `ssh/`.
-- Firmware: Abstract upgrade strategy & auto-upgrade planner into dedicated module with tests.
-- Address Engine: Extract normalization + comparison pipeline into `address/` package with unit tests.
 
----
-## 19. Change Log Annotations (Recommended Practice)
-When committing notable structural changes (file moves, new ops), annotate commit messages with tags:
-- `[ARCH]` Architecture level adjustments
-- `[FEAT]` New feature / menu option
-- `[SEC]` Security relevant change
-- `[FIX]` Bug fix
-- `[DOC]` Documentation only
-- `[REF]` Refactor (no behavior change)
-
----
-
----
 ## 21. Safe Refactor Strategy
-Incremental “measure twice, cut once” approach:
-1. Isolate: Extract a cohesive group (e.g., address parsing) into a new module; preserve public signatures.
-2. Cover: Add minimal tests (happy path + 1 edge case) before changing logic.
-3. Annotate: Add docstrings + SECURITY comments at IO & user input seams.
-4. Replace: Update imports; optionally keep a thin wrapper for compatibility until all callers updated.
-5. Verify: Run `--test` mode plus targeted manual menu option; inspect `script.log` for anomalies.
-One intent per PR: do not mix feature + refactor.
+- Incremental “measure twice, cut once” approach:
+- Isolate: Extract a cohesive group (e.g., address parsing) into a new module; preserve public signatures.
+- Cover: Add minimal tests (happy path + 1 edge case) before changing logic.
+- Annotate: Add docstrings + SECURITY comments at IO & user input seams.
+- Verify: Run `--test` mode plus targeted manual menu option; inspect `script.log` for anomalies.
+- One intent per PR: do not mix feature + refactor.
 
 ---
 ## 22. Contact & Escalation (Placeholder)
 
 ---
 ## 23. Summary
-Follow checklists above to maintain reliability. Emphasize clarity, explicit safety prompts, and minimal surface area changes. If uncertain: log intent, add a narrow TODO, proceed conservatively.
+- Follow checklists above to maintain reliability. 
+- Emphasize clarity, explicit safety prompts, and minimal surface area changes. 
+- If uncertain: log intent, add a narrow TODO, proceed conservatively.
 
 End of agents guide.
