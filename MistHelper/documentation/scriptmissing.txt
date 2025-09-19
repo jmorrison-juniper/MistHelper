@@ -1,5 +1,4 @@
 Gateway/SSR Specific:
-❌ Device Ping - POST /api/v1/sites/:site_id/devices/:device_id/ping
 ❌ Service Ping - POST /api/v1/sites/:site_id/devices/:device_id/service_ping
 ❌ Show Service Path - POST /api/v1/sites/{site_id}/devices/{device_id}/show_service_path
 ❌ Show Forwarding Table - POST /api/v1/sites/{site_id}/devices/{device_id}/show_forwarding_table

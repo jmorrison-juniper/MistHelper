@@ -72,5 +72,5 @@ VOLUME ["/app/data"]
 # Note: HEALTHCHECK removed for OCI/Podman compatibility
 # For health monitoring, use external tools or docker format
 
-# Default command
-CMD ["python", "MistHelper.py", "--output-format", "sqlite", "--menu", "11"]
+# Default command - show interactive menu with default output format
+CMD ["python", "MistHelper.py"]

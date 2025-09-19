@@ -11,7 +11,7 @@ from pathlib import Path
 
 PODMAN_EXECUTABLE = r"C:\\Program Files\\RedHat\\Podman\\podman.exe"
 
-def run_misthelper(output_format="csv", menu=None, test=False, fast=False):
+def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug=False):
     """Run MistHelper in Podman container with detected executable."""
     
     # Ensure data directory exists
@@ -22,28 +22,29 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False):
     script_log_path = Path("./script.log")
     if not script_log_path.exists():
         script_log_path.touch()  # Create empty log file
-        print(f"📝 Created script.log file: {script_log_path}")
+        print(f"[INFO] Created script.log file: {script_log_path}")
     
     # Build image first
-    print("🔨 Building Podman image...")
+    print("[BUILD] Building Podman image...")
     build_cmd = [PODMAN_EXECUTABLE, "build", "-t", "misthelper", "."]
     build_result = subprocess.run(build_cmd)
     
     if build_result.returncode != 0:
-        print("❌ Failed to build Podman image")
+        print("[ERROR] Failed to build Podman image")
         return False
     else:
-        print("✅ Smart Podman image built successfully!")
+        print("[SUCCESS] Smart Podman image built successfully!")
     
     # Run container
-    print("🚀 Running MistHelper container...")
-    print(f"📊 Output format: {output_format}")
+    print("[RUN] Running MistHelper container...")
+    print(f"[CONFIG] Output format: {output_format}")
     if menu:
-        print(f"📋 Menu option: {menu}")
+        print(f"[CONFIG] Menu option: {menu}")
     else:
-        print("📋 Menu option: Interactive mode")
-    print(f"🧪 Test mode: {'enabled' if test else 'disabled'}")
-    print(f"⚡ Fast mode: {'enabled' if fast else 'disabled'}")
+        print("[CONFIG] Menu option: Interactive mode")
+    print(f"[CONFIG] Test mode: {'enabled' if test else 'disabled'}")
+    print(f"[CONFIG] Fast mode: {'enabled' if fast else 'disabled'}")
+    print(f"[DEBUG] Debug mode: {'enabled' if debug else 'disabled'}")
     
     # Build the command with conditional arguments
     run_cmd = [
@@ -76,14 +77,16 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False):
         run_cmd.append("--test")
     if fast:
         run_cmd.append("--fast")
+    if debug:
+        run_cmd.append("--debug")
     
     result = subprocess.run(run_cmd)
     
     if result.returncode == 0:
-        print("✅ MistHelper completed successfully!")
-        print(f"📁 Check ./data directory for output files")
+        print("[SUCCESS] MistHelper completed successfully!")
+        print(f"[INFO] Check ./data directory for output files")
     else:
-        print("❌ MistHelper encountered an error")
+        print("[ERROR] MistHelper encountered an error")
     
     return result.returncode == 0
 
@@ -103,8 +106,10 @@ if __name__ == "__main__":
                        help="Enable fast mode (default: disabled)")
     parser.add_argument("--no-fast", action="store_false", dest="fast",
                        help="Disable fast mode")
+    parser.add_argument("--debug", action="store_true", default=False,
+                       help="Enable debug output (default: disabled)")
     
     args = parser.parse_args()
     
-    success = run_misthelper(args.output_format, args.menu, args.test, args.fast)
+    success = run_misthelper(args.output_format, args.menu, args.test, args.fast, args.debug)
     sys.exit(0 if success else 1)

@@ -234,8 +234,48 @@ After change:
 - Verify: Run `--test` mode plus targeted manual menu option; inspect `script.log` for anomalies.
 - One intent per PR: do not mix feature + refactor.
 
----
-## 22. Contact & Escalation (Placeholder)
+
+Emojie to replacement character map:
+
+Character,Unicode,Emoji Replacement,Usage Context
+•,U+2022,🔘,"Bullet point, status indicator"
+→,U+2192,➡️,"Direction, flow, next step"
+←,U+2190,⬅️,"Back, previous step"
+↑,U+2191,🔼,"Upload, increase"
+↓,U+2193,🔽,"Download, decrease"
+✓,U+2713,✅,"Success, check"
+✗,U+2717,❌,"Failure, error"
+⚠,U+26A0,⚠️,Warning
+★,U+2605,🌟,"Highlight, favorite"
+☁,U+2601,☁️,"Cloud, network"
+☀,U+2600,🌞,"Online, active"
+☕,U+2615,☕️,"Idle, break"
+⌛,U+231B,⏳,"Waiting, loading"
+⚡,U+26A1,⚡️,"Fast, power"
+♻,U+267B,♻️,"Refresh, recycle"
+∞,U+221E,🔁,"Loop, unlimited"
+π,U+03C0,🧠,"Math, AI, ML"
+Σ,U+03A3,📊,"Summation, statistics"
+Δ,U+0394,🔺,"Change, delta"
+λ,U+03BB,🤖,"Lambda, functional logic"
+─,U+2500,➖,"Line, divider"
+│,U+2502,📊,"Vertical bar, chart"
+┌,U+250C,📈,"Top-left corner, graph"
+┐,U+2510,📉,"Top-right corner, graph"
+└,U+2514,📈,"Bottom-left corner, graph"
+┘,U+2518,📉,"Bottom-right corner, graph"
+┼,U+253C,➕,"Intersection, grid"
+█,U+2588,🟥,"Full block, progress"
+▓,U+2593,🟧,"Medium block, progress"
+▒,U+2592,🟨,"Light block, progress"
+░,U+2591,⬜,"Minimal block, progress"
+≠,U+2260,❎,"Not equal, mismatch"
+≈,U+2248,🔁,"Approximately equal, loop"
+≥,U+2265,🔼,Greater than or equal
+≤,U+2264,🔽,Less than or equal
+§,U+00A7,📜,"Section, documentation"
+¤,U+00A4,💰,"Currency, value"
+
 
 ---
 ## 23. Summary

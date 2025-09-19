@@ -29,6 +29,47 @@ import sys
 import os
 import subprocess
 import logging
+
+# Debug mode detection helper
+def is_debug_mode():
+    """Check if debug mode is enabled via command line arguments."""
+    return '--debug' in sys.argv or '-d' in sys.argv
+
+# Performance monitoring helper for detecting infinite loops
+class PerformanceMonitor:
+    """Simple performance monitoring to detect hangs and infinite loops."""
+    
+    def __init__(self, name, max_iterations=10000, log_interval=5.0):
+        self.name = name
+        self.start_time = time.time()
+        self.last_log_time = self.start_time
+        self.iteration_count = 0
+        self.max_iterations = max_iterations
+        self.log_interval = log_interval
+        
+    def check_iteration(self):
+        """Call this on each loop iteration to monitor for hangs."""
+        self.iteration_count += 1
+        current_time = time.time()
+        
+        # Log performance periodically
+        if is_debug_mode() and (current_time - self.last_log_time) >= self.log_interval:
+            elapsed = current_time - self.start_time
+            print(f"[PERF] {self.name}: {self.iteration_count} iterations in {elapsed:.1f}s")
+            self.last_log_time = current_time
+            
+        # Circuit breaker for infinite loops
+        if self.iteration_count > self.max_iterations:
+            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"
+            print(f"[EMERGENCY] {error_msg}")
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
+            
+    def finish(self):
+        """Call when loop completes normally."""
+        elapsed = time.time() - self.start_time
+        if is_debug_mode():
+            print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import time
@@ -1884,6 +1925,604 @@ def interactive_fetch_device_data_to_csv(fetch_function, filename, description, 
     # Display the data in a table
     display_dict_list_as_pretty_table(stats)
 
+
+# ============================================================================
+# WEBSOCKET MANAGEMENT CLASS
+# ============================================================================
+
+class WebSocketManager:
+    """
+    WebSocket Manager for Mist API real-time communications.
+    
+    This class handles WebSocket connections to the Mist API following the 
+    documented patterns: subscribe first, issue POST command, await results.
+    
+    SECURITY: WebSocket connections use authenticated sessions with proper
+    credential handling and session-based command demultiplexing.
+    """
+    
+    def __init__(self, mist_session, mist_host=None):
+        """
+        Initialize WebSocket manager with Mist session.
+        
+        Args:
+            mist_session: Authenticated Mist API session
+            mist_host: Mist API host (if None, will get from session)
+        """
+        self.mist_session = mist_session
+        self.mist_host = mist_host or getattr(mist_session, "host", None) or os.getenv("MIST_HOST", "api.mist.com")
+        
+        # Convert API host to WebSocket host
+        websocket_host = self.mist_host.replace("api.", "api-ws.")
+        self.websocket_url = f"wss://{websocket_host}/api-ws/v1/stream"
+        self.websocket_connection = None
+        self.logger = logging.getLogger(__name__)
+        self.connected = False
+        self.subscribed_channels = set()
+        self.confirmed_subscriptions = set()  # Track confirmed subscriptions
+        
+        # Results storage for command outputs
+        self.command_results = {}
+        self.results_lock = threading.Lock()
+        
+    def connect(self):
+        """
+        Establish WebSocket connection with proper authentication.
+        
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        try:
+            # Prepare authentication headers using session token
+            mist_apitoken = getattr(self.mist_session, "apitoken", None) or os.getenv("MIST_APITOKEN")
+            if not mist_apitoken:
+                self.logger.error("No API token found in session or environment")
+                return False
+                
+            auth_header = f"Authorization: Token {mist_apitoken}"
+            headers = [auth_header]
+            
+            # Create WebSocket connection
+            self.websocket_connection = websocket.WebSocketApp(
+                self.websocket_url,
+                header=headers,
+                on_message=self._on_message,
+                on_error=self._on_error,
+                on_close=self._on_close,
+                on_open=self._on_open
+            )
+            
+            # Start connection in background thread
+            self.websocket_thread = threading.Thread(
+                target=self.websocket_connection.run_forever,
+                daemon=True
+            )
+            self.websocket_thread.start()
+            
+            # Wait for connection to establish
+            timeout_counter = 0
+            while not self.connected and timeout_counter < 10:
+                time.sleep(0.5)
+                timeout_counter += 1
+                
+            if self.connected:
+                self.logger.info("WebSocket connection established successfully")
+                return True
+            else:
+                self.logger.error("WebSocket connection timeout")
+                return False
+                
+        except Exception as connection_error:
+            self.logger.error(f"WebSocket connection failed: {connection_error}")
+            return False
+    
+    def subscribe_to_channel(self, channel_path):
+        """
+        Subscribe to a WebSocket channel for receiving command outputs.
+        
+        Args:
+            channel_path (str): Channel path (e.g., "/sites/{site_id}/devices/{device_id}/cmd")
+            
+        Returns:
+            bool: True if subscription successful, False otherwise
+        """
+        if not self.connected:
+            self.logger.error("Cannot subscribe: WebSocket not connected")
+            return False
+            
+        try:
+            subscription_message = {
+                "subscribe": channel_path
+            }
+            
+            self.websocket_connection.send(json.dumps(subscription_message))
+            self.subscribed_channels.add(channel_path)
+            self.logger.debug(f"Subscribed to channel: {channel_path}")
+            return True
+            
+        except Exception as subscription_error:
+            self.logger.error(f"Channel subscription failed: {subscription_error}")
+            return False
+    
+    def wait_for_subscription_confirmation(self, channel_path, timeout_seconds=10):
+        """
+        Wait for WebSocket subscription confirmation for a specific channel.
+        
+        Args:
+            channel_path (str): Channel path to wait for confirmation
+            timeout_seconds (int): Maximum time to wait for confirmation
+            
+        Returns:
+            bool: True if confirmation received, False if timeout
+        """
+        import time
+        start_time = time.time()
+        
+        debug_mode = getattr(self, 'debug_mode', False) or os.getenv('DEBUG', '').lower() in ['true', '1', 'yes']
+        
+        if debug_mode:
+            print(f"[DEBUG] Waiting for subscription confirmation for: {channel_path}")
+        
+        while time.time() - start_time < timeout_seconds:
+            # Check if subscription is confirmed
+            if channel_path in self.confirmed_subscriptions:
+                if debug_mode:
+                    print(f"[DEBUG] Subscription confirmed for: {channel_path}")
+                return True
+            
+            time.sleep(0.1)  # Small sleep to avoid busy waiting
+        
+        # Timeout reached
+        if debug_mode:
+            print(f"[DEBUG] Timeout waiting for subscription confirmation: {channel_path}")
+        self.logger.warning(f"Timeout waiting for subscription confirmation: {channel_path}")
+        return False
+    
+    def wait_for_command_result(self, session_id, timeout_seconds=30):
+        """
+        Wait for command result with specific session ID.
+        
+        For commands like ping that produce multiple output segments,
+        this will collect all results until the command completes.
+        
+        Args:
+            session_id (str): Session ID from command POST response
+            timeout_seconds (int): Maximum time to wait for result
+            
+        Returns:
+            dict: Complete command result data or None if timeout
+        """
+        import time
+        debug_mode = is_debug_mode()
+        start_time = time.time()
+        last_activity = time.time()
+        activity_timeout = 2  # Wait 2 seconds after last message (reduced from 5)
+        check_count = 0
+        last_debug_time = start_time
+        performance_log_interval = 5.0  # Log performance every 5 seconds
+        
+        # Create performance monitor to detect infinite loops
+        perf_monitor = PerformanceMonitor(f"wait_for_command_result({session_id[:8]}...)", 
+                                        max_iterations=10000, log_interval=5.0)
+        
+        if debug_mode:
+            print(f"[DEBUG] Waiting for session {session_id} (timeout: {timeout_seconds}s)")
+            print(f"[DEBUG] Current time: {time.time()}")
+            print(f"[DEBUG] Activity timeout: {activity_timeout}s)")
+        
+        while time.time() - start_time < timeout_seconds:
+            # Monitor for infinite loops
+            perf_monitor.check_iteration()
+            
+            current_time = time.time()
+            check_count += 1
+            
+            # Performance logging every 5 seconds in debug mode
+            if debug_mode and (current_time - last_debug_time) >= performance_log_interval:
+                elapsed = current_time - start_time
+                print(f"[PERF] Check #{check_count} at {elapsed:.1f}s - Still waiting for session {session_id}")
+                print(f"[PERF] Last activity: {current_time - last_activity:.1f}s ago")
+                with self.results_lock:
+                    available_sessions = list(self.command_results.keys())
+                    if session_id in self.command_results:
+                        msg_count = len(self.command_results[session_id])
+                        print(f"[PERF] Found {msg_count} messages for our session")
+                    else:
+                        print(f"[PERF] Our session not in results yet. Available: {available_sessions}")
+                last_debug_time = current_time
+            
+            with self.results_lock:
+                if session_id in self.command_results:
+                    collected_output = self.command_results[session_id]
+                    if collected_output:
+                        # Check ALL messages for completion indicators, not just the latest
+                        all_raw_content = ""
+                        for result in collected_output:
+                            all_raw_content += result.get("raw", "")
+                        
+                        latest_result = collected_output[-1]
+                        latest_raw = latest_result.get("raw", "")
+                        
+                        if debug_mode and check_count % 50 == 1:  # Debug every 50 checks (roughly 5 seconds)
+                            print(f"[DEBUG] Check #{check_count}, found {len(collected_output)} messages")
+                            print(f"[DEBUG] Latest raw (first 100 chars): {repr(latest_raw[:100])}")
+                            print(f"[DEBUG] Total content length: {len(all_raw_content)} chars")
+                        
+                        # Check if ANY of the collected content looks like a final command summary
+                        # Ping completion indicators
+                        ping_indicators = ["round-trip min/avg/max", "round-trip min/avg/max/stddev", "rtt min/avg/max"]
+                        # ARP completion indicators - specific patterns from actual ARP output
+                        arp_indicators = [
+                            "total mac entries",     # "Total 31 MAC Entries."
+                            "total flows:",          # "Total Flows:151"
+                            "mac-flow hi-water",     # "Mac-Flow Hi-Water:2865"
+                            "arp table",             # Generic ARP table reference
+                            "no arp entries",        # Empty ARP table
+                            "arp cache"              # ARP cache reference
+                        ]
+                        # Gateway-specific completion indicators (SSR gateways often have shorter output)
+                        gateway_indicators = [
+                            "connected routes",      # Gateway routing table
+                            "total entries",         # Gateway route totals
+                            "kernel routes",         # SSR kernel routing
+                            "bgp routes",           # BGP routing information
+                            "static routes",        # Static route information
+                            "route table"           # Generic route table reference
+                        ]
+                        # Switch-specific completion indicators
+                        switch_indicators = [
+                            "learning table",        # Switch MAC learning
+                            "fdb entries",          # Forwarding database
+                            "vlan information",     # VLAN details
+                            "port statistics",      # Port stats
+                            "interface status"      # Interface information
+                        ]
+                        # General completion indicators
+                        general_indicators = ["command completed", "operation complete", "finished"]
+                        
+                        all_indicators = ping_indicators + arp_indicators + gateway_indicators + switch_indicators + general_indicators
+                        found_indicator = None
+                        
+                        if debug_mode and check_count % 100 == 1:  # Debug indicator checking every 100 checks (roughly 10 seconds)
+                            print(f"[DEBUG] Checking {len(all_indicators)} completion indicators")
+                            print(f"[DEBUG] Content sample for indicator check: {repr(all_raw_content.lower()[:150])}")
+                        
+                        for indicator in all_indicators:
+                            if indicator in all_raw_content.lower():
+                                found_indicator = indicator
+                                if debug_mode:
+                                    print(f"[DEBUG] FOUND completion indicator: '{indicator}'")
+                                break
+                        
+                        # Alternative completion: look for "packet loss" followed by "round-trip" pattern (ping specific)
+                        if not found_indicator and "packet loss" in all_raw_content.lower():
+                            # Check if we have the complete statistics block
+                            lines = all_raw_content.lower().split('\n')
+                            for line in lines:
+                                if "packet loss" in line and ("round-trip" in all_raw_content.lower() or "rtt" in all_raw_content.lower()):
+                                    found_indicator = "complete statistics block"
+                                    if debug_mode:
+                                        print(f"[DEBUG] FOUND ping statistics completion pattern")
+                                        print(f"[DEBUG] Packet loss line: {repr(line[:100])}")
+                                    break
+                        
+                        # ARP-specific completion: check for structured ARP output patterns
+                        if not found_indicator and len(collected_output) >= 2:
+                            # Look for ARP table structure patterns
+                            arp_patterns = ["ip address", "hw address", "interface", "incomplete", "permanent"]
+                            arp_pattern_count = sum(1 for pattern in arp_patterns if pattern in all_raw_content.lower())
+                            
+                            if debug_mode and check_count % 200 == 1:  # Debug ARP patterns less frequently
+                                print(f"[DEBUG] ARP pattern analysis: found {arp_pattern_count}/{len(arp_patterns)} patterns")
+                                found_patterns = [p for p in arp_patterns if p in all_raw_content.lower()]
+                                print(f"[DEBUG] Found ARP patterns: {found_patterns}")
+                            
+                            # If we see multiple ARP patterns, this might be a complete ARP table
+                            if arp_pattern_count >= 2:
+                                # Check if we've been collecting for at least 1 second (ARP commands are usually fast)
+                                if time.time() - last_activity > 1:
+                                    found_indicator = "arp table structure detected"
+                                    if debug_mode:
+                                        print(f"[DEBUG] FOUND ARP table completion: {arp_pattern_count} patterns detected")
+                        
+                        if found_indicator:
+                            # This appears to be the final ping summary
+                            if debug_mode:
+                                print(f"[DEBUG] Found completion indicator '{found_indicator}' in combined content")
+                                print(f"[DEBUG] Completing after {check_count} checks")
+                                print(f"[DEBUG] Total collected messages: {len(collected_output)}")
+                                print(f"[DEBUG] Total content length: {len(all_raw_content)} characters")
+                                print(f"[DEBUG] Raw content sample (first 200 chars): {repr(all_raw_content[:200])}")
+                                print(f"[DEBUG] Raw content sample (last 200 chars): {repr(all_raw_content[-200:])}")
+                            final_results = self.command_results.pop(session_id)
+                            break
+                        
+                        last_activity = time.time()
+                else:
+                    if debug_mode and check_count % 50 == 1:  # Debug every 5 seconds
+                        print(f"[DEBUG] Check #{check_count}, no results yet for session {session_id}")
+                        print(f"[DEBUG] Available sessions: {list(self.command_results.keys())}")
+            
+            # Emergency circuit breaker - if we're doing too many checks, something is wrong
+            if check_count > 10000:  # At 0.1s per check, this is ~16 minutes
+                if debug_mode:
+                    print(f"[EMERGENCY] Circuit breaker triggered at {check_count} checks!")
+                    print(f"[EMERGENCY] This indicates a possible infinite loop or system hang")
+                self.logger.error(f"Emergency circuit breaker: {check_count} checks exceeded for session {session_id}")
+                with self.results_lock:
+                    final_results = self.command_results.pop(session_id, [])
+                return final_results if final_results else None
+            
+            # Check for activity timeout (no new messages)
+            collected_count = 0
+            with self.results_lock:
+                if session_id in self.command_results:
+                    collected_count = len(self.command_results[session_id])
+            
+            if collected_count > 0 and (time.time() - last_activity > activity_timeout):
+                if debug_mode:
+                    print(f"[DEBUG] Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages")
+                self.logger.info(f"No new data for {activity_timeout}s, assuming command complete")
+                with self.results_lock:
+                    if session_id in self.command_results:
+                        final_results = self.command_results.pop(session_id)
+                        break
+                
+            # Critical: Ensure we don't create a busy wait loop
+            time.sleep(0.1)  # Check every 100ms - DO NOT REMOVE THIS SLEEP
+        else:
+            # Timeout occurred
+            if debug_mode:
+                print(f"[DEBUG] Timeout occurred after {timeout_seconds}s, {check_count} checks")
+            with self.results_lock:
+                final_results = self.command_results.pop(session_id, [])
+            
+            if not final_results:
+                if debug_mode:
+                    print(f"[DEBUG] No results collected for session {session_id}")
+                self.logger.warning(f"Timeout waiting for command result: {session_id}")
+                perf_monitor.finish()  # Mark performance monitoring as complete
+                return None
+        
+        # Combine all collected output
+        perf_monitor.finish()  # Mark performance monitoring as complete
+        
+        if final_results:
+            if debug_mode:
+                print(f"[DEBUG] Combining {len(final_results)} result segments")
+                print(f"[DEBUG] Total wait time: {time.time() - start_time:.2f} seconds")
+                print(f"[DEBUG] Total checks performed: {check_count}")
+            
+            combined_raw = ""
+            combined_other = {}
+            
+            for index, result in enumerate(final_results):
+                raw_content = result.get("raw", "")
+                if raw_content:
+                    combined_raw += raw_content
+                    if debug_mode and len(final_results) > 5:  # Only show details for complex results
+                        print(f"[DEBUG] Segment {index+1}: {len(raw_content)} chars")
+                    
+                # Collect any other fields
+                for key, value in result.items():
+                    if key not in ["raw", "session"]:
+                        if key in combined_other:
+                            combined_other[key] = str(combined_other[key]) + str(value)
+                        else:
+                            combined_other[key] = value
+            
+            # Return combined result
+            final_result = {"raw": combined_raw, "session": session_id}
+            final_result.update(combined_other)
+            
+            if debug_mode:
+                print(f"[DEBUG] Final combined result length: {len(combined_raw)} characters")
+                print(f"[DEBUG] Final result fields: {list(final_result.keys())}")
+                print(f"[DEBUG] First 150 chars of final result: {repr(combined_raw[:150])}")
+                print(f"[DEBUG] Last 150 chars of final result: {repr(combined_raw[-150:])}")
+                if len(combined_raw) == 0:
+                    print(f"[DEBUG] WARNING: Final result is empty - this may indicate an issue")
+                print(f"[DEBUG] Session {session_id} result collection complete")
+                print(f"[DEBUG] " + "="*60)
+            
+            self.logger.info(f"Command completed with {len(final_results)} message segments")
+            return final_result
+        
+        perf_monitor.finish()  # Mark performance monitoring as complete  
+        return None
+    
+    def _on_open(self, websocket_connection):
+        """WebSocket connection opened callback."""
+        self.connected = True
+        self.logger.debug("WebSocket connection opened")
+    
+    def _on_message(self, websocket_connection, message):
+        """
+        WebSocket message received callback.
+        
+        Processes incoming messages following the documented Mist API format:
+        {
+            "event": "data", 
+            "channel": "/sites/{site_id}/devices/{device_id}/cmd", 
+            "data": { 
+                "session": "session_id", 
+                "raw": "64 bytes from 23.211.0.110: seq=8 ttl=58 time=12.323 ms\n"
+            } 
+        }
+        """
+        debug_mode = is_debug_mode()
+        
+        try:
+            if debug_mode:
+                print(f"[DEBUG] Raw WebSocket message received: {repr(message)} (type: {type(message)})")
+            self.logger.debug(f"Raw WebSocket message received: {repr(message)} (type: {type(message)})")
+            
+            # Parse JSON message - handle string messages first
+            message_data = None
+            if isinstance(message, str):
+                try:
+                    message_data = json.loads(message)
+                    if debug_mode:
+                        print(f"[DEBUG] Successfully parsed JSON message: {message_data}")
+                    self.logger.debug(f"Successfully parsed JSON message: {message_data}")
+                except json.JSONDecodeError as json_error:
+                    if debug_mode:
+                        print(f"[DEBUG] Failed to parse JSON message: {json_error}")
+                        print(f"[DEBUG] Raw message content: {repr(message)}")
+                    self.logger.warning(f"Failed to parse JSON message: {json_error}")
+                    self.logger.debug(f"Raw message content: {repr(message)}")
+                    return
+            elif isinstance(message, dict):
+                message_data = message
+                if debug_mode:
+                    print(f"[DEBUG] Received dict message: {message_data}")
+                self.logger.debug(f"Received dict message: {message_data}")
+            else:
+                if debug_mode:
+                    print(f"[DEBUG] Unexpected message type: {type(message)}, content: {repr(message)}")
+                self.logger.warning(f"Unexpected message type: {type(message)}, content: {repr(message)}")
+                return
+            
+            # Ensure we have a valid message_data dict before proceeding
+            if not isinstance(message_data, dict):
+                if debug_mode:
+                    print(f"[DEBUG] Message data is not a dict after parsing: {type(message_data)}")
+                self.logger.error(f"Message data is not a dict after parsing: {type(message_data)}")
+                return
+            
+            # Enhanced packet content logging for debug mode
+            if debug_mode:
+                print(f"[PACKET] WebSocket packet details:")
+                print(f"[PACKET]   Event: {message_data.get('event', 'unknown')}")
+                print(f"[PACKET]   Channel: {message_data.get('channel', 'unknown')}")
+                if 'data' in message_data:
+                    data_content = message_data['data']
+                    print(f"[PACKET]   Data type: {type(data_content)}")
+                    if isinstance(data_content, dict):
+                        print(f"[PACKET]   Data keys: {list(data_content.keys())}")
+                        if 'session' in data_content:
+                            session_id = data_content['session']
+                            print(f"[PACKET]   Session ID: {session_id}")
+                        if 'raw' in data_content:
+                            raw_content = data_content['raw']
+                            print(f"[PACKET]   Raw content length: {len(str(raw_content))} chars")
+                            print(f"[PACKET]   Raw content: {repr(raw_content)}")
+                    else:
+                        print(f"[PACKET]   Data content: {repr(data_content)}")
+                else:
+                    print(f"[PACKET]   No data field in message")
+            
+            # Handle subscription confirmation
+            if message_data.get("event") == "channel_subscribed":
+                channel = message_data.get("channel")
+                if debug_mode:
+                    print(f"[DEBUG] Channel subscription confirmed: {channel}")
+                self.logger.info(f"Channel subscription confirmed: {channel}")
+                # Track confirmed subscription
+                if channel:
+                    self.confirmed_subscriptions.add(channel)
+                return
+            
+            # Handle command data following documented format
+            if message_data.get("event") == "data":
+                channel = message_data.get("channel", "")
+                data_payload = message_data.get("data", {})
+                
+                if debug_mode:
+                    print(f"[DEBUG] Processing data event from channel: {channel}")
+                    print(f"[DEBUG] Data payload type: {type(data_payload)}")
+                    print(f"[DEBUG] Data payload content: {repr(data_payload)}")
+                
+                # Check if data_payload is actually a nested message structure
+                if isinstance(data_payload, str):
+                    try:
+                        # Sometimes the data field contains a JSON string
+                        data_payload = json.loads(data_payload)
+                        if debug_mode:
+                            print(f"[DEBUG] Parsed nested JSON in data field: {data_payload}")
+                        self.logger.debug(f"Parsed nested JSON in data field: {data_payload}")
+                    except json.JSONDecodeError:
+                        if debug_mode:
+                            print(f"[DEBUG] Data field is string but not JSON: {data_payload}")
+                        self.logger.warning(f"Data field is string but not JSON: {data_payload}")
+                        return
+                
+                # Check if we have another nested event structure
+                if isinstance(data_payload, dict) and data_payload.get("event") == "data":
+                    # This is a nested structure, extract the actual data
+                    actual_data = data_payload.get("data", {})
+                    if debug_mode:
+                        print(f"[DEBUG] Found nested event structure, extracting actual data: {actual_data}")
+                    self.logger.debug(f"Found nested event structure, extracting actual data: {actual_data}")
+                    data_payload = actual_data
+                
+                session_id = data_payload.get("session") if isinstance(data_payload, dict) else None
+                
+                if debug_mode:
+                    print(f"[DEBUG] Processing data event - channel: {channel}, session: {session_id}")
+                    print(f"[DEBUG] Final data payload: {data_payload}")
+                    if session_id:
+                        print(f"[DEBUG] Session ID extracted: {session_id}")
+                    else:
+                        print(f"[DEBUG] No session ID found in data payload")
+                
+                self.logger.debug(f"Processing data event - channel: {channel}, session: {session_id}")
+                self.logger.debug(f"Final data payload: {data_payload}")
+                
+                if session_id:
+                    # Store each message for streaming commands like ping
+                    with self.results_lock:
+                        # Initialize a list for this session if it doesn't exist
+                        if session_id not in self.command_results:
+                            self.command_results[session_id] = []
+                            if debug_mode:
+                                print(f"[DEBUG] Initialized new result list for session: {session_id}")
+                        # Append this message to the list
+                        self.command_results[session_id].append(data_payload)
+                        
+                        if debug_mode:
+                            current_count = len(self.command_results[session_id])
+                            print(f"[DEBUG] Stored message #{current_count} for session {session_id}")
+                            if 'raw' in data_payload:
+                                raw_data = data_payload['raw']
+                                print(f"[DEBUG] Raw data in stored message: {repr(raw_data)}")
+                            print(f"[DEBUG] Complete stored message: {data_payload}")
+                        
+                        self.logger.debug(f"Stored command result for session {session_id}: {data_payload}")
+                    self.logger.debug(f"Command result segment received for session: {session_id}")
+                    self.logger.debug(f"Total segments for session: {len(self.command_results[session_id])}")
+                else:
+                    self.logger.warning(f"Received data event without session ID. Full message: {message_data}")
+                    self.logger.warning(f"Data payload: {data_payload}")
+            else:
+                self.logger.debug(f"Unhandled message event type: {message_data.get('event')}")
+                
+        except Exception as message_error:
+            self.logger.error(f"Error processing WebSocket message: {message_error}")
+            self.logger.debug(f"Exception details:", exc_info=True)
+            self.logger.debug(f"Problematic message: {repr(message)}")
+            self.logger.debug(f"Message type: {type(message)}")
+    
+    def _on_error(self, websocket_connection, error):
+        """WebSocket error callback."""
+        self.logger.error(f"WebSocket error: {error}")
+    
+    def _on_close(self, websocket_connection, close_status_code, close_message):
+        """WebSocket connection closed callback."""
+        self.connected = False
+        self.logger.info("WebSocket connection closed")
+    
+    def disconnect(self):
+        """Close WebSocket connection and cleanup resources."""
+        if self.websocket_connection:
+            self.websocket_connection.close()
+        self.connected = False
+        self.subscribed_channels.clear()
+        
+        with self.results_lock:
+            self.command_results.clear()
+
+
 class SFPTransceiverDataProcessor:
     """Process and correlate SFP / transceiver data with site & device context.
 
@@ -2196,6 +2835,384 @@ def get_cached_or_prompted_org_id():
     org_id_list = mistapi.cli.select_org(apisession)
     org_id = org_id_list[0]
     return org_id
+
+def fetch_organization_services():
+    """
+    Fetch all services defined at the organization level using the Mist API.
+    
+    Returns:
+        list: List of service dictionaries with service definitions, or empty list if error
+        
+    SECURITY: Read-only operation fetching configuration data only.
+    """
+    try:
+        org_id = get_cached_or_prompted_org_id()
+        logging.info(f"Fetching organization services for org_id: {org_id}")
+        
+        # Call the Mist API to get organization services
+        response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
+        
+        if hasattr(response, 'data') and response.data:
+            services_data = response.data
+            logging.info(f"Successfully retrieved {len(services_data)} organization services")
+            
+            # Extract service names and types for easier display
+            services_list = []
+            for service in services_data:
+                if isinstance(service, dict):
+                    service_name = service.get('name', 'unnamed')
+                    service_type = service.get('type', 'custom')
+                    service_desc = service.get('description', '')
+                    services_list.append({
+                        'name': service_name,
+                        'type': service_type,
+                        'description': service_desc,
+                        'full_config': service  # Keep full config for reference
+                    })
+                    
+            return services_list
+            
+        else:
+            logging.warning("No organization services found or response data is empty")
+            return []
+            
+    except Exception as error:
+        logging.error(f"Failed to fetch organization services: {error}")
+        return []
+
+def fetch_organization_tenants():
+    """
+    Fetch all tenants defined in organization networks using the Mist API.
+    
+    Returns:
+        list: List of tenant names found in organization networks, or empty list if error
+        
+    SECURITY: Read-only operation fetching configuration data only.
+    """
+    try:
+        org_id = get_cached_or_prompted_org_id()
+        logging.info(f"Fetching organization networks for tenant information from org_id: {org_id}")
+        
+        # Call the Mist API to get organization networks which contain tenant definitions
+        response = mistapi.api.v1.orgs.networks.listOrgNetworks(apisession, org_id, limit=1000)
+        
+        if hasattr(response, 'data') and response.data:
+            networks_data = response.data
+            logging.info(f"Successfully retrieved {len(networks_data)} organization networks")
+            
+            # Extract tenant names from all networks
+            tenant_names = set()  # Use set to avoid duplicates
+            for network in networks_data:
+                if isinstance(network, dict):
+                    # The network name itself is a tenant for service ping
+                    network_name = network.get('name')
+                    if network_name and isinstance(network_name, str):
+                        tenant_names.add(network_name)
+                        logging.debug(f"Found network tenant '{network_name}'")
+                    
+                    # Also check for any explicit tenants within the network
+                    if 'tenants' in network:
+                        tenants_dict = network.get('tenants', {})
+                        if isinstance(tenants_dict, dict):
+                            # Each key in the tenants dict is also a tenant name
+                            for tenant_name in tenants_dict.keys():
+                                if tenant_name and isinstance(tenant_name, str):
+                                    tenant_names.add(tenant_name)
+                                    logging.debug(f"Found explicit tenant '{tenant_name}' in network '{network.get('name', 'unnamed')}'")
+            
+            tenant_list = sorted(list(tenant_names))  # Convert to sorted list
+            logging.info(f"Found {len(tenant_list)} unique tenants across organization networks: {tenant_list}")
+            return tenant_list
+            
+        else:
+            logging.warning("No organization networks found or response data is empty")
+            return []
+            
+    except Exception as error:
+        logging.error(f"Error fetching organization tenants from networks: {error}")
+        return []
+
+def fetch_site_tenants(site_id):
+    """
+    Fetch all tenants defined in site-level derived networks using the Mist API.
+    
+    Args:
+        site_id (str): The site ID to fetch tenants for
+    
+    Returns:
+        list: List of tenant names found in site derived networks, or empty list if error
+        
+    SECURITY: Read-only operation fetching configuration data only.
+    """
+    try:
+        logging.info(f"Fetching site derived networks for tenant information from site_id: {site_id}")
+        
+        # Call the Mist API to get site derived networks which contain tenant definitions
+        response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(apisession, site_id)
+        
+        if hasattr(response, 'data') and response.data:
+            networks_data = response.data
+            logging.info(f"Successfully retrieved {len(networks_data)} site derived networks")
+            
+            # Extract tenant names from all networks
+            tenant_names = set()  # Use set to avoid duplicates
+            for network in networks_data:
+                if isinstance(network, dict):
+                    # The network name itself is a tenant for service ping
+                    network_name = network.get('name')
+                    if network_name and isinstance(network_name, str):
+                        tenant_names.add(network_name)
+                        logging.debug(f"Found site network tenant '{network_name}'")
+                    
+                    # Also check for any explicit tenants within the network
+                    if 'tenants' in network:
+                        tenants_dict = network.get('tenants', {})
+                        if isinstance(tenants_dict, dict):
+                            # Each key in the tenants dict is also a tenant name
+                            for tenant_name in tenants_dict.keys():
+                                if tenant_name and isinstance(tenant_name, str):
+                                    tenant_names.add(tenant_name)
+                                    logging.debug(f"Found explicit tenant '{tenant_name}' in site network '{network.get('name', 'unnamed')}'")
+            
+            tenant_list = sorted(list(tenant_names))  # Convert to sorted list
+            logging.info(f"Found {len(tenant_list)} unique tenants across site derived networks: {tenant_list}")
+            return tenant_list
+            
+        else:
+            logging.warning("No site derived networks found or response data is empty")
+            return []
+            
+    except Exception as error:
+        logging.error(f"Error fetching site tenants from derived networks: {error}")
+        return []
+
+def fetch_service_policy_tenants(site_id=None):
+    """
+    Fetch all tenants defined in organization and site service policies using the Mist API.
+    
+    Args:
+        site_id (str, optional): The site ID to fetch site-specific policies. If None, only org policies are fetched.
+    
+    Returns:
+        list: List of tenant names found in service policies, or empty list if error
+        
+    SECURITY: Read-only operation fetching configuration data only.
+    """
+    try:
+        tenant_names = set()  # Use set to avoid duplicates
+        
+        # Fetch organization service policies
+        org_id = get_cached_or_prompted_org_id()
+        logging.info(f"Fetching organization service policies for tenant information from org_id: {org_id}")
+        
+        try:
+            response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(apisession, org_id, limit=1000)
+            
+            if hasattr(response, 'data') and response.data:
+                policies_data = response.data
+                logging.info(f"Successfully retrieved {len(policies_data)} organization service policies")
+                
+                # Extract tenant names from service policies
+                for policy in policies_data:
+                    if isinstance(policy, dict):
+                        # Check for tenants array in policy (this is where the tenant names are)
+                        tenants_list = policy.get('tenants', [])
+                        if isinstance(tenants_list, list):
+                            for tenant_name in tenants_list:
+                                if tenant_name and isinstance(tenant_name, str):
+                                    tenant_names.add(tenant_name)
+                                    logging.debug(f"Found tenant '{tenant_name}' in org service policy '{policy.get('name', 'unnamed')}'")
+                        
+                        # Also check legacy single tenant field for compatibility
+                        tenant_name = policy.get('tenant', '')
+                        if tenant_name and isinstance(tenant_name, str):
+                            tenant_names.add(tenant_name)
+                            logging.debug(f"Found single tenant '{tenant_name}' in org service policy '{policy.get('name', 'unnamed')}'")
+                        
+                        # Check for tenants in policy services (if any)
+                        services = policy.get('services', [])
+                        if isinstance(services, list):
+                            for service in services:
+                                if isinstance(service, dict):
+                                    service_tenant = service.get('tenant', '')
+                                    if service_tenant and isinstance(service_tenant, str):
+                                        tenant_names.add(service_tenant)
+                                        logging.debug(f"Found tenant '{service_tenant}' in org service policy service")
+            
+        except Exception as org_error:
+            logging.warning(f"Could not fetch organization service policies: {org_error}")
+        
+        # Fetch site service policies if site_id provided
+        if site_id:
+            logging.info(f"Fetching site service policies for tenant information from site_id: {site_id}")
+            
+            try:
+                response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(apisession, site_id)
+                
+                if hasattr(response, 'data') and response.data:
+                    policies_data = response.data
+                    logging.info(f"Successfully retrieved {len(policies_data)} site service policies")
+                    
+                    # Extract tenant names from site service policies
+                    for policy in policies_data:
+                        if isinstance(policy, dict):
+                            # Check for tenants array in policy (this is where the tenant names are)
+                            tenants_list = policy.get('tenants', [])
+                            if isinstance(tenants_list, list):
+                                for tenant_name in tenants_list:
+                                    if tenant_name and isinstance(tenant_name, str):
+                                        tenant_names.add(tenant_name)
+                                        logging.debug(f"Found tenant '{tenant_name}' in site service policy '{policy.get('name', 'unnamed')}'")
+                            
+                            # Also check legacy single tenant field for compatibility
+                            tenant_name = policy.get('tenant', '')
+                            if tenant_name and isinstance(tenant_name, str):
+                                tenant_names.add(tenant_name)
+                                logging.debug(f"Found single tenant '{tenant_name}' in site service policy '{policy.get('name', 'unnamed')}'")
+                            
+                            # Check for tenants in policy services (if any)
+                            services = policy.get('services', [])
+                            if isinstance(services, list):
+                                for service in services:
+                                    if isinstance(service, dict):
+                                        service_tenant = service.get('tenant', '')
+                                        if service_tenant and isinstance(service_tenant, str):
+                                            tenant_names.add(service_tenant)
+                                            logging.debug(f"Found tenant '{service_tenant}' in site service policy service")
+                
+            except Exception as site_error:
+                logging.warning(f"Could not fetch site service policies: {site_error}")
+        
+        tenant_list = sorted(list(tenant_names))  # Convert to sorted list
+        logging.info(f"Found {len(tenant_list)} unique tenants across service policies: {tenant_list}")
+        return tenant_list
+        
+    except Exception as error:
+        logging.error(f"Error fetching tenants from service policies: {error}")
+        return []
+
+def fetch_gateway_template_tenants(site_id=None):
+    """
+    Fetch all tenants defined in organization and site gateway templates using the Mist API.
+    
+    Args:
+        site_id (str, optional): The site ID to fetch site-specific templates. If None, only org templates are fetched.
+    
+    Returns:
+        list: List of tenant names found in gateway templates, or empty list if error
+        
+    SECURITY: Read-only operation fetching configuration data only.
+    """
+    try:
+        tenant_names = set()  # Use set to avoid duplicates
+        
+        # Fetch organization gateway templates
+        org_id = get_cached_or_prompted_org_id()
+        logging.info(f"Fetching organization gateway templates for tenant information from org_id: {org_id}")
+        
+        try:
+            response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id, limit=1000)
+            
+            if hasattr(response, 'data') and response.data:
+                templates_data = response.data
+                logging.info(f"Successfully retrieved {len(templates_data)} organization gateway templates")
+                
+                # Extract tenant names from gateway templates
+                for template in templates_data:
+                    if isinstance(template, dict):
+                        # Check router configuration in gateway template
+                        router_config = template.get('router', {})
+                        if isinstance(router_config, dict):
+                            # Check for tenants in router config
+                            tenants_config = router_config.get('tenants', [])
+                            if isinstance(tenants_config, list):
+                                for tenant_item in tenants_config:
+                                    if isinstance(tenant_item, dict):
+                                        tenant_name = tenant_item.get('name', '')
+                                        if tenant_name and isinstance(tenant_name, str):
+                                            tenant_names.add(tenant_name)
+                                            logging.debug(f"Found tenant '{tenant_name}' in org gateway template '{template.get('name', 'unnamed')}'")
+                            
+                            # Also check router.tenant_profiles which might contain tenant definitions
+                            tenant_profiles = router_config.get('tenant_profiles', {})
+                            if isinstance(tenant_profiles, dict):
+                                for tenant_name in tenant_profiles.keys():
+                                    if tenant_name and isinstance(tenant_name, str):
+                                        tenant_names.add(tenant_name)
+                                        logging.debug(f"Found tenant profile '{tenant_name}' in org gateway template")
+                        
+                        # Check networks configuration which might have tenant mappings
+                        networks_config = template.get('networks', [])
+                        if isinstance(networks_config, list):
+                            for network in networks_config:
+                                if isinstance(network, dict) and 'tenants' in network:
+                                    tenants_dict = network.get('tenants', {})
+                                    if isinstance(tenants_dict, dict):
+                                        for tenant_name in tenants_dict.keys():
+                                            if tenant_name and isinstance(tenant_name, str):
+                                                tenant_names.add(tenant_name)
+                                                logging.debug(f"Found tenant '{tenant_name}' in org gateway template network")
+            
+        except Exception as org_error:
+            logging.warning(f"Could not fetch organization gateway templates: {org_error}")
+        
+        # Fetch site gateway templates if site_id provided
+        if site_id:
+            logging.info(f"Fetching site gateway templates for tenant information from site_id: {site_id}")
+            
+            try:
+                response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(apisession, site_id)
+                
+                if hasattr(response, 'data') and response.data:
+                    templates_data = response.data
+                    logging.info(f"Successfully retrieved {len(templates_data)} site gateway templates")
+                    
+                    # Extract tenant names from site gateway templates
+                    for template in templates_data:
+                        if isinstance(template, dict):
+                            # Check router configuration in gateway template
+                            router_config = template.get('router', {})
+                            if isinstance(router_config, dict):
+                                # Check for tenants in router config
+                                tenants_config = router_config.get('tenants', [])
+                                if isinstance(tenants_config, list):
+                                    for tenant_item in tenants_config:
+                                        if isinstance(tenant_item, dict):
+                                            tenant_name = tenant_item.get('name', '')
+                                            if tenant_name and isinstance(tenant_name, str):
+                                                tenant_names.add(tenant_name)
+                                                logging.debug(f"Found tenant '{tenant_name}' in site gateway template '{template.get('name', 'unnamed')}'")
+                                
+                                # Also check router.tenant_profiles
+                                tenant_profiles = router_config.get('tenant_profiles', {})
+                                if isinstance(tenant_profiles, dict):
+                                    for tenant_name in tenant_profiles.keys():
+                                        if tenant_name and isinstance(tenant_name, str):
+                                            tenant_names.add(tenant_name)
+                                            logging.debug(f"Found tenant profile '{tenant_name}' in site gateway template")
+                            
+                            # Check networks configuration
+                            networks_config = template.get('networks', [])
+                            if isinstance(networks_config, list):
+                                for network in networks_config:
+                                    if isinstance(network, dict) and 'tenants' in network:
+                                        tenants_dict = network.get('tenants', {})
+                                        if isinstance(tenants_dict, dict):
+                                            for tenant_name in tenants_dict.keys():
+                                                if tenant_name and isinstance(tenant_name, str):
+                                                    tenant_names.add(tenant_name)
+                                                    logging.debug(f"Found tenant '{tenant_name}' in site gateway template network")
+                
+            except Exception as site_error:
+                logging.warning(f"Could not fetch site gateway templates: {site_error}")
+        
+        tenant_list = sorted(list(tenant_names))  # Convert to sorted list
+        logging.info(f"Found {len(tenant_list)} unique tenants across gateway templates: {tenant_list}")
+        return tenant_list
+        
+    except Exception as error:
+        logging.error(f"Error fetching tenants from gateway templates: {error}")
+        return []
 
 def flatten_dict_recursively(d, parent_key='', sep='_'):
     """
@@ -3659,6 +4676,1513 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
         logging.error(f"Failed to export audit logs: {e}")
         logging.debug("EXIT: export_audit_logs_to_csv - error")
         raise
+
+
+# ============================================================================
+# WEBSOCKET COMMAND FUNCTIONS
+# ============================================================================
+
+def ping_device_websocket():
+    """
+    Execute ping command on a network device via WebSocket.
+    
+    Follows the documented Mist API pattern:
+    1. Connect to WebSocket
+    2. Subscribe to device command channel
+    3. Issue POST ping command
+    4. Await results via WebSocket stream
+    
+    SECURITY: Uses authenticated WebSocket connection with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    # Check for debug mode from command line args
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("[DEBUG] DEBUG MODE ENABLED")
+    
+    logging.info("Starting WebSocket ping operation...")
+    logging.debug("ENTER: ping_device_websocket")
+    
+    try:
+        # Interactive site and device selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+            
+        # Get device selection  
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="all")
+        if not device_id:
+            print("! No device selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+            
+        # Get ping target from user (default to 8.8.8.8)
+        target_input = input("Enter the target hostname or IP address to ping (default: 8.8.8.8): ").strip()
+        target_host = target_input if target_input else "8.8.8.8"
+            
+        # Validate target host
+        if not _validate_ping_target(target_host):
+            print(f"! Invalid ping target: {target_host}")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Target host = {target_host}")
+            
+        # Get ping count (optional)
+        ping_count_input = input("Enter number of ping packets (default: 4): ").strip()
+        ping_count = 4
+        if ping_count_input:
+            try:
+                ping_count = int(ping_count_input)
+                if ping_count < 1 or ping_count > 100:
+                    print("! Ping count must be between 1 and 100. Using default: 4")
+                    ping_count = 4
+            except ValueError:
+                print("! Invalid ping count. Using default: 4")
+                ping_count = 4
+        
+        if debug_mode:
+            print(f"[DEBUG] Ping count = {ping_count}")
+        
+        print(f"\n→ Executing ping to {target_host} on device {device_id}...")
+        print(f"→ Ping count: {ping_count}")
+        print("→ Establishing WebSocket connection...")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+            
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        # Issue ping command via REST API
+        ping_payload = {
+            "host": target_host,
+            "count": ping_count
+        }
+        
+        print("→ Issuing ping command...")
+        logging.debug(f"Ping payload: {ping_payload}")
+        
+        if debug_mode:
+            print(f"[DEBUG] Ping payload = {ping_payload}")
+        
+        # Get authentication details for direct HTTP request
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        
+        if not mist_host or not mist_apitoken:
+            print("! Mist host or API token not found in session or environment")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] mist_host = {mist_host}")
+            print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
+        
+        # Make direct POST request to trigger ping
+        ping_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/ping"
+        headers = {'Authorization': f'Token {mist_apitoken}', 'Content-Type': 'application/json'}
+        
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {ping_url}")
+            print(f"[DEBUG] Headers = {{'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}}")
+        
+        ping_response = requests.post(ping_url, headers=headers, json=ping_payload)
+        
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {ping_response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {ping_response.text}")
+        
+        if ping_response.status_code != 200:
+            print(f"! Failed to issue ping command: {ping_response.status_code}")
+            print(f"! Response: {ping_response.text}")
+            websocket_manager.disconnect()
+            return
+            
+        # Extract session ID from response
+        response_data = ping_response.json()
+        session_id = response_data.get("session")
+        if not session_id:
+            print("! No session ID returned from ping command")
+            websocket_manager.disconnect()
+            return
+            
+        print(f"→ Ping command issued (session: {session_id[:8]}...)")
+        print("→ Waiting for ping results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Wait for ping results via WebSocket
+        ping_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=30)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {ping_result is not None}")
+            if ping_result:
+                print(f"[DEBUG] Result keys: {list(ping_result.keys())}")
+        
+        if ping_result:
+            print("\n" + "=" * 60)
+            print("PING RESULTS:")
+            print("=" * 60)
+            
+            # Display raw output (this is where ping results come according to documentation)
+            raw_output = ping_result.get("raw", "")
+            if raw_output:
+                print("RAW OUTPUT:")
+                print("-" * 40)
+                print(raw_output)
+            
+            # Display any other output fields that might be present
+            output_fields = ping_result.get("Output", "")
+            if output_fields and output_fields != raw_output:
+                print("\nOTHER OUTPUT:")
+                print("-" * 40)
+                print(output_fields)
+                
+            # Show all available fields for debugging
+            available_fields = [key for key in ping_result.keys() if key not in ['raw', 'Output', 'session']]
+            if available_fields:
+                print(f"\nOTHER AVAILABLE FIELDS: {available_fields}")
+                for field in available_fields:
+                    field_value = ping_result.get(field)
+                    if field_value:
+                        print(f"{field}: {field_value}")
+                
+            if not raw_output and not output_fields:
+                print("No output data received")
+                print(f"Available result keys: {list(ping_result.keys())}")
+                
+            print("=" * 60)
+            
+            # Log the successful operation
+            logging.info(f"WebSocket ping completed successfully for {target_host}")
+            
+        else:
+            print("! Timeout waiting for ping results")
+            logging.warning("WebSocket ping operation timed out")
+            
+            if debug_mode:
+                print("[DEBUG] Checking WebSocket manager state...")
+                print(f"[DEBUG] Connected = {websocket_manager.connected}")
+                print(f"[DEBUG] Subscribed channels = {websocket_manager.subscribed_channels}")
+                with websocket_manager.results_lock:
+                    print(f"[DEBUG] Pending results = {list(websocket_manager.command_results.keys())}")
+            
+    except Exception as ping_error:
+        error_message = f"WebSocket ping operation failed: {ping_error}"
+        print(f"! {error_message}")
+        logging.error(error_message)
+        
+        if debug_mode:
+            print("[DEBUG] Exception details:")
+            import traceback
+            traceback.print_exc()
+        
+        logging.debug("EXIT: ping_device_websocket - error")
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+                
+                if debug_mode:
+                    print("[DEBUG] WebSocket cleanup completed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: ping_device_websocket")
+
+
+def arp_device_websocket():
+    """
+    Execute ARP command on a network device via WebSocket.
+    
+    Follows the documented Mist API pattern for ARP commands:
+    1. Subscribe to WebSocket channel
+    2. POST ARP command
+    3. Receive results via WebSocket stream with session-based demultiplexing
+    
+    SECURITY: Uses authenticated WebSocket connection with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    logging.info("Starting WebSocket ARP operation...")
+    logging.debug("ENTER: arp_device_websocket")
+    
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        print("[DEBUG] Starting ARP via WebSocket operation...")
+    
+    try:
+        # Interactive site and device selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+            
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+        
+        # Get device selection  
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="all")
+        if not device_id:
+            print("! No device selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+        
+        # Get device details to check type and model for compatibility
+        device_info = None
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
+            
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', f"Device {device_id[:8]}")
+                
+                if debug_mode:
+                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
+                
+                # Warn about device compatibility
+                if device_type == 'switch':
+                    print(f"⚠  WARNING: Switch detected (Model: {device_model})")
+                    print("   → Switches may have limited WebSocket ARP support")
+                    print("   → Consider using SSH-based ARP commands instead")
+                    print("   → This operation may timeout or return limited results")
+                    
+                    response = input("   → Continue anyway? (y/N): ").strip().lower()
+                    if response not in ['y', 'yes']:
+                        print("! Operation cancelled by user")
+                        return
+                        
+                elif device_type == 'gateway':
+                    print(f"✓ Gateway detected (Model: {device_model})")
+                    print("   → Gateways have good WebSocket ARP support")
+                    print("   → Results may differ from Access Points")
+                    
+                elif device_type == 'ap':
+                    print(f"✓ Access Point detected (Model: {device_model})")
+                    print("   → Access Points have full WebSocket ARP support")
+                    
+                else:
+                    print(f"? Unknown device type: {device_type} (Model: {device_model})")
+                    print("   → Proceeding with standard ARP command")
+                    
+        except Exception as device_check_error:
+            logging.warning(f"Could not verify device compatibility: {device_check_error}")
+            if debug_mode:
+                print(f"[DEBUG] Device check failed: {device_check_error}")
+            print("   → Proceeding with standard ARP command")
+        
+        print(f"\n→ Executing ARP command on device {device_id}...")
+        print("→ Establishing WebSocket connection...")
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+        
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+            
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+        
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        print("→ Issuing ARP command...")
+        
+        # Get authentication details for direct HTTP request
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        
+        if debug_mode:
+            print(f"[DEBUG] mist_host = {mist_host}")
+            print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 'None'}")
+        
+        if not mist_host or not mist_apitoken:
+            print("! Mist host or API token not found in session or environment")
+            websocket_manager.disconnect()
+            return
+        
+        # Make direct POST request to trigger ARP command
+        arp_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"
+        headers = {'Authorization': f'Token {mist_apitoken}', 'Content-Type': 'application/json'}
+        
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {arp_url}")
+            print(f"[DEBUG] Headers = {{'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}}")
+        
+        # ARP command typically doesn't need a payload body
+        arp_response = requests.post(arp_url, headers=headers, json={})
+        
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {arp_response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {arp_response.text}")
+        
+        if arp_response.status_code != 200:
+            print(f"! Failed to issue ARP command: {arp_response.status_code}")
+            print(f"! Response: {arp_response.text}")
+            websocket_manager.disconnect()
+            return
+            
+        # Extract session ID from response
+        response_data = arp_response.json()
+        session_id = response_data.get("session")
+        if not session_id:
+            print("! No session ID returned from ARP command")
+            websocket_manager.disconnect()
+            return
+            
+        print(f"→ ARP command issued (session: {session_id[:8]}...)")
+        print("→ Waiting for ARP results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Determine timeout based on device type
+        if device_info:
+            device_type = device_info.get('type', 'unknown')
+            if device_type == 'switch':
+                # Switches often timeout, give them more time
+                timeout_seconds = 45
+                print("   → Using extended timeout for switch (45 seconds)")
+            elif device_type == 'gateway':
+                # Gateways work but may be slower
+                timeout_seconds = 35
+                print("   → Using extended timeout for gateway (35 seconds)")
+            else:
+                # APs and unknown devices use standard timeout
+                timeout_seconds = 30
+        else:
+            timeout_seconds = 30
+        
+        # Wait for ARP results via WebSocket
+        arp_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {arp_result is not None}")
+            if arp_result:
+                print(f"[DEBUG] Result keys: {list(arp_result.keys())}")
+        
+        if arp_result:
+            print("\n" + "=" * 60)
+            print("ARP TABLE RESULTS:")
+            print("=" * 60)
+            
+            # Add device-specific context
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', 'Unknown Device')
+                
+                print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
+                
+                if device_type == 'switch':
+                    print("Note: Switch ARP data may show forwarding table or limited ARP information")
+                elif device_type == 'gateway':
+                    print("Note: Gateway ARP data may include routing information")
+                elif device_type == 'ap':
+                    print("Note: Access Point ARP data shows client connectivity information")
+                    
+                print("-" * 60)
+            
+            # Display raw output if available
+            raw_output = arp_result.get("raw", "")
+            if raw_output:
+                # Parse and display gateway data in table format if it's JSON
+                if device_info and device_info.get('type') == 'gateway' and raw_output.strip().startswith('{'):
+                    try:
+                        import json
+                        gateway_data = json.loads(raw_output)
+                        
+                        if gateway_data.get('status') == 'SUCCESS' and 'rows' in gateway_data:
+                            print("PARSED ARP TABLE:")
+                            print("-" * 40)
+                            
+                            # Get column headers
+                            columns = gateway_data.get('columns', [])
+                            if columns:
+                                # Create header row
+                                headers = [col.get('display_name', col.get('id', 'Unknown')) for col in columns]
+                                
+                                # Calculate column widths
+                                rows = gateway_data.get('rows', [])
+                                col_widths = []
+                                for idx, header in enumerate(headers):
+                                    max_width = len(header)
+                                    for row in rows:
+                                        col_id = columns[idx].get('id', '')
+                                        cell_value = str(row.get(col_id, ''))
+                                        max_width = max(max_width, len(cell_value))
+                                    col_widths.append(min(max_width + 2, 20))  # Cap at 20 chars
+                                
+                                # Print header
+                                header_line = " | ".join(header.ljust(col_widths[idx]) for idx, header in enumerate(headers))
+                                print(header_line)
+                                print("-" * len(header_line))
+                                
+                                # Print data rows
+                                for row in rows:
+                                    row_values = []
+                                    for idx, col in enumerate(columns):
+                                        col_id = col.get('id', '')
+                                        cell_value = str(row.get(col_id, ''))
+                                        # Truncate if too long
+                                        if len(cell_value) > col_widths[idx] - 2:
+                                            cell_value = cell_value[:col_widths[idx] - 5] + "..."
+                                        row_values.append(cell_value.ljust(col_widths[idx]))
+                                    print(" | ".join(row_values))
+                                
+                                print(f"\nTotal ARP Entries: {len(rows)}")
+                                
+                                # Also show raw for reference if debug mode
+                                if debug_mode:
+                                    print("\nRAW JSON OUTPUT (Debug):")
+                                    print("-" * 40)
+                                    print(raw_output)
+                            else:
+                                print("No column information available in gateway response")
+                                print("RAW OUTPUT:")
+                                print("-" * 40)
+                                print(raw_output)
+                        else:
+                            print("Gateway response format not recognized")
+                            print("RAW OUTPUT:")
+                            print("-" * 40)
+                            print(raw_output)
+                            
+                    except json.JSONDecodeError as json_error:
+                        if debug_mode:
+                            print(f"[DEBUG] Failed to parse gateway JSON: {json_error}")
+                        print("Failed to parse gateway JSON output")
+                        print("RAW OUTPUT:")
+                        print("-" * 40)
+                        print(raw_output)
+                else:
+                    # For APs and other devices, show raw output
+                    print("RAW OUTPUT:")
+                    print("-" * 40)
+                    print(raw_output)
+            
+            # Display parsed output if available  
+            parsed_output = arp_result.get("Output", "")
+            if parsed_output and parsed_output != raw_output:
+                print("\nPARSED OUTPUT:")
+                print("-" * 40)
+                print(parsed_output)
+                
+            if not raw_output and not parsed_output:
+                print("No output data received")
+                if device_info and device_info.get('type') == 'switch':
+                    print("\nTroubleshooting for switches:")
+                    print("→ Try using SSH-based commands instead")
+                    print("→ Some switches require specific ARP command syntax")
+                    print("→ WebSocket API may have limited switch support")
+                
+            print("=" * 60)
+            
+            # Log the successful operation with device context
+            device_context = f"device {device_id}"
+            if device_info:
+                device_context = f"{device_info.get('type', 'unknown')} {device_info.get('name', device_id[:8])}"
+            logging.info(f"WebSocket ARP completed successfully for {device_context}")
+            
+        else:
+            print("! Timeout waiting for ARP results")
+            
+            # Provide device-specific troubleshooting advice
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                
+                if device_type == 'switch':
+                    print(f"\nSwitch troubleshooting ({device_model}):")
+                    print("→ Switches often have limited WebSocket ARP support")
+                    print("→ Try using SSH-based 'show arp' commands instead")
+                    print("→ Some switch models require specific command syntax")
+                    print("→ Consider using Menu option for SSH device commands")
+                elif device_type == 'gateway':
+                    print(f"\nGateway troubleshooting ({device_model}):")
+                    print("→ Try increasing timeout or checking network connectivity")
+                    print("→ Gateway may require different ARP command format")
+                else:
+                    print(f"\nGeneral troubleshooting ({device_type}):")
+                    print("→ Check device connectivity and WebSocket support")
+                    print("→ Some devices may require SSH-based commands")
+            
+            logging.warning("WebSocket ARP operation timed out")
+            
+    except Exception as arp_error:
+        error_message = f"WebSocket ARP operation failed: {arp_error}"
+        print(f"! {error_message}")
+        logging.error(error_message)
+        logging.debug("EXIT: arp_device_websocket - error")
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: arp_device_websocket")
+
+
+def service_ping_device_websocket():
+    """
+    Execute service ping command on SSR gateway devices via WebSocket.
+    Service ping allows ping packets to follow the same path as specific services.
+    
+    Follows the documented Mist API pattern for service ping commands:
+    1. Subscribe to WebSocket channel
+    2. POST service ping command with service-specific parameters
+    3. Receive results via WebSocket stream with session-based demultiplexing
+    
+    SECURITY: Uses authenticated WebSocket connection with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    logging.info("Starting WebSocket Service Ping operation...")
+    logging.debug("ENTER: service_ping_device_websocket")
+    
+    debug_mode = is_debug_mode()
+    
+    if debug_mode:
+        print("[DEBUG] Starting Service Ping via WebSocket operation...")
+        print(f"[DEBUG] Command line args: {sys.argv}")
+        print(f"[DEBUG] Debug mode detected: {debug_mode}")
+    
+    try:
+        # Interactive site and device selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+            
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+        
+        # Get device selection - ONLY gateways for Service Ping
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="gateway")
+        if not device_id:
+            print("! No gateway devices found or selected. Service Ping requires an SSR gateway.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+        
+        # Get device details to check type and model for compatibility
+        device_info = None
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway").data
+            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
+            
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', f"Device {device_id[:8]}")
+                
+                if debug_mode:
+                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
+                
+                # Provide device-specific guidance
+                if device_type == 'gateway':
+                    print(f"✓ SSR Gateway detected (Model: {device_model})")
+                    print("   → Service Ping allows ping packets to follow service-specific paths")
+                    print("   → This is an SSR-specific feature")
+                elif device_type == 'ap':
+                    print(f"⚠ WARNING: Access Point detected (Model: {device_model})")
+                    print("   → Service Ping is designed for SSR gateways")
+                    print("   → This device may not support service ping functionality")
+                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    if choice != 'y':
+                        print("Operation cancelled.")
+                        return
+                elif device_type == 'switch':
+                    print(f"⚠ WARNING: Switch detected (Model: {device_model})")
+                    print("   → Service Ping is designed for SSR gateways")
+                    print("   → Switches typically do not support service ping")
+                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    if choice != 'y':
+                        print("Operation cancelled.")
+                        return
+                else:
+                    print(f"⚠ WARNING: Unknown device type detected (Model: {device_model})")
+                    print("   → Service Ping is designed for SSR gateways")
+                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    if choice != 'y':
+                        print("Operation cancelled.")
+                        return
+            
+        except Exception as device_error:
+            logging.warning(f"Could not retrieve device details: {device_error}")
+            if debug_mode:
+                print(f"[DEBUG] Device details error: {device_error}")
+            print("⚠ Cannot determine device type - proceeding with caution")
+            print("   → Service Ping is designed for SSR gateways")
+            choice = input("   → Continue anyway? (y/N): ").strip().lower()
+            if choice != 'y':
+                print("Operation cancelled.")
+                return
+        
+        # Fetch organization services first (primary source)
+        print("\n→ Fetching organization services...")
+        org_services = fetch_organization_services()
+        available_org_services = []
+        
+        if org_services:
+            available_org_services = [svc['name'] for svc in org_services if svc.get('name')]
+            print(f"   → Found {len(available_org_services)} organization-level services")
+            if debug_mode:
+                print(f"[DEBUG] Organization services: {available_org_services}")
+        else:
+            print("   → No organization-level services found")
+        
+        # Fetch organization tenants from networks (primary source)
+        print("→ Fetching organization tenants...")
+        org_tenants = fetch_organization_tenants()
+        available_org_tenants = []
+        
+        if org_tenants:
+            available_org_tenants = org_tenants
+            print(f"   → Found {len(available_org_tenants)} organization-level tenants")
+            if debug_mode:
+                print(f"[DEBUG] Organization tenants: {available_org_tenants}")
+        else:
+            print("   → No organization-level tenants found")
+        
+        # Fetch site tenants from derived networks (secondary source)
+        print("→ Fetching site tenants...")
+        site_tenants = fetch_site_tenants(site_id)
+        available_site_tenants = []
+        
+        if site_tenants:
+            available_site_tenants = site_tenants
+            print(f"   → Found {len(available_site_tenants)} site-level tenants")
+            if debug_mode:
+                print(f"[DEBUG] Site tenants: {available_site_tenants}")
+        else:
+            print("   → No site-level tenants found")
+        
+        # Fetch tenants from service policies (tertiary source)
+        print("→ Fetching service policy tenants...")
+        service_policy_tenants = fetch_service_policy_tenants(site_id)
+        available_service_policy_tenants = []
+        
+        if service_policy_tenants:
+            available_service_policy_tenants = service_policy_tenants
+            print(f"   → Found {len(available_service_policy_tenants)} service policy tenants")
+            if debug_mode:
+                print(f"[DEBUG] Service policy tenants: {available_service_policy_tenants}")
+        else:
+            print("   → No service policy tenants found")
+        
+        # Fetch tenants from gateway templates (quaternary source)
+        print("→ Fetching gateway template tenants...")
+        gateway_template_tenants = fetch_gateway_template_tenants(site_id)
+        available_gateway_template_tenants = []
+        
+        if gateway_template_tenants:
+            available_gateway_template_tenants = gateway_template_tenants
+            print(f"   → Found {len(available_gateway_template_tenants)} gateway template tenants")
+            if debug_mode:
+                print(f"[DEBUG] Gateway template tenants: {available_gateway_template_tenants}")
+        else:
+            print("   → No gateway template tenants found")
+        
+        # Fetch device configuration for additional tenant and service options (fallback)
+        print("→ Fetching device configuration for additional options...")
+        device_config = None
+        available_device_tenants = []
+        available_device_services = []
+        
+        try:
+            config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            device_config = getattr(config_response, "data", {})
+            
+            if debug_mode:
+                print(f"[DEBUG] Device config keys: {list(device_config.keys())}")
+            
+            # Extract tenants and services from device configuration/stats
+            tenants_set = set()
+            services_set = set()
+            
+            # Method 1: Check service_policies
+            service_policies = device_config.get("service_policies", [])
+            for policy in service_policies:
+                if isinstance(policy, dict):
+                    tenant_name = policy.get("tenant", "")
+                    if tenant_name:
+                        tenants_set.add(tenant_name)
+                    
+                    # Extract services from policies
+                    services = policy.get("services", [])
+                    if isinstance(services, list):
+                        for service_item in services:
+                            if isinstance(service_item, dict):
+                                service_name = service_item.get("name", "")
+                                if service_name:
+                                    services_set.add(service_name)
+                            elif isinstance(service_item, str):
+                                services_set.add(service_item)
+            
+            # Method 2: Check routing instances for tenants
+            routing_instances = device_config.get("routing_instances", [])
+            for instance in routing_instances:
+                if isinstance(instance, dict):
+                    tenant_name = instance.get("name", "")
+                    if tenant_name and not tenant_name.startswith("_"):
+                        tenants_set.add(tenant_name)
+            
+            # Method 3: Check router configuration
+            router_config = device_config.get("router", {})
+            if isinstance(router_config, dict):
+                # Check for tenants in router config
+                tenants_config = router_config.get("tenants", [])
+                if isinstance(tenants_config, list):
+                    for tenant_item in tenants_config:
+                        if isinstance(tenant_item, dict):
+                            tenant_name = tenant_item.get("name", "")
+                            if tenant_name:
+                                tenants_set.add(tenant_name)
+                
+                # Check for services in router config
+                services_config = router_config.get("services", [])
+                if isinstance(services_config, list):
+                    for service_item in services_config:
+                        if isinstance(service_item, dict):
+                            service_name = service_item.get("name", "")
+                            if service_name:
+                                services_set.add(service_name)
+            
+            # Method 4: Check device stats for additional service/tenant info
+            try:
+                stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+                stats_data = getattr(stats_response, "data", {})
+                
+                # Look for tenant/service info in stats
+                if "service_stat" in stats_data:
+                    service_stats = stats_data.get("service_stat", [])
+                    for service_stat in service_stats:
+                        if isinstance(service_stat, dict):
+                            service_name = service_stat.get("name", "")
+                            if service_name and not service_name.startswith("_"):
+                                services_set.add(service_name)
+                
+                if debug_mode:
+                    print(f"[DEBUG] Stats keys: {list(stats_data.keys())}")
+                    
+            except Exception as stats_error:
+                if debug_mode:
+                    print(f"[DEBUG] Could not fetch stats: {stats_error}")
+            
+            # Convert to sorted lists and filter out internal/system entries
+            available_device_tenants = sorted([t for t in tenants_set if t and not t.startswith("_")])
+            available_device_services = sorted([s for s in services_set if s and not s.startswith("_")])
+            
+            if debug_mode:
+                print(f"[DEBUG] Found tenants from device: {available_device_tenants}")
+                print(f"[DEBUG] Found services from device: {available_device_services}")
+            
+            # Report device configuration results
+            if not available_device_tenants:
+                print("   → No tenants found in device configuration")
+            else:
+                print(f"   → Found {len(available_device_tenants)} tenants from device configuration")
+                
+            if not available_device_services:
+                print("   → No additional services found in device configuration")
+            else:
+                print(f"   → Found {len(available_device_services)} additional services from device configuration")
+                
+        except Exception as config_error:
+            logging.warning(f"Could not fetch device configuration: {config_error}")
+            if debug_mode:
+                print(f"[DEBUG] Config error: {config_error}")
+            print("⚠ Cannot retrieve device configuration")
+        
+        # Combine organization, site, service policy, gateway template, and device tenants 
+        # (precedence: org > site > service policy > gateway template > device)
+        all_available_tenants = list(available_org_tenants)  # Start with org tenants
+        
+        # Add site tenants (if not already present from org)
+        for site_tenant in available_site_tenants:
+            if site_tenant not in all_available_tenants:
+                all_available_tenants.append(site_tenant)
+        
+        # Add service policy tenants (if not already present from org or site)
+        for policy_tenant in available_service_policy_tenants:
+            if policy_tenant not in all_available_tenants:
+                all_available_tenants.append(policy_tenant)
+        
+        # Add gateway template tenants (if not already present)
+        for template_tenant in available_gateway_template_tenants:
+            if template_tenant not in all_available_tenants:
+                all_available_tenants.append(template_tenant)
+        
+        # Add device tenants (if not already present from any other source)
+        for device_tenant in available_device_tenants:
+            if device_tenant not in all_available_tenants:
+                all_available_tenants.append(device_tenant)
+        
+        # Combine organization and device services (org services take precedence)
+        all_available_services = list(available_org_services)  # Start with org services
+        for device_service in available_device_services:
+            if device_service not in all_available_services:
+                all_available_services.append(device_service)
+        
+        # Force add default tenant "testing-tools" if not already present
+        if "testing-tools" not in all_available_tenants:
+            all_available_tenants.append("testing-tools")
+            if debug_mode:
+                print(f"[DEBUG] Added default tenant: testing-tools")
+        
+        # Force add default service "web-session" if not already present
+        if "web-session" not in all_available_services:
+            all_available_services.append("web-session")
+            if debug_mode:
+                print(f"[DEBUG] Added default service: web-session")
+        
+        if debug_mode:
+            print(f"[DEBUG] Combined tenant list: {all_available_tenants}")
+            print(f"[DEBUG] Combined service list: {all_available_services}")
+        
+        # Get service ping parameters from user
+        print("\n" + "=" * 50)
+        print("SERVICE PING CONFIGURATION")
+        print("=" * 50)
+        
+        # Tenant selection (organization, site, service policy, gateway template, and device tenants combined)
+        tenant = None
+        if all_available_tenants:
+            print("\nAvailable Tenants:")
+            
+            current_index = 0
+            
+            # Show organization tenants first
+            org_tenant_count = len(available_org_tenants)
+            if org_tenant_count > 0:
+                print(f"  Organization Tenants ({org_tenant_count}):")
+                for tenant_name in available_org_tenants:
+                    print(f"    [{current_index}] {tenant_name} (org networks)")
+                    current_index += 1
+            
+            # Show site tenants (additional to org tenants)
+            site_only_tenants = [tenant for tenant in available_site_tenants if tenant not in available_org_tenants]
+            if site_only_tenants:
+                print(f"  Site Tenants ({len(site_only_tenants)}):")
+                for tenant_name in site_only_tenants:
+                    print(f"    [{current_index}] {tenant_name} (site networks)")
+                    current_index += 1
+            
+            # Show service policy tenants (additional to org and site tenants)
+            policy_only_tenants = [tenant for tenant in available_service_policy_tenants if tenant not in available_org_tenants and tenant not in available_site_tenants]
+            if policy_only_tenants:
+                print(f"  Service Policy Tenants ({len(policy_only_tenants)}):")
+                for tenant_name in policy_only_tenants:
+                    print(f"    [{current_index}] {tenant_name} (service policies)")
+                    current_index += 1
+            
+            # Show gateway template tenants (additional to org, site, and policy tenants)
+            template_only_tenants = [tenant for tenant in available_gateway_template_tenants 
+                                   if tenant not in available_org_tenants 
+                                   and tenant not in available_site_tenants 
+                                   and tenant not in available_service_policy_tenants]
+            if template_only_tenants:
+                print(f"  Gateway Template Tenants ({len(template_only_tenants)}):")
+                for tenant_name in template_only_tenants:
+                    print(f"    [{current_index}] {tenant_name} (gateway templates)")
+                    current_index += 1
+            
+            # Show device tenants (additional to all other sources)
+            device_only_tenants = [tenant for tenant in available_device_tenants 
+                                 if tenant not in available_org_tenants 
+                                 and tenant not in available_site_tenants 
+                                 and tenant not in available_service_policy_tenants
+                                 and tenant not in available_gateway_template_tenants]
+            if device_only_tenants:
+                print(f"  Device Configuration Tenants ({len(device_only_tenants)}):")
+                for tenant_name in device_only_tenants:
+                    print(f"    [{current_index}] {tenant_name} (device config)")
+                    current_index += 1
+            
+            # Show any remaining tenants that don't fit into the above categories (e.g., defaults)
+            remaining_tenants = [tenant for tenant in all_available_tenants 
+                               if tenant not in available_org_tenants 
+                               and tenant not in available_site_tenants 
+                               and tenant not in available_service_policy_tenants
+                               and tenant not in available_gateway_template_tenants
+                               and tenant not in available_device_tenants]
+            if remaining_tenants:
+                print(f"  Additional Tenants ({len(remaining_tenants)}):")
+                for tenant_name in remaining_tenants:
+                    print(f"    [{current_index}] {tenant_name} (default/custom)")
+                    current_index += 1
+            
+            # Find the index of "testing-tools" for default selection
+            testing_tools_index = None
+            if "testing-tools" in all_available_tenants:
+                testing_tools_index = all_available_tenants.index("testing-tools")
+            
+            print(f"  [{len(all_available_tenants)}] Skip tenant selection")
+            
+            while True:
+                try:
+                    if testing_tools_index is not None:
+                        selection = input(f"\nSelect tenant index (0-{len(all_available_tenants)}) [default: {testing_tools_index} (testing-tools)]: ").strip()
+                    else:
+                        selection = input(f"\nSelect tenant index (0-{len(all_available_tenants)}) [default: skip]: ").strip()
+                    
+                    if not selection:
+                        # Default behavior
+                        if testing_tools_index is not None:
+                            tenant = all_available_tenants[testing_tools_index]
+                            print(f"✓ Using default tenant: {tenant}")
+                        break
+                    
+                    selection_index = int(selection)
+                    if 0 <= selection_index < len(all_available_tenants):
+                        tenant = all_available_tenants[selection_index]
+                        
+                        # Show which source the tenant came from
+                        if tenant in available_org_tenants:
+                            print(f"✓ Selected organization tenant: {tenant}")
+                        elif tenant in available_site_tenants:
+                            print(f"✓ Selected site tenant: {tenant}")
+                        elif tenant in available_service_policy_tenants:
+                            print(f"✓ Selected service policy tenant: {tenant}")
+                        elif tenant in available_gateway_template_tenants:
+                            print(f"✓ Selected gateway template tenant: {tenant}")
+                        elif tenant in available_device_tenants:
+                            print(f"✓ Selected device configuration tenant: {tenant}")
+                        else:
+                            print(f"✓ Selected default/custom tenant: {tenant}")
+                        break
+                    elif selection_index == len(all_available_tenants):
+                        # Skip tenant selection
+                        print("✓ Skipping tenant selection")
+                        break
+                    else:
+                        print(f"Please enter a number between 0 and {len(all_available_tenants)}")
+                except ValueError:
+                    print("Please enter a valid number")
+                except KeyboardInterrupt:
+                    print("\nOperation cancelled")
+                    return
+        else:
+            print("\n→ No tenants found in organization networks, site networks, service policies, gateway templates, or device configuration")
+            
+            # For SSR service ping, tenant is often required, so offer manual entry
+            manual_tenant = input("→ Enter tenant name manually (or press Enter to skip): ").strip()
+            if manual_tenant:
+                tenant = manual_tenant
+                print(f"✓ Manual tenant: {tenant}")
+            else:
+                print("→ Proceeding without tenant (may cause service ping to fail)")
+                tenant = None
+        
+        # Service selection - now using combined organization and device services
+        service = None
+        if all_available_services:
+            print("\nAvailable Services:")
+            
+            # Show organization services first
+            org_service_count = len(available_org_services)
+            if org_service_count > 0:
+                print(f"  Organization Services ({org_service_count}):")
+                for index, service_name in enumerate(available_org_services):
+                    # Find the service details from org_services
+                    service_details = next((svc for svc in org_services if svc['name'] == service_name), {})
+                    service_type = service_details.get('type', 'custom')
+                    service_desc = service_details.get('description', '')
+                    if service_desc:
+                        print(f"    [{index}] {service_name} ({service_type}) - {service_desc}")
+                    else:
+                        print(f"    [{index}] {service_name} ({service_type})")
+            
+            # Show device services if any (additional to org services)
+            device_only_services = [svc for svc in available_device_services if svc not in available_org_services]
+            device_service_start_index = org_service_count
+            if device_only_services:
+                print(f"  Device Configuration Services ({len(device_only_services)}):")
+                for index, service_name in enumerate(device_only_services, start=device_service_start_index):
+                    print(f"    [{index}] {service_name} (device config)")
+            
+            # Show any remaining services that don't fit into the above categories (e.g., defaults like "any")
+            remaining_services = [svc for svc in all_available_services 
+                                if svc not in available_org_services 
+                                and svc not in available_device_services]
+            remaining_service_start_index = device_service_start_index + len(device_only_services)
+            if remaining_services:
+                print(f"  Additional Services ({len(remaining_services)}):")
+                for index, service_name in enumerate(remaining_services, start=remaining_service_start_index):
+                    print(f"    [{index}] {service_name} (default/custom)")
+            
+            # Find the index of "web-session" for default selection
+            web_session_service_index = None
+            if "web-session" in all_available_services:
+                web_session_service_index = all_available_services.index("web-session")
+            
+            print(f"  [{len(all_available_services)}] Enter custom service name")
+            
+            while True:
+                try:
+                    if web_session_service_index is not None:
+                        selection = input(f"\nSelect service index (0-{len(all_available_services)}) or enter custom [default: {web_session_service_index} (web-session)]: ").strip()
+                    else:
+                        selection = input(f"\nSelect service index (0-{len(all_available_services)}) or enter custom: ").strip()
+                    
+                    # Check if it's a number (index selection)
+                    try:
+                        if not selection:
+                            # Default behavior
+                            if web_session_service_index is not None:
+                                service = all_available_services[web_session_service_index]
+                                print(f"✓ Using default service: {service}")
+                                break
+                            else:
+                                print("Please enter a service name or select from the list")
+                                continue
+                        
+                        selection_index = int(selection)
+                        if 0 <= selection_index < len(all_available_services):
+                            service = all_available_services[selection_index]
+                            
+                            # Show which source the service came from
+                            if service in available_org_services:
+                                print(f"✓ Selected organization service: {service}")
+                                # Show service details if available
+                                service_details = next((svc for svc in org_services if svc['name'] == service), {})
+                                if service_details.get('description'):
+                                    print(f"  Description: {service_details['description']}")
+                                if service_details.get('type'):
+                                    print(f"  Type: {service_details['type']}")
+                            elif service in available_device_services:
+                                print(f"✓ Selected device configuration service: {service}")
+                            else:
+                                print(f"✓ Selected default/custom service: {service}")
+                            break
+                        elif selection_index == len(all_available_services):
+                            # Enter custom service name
+                            service = input("Enter custom service name: ").strip()
+                            if service:
+                                print(f"✓ Custom service: {service}")
+                                break
+                            else:
+                                print("Service name cannot be empty")
+                        else:
+                            print(f"Please enter a number between 0 and {len(all_available_services)}")
+                    except ValueError:
+                        # Not a number, treat as custom service name
+                        if selection:
+                            service = selection
+                            print(f"✓ Custom service: {service}")
+                            break
+                        else:
+                            print("Please enter a service name or select from the list")
+                except KeyboardInterrupt:
+                    print("\nOperation cancelled")
+                    return
+        else:
+            # If no services found in either source, require manual input
+            print("\n→ No services found in organization or device configuration")
+            while True:
+                service = input("Enter service name: ").strip()
+                if service:
+                    print(f"✓ Custom service: {service}")
+                    break
+                print("Service is required. Please enter a service name.")
+        
+        # Required: Host to ping (with default)
+        host = input("\nEnter target host/IP to ping [default: 8.8.8.8]: ").strip()
+        if not host:
+            host = "8.8.8.8"
+            print("✓ Using default destination: 8.8.8.8")
+        
+        # Optional: Count (default 4)
+        count_input = input("Enter ping count [default: 4]: ").strip()
+        try:
+            count = int(count_input) if count_input else 4
+            if count <= 0:
+                count = 4
+        except ValueError:
+            count = 4
+        
+        # Optional: Size (default 56, min 56, max 65535)
+        size_input = input("Enter packet size in bytes [default: 56]: ").strip()
+        try:
+            size = int(size_input) if size_input else 56
+            if size < 56:
+                size = 56
+            elif size > 65535:
+                size = 65535
+        except ValueError:
+            size = 56
+        
+        # Optional: HA node (node0, node1)
+        node_input = input("Enter HA node (node0/node1) [optional]: ").strip().lower()
+        node = node_input if node_input in ['node0', 'node1'] else None
+        
+        # Build service ping payload
+        # Based on Mist API documentation schema: utils_service_ping
+        # Example: {"count": 10, "host": "1.1.1.1", "service": "web-session"}
+        service_ping_payload = {
+            "host": host,
+            "service": service,
+            "count": count,
+            "size": size
+        }
+        
+        # Add optional parameters if specified
+        if tenant:
+            service_ping_payload["tenant"] = tenant
+        if node:
+            service_ping_payload["node"] = node
+        
+        print("\n" + "-" * 50)
+        print(f"Service Ping Configuration:")
+        print(f"  Host: {host}")
+        print(f"  Service: {service}")
+        print(f"  Count: {count}")
+        print(f"  Size: {size} bytes")
+        if tenant:
+            print(f"  Tenant: {tenant}")
+        if node:
+            print(f"  HA Node: {node}")
+        print("-" * 50)
+        
+        # Validate service name format
+        if debug_mode:
+            if service in ["web-session", "LANS", "RBO_SSH"]:
+                print(f"[DEBUG] Using known valid service: {service}")
+            else:
+                print(f"[DEBUG] Using custom service: {service} (may not exist on device)")
+        
+        print(f"\n→ Executing Service Ping on device {device_id}...")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+        
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            return
+            
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+        
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait for subscription confirmation before sending command
+        print("→ Waiting for subscription confirmation...")
+        if not websocket_manager.wait_for_subscription_confirmation(command_channel, timeout_seconds=15):
+            print("! Subscription confirmation not received within timeout")
+            print("! Proceeding anyway, but results may not be received")
+        else:
+            print("→ Subscription confirmed")
+        
+        print("→ Issuing Service Ping command...")
+        
+        # Execute service ping using mistapi library
+        if debug_mode:
+            print(f"[DEBUG] Using mistapi.api.v1.sites.devices.servicePingFromSsr")
+            print(f"[DEBUG] Service ping payload being sent:")
+            print(f"[DEBUG]   {service_ping_payload}")
+            logging.debug(f"Service ping payload: {service_ping_payload}")
+        
+        # Always log the service ping request details to the log file
+        logging.info(f"Sending service ping via mistapi to device: {device_id}")
+        logging.info(f"Service ping payload: {service_ping_payload}")
+        
+        try:
+            # Use mistapi library instead of direct requests
+            response = mistapi.api.v1.sites.devices.servicePingFromSsr(
+                apisession, site_id, device_id, service_ping_payload
+            )
+            
+            # Always log the response details to the log file
+            logging.info(f"Service ping mistapi response status: {response.status_code}")
+            logging.info(f"Service ping mistapi response data: {response.data}")
+            
+            if debug_mode:
+                print(f"[DEBUG] mistapi Response Status = {response.status_code}")
+                print(f"[DEBUG] mistapi Response Data = {response.data}")
+                
+            if response.status_code == 200:
+                result = response.data
+                session_id = result.get("session", "")
+                if debug_mode:
+                    print(f"[DEBUG] Response data parsed: {result}")
+                    print(f"[DEBUG] Extracted session_id: {session_id}")
+                    logging.debug(f"Service ping response data: {result}")
+                    logging.debug(f"Service ping session_id: {session_id}")
+                if session_id:
+                    short_session_id = session_id[:8] + "..." if len(session_id) > 8 else session_id
+                    print(f"→ Service Ping command issued (session: {short_session_id})")
+                    if debug_mode:
+                        print(f"[DEBUG] Full session ID: {session_id}")
+                else:
+                    print("→ Service Ping command issued (no session ID returned)")
+                    session_id = None
+            else:
+                error_msg = f"Failed to issue Service Ping command. mistapi status {response.status_code}: {response.data}"
+                print(error_msg)
+                logging.error(error_msg)
+                if debug_mode:
+                    print(f"[DEBUG] mistapi request failed - Status: {response.status_code}")
+                    print(f"[DEBUG] mistapi response data: {response.data}")
+                    logging.debug(f"Service ping failed - mistapi response: {response.data}")
+                return
+                
+        except Exception as api_error:
+            error_msg = f"Error issuing Service Ping command via mistapi: {api_error}"
+            print(error_msg)
+            logging.error(error_msg)
+            if debug_mode:
+                print(f"[DEBUG] mistapi exception details: {type(api_error).__name__}: {api_error}")
+                logging.debug(f"Service ping mistapi exception: {type(api_error).__name__}: {api_error}")
+            return
+        
+        # Proceed only if we have a session ID
+        if not session_id:
+            print("! No session ID received - cannot wait for results")
+            return
+        
+        # Wait for WebSocket results
+        print("→ Waiting for Service Ping results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Use device-specific timeout
+        if device_info and device_info.get('type') == 'gateway':
+            timeout_seconds = 45  # Extended timeout for gateways
+            print("   → Using extended timeout for SSR gateway (45 seconds)")
+        else:
+            timeout_seconds = 30  # Standard timeout for other devices
+        
+        service_ping_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {service_ping_result is not None}")
+            if service_ping_result:
+                print(f"[DEBUG] Result keys: {list(service_ping_result.keys())}")
+                print(f"[DEBUG] Service ping operation completed successfully")
+            else:
+                print(f"[DEBUG] Service ping operation timed out or failed")
+        
+        # Safety check: Ensure WebSocket manager is cleaned up
+        try:
+            if hasattr(websocket_manager, 'ws') and websocket_manager.ws:
+                websocket_manager.close_connection()
+                if debug_mode:
+                    print(f"[DEBUG] WebSocket connection cleaned up")
+        except Exception as cleanup_error:
+            if debug_mode:
+                print(f"[DEBUG] WebSocket cleanup warning: {cleanup_error}")
+            logging.warning(f"WebSocket cleanup issue: {cleanup_error}")
+        
+        # Display results
+        if service_ping_result:
+            print("\n" + "=" * 60)
+            print("SERVICE PING RESULTS:")
+            print("=" * 60)
+            
+            # Add device-specific context
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', 'Unknown Device')
+                
+                print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
+                print(f"Service: {service} → Host: {host}")
+                
+                if device_type == 'gateway':
+                    print("Note: Service-specific routing path used for ping packets")
+                else:
+                    print("Note: Device may not fully support service ping functionality")
+                    
+                print("-" * 60)
+            
+            # Display raw output if available
+            raw_output = service_ping_result.get("raw", "")
+            if raw_output:
+                print("PING OUTPUT:")
+                print("-" * 40)
+                print(raw_output)
+            
+            # Display parsed output if available  
+            parsed_output = service_ping_result.get("Output", "")
+            if parsed_output and parsed_output != raw_output:
+                print("\nPARSED OUTPUT:")
+                print("-" * 40)
+                print(parsed_output)
+            
+            if not raw_output and not parsed_output:
+                print("No output data received")
+                if device_info and device_info.get('type') != 'gateway':
+                    print("\nTroubleshooting for non-gateway devices:")
+                    print("→ Service Ping is designed specifically for SSR gateways")
+                    print("→ Try using regular ping (Menu 87) instead")
+                    print("→ Verify device supports service ping functionality")
+                
+            print("=" * 60)
+            
+            # Log the successful operation with device context
+            if device_info:
+                device_name = device_info.get('name', 'Unknown Device')
+                device_type = device_info.get('type', 'unknown')
+                logging.info(f"Service ping completed for {device_name} ({device_type}) - Service: {service}, Host: {host}")
+            else:
+                logging.info(f"Service ping completed for device {device_id} - Service: {service}, Host: {host}")
+        else:
+            print("\nNo Service Ping results received within timeout period.")
+            
+            # Provide device-specific troubleshooting guidance
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_name = device_info.get('name', 'Unknown Device')
+                print(f"Device: {device_name} ({device_type})")
+                
+                if device_type == 'gateway':
+                    print("\nTroubleshooting for SSR gateways:")
+                    print("→ Verify service name is valid for this SSR")
+                    print("→ Check if host is reachable through the specified service")
+                    print("→ Confirm SSR routing configuration for the service")
+                    print("→ Try with a different service name")
+                elif device_type == 'switch':
+                    print("\nNote: Switches typically do not support service ping")
+                    print("→ Try using regular ping (Menu 87) for basic connectivity")
+                    print("→ Service ping is an SSR-specific feature")
+                elif device_type == 'ap':
+                    print("\nNote: Access Points do not support service ping")
+                    print("→ Try using regular ping (Menu 87) for basic connectivity") 
+                    print("→ Service ping is an SSR-specific feature")
+                else:
+                    print("\nNote: Service ping is designed for SSR gateways")
+                    print("→ Try using regular ping (Menu 87) for basic connectivity")
+                
+            logging.warning(f"Service ping timeout - no results received for device {device_id}")
+            
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+        logging.info("Service ping operation cancelled by user")
+        
+    except Exception as error:
+        print(f"Error during Service Ping operation: {error}")
+        logging.error(f"Service ping error: {error}")
+        logging.debug("EXIT: service_ping_device_websocket - error")
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: service_ping_device_websocket")
+
+
+def _validate_ping_target(target):
+    """
+    Validate ping target hostname or IP address.
+    
+    Args:
+        target (str): Target hostname or IP address
+        
+    Returns:
+        bool: True if valid target, False otherwise
+    """
+    if not target or len(target.strip()) == 0:
+        return False
+        
+    target = target.strip()
+    
+    # Check if it's a valid IP address
+    try:
+        ipaddress.ip_address(target)
+        return True
+    except ValueError:
+        pass
+        
+    # Check if it's a valid hostname
+    # Basic hostname validation: alphanumeric, dots, hyphens
+    if re.match(r'^[a-zA-Z0-9.-]+$', target) and len(target) <= 253:
+        # Ensure it doesn't start or end with a dot or hyphen
+        if not target.startswith(('.', '-')) and not target.endswith(('.', '-')):
+            return True
+            
+    return False
+
 
 def export_all_sites_to_csv():
     """
@@ -5212,10 +7736,168 @@ def get_insight_metrics_by_scope(target_scope):
         logging.error(f"Error reading ConstInsightMetrics.csv: {e}")
         return []
 
+# ==============================
+# NORMALIZED ORG INSIGHT METRICS FUNCTIONS
+# ==============================
+
+def parse_insight_metric_to_normalized_data(metric_data, org_id):
+    """
+    Parse a single insight metric into normalized data structures.
+    
+    Args:
+        metric_data (dict): Raw insight metric data from API
+        org_id (str): Organization ID
+        
+    Returns:
+        dict: Containing 'summary', 'time_series', 'results', 'sites_data' lists
+    """
+    normalized_data = {
+        'summary': [],
+        'time_series': [],
+        'results': [],
+        'sites_data': []
+    }
+    
+    try:
+        metric_type = metric_data.get('metric_type', 'unknown')
+        
+        # Extract summary data
+        summary_data = {
+            'org_id': org_id,
+            'metric_type': metric_type,
+            'data_source': metric_data.get('data_source', ''),
+            'start_time': metric_data.get('start', ''),
+            'end_time': metric_data.get('end', ''),
+            'interval_seconds': metric_data.get('interval', ''),
+            'limit': metric_data.get('limit', ''),
+            'total_sites': metric_data.get('total_sites', ''),
+            'page': metric_data.get('page', ''),
+            'sle_category': metric_data.get('sle_category', ''),
+            'original_metric': metric_data.get('original_metric', ''),
+            'roaming': metric_data.get('roaming', ''),
+            'total': metric_data.get('total', ''),
+            'totalTunnelCount': metric_data.get('totalTunnelCount', ''),
+            'total_sites': metric_data.get('total_sites', '')
+        }
+        
+        # Add scalar metrics to summary
+        scalar_fields = [
+            'ap-health', 'ap-redundancy', 'capacity', 'coverage', 
+            'num_active_wan_tunnels', 'num_aps', 'num_auth', 'num_auth_failure', 
+            'num_auth_total', 'num_client', 'num_clients', 'num_gateways', 
+            'num_mdm_client', 'num_mxedges', 'num_mxtunnels', 'num_nac_clients', 
+            'num_switches', 'num_wan_clients', 'num_wired_clients',
+            'successful-connect', 'throughput', 'time-to-connect'
+        ]
+        
+        for field in scalar_fields:
+            if field in metric_data:
+                summary_data[field] = metric_data[field]
+        
+        normalized_data['summary'].append(summary_data)
+        
+        # Extract time series data
+        rt_field = metric_data.get('rt', '')
+        if rt_field and isinstance(rt_field, str) and ',' in rt_field:
+            timestamps = rt_field.split(',')
+            
+            # Process multiple time series fields
+            time_series_fields = ['num_clients', 'num_aps', 'num_gateways', 'num_switches', 'num_mxedges', 'num_mxtunnels']
+            
+            for field in time_series_fields:
+                field_data = metric_data.get(field, '')
+                if field_data and isinstance(field_data, str) and ',' in field_data:
+                    values = field_data.split(',')
+                    for i, (timestamp, value) in enumerate(zip(timestamps, values)):
+                        if value and value != 'None':
+                            time_series_record = {
+                                'org_id': org_id,
+                                'metric_type': metric_type,
+                                'timestamp': timestamp.strip(),
+                                'value': value.strip(),
+                                'value_type': field,
+                                'sequence_order': i
+                            }
+                            normalized_data['time_series'].append(time_series_record)
+        
+        # Extract results array data
+        results_data = []
+        for key, value in metric_data.items():
+            if key.startswith('results_') and '_' in key:
+                parts = key.split('_', 2)
+                if len(parts) >= 3:
+                    result_index = parts[1]
+                    result_field = parts[2]
+                    
+                    # Find or create result record
+                    existing_result = None
+                    for result in results_data:
+                        if result['result_index'] == result_index:
+                            existing_result = result
+                            break
+                    
+                    if existing_result is None:
+                        existing_result = {
+                            'org_id': org_id,
+                            'metric_type': metric_type,
+                            'result_index': int(result_index) if result_index.isdigit() else result_index
+                        }
+                        results_data.append(existing_result)
+                    
+                    existing_result[result_field] = value
+        
+        normalized_data['results'] = results_data
+        
+        # Extract sites data
+        sites_data = metric_data.get('sites_data', [])
+        if isinstance(sites_data, list):
+            for site_data in sites_data:
+                if isinstance(site_data, dict):
+                    site_record = {
+                        'org_id': org_id,
+                        'metric_type': metric_type
+                    }
+                    site_record.update(site_data)
+                    normalized_data['sites_data'].append(site_record)
+        
+        # Also parse individual sites_data_X fields
+        for key, value in metric_data.items():
+            if key.startswith('sites_data_') and '_' in key:
+                parts = key.split('_', 2)
+                if len(parts) >= 3:
+                    site_index = parts[2]
+                    site_field = parts[3] if len(parts) > 3 else 'value'
+                    
+                    # Find or create site record
+                    existing_site = None
+                    for site in normalized_data['sites_data']:
+                        if site.get('site_index') == site_index and site.get('metric_type') == metric_type:
+                            existing_site = site
+                            break
+                    
+                    if existing_site is None:
+                        existing_site = {
+                            'org_id': org_id,
+                            'metric_type': metric_type,
+                            'site_index': site_index
+                        }
+                        normalized_data['sites_data'].append(existing_site)
+                    
+                    existing_site[site_field] = value
+        
+        logging.debug(f"Normalized metric {metric_type}: {len(normalized_data['summary'])} summary, {len(normalized_data['time_series'])} time series, {len(normalized_data['results'])} results, {len(normalized_data['sites_data'])} sites")
+        
+    except Exception as e:
+        logging.error(f"Error parsing insight metric data: {e}")
+        logging.debug(f"Failed metric data structure: {metric_data}")
+    
+    return normalized_data
+
+
 def export_org_insight_metrics_to_csv():
-    """Export organization-wide insight metrics to OrgInsightMetrics.csv."""
-    print("Export Organization Insight Metrics:")
-    logging.info("Starting export of organization insight metrics...")
+    """Export organization-wide insight metrics to normalized CSV files."""
+    print("Export Organization Insight Metrics (Normalized):")
+    logging.info("Starting export of organization insight metrics with normalized structure...")
     
     # First, refresh the available metrics from the API
     print("! Refreshing available insight metrics from Mist API...")
@@ -5227,11 +7909,20 @@ def export_org_insight_metrics_to_csv():
     if not org_metrics:
         print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
         logging.error("No org-scope metrics found in const insight metrics")
-        DataExporter.save_data_to_output([], "OrgInsightMetrics.csv")
+        # Create empty normalized files
+        DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+        DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+        DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+        DataExporter.save_data_to_output([], "OrgSitesData.csv")
         return
     
     org_id = get_cached_or_prompted_org_id()
-    filename = "OrgInsightMetrics.csv"
+    
+    # Initialize normalized data collections
+    all_summary_data = []
+    all_time_series_data = []
+    all_results_data = []
+    all_sites_data = []
     
     all_insight_data = []
     metrics_retrieved = 0
@@ -5330,21 +8021,67 @@ def export_org_insight_metrics_to_csv():
         logging.info(f"Org insight metrics: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
         
         if all_insight_data:
-            # Flatten and process the data for CSV export
-            processed = flatten_nested_fields_in_list(all_insight_data)
-            processed = escape_multiline_strings_for_csv(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} organization insight metrics exported to {filename}")
-            logging.info(f"Exported {len(processed)} org insight data points from {metrics_retrieved} metrics to {filename}")
+            print("! Parsing metrics into normalized data structures...")
+            
+            # Parse each metric into normalized structures
+            for metric_data in all_insight_data:
+                normalized = parse_insight_metric_to_normalized_data(metric_data, org_id)
+                all_summary_data.extend(normalized['summary'])
+                all_time_series_data.extend(normalized['time_series'])
+                all_results_data.extend(normalized['results'])
+                all_sites_data.extend(normalized['sites_data'])
+            
+            # Export to separate CSV files
+            print("! Exporting to normalized CSV files...")
+            
+            # Summary data
+            processed_summary = escape_multiline_strings_for_csv(all_summary_data)
+            DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")
+            print(f"  ✓ {len(processed_summary)} summary records → OrgMetricsSummary.csv")
+            
+            # Time series data
+            processed_time_series = escape_multiline_strings_for_csv(all_time_series_data)
+            DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")
+            print(f"  ✓ {len(processed_time_series)} time series records → OrgMetricsTimeSeries.csv")
+            
+            # Results data
+            processed_results = escape_multiline_strings_for_csv(all_results_data)
+            DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")
+            print(f"  ✓ {len(processed_results)} results records → OrgMetricsResults.csv")
+            
+            # Sites data
+            processed_sites = escape_multiline_strings_for_csv(all_sites_data)
+            DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")
+            print(f"  ✓ {len(processed_sites)} sites records → OrgSitesData.csv")
+            
+            print(f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files")
+            logging.info(f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files")
+            
+            # Also save a legacy combined file for compatibility
+            processed_legacy = flatten_nested_fields_in_list(all_insight_data)
+            processed_legacy = escape_multiline_strings_for_csv(processed_legacy)
+            DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")
+            print(f"  ✓ Legacy format maintained → OrgInsightMetrics_Legacy.csv")
+            
         else:
-            print(f"! 0 organization insight metrics exported to {filename} (no data available)")
+            print(f"! 0 organization insight metrics exported (no data available)")
             logging.warning("No org insight data available - all metrics failed or returned empty")
-            DataExporter.save_data_to_output([], filename)
+            # Create empty normalized files
+            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+            DataExporter.save_data_to_output([], "OrgSitesData.csv")
+            DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
             
     except Exception as e:
         print(f"! Error exporting organization insight metrics: {e}")
         logging.error(f"Failed to export org insight metrics: {e}")
-        DataExporter.save_data_to_output([], filename)
+        # Create empty normalized files in case of error
+        DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+        DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+        DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+        DataExporter.save_data_to_output([], "OrgSitesData.csv")
+        DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
 
 def export_org_rogue_clients_to_csv():
     """Export rogue client detections from all sites to OrgRogueClients.csv."""
@@ -8404,6 +11141,311 @@ def export_gateway_templates_to_csv():
         limit=1000
     )
     logging.info(" Gateway templates exported to OrgGatewayTemplates.csv.")
+
+def export_gateway_management_ips_to_csv(fast=False):
+    """
+    Exports gateway management overlay IPs grouped by gateway template association.
+    Creates a single CSV with gateway info, management IPs, status, and template names.
+    
+    This function:
+    1. Gets current device inventory (calls existing function)
+    2. Gets gateway template mappings (calls existing function) 
+    3. Gets gateway configurations with management IPs (calls existing function)
+    4. Outputs CSV with: Gateway Name, Gateway Template, Management IP, Online Status, Site Name
+    
+    Args:
+        fast (bool): Enable fast mode for API calls
+    """
+    logging.info("Starting export of gateway management overlay IPs...")
+    print("Gateway Management IP Export:")
+    print("Collecting data from inventory, templates, and configurations...")
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Ensure required CSVs are fresh by calling existing functions
+    print("  1. Ensuring site list with template mappings is current...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    print("  2. Ensuring gateway templates are current...")
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    
+    print("  3. Ensuring gateway device data with connection status is current...")
+    check_and_generate_csv("GatewaysWithSiteInfo.csv", export_gateways_with_site_info_to_csv)
+    
+    print("  4. Ensuring gateway configurations with management IPs are current...")
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
+    
+    print("  5. Processing and correlating data...")
+    
+    # Load required data
+    try:
+        # Load sites with gateway template associations
+        with open(get_csv_file_path("SiteList.csv"), encoding="utf-8") as f:
+            sites = list(csv.DictReader(f))
+        
+        # Load gateway templates for name lookups
+        with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as f:
+            templates = list(csv.DictReader(f))
+        
+        # Load gateway device data with connection status
+        with open(get_csv_file_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as f:
+            gateway_devices = list(csv.DictReader(f))
+        
+        # Load gateway configurations with management IPs
+        with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
+            gateway_configs = list(csv.DictReader(f))
+            
+    except FileNotFoundError as e:
+        logging.error(f"Required CSV file not found: {e}")
+        print(f"! Error: Required CSV file not found: {e}")
+        return
+    
+    # Create lookup dictionaries
+    site_lookup = {site.get("id"): site for site in sites}
+    template_lookup = {t.get("id"): t.get("name", "Unknown Template") for t in templates}
+    
+    # Create device lookup for connection status by device name
+    device_lookup = {dev.get("name"): dev for dev in gateway_devices}
+    
+    # Create management IP lookup by device name
+    mgmt_ip_lookup = {config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") 
+                      for config in gateway_configs}
+    
+    # Process gateway devices and correlate with template and management IP data
+    results = []
+    gateways_processed = 0
+    gateways_with_mgmt_ip = 0
+    
+    for device in gateway_devices:
+        gateway_name = device.get("name", "Unknown Gateway")
+        site_id = device.get("site_id", "")
+        site_name = device.get("site_name", "Unknown Site")
+        connected_status = device.get("connected", "")
+        
+        # Get management IP from configs
+        mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")
+        
+        # Determine connection status - simple online/offline based on connected field
+        connected_val = str(connected_status).strip().lower()
+        
+        if connected_val in ['true', '1', 'yes']:
+            status = "Online"
+        elif connected_val in ['false', '0', 'no']:
+            status = "Offline"
+        else:
+            # Empty or unknown connection status
+            status = "Unknown"
+        
+        # Get template information
+        site_info = site_lookup.get(site_id, {})
+        template_id = site_info.get("gatewaytemplate_id", "")
+        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
+        
+        # Prepare result row
+        result_row = {
+            "gateway_name": gateway_name,
+            "management_ip": mgmt_ip if mgmt_ip else "Not Configured",
+            "status": status,
+            "site_name": site_name,
+            "gateway_template": template_name,
+            "template_id": template_id if template_id else "None"
+        }
+        
+        results.append(result_row)
+        gateways_processed += 1
+        
+        if mgmt_ip:
+            gateways_with_mgmt_ip += 1
+            logging.debug(f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})")
+        else:
+            logging.debug(f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})")
+    
+    # Sort results by template name, then gateway name
+    results.sort(key=lambda x: (x["gateway_template"], x["gateway_name"]))
+    
+    # Create the final CSV with requested columns
+    final_results = [
+        {
+            "Gateway Name": row["gateway_name"],
+            "Gateway Template": row["gateway_template"],
+            "Management IP": row["management_ip"],
+            "Online Status": row["status"],
+            "Site Name": row["site_name"]
+        }
+        for row in results
+    ]
+    
+    # Write CSV file
+    DataExporter.save_data_to_output(final_results, "GatewayManagementIPs.csv")
+    
+    # Summary output
+    print(f"! Gateway management IP export completed:")
+    print(f"  - Total gateways processed: {gateways_processed}")
+    print(f"  - Gateways with management IPs: {gateways_with_mgmt_ip}")
+    print(f"  - Gateways without management IPs: {gateways_processed - gateways_with_mgmt_ip}")
+    print(f"  - Output CSV: GatewayManagementIPs.csv")
+    
+    logging.info(f"Gateway management IP export completed. {gateways_processed} gateways processed, {gateways_with_mgmt_ip} with management IPs.")
+
+def ssh_runner_by_gateway_template(fast=False):
+    """
+    SSH runner that targets gateways by template name and online status.
+    
+    This function:
+    1. Ensures gateway management IP data is current (calls Menu Option 4)
+    2. Prompts user to select a gateway template name
+    3. Filters for gateways with that template AND online status
+    4. Extracts management IPs from matching gateways
+    5. Executes SSH commands on those filtered hosts using the SSH runner
+    
+    Args:
+        fast (bool): Enable fast mode for data collection
+    """
+    logging.info("Starting SSH runner targeting gateways by template and online status...")
+    print("SSH Runner - Gateway Template Targeting:")
+    print("=" * 60)
+    
+    # Step 1: Ensure gateway management IP data is current
+    print("  1. Ensuring gateway management IP data is current...")
+    check_and_generate_csv("GatewayManagementIPs.csv", lambda: export_gateway_management_ips_to_csv(fast=fast))
+    
+    # Step 2: Read the gateway data
+    try:
+        with open(get_csv_file_path("GatewayManagementIPs.csv"), encoding="utf-8") as f:
+            gateways = list(csv.DictReader(f))
+    except FileNotFoundError:
+        print("! Error: Gateway management IP data not found. Please run Menu Option 4 first.")
+        logging.error("GatewayManagementIPs.csv not found")
+        return
+    
+    if not gateways:
+        print("! No gateway data found.")
+        return
+    
+    # Step 3: Get unique template names for user selection
+    template_names = sorted(set(gw.get("Gateway Template", "Unknown") for gw in gateways))
+    template_names = [t for t in template_names if t and t != "Unknown"]
+    
+    if not template_names:
+        print("! No gateway templates found in the data.")
+        return
+    
+    print(f"\n  2. Available gateway templates:")
+    for i, template_name in enumerate(template_names, 1):
+        gateway_count = sum(1 for gw in gateways if gw.get("Gateway Template") == template_name)
+        online_count = sum(1 for gw in gateways if gw.get("Gateway Template") == template_name and gw.get("Online Status") == "Online")
+        print(f"     {i:2}. {template_name} ({gateway_count} total, {online_count} online)")
+    
+    # Step 4: User selects template
+    try:
+        selection = input(f"\n  Enter template number (1-{len(template_names)}) or template name: ").strip()
+        
+        # Try to parse as number first
+        try:
+            template_index = int(selection) - 1
+            if 0 <= template_index < len(template_names):
+                selected_template = template_names[template_index]
+            else:
+                print(f"! Invalid selection. Please choose 1-{len(template_names)}")
+                return
+        except ValueError:
+            # Try to match by name (case insensitive)
+            matching_templates = [t for t in template_names if selection.lower() in t.lower()]
+            if len(matching_templates) == 1:
+                selected_template = matching_templates[0]
+            elif len(matching_templates) > 1:
+                print(f"! Ambiguous template name. Matches: {', '.join(matching_templates)}")
+                return
+            else:
+                print(f"! Template '{selection}' not found.")
+                return
+    
+    except KeyboardInterrupt:
+        print("\n! Operation cancelled by user.")
+        return
+    
+    # Step 5: Filter gateways by template and online status
+    filtered_gateways = [
+        gw for gw in gateways 
+        if gw.get("Gateway Template") == selected_template 
+        and gw.get("Online Status") == "Online"
+        and gw.get("Management IP") != "Not Configured"
+        and gw.get("Management IP", "").strip()
+    ]
+    
+    if not filtered_gateways:
+        print(f"! No online gateways with configured management IPs found for template '{selected_template}'")
+        return
+    
+    # Step 6: Extract management IPs
+    management_ips = [gw.get("Management IP") for gw in filtered_gateways]
+    
+    print(f"\n  3. Found {len(filtered_gateways)} online gateways with management IPs for template '{selected_template}':")
+    for gw in filtered_gateways:
+        print(f"     - {gw.get('Gateway Name', 'Unknown'):15} | {gw.get('Management IP'):15} | {gw.get('Site Name', 'Unknown')}")
+    
+    # Step 7: Confirm before executing SSH
+    try:
+        confirm = input(f"\n  Execute SSH commands on these {len(management_ips)} gateways? (y/N): ").strip().lower()
+        if confirm not in ['y', 'yes']:
+            print("! Operation cancelled.")
+            return
+    except KeyboardInterrupt:
+        print("\n! Operation cancelled by user.")
+        return
+    
+    # Step 8: Load SSH configuration and execute
+    print(f"\n  4. Loading SSH configuration and executing commands...")
+    
+    try:
+        # Get SSH configuration from environment
+        ssh_config = EnhancedSSHRunner.load_ssh_config_from_env()
+        
+        if not ssh_config.get('username') or not ssh_config.get('password'):
+            print("! SSH credentials not found in .env file.")
+            print("  Please set SSH_USER and SSH_PASSWORD in your .env file.")
+            return
+        
+        # Get commands from configuration
+        commands = ssh_config.get('commands', [])
+        if not commands:
+            # Try loading from CSV fallback
+            commands = EnhancedSSHRunner.load_commands_from_csv()
+            if not commands:
+                print("! No SSH commands found in .env file or data/SSH_COMMANDS.CSV")
+                print("  Please set SSH_COMMANDS in .env or add commands to data/SSH_COMMANDS.CSV")
+                return
+        
+        print(f"  - Target hosts: {len(management_ips)} gateways")
+        print(f"  - Commands to execute: {len(commands)}")
+        print(f"  - Template filter: {selected_template}")
+        
+        # Execute SSH commands on filtered hosts
+        results = EnhancedSSHRunner.run_ssh_commands_multi_host(
+            hosts=management_ips,
+            username=ssh_config['username'],
+            password=ssh_config['password'],
+            commands=commands,
+            port=22,
+            timeout=30,
+            use_shell=True,
+            max_threads=5
+        )
+        
+        # Summary
+        successful_count = results.get('successful', 0)
+        print(f"\n! SSH execution completed:")
+        print(f"  - Template: {selected_template}")
+        print(f"  - Hosts targeted: {len(management_ips)}")
+        print(f"  - Successful: {successful_count}")
+        print(f"  - Failed: {results.get('failed', 0)}")
+        print(f"  - Per-host logs: per-host-logs/ssh_output_<host>_<timestamp>.log")
+        
+        logging.info(f"SSH runner by template completed: {selected_template}, {successful_count}/{results.get('total', len(management_ips))} successful")
+        
+    except Exception as e:
+        print(f"! Error during SSH execution: {e}")
+        logging.error(f"SSH runner by template error: {e}", exc_info=True)
 
 def show_dhcp_security_binding():
     """
@@ -15961,20 +19003,20 @@ def ssh_runner_main():
         sys.exit(0 if ssh_main_success else 1)
         
     except argparse.ArgumentTypeError as e:
-        print(f"❌ Invalid argument: {e}")
+        print(f"[ERROR] Invalid argument: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n🛑 Operation cancelled by user")
+        print("\n[INTERRUPT] Operation cancelled by user")
         sys.exit(130)
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"[ERROR] Fatal error: {e}")
         sys.exit(1)
 
 
 def ssh_runner_interactive():
     """SSH Runner wrapper for menu system integration - runs with auto-detection"""
     try:
-        print("\n🚀 Enhanced SSH Command Runner")
+        print("\n>> Enhanced SSH Command Runner")
         print("=" * 60)
         
         # Create a mock args object that enables auto-detection behavior
@@ -16000,17 +19042,17 @@ def ssh_runner_interactive():
         ssh_runner_success = EnhancedSSHRunner.run_application(args)
         
         if ssh_runner_success:
-            print("\n✅ SSH runner completed successfully")
+            print("\n[OK] SSH runner completed successfully")
         else:
-            print("\n❌ SSH runner completed with errors")
+            print("\n[ERROR] SSH runner completed with errors")
             
         return ssh_runner_success
         
     except KeyboardInterrupt:
-        print("\n🛑 Operation cancelled by user")
+        print("\n[INTERRUPT] Operation cancelled by user")
         return False
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"[ERROR] Fatal error: {e}")
         logging.error(f"SSH Runner error: {e}", exc_info=True)
         return False
 
@@ -16024,6 +19066,7 @@ menu_actions = {
     "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
     "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
+    "4": (lambda fast=False: export_gateway_management_ips_to_csv(fast=fast), "Export gateway management overlay IPs grouped by template association"),
 
     # Organization-Level Exports
     "11": (export_all_sites_to_csv, "Export a list of all sites in the organization"),
@@ -16136,6 +19179,7 @@ menu_actions = {
     "95": (lambda fast=False: export_gateway_device_stats_to_csv_with_freshness_check(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
     "96": (export_gateways_with_wan_port_conflicts_to_csv, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
     "97": (ssh_runner_interactive, "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH"),
+    "98": (ssh_runner_by_gateway_template, "SSH Runner - Target gateways by template name (online gateways with management IPs only)"),
 
     # ==============================
     # INSIGHTS API OPERATIONS - Organization & Site Analytics
@@ -16150,6 +19194,9 @@ menu_actions = {
     "84": (export_site_anomaly_metrics_to_csv, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
     "85": (export_site_device_anomaly_to_csv, "Export Site Device Anomaly Events (device-specific anomaly detection)"),
     "86": (export_site_client_anomaly_to_csv, "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"),
+    "87": (ping_device_websocket, "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)"),
+    "88": (arp_device_websocket, "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)"),
+    "89": (service_ping_device_websocket, "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)"),
 
     # ==============================
     # POST API OPERATIONS - Device Commands (Starting at 100)
@@ -16579,7 +19626,7 @@ class EnhancedSSHRunner:
         
         # Length check to prevent DoS
         if len(hosts_str) > 10000:  # Reasonable limit for host list
-            print("⚠️  Host list too long, truncating to first 10000 characters")
+            print("[WARNING] Host list too long, truncating to first 10000 characters")
             hosts_str = hosts_str[:10000]
         
         # Split by comma and validate each host
@@ -16599,14 +19646,14 @@ class EnhancedSSHRunner:
         
         # Warn about invalid hosts
         if invalid_hosts:
-            print(f"⚠️  Skipping {len(invalid_hosts)} invalid hosts: {', '.join(invalid_hosts[:5])}")
+            print(f"[WARNING] Skipping {len(invalid_hosts)} invalid hosts: {', '.join(invalid_hosts[:5])}")
             if len(invalid_hosts) > 5:
                 print(f"    ... and {len(invalid_hosts) - 5} more")
         
         # Limit total number of hosts to prevent resource exhaustion
         max_hosts = 100  # Reasonable limit
         if len(hosts) > max_hosts:
-            print(f"⚠️  Too many hosts ({len(hosts)}), limiting to first {max_hosts}")
+            print(f"[WARNING] Too many hosts ({len(hosts)}), limiting to first {max_hosts}")
             hosts = hosts[:max_hosts]
         
         return hosts
@@ -16627,7 +19674,7 @@ class EnhancedSSHRunner:
         
         # Length check to prevent DoS
         if len(commands_str) > 50000:  # Reasonable limit for command string
-            print("⚠️  Command list too long, truncating to first 50000 characters")
+            print("[WARNING] Command list too long, truncating to first 50000 characters")
             commands_str = commands_str[:50000]
         
         # Remove outer quotes if present
@@ -16652,14 +19699,14 @@ class EnhancedSSHRunner:
         
         # Warn about invalid commands
         if invalid_commands:
-            print(f"⚠️  Skipping {len(invalid_commands)} invalid commands: {', '.join(invalid_commands[:3])}")
+            print(f"[WARNING] Skipping {len(invalid_commands)} invalid commands: {', '.join(invalid_commands[:3])}")
             if len(invalid_commands) > 3:
                 print(f"    ... and {len(invalid_commands) - 3} more")
         
         # Limit total number of commands to prevent resource exhaustion
         max_commands = 50  # Reasonable limit
         if len(commands) > max_commands:
-            print(f"⚠️  Too many commands ({len(commands)}), limiting to first {max_commands}")
+            print(f"[WARNING] Too many commands ({len(commands)}), limiting to first {max_commands}")
             commands = commands[:max_commands]
         
         return commands
@@ -16697,7 +19744,7 @@ class EnhancedSSHRunner:
                 legacy_path = csv_file_path.replace("data/", "")
                 if os.path.exists(legacy_path):
                     try:
-                        print(f"ℹ️  Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
+                        print(f"• Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
                         csv_file_path = legacy_path
                     except Exception:
                         return commands
@@ -16734,7 +19781,7 @@ class EnhancedSSHRunner:
                 
                 # Warn about invalid commands
                 if invalid_commands:
-                    print(f"⚠️  Skipping {len(invalid_commands)} invalid commands from {csv_file_path}:")
+                    print(f"[WARNING] Skipping {len(invalid_commands)} invalid commands from {csv_file_path}:")
                     for invalid_cmd in invalid_commands[:3]:  # Show first 3
                         print(f"    {invalid_cmd}")
                     if len(invalid_commands) > 3:
@@ -16743,11 +19790,11 @@ class EnhancedSSHRunner:
                 # Limit total number of commands to prevent resource exhaustion
                 max_commands = 50  # Reasonable limit
                 if len(commands) > max_commands:
-                    print(f"⚠️  Too many commands in {csv_file_path} ({len(commands)}), limiting to first {max_commands}")
+                    print(f"[WARNING] Too many commands in {csv_file_path} ({len(commands)}), limiting to first {max_commands}")
                     commands = commands[:max_commands]
                     
         except Exception as e:
-            print(f"⚠️  Warning: Could not read {csv_file_path}: {e}")
+            print(f"[WARNING] Warning: Could not read {csv_file_path}: {e}")
             return []
             
         return commands
@@ -16827,30 +19874,30 @@ class EnhancedSSHRunner:
         if not self.validate_hostname(hostname):
             error_msg = f"Invalid hostname format: {hostname}"
             self.logger.error(error_msg)
-            print(f"❌ {error_msg}")
+            print(f"[ERROR] {error_msg}")
             return False
         
         if not self.validate_username(username):
             error_msg = f"Invalid username format: {username}"
             self.logger.error(error_msg)
-            print(f"❌ {error_msg}")
+            print(f"[ERROR] {error_msg}")
             return False
         
         if not self.validate_port(port):
             error_msg = f"Invalid port number: {port} (must be 1-65535)"
             self.logger.error(error_msg)
-            print(f"❌ {error_msg}")
+            print(f"[ERROR] {error_msg}")
             return False
         
         if not password:
             error_msg = "Password cannot be empty"
             self.logger.error(error_msg)
-            print(f"❌ {error_msg}")
+            print(f"[ERROR] {error_msg}")
             return False
         
         try:
             self.logger.info(f"Attempting SSH connection to {hostname}:{port} as {username}")
-            print(f"🔌 Connecting to {hostname}:{port} as {username}...")
+            print(f">> Connecting to {hostname}:{port} as {username}...")
             
             # Create SSH client
             self.client = SSHClient()
@@ -16883,33 +19930,33 @@ class EnhancedSSHRunner:
             self.logger.debug(f"SSH connection established in {connection_time:.2f} seconds")
             
             self.logger.info(f"Successfully connected to {hostname} in {connection_time:.2f} seconds")
-            print(f"✅ Successfully connected to {hostname}")
+            print(f"[OK] Successfully connected to {hostname}")
             return True
             
         except socket.gaierror as e:
             error_msg = f"DNS Resolution Error for {hostname}: {e}"
             self.logger.error(error_msg)
-            print(f"❌ DNS Resolution Error: {e}")
+            print(f"[ERROR] DNS Resolution Error: {e}")
             return False
         except socket.timeout:
             error_msg = f"Connection timeout to {hostname}:{port} after {self.timeout} seconds"
             self.logger.error(error_msg)
-            print(f"❌ Connection timeout after {self.timeout} seconds")
+            print(f"[ERROR] Connection timeout after {self.timeout} seconds")
             return False
         except paramiko.AuthenticationException as e:
             error_msg = f"Authentication failed for {username}@{hostname}: {e}"
             self.logger.error(error_msg)
-            print("❌ Authentication failed - check username and password")
+            print("[ERROR] Authentication failed - check username and password")
             return False
         except paramiko.SSHException as e:
             error_msg = f"SSH Error connecting to {hostname}: {e}"
             self.logger.error(error_msg)
-            print(f"❌ SSH Error: {e}")
+            print(f"[ERROR] SSH Error: {e}")
             return False
         except Exception as e:
             error_msg = f"Unexpected error connecting to {hostname}: {type(e).__name__}: {e}"
             self.logger.error(error_msg, exc_info=True)
-            print(f"❌ Unexpected error: {e}")
+            print(f"[ERROR] Unexpected error: {e}")
             return False
     
     def execute_command(self, command: str, use_shell: bool = False, hostname: str = "unknown") -> Tuple[bool, str, str]:
@@ -16979,7 +20026,7 @@ class EnhancedSSHRunner:
                 stderr_sample = stderr_output[:200].replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                 self.logger.warning(f"STDERR ({len(stderr_output)} chars): {stderr_sample}{'...' if len(stderr_output) > 200 else ''}")
             
-            print(f"📊 [{hostname}] Command completed with exit status: {exit_status}")
+            print(f"Σ [{hostname}] Command completed with exit status: {exit_status}")
             return exit_status == 0, stdout_output, stderr_output
             
         except Exception as e:
@@ -16993,7 +20040,7 @@ class EnhancedSSHRunner:
                 command_time = time.time() - start_time
                 
                 self.logger.debug(f"Command completed (no PTY) in {command_time:.2f} seconds with exit status: {exit_status}")
-                print(f"📊 [{hostname}] Command completed with exit status: {exit_status}")
+                print(f"Σ [{hostname}] Command completed with exit status: {exit_status}")
                 return exit_status == 0, stdout_output, stderr_output
             except Exception as e2:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
@@ -17057,7 +20104,7 @@ class EnhancedSSHRunner:
                     
                     # Hard timeout detection - if we've been running too long, force completion
                     if current_duration > 90:  # 90 second hard timeout
-                        print(f"⏰ [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, forcing completion")
+                        print(f"[TIMEOUT] [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, forcing completion")
                         self.logger.warning(f"Command hang detected after {current_duration:.0f}s, forcing completion: {command}")
                         output += f"\n\n[COMMAND TIMEOUT - Forced completion after {current_duration:.0f}s]\n"
                         break
@@ -17065,7 +20112,7 @@ class EnhancedSSHRunner:
                     # Progress messages for long-running commands
                     if current_duration > 30:  # Show progress after 30 seconds
                         if chunk_count % 150 == 0:  # Every 150 chunks after 30 seconds
-                            print(f"⏱️ [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)")
+                            print(f"⌛ [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)")
                     
                     if shell.recv_ready():
                         chunk = shell.recv(131072).decode('utf-8', errors='ignore')  # Even larger buffer (128KB) for efficiency
@@ -17079,13 +20126,13 @@ class EnhancedSSHRunner:
                             self.logger.debug(f"Receiving data... {chunk_count} chunks, {output_mb:.1f}MB")
                             # Print progress for user feedback on large outputs
                             if output_mb > 5:
-                                print(f"📥 [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)")
+                                print(f"↓ [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)")
                         
                         # Check output size limit - but keep draining to prevent blocking
                         if len(output) > max_output_size:
                             self.logger.warning(f"Output size limit ({max_output_size // (1024*1024)}MB) reached, draining remaining data...")
                             output += f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024*1024)}MB reached]\n"
-                            print(f"📋 [{hostname}] Output truncated at {max_output_size // (1024*1024)}MB, draining remaining data...")
+                            print(f"§ [{hostname}] Output truncated at {max_output_size // (1024*1024)}MB, draining remaining data...")
                             
                             # Continue draining data without storing it to prevent device blocking
                             drain_start = time.time()
@@ -17101,7 +20148,7 @@ class EnhancedSSHRunner:
                                     # Show drain progress
                                     if drained_chunks % 100 == 0:
                                         drain_duration = time.time() - drain_start
-                                        print(f"🚰 [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)")
+                                        print(f"• [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)")
                                         
                                 else:
                                     # Check if we've waited long enough since last data
@@ -17110,7 +20157,7 @@ class EnhancedSSHRunner:
                                     time.sleep(0.05)
                             
                             drain_duration = time.time() - drain_start
-                            print(f"✅ [{hostname}] Data drain completed in {drain_duration:.1f}s ({drained_chunks} chunks discarded)")
+                            print(f"[OK] [{hostname}] Data drain completed in {drain_duration:.1f}s ({drained_chunks} chunks discarded)")
                             break
                         
                         time.sleep(0.01)  # Very small delay for maximum throughput
@@ -17121,7 +20168,7 @@ class EnhancedSSHRunner:
                         time.sleep(0.05)  # Small sleep when no data available
                     
             except KeyboardInterrupt:
-                print(f"\n💥 [{hostname}] Ctrl+C detected! Interrupting command: {command}")
+                print(f"\n✗ [{hostname}] Ctrl+C detected! Interrupting command: {command}")
                 self.logger.warning(f"Command interrupted by user: {command}")
                 output += f"\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"
                 # Don't return here, continue with cleanup and return what we have
@@ -17156,7 +20203,7 @@ class EnhancedSSHRunner:
                         break  # No more data, exit quickly
                         
             except KeyboardInterrupt:
-                print(f"💥 [{hostname}] Ctrl+C during cleanup - forcing shell close")
+                print(f"✗ [{hostname}] Ctrl+C during cleanup - forcing shell close")
                 self.logger.warning("Command cleanup interrupted by user")
             except Exception as e:
                 self.logger.debug(f"Warning during cleanup: {e}")
@@ -17311,7 +20358,7 @@ class EnhancedSSHRunner:
                         break
             
             self.logger.debug(f"Command success determination: success={command_success}, output_length={len(cleaned_output)}")
-            print(f"📊 [{hostname}] Command completed in {command_time:.2f} seconds")
+            print(f"[STATUS] [{hostname}] Command completed in {command_time:.2f} seconds")
             return command_success, cleaned_output, ""
             
         except Exception as e:
@@ -17325,7 +20372,7 @@ class EnhancedSSHRunner:
             self.logger.debug("Closing SSH connection")
             self.client.close()
             self.client = None
-            print("🔌 SSH connection closed")
+            print(">> SSH connection closed")
         else:
             self.logger.debug("No SSH connection to close")
     
@@ -17349,7 +20396,7 @@ class EnhancedSSHRunner:
         
         # Validate env_file path to prevent directory traversal
         if not env_file or '..' in env_file or env_file.startswith('/') or '\\' in env_file:
-            print(f"⚠️  Invalid .env file path: {env_file}")
+            print(f"[WARNING] Invalid .env file path: {env_file}")
             return config
         
         if not os.path.exists(env_file):
@@ -17359,10 +20406,10 @@ class EnhancedSSHRunner:
         try:
             file_size = os.path.getsize(env_file)
             if file_size > 1024 * 1024:  # 1MB limit
-                print(f"⚠️  .env file too large ({file_size} bytes), skipping")
+                print(f"[WARNING] .env file too large ({file_size} bytes), skipping")
                 return config
         except OSError as e:
-            print(f"⚠️  Cannot access .env file: {e}")
+            print(f"[WARNING] Cannot access .env file: {e}")
             return config
         
         if DOTENV_AVAILABLE:
@@ -17378,7 +20425,7 @@ class EnhancedSSHRunner:
                 if username and EnhancedSSHRunner.validate_username(username):
                     config['username'] = username
                 elif username:
-                    print(f"⚠️  Invalid username format in .env file: {username}")
+                    print(f"[WARNING] Invalid username format in .env file: {username}")
                 
                 config['password'] = os.getenv('SSH_PASSWORD')
                 
@@ -17387,7 +20434,7 @@ class EnhancedSSHRunner:
                 if ssh_commands:
                     config['commands'] = EnhancedSSHRunner.parse_command_list(ssh_commands)
             except Exception as e:
-                print(f"⚠️  Error loading .env with python-dotenv: {e}")
+                print(f"[WARNING] Error loading .env with python-dotenv: {e}")
         else:
             # Basic manual parsing for .env files with enhanced validation
             try:
@@ -17398,7 +20445,7 @@ class EnhancedSSHRunner:
                         
                         # Prevent processing too many lines
                         if line_count > 1000:
-                            print("⚠️  .env file has too many lines, stopping at 1000")
+                            print("[WARNING] .env file has too many lines, stopping at 1000")
                             break
                         
                         line = line.strip()
@@ -17432,18 +20479,18 @@ class EnhancedSSHRunner:
                             if EnhancedSSHRunner.validate_username(value):
                                 config['username'] = value
                             else:
-                                print(f"⚠️  Invalid username format in .env file: {value}")
+                                print(f"[WARNING] Invalid username format in .env file: {value}")
                         elif key == 'SSH_PASSWORD':
                             config['password'] = value
                         elif key == 'SSH_COMMANDS':
                             config['commands'] = EnhancedSSHRunner.parse_command_list(value)
                             
             except UnicodeDecodeError as e:
-                print(f"⚠️  .env file encoding error: {e}")
+                print(f"[WARNING] .env file encoding error: {e}")
             except IOError as e:
-                print(f"⚠️  Error reading {env_file}: {e}")
+                print(f"[WARNING] Error reading {env_file}: {e}")
             except Exception as e:
-                print(f"⚠️  Unexpected error reading {env_file}: {e}")
+                print(f"[WARNING] Unexpected error reading {env_file}: {e}")
         
         return config
     
@@ -17473,6 +20520,318 @@ class EnhancedSSHRunner:
             logger.info("Enhanced SSH Runner v2 logging initialized (root handlers)")
         return logger
     
+    @staticmethod
+    def run_multiple_ssh_commands_interactive(hostname: str, username: str, password: str, commands: list, 
+                                            port: int = 22, timeout: int = 30, use_shell: bool = True) -> bool:
+        """
+        Connect via SSH and execute multiple commands with interactive prompt support
+        
+        Handles password prompts and interactive sequences like:
+        1. su -> Password: -> (send password) -> root prompt
+        2. pcli -> PCLI mode
+        3. show commands work in PCLI
+        
+        Args:
+            hostname: IP address or hostname
+            username: SSH username
+            password: SSH password
+            commands: List of commands/responses to execute
+            port: SSH port (default 22)
+            timeout: Connection timeout
+            use_shell: Use interactive shell mode (required for interactive prompts)
+            
+        Returns:
+            bool: True if all commands successful, False otherwise
+        """
+        # Get the already-configured logger
+        logger = logging.getLogger('ssh_runner_v2')
+        logger.debug(f"Starting SSH interactive multi-command execution: {hostname}:{port} - {len(commands)} commands")
+        logger.debug(f"Interactive commands to execute: {commands}")
+        
+        # Create per-host log file in subfolder with proper sanitization
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
+        
+        # Ensure per-host-logs directory exists and is secure
+        log_dir = "per-host-logs"
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            # Set secure permissions on directory (owner read/write/execute only)
+            if hasattr(os, 'chmod'):
+                os.chmod(log_dir, 0o700)
+        except OSError as e:
+            logger.error(f"Failed to create log directory {log_dir}: {e}")
+            # Fallback to current directory
+            log_dir = "."
+            safe_hostname = f"fallback_{safe_hostname}"
+        
+        host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
+        print(f"** [{hostname}] Logging to: {host_log_file}")
+        
+        def write_to_host_log(message: str):
+            """Write message to host-specific log file only (not console)"""
+            if not message:
+                return
+            
+            try:
+                # Clean ANSI escape sequences and terminal control codes for readable logs
+                import re
+                clean_message = message
+                
+                # Remove ANSI escape sequences (colors, cursor positioning, etc.)
+                ansi_escape = re.compile(r'\x1b\[[0-9;]*[mGKHfABCDsuJ]')
+                clean_message = ansi_escape.sub('', clean_message)
+                
+                # Remove other common terminal control sequences
+                control_sequences = [
+                    r'\x1b\[\?[0-9]+[lh]',  # DEC private mode sequences
+                    r'\x1b\[[0-9]+[ABCDGK]',  # Cursor movement
+                    r'\x1b\[[0-9]+;[0-9]+[Hf]',  # Cursor positioning
+                    r'\x1b\[[0-9]*[J]',  # Erase sequences
+                    r'\x1b\[6n',  # Cursor position request
+                    r'\x1b\[[0-9]+D',  # Cursor backward
+                    r'\x1b\[\?2004[hl]',  # Bracketed paste mode
+                    r'\x1b\[\?25[lh]',  # Cursor visibility
+                    r'\x1b\[\?7[lh]',   # Line wrap mode
+                    r'\x1b\[\?12[lh]',  # Start/stop blinking cursor
+                ]
+                
+                for pattern in control_sequences:
+                    clean_message = re.sub(pattern, '', clean_message)
+                
+                # Remove excessive whitespace and clean up line breaks
+                clean_message = re.sub(r'\n\s*\n\s*\n', '\n\n', clean_message)  # Max 2 consecutive newlines
+                clean_message = re.sub(r'[ \t]+\n', '\n', clean_message)  # Remove trailing spaces
+                
+                # Sanitize message to prevent log injection
+                safe_message = clean_message.replace('\x00', '').replace('\r\n', '\n')
+                
+                with open(host_log_file, 'a', encoding='utf-8') as f:
+                    f.write(f"{safe_message}\n")
+                    f.flush()
+                    
+                # Set secure permissions on log file (owner read/write only)
+                if hasattr(os, 'chmod'):
+                    os.chmod(host_log_file, 0o600)
+            except UnicodeEncodeError:
+                # Try writing a sanitized version
+                try:
+                    safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                    with open(host_log_file, 'a', encoding='utf-8') as f:
+                        f.write(f"{safe_message}\n")
+                        f.flush()
+                except Exception:
+                    logger.error(f"Failed to write sanitized message to host log")
+            except Exception as e:
+                logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
+        
+        runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
+        overall_success = True
+        
+        # Initialize host log with header
+        header = f"""
+{'='*80}
+SSH Interactive Session Log for Host: {hostname}
+Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Commands/responses to execute: {len(commands)}
+{'='*80}"""
+        write_to_host_log(header)
+        
+        try:
+            # Connect once for all commands
+            if not runner.connect(hostname, username, password, port):
+                error_msg = f"Failed to connect to {hostname}"
+                logger.error(f"SSH connection failed: {hostname}:{port}")
+                write_to_host_log(f"[ERROR] {error_msg}")
+                return False
+            
+            logger.debug(f"SSH connected to {hostname}, starting interactive session")
+            connection_msg = f"\n>> Starting interactive session with {len(commands)} steps..."
+            write_to_host_log(connection_msg)
+            
+            # Create persistent shell for interactive session
+            if not use_shell:
+                logger.warning(f"Interactive mode requires shell=True, enabling shell mode")
+                use_shell = True
+            
+            # Start interactive shell
+            shell = runner.client.invoke_shell(term='vt100', width=120, height=24)
+            shell.settimeout(timeout)
+            
+            # Wait for initial prompt
+            time.sleep(1)
+            if shell.recv_ready():
+                initial_output = shell.recv(4096).decode('utf-8', errors='ignore')
+                write_to_host_log(f"[OUTPUT] INITIAL PROMPT:\n{initial_output}")
+                logger.debug(f"Initial shell prompt received")
+            
+            # Process each command/response in sequence
+            command_index = 0
+            while command_index < len(commands):
+                current_item = commands[command_index].strip()
+                
+                # Skip empty commands
+                if not current_item:
+                    command_index += 1
+                    continue
+                
+                step_num = command_index + 1
+                separator = f"\n{'='*60}"
+                step_header = f"[STEP] Step {step_num}/{len(commands)}: {current_item}"
+                separator_line = '='*60
+                
+                write_to_host_log(separator)
+                write_to_host_log(step_header)
+                write_to_host_log(separator_line)
+                
+                # SECURITY: Redact potential passwords in console output
+                display_item = current_item
+                if any(pwd_hint in current_item.lower() for pwd_hint in ['password', 'pass', 'pwd']) and len(current_item) > 5:
+                    display_item = "*" * len(current_item)  # Redact password
+                
+                print(f"* [{hostname}] Executing step {step_num}: {display_item}")
+                logger.debug(f"[{hostname}] Sending: {current_item}")
+                
+                try:
+                    # Send command/response
+                    shell.send(current_item + '\n')
+                    time.sleep(0.2)  # Brief pause to let command register
+                    
+                    # Wait for and collect response
+                    max_wait_time = 10  # Maximum wait for response
+                    wait_increment = 0.1
+                    total_wait = 0
+                    response_output = ""
+                    last_data_time = time.time()
+                    no_data_timeout = 3.0  # Wait 3 seconds after no new data
+                    
+                    while total_wait < max_wait_time:
+                        if shell.recv_ready():
+                            chunk = shell.recv(4096).decode('utf-8', errors='ignore')
+                            response_output += chunk
+                            last_data_time = time.time()
+                            
+                            # Check if we got a password prompt
+                            if any(prompt in response_output.lower() for prompt in ['password:', 'password ', 'passwd:']):
+                                logger.debug(f"[{hostname}] Password prompt detected")
+                                break
+                                
+                            # Check if we got a shell prompt (command completed)
+                            prompt_patterns = ['$', '#', '>', 'pcli']
+                            if any(pattern in response_output[-50:] for pattern in prompt_patterns):
+                                if (time.time() - last_data_time) > 1.0:  # No new data for 1 second
+                                    break
+                        else:
+                            # Check if we've waited long enough since last data
+                            if (time.time() - last_data_time) >= no_data_timeout:
+                                break  # No new data, likely command completed
+                                
+                        time.sleep(wait_increment)
+                        total_wait += wait_increment
+                    
+                    # Log the response
+                    if response_output.strip():
+                        write_to_host_log("[OUTPUT] RESPONSE:")
+                        write_to_host_log(response_output)
+                        logger.debug(f"[{hostname}] Response received: {len(response_output)} chars")
+                    else:
+                        write_to_host_log("[STATUS] No response output")
+                        logger.debug(f"[{hostname}] No response output received")
+                    
+                    # Check for success indicators
+                    step_success = True
+                    if "command not found" in response_output.lower():
+                        step_success = False
+                        logger.warning(f"[{hostname}] Step {step_num} failed: command not found")
+                    elif "permission denied" in response_output.lower():
+                        step_success = False
+                        logger.warning(f"[{hostname}] Step {step_num} failed: permission denied")
+                    elif "authentication failed" in response_output.lower():
+                        step_success = False
+                        logger.warning(f"[{hostname}] Step {step_num} failed: authentication failed")
+                    
+                    if step_success:
+                        success_msg = f"[OK] Step {step_num} completed successfully"
+                        write_to_host_log(success_msg)
+                        logger.debug(f"[{hostname}] Step {step_num} completed successfully")
+                    else:
+                        failure_msg = f"[ERROR] Step {step_num} failed"
+                        write_to_host_log(failure_msg)
+                        overall_success = False
+                    
+                    command_index += 1
+                    
+                    # Brief pause between commands for stability
+                    if command_index < len(commands):
+                        time.sleep(0.5)
+                        
+                except KeyboardInterrupt:
+                    print(f"\n[INTERRUPT] [{hostname}] Ctrl+C detected! Stopping interactive session...")
+                    logger.warning(f"Interactive session interrupted by user at step {step_num}")
+                    write_to_host_log(f"\n[INTERRUPT] Session interrupted by user at step {step_num}")
+                    overall_success = False
+                    break
+                except Exception as step_e:
+                    logger.error(f"[{hostname}] Error at step {step_num}: {type(step_e).__name__}: {step_e}")
+                    error_msg = f"[ERROR] Step {step_num} error: {step_e}"
+                    write_to_host_log(error_msg)
+                    overall_success = False
+                    break
+            
+            # Cleanup - close shell gracefully
+            try:
+                shell.send('exit\n')
+                time.sleep(0.5)
+                shell.close()
+                logger.debug(f"[{hostname}] Interactive shell closed gracefully")
+            except Exception as cleanup_e:
+                logger.debug(f"[{hostname}] Shell cleanup warning: {cleanup_e}")
+            
+            # Final status
+            if overall_success:
+                logger.info(f"[{hostname}] All {len(commands)} interactive steps completed successfully")
+                final_msg = "[OK] All interactive steps completed successfully"
+                write_to_host_log(final_msg)
+            else:
+                logger.warning(f"[{hostname}] Some interactive steps failed")
+                final_msg = "[WARNING] Some interactive steps failed - check output above"
+                write_to_host_log(final_msg)
+            
+            return overall_success
+            
+        except Exception as e:
+            logger.error(f"[{hostname}] Unexpected error during interactive session: {type(e).__name__}: {e}", exc_info=True)
+            error_msg = f"[ERROR] Unexpected error: {e}"
+            write_to_host_log(error_msg)
+            return False
+        finally:
+            runner.disconnect()
+            logger.debug(f"[{hostname}] SSH interactive session completed")
+            
+            # Write session footer to host log with safer success check
+            try:
+                # Ensure we have a valid overall_success value
+                final_success = locals().get('overall_success', False)
+                if not isinstance(final_success, bool):
+                    logger.warning(f"Overall success value is not boolean: {type(final_success)} = {final_success}")
+                    final_success = False
+                    
+                footer = f"""
+{'='*80}
+SSH Interactive Session Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Status: {'SUCCESS' if final_success else 'FAILED'}
+Log file: {host_log_file}
+{'='*80}"""
+                write_to_host_log(footer)
+            except Exception as e:
+                logger.error(f"Error in interactive session footer generation: {type(e).__name__}: {e}")
+                # Write minimal footer
+                try:
+                    simple_footer = f"Session completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    write_to_host_log(simple_footer)
+                except Exception as e2:
+                    logger.error(f"Even simple interactive footer failed: {e2}")
+
     @staticmethod
     def run_multiple_ssh_commands(hostname: str, username: str, password: str, commands: list, 
                                  port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
@@ -17514,7 +20873,7 @@ class EnhancedSSHRunner:
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-        print(f"🌐 [{hostname}] Logging to: {host_log_file}")
+        print(f"☁ [{hostname}] Logging to: {host_log_file}")
         
         def write_to_host_log(message: str):
             """Write message to host-specific log file only (not console)"""
@@ -17560,18 +20919,18 @@ Commands to execute: {len(commands)}
             if not runner.connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
-                write_to_host_log(f"❌ {error_msg}")
+                write_to_host_log(f"✗ {error_msg}")
                 return False
             
             logger.debug(f"SSH connected to {hostname}, executing {len(commands)} commands")
-            connection_msg = f"\n🚀 Executing {len(commands)} commands sequentially..."
+            connection_msg = f"\n>> Executing {len(commands)} commands sequentially..."
             write_to_host_log(connection_msg)
             
             # Execute each command with keyboard interrupt handling
             for i, command in enumerate(commands, 1):
                 try:
                     separator = f"\n{'='*60}"
-                    command_header = f"📝 Command {i}/{len(commands)}: {command}"
+                    command_header = f"• Command {i}/{len(commands)}: {command}"
                     separator_line = '='*60
                     
                     write_to_host_log(separator)
@@ -17582,20 +20941,20 @@ Commands to execute: {len(commands)}
                     success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
                     
                     if stdout:
-                        write_to_host_log("📤 OUTPUT:")
+                        write_to_host_log("→ OUTPUT:")
                         write_to_host_log(stdout)
                     
                     if stderr:
-                        write_to_host_log("📤 ERRORS:")
+                        write_to_host_log("→ ERRORS:")
                         write_to_host_log(stderr)
                     
                     if success:
                         logger.debug(f"[{hostname}] Command {i}/{len(commands)} completed: {command}")
-                        success_msg = f"✅ Command {i} executed successfully"
+                        success_msg = f"[OK] Command {i} executed successfully"
                         write_to_host_log(success_msg)
                     else:
                         logger.warning(f"[{hostname}] Command {i}/{len(commands)} failed: {command[:50]}...")
-                        failure_msg = f"❌ Command {i} failed"
+                        failure_msg = f"[ERROR] Command {i} failed"
                         write_to_host_log(failure_msg)
                         overall_success = False
                     
@@ -17604,8 +20963,8 @@ Commands to execute: {len(commands)}
                         time.sleep(0.5)
                         
                 except KeyboardInterrupt:
-                    print(f"\n💥 [{hostname}] Ctrl+C detected! Skipping remaining commands...")
-                    interrupt_msg = f"\n❌ Command {i} interrupted by user (Ctrl+C)\n⏭️ Skipping remaining {len(commands) - i} commands"
+                    print(f"\n✗ [{hostname}] Ctrl+C detected! Skipping remaining commands...")
+                    interrupt_msg = f"\n[ERROR] Command {i} interrupted by user (Ctrl+C)\n[SKIP] Skipping remaining {len(commands) - i} commands"
                     write_to_host_log(interrupt_msg)
                     logger.warning(f"[{hostname}] Command execution interrupted by user at command {i}/{len(commands)}")
                     overall_success = False
@@ -17616,18 +20975,18 @@ Commands to execute: {len(commands)}
             
             if overall_success:
                 logger.info(f"[{hostname}] All {len(commands)} commands completed successfully")
-                final_msg = "✅ All commands executed successfully"
+                final_msg = "[OK] All commands executed successfully"
                 write_to_host_log(final_msg)
             else:
                 logger.warning(f"[{hostname}] Some commands failed during execution")
-                final_msg = "⚠️  Some commands failed - check output above"
+                final_msg = "[WARNING] Some commands failed - check output above"
                 write_to_host_log(final_msg)
             
             return overall_success
             
         except Exception as e:
             logger.error(f"[{hostname}] Unexpected error during multi-command execution: {type(e).__name__}: {e}", exc_info=True)
-            error_msg = f"❌ Unexpected error: {e}"
+            error_msg = f"[ERROR] Unexpected error: {e}"
             write_to_host_log(error_msg)
             return False
         finally:
@@ -17699,7 +21058,7 @@ Log file: {host_log_file}
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-        print(f"🌐 [{hostname}] Logging to: {host_log_file}")
+        print(f"☁ [{hostname}] Logging to: {host_log_file}")
         
         def write_to_host_log(message: str):
             """Write message to host-specific log file only (not console)"""
@@ -17744,7 +21103,7 @@ Command: {command}
             if not runner.connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
-                write_to_host_log(f"❌ {error_msg}")
+                write_to_host_log(f"✗ {error_msg}")
                 return False
             
             logger.debug(f"SSH connected to {hostname}, executing single command")
@@ -17754,7 +21113,7 @@ Command: {command}
             
             # Display results
             separator = "\n" + "=" * 60
-            output_header = "📋 COMMAND OUTPUT"
+            output_header = "§ COMMAND OUTPUT"
             separator_line = "=" * 60
             
             write_to_host_log(separator)
@@ -17762,32 +21121,32 @@ Command: {command}
             write_to_host_log(separator_line)
             
             if stdout:
-                write_to_host_log("📤 STDOUT:")
+                write_to_host_log("→ STDOUT:")
                 write_to_host_log(stdout)
             
             if stderr:
-                write_to_host_log("📤 STDERR:")
+                write_to_host_log("→ STDERR:")
                 write_to_host_log(stderr)
             
             if not stdout and not stderr:
-                write_to_host_log("📝 No output returned")
+                write_to_host_log("• No output returned")
             
             write_to_host_log(separator_line)
             
             if single_cmd_success:
                 logger.info(f"[{hostname}] Command completed successfully")
-                success_msg = "✅ Command executed successfully"
+                success_msg = "[OK] Command executed successfully"
                 write_to_host_log(success_msg)
             else:
                 logger.warning(f"[{hostname}] Command failed: {command[:50]}...")
-                failure_msg = "❌ Command execution failed or returned non-zero exit status"
+                failure_msg = "[ERROR] Command execution failed or returned non-zero exit status"
                 write_to_host_log(failure_msg)
                     
             return single_cmd_success
             
         except Exception as e:
             logger.error(f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True)
-            error_msg = f"❌ Unexpected error: {e}"
+            error_msg = f"[ERROR] Unexpected error: {e}"
             write_to_host_log(error_msg)
             return False
         finally:
@@ -17847,9 +21206,32 @@ Log file: {host_log_file}
                 host_success = EnhancedSSHRunner.run_ssh_command(hostname, username, password, commands[0], port, timeout, use_shell)
                 return (hostname, host_success, f"Single command: {commands[0]}")
             else:
-                # Multiple commands
-                host_success = EnhancedSSHRunner.run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
-                return (hostname, host_success, f"{len(commands)} commands executed")
+                # Multiple commands - check if we need interactive mode
+                # Detect interactive sequences (su commands followed by potential passwords)
+                needs_interactive = False
+                for i, cmd in enumerate(commands):
+                    cmd_lower = cmd.strip().lower()
+                    # Check for commands that typically require interactive input
+                    if cmd_lower in ['su', 'sudo', 'sudo su'] or cmd_lower.startswith('su '):
+                        needs_interactive = True
+                        logger.debug(f"[{hostname}] Interactive mode needed: detected '{cmd}' command")
+                        break
+                    # Check for sequences that look like password responses
+                    if i > 0 and len(cmd.strip()) > 5:
+                        prev_cmd = commands[i-1].strip().lower()
+                        if prev_cmd in ['su', 'sudo'] and not cmd.startswith('/') and not cmd.startswith('show'):
+                            needs_interactive = True
+                            logger.debug(f"[{hostname}] Interactive mode needed: '{cmd}' looks like password response")
+                            break
+                
+                if needs_interactive:
+                    logger.info(f"[{hostname}] Using interactive mode for {len(commands)} commands")
+                    host_success = EnhancedSSHRunner.run_multiple_ssh_commands_interactive(hostname, username, password, commands, port, timeout, use_shell)
+                    return (hostname, host_success, f"{len(commands)} interactive commands executed")
+                else:
+                    # Standard sequential command execution
+                    host_success = EnhancedSSHRunner.run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
+                    return (hostname, host_success, f"{len(commands)} commands executed")
 
         except Exception as e:
             logger.error(f"[{hostname}] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
@@ -17881,7 +21263,7 @@ Log file: {host_log_file}
             logger.debug(f"[TRACE] Enter run_ssh_commands_multi_host(hosts={hosts}, username={username}, port={port}, timeout={timeout}, use_shell={use_shell}, max_threads={max_threads})")
             logger.debug(f"[TRACE] Types: hosts={type(hosts)}, username={type(username)}, password={'***' if password else None}, commands={type(commands)}, timeout={type(timeout)}")
         
-        print(f"\n🚀 Starting SSH execution on {len(hosts)} hosts ({max_threads} threads)")
+        print(f"\n>> Starting SSH execution on {len(hosts)} hosts ({max_threads} threads)")
         logger.info(f"Multi-host SSH execution: {len(hosts)} hosts, {len(commands)} commands, {max_threads} threads")
         logger.debug(f"Target hosts: {hosts}")
         logger.debug(f"Commands: {commands}")
@@ -17938,18 +21320,18 @@ Log file: {host_log_file}
         
         # Summary report
         print(f"\n{'='*60}")
-        print(f"📊 EXECUTION SUMMARY")
+        print(f"[STATUS] EXECUTION SUMMARY")
         print(f"{'='*60}")
         print(f"Total hosts: {len(hosts)}")
-        print(f"Successful: {len(successful_hosts)} ✅")
-        print(f"Failed: {len(failed_hosts)} ❌")
+        print(f"Successful: {len(successful_hosts)} [OK]")
+        print(f"Failed: {len(failed_hosts)} [ERROR]")
         print(f"Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")
         
         if successful_hosts:
-            print(f"\n✅ Successful hosts: {', '.join(successful_hosts)}")
+            print(f"\n[OK] Successful hosts: {', '.join(successful_hosts)}")
         
         if failed_hosts:
-            print(f"\n❌ Failed hosts: {', '.join(failed_hosts)}")
+            print(f"\n[ERROR] Failed hosts: {', '.join(failed_hosts)}")
         
         logger.info(f"Multi-host execution completed: {len(successful_hosts)}/{len(hosts)} successful")
         
@@ -18027,13 +21409,13 @@ Log file: {host_log_file}
         if not final_password and not args.secure:
             if final_username and final_hosts:
                 host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-                final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
+                final_password = getpass.getpass(f"§ Enter password for {final_username}@{host_display}: ")
             else:
-                print("❌ Password required but not provided")
+                print("✗ Password required but not provided")
                 return False
         elif args.secure and not final_password:
             host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-            final_password = getpass.getpass(f"🔒 Enter password for {final_username}@{host_display}: ")
+            final_password = getpass.getpass(f"§ Enter password for {final_username}@{host_display}: ")
         # SECURITY: Password argument removed - this code block is no longer needed
         
         # Validate final parameters
@@ -18047,17 +21429,17 @@ Log file: {host_log_file}
                 invalid_hosts.append(host)
         
         if invalid_hosts:
-            print(f"❌ Invalid hosts detected: {', '.join(invalid_hosts)}")
+            print(f"✗ Invalid hosts detected: {', '.join(invalid_hosts)}")
             if not validated_hosts:
-                print("❌ No valid hosts remaining")
+                print("✗ No valid hosts remaining")
                 return False
             else:
-                print(f"⚠️  Proceeding with {len(validated_hosts)} valid hosts")
+                print(f"[WARNING] Proceeding with {len(validated_hosts)} valid hosts")
                 final_hosts = validated_hosts
         
         # Validate username
         if final_username and not EnhancedSSHRunner.validate_username(final_username):
-            print(f"❌ Invalid username format: {final_username}")
+            print(f"[ERROR] Invalid username format: {final_username}")
             return False
         
         # Check if we have minimum required parameters
@@ -18067,12 +21449,12 @@ Log file: {host_log_file}
             if not final_username: missing.append("username/SSH_USER") 
             if not final_password: missing.append("password/SSH_PASSWORD")
             
-            print(f"❌ Error: Missing required parameters: {', '.join(missing)}")
+            print(f"✗ Error: Missing required parameters: {', '.join(missing)}")
             if use_env:
-                print("💡 Add these to your .env file or provide as command line arguments")
-                print("💡 Use --no-env flag to disable .env file loading")
+                print("★ Add these to your .env file or provide as command line arguments")
+                print("★ Use --no-env flag to disable .env file loading")
             else:
-                print("💡 Provide as command line arguments or remove --no-env flag to use .env file")
+                print("★ Provide as command line arguments or remove --no-env flag to use .env file")
                 # Since we can't access the parser here, we'll let the caller handle help display
             return False
         
@@ -18093,7 +21475,7 @@ Log file: {host_log_file}
             if csv_commands:
                 commands_to_run = csv_commands
                 logger.info(f"Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
-                print(f"💡 Loaded {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV")
+                print(f"★ Loaded {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV")
         # Priority 4: Interactive input
         else:
             # Check what command sources are available
@@ -18104,30 +21486,30 @@ Log file: {host_log_file}
                 command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env, or 'csv' for {len(csv_commands)} commands from CSV): ").strip()
                 if not command:
                     commands_to_run = env_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                    print(f"★ Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
                 elif command.lower() == 'csv':
                     commands_to_run = csv_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"★ Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             elif env_commands:
                 command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
                 if not command:
                     commands_to_run = env_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                    print(f"★ Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             elif csv_commands:
                 command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from data/SSH_COMMANDS.CSV): ").strip()
                 if not command:
                     commands_to_run = csv_commands
-                    print(f"💡 Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"★ Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             else:
                 command = input("⚡ Enter command to execute: ").strip()
                 if not command:
-                    print("❌ No commands specified")
+                    print("✗ No commands specified")
                     return False
                 commands_to_run = [command]
         
@@ -18143,16 +21525,16 @@ Log file: {host_log_file}
                 invalid_commands.append(invalid_cmd)
         
         if invalid_commands:
-            print(f"❌ Invalid commands detected: {', '.join(invalid_commands)}")
+            print(f"✗ Invalid commands detected: {', '.join(invalid_commands)}")
             if not validated_commands:
-                print("❌ No valid commands remaining")
+                print("✗ No valid commands remaining")
                 return False
             else:
-                print(f"⚠️  Proceeding with {len(validated_commands)} valid commands")
+                print(f"⚠ Proceeding with {len(validated_commands)} valid commands")
                 commands_to_run = validated_commands
         
         if not commands_to_run:
-            print("❌ No commands to execute")
+            print("✗ No commands to execute")
             return False
         
         # Determine shell mode (default is True unless --no-shell is specified)
@@ -18195,7 +21577,7 @@ Log file: {host_log_file}
                 max_threads = EnhancedSSHRunner.validate_thread_count(requested_threads, len(final_hosts))
                 
                 if max_threads != requested_threads:
-                    print(f"⚠️  Adjusted thread count from {requested_threads} to {max_threads}")
+                    print(f"⚠ Adjusted thread count from {requested_threads} to {max_threads}")
                 
                 ssh_results = EnhancedSSHRunner.run_ssh_commands_multi_host(
                     final_hosts,
@@ -18212,7 +21594,7 @@ Log file: {host_log_file}
                 return ssh_results['failed'] == 0
             
         except KeyboardInterrupt:
-            print("\n🛑 Operation cancelled by user")
+            print("\n[INTERRUPT] Operation cancelled by user")
             return False
         except Exception as e:
             # Enhanced diagnostic logging for elusive dict+float TypeError
@@ -18221,7 +21603,7 @@ Log file: {host_log_file}
                 logger.debug(f"[DIAG] Type of exception object: {type(e)}")
             except Exception:
                 pass
-            print(f"❌ Fatal error: {e}")
+            print(f"✗ Fatal error: {e}")
             return False
         finally:
             if tracer_installed:
@@ -18330,80 +21712,80 @@ SECURITY NOTES:
     @staticmethod
     def interactive_mode():
         """Interactive mode for SSH command execution with input validation"""
-        print("🖥️  Enhanced SSH Command Runner v2 - Interactive Mode")
+        print("█ Enhanced SSH Command Runner v2 - Interactive Mode")
         print("=" * 60)
         
         # Get connection details with validation
         while True:
-            hostname = input("🌐 Enter hostname or IP address: ").strip()
+            hostname = input("☁ Enter hostname or IP address: ").strip()
             if not hostname:
-                print("❌ Hostname is required")
+                print("✗ Hostname is required")
                 continue
             if not EnhancedSSHRunner.validate_hostname(hostname):
-                print("❌ Invalid hostname or IP address format")
+                print("✗ Invalid hostname or IP address format")
                 continue
             break
         
         while True:
-            username = input("👤 Enter username: ").strip()
+            username = input("• Enter username: ").strip()
             if not username:
-                print("❌ Username is required")
+                print("✗ Username is required")
                 continue
             if not EnhancedSSHRunner.validate_username(username):
-                print("❌ Invalid username format (alphanumeric, underscore, hyphen, dot only)")
+                print("✗ Invalid username format (alphanumeric, underscore, hyphen, dot only)")
                 continue
             break
         
-        password = getpass.getpass("🔒 Enter password: ")
+        password = getpass.getpass("§ Enter password: ")
         if not password:
-            print("❌ Password is required")
+            print("✗ Password is required")
             return False
         
         # Optional settings with validation
         while True:
             try:
-                port_input = input("🔌 Enter SSH port (default 22): ").strip()
+                port_input = input(">> Enter SSH port (default 22): ").strip()
                 if not port_input:
                     port = 22
                     break
                 port = int(port_input)
                 if not EnhancedSSHRunner.validate_port(port):
-                    print("❌ Port must be between 1 and 65535")
+                    print("✗ Port must be between 1 and 65535")
                     continue
                 break
             except ValueError:
-                print("❌ Port must be a valid number")
+                print("✗ Port must be a valid number")
         
         while True:
             try:
-                timeout_input = input("⏱️  Enter timeout in seconds (default 30): ").strip()
+                timeout_input = input("⌛ Enter timeout in seconds (default 30): ").strip()
                 if not timeout_input:
                     timeout = 30
                     break
                 timeout = int(timeout_input)
                 if not EnhancedSSHRunner.validate_timeout(timeout):
-                    print("❌ Timeout must be between 1 and 3600 seconds")
+                    print("✗ Timeout must be between 1 and 3600 seconds")
                     continue
                 break
             except ValueError:
-                print("❌ Timeout must be a valid number")
+                print("✗ Timeout must be a valid number")
         
         # Execution mode
-        shell_mode = input("🐚 Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
+        shell_mode = input("• Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
         use_shell = shell_mode in ['y', 'yes', 'true', '1']
         
         # Get command with validation
         while True:
             command = input("⚡ Enter command to execute: ").strip()
             if not command:
-                print("❌ Command is required")
+                print("✗ Command is required")
                 continue
             if not EnhancedSSHRunner.validate_command(command):
-                print("❌ Invalid command (too long or contains null bytes)")
+                print("✗ Invalid command (too long or contains null bytes)")
                 continue
             break
         
-        print(f"\n🚀 Starting SSH session (shell_mode={use_shell})...")
+        print(f"\n>> Starting SSH session (shell_mode={use_shell})...")
         
         # Execute
         return EnhancedSSHRunner.run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
@@ -18552,6 +21934,9 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Debug logging enabled via --debug flag")
+        print("[DEBUG] Debug mode activated - enhanced logging and performance monitoring enabled")
+        print(f"[DEBUG] Command line arguments: {' '.join(sys.argv)}")
+        print(f"[DEBUG] Performance monitoring will trigger circuit breakers for infinite loops")
     
     # Handle systematic testing mode
     if args.test:

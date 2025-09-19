@@ -1,11 +1,10 @@
-docker --versi1. Operation Count: The code currently defines 87 actionable menu entries (1–3, 11–86, 90–97) – not a fixed "96" set. Some gaps exist in numbering (4–10, 87–89) for future expansion.n
-<div align="center">
-
 # MistHelper
 
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
 </div>
+
+**Operation Count:** The code currently defines 91 actionable menu entries (1–4, 11–89, 90–98) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -148,7 +147,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 
 | Range | Focus | Highlights |
 |-------|-------|-----------|
-| 1–3 | Alarms & Definitions | Org alarms, device events, audit logs (24h) |
+| 1–4 | Alarms & Definitions | Org alarms, device events, audit logs (24h), gateway management IPs |
 | 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
 | 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
 | 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
@@ -162,9 +161,11 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
 | 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
 | 81–86 | Advanced Insights | Device insights, const definitions, organization insights, anomaly metrics |
+| 87–89 | WebSocket Commands | Device ping, ARP, and service ping via WebSocket (real-time output) |
 | 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
 | 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
+| 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -193,6 +194,15 @@ Features:
 * Structured logging (per‑host log concept; ensure directory creation if extending)
 
 Note: Legacy root `SSH_COMMANDS.CSV` is auto-detected if the `data/` copy is absent; you will see an informational message. Migrate to `data/` to suppress it.
+
+### SSH by Gateway Template (Option 98)
+Features:
+* Integrates with Menu Option 4 (Gateway Management IPs) for target discovery
+* Filters gateways by user-selected template name AND online status
+* Only targets gateways with configured management IPs
+* Interactive template selection with gateway counts
+* Uses same SSH configuration as Option 97 (`.env` and `data/SSH_COMMANDS.CSV`)
+* Provides confirmation before execution with target list preview
 
 ---
 ## 11. Rate Limiting & Performance

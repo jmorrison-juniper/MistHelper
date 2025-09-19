@@ -86,5 +86,5 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sqlite3; conn = sqlite3.connect('/app/data/mist_data.db'); conn.close()" || exit 1
 
-# Default command
-CMD ["python", "MistHelper.py", "--output-format", "sqlite", "--menu", "11"]
+# Default command - show interactive menu with default output format
+CMD ["python", "MistHelper.py"]
