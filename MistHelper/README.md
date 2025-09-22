@@ -51,50 +51,121 @@ This README reflects the current actual logic inside `MistHelper.py` (≈19k lin
 All export CSVs are now written inside `data/` (the code enforces a data directory even if a legacy doc claims root CSV placement).
 
 ---
-## 4. Installation (Local)
-Choose one path:
+## 4. Installation and Setup
 
-### Option A: Quick Start (pip)
-```bash
+### Step 1: Get the Code
+Download or clone MistHelper to your local machine:
+```powershell
 git clone https://github.com/jmorrison-juniper/MistHelper.git
 cd MistHelper
-python -m venv .venv
-./.venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install --upgrade pip
-pip install -r requirements.txt
-python MistHelper.py
 ```
 
-### Option B: Prefer UV (If Allowed)
-```bash
+### Step 2: Create a Virtual Environment
+Always use a virtual environment to keep your Python packages organized:
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### Step 3: Install Dependencies
+Install the required Python packages using either UV (recommended) or pip:
+
+**Option A: Using UV (Faster, Recommended)**
+```powershell
 python -m pip install uv
-git clone https://github.com/jmorrison-juniper/MistHelper.git
-cd MistHelper
 uv pip install -r requirements.txt
-python MistHelper.py
+```
+
+**Option B: Using pip (Standard)**
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Step 4: Configure Your Environment
+Create your configuration file from the template:
+```powershell
+cp documentation\sample.env .env
+```
+
+Edit `.env` file with your settings:
+- **Required:** Set `MIST_APITOKEN` to your Mist API token
+- **Optional but Helpful:** Set `org_id` to skip organization selection
+- **Optional:** Configure SSH settings for device commands
+
+To get your API token:
+1. Login to https://manage.mist.com
+2. Go to Organization → API Tokens  
+3. Create a new token with appropriate permissions
+4. Copy the token to your `.env` file
+
+### Step 5: Test Your Setup
+Verify everything works:
+```powershell
+python MistHelper.py --help
+python MistHelper.py --menu 1
 ```
 
 ---
-## 5. Environment Configuration (`.env`)
-Minimal required variables:
-```env
-MIST_HOST=api.mist.com
-MIST_APITOKEN=replace_with_org_admin_token
-org_id=replace_with_org_uuid
+## 5. How to Run MistHelper
 
-# Optional Tuning (defaults shown)
-CSV_FRESHNESS_MINUTES=15
-AUTO_UPGRADE_UV=true
-AUTO_UPGRADE_DEPENDENCIES=true
-UPGRADE_CHECK_TIMEOUT=30
-FAST_MODE_MAX_RETRIES=3
-FAST_MODE_DEVICES_PER_THREAD=10
-FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8
-FAST_MODE_USE_CONNECTION_AWARE_THREADING=true
+### Interactive Menu Mode (Beginner Friendly)
+Simply run the script and choose from the menu:
+```powershell
+python MistHelper.py
 ```
-Security note: Never commit `.env`. The code auto‑loads using `python-dotenv` if present, else a manual fallback parser.
 
-Organization ID can be copied from the Mist UI URL (`org_id=<uuid>`). If omitted, some paths invoke interactive selection via `mistapi.cli.select_org`.
+### Direct Command Mode (For Automation)
+Run specific operations directly:
+```powershell
+# Export organization inventory
+python MistHelper.py --menu 11
+
+# Export sites information  
+python MistHelper.py --menu 12
+
+# Run gateway synthetic tests (fast mode)
+python MistHelper.py --menu 16 --fast
+
+# Export data to SQLite database
+python MistHelper.py --menu 11 --output-format sqlite
+```
+
+### Test Mode (Verify Everything Works)
+Run automated tests on safe operations:
+```powershell
+python MistHelper.py --test
+```
+
+### Common Useful Commands
+```powershell
+# Get help with all options
+python MistHelper.py --help
+
+# Run with detailed logging for troubleshooting
+python MistHelper.py --menu 11 --debug
+
+# SSH into devices (requires SSH configuration in .env)
+python MistHelper.py --menu 97
+
+# Fast mode for large organizations
+python MistHelper.py --menu 16 --fast
+```
+
+### Working with Output Files
+MistHelper creates organized output in the `data/` directory:
+- **CSV files:** Easy to open in Excel or import elsewhere
+- **SQLite database:** Use `data/mist_data.db` for complex queries
+- **Weekly inventory:** Time-series data in `CombinedInventory_ByWeek/`
+
+View SQLite data:
+```powershell
+sqlite3 data\mist_data.db
+```
+```sql
+.tables
+SELECT COUNT(*) FROM listOrgSites;
+```
 
 ---
 ## 6. Command Line Interface
