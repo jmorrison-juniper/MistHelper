@@ -2665,6 +2665,62 @@ def get_csv_file_path(filename):
     # Otherwise, place it in the data directory
     return os.path.join(data_dir, filename)
 
+def is_running_in_container():
+    """
+    Detect if the application is running inside a container.
+    
+    This function checks multiple indicators to determine container execution:
+    - Presence of /.dockerenv file (Docker)
+    - Container-specific environment variables
+    - cgroup information indicating container runtime
+    
+    Returns:
+        bool: True if running in container, False otherwise
+    """
+    try:
+        # Check for Docker environment file
+        if os.path.exists('/.dockerenv'):
+            return True
+        
+        # Check for common container environment variables
+        container_env_vars = [
+            'CONTAINER',
+            'DOCKER_CONTAINER', 
+            'PODMAN_CONTAINER',
+            'KUBERNETES_SERVICE_HOST',
+            'CONTAINERD_NAMESPACE'
+        ]
+        
+        for env_var in container_env_vars:
+            if os.environ.get(env_var):
+                return True
+        
+        # Check cgroup information for container indicators
+        try:
+            with open('/proc/1/cgroup', 'r') as f:
+                cgroup_content = f.read()
+                container_indicators = ['docker', 'containerd', 'podman', 'lxc']
+                if any(indicator in cgroup_content.lower() for indicator in container_indicators):
+                    return True
+        except (FileNotFoundError, PermissionError):
+            # /proc/1/cgroup not accessible (likely not Linux or no permissions)
+            pass
+        
+        # Check if running as user 'misthelper' which is our container user
+        try:
+            import pwd
+            current_user = pwd.getpwuid(os.getuid()).pw_name
+            if current_user == 'misthelper':
+                return True
+        except (ImportError, KeyError, OSError):
+            # pwd module not available or getuid failed
+            pass
+            
+    except Exception as e:
+        logging.debug(f"Container detection failed: {e}")
+    
+    return False
+
 def validate_site_id(site_id, function_name="unknown"):
     """
     Validates that site_id is not None or empty before making API calls.
@@ -19014,39 +19070,177 @@ def ssh_runner_main():
 
 
 def ssh_runner_interactive():
-    """SSH Runner wrapper for menu system integration - runs with auto-detection"""
+    """SSH Runner wrapper for menu system integration - runs with auto-detection and interactive prompts"""
     try:
         print("\n>> Enhanced SSH Command Runner")
         print("=" * 60)
         
-        # Create a mock args object that enables auto-detection behavior
+        # Get global CLI args to check for --no-env flag
+        cli_args = globals().get('args') if 'args' in globals() else None
+        no_env_flag = cli_args.no_env if cli_args and hasattr(cli_args, 'no_env') else False
+        
+        # Try to load .env configuration first
+        env_config = {}
+        if not no_env_flag:
+            env_config = EnhancedSSHRunner.load_ssh_config_from_env()
+        
+        # Determine what we have and what we need
+        hosts = env_config.get('hosts', [])
+        username = env_config.get('username')
+        password = env_config.get('password')
+        commands = env_config.get('commands', [])
+        
+        # Interactive prompts for missing required data
+        missing_data = []
+        
+        # Check for hosts
+        if not hosts:
+            missing_data.append("SSH hosts")
+            try:
+                host_input = input("Enter SSH host(s) (comma-separated for multiple): ").strip()
+                if host_input:
+                    hosts = [h.strip() for h in host_input.split(',') if h.strip()]
+                else:
+                    print("✗ SSH host is required")
+                    return False
+            except (EOFError, KeyboardInterrupt):
+                print("\n[CANCELLED] Operation cancelled by user")
+                return False
+        
+        # Check for username
+        if not username:
+            missing_data.append("SSH username")
+            try:
+                username = input("Enter SSH username: ").strip()
+                if not username:
+                    print("✗ SSH username is required")
+                    return False
+            except (EOFError, KeyboardInterrupt):
+                print("\n[CANCELLED] Operation cancelled by user")
+                return False
+        
+        # Check for password
+        if not password:
+            missing_data.append("SSH password")
+            try:
+                import getpass
+                password = getpass.getpass("Enter SSH password: ")
+                if not password:
+                    print("✗ SSH password is required")
+                    return False
+            except (EOFError, KeyboardInterrupt):
+                print("\n[CANCELLED] Operation cancelled by user")
+                return False
+        
+        # Check for commands
+        if not commands:
+            print("\nNo commands configured. You can:")
+            print("1. Enter a single command now")
+            print("2. Use default commands from data/SSH_COMMANDS.CSV (if available)")
+            try:
+                choice = input("Enter command or press Enter for CSV fallback: ").strip()
+                if choice:
+                    commands = [choice]
+            except (EOFError, KeyboardInterrupt):
+                print("\n[CANCELLED] Operation cancelled by user")
+                return False
+        
+        # Show summary of what will be executed
+        if missing_data:
+            print(f"\n★ Interactively provided: {', '.join(missing_data)}")
+        
+        print(f"★ Target hosts: {', '.join(hosts)}")
+        print(f"★ Username: {username}")
+        print(f"★ Commands: {len(commands)} command(s)")
+        if commands:
+            for idx, cmd in enumerate(commands, 1):
+                print(f"  {idx}. {cmd}")
+        
+        # Create a mock args object with the collected data
         class MockArgs:
-            def __init__(self):
-                self.interactive = False  # Set to False to enable auto-detection
-                self.hostname = None      # Will be auto-detected from .env
-                self.username = None      # Will be auto-detected from .env
-                self.password = None      # Will be auto-detected from .env
-                self.command = None       # Will be auto-detected from CSV
+            def __init__(self, hosts, username, password, commands, no_env_setting):
+                self.interactive = False
+                self.hostname = hosts[0] if len(hosts) == 1 else None  # Single host mode
+                self.username = username
+                self.password = None  # Never pass password via args for security - use env_config
+                self.command = commands[0] if len(commands) == 1 else None  # Single command mode
                 self.port = 22
                 self.timeout = 30
                 self.shell = True
                 self.no_shell = False
-                self.no_env = False       # Enable .env file loading
+                # SECURITY: Force no_env=False when we have interactive data to enable env_config loading
+                self.no_env = False  # Always enable env loading when we have interactive data
                 self.log_level = 'INFO'
                 self.debug = False
                 self.max_threads = None
                 self.secure = False
+                # For multi-host scenarios, we'll need to handle this differently
+                self._hosts = hosts
+                self._commands = commands
         
-        # Run the SSH runner with auto-detection
-        args = MockArgs()
-        ssh_runner_success = EnhancedSSHRunner.run_application(args)
+        # Create args with collected data
+        args = MockArgs(hosts, username, password, commands, no_env_flag)
         
-        if ssh_runner_success:
-            print("\n[OK] SSH runner completed successfully")
-        else:
-            print("\n[ERROR] SSH runner completed with errors")
+        # SECURITY: For interactive mode, we need to override the env_config loading
+        # to include the interactively-collected password. We'll temporarily patch
+        # the load_ssh_config_from_env method to return our interactive data.
+        original_load_method = EnhancedSSHRunner.load_ssh_config_from_env
+        
+        def mock_load_ssh_config():
+            """Return our interactively collected configuration"""
+            return {
+                'hosts': hosts,
+                'username': username,
+                'password': password,  # This is the securely collected password
+                'commands': commands
+            }
+        
+        try:
+            # Temporarily replace the env loader with our interactive data
+            EnhancedSSHRunner.load_ssh_config_from_env = mock_load_ssh_config
+        
+            # Handle multi-host execution if needed
+            if len(hosts) > 1 or len(commands) > 1:
+                print(f"\n★ Executing {len(commands)} command(s) on {len(hosts)} host(s)")
+                
+                # Use the EnhancedSSHRunner's multi-host execution directly
+                config = {
+                    'hosts': hosts,
+                    'username': username,
+                    'password': password,
+                    'commands': commands,
+                    'port': 22,
+                    'timeout': 30,
+                    'shell_mode': True,
+                    'max_threads': min(len(hosts), 4)  # Reasonable thread limit
+                }
+                
+                summary = EnhancedSSHRunner.execute_ssh_commands_multi_host(config)
+                
+                # Display results
+                successful = sum(1 for result in summary.values() if result.get('success', False))
+                total = len(summary)
+                
+                print(f"\n★ Execution Summary: {successful}/{total} hosts successful")
+                for host, result in summary.items():
+                    status = "✓" if result.get('success', False) else "✗"
+                    print(f"  {status} {host}: {result.get('status', 'Unknown')}")
+                
+                return successful > 0
+            else:
+                # Single host/command - use standard execution
+                ssh_runner_success = EnhancedSSHRunner.run_application(args)
+                
+                if ssh_runner_success:
+                    print("\n[OK] SSH runner completed successfully")
+                else:
+                    print("\n[ERROR] SSH runner completed with errors")
+                
+                return ssh_runner_success
             
-        return ssh_runner_success
+        finally:
+            # Always restore the original method for security
+            EnhancedSSHRunner.load_ssh_config_from_env = original_load_method
         
     except KeyboardInterrupt:
         print("\n[INTERRUPT] Operation cancelled by user")
@@ -19058,6 +19252,11 @@ def ssh_runner_interactive():
 
 
 menu_actions = {
+    # ==============================
+    # SYSTEM OPERATIONS
+    # ==============================
+    "0": (lambda: sys.exit(0), "Exit MistHelper"),
+    
     # ==============================
     # READ-ONLY OPERATIONS
     # ==============================
@@ -21842,7 +22041,11 @@ def main():
     parser.add_argument("--test", action="store_true", help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)")
     parser.add_argument("--address-check", action="store_true", help="Enable external address validation using Nominatim API for address comparison operations")
     parser.add_argument("--skip-ssl-verify", action="store_true", help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)")
+    parser.add_argument("--no-env", action="store_true", help="Disable .env file loading for SSH operations (require explicit command line parameters)")
     args = parser.parse_args()
+
+    # Store args globally for menu functions to access CLI flags
+    globals()['args'] = args
 
     # ------------------------------------------------------------------------
     # Establish global FAST_MODE_ENABLED flag for systematic test harness
@@ -22018,28 +22221,75 @@ def main():
 
     # --- Interactive Menu Fallback ---
     logging.info("No CLI arguments detected, running in interactive menu mode.")
-    print("\nAvailable Options:")
-    for key, (func, description) in menu_actions.items():
-        print(f"{key}: {description}")
-    iwant = input("\nEnter your selection number now: ").strip()
-    selected = menu_actions.get(iwant)
-    if selected:
-        func, _ = selected
-        logging.info(f"User selected menu option '{iwant}'. Executing associated function.")
-        try:
-            func()
-            logging.info("Interactive menu execution complete.")
-            logging.debug("EXIT: main() - interactive success")
-            sys.exit(0)
-        except Exception as e:
-            logging.error(f"Error executing menu option '{iwant}': {e}")
-            logging.debug("EXIT: main() - interactive error")
-            sys.exit(1)
-    else:
-        logging.error(f"Invalid selection '{iwant}' entered by user.")
-        print("Invalid selection. Please try again.")
-        logging.debug("EXIT: main() - invalid selection")
-        sys.exit(1)
+    
+    # Check if running in container for different behavior
+    container_mode = is_running_in_container()
+    if container_mode:
+        logging.info("Container mode detected - enabling continuous menu loop")
+        print("[CONTAINER MODE] MistHelper will return to menu after each operation")
+        print("                 Use option 0 to exit the container")
+    
+    # Container mode: continuous menu loop, Direct mode: single execution
+    while True:
+        print("\nAvailable Options:")
+        # Sort menu options numerically for proper presentation order
+        sorted_menu_keys = sorted(menu_actions.keys(), key=lambda x: float(x.replace('a', '.1')))
+        for key in sorted_menu_keys:
+            func, description = menu_actions[key]
+            print(f"{key}: {description}")
+        
+        iwant = input("\nEnter your selection number now: ").strip()
+        selected = menu_actions.get(iwant)
+        
+        if selected:
+            func, _ = selected
+            logging.info(f"User selected menu option '{iwant}'. Executing associated function.")
+            
+            try:
+                # Special handling for exit option
+                if iwant == "0":
+                    logging.info("Exit option selected by user.")
+                    logging.debug("EXIT: main() - user requested exit")
+                    sys.exit(0)
+                
+                func()
+                logging.info(f"Menu option '{iwant}' execution complete.")
+                
+                # In container mode, return to menu. In direct mode, exit.
+                if not container_mode:
+                    logging.debug("EXIT: main() - interactive success")
+                    sys.exit(0)
+                else:
+                    print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")
+                    print("=" * 60)
+                    
+            except KeyboardInterrupt:
+                logging.info("Operation interrupted by user (Ctrl+C)")
+                if container_mode:
+                    print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")
+                    print("=" * 60)
+                    continue
+                else:
+                    logging.debug("EXIT: main() - user interrupt")
+                    sys.exit(130)
+                    
+            except Exception as e:
+                logging.error(f"Error executing menu option '{iwant}': {e}")
+                if container_mode:
+                    print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {e}")
+                    print("Returning to menu...")
+                    print("=" * 60)
+                    continue
+                else:
+                    logging.debug("EXIT: main() - interactive error")
+                    sys.exit(1)
+        else:
+            logging.error(f"Invalid selection '{iwant}' entered by user.")
+            print("Invalid selection. Please try again.")
+            if not container_mode:
+                logging.debug("EXIT: main() - invalid selection")
+                sys.exit(1)
+            # In container mode, just continue the loop for another attempt
 
 if __name__ == "__main__":
     try:

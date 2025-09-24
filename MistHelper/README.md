@@ -2,11 +2,11 @@
 
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-</div>
-
-**Operation Count:** The code currently defines 91 actionable menu entries (1–4, 11–89, 90–98) with some gaps for future expansion.
+**Operation Count:** The code currently defines 97 actionable menu entries (1–4, 11–89, 90–98) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+
+**NEW: SSH Remote Access** - MistHelper now supports containerized deployment with SSH server for remote access. Connect via SSH to run MistHelper in isolated sessions with automatic session management and multi-user support.
 
 ---
 ## 1. Why This Rewrite?
@@ -17,7 +17,7 @@ The previous README was partially outdated. Key discrepancies corrected here:
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
 5. WIP Operations: 63–65 are explicitly flagged in code as work‑in‑progress and may change schema/output without notice.
 
-This README reflects the current actual logic inside `MistHelper.py` (≈19k lines) as of 2025‑09‑18.
+This README reflects the current actual logic inside `MistHelper.py` (≈22k lines) as of 2025‑09‑23.
 
 ---
 ## 2. Core Capabilities
@@ -119,16 +119,16 @@ python MistHelper.py
 Run specific operations directly:
 ```powershell
 # Export organization inventory
-python MistHelper.py --menu 11
+python MistHelper.py -M 11
 
 # Export sites information  
-python MistHelper.py --menu 12
+python MistHelper.py -M 12
 
 # Run gateway synthetic tests (fast mode)
-python MistHelper.py --menu 16 --fast
+python MistHelper.py -M 16 --fast
 
 # Export data to SQLite database
-python MistHelper.py --menu 11 --output-format sqlite
+python MistHelper.py -M 11 --output-format sqlite
 ```
 
 ### Test Mode (Verify Everything Works)
@@ -143,13 +143,13 @@ python MistHelper.py --test
 python MistHelper.py --help
 
 # Run with detailed logging for troubleshooting
-python MistHelper.py --menu 11 --debug
+python MistHelper.py -M 11 --debug
 
 # SSH into devices (requires SSH configuration in .env)
-python MistHelper.py --menu 97
+python MistHelper.py -M 97
 
 # Fast mode for large organizations
-python MistHelper.py --menu 16 --fast
+python MistHelper.py -M 16 --fast
 ```
 
 ### Working with Output Files
@@ -172,22 +172,29 @@ SELECT COUNT(*) FROM listOrgSites;
 Primary flags (from argparse block near end of file):
 | Flag | Purpose |
 |------|---------|
-| `--menu/-M <id>` | Execute a single menu action non‑interactively |
+| `-O, --org` | Organization ID |
+| `-M, --menu <id>` | Execute a single menu action non‑interactively |
+| `-S, --site` | Human-readable site name |
+| `-D, --device` | Human-readable device name |
+| `-P, --port` | Port ID |
 | `--output-format {csv,sqlite}` | Select output backend (default csv) |
 | `--test` | Run systematic safe‑operation test suite |
 | `--fast` | Enable fast mode heuristics (threading & reduced retries) |
 | `--skip-deps` | Skip dependency auto‑install / upgrade phase |
-| `--debug` | Elevate logging for troubleshooting |
-| `--address-check` | (If implemented) enable address normalization checks |
+| `--debug` | Enable debug output (includes detailed table data in logs) |
+| `--delay <seconds>` | Fixed delay between loop iterations (in seconds) |
+| `--address-check` | Enable external address validation using Nominatim API |
+| `--skip-ssl-verify` | Skip SSL certificate verification for external API calls |
+| `--no-env` | Disable .env file loading for SSH operations |
 
 Examples (PowerShell friendly):
 ```powershell
-python .\MistHelper.py --menu 11 --output-format sqlite
-python .\MistHelper.py --menu 13 --output-format sqlite --fast
+python .\MistHelper.py -M 11 --output-format sqlite
+python .\MistHelper.py -M 13 --output-format sqlite --fast
 python .\MistHelper.py --test --output-format sqlite --debug
 ```
 
-Interactive fallback occurs if no `--menu` is supplied.
+Interactive fallback occurs if no `-M/--menu` is supplied.
 
 ---
 ## 7. Output & Data Model
@@ -303,11 +310,14 @@ If `usaddress-scourgify` and `rapidfuzz` are installed, address comparison for i
 Before extending destructive workflows, replicate existing confirmation pattern and add SECURITY comments as per `agents.md`.
 
 ---
-## 14. Containers
+## 14. Containers & SSH Remote Access
+
+### Container Build Strategies
 Two build strategies:
 1. `Containerfile` (simple, pip only, SSL bypass env overrides for constrained corporate PKI)
 2. `Dockerfile` (multi‑path UV attempt + HEALTHCHECK)
 
+### Local Container Usage
 Compose example (interactive shell):
 ```bash
 docker compose build
@@ -318,6 +328,77 @@ Podman helper (auto build + run):
 ```powershell
 python .\run-misthelper.py
 ```
+
+### SSH Remote Access (NEW)
+MistHelper now supports SSH server deployment for remote access with automatic session management:
+
+#### Quick Start - SSH Server
+```powershell
+# Build and start SSH server container
+python .\run-misthelper.py --ssh
+
+# Connect from any SSH client
+ssh -p 2200 misthelper@localhost
+# Password: misthelper123!
+```
+
+#### SSH Server Features
+- **Automatic Session Management**: Each SSH connection creates an isolated MistHelper session
+- **Multi-User Support**: Multiple users can connect simultaneously with session isolation
+- **Session Persistence**: Sessions persist until you explicitly exit
+- **Auto-Restart**: If MistHelper crashes, the session automatically restarts
+- **ForceCommand Architecture**: Direct launch into MistHelper (no shell access for security)
+
+#### SSH Connection Details
+| Setting | Value | Notes |
+|---------|-------|-------|
+| **Port** | 2200 | Avoids conflict with system SSH (port 22) |
+| **Username** | misthelper | Fixed username for all connections |
+| **Password** | misthelper123! | Default password (change in production) |
+| **Host Keys** | Auto-generated | Unique per container instance |
+
+#### SSH Session Management
+Each SSH connection automatically:
+1. Creates a unique session ID based on connection details
+2. Sets up an isolated working directory (`/app/sessions/session_<id>/`)
+3. Launches MistHelper with container detection
+4. Handles clean exit and session cleanup
+5. Provides session restart on unexpected termination
+
+#### SSH Usage Examples
+```bash
+# Connect and run interactively
+ssh -p 2200 misthelper@localhost
+
+# Connect with specific SSH client settings
+ssh -p 2200 -o StrictHostKeyChecking=no misthelper@localhost
+
+# From Windows with built-in SSH client
+ssh -p 2200 misthelper@127.0.0.1
+```
+
+#### SSH Architecture Details
+- **ForceCommand**: SSH forces execution of MistHelper (no shell access)
+- **Session Isolation**: Each connection gets independent session directory
+- **Container Detection**: MistHelper automatically detects SSH container mode
+- **Session Cleanup**: Automatic cleanup on connection termination
+- **Multi-User**: Supports multiple simultaneous SSH connections
+
+#### SSH Security Considerations
+- SSH server runs on non-standard port 2200
+- ForceCommand prevents shell access (application-only access)
+- Session directories are isolated between connections
+- Default credentials should be changed in production environments
+- Host key verification recommended for production use
+
+#### SSH Troubleshooting
+| Issue | Solution |
+|-------|----------|
+| Connection refused | Ensure container is running: `docker ps` |
+| Wrong password | Default is `misthelper123!` |
+| Permission denied | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
+| Session not starting | Check container logs: `docker logs <container>` |
+| Port conflict | Ensure port 2200 is available |
 
 Persisted artifacts appear under local `data/` bind mount.
 
@@ -344,6 +425,11 @@ Coding Style Essentials:
 | SQLite table missing | First run not completed or permission issue | Re-run with `--output-format sqlite` and check write perms on `data/` |
 | SSH runner fails | Missing `paramiko` or creds | Ensure `paramiko` installed; add SSH vars to `.env` |
 | WIP export fails | Endpoint schema drift | Treat 63–65 as non-stable; review code before relying |
+| **SSH connection refused** | **Container not running** | **Check `docker ps`, restart with `python run-misthelper.py --ssh`** |
+| **SSH wrong password** | **Using incorrect credentials** | **Default password is `misthelper123!`** |
+| **SSH session won't start** | **ForceCommand or session issues** | **Check container logs, verify SSH server is running** |
+| **SSH port conflict** | **Port 2200 already in use** | **Stop other services on port 2200 or modify container config** |
+| **Multiple SSH sessions interfering** | **Session isolation problem** | **Each connection should get unique session ID - check logs** |
 
 ---
 ## 17. Contributing

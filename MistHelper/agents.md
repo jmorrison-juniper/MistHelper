@@ -33,7 +33,35 @@ If adding new features: include similar inline SECURITY comments for potentially
 If introducing new persistent artifacts, prefer storing them under `data/` unless they are time-series or operational logs (then use a dedicated folder).
 
 ---
-## 15. Do's and Don'ts
+## 1. Mist API Ecosystem Reference
+MistHelper depends on the `mistapi` Python package authored by Thomas Munzer (GitHub: tmunzer, ID: 5295774). Understanding the broader ecosystem helps with development decisions and potential integration opportunities.
+
+### Core Dependencies
+| Package | Author | Repository | Purpose |
+|---------|---------|-----------|---------|
+| mistapi | Thomas Munzer | tmunzer/mistapi_python | Primary Mist API SDK - core dependency for all API operations |
+
+### Related Ecosystem Projects (Thomas Munzer)
+| Repository | Stars | Description | Relevance to MistHelper |
+|------------|-------|-------------|------------------------|
+| mist_library | 45 | Collection of Python scripts for Mist operations | Reference implementations and examples |
+| mistapi_python | 11 | Core Python SDK for Mist API | Direct dependency - source of our API client |
+| mist-utils | Various | Additional utilities and tools | Potential feature inspiration |
+
+### Integration Notes
+- Thomas Munzer maintains the core mistapi package that powers MistHelper's API functionality
+- His mist_library repository contains reference implementations that can guide feature development
+- When adding new API operations, check Thomas's repositories for existing patterns and best practices
+- Consider contributing improvements back to the mistapi package when beneficial for the broader community
+
+### Future Development Considerations
+- Monitor Thomas Munzer's repositories for API updates and new features
+- Reference his implementation patterns when extending MistHelper functionality
+- Consider collaboration opportunities for shared tooling needs
+- Maintain compatibility with upstream mistapi package changes
+
+---
+## 2. Architectural Concepts
 | Do | Don't |
 |----|-------|
 | Use existing validators and logging patterns | Don't print raw exceptions without context |
@@ -56,7 +84,7 @@ If introducing new persistent artifacts, prefer storing them under `data/` unles
 - Configuration: `.env` (never commit credentials) – supports Mist API + SSH credentials + tuning flags.
 
 
-## 2. Architectural Concepts
+## 3. Architectural Concepts
 | Area | Pattern | Notes |
 |------|---------|-------|
 | API Operations | Menu-based dispatch | Each menu option corresponds to a data retrieval/export routine. |
@@ -148,7 +176,7 @@ Checklist for DB table creation:
 - Consistent timestamp format (ISO 8601 preferred if present).  
 
 
-## 10. Validation & Resource Limits Summary
+## 9. Validation & Resource Limits Summary
 Bullet summary:
 - Thread count: Max CPU thread count.
 - Shell read no-data timeout: Approximately 3 seconds after last data; total maximum 120 seconds.
@@ -157,27 +185,27 @@ Bullet summary:
 Maintain or lower limits unless there's a measured requirement; justify increases.
 
 ---
-## 11. Performance & Stability Considerations
+## 10. Performance & Stability Considerations
 - Avoid blocking UI/CLI with long synchronous loops without progress indication.
 - For large API enumerations: batch requests + respect rate limiting.
 - For multi-host SSH: ensure executor shutdown always occurs (use context manager as current code does).
 - Memory: stream large outputs instead of accumulating if adding huge exports (>100MB) unless compression planned.
 
 ---
-## 12. Dependency Management
+## 11. Dependency Management
 - Dependencies declared in `requirements.txt`—retain version lower bounds. 
 - Avoid adding heavy dependencies unless critical (risk: container build complexity).
 - Use UV to install or update if update is availible. Use pip to install UV if UV is missing.
 - If adding: update README (Installation + Advanced Features) and note any platform caveats.
 
 ---
-## 13. Testing Strategy (Current State & Suggestions)
+## 12. Testing Strategy (Current State & Suggestions)
 Current: Manual/systematic `--test` mode for non-destructive operations.  
 Suggested enhancements (agents MAY implement gradually):
 - Add lightweight unit tests for validators (hostname, port, command parsing).  
 
 ---
-## 14. Common Error Patterns & Handling
+## 13. Common Error Patterns & Handling
 Structured list (add entries as they are discovered; keep concise and action focused):
 - Scenario: (Example placeholder) API rate limit exceeded.
   - Current Handling: Adaptive delay logic increases wait based on recent failures.
@@ -197,14 +225,14 @@ Add new scenarios following the same three-line pattern for clarity and consiste
 
 
 ---
-## 16. Glossary
+## 14. Glossary
 - "Natural Key": Business meaningful primary key (e.g., device ID from API).  
 - "Fallback CSV": The `data/SSH_COMMANDS.CSV` list used if no command specified.  
 - "Shell Mode": Paramiko interactive channel for network devices requiring paginated output handling.  
 - "Direct Mode": `exec_command` execution without interactive shell.  
 
 ---
-## 17. Agent Action Checklist
+## 15. Agent Action Checklist
 Before starting a change:
 - [ ] Identify all references (use project-wide search) for symbols you're modifying.
 - [ ] Confirm no secrets will be exposed.
@@ -226,7 +254,7 @@ After change:
 
 - Logging: Add structured JSON log option for automation contexts.
 
-## 21. Safe Refactor Strategy
+## 16. Safe Refactor Strategy
 - Incremental “measure twice, cut once” approach:
 - Isolate: Extract a cohesive group (e.g., address parsing) into a new module; preserve public signatures.
 - Cover: Add minimal tests (happy path + 1 edge case) before changing logic.
@@ -235,7 +263,8 @@ After change:
 - One intent per PR: do not mix feature + refactor.
 
 
-Emojie to replacement character map:
+---
+## 17. Emoji to ASCII Replacement Character Map
 
 Character,Unicode,Emoji Replacement,Usage Context
 •,U+2022,🔘,"Bullet point, status indicator"
@@ -278,7 +307,7 @@ Character,Unicode,Emoji Replacement,Usage Context
 
 
 ---
-## 23. Summary
+## 18. Summary
 - Follow checklists above to maintain reliability. 
 - Emphasize clarity, explicit safety prompts, and minimal surface area changes. 
 - If uncertain: log intent, add a narrow TODO, proceed conservatively.
