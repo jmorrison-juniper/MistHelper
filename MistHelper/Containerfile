@@ -161,12 +161,46 @@ USER root
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
     echo '' >> /start.sh && \
-    echo '# Start SSH daemon' >> /start.sh && \
+    echo '# -----------------------------------------------------------------' >> /start.sh && \
+    echo '# Dynamic SSH user/password provisioning (runtime, not build time)' >> /start.sh && \
+    echo '# SECURITY: Password never echoed. Username may be echoed (not secret).' >> /start.sh && \
+    echo '# Variables honored if provided:' >> /start.sh && \
+    echo '#   MISTHELPER_SSH_USERNAME  (defaults to misthelper)' >> /start.sh && \
+    echo '#   MISTHELPER_SSH_PASSWORD  (defaults to build-time password if omitted)' >> /start.sh && \
+    echo '# -----------------------------------------------------------------' >> /start.sh && \
+    echo 'USERNAME="${MISTHELPER_SSH_USERNAME:-misthelper}"' >> /start.sh && \
+    echo 'PASSWORD="${MISTHELPER_SSH_PASSWORD:-}"' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# If a different username is requested, create it (idempotent).' >> /start.sh && \
+    echo 'if ! id "$USERNAME" >/dev/null 2>&1; then' >> /start.sh && \
+    echo '  echo "[SSH] Creating user $USERNAME"' >> /start.sh && \
+    echo '  useradd -m -s /bin/bash "$USERNAME" || true' >> /start.sh && \
+    echo '  usermod -aG sudo "$USERNAME" || true' >> /start.sh && \
+    echo '  # Ensure /app readable; retain original ownership on writable paths' >> /start.sh && \
+    echo '  chown -R "$USERNAME" /app/data 2>/dev/null || true' >> /start.sh && \
+    echo 'fi' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Update password if provided (non-empty).' >> /start.sh && \
+    echo 'if [ -n "$PASSWORD" ]; then' >> /start.sh && \
+    echo '  echo "$USERNAME:$PASSWORD" | chpasswd' >> /start.sh && \
+    echo '  echo "[SSH] Applied runtime password for $USERNAME"' >> /start.sh && \
+    echo 'else' >> /start.sh && \
+    echo '  echo "[SSH] No runtime password override provided; using build-time password."' >> /start.sh && \
+    echo 'fi' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Adjust AllowUsers directive to reflect chosen username.' >> /start.sh && \
+    echo 'if [ -f /etc/ssh/sshd_config.d/misthelper.conf ]; then' >> /start.sh && \
+    echo '  if grep -q "^AllowUsers " /etc/ssh/sshd_config.d/misthelper.conf; then' >> /start.sh && \
+    echo '    sed -i "s/^AllowUsers .*/AllowUsers $USERNAME/" /etc/ssh/sshd_config.d/misthelper.conf' >> /start.sh && \
+    echo '  else' >> /start.sh && \
+    echo '    echo "AllowUsers $USERNAME" >> /etc/ssh/sshd_config.d/misthelper.conf' >> /start.sh && \
+    echo '  fi' >> /start.sh && \
+    echo 'fi' >> /start.sh && \
+    echo '' >> /start.sh && \
     echo 'echo "[SSH] Starting MistHelper SSH Service on port 2200..."' >> /start.sh && \
-    echo 'echo "[SSH] Each SSH connection will get its own MistHelper session"' >> /start.sh && \
-    echo 'echo "[SSH] Connect with: ssh -p 2200 misthelper@<container-ip>"' >> /start.sh && \
-    echo 'echo "[SSH] Default password: misthelper123!"' >> /start.sh && \
-    echo 'echo "[SSH] Use option 0 in MistHelper to disconnect"' >> /start.sh && \
+    echo 'echo "[SSH] Each SSH connection spawns its own MistHelper session."' >> /start.sh && \
+    echo 'echo "[SSH] Connect with: ssh -p 2200 $USERNAME@<container-ip>"' >> /start.sh && \
+    echo 'echo "[SSH] Use option 0 in MistHelper to disconnect."' >> /start.sh && \
     echo '' >> /start.sh && \
     echo '# Run SSH daemon in foreground' >> /start.sh && \
     echo 'exec /usr/sbin/sshd -D' >> /start.sh && \

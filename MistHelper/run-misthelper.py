@@ -21,6 +21,49 @@ import shutil
 import platform
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Local .env loader (lightweight, no external dependency)
+# SECURITY: Does NOT log values; only counts variables applied. Existing
+# environment variables are NOT overridden unless explicitly requested.
+# ---------------------------------------------------------------------------
+def load_local_env_file(env_file_path: Path, override: bool = False) -> int:
+    """Parse a simple .env file and inject variables into os.environ.
+
+    Rules:
+        - Lines starting with '#' or blank lines are ignored.
+        - First '=' splits key and value; remaining '=' retained in value.
+        - Surrounding single or double quotes are stripped from value.
+        - Existing environment variables are preserved unless override=True.
+        - Whitespace around key and value is trimmed.
+    Returns:
+        Count of variables newly set (or overwritten if override=True).
+    """
+    applied_count = 0
+    try:
+        if not env_file_path.exists():
+            return 0
+        with env_file_path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue  # Skip malformed line silently (safety: do not guess)
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                # Strip symmetrical quotes
+                if (value.startswith("\"") and value.endswith("\"")) or (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                if not override and key in os.environ:
+                    continue
+                # SECURITY: Do NOT log secret values
+                os.environ[key] = value
+                applied_count += 1
+    except Exception as exc:  # Broad catch to avoid breaking caller for env parsing issues
+        print(f"[WARNING] Failed to parse .env file '{env_file_path}': {exc}")
+    return applied_count
+
 # Engine detection results will be stored here after initialization
 CONTAINER_ENGINE_EXECUTABLE = None
 CONTAINER_ENGINE_NAME = None  # "podman" or "docker"
@@ -184,6 +227,13 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
         return False
     print(f"[SUCCESS] Image built successfully with {CONTAINER_ENGINE_NAME}.")
 
+    # Load .env into current process environment (unless explicitly disabled)
+    if not no_env:
+        applied = load_local_env_file(Path("./.env"), override=False)
+        print(f"[ENV] Loaded .env file ({applied} variables applied, override=False)")
+    else:
+        print("[ENV] Skipping .env load due to --no-env flag")
+
     # Configuration summary
     print("[RUN] Launching MistHelper container...")
     print(f"[CONFIG] Output format: {output_format}")
@@ -247,13 +297,55 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
         "AUTO_UPGRADE_DEPENDENCIES": "false",
         "PYTHONPATH": "/app",
     }
-    for k, v in env_vars.items():
-        run_cmd.extend(["-e", f"{k}={v}"])
+    # Defer injecting env (-e flags) until after optional SSH credential enrichment.
 
     # For SSH mode we need -d (detached) BEFORE image reference
+    ssh_username_masked_for_later = None  # Stored for final connection instructions
     if ssh_mode:
         run_cmd.append("-d")
 
+
+    # ------------------------------------------------------------------
+    # SSH credential handling (read from environment / .env)
+    # SECURITY: We NEVER print actual credential values. Mask length only.
+    # Variable precedence (first non-empty wins):
+    #   Username: MISTHELPER_SSH_USERNAME, SSH_USERNAME, fallback: 'misthelper'
+    #   Password: MISTHELPER_SSH_PASSWORD, SSH_PASSWORD, fallback: 'misthelper123!'
+    # These are only injected when ssh_mode=True.
+    # ------------------------------------------------------------------
+    if ssh_mode:
+        # SECURITY: SSH mode now REQUIRES explicit credentials. No defaults.
+        # Required variables (first form preferred):
+        #   MISTHELPER_SSH_USERNAME  (or SSH_USERNAME)
+        #   MISTHELPER_SSH_PASSWORD  (or SSH_PASSWORD)
+        # If either is missing or blank, we abort with clear instructions.
+        raw_user = os.environ.get("MISTHELPER_SSH_USERNAME") or os.environ.get("SSH_USERNAME") or ""
+        raw_pass = os.environ.get("MISTHELPER_SSH_PASSWORD") or os.environ.get("SSH_PASSWORD") or ""
+
+        if not raw_user.strip() or not raw_pass.strip():
+            print("[ERROR] Missing required SSH credentials for --ssh mode.")
+            print("[INFO] Set BOTH of the following in your .env (or environment):")
+            print("       MISTHELPER_SSH_USERNAME=youruser")
+            print("       MISTHELPER_SSH_PASSWORD=yourStrongPassword")
+            print("[REFERENCE] See agents.md section 'EnhancedSSHRunner Design Notes' for security guidance.")
+            print("[ABORT] Stopping before container launch to avoid insecure defaults.")
+            return False
+
+        ssh_username = raw_user.strip()
+        ssh_password = raw_pass.strip()
+
+        # Inject into container environment (not logged in cleartext)
+        env_vars["MISTHELPER_SSH_USERNAME"] = ssh_username
+        env_vars["MISTHELPER_SSH_PASSWORD"] = ssh_password
+
+        masked_user = ssh_username[:1] + "*" * (len(ssh_username) - 1)
+        print(f"[CONFIG] SSH username (masked): {masked_user}")
+        print(f"[CONFIG] SSH password (masked length): {len(ssh_password)} characters")
+        ssh_username_masked_for_later = ssh_username  # Username itself is not secret; display later
+
+    # Now that env_vars dict is finalized, inject them as -e flags.
+    for k, v in env_vars.items():
+        run_cmd.extend(["-e", f"{k}={v}"])
     # Add image name
     run_cmd.append("misthelper")
 
@@ -289,10 +381,12 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
         if result.returncode == 0:
             print("[SUCCESS] SSH container started.")
             if network_name == "host":
-                print("[INFO] Connect: ssh -p 2200 misthelper@<host-lan-ip>")
+                connect_user = ssh_username_masked_for_later or "<user>"
+                print(f"[INFO] Connect: ssh -p 2200 {connect_user}@<host-lan-ip>")
             else:
-                print("[INFO] Connect: ssh -p 2200 misthelper@localhost")
-            print("[INFO] Password: misthelper123!")
+                connect_user = ssh_username_masked_for_later or "<user>"
+                print(f"[INFO] Connect: ssh -p 2200 {connect_user}@localhost")
+            print("[INFO] Password is the value you supplied in MISTHELPER_SSH_PASSWORD (not displayed).")
         else:
             print("[ERROR] Failed to start SSH container.")
     else:
