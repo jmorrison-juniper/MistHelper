@@ -462,5 +462,22 @@ License: MIT (see `pyproject.toml`).
 Built for operational reliability and clarity in large enterprise / NOC contexts. See `agents.md` for internal safety and refactor guidance.
 
 ---
+## 21. Changelog
+
+### Version 25.09.25.14.30
+- **Fixed**: Menu option 78 (Generate support package) file path permissions - now properly writes to data/ directory
+- **Fixed**: Menu option 80 (ARP WebSocket output) file path permissions - now properly saves to data/ directory  
+- **Fixed**: Menu option 85 variable scope error - removed duplicate logging statement
+- **Fixed**: SSH logging operations - all SSH functions now use proper data/per-host-logs/ directory structure
+- **Enhanced**: Container security compliance - all file I/O operations now respect container volume mounting
+- **Verified**: Comprehensive network data capture functionality working correctly
+
+### Version 25.09.23.00.00
+- Initial comprehensive README rewrite to match current codebase
+- Added SSH remote access capabilities with containerized deployment
+- Enhanced menu operation documentation with current truth from code
+- Added systematic test mode and performance optimization features
+
+---
 **MistHelper** – Practical, transparent data operations for Juniper Mist Cloud.
 
