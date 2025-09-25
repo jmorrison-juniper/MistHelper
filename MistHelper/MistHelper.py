@@ -319,7 +319,10 @@ class GlobalImportManager:
         console_handler.setFormatter(console_formatter)
         
         # Create file handler with environment-specified level
-        file_handler = logging.FileHandler('script.log')
+        # Use data directory for log files to ensure write permissions in container
+        log_file_path = os.path.join("data", "script.log")
+        os.makedirs("data", exist_ok=True)  # Ensure data directory exists
+        file_handler = logging.FileHandler(log_file_path)
         file_handler.setLevel(file_log_level)
         file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(file_formatter)
@@ -1258,7 +1261,25 @@ class GlobalImportManager:
 # ============================================================================
 
 # File paths for configuration and data
-tuning_data_file = "tuning_data.json"
+# SECURITY / SAFETY: Place tuning data inside the data/ directory to avoid
+# permission issues when running as non-root inside a container with read-only
+# application root. The file is small and safe to persist across runs.
+def _get_tuning_data_file_path() -> str:
+    """Return full path to tuning data JSON stored in data/ directory.
+
+    Ensures the directory exists. Separated for future extension (e.g.,
+    namespacing by org or mode) without scattering path logic.
+    """
+    data_dir = os.path.join(os.getcwd(), "data")
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception as e:
+        # If directory creation fails, fall back to current working directory;
+        # logging deferred until logger configured.
+        return os.path.join(os.getcwd(), "tuning_data.json")
+    return os.path.join(data_dir, "tuning_data.json")
+
+tuning_data_file = _get_tuning_data_file_path()
 
 # API usage tracking cache
 _api_usage_cache = {
@@ -1734,12 +1755,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         'unique_constraints': [],
         'description': 'Site device statistics with composite key for metrics'
     },
-    'searchSiteClientStats': {
+    'listSiteWirelessClientsStats': {
         'type': 'composite_pk',
         'primary_key': ['client_mac', 'timestamp'],
         'indexes': ['client_mac', 'timestamp', 'site_id', 'device_id'],
         'unique_constraints': [],
-        'description': 'Site client statistics with composite key for metrics'
+        'description': 'Site wireless client statistics with composite key for metrics'
     },
     'searchOrgSwOrGwPorts': {
         'type': 'composite_pk',
@@ -1748,12 +1769,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         'unique_constraints': [],
         'description': 'Switch/gateway port statistics with composite key'
     },
-    'searchSitePortStats': {
+    'searchSiteSwOrGwPorts': {
         'type': 'composite_pk',
         'primary_key': ['device_id', 'port_id', 'timestamp'],
         'indexes': ['device_id', 'port_id', 'timestamp', 'site_id'],
         'unique_constraints': [],
-        'description': 'Site port statistics with composite key'
+        'description': 'Site switch/gateway port statistics with composite key'
     },
     'searchOrgPeerPathStats': {
         'type': 'composite_pk',
@@ -2666,59 +2687,90 @@ def get_csv_file_path(filename):
     return os.path.join(data_dir, filename)
 
 def is_running_in_container():
-    """
-    Detect if the application is running inside a container.
-    
-    This function checks multiple indicators to determine container execution:
-    - Presence of /.dockerenv file (Docker)
-    - Container-specific environment variables
-    - cgroup information indicating container runtime
-    
-    Returns:
-        bool: True if running in container, False otherwise
+    """Determine if execution appears to be inside a container.
+
+    Detection strategy is deliberately multi‑factor and conservative. A positive
+    result enables continuous interactive looping behavior. False negatives can
+    cause the menu to exit after one operation (observed issue when attaching
+    via SSH inside the container with a different runtime user name).
+
+    Order of checks (first positive returns immediately):
+      1. Explicit override environment variables:
+         - MISTHELPER_FORCE_CONTAINER_LOOP
+         - MISTHELPER_CONTAINER
+         Any of: '1','true','yes','on' (case‑insensitive)
+      2. Standard /.dockerenv sentinel file
+      3. Well-known container environment variables
+      4. cgroup markers
+      5. Runtime user name 'misthelper'
+      6. /app path detection with sshd presence
+
+    SECURITY: Only boolean enabling of loop behavior; no privileged actions.
     """
     try:
-        # Check for Docker environment file
+        true_values = {"1", "true", "yes", "on"}
+        # Explicit operator override (most reliable and fastest)
+        for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
+            value = os.environ.get(explicit_var, "").strip().lower()
+            if value in true_values:
+                logging.debug(f"Container detection: override via {explicit_var}={value}")
+                return True
+
+        # /.dockerenv sentinel
         if os.path.exists('/.dockerenv'):
+            logging.debug("Container detection: /.dockerenv present")
             return True
-        
-        # Check for common container environment variables
+
         container_env_vars = [
             'CONTAINER',
-            'DOCKER_CONTAINER', 
+            'DOCKER_CONTAINER',
             'PODMAN_CONTAINER',
             'KUBERNETES_SERVICE_HOST',
             'CONTAINERD_NAMESPACE'
         ]
-        
         for env_var in container_env_vars:
             if os.environ.get(env_var):
+                logging.debug(f"Container detection: environment variable {env_var} present")
                 return True
-        
-        # Check cgroup information for container indicators
+
+        # cgroup heuristic
         try:
-            with open('/proc/1/cgroup', 'r') as f:
-                cgroup_content = f.read()
-                container_indicators = ['docker', 'containerd', 'podman', 'lxc']
-                if any(indicator in cgroup_content.lower() for indicator in container_indicators):
-                    return True
+            with open('/proc/1/cgroup', 'r', encoding='utf-8', errors='ignore') as cgroup_file:
+                cgroup_content = cgroup_file.read().lower()
+                for indicator in ('docker', 'containerd', 'podman', 'lxc'):
+                    if indicator in cgroup_content:
+                        logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
+                        return True
         except (FileNotFoundError, PermissionError):
-            # /proc/1/cgroup not accessible (likely not Linux or no permissions)
+            # Not Linux or insufficient permissions; ignore silently
             pass
-        
-        # Check if running as user 'misthelper' which is our container user
+
+        # Runtime user name heuristic
         try:
-            import pwd
-            current_user = pwd.getpwuid(os.getuid()).pw_name
-            if current_user == 'misthelper':
+            import pwd  # Unix only
+            current_user_name = pwd.getpwuid(os.getuid()).pw_name
+            if current_user_name == 'misthelper':
+                logging.debug("Container detection: running as user 'misthelper'")
                 return True
-        except (ImportError, KeyError, OSError):
-            # pwd module not available or getuid failed
+        except Exception:
+            # Non‑Unix or lookup failure; treat as non‑container for this heuristic step
             pass
-            
-    except Exception as e:
-        logging.debug(f"Container detection failed: {e}")
+
+        # Heuristic: application installed in canonical container path /app and script present
+        try:
+            this_file_dir = os.path.abspath(os.path.dirname(__file__))
+            if this_file_dir.startswith('/app') and os.path.exists('/app/MistHelper.py'):
+                # Additional guard: presence of sshd in typical container location indicates container packaging
+                if os.path.exists('/usr/sbin/sshd'):
+                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")
+                    return True
+        except Exception:
+            pass
+    except Exception as container_detection_error:
+        logging.debug(f"Container detection failed with exception: {container_detection_error}")
     
+    # If we reach here, no container indicators were found
+    logging.debug("Container detection: no container indicators found - running in direct mode")
     return False
 
 def validate_site_id(site_id, function_name="unknown"):
@@ -4555,18 +4607,29 @@ def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs
 
         # Write processed data to output
         DataExporter.save_data_to_output(data, filename)
+        
+        # Determine the full file path for console output (matches CSV writer logic)
+        if not os.path.dirname(filename):
+            full_file_path = os.path.join("data", filename)
+        else:
+            full_file_path = filename
+            
+        print(f"! {len(data)} records exported to {full_file_path}")
         logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
 
-        # Display the data in a table
-        fields = get_all_unique_dict_keys(data)
-        table = PrettyTable()
-        table.field_names = fields
-        table.valign = "t"
-        for item in tqdm(data, desc="Processing", unit="record"):
-            row = [item.get(field, "") for field in table.field_names]
-            table.add_row(row)
-        print(table)
-        logging.info("Site data displayed in table format.")
+        # Display the data in a table (only in debug mode, otherwise just log summary)
+        if is_debug_mode():
+            fields = get_all_unique_dict_keys(data)
+            table = PrettyTable()
+            table.field_names = fields
+            table.valign = "t"
+            for item in tqdm(data, desc="Processing", unit="record"):
+                row = [item.get(field, "") for field in table.field_names]
+                table.add_row(row)
+            print(table)
+            logging.debug("Site data displayed in table format (debug mode).")
+        else:
+            logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
         
     except Exception as e:
         logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
@@ -6395,7 +6458,7 @@ def export_vpn_peer_stats_to_csv(fast: bool = False):
 def export_site_port_stats_to_csv():
     """Export port statistics for a specific site to SitePortStats.csv."""
     export_site_specific_data(
-        api_call=mistapi.api.v1.sites.stats.searchSitePortStats,
+        api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts,
         data_type="port stats",
         sort_key="mac"
     )
@@ -6551,7 +6614,7 @@ def export_site_clients_to_csv():
     
     # Fetch site client stats directly
     try:
-        response = mistapi.api.v1.sites.stats.searchSiteClientStats(apisession, site_id, limit=1000)
+        response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
         
         if rawdata:
@@ -8502,11 +8565,11 @@ def export_site_zones_to_csv():
     )
 
 def export_site_insights_to_csv():
-    """Export insights information for a specific site to SiteInsights.csv."""
+    """Export SLE (Service Level Experience) metrics insights for a specific site to SiteInsights.csv."""
     export_site_specific_data(
-        api_call=mistapi.api.v1.sites.insights.listSiteInsights,
-        data_type="insights",
-        sort_key="timestamp"
+        api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics,
+        data_type="sle_metrics_insights",
+        sort_key="name"
     )
 
 def continuous_data_collection_loop():
@@ -9847,7 +9910,9 @@ def write_support_data_to_csv(data, filename):
 
     logging.debug(f"Final CSV fieldnames: {fieldnames}")
 
-    with open(filename, mode='w', newline='', encoding='utf-8') as file:
+    # SECURITY: Use proper file path handling to ensure files go to data/ directory
+    csv_file_path = get_csv_file_path(filename)
+    with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)  # Create a CSV writer
         writer.writeheader()  # Write the header row
         row_count = 0
@@ -9855,9 +9920,9 @@ def write_support_data_to_csv(data, filename):
             for row in section:
                 writer.writerow(row)  # Write each row to the CSV file
                 row_count += 1
-        logging.info(f"Wrote {row_count} rows to {filename} for support package.")
+        logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
 
-    logging.info(f"Support package written to {filename}")  # Log completion of the file write
+    logging.info(f"Support package written to {csv_file_path}")  # Log completion of the file write
 
 def poll_marvis_actions():
     """
@@ -10941,7 +11006,12 @@ def _handle_ws_close(output_lines, debug=False):
 
 def export_arp_output_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
     try:
-        with open(txt_filename, "r", encoding="utf-8") as f:
+        # SECURITY: Use proper file path handling for all file operations
+        txt_file_path = get_csv_file_path(txt_filename)
+        csv1_path = get_csv_file_path(csv1)
+        csv2_path = get_csv_file_path(csv2)
+        
+        with open(txt_file_path, "r", encoding="utf-8") as f:
             raw_text = f.read()
 
         lines = raw_text.splitlines()
@@ -10958,25 +11028,27 @@ def export_arp_output_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_datase
                 if columns:
                     current_dataset.append(columns)
 
-        with open(csv1, 'w', newline='', encoding='utf-8') as f1:
+        with open(csv1_path, 'w', newline='', encoding='utf-8') as f1:
             writer = csv.writer(f1)
             writer.writerows(dataset1)
 
-        with open(csv2, 'w', newline='', encoding='utf-8') as f2:
+        with open(csv2_path, 'w', newline='', encoding='utf-8') as f2:
             writer = csv.writer(f2)
             writer.writerows(dataset2)
 
-        print(f"! Saved {len(dataset1)} rows to {csv1}")
-        print(f"! Saved {len(dataset2)} rows to {csv2}")
+        print(f"! Saved {len(dataset1)} rows to {csv1_path}")
+        print(f"! Saved {len(dataset2)} rows to {csv2_path}")
 
     except Exception as e:
         print(f"! Failed to export ARP output to CSV: {e}")
 
 def _save_output_to_file(compiled_output, filename="arp_output_raw.txt"):
     try:
-        with open(filename, "w", encoding="utf-8") as f:
+        # SECURITY: Use proper file path handling to ensure files go to data/ directory
+        file_path = get_csv_file_path(filename)
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(compiled_output)
-        logging.info(f"! ARP output saved to {filename}")
+        logging.info(f"! ARP output saved to {file_path}")
     except Exception as e:
         logging.error(f"! Failed to save ARP output to file: {e}")
 
@@ -11591,6 +11663,17 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
     """
     logging.debug(f"ENTRY: append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
     
+    # SECURITY: File path is forced into data/ directory unless caller provides an explicit path.
+    # This prevents creating arbitrary files in the application root (permission errors in container) or unsafe paths.
+    if filename == "delay_metrics.json":
+        try:
+            data_directory = "data"
+            os.makedirs(data_directory, exist_ok=True)
+            filename = os.path.join(data_directory, filename)
+        except Exception as directory_creation_error:
+            logging.error(f"File I/O: Failed to ensure data directory for delay metrics file: {directory_creation_error}")
+            # Fall back to original filename; subsequent write may fail but we continue safely.
+
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "delay_metrics": delay_metrics,
@@ -11967,8 +12050,8 @@ def export_combined_inventory_with_site_info():
     with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
         site_configs = list(csv.DictReader(f))
 
-    # Create a subfolder for weekly CSV files
-    output_folder = "CombinedInventory_ByWeek"
+    # Create a subfolder for weekly CSV files in the data directory
+    output_folder = os.path.join("data", "CombinedInventory_ByWeek")
     os.makedirs(output_folder, exist_ok=True)
 
     # Initialize data structures for weekly grouping and summary
@@ -12027,8 +12110,8 @@ def export_combined_inventory_with_site_info():
     # Count the total weekly files created
     total_weeks = len(weekly_data)
     total_devices = len(site_configs)
-    print(f"! {total_weeks} weekly CSV files created in CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)")
-    print(f"! Summary report exported to CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
+    print(f"! {total_weeks} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)")
+    print(f"! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
 
 def normalize_zip_code(zip_code):
     """
@@ -13186,64 +13269,63 @@ class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
     
     def __init__(self):
+        """Initialize all counter attributes and timing."""
         self.total_devices = 0
         self.devices_enriched = 0
         self.devices_skipped = 0
-        self.parse_failures = 0
-        self.comparison_failures = 0
-        self.validation_attempts = 0
-        self.validation_successes = 0
-        self.validation_failures = 0
-        self.mismatches_found = 0
         self.perfect_matches = 0
-        self.auto_corrections = 0  # New counter for automatically corrected addresses
+        self.mismatches_found = 0
+        self.auto_corrections = 0
+        self.comparison_failures = 0
+        self.parse_failures = 0
         self.parse_failure_reasons = {}
         self.start_time = None
         self.end_time = None
     
     def start_timing(self):
+        """Start the timing counter for performance tracking."""
+        import time
         self.start_time = time.time()
     
     def end_timing(self):
+        """End the timing counter for performance tracking."""
+        import time
         self.end_time = time.time()
     
     def get_duration(self):
-        if self.start_time and self.end_time:
-            return self.end_time - self.start_time
-        return 0
+        """Get the elapsed time in seconds between start and end timing."""
+        if self.start_time is None or self.end_time is None:
+            return 0
+        return self.end_time - self.start_time
     
     def increment_parse_failure(self, reason):
+        """
+        Increment parse failure counter and track the specific reason.
+        
+        Args:
+            reason (str): The specific reason for the parse failure
+        """
         self.parse_failures += 1
-        self.parse_failure_reasons[reason] = self.parse_failure_reasons.get(reason, 0) + 1
+        if reason in self.parse_failure_reasons:
+            self.parse_failure_reasons[reason] += 1
+        else:
+            self.parse_failure_reasons[reason] = 1
     
     def log_summary(self):
-        """Log comprehensive summary of the comparison operation."""
-        duration = self.get_duration()
-        
-        logging.info("=== ADDRESS COMPARISON SUMMARY ===")
+        """Log a comprehensive summary of all counter metrics."""
+        import logging
+        logging.info("Address comparison operation completed successfully")
         logging.info(f"Total devices processed: {self.total_devices}")
-        logging.info(f"Devices enriched with site info: {self.devices_enriched}")
-        logging.info(f"Devices skipped (not in comparison CSV): {self.devices_skipped}")
-        logging.info(f"Parse failures: {self.parse_failures}")
-        logging.info(f"Address mismatches found: {self.mismatches_found}")
+        logging.info(f"Devices enriched: {self.devices_enriched}")
+        logging.info(f"Devices skipped: {self.devices_skipped}")
         logging.info(f"Perfect matches: {self.perfect_matches}")
-        logging.info(f"Auto-corrections applied: {self.auto_corrections}")
-        
-        if self.validation_attempts > 0:
-            success_rate = (self.validation_successes / self.validation_attempts) * 100
-            logging.info(f"External validation attempts: {self.validation_attempts}")
-            logging.info(f"External validation successes: {self.validation_successes} ({success_rate:.1f}%)")
-            logging.info(f"External validation failures: {self.validation_failures}")
-        
+        logging.info(f"Mismatches found: {self.mismatches_found}")
+        logging.info(f"Auto corrections: {self.auto_corrections}")
+        logging.info(f"Comparison failures: {self.comparison_failures}")
+        logging.info(f"Parse failures: {self.parse_failures}")
         if self.parse_failure_reasons:
-            logging.info("Parse failure breakdown:")
-            for reason, count in self.parse_failure_reasons.items():
-                logging.info(f"  {reason}: {count}")
-        
-        if duration > 0:
-            logging.info(f"Total operation duration: {duration:.2f} seconds")
-            devices_per_second = self.total_devices / duration if duration > 0 else 0
-            logging.info(f"Processing rate: {devices_per_second:.2f} devices/second")
+            logging.info(f"Parse failure breakdown: {self.parse_failure_reasons}")
+        logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
 
 def create_address_parse_failures_csv(parse_failures, filename="AddressParseFailures.csv"):
     """
@@ -18913,7 +18995,6 @@ def export_site_device_anomaly_to_csv():
         # Restore original logging levels
         for logger_name, original_level in original_levels.items():
             logging.getLogger(logger_name).setLevel(original_level)
-        logging.error(f"Failed to export device anomaly events for {device_name}: {e}")
 
 
 def export_site_client_anomaly_to_csv():
@@ -19325,7 +19406,7 @@ menu_actions = {
     "50": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
     "51": (export_site_maps_to_csv, "Export map information for a selected site"),
     "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
-    "53": (export_site_insights_to_csv, "Export insights information for a selected site"),
+    "53": (export_site_insights_to_csv, "Export SLE (Service Level Experience) metrics insights for a selected site"),
     
     # Organization Management (Read-Only)
     "54": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
@@ -20012,8 +20093,10 @@ class EnhancedSSHRunner:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         safe_hostname = self.sanitize_filename(hostname)
         
-        # Ensure per-host-logs directory exists and is secure
-        log_dir = "per-host-logs"
+        # Ensure per-host-logs directory exists and is secure (in data folder)
+        # SECURITY: Use proper data directory path to avoid permission issues
+        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
             # Set secure permissions on directory (owner read/write/execute only)
@@ -20021,8 +20104,8 @@ class EnhancedSSHRunner:
                 os.chmod(log_dir, 0o700)
         except OSError as e:
             self.logger.error(f"Failed to create log directory {log_dir}: {e}")
-            # Fallback to current directory
-            log_dir = "."
+            # Fallback to data directory
+            log_dir = data_dir
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
@@ -20751,8 +20834,10 @@ class EnhancedSSHRunner:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
         
-        # Ensure per-host-logs directory exists and is secure
-        log_dir = "per-host-logs"
+        # Ensure per-host-logs directory exists and is secure (in data folder)
+        # SECURITY: Use proper data directory path to avoid permission issues
+        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
             # Set secure permissions on directory (owner read/write/execute only)
@@ -20760,8 +20845,8 @@ class EnhancedSSHRunner:
                 os.chmod(log_dir, 0o700)
         except OSError as e:
             logger.error(f"Failed to create log directory {log_dir}: {e}")
-            # Fallback to current directory
-            log_dir = "."
+            # Fallback to data directory
+            log_dir = data_dir
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
@@ -21058,8 +21143,10 @@ Log file: {host_log_file}
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
         
-        # Ensure per-host-logs directory exists and is secure
-        log_dir = "per-host-logs"
+        # Ensure per-host-logs directory exists and is secure (in data folder)
+        # SECURITY: Use proper data directory path to avoid permission issues
+        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
             # Set secure permissions on directory (owner read/write/execute only)
@@ -21067,8 +21154,8 @@ Log file: {host_log_file}
                 os.chmod(log_dir, 0o700)
         except OSError as e:
             logger.error(f"Failed to create log directory {log_dir}: {e}")
-            # Fallback to current directory
-            log_dir = "."
+            # Fallback to data directory
+            log_dir = data_dir
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
@@ -21243,8 +21330,10 @@ Log file: {host_log_file}
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
         
-        # Ensure per-host-logs directory exists and is secure
-        log_dir = "per-host-logs"
+        # Ensure per-host-logs directory exists and is secure (in data folder)
+        # SECURITY: Use proper data directory path to avoid permission issues
+        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
             # Set secure permissions on directory (owner read/write/execute only)
@@ -21252,8 +21341,8 @@ Log file: {host_log_file}
                 os.chmod(log_dir, 0o700)
         except OSError as e:
             logger.error(f"Failed to create log directory {log_dir}: {e}")
-            # Fallback to current directory
-            log_dir = "."
+            # Fallback to data directory
+            log_dir = data_dir
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
@@ -22222,6 +22311,10 @@ def main():
     # --- Interactive Menu Fallback ---
     logging.info("No CLI arguments detected, running in interactive menu mode.")
     
+    # Initialize org_id for interactive mode
+    org_id = get_cached_or_prompted_org_id()
+    logging.info(f"Organization ID initialized for interactive mode: {org_id}")
+    
     # Check if running in container for different behavior
     container_mode = is_running_in_container()
     if container_mode:
@@ -22239,6 +22332,16 @@ def main():
             print(f"{key}: {description}")
         
         iwant = input("\nEnter your selection number now: ").strip()
+        # Graceful handling of empty input: simply redisplay menu without logging an error
+        if iwant == "":
+            if container_mode:
+                print("[CONTAINER MODE] No selection entered. Redisplaying menu...")
+                print("=" * 60)
+                continue
+            else:
+                # In direct (non-container) interactive mode, just prompt again for clarity
+                print("No selection entered. Please enter a menu number.")
+                continue
         selected = menu_actions.get(iwant)
         
         if selected:
@@ -22257,15 +22360,17 @@ def main():
                 
                 # In container mode, return to menu. In direct mode, exit.
                 if not container_mode:
-                    logging.debug("EXIT: main() - interactive success")
+                    logging.debug("EXIT: main() - interactive success (direct mode)")
                     sys.exit(0)
                 else:
+                    logging.debug(f"Container mode: option '{iwant}' completed successfully, returning to menu")
                     print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")
                     print("=" * 60)
                     
             except KeyboardInterrupt:
                 logging.info("Operation interrupted by user (Ctrl+C)")
                 if container_mode:
+                    logging.debug(f"Container mode: option '{iwant}' interrupted, returning to menu")
                     print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")
                     print("=" * 60)
                     continue
@@ -22276,20 +22381,24 @@ def main():
             except Exception as e:
                 logging.error(f"Error executing menu option '{iwant}': {e}")
                 if container_mode:
+                    logging.debug(f"Container mode: option '{iwant}' failed with error, returning to menu")
                     print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {e}")
                     print("Returning to menu...")
                     print("=" * 60)
                     continue
                 else:
-                    logging.debug("EXIT: main() - interactive error")
+                    logging.debug("EXIT: main() - interactive error (direct mode)")
                     sys.exit(1)
         else:
+            # Invalid (non-empty) entry
             logging.error(f"Invalid selection '{iwant}' entered by user.")
             print("Invalid selection. Please try again.")
             if not container_mode:
-                logging.debug("EXIT: main() - invalid selection")
+                logging.debug("EXIT: main() - invalid selection (direct mode)")
                 sys.exit(1)
-            # In container mode, just continue the loop for another attempt
+            else:
+                logging.debug(f"Container mode: invalid selection '{iwant}', redisplaying menu")
+            # In container mode, continue loop for another attempt
 
 if __name__ == "__main__":
     try:
