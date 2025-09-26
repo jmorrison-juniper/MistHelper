@@ -130,7 +130,9 @@ def setup_networking(bridge_mode: bool = False, engine_name: str = "podman", eng
             print("[INFO] Falling back to standard bridged network with port publishing.")
             # Continue with normal network creation (below) without host mode.
 
-    network_name = "misthelper-net"
+    network_name = os.environ.get("MISTHELPER_NETWORK_NAME", "misthelper-net")
+    network_subnet = os.environ.get("MISTHELPER_NETWORK_SUBNET", "10.89.0.0/24")
+    network_driver = os.environ.get("MISTHELPER_NETWORK_DRIVER", "bridge")
 
     # Check if network exists (both engines support a similar list command)
     list_cmd = [engine_exe, "network", "ls"]
@@ -140,7 +142,7 @@ def setup_networking(bridge_mode: bool = False, engine_name: str = "podman", eng
     if network_name not in existing:
         print(f"[NETWORK] Creating network: {network_name}")
         # Subnet creation works for both; if it fails we fall back.
-        create_cmd = [engine_exe, "network", "create", "--driver", "bridge", "--subnet", "10.89.0.0/24", network_name]
+        create_cmd = [engine_exe, "network", "create", "--driver", network_driver, "--subnet", network_subnet, network_name]
         create_result = subprocess.run(create_cmd, capture_output=True, text=True)
         if create_result.returncode != 0:
             print("[WARNING] Failed to create custom network; using default engine network.")
@@ -171,7 +173,9 @@ def show_network_info():
 
     print("\n[NETWORK INFO] Container IP Addresses (may be blank in host mode):")
     print("=" * 60)
-    for container_name in ["misthelper-main", "misthelper-ssh"]:
+    ssh_container_name = os.environ.get("MISTHELPER_SSH_CONTAINER_NAME", "misthelper-ssh")
+    main_container_name = os.environ.get("MISTHELPER_MAIN_CONTAINER_NAME", "misthelper-main")
+    for container_name in [main_container_name, ssh_container_name]:
         inspect_cmd = [CONTAINER_ENGINE_EXECUTABLE, "inspect", container_name, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"]
         result = subprocess.run(inspect_cmd, capture_output=True, text=True)
         if result.returncode == 0 and result.stdout.strip():
@@ -179,9 +183,10 @@ def show_network_info():
         else:
             print(f"{container_name}: Not running or no IP assigned")
 
+    network_name = os.environ.get("MISTHELPER_NETWORK_NAME", "misthelper-net")
     print("\n[NETWORK INFO] MistHelper Network Definition:")
     print("=" * 60)
-    network_cmd = [CONTAINER_ENGINE_EXECUTABLE, "network", "inspect", "misthelper-net"]
+    network_cmd = [CONTAINER_ENGINE_EXECUTABLE, "network", "inspect", network_name]
     subprocess.run(network_cmd)
 
 def cleanup_all():
@@ -189,15 +194,18 @@ def cleanup_all():
     global CONTAINER_ENGINE_EXECUTABLE
     print("[CLEANUP] Removing all MistHelper containers and networks...")
 
-    for container_name in ["misthelper-main", "misthelper-ssh"]:
+    ssh_container_name = os.environ.get("MISTHELPER_SSH_CONTAINER_NAME", "misthelper-ssh")
+    main_container_name = os.environ.get("MISTHELPER_MAIN_CONTAINER_NAME", "misthelper-main")
+    for container_name in [main_container_name, ssh_container_name]:
         print(f"[CLEANUP] Stopping and removing container: {container_name}")
         stop_cmd = [CONTAINER_ENGINE_EXECUTABLE, "stop", container_name]
         subprocess.run(stop_cmd, capture_output=True)
         rm_cmd = [CONTAINER_ENGINE_EXECUTABLE, "rm", "-f", container_name]
         subprocess.run(rm_cmd, capture_output=True)
 
-    print("[CLEANUP] Removing network: misthelper-net")
-    network_rm_cmd = [CONTAINER_ENGINE_EXECUTABLE, "network", "rm", "misthelper-net"]
+    network_name = os.environ.get("MISTHELPER_NETWORK_NAME", "misthelper-net")
+    print(f"[CLEANUP] Removing network: {network_name}")
+    network_rm_cmd = [CONTAINER_ENGINE_EXECUTABLE, "network", "rm", network_name]
     subprocess.run(network_rm_cmd, capture_output=True)
     print("[CLEANUP] Cleanup completed!")
 
@@ -206,21 +214,26 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     global CONTAINER_ENGINE_EXECUTABLE, CONTAINER_ENGINE_NAME
 
     # Preparation: ensure required paths exist
-    data_dir = Path("./data")
+    data_dir_name = os.environ.get("MISTHELPER_DATA_DIR", "data")
+    script_log_name = os.environ.get("MISTHELPER_SCRIPT_LOG", "script.log")
+    env_file_name = os.environ.get("MISTHELPER_ENV_FILE", ".env")
+    
+    data_dir = Path(f"./{data_dir_name}")
     data_dir.mkdir(exist_ok=True)
-    script_log_path = Path("./script.log")
+    script_log_path = Path(f"./{script_log_name}")
     if not script_log_path.exists():
         script_log_path.touch()
-        print(f"[INFO] Created script.log file: {script_log_path}")
+        print(f"[INFO] Created {script_log_name} file: {script_log_path}")
     # Ensure .env exists (empty) so volume mount does not fail on Docker / Windows
-    env_path = Path("./.env")
+    env_path = Path(f"./{env_file_name}")
     if not env_path.exists():
         env_path.write_text("")
-        print(f"[INFO] Created placeholder .env file (empty): {env_path}")
+        print(f"[INFO] Created placeholder {env_file_name} file (empty): {env_path}")
 
     # Build image
     print(f"[BUILD] Building image with {CONTAINER_ENGINE_NAME}...")
-    build_cmd = [CONTAINER_ENGINE_EXECUTABLE, "build", "-t", "misthelper", "."]
+    image_name = os.environ.get("MISTHELPER_IMAGE_NAME", "misthelper")
+    build_cmd = [CONTAINER_ENGINE_EXECUTABLE, "build", "-t", image_name, "."]
     build_result = subprocess.run(build_cmd)
     if build_result.returncode != 0:
         print(f"[ERROR] Failed to build image using {CONTAINER_ENGINE_NAME}")
@@ -229,8 +242,9 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
 
     # Load .env into current process environment (unless explicitly disabled)
     if not no_env:
-        applied = load_local_env_file(Path("./.env"), override=False)
-        print(f"[ENV] Loaded .env file ({applied} variables applied, override=False)")
+        env_file_name = os.environ.get("MISTHELPER_ENV_FILE", ".env")
+        applied = load_local_env_file(Path(f"./{env_file_name}"), override=False)
+        print(f"[ENV] Loaded {env_file_name} file ({applied} variables applied, override=False)")
     else:
         print("[ENV] Skipping .env load due to --no-env flag")
 
@@ -246,7 +260,9 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     print(f"[CONFIG] Host networking requested: {'yes' if bridge_mode else 'no'}")
 
     run_cmd = [CONTAINER_ENGINE_EXECUTABLE, "run"]
-    container_name = "misthelper-ssh" if ssh_mode else "misthelper-main"
+    ssh_container_name = os.environ.get("MISTHELPER_SSH_CONTAINER_NAME", "misthelper-ssh")
+    main_container_name = os.environ.get("MISTHELPER_MAIN_CONTAINER_NAME", "misthelper-main")
+    container_name = ssh_container_name if ssh_mode else main_container_name
     cleanup_container(container_name)
     network_name = setup_networking(bridge_mode, CONTAINER_ENGINE_NAME, CONTAINER_ENGINE_EXECUTABLE)
 
@@ -265,7 +281,8 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
 
     # Port publishing: if SSH mode and NOT host network
     if ssh_mode and network_name != "host":
-        run_cmd.extend(["-p", "2200:2200"])
+        ssh_port = os.environ.get("MISTHELPER_SSH_PORT", "2200")
+        run_cmd.extend(["-p", f"{ssh_port}:{ssh_port}"])
 
     # Interactive only when no menu and not in SSH daemon mode
     if not menu and not ssh_mode:
@@ -276,26 +293,33 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
 
     cwd = os.getcwd()
     # Build volume specs carefully to avoid Windows path + option ambiguity
+    data_dir = os.environ.get("MISTHELPER_DATA_DIR", "data")
+    env_file = os.environ.get("MISTHELPER_ENV_FILE", ".env")
+    script_log = os.environ.get("MISTHELPER_SCRIPT_LOG", "script.log")
+    container_data_path = os.environ.get("MISTHELPER_CONTAINER_DATA_PATH", "/app/data")
+    container_env_path = os.environ.get("MISTHELPER_CONTAINER_ENV_PATH", "/app/.env")
+    container_log_path = os.environ.get("MISTHELPER_CONTAINER_LOG_PATH", "/app/script.log")
+    
     volumes = [
-        f"{cwd}/data:/app/data{selinux_label}",
-        f"{cwd}/.env:/app/.env{selinux_label}",
-        f"{cwd}/script.log:/app/script.log{selinux_label}",
+        f"{cwd}/{data_dir}:{container_data_path}{selinux_label}",
+        f"{cwd}/{env_file}:{container_env_path}{selinux_label}",
+        f"{cwd}/{script_log}:{container_log_path}{selinux_label}",
     ]
     for v in volumes:
         run_cmd.extend(["-v", v])
 
-    # Common environment variables
+    # Common environment variables (read from .env with fallback defaults)
     env_vars = {
         "OUTPUT_FORMAT": output_format,
-        "PYTHONHTTPSVERIFY": "0",
-        "SSL_VERIFY": "false",
-        "REQUESTS_CA_BUNDLE": "",
-        "CURL_CA_BUNDLE": "",
-        "DISABLE_UV_CHECK": "true",
-        "DISABLE_AUTO_INSTALL": "true",
-        "AUTO_UPGRADE_UV": "false",
-        "AUTO_UPGRADE_DEPENDENCIES": "false",
-        "PYTHONPATH": "/app",
+        "PYTHONHTTPSVERIFY": os.environ.get("PYTHONHTTPSVERIFY", "0"),
+        "SSL_VERIFY": os.environ.get("SSL_VERIFY", "false"),
+        "REQUESTS_CA_BUNDLE": os.environ.get("REQUESTS_CA_BUNDLE", ""),
+        "CURL_CA_BUNDLE": os.environ.get("CURL_CA_BUNDLE", ""),
+        "DISABLE_UV_CHECK": os.environ.get("DISABLE_UV_CHECK", "true"),
+        "DISABLE_AUTO_INSTALL": os.environ.get("DISABLE_AUTO_INSTALL", "true"),
+        "AUTO_UPGRADE_UV": os.environ.get("AUTO_UPGRADE_UV", "false"),
+        "AUTO_UPGRADE_DEPENDENCIES": os.environ.get("AUTO_UPGRADE_DEPENDENCIES", "false"),
+        "PYTHONPATH": os.environ.get("PYTHONPATH", "/app"),
     }
     # Defer injecting env (-e flags) until after optional SSH credential enrichment.
 
@@ -347,13 +371,16 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     for k, v in env_vars.items():
         run_cmd.extend(["-e", f"{k}={v}"])
     # Add image name
-    run_cmd.append("misthelper")
+    image_name = os.environ.get("MISTHELPER_IMAGE_NAME", "misthelper")
+    run_cmd.append(image_name)
 
     if ssh_mode:
         # Command inside container to start SSH service + session handling
-        run_cmd.append("/start.sh")
+        start_script = os.environ.get("MISTHELPER_SSH_START_SCRIPT", "/start.sh")
+        run_cmd.append(start_script)
     else:
-        run_cmd.extend(["python", "MistHelper.py", "--output-format", output_format])
+        main_script = os.environ.get("MISTHELPER_MAIN_SCRIPT", "MistHelper.py")
+        run_cmd.extend(["python", main_script, "--output-format", output_format])
         if menu:
             run_cmd.extend(["--menu", menu])
         if test:
@@ -368,7 +395,8 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     # Network summary
     print(f"[NETWORK] Container name: {container_name}")
     if network_name == "host":
-        print("[NETWORK] Host mode active. Use host's LAN IP with port 2200 for SSH.")
+        ssh_port = os.environ.get("MISTHELPER_SSH_PORT", "2200")
+        print(f"[NETWORK] Host mode active. Use host's LAN IP with port {ssh_port} for SSH.")
     elif network_name:
         print(f"[NETWORK] Custom network: {network_name}")
     else:
@@ -380,12 +408,13 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     if ssh_mode:
         if result.returncode == 0:
             print("[SUCCESS] SSH container started.")
+            ssh_port = os.environ.get("MISTHELPER_SSH_PORT", "2200")
             if network_name == "host":
                 connect_user = ssh_username_masked_for_later or "<user>"
-                print(f"[INFO] Connect: ssh -p 2200 {connect_user}@<host-lan-ip>")
+                print(f"[INFO] Connect: ssh -p {ssh_port} {connect_user}@<host-lan-ip>")
             else:
                 connect_user = ssh_username_masked_for_later or "<user>"
-                print(f"[INFO] Connect: ssh -p 2200 {connect_user}@localhost")
+                print(f"[INFO] Connect: ssh -p {ssh_port} {connect_user}@localhost")
             print("[INFO] Password is the value you supplied in MISTHELPER_SSH_PASSWORD (not displayed).")
         else:
             print("[ERROR] Failed to start SSH container.")
@@ -418,8 +447,8 @@ if __name__ == "__main__":
 
     # Detect engine early
     # Environment variable override takes precedence if provided
-    env_engine = os.environ.get("MISTHELPER_CONTAINER_ENGINE", "").strip().lower()
-    engine_pref = env_engine or args.engine
+    env_engine = os.environ.get("MISTHELPER_CONTAINER_ENGINE", "auto").strip().lower()
+    engine_pref = env_engine if env_engine != "auto" else args.engine
     name, exe = detect_container_engine(engine_pref)
     CONTAINER_ENGINE_NAME = name
     CONTAINER_ENGINE_EXECUTABLE = exe

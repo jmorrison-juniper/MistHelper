@@ -1,5 +1,4 @@
-# MistHelper
-
+# MistHelper2. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–98) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
 **Operation Count:** The code currently defines 97 actionable menu entries (1–4, 11–89, 90–98) with some gaps for future expansion.
@@ -464,12 +463,40 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ---
 ## 21. Changelog
 
+### Version 25.09.26.14.30
+- **Fixed**: Menu option 60 (Firmware status check) - Eliminated double scope selection prompts by creating direct FirmwareManager path
+- **Fixed**: DateTime error handling - Enhanced timestamp validation for firmware upgrade status with proper type checking and exception handling
+- **Fixed**: Firmware status implementation - Removed duplicate scope selection logic in check_firmware_upgrade_status_impl()
+- **Enhanced**: Error reporting - Improved datetime.fromtimestamp() error handling with specific exception types and debug logging
+- **Enhanced**: Code stability - Added input validation for timestamp values before datetime conversion
+- **Fixed**: User experience - Single scope selection prompt for option 60 eliminating confusing double prompts
+
+### Version 25.09.26.11.15
+- **Added**: FirmwareManager class - Comprehensive firmware management system for Mist Access Points
+- **Enhanced**: Menu option 90 - Consolidated firmware upgrade with mode selection (By Site or By Template)
+- **Added**: Interactive mode selection - Choose between site-based or template-based upgrades at runtime
+- **Added**: Template-based AP firmware upgrades with Gateway Template selection and site count display
+- **Enhanced**: Firmware upgrade architecture - Refactored existing functions into class-based structure
+- **Added**: Automatic site discovery and AP enumeration across all sites in selected template
+- **Enhanced**: User experience - Single menu option with clear workflow branching
+- **Enhanced**: Backward compatibility - All existing functionality maintained with improved organization
+- **Enhanced**: Code organization - NASA/JPL compliant safety architecture with comprehensive validation
+- **Documented**: Complete firmware upgrade workflow including site auto-upgrade configuration behavior
+
 ### Version 25.09.25.14.30
 - **Fixed**: Menu option 78 (Generate support package) file path permissions - now properly writes to data/ directory
 - **Fixed**: Menu option 80 (ARP WebSocket output) file path permissions - now properly saves to data/ directory  
 - **Fixed**: Menu option 85 variable scope error - removed duplicate logging statement
 - **Fixed**: SSH logging operations - all SSH functions now use proper data/per-host-logs/ directory structure
 - **Enhanced**: Container security compliance - all file I/O operations now respect container volume mounting
+- **Enhanced**: Configuration management - moved all hardcoded values from run-misthelper.py to .env file
+- **Added**: Configurable SSL settings (PYTHONHTTPSVERIFY, SSL_VERIFY, CA bundles) in .env
+- **Added**: Configurable container networking (network name, subnet, driver) in .env
+- **Added**: Configurable package management settings (UV check, auto-install, dependencies) in .env
+- **Added**: Configurable container runtime settings (image name, container names, SSH port) in .env
+- **Added**: Configurable file paths (data directory, script log, env file locations) in .env
+- **Added**: Configurable container mount paths for custom deployment scenarios in .env
+- **Enhanced**: sample.env template with complete configuration options and documentation
 - **Verified**: Comprehensive network data capture functionality working correctly
 
 ### Version 25.09.23.00.00

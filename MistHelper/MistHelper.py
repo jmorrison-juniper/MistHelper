@@ -653,6 +653,7 @@ class GlobalImportManager:
                 # Make this object callable like datetime class
                 self.now = datetime.now
                 self.fromtimestamp = datetime.fromtimestamp
+                self.fromisoformat = datetime.fromisoformat
                 self.strptime = datetime.strptime
                 self.utcnow = datetime.utcnow
                 # Add module attributes
@@ -15582,8 +15583,421 @@ def reboot_devices_by_gateway_template_list():
         print(f"! Failed to write results to CSV: {e}")
 
 
+class FirmwareManager:
+    """
+    Advanced Firmware Management System for Mist Access Points
+    
+    This class provides comprehensive firmware upgrade capabilities including:
+    1. Firmware status monitoring and reporting
+    2. Site-based bulk firmware upgrades  
+    3. Gateway template-based firmware upgrades
+    4. Automatic site auto-upgrade configuration
+    5. Multi-strategy upgrade orchestration (big_bang, canary, rrm, serial)
+    6. Progress monitoring and audit logging
+    
+    Follows NASA/JPL coding standards for safety-critical operations with:
+    - Comprehensive validation and error handling
+    - Explicit user confirmation for destructive operations
+    - Complete audit trails and logging
+    - Rollback and recovery capabilities
+    """
+    
+    def __init__(self, apisession, org_id):
+        """
+        Initialize FirmwareManager with API session and organization context.
+        
+        Args:
+            apisession: Authenticated Mist API session
+            org_id: Organization ID for operations
+        """
+        self.apisession = apisession
+        self.org_id = org_id
+        logging.info("FirmwareManager initialized for org_id: {}".format(org_id))
+    
+    def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):
+        """
+        Check current firmware upgrade status across the organization.
+        
+        This method provides comprehensive upgrade status monitoring with:
+        1. Device-level firmware status from device statistics (fwupdate field)
+        2. Site-level upgrade operations and history
+        3. Organization-wide upgrade tracking
+        4. Current version vs. available version comparison
+        5. Upgrade progress monitoring for active operations
+        6. Failed upgrade identification and retry status
+        7. Bulk status export to CSV for analysis
+        8. Interactive site/device filtering options
+        
+        Args:
+            scope_choice: Optional pre-selected scope (1-4)
+            site_filter: Optional pre-selected site ID
+            
+        Reports include:
+        - Current firmware versions and upgrade status per device
+        - Active upgrade operations with progress tracking
+        - Failed upgrades with error details and retry information
+        - Upgrade history and completion statistics
+        - Version mismatch identification across sites
+        """
+        logging.info("Starting firmware upgrade status check...")
+        logging.debug("FirmwareManager.check_firmware_upgrade_status() initiated")
+        
+        print(" Firmware Upgrade Status Check")
+        print("=" * 60)
+        
+        # Step 1: Choose scope (organization-wide or specific site) if not provided
+        if scope_choice is None:
+            print("\n  Select status check scope:")
+            print("   [1] Organization-wide status (all sites and devices)")
+            print("   [2] Specific site status")
+            print("   [3] Active upgrade operations only")
+            print("   [4] Failed upgrades only")
+            
+            while True:
+                try:
+                    scope_choice = input("Select scope (1-4): ").strip()
+                    if scope_choice in ['1', '2', '3', '4']:
+                        logging.debug(f"User selected scope: {scope_choice}")
+                        break
+                    else:
+                        print(" Invalid selection. Please choose 1-4.")
+                        logging.debug(f"Invalid scope selection: {scope_choice}")
+                except KeyboardInterrupt:
+                    print("\n Operation cancelled by user.")
+                    return
+        
+        if scope_choice == '2' and site_filter is None:
+            # Get specific site selection
+            logging.debug("User selected specific site mode")
+            site_filter = prompt_site_selection()
+            if not site_filter:
+                print(" No site selected. Exiting.")
+                logging.warning("No site selected in specific site mode")
+                return
+            logging.debug(f"Selected site filter: {site_filter}")
+        
+        # Continue with the existing implementation...
+        return self._execute_status_check(scope_choice, site_filter)
+    
+    def upgrade_ap_firmware_by_gateway_template(self):
+        """
+        Advanced AP firmware upgrade organized by Gateway Template assignment.
+        
+        This method provides template-based firmware upgrades with:
+        1. Interactive Gateway Template selection with site count display
+        2. Automatic site discovery for selected template
+        3. AP enumeration across all sites in template
+        4. Model-based firmware version selection
+        5. Unified upgrade execution across template sites
+        6. Automatic site auto-upgrade configuration
+        7. Comprehensive audit logging and progress monitoring
+        
+        Features:
+        - Template selection by index or name
+        - Site count and AP count display per template
+        - Reuse of existing upgrade strategies and safety measures
+        - Maintains all existing safety confirmations and audit trails
+        """
+        logging.info("Starting template-based AP firmware upgrade...")
+        logging.debug("FirmwareManager.upgrade_ap_firmware_by_gateway_template() initiated")
+        
+        print(" Advanced AP Firmware Upgrade by Gateway Template")
+        print("=" * 70)
+        
+        # Step 1: Ensure required CSVs are fresh
+        print("\n  Preparing template and site data...")
+        check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        
+        # Step 2: Load gateway templates and build template-to-sites mapping
+        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
+        
+        if not template_name_to_id:
+            print(" No gateway templates found.")
+            logging.warning("No gateway templates available for upgrade")
+            return
+        
+        # Step 3: Display template selection with site counts
+        selected_template_id, selected_template_name = self._prompt_template_selection(
+            template_name_to_id, template_sites_mapping
+        )
+        
+        if not selected_template_id:
+            print(" No template selected. Exiting.")
+            logging.info("Template-based upgrade cancelled - no template selected")
+            return
+        
+        # Step 4: Get sites for selected template
+        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
+        
+        if not sites_to_upgrade:
+            print(f" No sites found using template '{selected_template_name}'.")
+            logging.warning(f"No sites found for template {selected_template_name} (ID: {selected_template_id})")
+            return
+        
+        print(f"\n  Template Selection Summary:")
+        print(f"   Selected Template: {selected_template_name}")
+        print(f"   Template ID: {selected_template_id}")
+        print(f"   Sites in Template: {len(sites_to_upgrade)}")
+        
+        # Log site details
+        logging.info(f"Template-based upgrade: '{selected_template_name}' with {len(sites_to_upgrade)} sites")
+        for site_info in sites_to_upgrade:
+            logging.debug(f"  Site: {site_info['name']} (ID: {site_info['id']})")
+        
+        # Step 5: Execute firmware upgrade using existing bulk upgrade logic
+        # Convert sites_to_upgrade to the format expected by bulk_upgrade_ap_firmware_by_site
+        return self._execute_template_based_upgrade(sites_to_upgrade, selected_template_name)
+    
+    def _load_template_sites_mapping(self):
+        """
+        Load gateway templates and create mapping of templates to their assigned sites.
+        
+        Returns:
+            tuple: (template_name_to_id dict, template_sites_mapping dict)
+        """
+        template_name_to_id = {}
+        template_sites_mapping = {}  # template_id -> list of site info dicts
+        
+        try:
+            # Load gateway templates
+            gateway_templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+            with open(gateway_templates_path, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    name = row.get("name", "").strip()
+                    tid = row.get("id", "").strip()
+                    if name and tid:
+                        template_name_to_id[name] = tid
+                        template_sites_mapping[tid] = []  # Initialize empty list
+            
+            logging.info(f"Loaded {len(template_name_to_id)} gateway templates")
+            
+            # Load sites and map them to templates
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    gateway_template_id = row.get("gatewaytemplate_id", "").strip()
+                    site_id = row.get("id", "").strip()
+                    site_name = row.get("name", "").strip()
+                    
+                    if gateway_template_id in template_sites_mapping and site_id and site_name:
+                        template_sites_mapping[gateway_template_id].append({
+                            'id': site_id,
+                            'name': site_name
+                        })
+            
+            # Log template-to-site mapping statistics
+            for template_id, sites in template_sites_mapping.items():
+                template_name = next((name for name, tid in template_name_to_id.items() if tid == template_id), "Unknown")
+                logging.debug(f"Template '{template_name}': {len(sites)} sites")
+            
+            return template_name_to_id, template_sites_mapping
+            
+        except Exception as e:
+            logging.error(f"Failed to load template-sites mapping: {e}")
+            print(f"! Failed to load template and site data: {e}")
+            return {}, {}
+    
+    def _prompt_template_selection(self, template_name_to_id, template_sites_mapping):
+        """
+        Present interactive template selection with site counts.
+        
+        Args:
+            template_name_to_id: Dict mapping template names to IDs
+            template_sites_mapping: Dict mapping template IDs to site lists
+            
+        Returns:
+            tuple: (selected_template_id, selected_template_name) or (None, None)
+        """
+        print(f"\n  Available Gateway Templates:")
+        print(f"  {'Index':<8} {'Template Name':<40} {'Sites':<8}")
+        print(f"  {'-' * 8} {'-' * 40} {'-' * 8}")
+        
+        # Create indexed list of templates sorted by name
+        sorted_templates = sorted(template_name_to_id.items())
+        template_index_map = {}
+        
+        for idx, (template_name, template_id) in enumerate(sorted_templates, 1):
+            site_count = len(template_sites_mapping.get(template_id, []))
+            print(f"  [{idx:<7}] {template_name:<40} {site_count:<8}")
+            template_index_map[str(idx)] = (template_id, template_name)
+        
+        print(f"\n  Selection Options:")
+        print(f"   � Enter index number (1-{len(sorted_templates)})")
+        print(f"   � Type exact template name") 
+        print(f"   � Press Enter to cancel")
+        
+        while True:
+            try:
+                user_input = input(f"\n  Select template: ").strip()
+                
+                if not user_input:
+                    # Empty input - cancel
+                    return None, None
+                
+                # Check if input is an index number
+                if user_input in template_index_map:
+                    template_id, template_name = template_index_map[user_input]
+                    logging.debug(f"Template selected by index {user_input}: {template_name}")
+                    return template_id, template_name
+                
+                # Check if input matches a template name exactly
+                if user_input in template_name_to_id:
+                    template_id = template_name_to_id[user_input]
+                    logging.debug(f"Template selected by name: {user_input}")
+                    return template_id, user_input
+                
+                # No match found
+                print(f"   Invalid selection. Please enter a valid index (1-{len(sorted_templates)}) or exact template name.")
+                
+            except KeyboardInterrupt:
+                print(f"\n   Template selection cancelled.")
+                return None, None
+    
+    def _execute_template_based_upgrade(self, sites_to_upgrade, template_name):
+        """
+        Execute firmware upgrade for all sites in a gateway template.
+        
+        This method reuses the existing bulk upgrade logic but with template context.
+        
+        Args:
+            sites_to_upgrade: List of site info dicts with 'id' and 'name'
+            template_name: Name of the selected template for logging
+            
+        Returns:
+            Results of the upgrade operation
+        """
+        logging.info(f"Executing template-based firmware upgrade for template '{template_name}' with {len(sites_to_upgrade)} sites")
+        
+        print(f"\n  Template-Based Upgrade Execution")
+        print(f"  Template: {template_name}")
+        print(f"  Sites to process: {len(sites_to_upgrade)}")
+        print(f"  {'Site Name':<40} {'Site ID':<40}")
+        print(f"  {'-' * 40} {'-' * 40}")
+        
+        for site_info in sites_to_upgrade:
+            print(f"  {site_info['name']:<40} {site_info['id']:<40}")
+        
+        # Use the existing bulk upgrade functionality
+        # We'll call the refactored bulk_upgrade method with our site list
+        return self.bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)
+    
+    def execute_firmware_upgrade_with_mode_selection(self):
+        """
+        Main entry point for firmware upgrades with mode selection.
+        
+        Presents user with choice between:
+        1. Site-based upgrade (existing behavior)
+        2. Template-based upgrade (new functionality)
+        
+        Returns:
+            Results of the selected upgrade operation
+        """
+        logging.info("Starting firmware upgrade with mode selection...")
+        logging.debug("FirmwareManager.execute_firmware_upgrade_with_mode_selection() initiated")
+        
+        print(" Advanced AP Firmware Upgrade")
+        print("=" * 60)
+        
+        # Step 1: Mode selection
+        print("\n  Select upgrade mode:")
+        print("   [1] By Site - Upgrade specific sites (CSV file, bulk list, or single site selection)")
+        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
+        
+        while True:
+            try:
+                mode_choice = input("\n  Select mode (1-2): ").strip()
+                if mode_choice == "1":
+                    logging.info("User selected site-based upgrade mode")
+                    print("\n  Site-based upgrade mode selected")
+                    return self.bulk_upgrade_ap_firmware_by_site()
+                elif mode_choice == "2":
+                    logging.info("User selected template-based upgrade mode")
+                    print("\n  Template-based upgrade mode selected")
+                    return self.upgrade_ap_firmware_by_gateway_template()
+                else:
+                    print("   Invalid selection. Please choose 1 or 2.")
+                    logging.debug(f"Invalid mode selection: {mode_choice}")
+            except KeyboardInterrupt:
+                print("\n\n  Firmware upgrade cancelled by user.")
+                logging.info("Firmware upgrade cancelled during mode selection")
+                return
+    
+    def bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
+        """
+        Advanced bulk upgrade AP firmware for APs at selected site(s).
+        
+        This method provides comprehensive firmware upgrade capabilities with:
+        1. Bulk site mode: Reads APUpgradeSiteList.CSV for multi-site upgrades
+        2. Single site mode: Interactive site selection (fallback if CSV not found)
+        3. Template mode: Uses provided sites_to_upgrade_override for template-based upgrades
+        4. Automatic site name-to-ID resolution via organization lookup
+        5. Firmware version selection per model across all sites
+        6. Advanced upgrade strategies (big_bang, canary, rrm, serial) - default: RRM
+        7. P2P firmware sharing options (default: enabled)
+        8. Scheduling and failure threshold controls
+        9. Device filtering and selection rules
+        10. Progress monitoring and rollback options
+        11. Comprehensive safety measures and audit logging
+        12. Per-site upgrade execution with unified reporting
+        
+        Args:
+            sites_to_upgrade_override: Optional list of site dicts for template-based upgrades
+                                     Format: [{'id': site_id, 'name': site_name}, ...]
+        
+        File Format for APUpgradeSiteList.CSV (headerless, one site name per line):
+        Main Office
+        Branch Office A
+        Remote Site B
+        
+        Note: Site names must exactly match those in the Mist organization.
+        """
+        # Set up global session context for compatibility with existing helper functions
+        global apisession
+        original_apisession = apisession
+        apisession = self.apisession
+        
+        try:
+            return self._execute_bulk_upgrade(sites_to_upgrade_override)
+        finally:
+            apisession = original_apisession
+    
+    def _execute_bulk_upgrade(self, sites_to_upgrade_override):
+        """Execute the bulk firmware upgrade with existing implementation."""
+        return bulk_upgrade_ap_firmware_by_site_impl(self.org_id, sites_to_upgrade_override)
+    
+    def _execute_status_check(self, scope_choice, site_filter):
+        """Execute the firmware status check with the existing implementation."""
+        # Set up the implementation to use this class's session and org_id
+        global apisession
+        original_apisession = apisession
+        apisession = self.apisession
+        
+        try:
+            return check_firmware_upgrade_status_impl(scope_choice, site_filter)
+        finally:
+            apisession = original_apisession
+
+
+def check_firmware_upgrade_status_direct():
+    """
+    Direct firmware status check using FirmwareManager.
+    Avoids the deprecated wrapper chain that causes double prompting.
+    """
+    logging.info("Starting firmware status check using FirmwareManager directly")
+    org_id = get_cached_or_prompted_org_id()
+    
+    firmware_manager = FirmwareManager(apisession, org_id)
+    return firmware_manager.check_firmware_upgrade_status()
+
 def check_firmware_upgrade_status():
     """
+    DEPRECATED: Use FirmwareManager.check_firmware_upgrade_status() instead.
+    
+    Maintained for backward compatibility.
+    
     Check current firmware upgrade status across the organization.
     
     This function provides comprehensive upgrade status monitoring with:
@@ -15603,36 +16017,25 @@ def check_firmware_upgrade_status():
     - Upgrade history and completion statistics
     - Version mismatch identification across sites
     """
+    org_id = get_cached_or_prompted_org_id()
+    firmware_manager = FirmwareManager(apisession, org_id)
+    return firmware_manager.check_firmware_upgrade_status()
+
+
+def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
+    """
+    Implementation function for firmware upgrade status checking.
+    This contains the actual logic from the original function.
+    """
     logging.info("Starting firmware upgrade status check...")
-    logging.debug("Option 60: check_firmware_upgrade_status() initiated")
+    logging.debug("check_firmware_upgrade_status_impl() initiated")
     org_id = get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
     
-    print(" Firmware Upgrade Status Check")
-    print("=" * 60)
+    # Scope selection is now handled by FirmwareManager.check_firmware_upgrade_status()
+    # This function receives the validated scope_choice and site_filter parameters
     
-    # Step 1: Choose scope (organization-wide or specific site)
-    print("\n  Select status check scope:")
-    print("   [1] Organization-wide status (all sites and devices)")
-    print("   [2] Specific site status")
-    print("   [3] Active upgrade operations only")
-    print("   [4] Failed upgrades only")
-    
-    while True:
-        try:
-            scope_choice = input("Select scope (1-4): ").strip()
-            if scope_choice in ['1', '2', '3', '4']:
-                logging.debug(f"User selected scope: {scope_choice}")
-                break
-            else:
-                print(" Invalid selection. Please choose 1-4.")
-                logging.debug(f"Invalid scope selection: {scope_choice}")
-        except KeyboardInterrupt:
-            print("\n Operation cancelled by user.")
-            return
-    
-    site_filter = None
-    if scope_choice == '2':
+    if scope_choice == '2' and site_filter is None:
         # Get specific site selection
         logging.debug("User selected specific site mode")
         site_filter = prompt_site_selection()
@@ -15750,18 +16153,20 @@ def check_firmware_upgrade_status():
             
             # Format timestamps for display
             fw_time_str = "Unknown"
-            if fw_timestamp:
+            if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
                 try:
                     fw_time_str = datetime.fromtimestamp(fw_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    fw_time_str = str(fw_timestamp)
+                except (ValueError, OSError, TypeError) as e:
+                    logging.debug(f"Invalid firmware timestamp {fw_timestamp}: {e}")
+                    fw_time_str = f"Invalid timestamp: {fw_timestamp}"
             
             last_seen_str = "Unknown"
-            if last_seen:
+            if last_seen and isinstance(last_seen, (int, float)) and last_seen > 0:
                 try:
                     last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    last_seen_str = str(last_seen)
+                except (ValueError, OSError, TypeError) as e:
+                    logging.debug(f"Invalid last_seen timestamp {last_seen}: {e}")
+                    last_seen_str = f"Invalid timestamp: {last_seen}"
         else:
             fw_status = "no_upgrade_info"
             fw_progress = 0
@@ -15770,11 +16175,12 @@ def check_firmware_upgrade_status():
             fw_will_retry = False
             fw_time_str = "N/A"
             last_seen_str = "Unknown"
-            if last_seen:
+            if last_seen and isinstance(last_seen, (int, float)) and last_seen > 0:
                 try:
                     last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    last_seen_str = str(last_seen)
+                except (ValueError, OSError, TypeError) as e:
+                    logging.debug(f"Invalid last_seen timestamp {last_seen}: {e}")
+                    last_seen_str = f"Invalid timestamp: {last_seen}"
         
         # Track version distribution
         if device_version not in firmware_status_summary['devices_by_version']:
@@ -15816,23 +16222,23 @@ def check_firmware_upgrade_status():
     
     # Step 4: Display summary statistics
     print(f"\n  Firmware Status Summary:")
-    print(f"   � Total devices analyzed: {firmware_status_summary['total_devices']}")
-    print(f"   � Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
-    print(f"   � Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
-    print(f"   � Upgrades completed: {firmware_status_summary['upgrade_completed']}")
-    print(f"   � Upgrades failed: {firmware_status_summary['upgrade_failed']}")
-    print(f"   � Unknown status: {firmware_status_summary['upgrade_unknown']}")
+    print(f"   • Total devices analyzed: {firmware_status_summary['total_devices']}")
+    print(f"   • Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
+    print(f"   • Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
+    print(f"   • Upgrades completed: {firmware_status_summary['upgrade_completed']}")
+    print(f"   • Upgrades failed: {firmware_status_summary['upgrade_failed']}")
+    print(f"   • Unknown status: {firmware_status_summary['upgrade_unknown']}")
     
     if firmware_status_summary['devices_by_status']:
         print(f"\n  Status Distribution:")
         for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
-            print(f"   � {status}: {count} devices")
+            print(f"   • {status}: {count} devices")
     
     print(f"\n  Version Distribution:")
     sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
                            key=lambda x: x[1], reverse=True)
     for version, count in sorted_versions[:10]:  # Show top 10 versions
-        print(f"   � {version}: {count} devices")
+        print(f"   • {version}: {count} devices")
     if len(sorted_versions) > 10:
         print(f"   ... and {len(sorted_versions) - 10} more versions")
     
@@ -15840,7 +16246,7 @@ def check_firmware_upgrade_status():
     sorted_models = sorted(firmware_status_summary['devices_by_model'].items(), 
                           key=lambda x: x[1], reverse=True)
     for model, count in sorted_models[:10]:  # Show top 10 models
-        print(f"   � {model}: {count} devices")
+        print(f"   • {model}: {count} devices")
     if len(sorted_models) > 10:
         print(f"   ... and {len(sorted_models) - 10} more models")
     
@@ -16094,7 +16500,7 @@ def check_firmware_upgrade_status():
             logging.error(f"Failed to export device status: {e}")
     
     if active_upgrades:
-        upgrade_ops_file = f"ActiveUpgradeOperations_{timestamp_suffix}.csv"
+        upgrade_ops_file = os.path.join("data", f"ActiveUpgradeOperations_{timestamp_suffix}.csv")
         upgrade_fieldnames = ['site_id', 'site_name', 'upgrade_id', 'status', 'strategy',
                              'target_version', 'start_time', 'enable_p2p', 'total_devices',
                              'downloaded', 'download_requested', 'rebooted', 'reboot_in_progress',
@@ -16255,135 +16661,147 @@ def get_auto_upgrade_time_settings():
 
 def bulk_upgrade_ap_firmware_by_site():
     """
-    Advanced bulk upgrade AP firmware for APs at selected site(s).
+    Advanced AP firmware upgrade with mode selection.
     
     This function provides comprehensive firmware upgrade capabilities with:
-    1. Bulk site mode: Reads APUpgradeSiteList.CSV for multi-site upgrades
-    2. Single site mode: Interactive site selection (fallback if CSV not found)
-    3. Automatic site name-to-ID resolution via organization lookup
-    4. Firmware version selection per model across all sites
-    5. Advanced upgrade strategies (big_bang, canary, rrm, serial) - default: RRM
-    6. P2P firmware sharing options (default: enabled)
-    7. Scheduling and failure threshold controls
-    8. Device filtering and selection rules
-    9. Progress monitoring and rollback options
-    10. Comprehensive safety measures and audit logging
-    11. Per-site upgrade execution with unified reporting
+    1. Mode Selection: Choose between site-based or template-based upgrades
+    2. Site Mode: Bulk site list, single site selection, or CSV file input
+    3. Template Mode: Gateway Template selection with automatic site discovery
+    4. Advanced upgrade strategies (big_bang, canary, rrm, serial) - default: RRM
+    5. P2P firmware sharing options (default: enabled)
+    6. Scheduling and failure threshold controls
+    7. Comprehensive safety measures and audit logging
+    """
+    org_id = get_cached_or_prompted_org_id()
+    firmware_manager = FirmwareManager(apisession, org_id)
+    return firmware_manager.execute_firmware_upgrade_with_mode_selection()
+
+
+
+
+
+def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None):
+    """
+    Implementation function for bulk AP firmware upgrade.
     
-    File Format for APUpgradeSiteList.CSV (headerless, one site name per line):
-    Main Office
-    Branch Office A
-    Remote Site B
-    
-    Note: Site names must exactly match those in the Mist organization.
+    Args:
+        org_id: Organization ID
+        sites_to_upgrade_override: Optional list of site dicts for template-based upgrades
     """
     logging.info("Starting advanced bulk AP firmware upgrade by site...")
-    logging.debug("Option 90: bulk_upgrade_ap_firmware_by_site() initiated")
-    
-    # Step 0: Ensure org_id is properly set
-    org_id = get_cached_or_prompted_org_id()
+    logging.debug("bulk_upgrade_ap_firmware_by_site_impl() initiated")
     logging.debug(f"Using org_id: {org_id}")
     
-    # Step 1: Check for bulk site upgrade file or get single site selection
-    bulk_upgrade_file = "APUpgradeSiteList.CSV"
-    bulk_upgrade_file_path = get_csv_file_path(bulk_upgrade_file)
+    # Step 1: Determine site selection method (override, file, or interactive)
     sites_to_upgrade = []
     
-    if os.path.exists(bulk_upgrade_file_path):
-        print(f"! Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
-        logging.info(f"Found {bulk_upgrade_file} file, proceeding with bulk site upgrade")
-        logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file_path)}")
-        
-        # First, get all sites in the organization for reverse lookup
-        print(f"   Fetching organization sites for name-to-ID lookup...")
-        logging.debug("Fetching organization sites for name-to-ID mapping")
-        try:
-            all_org_sites = fetch_all_sites_with_limit(org_id)
-            logging.debug(f"Retrieved {len(all_org_sites)} organization sites")
-            
-            # Build lookup dictionary: site_name -> site_id
-            site_name_to_id = {}
-            for site in all_org_sites:
-                site_name = site.get("name", "").strip()
-                site_id = site.get("id", "").strip()
-                if site_name and site_id:
-                    site_name_to_id[site_name] = site_id
-            
-            logging.info(f"Built lookup table for {len(site_name_to_id)} organization sites")
-            logging.debug(f"Site name mappings: {list(site_name_to_id.keys())[:10]}...")  # Log first 10 site names
-            
-        except Exception as e:
-            print(f"! Failed to fetch organization sites: {e}")
-            logging.error(f"Failed to fetch organization sites for lookup: {e}")
-            return
-        
-        # Read site names from file (headerless format)
-        try:
-            logging.debug(f"Reading site names from {bulk_upgrade_file_path}")
-            with open(bulk_upgrade_file_path, 'r', encoding='utf-8') as f:
-                site_names = []
-                for line_num, line in enumerate(f, 1):
-                    site_name = line.strip()
-                    if site_name:  # Skip empty lines
-                        site_names.append(site_name)
-                        logging.debug(f"Line {line_num}: Added site '{site_name}'")
-            
-            if not site_names:
-                print(f"! No site names found in {bulk_upgrade_file}")
-                logging.error(f"No site names found in {bulk_upgrade_file}")
-                return
-            
-            print(f"   Read {len(site_names)} site names from file")
-            logging.info(f"Read {len(site_names)} site names from file: {site_names}")
-            
-            # Resolve site names to site IDs
-            sites_to_upgrade = []
-            missing_sites = []
-            
-            for site_name in site_names:
-                if site_name in site_name_to_id:
-                    site_id = site_name_to_id[site_name]
-                    sites_to_upgrade.append({
-                        'name': site_name,
-                        'id': site_id
-                    })
-                    logging.debug(f"Resolved site '{site_name}' to ID: {site_id}")
-                else:
-                    missing_sites.append(site_name)
-                    logging.warning(f"Site '{site_name}' not found in organization")
-            
-            # Report results
-            if missing_sites:
-                print(f"   Warning: {len(missing_sites)} site(s) not found in organization:")
-                for missing_site in missing_sites:
-                    print(f"      � '{missing_site}'")
-                print(f"   Available sites in organization:")
-                available_names = sorted(site_name_to_id.keys())
-                for name in available_names[:10]:  # Show first 10 as examples
-                    print(f"      � '{name}'")
-                if len(available_names) > 10:
-                    print(f"      ... and {len(available_names) - 10} more")
-                    
-            if not sites_to_upgrade:
-                print(f"! No valid sites found - none of the names in {bulk_upgrade_file} match organization sites")
-                logging.error(f"No valid sites found in {bulk_upgrade_file}")
-                return
-            
-            print(f"! Successfully resolved {len(sites_to_upgrade)} site(s) for bulk upgrade:")
-            for site in sites_to_upgrade:
-                print(f"   � {site['name']} (ID: {site['id']})")
-            
-            logging.info(f"Resolved {len(sites_to_upgrade)} sites for bulk upgrade from {bulk_upgrade_file}")
-            
-        except Exception as e:
-            print(f"! Failed to read {bulk_upgrade_file}: {e}")
-            logging.error(f"Failed to read {bulk_upgrade_file}: {e}")
-            return
+    if sites_to_upgrade_override is not None:
+        # Template-based upgrade mode - use provided sites
+        sites_to_upgrade = sites_to_upgrade_override
+        print(f"! Template-based upgrade mode - using {len(sites_to_upgrade)} provided sites")
+        logging.info(f"Using template-provided sites: {len(sites_to_upgrade)} sites")
+        for site in sites_to_upgrade:
+            logging.debug(f"  Template site: {site['name']} (ID: {site['id']})")
     else:
-        print(f"! {bulk_upgrade_file} not found - Single site mode")
-        print(f"   To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
-        print(f"   File format: one site name per line (no header)")
-        logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
+        # Check for bulk site upgrade file or get single site selection
+        bulk_upgrade_file = "APUpgradeSiteList.CSV"
+        bulk_upgrade_file_path = get_csv_file_path(bulk_upgrade_file)
+        
+        if os.path.exists(bulk_upgrade_file_path):
+            print(f"! Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
+            logging.info(f"Found {bulk_upgrade_file} file, proceeding with bulk site upgrade")
+            logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file_path)}")
+        
+            # First, get all sites in the organization for reverse lookup
+            print(f"   Fetching organization sites for name-to-ID lookup...")
+            logging.debug("Fetching organization sites for name-to-ID mapping")
+            try:
+                all_org_sites = fetch_all_sites_with_limit(org_id)
+                logging.debug(f"Retrieved {len(all_org_sites)} organization sites")
+                
+                # Build lookup dictionary: site_name -> site_id
+                site_name_to_id = {}
+                for site in all_org_sites:
+                    site_name = site.get("name", "").strip()
+                    site_id = site.get("id", "").strip()
+                    if site_name and site_id:
+                        site_name_to_id[site_name] = site_id
+                
+                logging.info(f"Built lookup table for {len(site_name_to_id)} organization sites")
+                logging.debug(f"Site name mappings: {list(site_name_to_id.keys())[:10]}...")  # Log first 10 site names
+                
+            except Exception as e:
+                print(f"! Failed to fetch organization sites: {e}")
+                logging.error(f"Failed to fetch organization sites for lookup: {e}")
+                return
+            
+            # Read site names from file (headerless format)
+            try:
+                logging.debug(f"Reading site names from {bulk_upgrade_file_path}")
+                with open(bulk_upgrade_file_path, 'r', encoding='utf-8') as f:
+                    site_names = []
+                    for line_num, line in enumerate(f, 1):
+                        site_name = line.strip()
+                        if site_name:  # Skip empty lines
+                            site_names.append(site_name)
+                            logging.debug(f"Line {line_num}: Added site '{site_name}'")
+                
+                if not site_names:
+                    print(f"! No site names found in {bulk_upgrade_file}")
+                    logging.error(f"No site names found in {bulk_upgrade_file}")
+                    return
+                
+                print(f"   Read {len(site_names)} site names from file")
+                logging.info(f"Read {len(site_names)} site names from file: {site_names}")
+                
+                # Resolve site names to site IDs
+                sites_to_upgrade = []
+                missing_sites = []
+                
+                for site_name in site_names:
+                    if site_name in site_name_to_id:
+                        site_id = site_name_to_id[site_name]
+                        sites_to_upgrade.append({
+                            'name': site_name,
+                            'id': site_id
+                        })
+                        logging.debug(f"Resolved site '{site_name}' to ID: {site_id}")
+                    else:
+                        missing_sites.append(site_name)
+                        logging.warning(f"Site '{site_name}' not found in organization")
+                
+                # Report results
+                if missing_sites:
+                    print(f"   Warning: {len(missing_sites)} site(s) not found in organization:")
+                    for missing_site in missing_sites:
+                        print(f"      � '{missing_site}'")
+                    print(f"   Available sites in organization:")
+                    available_names = sorted(site_name_to_id.keys())
+                    for name in available_names[:10]:  # Show first 10 as examples
+                        print(f"      � '{name}'")
+                    if len(available_names) > 10:
+                        print(f"      ... and {len(available_names) - 10} more")
+                        
+                if not sites_to_upgrade:
+                    print(f"! No valid sites found - none of the names in {bulk_upgrade_file} match organization sites")
+                    logging.error(f"No valid sites found in {bulk_upgrade_file}")
+                    return
+                
+                print(f"! Successfully resolved {len(sites_to_upgrade)} site(s) for bulk upgrade:")
+                for site in sites_to_upgrade:
+                    print(f"   � {site['name']} (ID: {site['id']})")
+                
+                logging.info(f"Resolved {len(sites_to_upgrade)} sites for bulk upgrade from {bulk_upgrade_file}")
+                
+            except Exception as e:
+                print(f"! Failed to read {bulk_upgrade_file}: {e}")
+                logging.error(f"Failed to read {bulk_upgrade_file}: {e}")
+                return
+        else:
+            print(f"! {bulk_upgrade_file} not found - Single site mode")
+            print(f"   To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
+            print(f"   File format: one site name per line (no header)")
+            logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
         
         # Single site selection (existing behavior)
         site_id = prompt_site_selection()
@@ -18627,7 +19045,7 @@ def bulk_upgrade_ap_firmware_by_site():
     
     # Step 12: Write results to CSV
     try:
-        results_filename = f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        results_filename = os.path.join("data", f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
         with open(results_filename, "w", newline='', encoding="utf-8") as f:
             if results:
                 fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC", 
@@ -19417,7 +19835,7 @@ menu_actions = {
     "59": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
     
     # Status & Monitoring
-    "60": (check_firmware_upgrade_status, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
+    "60": (check_firmware_upgrade_status_direct, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
     "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: compare_inventory_with_csv(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
     "62": (poll_marvis_actions, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
@@ -19451,7 +19869,7 @@ menu_actions = {
     "80": (run_arp_via_websocket, "Run ARP command on an AP and receive output via WebSocket"),
 
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
-    "90": (bulk_upgrade_ap_firmware_by_site, " DESTRUCTIVE: Advanced bulk AP firmware upgrade with multiple strategies (big_bang, canary, rrm, serial), P2P sharing, scheduling, and progress monitoring"),
+    "90": (bulk_upgrade_ap_firmware_by_site, " DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
     "91": (reboot_devices_by_gateway_template_list, " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"),
     "92": (convert_virtual_chassis_to_virtual_mac, " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (convert_virtual_chassis_by_site_list, " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
