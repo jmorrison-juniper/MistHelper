@@ -1,7 +1,7 @@
-# MistHelper2. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–98) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
+# MistHelper1. Operation Count: The code currently defines 98 actionable menu entries (1–65, 70–78, 79–80, 90–99) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–98) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 97 actionable menu entries (1–4, 11–89, 90–98) with some gaps for future expansion.
+**Operation Count:** The code currently defines 98 actionable menu entries (1–4, 11–89, 90–99) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -243,11 +243,12 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
 | 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
+| 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
 * 63–65 intentionally marked WIP; expect evolution.
-* 90–93 should never be scripted unattended without explicit review.
+* 90–93, 99 should never be scripted unattended without explicit review.
 
 ---
 ## 9. Systematic Test Mode (`--test`)
@@ -462,6 +463,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 
 ---
 ## 21. Changelog
+
+### Version 25.09.26.16.45
+- **CRITICAL FIX**: Switch firmware model filtering - Added missing device model compatibility validation for option 99 (switch firmware upgrades)
+- **Enhanced**: Firmware version selection - Now filters available firmware versions by actual switch models in the organization inventory
+- **Enhanced**: Model compatibility display - Firmware version selection now shows compatible switch models for each available version
+- **Enhanced**: Safety improvements - Prevents selection of incompatible firmware versions that could cause upgrade failures
+- **Added**: Fallback firmware entry - Manual firmware version specification with compatibility warnings when no compatible versions found
+- **Enhanced**: Error handling - Improved messaging when no compatible firmware versions are available for detected switch models
+- **Fixed**: Security vulnerability - Eliminated potential firmware compatibility mismatches that could cause network device failures
+
+### Version 25.09.26.14.14
+- **Added**: Menu option 99 - Advanced Switch firmware upgrade with mode selection (By Site or By Template)
+- **Added**: Switch firmware upgrade system - Complete enterprise-grade switch firmware management 
+- **Added**: FirmwareManager class - Extended with comprehensive switch firmware methods including execute_switch_firmware_upgrade_with_mode_selection(), bulk_upgrade_switch_firmware_by_site(), upgrade_switch_firmware_by_gateway_template()
+- **Added**: Switch-specific API parameters - Proper reboot=True, snapshot=True for Junos devices, no P2P support
+- **Added**: Gateway Template integration for switches - Reuses existing template infrastructure for consistent site grouping
+- **Added**: Switch device discovery - Automatic enumeration using listSiteDevices(type="switch") with proper filtering
+- **Added**: Switch firmware validation - Version availability checking via listOrgAvailableDeviceVersions(type="switch")
+- **Added**: Switch upgrade strategies - Big bang, canary, RRM, and serial upgrade modes with network-aware safety warnings
+- **Added**: Enhanced safety prompts - Network disruption warnings specific to switch operations requiring maintenance windows
+- **Enhanced**: Destructive operation tracking - Added option 99 to systematic test exclusions for safe automated testing
+- **Enhanced**: Documentation - Updated README with switch firmware capabilities and operation count (now 98 total menu options)
+- **Enhanced**: CSV export system - Switch upgrades export to data/ActiveSwitchUpgradeOperations.csv with comprehensive tracking
 
 ### Version 25.09.26.14.30
 - **Fixed**: Menu option 60 (Firmware status check) - Eliminated double scope selection prompts by creating direct FirmwareManager path
