@@ -12,6 +12,8 @@ Coding standards need to match that of NASA/JPL and their coding guidelines for 
 
 Never use emojis, only ASCII. If emojis are found, swap them out for the nearest equivilant ASCII symbol or art.
 
+All features, or helpers need to live under the appropietly titled/named "Class"'s for code clarity and organization. Refactor code across the script if we need to move a helper or function around that does not yet live in the correct class. Check whole script for refrences that need adjusted during the move.
+
 Warnings and logs need to be accurate and valid, nothing can be presented to the user or logs if it is not 100% true. Ignoring false positive warnings or messages is unacceptable.
 
 When searching or listing devices , the Mist API defaults to just AP's unless we specify the "type=all" flag.
@@ -79,9 +81,9 @@ MistHelper depends on the `mistapi` Python package authored by Thomas Munzer (Gi
 - Data output locations:
   - SQLite DB: `data/mist_data.db`
   - CSV outputs: `data` subfolder
-  - Per-host SSH logs: `per-host-logs/`
+  - Per-host SSH logs: `data/per-host-logs/`
 
-- Main Log file: `script.log`
+- Main Log file: `data/script.log`
 
 - Configuration: `.env` (never commit credentials) – supports Mist API + SSH credentials + tuning flags.
 

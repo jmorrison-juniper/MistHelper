@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 MistHelper - Comprehensive Juniper Mist API Data Export Tool
 A powerful utility for extracting and analyzing data from Juniper Mist cloud environments.
@@ -2083,12 +2083,14 @@ class WebSocketManager:
         debug_mode = getattr(self, 'debug_mode', False) or os.getenv('DEBUG', '').lower() in ['true', '1', 'yes']
         
         if debug_mode:
+            self.logger.debug(f"Waiting for subscription confirmation for: {channel_path}")
             print(f"[DEBUG] Waiting for subscription confirmation for: {channel_path}")
         
         while time.time() - start_time < timeout_seconds:
             # Check if subscription is confirmed
             if channel_path in self.confirmed_subscriptions:
                 if debug_mode:
+                    self.logger.debug(f"Subscription confirmed for: {channel_path}")
                     print(f"[DEBUG] Subscription confirmed for: {channel_path}")
                 return True
             
@@ -2096,11 +2098,12 @@ class WebSocketManager:
         
         # Timeout reached
         if debug_mode:
+            self.logger.debug(f"Timeout waiting for subscription confirmation: {channel_path}")
             print(f"[DEBUG] Timeout waiting for subscription confirmation: {channel_path}")
         self.logger.warning(f"Timeout waiting for subscription confirmation: {channel_path}")
         return False
     
-    def wait_for_command_result(self, session_id, timeout_seconds=30):
+    def wait_for_command_result(self, session_id, timeout_seconds=30, activity_timeout_seconds=None):
         """
         Wait for command result with specific session ID.
         
@@ -2110,6 +2113,7 @@ class WebSocketManager:
         Args:
             session_id (str): Session ID from command POST response
             timeout_seconds (int): Maximum time to wait for result
+            activity_timeout_seconds (int): Seconds to wait after last message before considering complete
             
         Returns:
             dict: Complete command result data or None if timeout
@@ -2118,7 +2122,14 @@ class WebSocketManager:
         debug_mode = is_debug_mode()
         start_time = time.time()
         last_activity = time.time()
-        activity_timeout = 2  # Wait 2 seconds after last message (reduced from 5)
+        last_message_count = 0  # Track number of messages to detect new activity
+        
+        # Reset MAC table completion cache for new sessions
+        if hasattr(self, '_mac_expected_entries'):
+            delattr(self, '_mac_expected_entries')
+        
+        # Use custom activity timeout if provided, otherwise default to 2 seconds
+        activity_timeout = activity_timeout_seconds if activity_timeout_seconds is not None else 2
         check_count = 0
         last_debug_time = start_time
         performance_log_interval = 5.0  # Log performance every 5 seconds
@@ -2128,6 +2139,9 @@ class WebSocketManager:
                                         max_iterations=10000, log_interval=5.0)
         
         if debug_mode:
+            self.logger.debug(f"Waiting for session {session_id} (timeout: {timeout_seconds}s)")
+            self.logger.debug(f"Current time: {time.time()}")
+            self.logger.debug(f"Activity timeout: {activity_timeout}s)")
             print(f"[DEBUG] Waiting for session {session_id} (timeout: {timeout_seconds}s)")
             print(f"[DEBUG] Current time: {time.time()}")
             print(f"[DEBUG] Activity timeout: {activity_timeout}s)")
@@ -2142,20 +2156,33 @@ class WebSocketManager:
             # Performance logging every 5 seconds in debug mode
             if debug_mode and (current_time - last_debug_time) >= performance_log_interval:
                 elapsed = current_time - start_time
+                self.logger.debug(f"Check #{check_count} at {elapsed:.1f}s - Still waiting for session {session_id}")
+                self.logger.debug(f"Last activity: {current_time - last_activity:.1f}s ago")
                 print(f"[PERF] Check #{check_count} at {elapsed:.1f}s - Still waiting for session {session_id}")
                 print(f"[PERF] Last activity: {current_time - last_activity:.1f}s ago")
                 with self.results_lock:
                     available_sessions = list(self.command_results.keys())
                     if session_id in self.command_results:
                         msg_count = len(self.command_results[session_id])
+                        self.logger.debug(f"Found {msg_count} messages for our session")
                         print(f"[PERF] Found {msg_count} messages for our session")
                     else:
+                        self.logger.debug(f"Our session not in results yet. Available: {available_sessions}")
                         print(f"[PERF] Our session not in results yet. Available: {available_sessions}")
                 last_debug_time = current_time
             
             with self.results_lock:
                 if session_id in self.command_results:
                     collected_output = self.command_results[session_id]
+                    current_message_count = len(collected_output)
+                    
+                    # Update last_activity only when NEW messages arrive
+                    if current_message_count > last_message_count:
+                        last_activity = time.time()
+                        last_message_count = current_message_count
+                        if debug_mode:
+                            self.logger.debug(f"New activity detected: {current_message_count} messages (+{current_message_count - (last_message_count - (current_message_count - last_message_count))}) ")
+                    
                     if collected_output:
                         # Check ALL messages for completion indicators, not just the latest
                         all_raw_content = ""
@@ -2166,13 +2193,42 @@ class WebSocketManager:
                         latest_raw = latest_result.get("raw", "")
                         
                         if debug_mode and check_count % 50 == 1:  # Debug every 50 checks (roughly 5 seconds)
+                            self.logger.debug(f"Check #{check_count}, found {len(collected_output)} messages")
+                            self.logger.debug(f"Latest raw (first 100 chars): {repr(latest_raw[:100])}")
+                            self.logger.debug(f"Total content length: {len(all_raw_content)} chars")
                             print(f"[DEBUG] Check #{check_count}, found {len(collected_output)} messages")
                             print(f"[DEBUG] Latest raw (first 100 chars): {repr(latest_raw[:100])}")
                             print(f"[DEBUG] Total content length: {len(all_raw_content)} chars")
+                            # For service ping debugging, show more content
+                            if len(all_raw_content) > 0:
+                                self.logger.debug(f"Service ping content sample: {repr(all_raw_content[:300])}")
+                                print(f"[DEBUG] Service ping content sample: {repr(all_raw_content[:300])}")
+                                if "bytes from" in all_raw_content.lower():
+                                    self.logger.debug("Service ping: Found 'bytes from' pattern")
+                                    print(f"[DEBUG] Service ping: Found 'bytes from' pattern")
+                                if "seq=" in all_raw_content.lower():
+                                    self.logger.debug("Service ping: Found 'seq=' pattern")
+                                    print(f"[DEBUG] Service ping: Found 'seq=' pattern")
+                                if "time=" in all_raw_content.lower():
+                                    self.logger.debug("Service ping: Found 'time=' pattern")
+                                    print(f"[DEBUG] Service ping: Found 'time=' pattern")
                         
                         # Check if ANY of the collected content looks like a final command summary
                         # Ping completion indicators
                         ping_indicators = ["round-trip min/avg/max", "round-trip min/avg/max/stddev", "rtt min/avg/max"]
+                        # Service ping completion indicators - SSR service ping specific patterns
+                        service_ping_indicators = [
+                            "service ping completed",    # Generic service ping completion
+                            "service-ping",              # Service ping command reference
+                            "packet transmitted",        # "10 packets transmitted"
+                            "packets transmitted",       # Alternative format
+                            "received",                  # "10 received" - common in ping summaries
+                            "packet loss",              # Alternative packet loss indicator
+                            "transmission failure",      # Service ping specific failure
+                            "service path",             # Service path reference
+                            "tenant context",           # Tenant context completion
+                            "service route",            # Service routing completion
+                        ]
                         # ARP completion indicators - specific patterns from actual ARP output
                         arp_indicators = [
                             "total mac entries",     # "Total 31 MAC Entries."
@@ -2197,22 +2253,32 @@ class WebSocketManager:
                             "fdb entries",          # Forwarding database
                             "vlan information",     # VLAN details
                             "port statistics",      # Port stats
-                            "interface status"      # Interface information
+                            "interface status",     # Interface information
+                            "ethernet switching table",  # MAC table header
+                            "entries, 40 learned",       # MAC table summary (specific count varies)
+                            "entries,",             # Generic MAC table entry count
+                            "learned"               # MAC learning completion
                         ]
                         # General completion indicators
                         general_indicators = ["command completed", "operation complete", "finished"]
                         
-                        all_indicators = ping_indicators + arp_indicators + gateway_indicators + switch_indicators + general_indicators
+                        all_indicators = ping_indicators + service_ping_indicators + arp_indicators + gateway_indicators + switch_indicators + general_indicators
                         found_indicator = None
                         
                         if debug_mode and check_count % 100 == 1:  # Debug indicator checking every 100 checks (roughly 10 seconds)
+                            self.logger.debug(f"Checking {len(all_indicators)} completion indicators")
+                            self.logger.debug(f"Content sample for indicator check: {repr(all_raw_content.lower()[:150])}")
                             print(f"[DEBUG] Checking {len(all_indicators)} completion indicators")
                             print(f"[DEBUG] Content sample for indicator check: {repr(all_raw_content.lower()[:150])}")
                         
                         for indicator in all_indicators:
+                            # Skip generic indicators for MAC table commands to allow proper completion detection
+                            if "ethernet switching table" in all_raw_content.lower() and indicator in ["ethernet switching table", "entries,", "learned"]:
+                                continue  # Let MAC table specific logic handle this
                             if indicator in all_raw_content.lower():
                                 found_indicator = indicator
                                 if debug_mode:
+                                    self.logger.debug(f"FOUND completion indicator: '{indicator}'")
                                     print(f"[DEBUG] FOUND completion indicator: '{indicator}'")
                                 break
                         
@@ -2224,9 +2290,98 @@ class WebSocketManager:
                                 if "packet loss" in line and ("round-trip" in all_raw_content.lower() or "rtt" in all_raw_content.lower()):
                                     found_indicator = "complete statistics block"
                                     if debug_mode:
+                                        self.logger.debug("FOUND ping statistics completion pattern")
+                                        self.logger.debug(f"Packet loss line: {repr(line[:100])}")
                                         print(f"[DEBUG] FOUND ping statistics completion pattern")
                                         print(f"[DEBUG] Packet loss line: {repr(line[:100])}")
                                     break
+                        
+                        # Service ping specific completion: look for individual ping responses with timing
+                        if not found_indicator and len(collected_output) >= 3:  # Service ping typically has multiple responses
+                            # Look for service ping patterns - individual responses with seq/ttl/time
+                            service_ping_pattern_count = 0
+                            if "seq=" in all_raw_content.lower() and ("ttl=" in all_raw_content.lower() or "time=" in all_raw_content.lower()):
+                                service_ping_pattern_count += 1
+                            if "bytes from" in all_raw_content.lower():
+                                service_ping_pattern_count += 1
+                            
+                            if debug_mode and check_count % 200 == 1:  # Debug service ping patterns
+                                self.logger.debug(f"Service ping pattern analysis: found {service_ping_pattern_count} service ping indicators")
+                                print(f"[DEBUG] Service ping pattern analysis: found {service_ping_pattern_count} service ping indicators")
+                                if "seq=" in all_raw_content.lower():
+                                    self.logger.debug("Found seq= pattern in service ping output")
+                                    print(f"[DEBUG] Found seq= pattern in service ping output")
+                                if "bytes from" in all_raw_content.lower():
+                                    self.logger.debug("Found 'bytes from' pattern in service ping output")
+                                    print(f"[DEBUG] Found 'bytes from' pattern in service ping output")
+                            
+                            # If we see service ping patterns and have been collecting for reasonable time
+                            if service_ping_pattern_count >= 2:
+                                # For service ping, if we have multiple ping responses and some idle time, consider complete
+                                if time.time() - last_activity > 3:  # Wait 3 seconds after last response for service ping
+                                    found_indicator = "service ping pattern detected"
+                                    if debug_mode:
+                                        self.logger.debug(f"FOUND service ping completion: {service_ping_pattern_count} patterns detected")
+                                        self.logger.debug(f"Service ping idle time: {time.time() - last_activity:.1f}s")
+                                        print(f"[DEBUG] FOUND service ping completion: {service_ping_pattern_count} patterns detected")
+                                        print(f"[DEBUG] Service ping idle time: {time.time() - last_activity:.1f}s")
+                        
+                        # Alternative service ping completion: check for count-based completion
+                        if not found_indicator and len(collected_output) >= 5:  # Reasonable number of responses
+                            # Count individual ping responses in format: "64 bytes from X.X.X.X: seq=N ttl=N time=N ms"
+                            ping_response_count = all_raw_content.lower().count("bytes from")
+                            if ping_response_count >= 5 and time.time() - last_activity > 2:  # Have responses and idle time
+                                found_indicator = f"count-based completion ({ping_response_count} responses)"
+                                if debug_mode:
+                                    self.logger.debug(f"FOUND count-based service ping completion: {ping_response_count} responses")
+                                    self.logger.debug(f"Idle time since last response: {time.time() - last_activity:.1f}s")
+                                    print(f"[DEBUG] FOUND count-based service ping completion: {ping_response_count} responses")
+                                    print(f"[DEBUG] Idle time since last response: {time.time() - last_activity:.1f}s")
+                        
+                        # MAC table completion: detect when table is complete and device stops sending
+                        if not found_indicator and ("ethernet switching table" in all_raw_content.lower() or "thernet switching table" in all_raw_content.lower()):
+                            # Search for "Ethernet switching table : XXX entries" pattern in reassembled buffer
+                            import re
+                            # Look for pattern like "Ethernet switching table : 44 entries" (handles chunking)
+                            table_pattern = r'ethernet switching table\s*:\s*(\d+)\s+entries'
+                            match = re.search(table_pattern, all_raw_content.lower())
+                            
+                            if match:
+                                entry_count = int(match.group(1))
+                                
+                                # First check: if we're getting the same message content repeatedly (completion signal)
+                                if len(collected_output) >= 5:
+                                    # Get the last 5 message contents
+                                    last_messages = [msg.get('raw', '') for msg in collected_output[-5:]]
+                                    # If all 5 are identical (and not empty), the command has finished
+                                    if len(set(last_messages)) == 1 and last_messages[0].strip():
+                                        found_indicator = f"mac table completion (detected {len(last_messages)} repeated identical messages)"
+                                        if debug_mode:
+                                            self.logger.debug(f"FOUND MAC table completion: {len(last_messages)} repeated identical messages detected")
+                                            self.logger.debug(f"Repeated message: {repr(last_messages[0][:100])}")
+                                            print(f"[DEBUG] FOUND MAC table completion: {len(last_messages)} repeated identical messages detected")
+                                            print(f"[DEBUG] Repeated message: {repr(last_messages[0][:100])}")
+                                    else:
+                                        if debug_mode and check_count % 50 == 1:
+                                            # Show how many unique messages in the last 5
+                                            unique_count = len(set(last_messages))
+                                            print(f"[DEBUG] MAC table: found {entry_count} entries, last 5 messages have {unique_count} unique contents")
+                                
+                                # Second check: if device has been idle for 3+ seconds and we have substantial MAC entries
+                                if not found_indicator and len(collected_output) >= 10 and entry_count >= 10:
+                                    idle_time = time.time() - last_activity
+                                    if idle_time >= 3.0:  # Device has been quiet for 3 seconds
+                                        found_indicator = f"mac table completion (idle timeout: {entry_count} entries, {idle_time:.1f}s idle)"
+                                        if debug_mode:
+                                            self.logger.debug(f"FOUND MAC table completion via idle timeout: {entry_count} entries, {idle_time:.1f}s idle")
+                                            print(f"[DEBUG] FOUND MAC table completion via idle timeout: {entry_count} entries, {idle_time:.1f}s idle")
+                                
+                                if not found_indicator and debug_mode and check_count % 50 == 1:
+                                    idle_time = time.time() - last_activity
+                                    print(f"[DEBUG] MAC table: found {entry_count} entries, idle for {idle_time:.1f}s")
+                            else:
+                                if debug_mode and check_count % 50 == 1:
+                                    print(f"[DEBUG] MAC table: checking for completion pattern in {len(all_raw_content)} chars")
                         
                         # ARP-specific completion: check for structured ARP output patterns
                         if not found_indicator and len(collected_output) >= 2:
@@ -2250,6 +2405,12 @@ class WebSocketManager:
                         if found_indicator:
                             # This appears to be the final ping summary
                             if debug_mode:
+                                self.logger.debug(f"Found completion indicator '{found_indicator}' in combined content")
+                                self.logger.debug(f"Completing after {check_count} checks")
+                                self.logger.debug(f"Total collected messages: {len(collected_output)}")
+                                self.logger.debug(f"Total content length: {len(all_raw_content)} characters")
+                                self.logger.debug(f"Raw content sample (first 200 chars): {repr(all_raw_content[:200])}")
+                                self.logger.debug(f"Raw content sample (last 200 chars): {repr(all_raw_content[-200:])}")
                                 print(f"[DEBUG] Found completion indicator '{found_indicator}' in combined content")
                                 print(f"[DEBUG] Completing after {check_count} checks")
                                 print(f"[DEBUG] Total collected messages: {len(collected_output)}")
@@ -2258,16 +2419,18 @@ class WebSocketManager:
                                 print(f"[DEBUG] Raw content sample (last 200 chars): {repr(all_raw_content[-200:])}")
                             final_results = self.command_results.pop(session_id)
                             break
-                        
-                        last_activity = time.time()
                 else:
                     if debug_mode and check_count % 50 == 1:  # Debug every 5 seconds
+                        self.logger.debug(f"Check #{check_count}, no results yet for session {session_id}")
+                        self.logger.debug(f"Available sessions: {list(self.command_results.keys())}")
                         print(f"[DEBUG] Check #{check_count}, no results yet for session {session_id}")
                         print(f"[DEBUG] Available sessions: {list(self.command_results.keys())}")
             
             # Emergency circuit breaker - if we're doing too many checks, something is wrong
             if check_count > 10000:  # At 0.1s per check, this is ~16 minutes
                 if debug_mode:
+                    self.logger.error(f"Circuit breaker triggered at {check_count} checks!")
+                    self.logger.error("This indicates a possible infinite loop or system hang")
                     print(f"[EMERGENCY] Circuit breaker triggered at {check_count} checks!")
                     print(f"[EMERGENCY] This indicates a possible infinite loop or system hang")
                 self.logger.error(f"Emergency circuit breaker: {check_count} checks exceeded for session {session_id}")
@@ -2283,6 +2446,7 @@ class WebSocketManager:
             
             if collected_count > 0 and (time.time() - last_activity > activity_timeout):
                 if debug_mode:
+                    self.logger.debug(f"Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages")
                     print(f"[DEBUG] Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages")
                 self.logger.info(f"No new data for {activity_timeout}s, assuming command complete")
                 with self.results_lock:
@@ -2295,6 +2459,7 @@ class WebSocketManager:
         else:
             # Timeout occurred
             if debug_mode:
+                self.logger.debug(f"Timeout occurred after {timeout_seconds}s, {check_count} checks")
                 print(f"[DEBUG] Timeout occurred after {timeout_seconds}s, {check_count} checks")
             with self.results_lock:
                 final_results = self.command_results.pop(session_id, [])
@@ -2311,6 +2476,9 @@ class WebSocketManager:
         
         if final_results:
             if debug_mode:
+                self.logger.debug(f"Combining {len(final_results)} result segments")
+                self.logger.debug(f"Total wait time: {time.time() - start_time:.2f} seconds")
+                self.logger.debug(f"Total checks performed: {check_count}")
                 print(f"[DEBUG] Combining {len(final_results)} result segments")
                 print(f"[DEBUG] Total wait time: {time.time() - start_time:.2f} seconds")
                 print(f"[DEBUG] Total checks performed: {check_count}")
@@ -4367,13 +4535,32 @@ def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filen
     """
     Prompts the user to select a device by index or name from the device inventory at a given site.
     Returns the corresponding device ID, or None if not found.
+    
+    SECURITY: Always fetch all device types from API first (type=all), then filter locally
+    to avoid Mist API's default behavior of only returning APs.
     """
-    # Fetch device inventory for the specified site and device type
-    rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type).data
+    # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
+    # The Mist API defaults to only APs unless explicitly specified
+    rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
     if not rawdata:
         print("No devices found for the selected site.")
-        logging.warning(f"No devices found for site_id: {site_id} with device_type: {device_type}")
+        logging.warning(f"No devices found for site_id: {site_id}")
         return None
+
+    # Filter devices locally based on requested device types
+    if device_type != "all":
+        requested_types = [dtype.strip() for dtype in device_type.split(",")]
+        filtered_data = []
+        for device in rawdata:
+            device_device_type = device.get("type", "").lower()
+            if device_device_type in requested_types:
+                filtered_data.append(device)
+        rawdata = filtered_data
+        
+        if not rawdata:
+            print(f"No devices of type '{device_type}' found at the selected site.")
+            logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+            return None
 
     # Sort, flatten, and sanitize the inventory data for display and CSV export
     inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
@@ -4426,13 +4613,34 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     - site_id: The ID of the site to fetch inventory for.
     - device_type: The type of device to filter (default: "all").
     - csv_filename: The filename to write the inventory CSV to.
+    
+    SECURITY: Always fetch all device types from API first (type=all), then filter locally
+    to avoid Mist API's default behavior of only returning APs.
     """
     logging.info(f"Fetching device inventory for site_id={site_id}, device_type={device_type}")
-    rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type).data
+    
+    # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
+    # The Mist API defaults to only APs unless explicitly specified
+    rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
     if not rawdata:
         print("No devices found for the selected site.")
-        logging.warning(f"No devices found for site_id={site_id} with device_type={device_type}")
+        logging.warning(f"No devices found for site_id={site_id}")
         return
+
+    # Filter devices locally based on requested device types
+    if device_type != "all":
+        requested_types = [dtype.strip() for dtype in device_type.split(",")]
+        filtered_data = []
+        for device in rawdata:
+            device_device_type = device.get("type", "").lower()
+            if device_device_type in requested_types:
+                filtered_data.append(device)
+        rawdata = filtered_data
+        
+        if not rawdata:
+            print(f"No devices of type '{device_type}' found at the selected site.")
+            logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+            return
 
     # Sort inventory by model for easier viewing
     inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
@@ -4802,6 +5010,147 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
 # WEBSOCKET COMMAND FUNCTIONS
 # ============================================================================
 
+class WebSocketCommands:
+    """
+    WebSocket Commands Class for Mist API device operations.
+    
+    This class organizes all WebSocket-based device command functions following
+    the agents guide requirement that "All features, or helpers need to live 
+    under the appropriately titled/named 'Class's for code clarity and organization."
+    
+    All methods are static since they don't require instance state and can be
+    called directly from menu actions.
+    
+    SECURITY: All methods use authenticated WebSocket connections with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    
+    @staticmethod
+    def ping_device():
+        """
+        Execute ping command on a network device via WebSocket.
+        
+        Follows the documented Mist API pattern:
+        1. Connect to WebSocket
+        2. Subscribe to device command channel
+        3. Issue POST ping command
+        4. Await results via WebSocket stream
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return ping_device_websocket()
+    
+    @staticmethod
+    def show_mac_table():
+        """
+        Execute show MAC table command on a switch device via WebSocket.
+        
+        MAC tables are a Layer 2 switching feature and are only meaningful on switches.
+        Routers/gateways operate at Layer 3 and typically don't maintain MAC tables.
+        
+        Follows the documented Mist API pattern:
+        1. Connect to WebSocket
+        2. Subscribe to device command channel
+        3. Issue POST show_mac_table command
+        4. Await results via WebSocket stream
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return show_mac_table_websocket()
+    
+    @staticmethod
+    def arp_device():
+        """
+        Execute ARP command on a network device via WebSocket.
+        
+        Follows the documented Mist API pattern for ARP commands:
+        1. Subscribe to WebSocket channel
+        2. POST ARP command
+        3. Receive results via WebSocket stream with session-based demultiplexing
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return arp_device_websocket()
+    
+    @staticmethod
+    def service_ping_device():
+        """
+        Execute service ping command on SSR gateway devices via WebSocket.
+        Service ping allows ping packets to follow the same path as specific services.
+        
+        Follows the documented Mist API pattern for service ping commands:
+        1. Subscribe to WebSocket channel
+        2. POST service ping command with service-specific parameters
+        3. Receive results via WebSocket stream with session-based demultiplexing
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return service_ping_device_websocket()
+    
+    @staticmethod
+    def show_forwarding_table():
+        """
+        Execute show forwarding table command on a gateway/SSR device via WebSocket.
+        
+        Displays Layer 3 routing table information for gateway/SSR devices.
+        This is a routing table diagnostic command specifically for devices that
+        perform Layer 3 forwarding functions.
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return show_forwarding_table_websocket()
+    
+    @staticmethod
+    def show_routing_table():
+        """
+        Execute show route command on switches, routers, and SSR devices via WebSocket.
+        
+        Displays routing table information (RIB - Routing Information Base) for network devices.
+        This shows the routing protocol information maintained by routing protocols like BGP, OSPF, 
+        static routes, etc. Different from forwarding table (FIB) which shows actual forwarding entries.
+        
+        Supported on:
+        - Switches with Layer 3 capabilities
+        - SRX routers  
+        - SSR gateways
+        - Other routing-capable devices
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+        return show_routing_table_websocket()
+    
+    @staticmethod
+    def show_ssr_routes():
+        """
+        Execute SSR/SRX routing table command using dedicated API function.
+        
+        Uses the dedicated mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes function
+        which provides structured routing table queries specifically optimized for
+        SSR and SRX devices with proper parameter validation and device-specific formatting.
+        
+        This is the preferred method for SSR/SRX routing table queries as it provides:
+        - Structured parameter input (protocol, neighbor, prefix, vrf, node, route direction)
+        - Device-specific optimization for SSR/SRX platforms
+        - Proper BGP neighbor route analysis (received/advertised)
+        - VRF-aware routing table queries
+        - HA cluster node selection for multi-node deployments
+        
+        Supported devices:
+        - SSR gateways (128T Session Smart Routers)
+        - SRX routers (Juniper SRX series)
+        
+        SECURITY: Uses authenticated API session with proper parameter validation
+        and device capability checking for safe routing table operations.
+        """
+        return show_ssr_routes_dedicated()
+
+
 def ping_device_websocket():
     """
     Execute ping command on a network device via WebSocket.
@@ -4815,6 +5164,8 @@ def ping_device_websocket():
     SECURITY: Uses authenticated WebSocket connection with session-based
     command demultiplexing for concurrent command safety.
     """
+    logging.info("Starting WebSocket ping operation...")
+    
     # Check for debug mode from command line args
     debug_mode = '--debug' in sys.argv or '-d' in sys.argv
     
@@ -5046,6 +5397,232 @@ def ping_device_websocket():
             logging.warning(f"WebSocket cleanup error: {cleanup_error}")
             
         logging.debug("EXIT: ping_device_websocket")
+
+
+def show_mac_table_websocket():
+    """
+    Execute show MAC table command on a switch device via WebSocket.
+    
+    MAC tables are a Layer 2 switching feature and are only meaningful on switches.
+    Routers/gateways operate at Layer 3 and typically don't maintain MAC tables.
+    
+    Follows the documented Mist API pattern:
+    1. Connect to WebSocket
+    2. Subscribe to device command channel
+    3. Issue POST show_mac_table command
+    4. Await results via WebSocket stream
+    
+    SECURITY: Uses authenticated WebSocket connection with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    # Check for debug mode from command line arguments
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("[DEBUG] DEBUG MODE ENABLED")
+    
+    logging.info("Starting WebSocket show MAC table operation...")
+    logging.debug("ENTER: show_mac_table_websocket")
+    
+    try:
+        # Interactive site selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+            
+        # Get device selection - MAC table is a Layer 2 switching feature
+        print("→ MAC table is available on switches (Layer 2 devices)")
+        print("→ Routers/gateways operate at Layer 3 and typically don't maintain MAC tables")
+        print("→ APs forward wireless traffic but don't maintain traditional MAC tables")
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="switch")
+        if not device_id:
+            print("! No switch device selected. MAC table command requires Layer 2 switching devices.")
+            print("! Only switches maintain MAC address learning tables for Ethernet forwarding.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+            
+        print(f"\n→ Executing show MAC table on device {device_id}...")
+        print("→ Establishing WebSocket connection...")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+            
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        # Issue show MAC table command via REST API
+        mac_table_payload = {}  # show_mac_table typically doesn't require additional parameters
+        
+        print("→ Issuing show MAC table command...")
+        logging.debug(f"MAC table payload: {mac_table_payload}")
+        
+        if debug_mode:
+            print(f"[DEBUG] MAC table payload = {mac_table_payload}")
+        
+        # Get authentication details for direct HTTP request
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        
+        if not mist_host or not mist_apitoken:
+            print("! Mist host or API token not found in session or environment")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] mist_host = {mist_host}")
+            print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
+        
+        # Make direct POST request to trigger show MAC table
+        mac_table_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_mac_table"
+        headers = {'Authorization': f'Token {mist_apitoken}', 'Content-Type': 'application/json'}
+        
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {mac_table_url}")
+            print(f"[DEBUG] Headers = {{'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}}")
+        
+        mac_table_response = requests.post(mac_table_url, headers=headers, json=mac_table_payload)
+        
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {mac_table_response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {mac_table_response.text}")
+        
+        if mac_table_response.status_code != 200:
+            print(f"! Failed to issue show MAC table command: {mac_table_response.status_code}")
+            print(f"! Response: {mac_table_response.text}")
+            websocket_manager.disconnect()
+            return
+            
+        # Extract session ID from response
+        response_data = mac_table_response.json()
+        session_id = response_data.get("session")
+        if not session_id:
+            print("! No session ID returned from show MAC table command")
+            websocket_manager.disconnect()
+            return
+            
+        print(f"→ Show MAC table command issued (session: {session_id[:8]}...)")
+        print("→ Waiting for MAC table results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Wait for MAC table results via WebSocket (longer timeout for potentially large tables)
+        mac_table_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {mac_table_result is not None}")
+            if mac_table_result:
+                print(f"[DEBUG] Result keys: {list(mac_table_result.keys())}")
+        
+        if mac_table_result:
+            print("\n" + "=" * 60)
+            print("MAC TABLE RESULTS:")
+            print("=" * 60)
+            
+            # Display raw output (this is where MAC table results come according to documentation)
+            raw_output = mac_table_result.get("raw", "")
+            if raw_output:
+                print("RAW OUTPUT:")
+                print("-" * 40)
+                print(raw_output)
+            
+            # Display any other output fields that might be present
+            output_fields = mac_table_result.get("Output", "")
+            if output_fields and output_fields != raw_output:
+                print("\nOTHER OUTPUT:")
+                print("-" * 40)
+                print(output_fields)
+                
+            # Show all available fields for debugging
+            available_fields = [key for key in mac_table_result.keys() if key not in ['raw', 'Output', 'session']]
+            if available_fields:
+                print(f"\nOTHER AVAILABLE FIELDS: {available_fields}")
+                for field in available_fields:
+                    field_value = mac_table_result.get(field)
+                    if field_value:
+                        print(f"{field}: {field_value}")
+                
+            if not raw_output and not output_fields:
+                print("No output data received")
+                print(f"Available result keys: {list(mac_table_result.keys())}")
+                
+            print("=" * 60)
+            
+            # Log the successful operation
+            logging.info("WebSocket show MAC table completed successfully")
+            
+        else:
+            print("! Timeout waiting for MAC table results")
+            print("! This may indicate:")
+            print("  - The device doesn't support MAC table commands (common for routers/Layer 3 devices)")
+            print("  - The device is busy or not responding")
+            print("  - Network connectivity issues")
+            print("! Note: MAC tables are primarily a Layer 2 (switch) feature")
+            logging.warning("WebSocket show MAC table operation timed out")
+            
+            if debug_mode:
+                print("[DEBUG] Checking WebSocket manager state...")
+                print(f"[DEBUG] Connected = {websocket_manager.connected}")
+                print(f"[DEBUG] Subscribed channels = {websocket_manager.subscribed_channels}")
+                with websocket_manager.results_lock:
+                    print(f"[DEBUG] Pending results = {list(websocket_manager.command_results.keys())}")
+            
+    except Exception as mac_table_error:
+        error_message = f"WebSocket show MAC table operation failed: {mac_table_error}"
+        print(f"! {error_message}")
+        logging.error(error_message)
+        
+        if debug_mode:
+            print("[DEBUG] Exception details:")
+            import traceback
+            traceback.print_exc()
+        
+        logging.debug("EXIT: show_mac_table_websocket - error")
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+                
+                if debug_mode:
+                    print("[DEBUG] WebSocket cleanup completed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: show_mac_table_websocket")
 
 
 def arp_device_websocket():
@@ -5407,19 +5984,6 @@ def arp_device_websocket():
 
 
 def service_ping_device_websocket():
-    """
-    Execute service ping command on SSR gateway devices via WebSocket.
-    Service ping allows ping packets to follow the same path as specific services.
-    
-    Follows the documented Mist API pattern for service ping commands:
-    1. Subscribe to WebSocket channel
-    2. POST service ping command with service-specific parameters
-    3. Receive results via WebSocket stream with session-based demultiplexing
-    
-    SECURITY: Uses authenticated WebSocket connection with session-based
-    command demultiplexing for concurrent command safety.
-    """
-    logging.info("Starting WebSocket Service Ping operation...")
     logging.debug("ENTER: service_ping_device_websocket")
     
     debug_mode = is_debug_mode()
@@ -6144,11 +6708,17 @@ def service_ping_device_websocket():
         # Use device-specific timeout
         if device_info and device_info.get('type') == 'gateway':
             timeout_seconds = 45  # Extended timeout for gateways
-            print("   → Using extended timeout for SSR gateway (45 seconds)")
+            activity_timeout_seconds = 5  # Longer activity timeout for service ping
+            print("   → Using extended timeout for SSR gateway (45 seconds total, 5 seconds activity)")
         else:
             timeout_seconds = 30  # Standard timeout for other devices
+            activity_timeout_seconds = 3  # Moderate activity timeout for non-gateways
         
-        service_ping_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds)
+        service_ping_result = websocket_manager.wait_for_command_result(
+            session_id, 
+            timeout_seconds=timeout_seconds, 
+            activity_timeout_seconds=activity_timeout_seconds
+        )
         
         if debug_mode:
             print(f"[DEBUG] wait_for_command_result returned: {service_ping_result is not None}")
@@ -6270,6 +6840,1908 @@ def service_ping_device_websocket():
             logging.warning(f"WebSocket cleanup error: {cleanup_error}")
             
         logging.debug("EXIT: service_ping_device_websocket")
+
+
+def parse_forwarding_table_output(raw_output):
+    """
+    Parse the raw JSON forwarding table output into structured data.
+    
+    Args:
+        raw_output (str): Raw JSON string containing forwarding table data
+        
+    Returns:
+        list: List of parsed forwarding table entries
+    """
+    entries = []
+    
+    if not raw_output or not raw_output.strip():
+        return entries
+    
+    try:
+        # Split multiple JSON objects (WebSocket can send multiple chunks)
+        json_chunks = []
+        for line in raw_output.strip().split('\n'):
+            line = line.strip()
+            if line and line.startswith('{') and line.endswith('}'):
+                try:
+                    chunk = json.loads(line)
+                    json_chunks.append(chunk)
+                except json.JSONDecodeError:
+                    continue
+        
+        # Process all chunks and extract forwarding table rows
+        for chunk in json_chunks:
+            if isinstance(chunk, dict) and 'rows' in chunk:
+                rows = chunk.get('rows', [])
+                for row in rows:
+                    if isinstance(row, dict):
+                        # Clean up None values and empty strings
+                        cleaned_entry = {}
+                        for key, value in row.items():
+                            if value == "None" or value == "":
+                                cleaned_entry[key] = "-"
+                            else:
+                                cleaned_entry[key] = value
+                        entries.append(cleaned_entry)
+    
+    except Exception as e:
+        logging.error(f"Error parsing forwarding table output: {e}")
+        # Return raw data if parsing fails
+        return [{"raw_data": raw_output}]
+    
+    return entries
+
+
+def display_forwarding_table_summary(entries):
+    """
+    Display a user-friendly summary of forwarding table entries.
+    
+    Args:
+        entries (list): List of forwarding table entry dictionaries
+    """
+    if not entries:
+        print("→ No forwarding table entries found")
+        return
+    
+    # Handle raw data fallback
+    if len(entries) == 1 and "raw_data" in entries[0]:
+        print("→ Raw forwarding table data (parsing failed):")
+        print(entries[0]["raw_data"][:1000] + "..." if len(entries[0]["raw_data"]) > 1000 else entries[0]["raw_data"])
+        return
+    
+    print(f"→ Total forwarding table entries: {len(entries)}")
+    
+    # Analyze the data for summary statistics
+    prefixes = set()
+    services = set()
+    tenants = set()
+    protocols = set()
+    interfaces = set()
+    
+    for entry in entries:
+        if entry.get('ip_prefix') and entry['ip_prefix'] != '-':
+            prefixes.add(entry['ip_prefix'])
+        if entry.get('service') and entry['service'] != '-':
+            services.add(entry['service'])
+        if entry.get('tenant') and entry['tenant'] != '-':
+            tenants.add(entry['tenant'])
+        if entry.get('protocol') and entry['protocol'] != '-':
+            protocols.add(entry['protocol'])
+        if entry.get('next_hops_interface') and entry['next_hops_interface'] != '-':
+            interfaces.add(entry['next_hops_interface'])
+    
+    # Display summary statistics
+    print(f"→ Unique IP prefixes: {len(prefixes)}")
+    print(f"→ Unique services: {len(services)}")
+    print(f"→ Unique tenants: {len(tenants)}")
+    print(f"→ Protocols: {', '.join(sorted(protocols)) if protocols else 'None'}")
+    print(f"→ Next-hop interfaces: {len(interfaces)}")
+    
+    # Group entries by IP prefix for better readability
+    prefix_groups = {}
+    for entry in entries:
+        prefix = entry.get('ip_prefix', 'Unknown')
+        if prefix not in prefix_groups:
+            prefix_groups[prefix] = []
+        prefix_groups[prefix].append(entry)
+    
+    # Display detailed table for all prefixes (removed artificial limiting)
+    print(f"\n→ Detailed forwarding table by IP prefix:")
+    for prefix in sorted(prefix_groups.keys()):
+        display_prefix_table(prefix, prefix_groups[prefix])
+    
+    # Show interface summary
+    if interfaces:
+        print(f"\n→ Active next-hop interfaces:")
+        for interface in sorted(interfaces):
+            if interface != '-':
+                interface_entries = [e for e in entries if e.get('next_hops_interface') == interface]
+                print(f"   {interface}: {len(interface_entries)} routes")
+
+
+def display_prefix_table(prefix, entries):
+    """
+    Display a formatted table for entries with a specific IP prefix.
+    
+    Args:
+        prefix (str): IP prefix to display
+        entries (list): List of forwarding table entries for this prefix
+    """
+    if not entries:
+        return
+    
+    print(f"\n→ Routes for {prefix} ({len(entries)} entries):")
+    
+    # Use prettytable if available, otherwise fall back to simple formatting
+    try:
+        table = PrettyTable()
+        table.field_names = ["Port", "Protocol", "Service", "Tenant", "Next Hop Interface", "Vector", "Cost"]
+        table.align = "l"
+        table.max_width = 20
+        
+        # Show ALL entries (removed truncation limit)
+        for entry in entries:
+            table.add_row([
+                entry.get('port', '-'),
+                entry.get('protocol', '-'),
+                entry.get('service', '-')[:18] + '..' if len(entry.get('service', '-')) > 20 else entry.get('service', '-'),
+                entry.get('tenant', '-')[:15] + '..' if len(entry.get('tenant', '-')) > 17 else entry.get('tenant', '-'),
+                entry.get('next_hops_interface', '-')[:15] + '..' if len(entry.get('next_hops_interface', '-')) > 17 else entry.get('next_hops_interface', '-'),
+                entry.get('vector', '-'),
+                entry.get('cost', '-')
+            ])
+        
+        print(table)
+            
+    except Exception as e:
+        # Fallback to simple text formatting if prettytable fails
+        print("   Port   | Protocol | Service              | Tenant           | Next Hop Interface")
+        print("   " + "-" * 80)
+        # Show ALL entries (removed truncation limit)
+        for entry in entries:
+            port = entry.get('port', '-')[:6]
+            protocol = entry.get('protocol', '-')[:8]
+            service = entry.get('service', '-')[:20]
+            tenant = entry.get('tenant', '-')[:16]
+            interface = entry.get('next_hops_interface', '-')[:18]
+            print(f"   {port:<6} | {protocol:<8} | {service:<20} | {tenant:<16} | {interface}")
+
+
+def parse_routing_table_output(raw_output):
+    """
+    Parse routing table output from Mist device show route command.
+    
+    This function handles routing table output from various device types including:
+    - Switches with Layer 3 capabilities
+    - SRX routers
+    - SSR gateways
+    - Other routing-capable devices
+    
+    The output contains routing protocol information (RIB) showing routes learned
+    from BGP, OSPF, static configuration, directly connected networks, etc.
+    
+    Args:
+        raw_output (str): Raw output from show route command
+        
+    Returns:
+        list: List of parsed routing table entries as dictionaries
+    """
+    if not raw_output:
+        return []
+    
+    # Detect Juniper routing table format and use specialized parser
+    if any(pattern in raw_output for pattern in ['inet.0:', 'inet6.0:', 'Limit/Threshold:']):
+        return parse_juniper_routing_table(raw_output)
+    
+    # Fallback to generic parsing for other device types
+    routes = []
+    lines = raw_output.strip().split('\n')
+    
+    # Look for common routing table patterns across different device types
+    # Handle various output formats from different device vendors/models
+    
+    for line_num, line in enumerate(lines):
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('show'):
+            continue
+            
+        # Parse common routing table patterns
+        # Different devices may have different output formats
+        
+        # Pattern 1: Standard route entry with prefix, next-hop, protocol
+        # Example: "192.168.1.0/24 via 10.0.0.1 dev eth0 proto bgp metric 100"
+        if ' via ' in line or ' dev ' in line or ' proto ' in line:
+            route_entry = parse_standard_route_line(line)
+            if route_entry:
+                routes.append(route_entry)
+                
+        # Pattern 2: Tabular format with columns
+        # Look for lines that appear to be route entries based on common fields
+        elif any(indicator in line.lower() for indicator in ['bgp', 'ospf', 'static', 'direct', 'connected']):
+            route_entry = parse_protocol_route_line(line)
+            if route_entry:
+                routes.append(route_entry)
+                
+        # Pattern 3: JSON-like structured output (some devices)
+        elif line.startswith('{') and line.endswith('}'):
+            try:
+                import json
+                route_data = json.loads(line)
+                route_entry = normalize_json_route_entry(route_data)
+                if route_entry:
+                    routes.append(route_entry)
+            except:
+                continue
+                
+        # Pattern 4: Space-separated tabular data
+        elif len(line.split()) >= 3:
+            route_entry = parse_tabular_route_line(line)
+            if route_entry:
+                routes.append(route_entry)
+    
+    return routes
+
+
+def parse_juniper_routing_table(raw_output):
+    """
+    Parse Juniper-specific routing table output format.
+    
+    Juniper routing tables have a specific multi-line format:
+    - Route table sections (inet.0:, inet6.0:)
+    - Multi-line route entries with continuation lines
+    - Route preferences indicated by >, *, +
+    - Protocol information in brackets like *[Direct/0]
+    
+    Example format:
+    0.0.0.0/0        *[Static/5] 00:01:02
+                    > via 192.168.1.1, irb.0
+    192.168.1.0/24   *[Direct/0] 1d 02:03:04
+                    > via irb.0
+    
+    Args:
+        raw_output (str): Raw routing table output from Juniper device
+        
+    Returns:
+        list: Parsed route entries
+    """
+    routes = []
+    lines = raw_output.strip().split('\n')
+    current_route = None
+    current_table = ""
+    
+    for line in lines:
+        line_stripped = line.strip()
+        
+        # Skip empty lines and headers
+        if not line_stripped:
+            continue
+            
+        # Detect routing table sections
+        if line_stripped.endswith(':') and any(table in line_stripped for table in ['inet.0', 'inet6.0', 'mpls.0']):
+            current_table = line_stripped.replace(':', '')
+            continue
+            
+        # Skip limit/threshold lines
+        if 'Limit/Threshold' in line_stripped or line_stripped == '+':
+            continue
+            
+        # Parse route entries
+        parts = line_stripped.split()
+        if not parts:
+            continue
+            
+        # Main route line (starts with destination prefix, not > or *)
+        if ('/' in parts[0] and not parts[0].startswith('>') and not parts[0].startswith('*') 
+            and not line_stripped.startswith(' ') and not line_stripped.startswith('>')):
+            
+            # Save previous route if exists
+            if current_route:
+                routes.append(current_route)
+                
+            # Start new route entry
+            current_route = {
+                'destination': parts[0],
+                'next_hop': '',
+                'interface': '',
+                'protocol': '',
+                'metric': '',
+                'admin_distance': '',
+                'table': current_table,
+                'active': False,
+                'selected': False
+            }
+            
+            # Look for protocol information in brackets on same line
+            line_remainder = ' '.join(parts[1:])
+            if '[' in line_remainder and ']' in line_remainder:
+                # Extract protocol and admin distance from [Protocol/admin_dist]
+                bracket_start = line_remainder.find('[')
+                bracket_end = line_remainder.find(']')
+                bracket_content = line_remainder[bracket_start + 1:bracket_end]
+                
+                # Mark as selected if starts with *
+                if line_remainder.startswith('*'):
+                    current_route['selected'] = True
+                    
+                if '/' in bracket_content:
+                    protocol_parts = bracket_content.split('/')
+                    current_route['protocol'] = protocol_parts[0]
+                    current_route['admin_distance'] = protocol_parts[1]
+                else:
+                    current_route['protocol'] = bracket_content
+                    
+        # Continuation lines (indented or start with > or *)
+        elif (current_route and (line_stripped.startswith('>') or line_stripped.startswith('*') 
+                                or line.startswith(' ') or line.startswith('\t'))):
+            
+            # Mark route as active if line starts with >
+            if line_stripped.startswith('>'):
+                current_route['active'] = True
+                line_stripped = line_stripped[1:].strip()
+                
+            # Parse via and interface information
+            if ' via ' in line_stripped:
+                # Extract next hop and interface
+                via_parts = line_stripped.split(' via ')[1].strip()
+                if ',' in via_parts:
+                    # Format: "via 192.168.1.1, irb.0"
+                    next_hop_part, interface_part = via_parts.split(',', 1)
+                    current_route['next_hop'] = next_hop_part.strip()
+                    current_route['interface'] = interface_part.strip()
+                else:
+                    # Format: "via irb.0" (direct interface)
+                    if '.' in via_parts and not '/' in via_parts:
+                        current_route['interface'] = via_parts.strip()
+                    else:
+                        current_route['next_hop'] = via_parts.strip()
+            
+            # Look for standalone interface (like "Local" or interface names)
+            elif line_stripped in ['Local']:
+                current_route['next_hop'] = 'Local'
+            elif '.' in line_stripped and len(line_stripped.split()) == 1:
+                current_route['interface'] = line_stripped
+    
+    # Add the last route
+    if current_route:
+        routes.append(current_route)
+    
+    return routes
+
+
+def parse_standard_route_line(line):
+    """Parse a standard route line with via/dev/proto keywords."""
+    try:
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+            
+        route_entry = {
+            'destination': parts[0] if parts[0] != '*' else 'default',
+            'next_hop': '',
+            'interface': '',
+            'protocol': '',
+            'metric': '',
+            'admin_distance': ''
+        }
+        
+        # Extract next hop
+        if ' via ' in line:
+            via_index = line.find(' via ')
+            via_part = line[via_index + 5:].split()[0]
+            route_entry['next_hop'] = via_part
+            
+        # Extract interface  
+        if ' dev ' in line:
+            dev_index = line.find(' dev ')
+            dev_part = line[dev_index + 5:].split()[0]
+            route_entry['interface'] = dev_part
+            
+        # Extract protocol
+        if ' proto ' in line:
+            proto_index = line.find(' proto ')
+            proto_part = line[proto_index + 7:].split()[0]
+            route_entry['protocol'] = proto_part
+            
+        # Extract metric
+        if ' metric ' in line:
+            metric_index = line.find(' metric ')
+            metric_part = line[metric_index + 8:].split()[0]
+            route_entry['metric'] = metric_part
+            
+        return route_entry
+        
+    except Exception as e:
+        return None
+
+
+def parse_protocol_route_line(line):
+    """Parse a route line containing protocol information."""
+    try:
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+            
+        route_entry = {
+            'destination': '',
+            'next_hop': '',
+            'interface': '',
+            'protocol': '',
+            'metric': '',
+            'admin_distance': ''
+        }
+        
+        # Look for destination (first IP-like field)
+        for i, part in enumerate(parts):
+            if '/' in part or any(char.isdigit() for char in part) and '.' in part:
+                route_entry['destination'] = part
+                break
+                
+        # Identify protocol
+        for protocol in ['bgp', 'ospf', 'static', 'direct', 'connected', 'kernel', 'evpn']:
+            if protocol in line.lower():
+                route_entry['protocol'] = protocol.upper()
+                break
+                
+        # Look for next hop (IP address pattern)
+        import re
+        ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+        ip_matches = re.findall(ip_pattern, line)
+        if len(ip_matches) > 1:  # First might be destination
+            route_entry['next_hop'] = ip_matches[1]
+        elif len(ip_matches) == 1 and route_entry['destination'] != ip_matches[0]:
+            route_entry['next_hop'] = ip_matches[0]
+            
+        return route_entry
+        
+    except Exception as e:
+        return None
+
+
+def parse_tabular_route_line(line):
+    """Parse a space-separated tabular route line."""
+    try:
+        parts = line.split()
+        if len(parts) < 3:
+            return None
+            
+        route_entry = {
+            'destination': parts[0] if parts[0] not in ['*', '>'] else (parts[1] if len(parts) > 1 else ''),
+            'next_hop': '',
+            'interface': '',
+            'protocol': '',
+            'metric': '',
+            'admin_distance': ''
+        }
+        
+        # Common patterns for different positions
+        for i, part in enumerate(parts[1:], 1):
+            # Look for next hop (IP address)
+            if '.' in part and any(char.isdigit() for char in part) and part != route_entry['destination']:
+                if not route_entry['next_hop']:
+                    route_entry['next_hop'] = part
+                    
+            # Look for interface (often starts with common prefixes)
+            elif any(part.lower().startswith(prefix) for prefix in ['eth', 'ge-', 'xe-', 'fe-', 'lo', 'vlan']):
+                route_entry['interface'] = part
+                
+            # Look for protocol indicators
+            elif part.upper() in ['BGP', 'OSPF', 'STATIC', 'DIRECT', 'CONNECTED', 'KERNEL']:
+                route_entry['protocol'] = part.upper()
+                
+            # Look for metric (numeric)
+            elif part.isdigit() and not route_entry['metric']:
+                route_entry['metric'] = part
+                
+        return route_entry
+        
+    except Exception as e:
+        return None
+
+
+def normalize_json_route_entry(route_data):
+    """Normalize a JSON route entry to standard format."""
+    try:
+        route_entry = {
+            'destination': route_data.get('destination', route_data.get('prefix', '')),
+            'next_hop': route_data.get('next_hop', route_data.get('nexthop', route_data.get('gateway', ''))),
+            'interface': route_data.get('interface', route_data.get('dev', route_data.get('outgoing_interface', ''))),
+            'protocol': route_data.get('protocol', route_data.get('proto', '')).upper(),
+            'metric': str(route_data.get('metric', route_data.get('cost', ''))),
+            'admin_distance': str(route_data.get('admin_distance', route_data.get('distance', '')))
+        }
+        return route_entry
+    except:
+        return None
+
+
+def parse_ssr_routing_json(json_data):
+    """
+    Parse SSR/SRX routing table JSON data from the dedicated API.
+    
+    The SSR API returns structured JSON with columns definition and rows data:
+    {
+        "status": "SUCCESS",
+        "finished": true,
+        "message": "Bgp Routes Table",
+        "columns": [
+            {"id": "vrfName", "display_name": "Vrf Name", "type": "STRING"},
+            {"id": "prefix", "display_name": "Prefix", "type": "STRING"},
+            {"id": "name", "display_name": "Name", "type": "STRING"},
+            {"id": "metric", "display_name": "Metric", "type": "NUMBER"},
+            {"id": "weight", "display_name": "Weight", "type": "NUMBER"},
+            {"id": "path", "display_name": "AS Path", "type": "STRING"},
+            {"id": "localPreference", "display_name": "Local Preference", "type": "NUMBER"},
+            {"id": "status", "display_name": "Status", "type": "STRING"},
+            {"id": "selectionReason", "display_name": "Selection Reason", "type": "STRING"},
+            {"id": "nextHops", "display_name": "Next Hops", "type": "STRING"}
+        ],
+        "rows": [...]
+    }
+    
+    Args:
+        json_data (str): Raw JSON string from SSR API
+        
+    Returns:
+        list: List of parsed routing table entries as dictionaries
+    """
+    try:
+        import json
+        data = json.loads(json_data)
+        
+        if data.get("status") != "SUCCESS":
+            return []
+            
+        columns = data.get("columns", [])
+        rows = data.get("rows", [])
+        
+        if not columns or not rows:
+            return []
+        
+        route_entries = []
+        for row in rows:
+            # Map SSR fields to standard routing table format
+            route_entry = {
+                'destination': row.get('prefix', ''),
+                'next_hop': row.get('nextHops', ''),
+                'interface': '',  # SSR doesn't provide interface in this API
+                'protocol': 'BGP' if 'bgp' in data.get("message", "").lower() else 'Unknown',
+                'admin_distance': '',  # Not directly provided
+                'metric': str(row.get('metric', '')),
+                'status': row.get('status', ''),
+                'vrf': row.get('vrfName', 'default'),
+                'name': row.get('name', ''),
+                'weight': str(row.get('weight', '')),
+                'as_path': row.get('path', ''),
+                'local_preference': str(row.get('localPreference', '')),
+                'selection_reason': row.get('selectionReason', '')
+            }
+            route_entries.append(route_entry)
+            
+        return route_entries
+        
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logging.warning(f"Failed to parse SSR routing JSON: {e}")
+        return []
+
+
+def display_routing_table_summary(route_entries, query_params):
+    """
+    Display a formatted summary of routing table entries.
+    
+    Args:
+        route_entries (list): List of parsed routing table entries
+        query_params (dict): Original query parameters for context
+    """
+    if not route_entries:
+        print("→ No routing table entries found")
+        if query_params:
+            print("  → Try adjusting query parameters:")
+            for key, value in query_params.items():
+                print(f"    - {key}: {value}")
+        return
+    
+    print(f"→ Total routing table entries: {len(route_entries)}")
+    
+    # Group routes by protocol for summary
+    protocols = {}
+    destinations = set()
+    next_hops = set()
+    interfaces = set()
+    tables = set()
+    active_routes = 0
+    
+    for entry in route_entries:
+        protocol = entry.get('protocol', 'Unknown').upper()
+        if protocol and protocol != 'UNKNOWN':
+            protocols[protocol] = protocols.get(protocol, 0) + 1
+        
+        if entry.get('destination') and entry.get('destination') != '-':
+            destinations.add(entry['destination'])
+        if entry.get('next_hop') and entry.get('next_hop') not in ['-', '']:
+            next_hops.add(entry['next_hop'])
+        if entry.get('interface') and entry.get('interface') not in ['-', '']:
+            interfaces.add(entry['interface'])
+        if entry.get('table'):
+            tables.add(entry['table'])
+        if entry.get('active'):
+            active_routes += 1
+    
+    # Display protocol summary  
+    if protocols:
+        print(f"→ Protocols: {', '.join([f'{proto}({count})' for proto, count in protocols.items()])}")
+    
+    # Display table summary if multiple tables
+    if len(tables) > 1:
+        print(f"→ Routing tables: {', '.join(sorted(tables))}")
+    
+    print(f"→ Unique destinations: {len(destinations)}")
+    print(f"→ Unique next hops: {len(next_hops)}")
+    print(f"→ Unique interfaces: {len(interfaces)}")
+    
+    if active_routes > 0:
+        print(f"→ Active routes (marked with >): {active_routes}")
+    
+    # Display detailed routing table
+    print(f"\n→ Detailed routing table:")
+    display_routing_table_details(route_entries)
+
+
+def display_routing_table_details(route_entries):
+    """
+    Display detailed routing table in a formatted table.
+    
+    Args:
+        route_entries (list): List of parsed routing table entries
+    """
+    if not route_entries:
+        return
+        
+    # Use prettytable if available, otherwise fall back to simple formatting
+    try:
+        table = PrettyTable()
+        table.field_names = ["Status", "Destination", "Next Hop", "Interface", "Protocol", "Admin Dist"]
+        table.align = "l"
+        # Remove max_width to prevent truncation
+        
+        # Show all entries with full data (no truncation)
+        for entry in route_entries:
+            # Create status indicator
+            status = ""
+            if entry.get('active'):
+                status += ">"
+            if entry.get('selected'):
+                status += "*"
+            if not status:
+                status = " "
+                
+            # Clean up fields - replace empty/None with dash
+            dest = entry.get('destination', '-')
+            if not dest or dest == '':
+                dest = '-'
+                
+            next_hop = entry.get('next_hop', '-')
+            if not next_hop or next_hop == '':
+                next_hop = '-'
+                
+            interface = entry.get('interface', '-')
+            if not interface or interface == '':
+                interface = '-'
+                
+            protocol = entry.get('protocol', '-')
+            if not protocol or protocol == '':
+                protocol = '-'
+                
+            admin_dist = entry.get('admin_distance', '-')
+            if not admin_dist or admin_dist == '':
+                admin_dist = '-'
+            
+            # Add row without truncation
+            table.add_row([
+                status,
+                dest,
+                next_hop,
+                interface,
+                protocol,
+                admin_dist
+            ])
+        
+        print(table)
+        
+        # Add legend for status indicators
+        print("\nStatus Legend:")
+        print("  > = Active route (installed in forwarding table)")
+        print("  * = Selected route (best route among alternatives)")
+            
+    except Exception as e:
+        # Fallback to simple text formatting if prettytable fails
+        print("   Status | Destination              | Next Hop        | Interface       | Protocol | Dist")
+        print("   " + "-" * 95)
+        for entry in route_entries:
+            status = ""
+            if entry.get('active'):
+                status += ">"
+            if entry.get('selected'):
+                status += "*"
+            if not status:
+                status = " "
+                
+            dest = entry.get('destination', '-')
+            next_hop = entry.get('next_hop', '-')
+            interface = entry.get('interface', '-')
+            protocol = entry.get('protocol', '-')
+            admin_dist = entry.get('admin_distance', '-')
+            print(f"   {status:<6} | {dest:<25} | {next_hop:<15} | {interface:<15} | {protocol:<8} | {admin_dist}")
+        
+        print("\nStatus Legend:")
+        print("  > = Active route, * = Selected route")
+
+
+def display_ssr_routing_table(route_entries, query_params):
+    """
+    Display SSR/SRX routing table with enhanced BGP-specific information.
+    
+    Args:
+        route_entries (list): List of parsed SSR routing table entries
+        query_params (dict): Original query parameters for context
+    """
+    if not route_entries:
+        print("→ No routing table entries found")
+        if query_params:
+            print("  → Try adjusting query parameters:")
+            for key, value in query_params.items():
+                print(f"    - {key}: {value}")
+        return
+    
+    # Count and categorize routes
+    total_routes = len(route_entries)
+    protocols = {}
+    vrfs = {}
+    next_hops = set()
+    
+    for entry in route_entries:
+        protocol = entry.get('protocol', 'Unknown')
+        protocols[protocol] = protocols.get(protocol, 0) + 1
+        
+        vrf = entry.get('vrf', 'default')
+        vrfs[vrf] = vrfs.get(vrf, 0) + 1
+        
+        next_hop = entry.get('next_hop', '')
+        if next_hop and next_hop != '0.0.0.0':
+            next_hops.add(next_hop)
+    
+    # Display summary
+    print(f"→ Total routing table entries: {total_routes}")
+    
+    protocol_summary = ", ".join([f"{proto}({count})" for proto, count in protocols.items()])
+    print(f"→ Protocols: {protocol_summary}")
+    
+    vrf_summary = ", ".join([f"{vrf}({count})" for vrf, count in vrfs.items()])
+    print(f"→ VRFs: {vrf_summary}")
+    
+    print(f"→ Unique next hops: {len(next_hops)}")
+    
+    # Display detailed table using prettytable
+    try:
+        table = PrettyTable()
+        table.field_names = ["Destination", "Next Hop", "Protocol", "Route Name", "Status", "Selection Reason", "Weight", "Metric", "Local Pref", "AS Path", "VRF"]
+        table.align = "l"
+        # Remove max_width to allow full data display
+        
+        for entry in route_entries:
+            vrf = entry.get('vrf', 'default')
+            destination = entry.get('destination', '-')
+            next_hop = entry.get('next_hop', '-')
+            protocol = entry.get('protocol', '-')
+            status = entry.get('status', '-')
+            weight = entry.get('weight', '-')
+            metric = entry.get('metric', '-')
+            local_pref = entry.get('local_preference', '-')
+            as_path = entry.get('as_path', '-')
+            route_name = entry.get('name', '-')
+            selection_reason = entry.get('selection_reason', '-')
+            
+            # No truncation - show full data
+            table.add_row([
+                destination,
+                next_hop,
+                protocol,
+                route_name,
+                status,
+                selection_reason,
+                weight,
+                metric,
+                local_pref,
+                as_path,
+                vrf
+            ])
+        
+        print(f"\n→ Detailed routing table:")
+        print(table)
+        
+    except Exception as e:
+        # Fallback to simple formatting
+        print(f"\n→ Detailed routing table:")
+        print("   Destination | Next Hop | Protocol | Route Name | Status | Selection Reason | Weight | Metric | Local Pref | AS Path | VRF")
+        print("   " + "-" * 140)
+        for entry in route_entries:
+            dest = entry.get('destination', '-')
+            next_hop = entry.get('next_hop', '-')
+            protocol = entry.get('protocol', '-')
+            route_name = entry.get('name', '-')
+            status = entry.get('status', '-')
+            selection_reason = entry.get('selection_reason', '-')
+            weight = entry.get('weight', '-')
+            metric = entry.get('metric', '-')
+            local_pref = entry.get('local_preference', '-')
+            as_path = entry.get('as_path', '-')
+            vrf = entry.get('vrf', 'default')
+            print(f"   {dest} | {next_hop} | {protocol} | {route_name} | {status} | {selection_reason} | {weight} | {metric} | {local_pref} | {as_path} | {vrf}")
+
+
+def show_forwarding_table_websocket():
+    """
+    Execute show forwarding table command on a gateway/SSR device via WebSocket.
+    
+    Forwarding tables are a Layer 3 routing feature primarily used by routers and gateways
+    to show the Forwarding Information Base (FIB) for packet forwarding decisions.
+    This is different from MAC tables (Layer 2) and provides routing/forwarding information.
+        
+        Follows the documented Mist API pattern:
+        1. Connect to WebSocket
+        2. Subscribe to device command channel
+        3. Issue POST show_forwarding_table command
+        4. Await results via WebSocket stream
+        
+        SECURITY: Uses authenticated WebSocket connection with session-based
+        command demultiplexing for concurrent command safety.
+        """
+    # Check for debug mode from command line arguments
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("[DEBUG] DEBUG MODE ENABLED")
+    
+    logging.info("Starting WebSocket show forwarding table operation...")
+    logging.debug("ENTER: show_forwarding_table_websocket")
+    
+    try:
+        # Interactive site selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+            
+        # Get device selection - Forwarding table is a Layer 3 routing feature
+        print("→ Forwarding table is available on routers and gateways (Layer 3 devices)")
+        print("→ This shows the Forwarding Information Base (FIB) used for packet routing decisions")
+        print("→ SSR gateways provide the most comprehensive forwarding table information")
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="gateway")
+        if not device_id:
+            print("! No gateway device selected. Forwarding table command is optimized for Layer 3 routing devices.")
+            print("! Gateways and SSR devices maintain forwarding tables for packet routing decisions.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+        
+        # Get device details to check type and model for compatibility
+        device_info = None
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
+            
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', f"Device {device_id[:8]}")
+                
+                if debug_mode:
+                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
+                
+                # Provide device-specific guidance
+                if device_type == 'gateway':
+                    if 'SSR' in device_model.upper() or '128T' in device_model:
+                        print(f"→ SSR gateway detected ({device_model}): Excellent forwarding table support")
+                    else:
+                        print(f"→ Gateway device detected ({device_model}): Good forwarding table support")
+                elif device_type == 'switch':
+                    print(f"⚠ Switch device ({device_model}): Limited forwarding table - primarily Layer 2")
+                    print("  → Consider using MAC table command for Layer 2 switching information")
+                elif device_type == 'ap':
+                    print(f"⚠ Access Point ({device_model}): No forwarding table - wireless bridging only")
+                    print("  → APs operate at Layer 2 and don't maintain routing tables")
+                    
+        except Exception as device_check_error:
+            logging.warning(f"Could not verify device compatibility: {device_check_error}")
+            if debug_mode:
+                print(f"[DEBUG] Device check failed: {device_check_error}")
+            print("   → Proceeding with standard forwarding table command")
+            
+        print(f"\n→ Executing show forwarding table on device {device_id}...")
+        print("→ Establishing WebSocket connection...")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+            
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        # Issue show forwarding table command via REST API
+        # According to Mist API docs: "prefix or/and service_name must be used for filtering forwarding table"
+        print("\n=== Forwarding Table Lookup Parameters ===")
+        print("The Mist API requires filtering parameters for forwarding table lookups.")
+        print("You can provide:")
+        print("  1. IP prefix (e.g., 192.168.1.0/24, 10.0.0.0/8)")
+        print("  2. Service name (for SSR gateways)")
+        print("  3. Both prefix and service name")
+        print("  4. Leave empty to use default (0.0.0.0/0 - all routes)")
+        
+        # Get user input for filtering parameters
+        prefix_input = input("\nEnter IP prefix (press Enter for default 0.0.0.0/0): ").strip()
+        service_name_input = input("Enter service name (press Enter to skip): ").strip()
+        vrf_input = input("Enter VRF name (press Enter to skip): ").strip()
+        node_input = input("Enter node (node0/node1 for HA, press Enter to skip): ").strip()
+        
+        # Build the payload with required filtering
+        forwarding_table_payload = {}
+        
+        # Use provided prefix or default to show all routes
+        if prefix_input:
+            forwarding_table_payload["prefix"] = prefix_input
+        else:
+            forwarding_table_payload["prefix"] = "0.0.0.0/0"  # Default to show all routes
+            print("→ Using default prefix: 0.0.0.0/0 (all routes)")
+        
+        # Add optional parameters if provided
+        if service_name_input:
+            forwarding_table_payload["service_name"] = service_name_input
+            
+        if vrf_input:
+            forwarding_table_payload["vrf"] = vrf_input
+            
+        if node_input and node_input.lower() in ["node0", "node1"]:
+            forwarding_table_payload["node"] = node_input.lower()
+        
+        print("→ Issuing show forwarding table command...")
+        logging.debug(f"Forwarding table payload: {forwarding_table_payload}")
+        
+        if debug_mode:
+            print(f"[DEBUG] Forwarding table payload = {forwarding_table_payload}")
+        
+        # Get authentication details for direct HTTP request
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        
+        if not mist_host or not mist_apitoken:
+            print("! Mist host or API token not found in session or environment")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] mist_host = {mist_host}")
+            print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
+        
+        # Make direct POST request to trigger show forwarding table
+        forwarding_table_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_forwarding_table"
+        headers = {'Authorization': f'Token {mist_apitoken}', 'Content-Type': 'application/json'}
+        
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {forwarding_table_url}")
+            print(f"[DEBUG] Headers = {{'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}}")
+        
+        forwarding_table_response = requests.post(forwarding_table_url, headers=headers, json=forwarding_table_payload)
+        
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {forwarding_table_response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {forwarding_table_response.text}")
+        
+        if forwarding_table_response.status_code != 200:
+            print(f"! Failed to issue show forwarding table command: {forwarding_table_response.status_code}")
+            print(f"! Response: {forwarding_table_response.text}")
+            websocket_manager.disconnect()
+            return
+            
+        # Extract session ID from response
+        response_data = forwarding_table_response.json()
+        session_id = response_data.get("session")
+        if not session_id:
+            print("! No session ID returned from show forwarding table command")
+            websocket_manager.disconnect()
+            return
+            
+        print(f"→ Show forwarding table command issued (session: {session_id[:8]}...)")
+        print("→ Waiting for forwarding table results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Wait for forwarding table results via WebSocket (longer timeout for potentially large tables)
+        forwarding_table_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {forwarding_table_result is not None}")
+            if forwarding_table_result:
+                print(f"[DEBUG] Result keys: {list(forwarding_table_result.keys())}")
+        
+        if forwarding_table_result:
+            print("\n" + "=" * 80)
+            print("FORWARDING TABLE RESULTS:")
+            print("=" * 80)
+            
+            # Parse and display forwarding table data in a user-friendly format
+            raw_output = forwarding_table_result.get("raw", "")
+            if raw_output:
+                forwarding_entries = parse_forwarding_table_output(raw_output)
+                display_forwarding_table_summary(forwarding_entries)
+            
+            # Display any other output fields that might be present
+            output_fields = forwarding_table_result.get("Output", "")
+            if output_fields and output_fields != raw_output:
+                print("\n" + "=" * 40)
+                print("ADDITIONAL OUTPUT:")
+                print("=" * 40)
+                additional_entries = parse_forwarding_table_output(output_fields)
+                display_forwarding_table_summary(additional_entries)
+                
+            # Show debug information if enabled
+            if debug_mode:
+                available_fields = [key for key in forwarding_table_result.keys() if key not in ['raw', 'Output', 'session']]
+                if available_fields:
+                    print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available_fields}")
+                    for field in available_fields:
+                        field_value = forwarding_table_result.get(field)
+                        if field_value:
+                            print(f"[DEBUG] {field}: {field_value}")
+                
+            if not raw_output and not output_fields:
+                print("! No forwarding table data received")
+                print(f"Available result keys: {list(forwarding_table_result.keys())}")
+            
+            print("=" * 80)
+            
+            # Log the successful operation with device context
+            device_context = f"device {device_id}"
+            if device_info:
+                device_context = f"{device_info.get('type', 'unknown')} {device_info.get('name', device_id[:8])}"
+            logging.info(f"WebSocket show forwarding table completed successfully for {device_context}")
+            
+        else:
+            print("! Timeout waiting for forwarding table results")
+            print("! This may indicate:")
+            print("  - The device doesn't support forwarding table commands (common for Layer 2-only devices)")
+            print("  - The device is busy or not responding")
+            print("  - Network connectivity issues")
+            print("! Note: Forwarding tables are primarily a Layer 3 (routing) feature")
+            
+            # Provide device-specific troubleshooting advice
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                
+                if device_type == 'gateway':
+                    print(f"\nGateway troubleshooting ({device_model}):")
+                    print("→ SSR gateways typically support forwarding table commands")
+                    print("→ Ensure the device is online and reachable")
+                    print("→ Check device CPU utilization - high load can delay responses")
+                    print("→ Try the command again or use SSH-based routing commands")
+                elif device_type == 'switch':
+                    print(f"\nSwitch troubleshooting ({device_model}):")
+                    print("→ Switches primarily operate at Layer 2")
+                    print("→ Use 'Show MAC Table' command for Layer 2 forwarding information")
+                    print("→ Layer 3 switches may support limited routing table commands")
+                elif device_type == 'ap':
+                    print(f"\nAccess Point troubleshooting ({device_model}):")
+                    print("→ APs operate at Layer 2 and don't maintain forwarding tables")
+                    print("→ Use wireless client statistics instead")
+                    print("→ Check AP connectivity and bridging status")
+                else:
+                    print(f"\nGeneral troubleshooting ({device_model}):")
+                    print("→ Verify device supports Layer 3 routing features")
+                    print("→ Check device online status and connectivity")
+                    print("→ Consider using SSH commands for advanced routing diagnostics")
+            
+            logging.warning("WebSocket show forwarding table operation timed out")
+            
+            if debug_mode:
+                print("[DEBUG] Checking WebSocket manager state...")
+                print(f"[DEBUG] Connected = {websocket_manager.connected}")
+                print(f"[DEBUG] Subscribed channels = {websocket_manager.subscribed_channels}")
+                with websocket_manager.results_lock:
+                    print(f"[DEBUG] Pending results = {list(websocket_manager.command_results.keys())}")
+            
+    except Exception as forwarding_table_error:
+        error_message = f"WebSocket show forwarding table operation failed: {forwarding_table_error}"
+        print(f"! {error_message}")
+        logging.error(error_message)
+        
+        if debug_mode:
+            print("[DEBUG] Exception details:")
+            import traceback
+            traceback.print_exc()
+        
+        logging.debug("EXIT: show_forwarding_table_websocket - error")
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+                
+                if debug_mode:
+                    print("[DEBUG] WebSocket cleanup completed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: show_forwarding_table_websocket")
+
+
+def show_routing_table_websocket():
+    """
+    Execute show route command on switches, routers, and SSR devices via WebSocket.
+    
+    This function retrieves routing table information (RIB - Routing Information Base) from network devices.
+    The routing table shows routes learned from various routing protocols like BGP, OSPF, static routes, etc.
+    This is different from the forwarding table (FIB) which shows the actual forwarding entries used for packet forwarding.
+    
+    Supported devices:
+    - Switches with Layer 3 routing capabilities 
+    - SRX routers
+    - SSR gateways
+    - Other routing-capable network devices
+    
+    API Endpoint: POST /api/v1/sites/:site_id/devices/:device_id/show_route
+    
+    SECURITY: Uses authenticated WebSocket connection with session-based
+    command demultiplexing for concurrent command safety.
+    """
+    # Check for debug mode from command line arguments
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("[DEBUG] DEBUG MODE ENABLED")
+    
+    logging.info("Starting WebSocket show routing table operation...")
+    logging.debug("ENTER: show_routing_table_websocket")
+    
+    try:
+        # Interactive site selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+            
+        # Get device selection - Focus on switches with Layer 3 routing capabilities
+        print("→ Switch routing table information (Layer 3 routing protocols)")
+        print("→ This shows the Routing Information Base (RIB) maintained by routing protocols")
+        print("→ Includes routes from BGP, OSPF, static routes, direct routes, etc.")
+        print("→ For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="switch")
+        if not device_id:
+            print("! No device selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+        
+        # Get device details to check type and model for switch routing compatibility
+        device_info = None
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="switch").data
+            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
+            
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', f"Device {device_id[:8]}")
+                
+                if debug_mode:
+                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
+                
+                # Provide device-specific guidance for switch routing table support
+                if device_type == 'switch':
+                    if 'EX' in device_model.upper():
+                        print(f"✓ Juniper EX switch detected ({device_model}): Excellent Layer 3 routing support")
+                    elif 'QFX' in device_model.upper():
+                        print(f"✓ Juniper QFX switch detected ({device_model}): Good Layer 3 routing support")
+                    else:
+                        print(f"→ Switch device detected ({device_model}): Layer 3 routing table support")
+                    print("  → Shows routing protocol information if Layer 3 features are enabled")
+                else:
+                    print(f"⚠ Non-switch device detected ({device_type}/{device_model})")
+                    print(f"  → For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
+                    print(f"  → For gateway forwarding tables, use Menu Option 6")
+                    user_choice = input("Continue with switch routing command anyway? (y/N): ").strip().lower()
+                    if user_choice not in ['y', 'yes']:
+                        print("Operation cancelled.")
+                        return
+                    
+        except Exception as device_check_error:
+            logging.warning(f"Could not verify device compatibility: {device_check_error}")
+            if debug_mode:
+                print(f"[DEBUG] Device check failed: {device_check_error}")
+            print("   → Proceeding with standard routing table command")
+            
+        print(f"\n→ Executing show route on device {device_id}...")
+        print("→ Establishing WebSocket connection...")
+        
+        # Initialize WebSocket manager
+        websocket_manager = WebSocketManager(apisession)
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+            
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        # Issue show route command via REST API
+        print("\n=== Routing Table Query Parameters ===")
+        print("Configure the routing table query (all parameters are optional):")
+        print("  • Prefix: Specific route prefix to look up (e.g., 192.168.1.0/24)")
+        print("  • Protocol: Filter by routing protocol (bgp, ospf, static, direct, evpn, any)")
+        print("  • VRF: Virtual Routing and Forwarding instance name")
+        print("  • Neighbor: BGP neighbor IP (shows received/advertised routes)")
+        print("  • Node: For HA devices (node0/node1)")
+        
+        # Get user input for routing table parameters
+        prefix_input = input("\nEnter route prefix (press Enter to show all routes): ").strip()
+        
+        print("\nProtocol options: any (default - shows all routes), bgp, ospf, static, direct, evpn")
+        protocol_input = input("Enter protocol filter (press Enter for default 'any'): ").strip()
+        
+        vrf_input = input("Enter VRF name (press Enter to skip): ").strip()
+        neighbor_input = input("Enter BGP neighbor IP (press Enter to skip): ").strip()
+        
+        if neighbor_input:
+            print("\nRoute direction options for BGP neighbor:")
+            print("  • received: Routes received from neighbor")
+            print("  • advertised: Routes advertised to neighbor") 
+            print("  • (empty): Both received and advertised routes")
+            route_direction = input("Enter route direction (press Enter for both): ").strip()
+        else:
+            route_direction = ""
+            
+        node_input = input("Enter node (node0/node1 for HA, press Enter to skip): ").strip()
+        
+        # Build the payload for show route command
+        route_payload = {}
+        
+        # Add parameters if provided
+        if prefix_input:
+            route_payload["prefix"] = prefix_input
+            
+        if protocol_input:
+            if protocol_input.lower() in ["bgp", "ospf", "static", "direct", "evpn", "any"]:
+                route_payload["protocol"] = protocol_input.lower()
+            else:
+                print(f"⚠ Invalid protocol '{protocol_input}', using default 'any'")
+                route_payload["protocol"] = "any"
+        else:
+            route_payload["protocol"] = "any"  # Default protocol - shows all routes
+            
+        if vrf_input:
+            route_payload["vrf"] = vrf_input
+            
+        if neighbor_input:
+            route_payload["neighbor"] = neighbor_input
+            if route_direction and route_direction.lower() in ["received", "advertised"]:
+                route_payload["route"] = route_direction.lower()
+            
+        if node_input and node_input.lower() in ["node0", "node1"]:
+            route_payload["node"] = node_input.lower()
+        
+        print("→ Issuing show route command...")
+        logging.debug(f"Route payload: {route_payload}")
+        
+        if debug_mode:
+            print(f"[DEBUG] Route payload = {route_payload}")
+        
+        # Get authentication details for direct HTTP request
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        
+        if not mist_host or not mist_apitoken:
+            print("! Mist host or API token not found in session or environment")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] mist_host = {mist_host}")
+            print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
+        
+        # Make direct POST request to trigger show route
+        route_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_route"
+        headers = {'Authorization': f'Token {mist_apitoken}', 'Content-Type': 'application/json'}
+        
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {route_url}")
+            print(f"[DEBUG] Headers = {{'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}}")
+        
+        route_response = requests.post(route_url, headers=headers, json=route_payload)
+        
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {route_response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {route_response.text}")
+        
+        if route_response.status_code != 200:
+            print(f"! Failed to issue show route command: {route_response.status_code}")
+            print(f"! Response: {route_response.text}")
+            websocket_manager.disconnect()
+            return
+            
+        # Extract session ID from response
+        response_data = route_response.json()
+        session_id = response_data.get("session")
+        if not session_id:
+            print("! No session ID returned from show route command")
+            websocket_manager.disconnect()
+            return
+            
+        print(f"→ Show route command issued (session: {session_id[:8]}...)")
+        print("→ Waiting for routing table results...")
+        
+        if debug_mode:
+            print(f"[DEBUG] Full session ID = {session_id}")
+            print("[DEBUG] Starting to wait for WebSocket results...")
+        
+        # Wait for routing table results via WebSocket (longer timeout for potentially large tables)
+        route_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+        
+        if debug_mode:
+            print(f"[DEBUG] wait_for_command_result returned: {route_result is not None}")
+            if route_result:
+                print(f"[DEBUG] Result keys: {list(route_result.keys())}")
+        
+        if route_result:
+            print("\n" + "=" * 80)
+            print("ROUTING TABLE RESULTS:")
+            print("=" * 80)
+            
+            # Parse and display routing table data in a user-friendly format
+            raw_output = route_result.get("raw", "")
+            if raw_output:
+                route_entries = parse_routing_table_output(raw_output)
+                display_routing_table_summary(route_entries, route_payload)
+            
+            # Display any other output fields that might be present
+            output_fields = route_result.get("Output", "")
+            if output_fields and output_fields != raw_output:
+                print("\n" + "=" * 40)
+                print("ADDITIONAL OUTPUT:")
+                print("=" * 40)
+                additional_entries = parse_routing_table_output(output_fields)
+                display_routing_table_summary(additional_entries, route_payload)
+                
+            # Show debug information if enabled
+            if debug_mode:
+                available_fields = [key for key in route_result.keys() if key not in ['raw', 'Output', 'session']]
+                if available_fields:
+                    print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available_fields}")
+                    for field in available_fields:
+                        field_value = route_result.get(field)
+                        if field_value:
+                            print(f"[DEBUG] {field}: {field_value}")
+                
+            if not raw_output and not output_fields:
+                print("! No routing table data received")
+                print(f"Available result keys: {list(route_result.keys())}")
+            
+            print("=" * 80)
+            
+            # Log the successful operation with device context
+            device_context = f"device {device_id}"
+            if device_info:
+                device_context = f"{device_info.get('type', 'unknown')} {device_info.get('name', device_id[:8])}"
+            logging.info(f"WebSocket show routing table completed successfully for {device_context}")
+            
+        else:
+            print("! Timeout waiting for routing table results")
+            print("! This may indicate:")
+            print("  - The device doesn't support routing table commands")
+            print("  - The device has no routing protocols configured")
+            print("  - The device is busy or not responding")
+            print("  - Network connectivity issues")
+            print("  - Invalid query parameters for this device type")
+            
+    except KeyboardInterrupt:
+        print("\n! Operation interrupted by user")
+        logging.info("WebSocket show routing table operation interrupted by user")
+        
+    except Exception as route_error:
+        print(f"! Error during show routing table operation: {route_error}")
+        logging.error(f"WebSocket show routing table error: {route_error}")
+        
+        if debug_mode:
+            import traceback
+            print("[DEBUG] Full traceback:")
+            traceback.print_exc()
+        
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+                
+                if debug_mode:
+                    print("[DEBUG] WebSocket cleanup completed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: show_routing_table_websocket")
+
+
+def show_ssr_routes_dedicated():
+    """
+    Execute SSR/SRX routing table command using dedicated API function.
+    
+    Uses the dedicated mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes function
+    which provides structured routing table queries specifically optimized for
+    SSR and SRX devices with proper parameter validation and device-specific formatting.
+    
+    This function provides advanced routing table analysis capabilities including:
+    - Protocol-specific filtering (BGP, OSPF, static, direct, EVPN, any)
+    - BGP neighbor analysis (received/advertised routes)  
+    - VRF-aware routing table queries
+    - Route prefix lookups
+    - HA cluster node selection
+    - Structured output formatting
+    
+    API Endpoint: POST /api/v1/sites/:site_id/devices/:device_id/show_route
+    Schema: utils_show_route (see OpenAPI documentation)
+    
+    Supported devices:
+    - SSR gateways (128T Session Smart Routers)
+    - SRX routers (Juniper SRX series)
+    
+    SECURITY: Uses authenticated API session with proper parameter validation
+    and device capability checking for safe routing table operations.
+    """
+    # Check for debug mode from command line arguments
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    
+    if debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("[DEBUG] DEBUG MODE ENABLED")
+    
+    logging.info("Starting SSR/SRX dedicated routing table operation...")
+    logging.debug("ENTER: show_ssr_routes_dedicated")
+    
+    try:
+        # Interactive site selection
+        site_id = prompt_select_site_id_from_csv()
+        if not site_id:
+            print("! No site selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected site_id = {site_id}")
+            
+        # Get device selection - Focus on SSR and SRX devices
+        print("→ SSR/SRX routing table query using dedicated API function")
+        print("→ This function is optimized for SSR (128T) and SRX devices")
+        print("→ Provides structured routing table queries with advanced filtering")
+        device_id = prompt_select_device_id_from_inventory(site_id, device_type="gateway")
+        if not device_id:
+            print("! No device selected. Operation cancelled.")
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Selected device_id = {device_id}")
+        
+        # Get device details to verify SSR/SRX compatibility
+        device_info = None
+        device_compatible = False
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway").data
+            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
+            
+            if device_info:
+                device_type = device_info.get('type', 'unknown')
+                device_model = device_info.get('model', 'unknown')
+                device_name = device_info.get('name', f"Device {device_id[:8]}")
+                
+                if debug_mode:
+                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
+                
+                # Check device compatibility for dedicated SSR/SRX API
+                if device_type == 'gateway':
+                    if 'SSR' in device_model.upper() or '128T' in device_model:
+                        print(f"✓ SSR gateway detected ({device_model}): Fully compatible with dedicated API")
+                        device_compatible = True
+                    elif 'SRX' in device_model.upper():
+                        print(f"✓ SRX router detected ({device_model}): Fully compatible with dedicated API") 
+                        device_compatible = True
+                    else:
+                        print(f"⚠ Gateway device ({device_model}): May have limited compatibility")
+                        print("  → This API function is optimized for SSR and SRX devices")
+                        user_choice = input("Continue anyway? (y/N): ").strip().lower()
+                        if user_choice not in ['y', 'yes']:
+                            print("Operation cancelled.")
+                            return
+                        device_compatible = True
+                else:
+                    print(f"⚠ Non-gateway device detected ({device_type}/{device_model})")
+                    print("  → This API function is designed for SSR and SRX gateway devices")
+                    user_choice = input("Continue anyway? (y/N): ").strip().lower()
+                    if user_choice not in ['y', 'yes']:
+                        print("Operation cancelled.")
+                        return
+                    device_compatible = True
+                    
+        except Exception as device_check_error:
+            logging.warning(f"Could not verify device compatibility: {device_check_error}")
+            if debug_mode:
+                print(f"[DEBUG] Device check failed: {device_check_error}")
+            print("   → Proceeding with SSR/SRX routing table command")
+            device_compatible = True
+            
+        if not device_compatible:
+            print("! Device compatibility check failed. Operation cancelled.")
+            return
+            
+        print(f"\n=== SSR/SRX Routing Table Query Parameters ===")
+        print("Configure the routing table query (all parameters are optional):")
+        print("  • Protocol: Filter by routing protocol")
+        print("  • Prefix: Specific route prefix to look up")
+        print("  • VRF: Virtual Routing and Forwarding instance")
+        print("  • Neighbor: BGP neighbor IP for route analysis")
+        print("  • Route Direction: For BGP neighbors (received/advertised)")
+        print("  • Node: For HA clusters (node0/node1)")
+        print("  • Refresh: Real-time updates (interval/duration)")
+        print("")
+        print("→ Note: SSR devices work well with BGP protocol queries")
+        print("→ For comprehensive routing table, use 'any' protocol")
+        print("→ Or let the API choose its own default by skipping protocol")
+        
+        # Build the request body using utils_show_route schema
+        request_body = {}
+        
+        # Protocol selection
+        print("\nProtocol options:")
+        print("  • bgp - Border Gateway Protocol routes")
+        print("  • any - Show all routing protocols")
+        print("  • ospf - Open Shortest Path First routes")
+        print("  • static - Statically configured routes")
+        print("  • direct - Directly connected routes")
+        print("  • evpn - Ethernet VPN routes")
+        print("  • (none) - Let API use its default behavior")
+        protocol_input = input("Enter protocol (press Enter to use API default): ").strip().lower()
+        
+        if protocol_input and protocol_input in ["any", "bgp", "ospf", "static", "direct", "evpn"]:
+            request_body["protocol"] = protocol_input
+        elif protocol_input:
+            print(f"⚠ Invalid protocol '{protocol_input}', skipping protocol filter")
+            # Don't set protocol in request_body - let API use its default
+        
+        # Route prefix
+        prefix_input = input("\nEnter route prefix (e.g., 192.168.1.0/24, press Enter to skip): ").strip()
+        if prefix_input:
+            request_body["prefix"] = prefix_input
+            
+        # VRF name
+        vrf_input = input("Enter VRF name (press Enter for default VRF): ").strip()
+        if vrf_input:
+            request_body["vrf"] = vrf_input
+            
+        # BGP neighbor analysis
+        neighbor_input = input("Enter BGP neighbor IP (press Enter to skip): ").strip()
+        if neighbor_input:
+            request_body["neighbor"] = neighbor_input
+            
+            print("\nBGP route direction options:")
+            print("  • received - Routes received from neighbor")
+            print("  • advertised - Routes advertised to neighbor") 
+            print("  • (empty) - Both received and advertised routes")
+            route_direction = input("Enter route direction (press Enter for both): ").strip().lower()
+            
+            if route_direction and route_direction in ["received", "advertised"]:
+                request_body["route"] = route_direction
+                
+        # HA cluster node selection
+        node_input = input("Enter HA cluster node (node0/node1, press Enter to skip): ").strip().lower()
+        if node_input and node_input in ["node0", "node1"]:
+            request_body["node"] = {"node": node_input}
+            
+        # Real-time refresh options
+        print("\nReal-time refresh options (for monitoring dynamic changes):")
+        interval_input = input("Refresh interval in seconds (0-10, press Enter for one-time): ").strip()
+        if interval_input and interval_input.isdigit():
+            interval_val = int(interval_input)
+            if 0 <= interval_val <= 10:
+                request_body["interval"] = interval_val
+                
+                if interval_val > 0:
+                    duration_input = input("Refresh duration in seconds (0-300, press Enter for 30): ").strip()
+                    if duration_input and duration_input.isdigit():
+                        duration_val = int(duration_input)
+                        if 0 <= duration_val <= 300:
+                            request_body["duration"] = duration_val
+                    else:
+                        request_body["duration"] = 30  # Default 30 seconds
+        
+        print(f"\n→ Executing SSR/SRX routing table query on device {device_id}...")
+        logging.debug(f"Request body: {request_body}")
+        
+        if debug_mode:
+            print(f"[DEBUG] Request body = {request_body}")
+        
+        # Initialize WebSocket manager for receiving results
+        print("→ Establishing WebSocket connection...")
+        websocket_manager = WebSocketManager(apisession)
+        
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+        
+        # Connect to WebSocket
+        if not websocket_manager.connect():
+            print("! Failed to establish WebSocket connection")
+            return
+            
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+            
+        # Subscribe to device command channel
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not websocket_manager.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            websocket_manager.disconnect()
+            return
+        
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            
+        print("→ WebSocket connected and subscribed")
+        
+        # Wait a moment for subscription to be established
+        time.sleep(1)
+        
+        # Execute the dedicated SSR/SRX routing table API call
+        try:
+            print("→ Calling dedicated SSR/SRX routing table API...")
+            if debug_mode:
+                print(f"[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")
+                print(f"[DEBUG] Parameters: site_id={site_id}, device_id={device_id}")
+                print(f"[DEBUG] Request body: {request_body}")
+            
+            response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(
+                apisession, 
+                site_id, 
+                device_id, 
+                request_body
+            )
+            
+            if debug_mode:
+                print(f"[DEBUG] API response type: {type(response)}")
+                print(f"[DEBUG] API response hasattr data: {hasattr(response, 'data')}")
+                print(f"[DEBUG] API response hasattr status_code: {hasattr(response, 'status_code')}")
+                if hasattr(response, 'data'):
+                    print(f"[DEBUG] Response data: {response.data}")
+                if hasattr(response, 'status_code'):
+                    print(f"[DEBUG] Status code: {response.status_code}")
+                if hasattr(response, 'raw_data'):
+                    print(f"[DEBUG] Raw response data: {response.raw_data}")
+                if hasattr(response, 'headers'):
+                    print(f"[DEBUG] Response headers: {response.headers}")
+                if hasattr(response, 'url'):
+                    print(f"[DEBUG] Request URL: {response.url}")
+                if hasattr(response, 'next'):
+                    print(f"[DEBUG] Next URL: {response.next}")
+                if hasattr(response, 'proxy_error'):
+                    print(f"[DEBUG] Proxy error: {response.proxy_error}")
+                if hasattr(response, '__dict__'):
+                    print(f"[DEBUG] Response attributes: {list(response.__dict__.keys())}")
+                    # Show all attributes with their values
+                    print("[DEBUG] === COMPLETE APIResponse OBJECT DUMP ===")
+                    for attr_name, attr_value in response.__dict__.items():
+                        print(f"[DEBUG] {attr_name}: {attr_value}")
+                    print("[DEBUG] === END APIResponse OBJECT DUMP ===")
+            
+            # Process the API response and extract session ID
+            session_id = None
+            if hasattr(response, 'data') and response.data:
+                session_id = response.data.get('session')
+                if session_id:
+                    print(f"→ Command initiated (session: {session_id[:8]}...)")
+                    print("→ Waiting for SSR/SRX routing table results...")
+                    
+                    if debug_mode:
+                        print(f"[DEBUG] Full session ID: {session_id}")
+                        print(f"[DEBUG] Response data keys: {list(response.data.keys())}")
+                        print(f"[DEBUG] WebSocket timeout will be 60 seconds")
+                        
+                else:
+                    print("! No session ID returned from SSR/SRX routing API")
+                    if debug_mode:
+                        print(f"[DEBUG] Response data content: {response.data}")
+                    websocket_manager.disconnect()
+                    return
+                            
+            elif hasattr(response, 'status_code'):
+                print(f"! API call returned status code: {response.status_code}")
+                if hasattr(response, 'data'):
+                    print(f"Response data: {response.data}")
+                websocket_manager.disconnect()
+                return
+                    
+            else:
+                print("! Unexpected API response format")
+                print(f"Response type: {type(response)}")
+                if hasattr(response, '__dict__'):
+                    print(f"Response attributes: {list(response.__dict__.keys())}")
+                websocket_manager.disconnect()
+                return
+            
+            # Wait for SSR/SRX routing table results via WebSocket (longer timeout for potentially large tables)
+            if debug_mode:
+                print("[DEBUG] Starting to wait for WebSocket results...")
+                print(f"[DEBUG] WebSocket manager state: connected={websocket_manager.connected if hasattr(websocket_manager, 'connected') else 'unknown'}")
+            
+            route_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+            
+            if debug_mode:
+                print(f"[DEBUG] wait_for_command_result returned: {route_result is not None}")
+                if route_result:
+                    print(f"[DEBUG] Result keys: {list(route_result.keys())}")
+                    print(f"[DEBUG] Result content preview: {str(route_result)[:500]}...")
+                else:
+                    print("[DEBUG] No result received from WebSocket")
+            
+            if route_result:
+                print("\n" + "=" * 80)
+                print("SSR/SRX ROUTING TABLE RESULTS:")
+                print("=" * 80)
+                
+                # Parse and display SSR/SRX routing table data in a user-friendly format
+                raw_output = route_result.get("raw", "")
+                if raw_output:
+                    # Try SSR JSON parser first
+                    route_entries = parse_ssr_routing_json(raw_output)
+                    if route_entries:
+                        display_ssr_routing_table(route_entries, request_body)
+                    else:
+                        # Fallback to generic parser for other formats
+                        route_entries = parse_routing_table_output(raw_output)
+                        display_routing_table_summary(route_entries, request_body)
+                
+                # Display any other output fields that might be present
+                output_fields = route_result.get("Output", "")
+                if output_fields and output_fields != raw_output:
+                    print("\n" + "=" * 40)
+                    print("ADDITIONAL OUTPUT:")
+                    print("=" * 40)
+                    additional_entries = parse_ssr_routing_json(output_fields)
+                    if additional_entries:
+                        display_ssr_routing_table(additional_entries, request_body)
+                    else:
+                        additional_entries = parse_routing_table_output(output_fields)
+                        display_routing_table_summary(additional_entries, request_body)
+                    
+                # Show debug information if enabled
+                if debug_mode:
+                    available_fields = [key for key in route_result.keys() if key not in ['raw', 'Output', 'session']]
+                    if available_fields:
+                        print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available_fields}")
+                        for field in available_fields:
+                            field_value = route_result.get(field)
+                            if field_value:
+                                print(f"[DEBUG] {field}: {field_value}")
+                    
+                if not raw_output and not output_fields:
+                    print("! No routing table data received")
+                    print(f"Available result keys: {list(route_result.keys())}")
+                
+                print("=" * 80)
+                
+                # Log the successful operation with device context
+                device_context = f"device {device_id}"
+                if device_info:
+                    device_context = f"{device_info.get('type', 'unknown')} {device_info.get('name', device_id[:8])}"
+                logging.info(f"SSR/SRX dedicated routing table completed successfully for {device_context}")
+                
+            else:
+                print("! Timeout waiting for SSR/SRX routing table results")
+                print("! This may indicate:")
+                print("  - The device doesn't support SSR/SRX routing table commands")
+                print("  - The device has no routing protocols configured")
+                print("  - The device is busy or not responding")
+                print("  - Network connectivity issues")
+                print("  - Invalid query parameters for this device type")
+                print("  - Try the generic routing table command (Menu 7) as fallback")
+            
+        except Exception as api_error:
+            print(f"! Error calling SSR/SRX routing table API: {api_error}")
+            logging.error(f"SSR/SRX routing table API error: {api_error}")
+            
+            if debug_mode:
+                import traceback
+                print("[DEBUG] Full API error traceback:")
+                traceback.print_exc()
+                
+            print("\n→ Troubleshooting suggestions:")
+            print("  • Verify the device is an SSR or SRX gateway")
+            print("  • Check device connectivity and responsiveness")
+            print("  • Verify API permissions for device commands")
+            print("  • Try the generic routing table command (Menu 7) as fallback")
+            
+    except KeyboardInterrupt:
+        print("\n! Operation interrupted by user")
+        logging.info("SSR/SRX routing table operation interrupted by user")
+        
+    except Exception as main_error:
+        print(f"! Error during SSR/SRX routing table operation: {main_error}")
+        logging.error(f"SSR/SRX routing table main error: {main_error}")
+        
+        if debug_mode:
+            import traceback
+            print("[DEBUG] Full main error traceback:")
+            traceback.print_exc()
+            
+    finally:
+        # Always cleanup WebSocket connection
+        try:
+            if 'websocket_manager' in locals():
+                websocket_manager.disconnect()
+                print("→ WebSocket connection closed")
+                
+                if debug_mode:
+                    print("[DEBUG] WebSocket cleanup completed")
+        except Exception as cleanup_error:
+            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            
+        logging.debug("EXIT: show_ssr_routes_dedicated")
 
 
 def _validate_ping_target(target):
@@ -20796,6 +23268,12 @@ menu_actions = {
     "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
     "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
     "4": (lambda fast=False: export_gateway_management_ips_to_csv(fast=fast), "Export gateway management overlay IPs grouped by template association"),
+    
+    # > WebSocket Device Commands
+    "5": (WebSocketCommands.show_mac_table, "Show MAC table on switch device via WebSocket (Layer 2 switching table)"),
+    "6": (WebSocketCommands.show_forwarding_table, "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)"),
+    "7": (WebSocketCommands.show_routing_table, "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)"),
+    "8": (WebSocketCommands.show_ssr_routes, "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)"),
 
     # Organization-Level Exports
     "11": (export_all_sites_to_csv, "Export a list of all sites in the organization"),
@@ -20923,9 +23401,9 @@ menu_actions = {
     "84": (export_site_anomaly_metrics_to_csv, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
     "85": (export_site_device_anomaly_to_csv, "Export Site Device Anomaly Events (device-specific anomaly detection)"),
     "86": (export_site_client_anomaly_to_csv, "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"),
-    "87": (ping_device_websocket, "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)"),
-    "88": (arp_device_websocket, "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)"),
-    "89": (service_ping_device_websocket, "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)"),
+    "87": (WebSocketCommands.ping_device, "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)"),
+    "88": (WebSocketCommands.arp_device, "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)"),
+    "89": (WebSocketCommands.service_ping_device, "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)"),
 
     # ==============================
     # POST API OPERATIONS - Device Commands (Starting at 100)

@@ -1,7 +1,7 @@
-# MistHelper1. Operation Count: The code currently defines 98 actionable menu entries (1–65, 70–78, 79–80, 90–99) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–98) – not a fixed "96" set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
+# MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 98 actionable menu entries (1–4, 11–89, 90–99) with some gaps for future expansion.
+**Operation Count:** The code currently defines 100 actionable menu entries (1–8, 11–89, 90–99) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -238,7 +238,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
 | 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
 | 81–86 | Advanced Insights | Device insights, const definitions, organization insights, anomaly metrics |
-| 87–89 | WebSocket Commands | Device ping, ARP, and service ping via WebSocket (real-time output) |
+| 5–8, 87–89 | WebSocket Commands | MAC table (switches), forwarding table (gateways), routing table (switches - BGP/OSPF/Static), SSR/SRX routing (128T/SRX gateways - Advanced BGP analysis), device ping, ARP, and service ping via WebSocket (real-time output) |
 | 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
 | 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
@@ -464,6 +464,47 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ---
 ## 21. Changelog
 
+### Version 25.09.29.17.05
+- **Enhanced**: Menu option 7 title - Updated to "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)" for clarity
+- **Enhanced**: Menu option 8 title - Updated to "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)" for device specificity
+- **Enhanced**: SSR routing table display - Added complete data table with all BGP attributes including Route Name, Selection Reason, Weight, Metric, Local Preference, AS Path, and VRF
+- **Enhanced**: Protocol selection flexibility - Users can now skip protocol specification to let API use its default behavior, choose specific protocols (bgp/any/ospf/static/direct/evpn), or get comprehensive routing views
+- **Enhanced**: Data presentation - Comprehensive routing table with full untruncated data display showing complete BGP route analysis including peer names, selection criteria, and all BGP path attributes
+- **Enhanced**: Menu categorization - Clear device-specific separation between switch routing (Option 7) and SSR/SRX gateway routing (Option 8) for improved operational clarity
+
+### Version 25.09.29.16.15
+- **Added**: Menu option 8 - SSR/SRX routing table using dedicated API function (advanced BGP/OSPF analysis with VRF support)
+- **Enhanced**: Dedicated SSR/SRX routing API - Uses mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes for structured routing queries
+- **Added**: Advanced routing table parameters - Protocol filtering, BGP neighbor analysis, VRF-aware queries, HA cluster node selection
+- **Added**: BGP route direction analysis - Received/advertised route inspection for BGP neighbors with structured output
+- **Enhanced**: Device compatibility validation - Specific checks for SSR (128T) and SRX devices with compatibility warnings
+- **Added**: Real-time refresh options - Configurable interval and duration for dynamic routing table monitoring
+- **Enhanced**: Parameter validation - Structured input validation using utils_show_route schema from OpenAPI specification
+- **Added**: Routing table comparison - Option 8 (dedicated API) vs Option 7 (generic WebSocket) for different use cases
+- **Enhanced**: Documentation - Clear distinction between generic routing table (7) and SSR-specific routing table (8) functions
+- **Fixed**: Menu organization - Filled gap at option 8 to improve numerical sequence and reduce confusion
+
+### Version 25.09.29.14.45
+- **Added**: Menu option 7 - Show routing table command for switches/routers/SSR devices via WebSocket (RIB - Routing Information Base)
+- **Enhanced**: Routing table diagnostics - Comprehensive routing protocol information (BGP, OSPF, static routes) with filtering capabilities
+- **Added**: Multi-format routing table parsing - Support for various device vendor output formats with intelligent parsing strategies
+- **Enhanced**: Interactive parameter collection - Optional filtering by protocol, prefix, VRF, neighbor, and node for targeted routing analysis
+- **Added**: Routing vs forwarding table distinction - Clear documentation explaining RIB (Routing Information Base) vs FIB (Forwarding Information Base)
+- **Enhanced**: Device compatibility validation - Comprehensive checks for Layer 3 routing capabilities on switches, routers, and SSR devices
+- **Enhanced**: Default protocol behavior - Changed default from 'bgp' to 'any' to show all route types unless specifically filtered
+- **Enhanced**: Juniper routing table parsing - Improved multi-line route entry parsing with proper protocol/admin distance extraction
+- **Enhanced**: Table display formatting - Removed truncation limits to show full routing data without ellipsis cutoffs
+- **Fixed**: prettytable import errors - Corrected class reference from prettytable.PrettyTable() to PrettyTable() following established import patterns
+- **Fixed**: Syntax errors - Resolved orphaned elif statements from parser refactoring
+
+### Version 25.01.02.18.30
+- **Added**: Menu option 6 - Show forwarding table command for gateway/SSR devices via WebSocket (Layer 3 routing table)
+- **Enhanced**: WebSocket device commands - Expanded support for both Layer 2 (MAC table) and Layer 3 (forwarding table) operations
+- **Added**: Gateway/SSR compatibility checks - Device-specific guidance and troubleshooting for forwarding table operations
+- **Enhanced**: Menu organization - Filled numbering gap between option 5 and 11 to improve menu structure
+- **Added**: Layer 3 routing diagnostics - Comprehensive forwarding table information for packet routing decisions
+- **Enhanced**: Device type validation - Improved device compatibility warnings for Layer 3 vs Layer 2 operations
+
 ### Version 25.09.26.16.45
 - **CRITICAL FIX**: Switch firmware model filtering - Added missing device model compatibility validation for option 99 (switch firmware upgrades)
 - **Enhanced**: Firmware version selection - Now filters available firmware versions by actual switch models in the organization inventory
@@ -506,6 +547,16 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 - **Enhanced**: Backward compatibility - All existing functionality maintained with improved organization
 - **Enhanced**: Code organization - NASA/JPL compliant safety architecture with comprehensive validation
 - **Documented**: Complete firmware upgrade workflow including site auto-upgrade configuration behavior
+
+### Version 25.01.08.15.30
+- **Added**: Menu option 5 - MAC table WebSocket command for switches with real-time streaming output
+- **Enhanced**: WebSocket completion detection - Fixed chunking issue in message parsing for improved performance  
+- **Enhanced**: Device filtering - Fixed type=all parameter handling to correctly show switches in device selection
+- **Enhanced**: MAC table completion - Smart detection completes in ~5 seconds instead of 60s timeout when all entries received
+- **Enhanced**: WebSocket debugging - Added comprehensive debug logging for troubleshooting message segmentation
+- **Added**: Switch-only filtering for MAC table operations to ensure compatibility with supported device types
+- **Enhanced**: Pattern matching - Robust handling of "ethernet switching table" vs "thernet switching table" chunking variations
+- **Verified**: MAC table retrieval tested on EX4100-F-12P switch with 44 entries, optimal performance confirmed
 
 ### Version 25.09.25.14.30
 - **Fixed**: Menu option 78 (Generate support package) file path permissions - now properly writes to data/ directory
