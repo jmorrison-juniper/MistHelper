@@ -4,6 +4,8 @@ Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maint
 
 As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to timers of changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too.
 
+Everytime you update the changelog in the readme, do a "stage" in git.
+
 Friendly note (new/junior engineers): This guide is meant to be calm and confidence‑building. Most operations are read-only unless clearly marked DESTRUCTIVE. If unsure, read the function header, log what you plan, then proceed in small steps.
 
 Target audience is always a Junior NOC engineer. Language needs to match that of a business professional—avoiding abbreviations or technical jargon—while still making correct Junior NOC level references in the style of Fred Rogers (Mr. Rogers) or Bob Ross (the painter).
@@ -13,6 +15,8 @@ Coding standards need to match that of NASA/JPL and their coding guidelines for 
 Never use emojis, only ASCII. If emojis are found, swap them out for the nearest equivilant ASCII symbol or art.
 
 All features, or helpers need to live under the appropietly titled/named "Class"'s for code clarity and organization. Refactor code across the script if we need to move a helper or function around that does not yet live in the correct class. Check whole script for refrences that need adjusted during the move.
+
+Avoid "Wrapper" or functions outside classes that point inside classes.
 
 Warnings and logs need to be accurate and valid, nothing can be presented to the user or logs if it is not 100% true. Ignoring false positive warnings or messages is unacceptable.
 

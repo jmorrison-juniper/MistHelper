@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 100 actionable menu entries (1–8, 11–89, 90–99) with some gaps for future expansion.
+**Operation Count:** The code currently defines 101 actionable menu entries (1–8, 11–89, 90–100) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -244,11 +244,12 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
 | 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
 | 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
+| 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR firmware upgrade with mode selection |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
 * 63–65 intentionally marked WIP; expect evolution.
-* 90–93, 99 should never be scripted unattended without explicit review.
+* 90–93, 99–100 should never be scripted unattended without explicit review.
 
 ---
 ## 9. Systematic Test Mode (`--test`)
@@ -463,6 +464,67 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 
 ---
 ## 21. Changelog
+
+### Version 25.09.30.15.52
+- **CRITICAL FIX**: Unicode encoding error - Replaced Unicode arrow characters (→) with ASCII equivalents (->) to prevent Windows logging crashes
+- **Added**: Firmware downgrade detection - Added intelligent version comparison to prevent API-rejected downgrades before upgrade attempts
+- **Enhanced**: Downgrade validation - Pre-flight version checking identifies and skips devices requiring downgrades with clear user messaging
+- **Improved**: Error classification - "Downgrade fw version not allowed" API responses now treated as validation warnings rather than critical errors
+- **Added**: Version comparison algorithm - Robust firmware version parsing handles SSR version formats (6.3.4-7.r2, 6.3.5-37.sts)
+- **Fixed**: Windows compatibility - All console output now uses ASCII-safe characters to prevent encoding errors on Windows systems
+
+### Version 25.09.30.15.47
+- **Enhanced**: Firmware version validation - Added pre-upgrade version checking to skip devices already at target firmware version
+- **Improved**: Smart error handling - "Already at requested fw version" API responses now treated as informational rather than errors
+- **Added**: Version comparison logic - Cross-references current device firmware versions against target version before upgrade attempts
+- **Enhanced**: User feedback - Clear messaging about devices skipped due to version matches, with upgrade vs skip counts
+- **Fixed**: Error classification - Devices already at target version no longer counted as upgrade failures in operation summary
+- **Improved**: Debug information - Enhanced logging shows current → target version transitions for devices needing upgrades
+
+### Version 25.09.30.15.45
+- **CRITICAL FIX**: SSR reboot parameter logic - Corrected inverted reboot_at logic that was disabling reboots when auto_reboot=True
+- **Fixed**: API parameter validation - When auto_reboot=True, now omits reboot_at parameter to use API default timing instead of setting reboot_at=-1 (which disables reboot)
+- **Enhanced**: Error response extraction - Improved API error response parsing to capture detailed error information from multiple response attributes
+- **Improved**: Debug logging - Enhanced response debugging to show status codes, headers, and response content when text is unavailable
+- **Documentation**: Added clear parameter behavior - reboot_at=-1 disables reboot, omitting parameter uses default timing
+
+### Version 25.09.30.15.41
+- **Enhanced**: SSR device validation - Added comprehensive validation against organization SSR inventory before upgrade attempts
+- **Added**: Cross-reference validation - SSR devices are now validated against org-level inventory to ensure they are recognized as upgradeable SSRs
+- **Enhanced**: Debug logging - Added detailed request body logging and device validation status for troubleshooting SSR upgrade issues
+- **Improved**: Error handling - Enhanced error response logging to capture API response details for 400 Bad Request errors
+- **Added**: Device eligibility checks - Only devices confirmed in organization SSR inventory proceed to upgrade process
+- **Enhanced**: Progress reporting - More detailed status messages showing validated device counts and inventory verification
+
+### Version 25.09.30.15.31
+- **Fixed**: SSR upgrade API 400 Bad Request error - Added missing required 'channel' parameter to upgrade request body
+- **Enhanced**: SSR upgrade confirmation - Simplified confirmation phrase from "UPGRADE SSR FIRMWARE" to "UPGRADE" for user convenience
+- **Fixed**: Undefined variable error - Added proper ssr_models definition before device filtering in upgrade execution
+- **Improved**: API compliance - SSR upgrade requests now include all required parameters per OpenAPI schema (device_ids, channel, version, strategy)
+
+### Version 25.09.30.15.24
+- **Fixed**: SSR firmware upgrade implementation - Corrected API endpoints from sites.devices.upgradeDevices to orgs.ssr.upgradeOrgSsrs with proper parameter mapping
+- **Added**: SSR firmware version discovery - Implemented listOrgAvailableSsrVersions API with indexed selection interface for proper version management
+- **Fixed**: Parameter validation - Removed invalid force, reboot, and snapshot parameters; replaced with proper SSR parameters (device_ids, version, channel, strategy, reboot_at)
+- **Enhanced**: Upgrade monitoring (Option 60) - Added comprehensive SSR upgrade monitoring using listOrgSsrUpgrades API with device type distribution tracking
+- **Fixed**: Device discovery for SSRs - Updated listSiteDevices calls to use type='gateway' parameter for proper SSR device filtering
+- **Enhanced**: Option 100 SSR upgrade - Corrected undefined variable errors and implemented proper org-level SSR upgrade workflow
+- **Added**: Device type tracking - Enhanced upgrade status monitoring to display distribution across AP, Switch, and SSR device types
+- **Fixed**: API endpoint corrections - All SSR operations now use proper mistapi.api.v1.orgs.ssr module instead of generic device endpoints
+
+### Version 25.09.30.18.30
+- **Added**: Menu option 100 - SSR firmware upgrade with comprehensive mode selection (site-based and Gateway Template-based upgrades)
+- **Enhanced**: FirmwareManager class - Extended with complete SSR firmware upgrade capabilities following established patterns from AP and switch upgrades
+- **Added**: SSR-specific safety framework - Enhanced critical infrastructure warnings for WAN connectivity disruption, SD-WAN tunnel impact, and branch office connectivity
+- **Added**: Session Smart Router detection - Smart filtering for SSR models (SSR120, SSR130, SSR1200, SSR1300, SSR1400, VM-SSR) from gateway inventory
+- **Enhanced**: Template-based upgrades - Reuses existing Gateway Template infrastructure for unified SSR upgrade orchestration across multiple sites
+- **Added**: Conservative upgrade defaults - Serial upgrade strategy and recovery snapshots enabled by default for routing infrastructure safety
+- **Enhanced**: Upgrade parameter configuration - SSR-optimized settings including reboot requirements, snapshot management, and HA coordination considerations
+- **Added**: Comprehensive confirmation system - Multi-layer safety confirmations with "UPGRADE SSR FIRMWARE" typed confirmation requirement
+- **Enhanced**: Audit logging - Complete operation tracking with SSR-specific context and routing infrastructure impact documentation
+- **Enhanced**: Error handling - SSR-specific error scenarios with WAN connectivity and SD-WAN tunnel re-establishment guidance
+- **Fixed**: Menu structure - Clean integration without wrapper functions, direct FirmwareManager method calls for consistent architecture
+- **Enhanced**: Systematic testing - Added menu option 100 to destructive operations skip list for safe automated testing
 
 ### Version 25.09.29.17.05
 - **Enhanced**: Menu option 7 title - Updated to "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)" for clarity

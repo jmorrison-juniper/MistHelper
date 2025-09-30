@@ -8957,7 +8957,7 @@ def export_site_device_virtual_chassis_to_csv():
         return
     
     # Get device name for display
-    response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id)
+    response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')
     devices = mistapi.get_all(response=response, mist_session=apisession)
     device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
     
@@ -18086,6 +18086,62 @@ class FirmwareManager:
         self.org_id = org_id
         logging.info("FirmwareManager initialized for org_id: {}".format(org_id))
     
+    def _is_firmware_downgrade(self, current_version, target_version):
+        """
+        Check if the target version is a downgrade from the current version.
+        
+        This method performs a basic version comparison to detect potential downgrades.
+        SSR firmware versions typically follow patterns like: 6.3.4-7.r2, 6.3.5-37.sts
+        
+        Args:
+            current_version (str): Current firmware version
+            target_version (str): Target firmware version
+            
+        Returns:
+            bool: True if target_version appears to be older than current_version
+        """
+        try:
+            # Handle empty versions
+            if not current_version or not target_version:
+                return False
+            
+            # Extract major.minor.patch from versions like "6.3.4-7.r2" or "6.3.5-37.sts"
+            current_parts = current_version.split('-')[0].split('.')
+            target_parts = target_version.split('-')[0].split('.')
+            
+            # Pad shorter version to same length
+            max_len = max(len(current_parts), len(target_parts))
+            while len(current_parts) < max_len:
+                current_parts.append('0')
+            while len(target_parts) < max_len:
+                target_parts.append('0')
+            
+            # Compare version parts numerically
+            for current_part, target_part in zip(current_parts, target_parts):
+                try:
+                    current_num = int(current_part)
+                    target_num = int(target_part)
+                    
+                    if target_num < current_num:
+                        return True  # Downgrade detected
+                    elif target_num > current_num:
+                        return False  # Upgrade
+                    # If equal, continue to next part
+                except ValueError:
+                    # Non-numeric parts, fall back to string comparison
+                    if target_part < current_part:
+                        return True
+                    elif target_part > current_part:
+                        return False
+            
+            # Versions are equal
+            return False
+            
+        except Exception as e:
+            logging.warning(f"Could not compare versions {current_version} vs {target_version}: {e}")
+            # If we can't compare, err on the side of caution and allow the upgrade
+            return False
+    
     def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):
         """
         Check current firmware upgrade status across the organization.
@@ -18617,6 +18673,766 @@ class FirmwareManager:
         # Use the switch-specific bulk upgrade implementation
         return self.bulk_upgrade_switch_firmware_by_site(sites_to_upgrade)
 
+    # ===============================================================================
+    # SSR FIRMWARE UPGRADE METHODS
+    # ===============================================================================
+    
+    def execute_ssr_firmware_upgrade_with_mode_selection(self):
+        """
+        Main entry point for SSR firmware upgrades with mode selection.
+        
+        Presents user with choice between:
+        1. Site-based upgrade (individual site selection)
+        2. Template-based upgrade (Gateway Template assignment - same grouping as APs/switches)
+        
+        SECURITY: This is a DESTRUCTIVE operation that will reboot SSR devices and
+        disrupt WAN/SD-WAN connectivity. Critical routing infrastructure warnings provided.
+        
+        Returns:
+            Results of the selected upgrade operation
+        """
+        logging.info("Starting SSR firmware upgrade with mode selection...")
+        logging.debug("FirmwareManager.execute_ssr_firmware_upgrade_with_mode_selection() initiated")
+        
+        print(" Advanced SSR Firmware Upgrade")
+        print("=" * 60)
+        print("")
+        print("  CRITICAL ROUTING INFRASTRUCTURE WARNING")
+        print("  ======================================")
+        print("  SSR firmware upgrades will:")
+        print("  • Reboot Session Smart Routers")
+        print("  • Disrupt WAN and SD-WAN connectivity")
+        print("  • Affect branch office connectivity")
+        print("  • Impact tunnel establishment and failover")
+        print("  • Require careful HA pair coordination")
+        print("  • Potentially cause extended outages")
+        print("")
+        print("  RECOMMENDED PRECAUTIONS:")
+        print("  • Schedule maintenance windows")
+        print("  • Verify backup connectivity paths")
+        print("  • Coordinate with network operations")
+        print("  • Monitor upgrade progress closely")
+        print("")
+        
+        # Step 1: Mode selection
+        print("  Select upgrade mode:")
+        print("   [1] By Site - Upgrade specific sites (individual site selection)")
+        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
+        
+        while True:
+            try:
+                mode_choice = input("\n  Select mode (1-2): ").strip()
+                if mode_choice == "1":
+                    logging.info("User selected site-based SSR upgrade mode")
+                    print("\n  Site-based SSR upgrade mode selected")
+                    return self.bulk_upgrade_ssr_firmware_by_site()
+                elif mode_choice == "2":
+                    logging.info("User selected template-based SSR upgrade mode")
+                    print("\n  Template-based SSR upgrade mode selected")
+                    return self.upgrade_ssr_firmware_by_gateway_template()
+                else:
+                    print("  Invalid selection. Please choose 1 or 2.")
+                    logging.debug(f"Invalid mode selection: {mode_choice}")
+            except KeyboardInterrupt:
+                print("\n  Operation cancelled by user.")
+                logging.info("SSR firmware upgrade cancelled by user")
+                return
+
+    def bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):
+        """
+        DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
+        
+        This function performs bulk firmware upgrades on SSR routing infrastructure with comprehensive
+        safety checks and detailed progress tracking. Supports multiple upgrade strategies
+        including big bang, canary testing, and rolling upgrade modes optimized for routing infrastructure.
+        
+        SECURITY: This operation will reboot Session Smart Routers and WILL cause WAN connectivity disruption.
+        All SSRs in target sites will be affected. This impacts SD-WAN tunnels, branch office connectivity,
+        and critical routing infrastructure. Use with extreme caution in production.
+        
+        Args:
+            sites_to_upgrade_override: Optional list of site dictionaries for template-based upgrades
+            
+        Returns:
+            dict: Comprehensive upgrade operation results with success/failure tracking
+            
+        Raises:
+            Exception: On critical API failures or validation errors
+            
+        CRITICAL INFRASTRUCTURE WARNING:
+        - SSR reboots will disrupt WAN and SD-WAN connectivity
+        - Branch offices may lose connectivity during upgrades
+        - SD-WAN tunnels will be re-established after reboot
+        - HA pairs require coordinated failover procedures
+        - Plan extended maintenance windows for production environments
+        - Verify backup connectivity paths before execution
+        - Monitor upgrade progress closely for rapid intervention
+        """
+        # Set up logging for this method
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Starting bulk SSR firmware upgrade - org_id: {self.org_id}")
+        
+        # Get organization information
+        print("\n-> Validating organization access...")
+        try:
+            org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)
+            if org_info.status_code != 200:
+                print(f"✗ Error accessing organization: {org_info.status_code}")
+                logger.error(f"Failed to access organization {self.org_id}: {org_info.status_code}")
+                return {"error": "Organization access failed"}
+            
+            org_name = org_info.data.get('name', 'Unknown')
+            print(f"✓ Organization: {org_name}")
+            logger.debug(f"Organization validated: {org_name}")
+            
+        except Exception as e:
+            print(f"✗ Error validating organization: {str(e)}")
+            logger.error(f"Organization validation failed: {str(e)}")
+            return {"error": f"Organization validation error: {str(e)}"}
+
+        # Site selection logic
+        if sites_to_upgrade_override:
+            selected_sites = sites_to_upgrade_override
+            print(f"-> Using provided site list: {len(selected_sites)} sites")
+        else:
+            # Get available sites
+            print("\n-> Discovering available sites...")
+            try:
+                sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)
+                if sites_response.status_code != 200:
+                    print(f"✗ Error retrieving sites: {sites_response.status_code}")
+                    return {"error": "Failed to retrieve sites"}
+                
+                all_sites = sites_response.data
+                print(f"✓ Found {len(all_sites)} total sites")
+                
+                # Present site selection to user
+                print("\nAvailable sites:")
+                for index, site in enumerate(all_sites, 1):
+                    print(f"{index:3}. {site.get('name', 'Unnamed')} (ID: {site.get('id', 'Unknown')})")
+                
+                print("\nSite selection options:")
+                print("A. All sites")
+                print("S. Select specific sites")
+                print("C. Cancel operation")
+                
+                site_choice = input("\nEnter your choice (A/S/C): ").strip().upper()
+                
+                if site_choice == 'C':
+                    print("-> Operation cancelled by user")
+                    return {"cancelled": True}
+                elif site_choice == 'A':
+                    selected_sites = all_sites
+                    print(f"-> Selected all {len(selected_sites)} sites")
+                elif site_choice == 'S':
+                    selected_sites = []
+                    print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
+                    site_input = input("Sites: ").strip()
+                    
+                    # Parse site selection
+                    try:
+                        for part in site_input.split(','):
+                            part = part.strip()
+                            if '-' in part:
+                                start, end = map(int, part.split('-'))
+                                for i in range(start-1, end):
+                                    if 0 <= i < len(all_sites):
+                                        selected_sites.append(all_sites[i])
+                            else:
+                                index = int(part) - 1
+                                if 0 <= index < len(all_sites):
+                                    selected_sites.append(all_sites[index])
+                        
+                        print(f"-> Selected {len(selected_sites)} sites")
+                        
+                    except Exception as e:
+                        print(f"✗ Invalid site selection: {str(e)}")
+                        return {"error": "Invalid site selection"}
+                else:
+                    print("✗ Invalid selection")
+                    return {"error": "Invalid selection"}
+                    
+            except Exception as e:
+                print(f"✗ Error during site discovery: {str(e)}")
+                logger.error(f"Site discovery failed: {str(e)}")
+                return {"error": f"Site discovery error: {str(e)}"}
+
+        if not selected_sites:
+            print("✗ No sites selected")
+            return {"error": "No sites selected"}
+
+        # SSR firmware upgrade parameter selection
+        print(f"\n{'='*60}")
+        print("SSR FIRMWARE UPGRADE PARAMETER CONFIGURATION")
+        print(f"{'='*60}")
+        
+        # Strategy selection (conservative defaults for SSR routing infrastructure)
+        print("\nUpgrade Strategy Options (optimized for routing infrastructure):")
+        print("1. serial      - Upgrade SSRs one by one (safest for routing infrastructure)")  
+        print("2. big_bang    - Upgrade all SSRs simultaneously (higher risk)")
+        
+        while True:
+            strategy_choice = input("\nSelect upgrade strategy (1-2, recommend 1): ").strip()
+            if strategy_choice == '1':
+                upgrade_strategy = 'serial'
+                break
+            elif strategy_choice == '2':
+                upgrade_strategy = 'big_bang'
+                print("⚠ WARNING: big_bang strategy will upgrade all SSRs simultaneously")
+                print("   This may cause widespread WAN connectivity disruption")
+                break
+            else:
+                print("✗ Please enter 1 or 2")
+        
+        print(f"-> Selected strategy: {upgrade_strategy}")
+        
+        # Reboot timing selection (SSR-specific parameter)
+        print("\nReboot Timing Options:")
+        print("1. Automatic - Reboot immediately after firmware download (recommended)")
+        print("2. Manual    - Download firmware only, manual reboot required later")
+        
+        while True:
+            reboot_choice = input("\nReboot timing? (1-2): ").strip()
+            if reboot_choice == '1':
+                auto_reboot = True
+                break
+            elif reboot_choice == '2':
+                auto_reboot = False
+                print("⚠ WARNING: SSRs require manual reboot to activate new firmware")
+                print("   New firmware will not be operational until manual reboot")
+                break
+            else:
+                print("✗ Please enter 1 or 2")
+        
+        print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
+        
+        # Channel selection for firmware versions  
+        print("\nFirmware Channel Options:")
+        print("1. stable - Production-ready releases (recommended)")
+        print("2. beta   - Pre-release versions for testing")
+        print("3. alpha  - Development versions (not recommended for production)")
+        
+        while True:
+            channel_choice = input("\nSelect firmware channel (1-3): ").strip()
+            if channel_choice == '1':
+                firmware_channel = 'stable'
+                break
+            elif channel_choice == '2':
+                firmware_channel = 'beta'
+                break
+            elif channel_choice == '3':
+                firmware_channel = 'alpha'
+                print("⚠ WARNING: alpha channel contains development versions")
+                print("   Not recommended for production environments")
+                break
+            else:
+                print("✗ Please enter 1, 2, or 3")
+        
+        print(f"-> Firmware channel: {firmware_channel}")
+
+        # SSR-specific firmware version selection
+        print(f"\n{'='*60}")
+        print("SSR FIRMWARE VERSION SELECTION")
+        print(f"{'='*60}")
+        
+        # Get available firmware versions for SSRs (Session Smart Routers)
+        print("\n-> Discovering available SSR firmware versions...")
+        try:
+            # Use the SSR-specific API to get available firmware versions
+            versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
+                self.apisession, self.org_id, channel=firmware_channel
+            )
+            
+            if versions_response.status_code != 200:
+                print(f"✗ Error retrieving SSR firmware versions: {versions_response.status_code}")
+                logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
+                return {"error": "Failed to retrieve SSR firmware versions"}
+            
+            available_versions = []
+            if hasattr(versions_response, 'data') and versions_response.data:
+                for version_obj in versions_response.data:
+                    if isinstance(version_obj, dict):
+                        version = version_obj.get('version')
+                        package = version_obj.get('package', 'SSR')
+                        is_default = version_obj.get('default', False)
+                        if version:
+                            available_versions.append({
+                                'version': version,
+                                'package': package,
+                                'default': is_default
+                            })
+                    elif isinstance(version_obj, str):
+                        # Handle case where API returns just version strings
+                        available_versions.append({
+                            'version': version_obj,
+                            'package': 'SSR',
+                            'default': False
+                        })
+            
+            if not available_versions:
+                print(f"✗ No SSR firmware versions available for {firmware_channel} channel")
+                print("   Please check with Juniper support for available SSR firmware versions")
+                print("   Or try a different firmware channel (stable/beta/alpha)")
+                return {"error": f"No SSR firmware versions available for {firmware_channel} channel"}
+            
+            print(f"✓ Found {len(available_versions)} available SSR firmware versions")
+            print(f"  Channel: {firmware_channel}")
+            
+            # Get SSR inventory to show current firmware versions  
+            print("\n-> Checking current SSR devices...")
+            ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                self.apisession, self.org_id, type="gateway"
+            )
+            
+            current_firmware_versions = set()
+            ssr_models_found = set()
+            ssr_count = 0
+            
+            if ssrs_response.status_code == 200:
+                # Filter for Session Smart Router models specifically
+                all_gateways = ssrs_response.data
+                for gateway in all_gateways:
+                    gateway_model = gateway.get('model', '')
+                    gateway_type = gateway.get('type', '')
+                    
+                    # Check if this is an SSR by model or type
+                    if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
+                        ssr_count += 1
+                        if gateway.get('version'):
+                            current_firmware_versions.add(gateway.get('version'))
+                        if gateway.get('model'):
+                            ssr_models_found.add(gateway.get('model'))
+            
+            if ssr_count > 0:
+                print(f"✓ Found {ssr_count} SSR device(s) in organization")
+                if ssr_models_found:
+                    print(f"  Models: {', '.join(sorted(ssr_models_found))}")
+                if current_firmware_versions:
+                    print(f"  Current versions: {', '.join(sorted(current_firmware_versions))}")
+            
+            # Present firmware version options
+            print(f"\n{'='*50}")
+            print("AVAILABLE SSR FIRMWARE VERSIONS")
+            print(f"{'='*50}")
+            
+            for i, version_info in enumerate(available_versions, 1):
+                version = version_info['version']
+                package = version_info['package']
+                is_default = version_info['default']
+                
+                default_marker = " (default)" if is_default else ""
+                print(f"{i:2d}. {version} [{package}]{default_marker}")
+            
+            # Allow user to select firmware version
+            while True:
+                try:
+                    choice = input(f"\nSelect firmware version (1-{len(available_versions)}): ").strip()
+                    if not choice:
+                        print("✗ Please enter a selection")
+                        continue
+                        
+                    version_index = int(choice) - 1
+                    if 0 <= version_index < len(available_versions):
+                        selected_version = available_versions[version_index]
+                        target_version = selected_version['version']
+                        break
+                    else:
+                        print(f"✗ Please enter a number between 1 and {len(available_versions)}")
+                except ValueError:
+                    print("✗ Please enter a valid number")
+            
+            print(f"-> Selected firmware version: {target_version}")
+            
+        except Exception as e:
+            print(f"✗ Error during SSR firmware discovery: {str(e)}")
+            logger.error(f"SSR firmware discovery failed: {str(e)}")
+            return {"error": f"SSR firmware discovery error: {str(e)}"}
+
+        # Configuration summary and confirmation
+        print(f"\n{'='*60}")
+        print("SSR UPGRADE CONFIGURATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Organization: {org_name}")
+        print(f"Sites to upgrade: {len(selected_sites)}")
+        print(f"Target firmware: {target_version}")
+        print(f"Firmware channel: {firmware_channel}")
+        print(f"Upgrade strategy: {upgrade_strategy}")
+        print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
+        
+        print(f"\n⚠ CRITICAL ROUTING INFRASTRUCTURE WARNING ⚠")
+        print("SSR firmware upgrades will cause WAN connectivity disruption!")
+        print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
+        print("- Branch offices may lose connectivity")
+        print("- Plan extended maintenance windows")
+        print("- Verify backup connectivity paths")
+        print("- Coordinate with network operations team")
+        print("- Monitor upgrade progress closely")
+        
+        print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
+        confirmation = input("Confirmation: ").strip()
+        
+        if confirmation != "UPGRADE":
+            print("-> Operation cancelled - incorrect confirmation")
+            logger.info("SSR firmware upgrade cancelled by user")
+            return {"cancelled": True}
+
+        # Execute upgrade operation
+        print(f"\n{'='*60}")
+        print("EXECUTING SSR FIRMWARE UPGRADE")
+        print(f"{'='*60}")
+        
+        # Initialize results tracking
+        upgrade_results = {
+            'operation_id': f"ssr_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'target_version': target_version,
+            'strategy': upgrade_strategy,
+            'channel': firmware_channel,
+            'reboot': auto_reboot,
+            'sites_processed': 0,
+            'ssrs_upgraded': 0,
+            'errors': [],
+            'start_time': datetime.now().isoformat(),
+            'site_results': []
+        }
+        
+        logger.info(f"Starting SSR firmware upgrade operation: {upgrade_results['operation_id']}")
+        
+        # Define SSR model patterns for device filtering
+        ssr_models = ['SSR', '128T']  # Patterns to identify SSR devices
+        
+        # Get org-level SSR inventory for validation
+        print("-> Validating SSR devices from organization inventory...")
+        org_ssr_inventory = {}
+        try:
+            ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                self.apisession, self.org_id, type="gateway"
+            )
+            if ssrs_response.status_code == 200:
+                for gateway in ssrs_response.data:
+                    gateway_id = gateway.get('id')
+                    gateway_model = gateway.get('model', '')
+                    gateway_type = gateway.get('type', '')
+                    
+                    # Check if this is an SSR by model or type
+                    if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
+                        org_ssr_inventory[gateway_id] = {
+                            'model': gateway_model,
+                            'type': gateway_type,
+                            'version': gateway.get('version', ''),
+                            'site_id': gateway.get('site_id', '')
+                        }
+                print(f"✓ Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
+            else:
+                logger.error(f"Failed to get org inventory: {ssrs_response.status_code}")
+                print("✗ Failed to validate SSR inventory")
+        except Exception as e:
+            logger.error(f"Error getting org SSR inventory: {e}")
+            print(f"✗ Error validating SSR inventory: {e}")
+        
+        try:
+            # Process each site for SSR upgrades
+            for site_index, site in enumerate(selected_sites, 1):
+                site_id = site.get('id')
+                site_name = site.get('name', 'Unknown')
+                
+                print(f"\n[{site_index}/{len(selected_sites)}] Processing site: {site_name}")
+                logger.info(f"Processing site {site_index}/{len(selected_sites)}: {site_name} (ID: {site_id})")
+                
+                site_result = {
+                    'site_id': site_id,
+                    'site_name': site_name,
+                    'ssrs_found': 0,
+                    'upgrade_initiated': False,
+                    'error': None
+                }
+                
+                try:
+                    # Get SSRs at this site
+                    print(f"  -> Discovering SSRs at {site_name}...")
+                    site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+                        self.apisession, site_id, type='gateway'
+                    )
+                    
+                    if site_devices_response.status_code != 200:
+                        error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
+                        print(f"  ✗ {error_msg}")
+                        site_result['error'] = error_msg
+                        upgrade_results['errors'].append(error_msg)
+                        continue
+                    
+                    site_devices = site_devices_response.data
+                    
+                    # Filter for SSRs at this site
+                    site_ssrs = []
+                    for device in site_devices:
+                        device_model = device.get('model', '')
+                        device_type = device.get('type', '')
+                        device_id = device.get('id', '')
+                        
+                        # Debug: Log device details
+                        logger.debug(f"Device {device_id}: model='{device_model}', type='{device_type}'")
+                        
+                        # Check if this is an SSR
+                        if (device_type == 'gateway' and 
+                            (any(ssr_pattern in device_model for ssr_pattern in ssr_models) or 'SSR' in device_model)):
+                            site_ssrs.append(device)
+                            logger.info(f"Identified SSR device: {device_id} (model: {device_model}, type: {device_type})")
+                            print(f"    -> Identified SSR: {device_model} ({device_id})")
+                        else:
+                            logger.debug(f"Skipping non-SSR device: {device_id} (model: {device_model}, type: {device_type})")
+                    
+                    site_result['ssrs_found'] = len(site_ssrs)
+                    
+                    if not site_ssrs:
+                        print(f"  -> No SSRs found at {site_name}, skipping")
+                        logger.info(f"No SSRs found at site {site_name}")
+                        upgrade_results['sites_processed'] += 1
+                        upgrade_results['site_results'].append(site_result)
+                        continue
+                    
+                    print(f"  ✓ Found {len(site_ssrs)} SSR(s) at {site_name}")
+                    
+                    # Initiate firmware upgrade for SSRs at this site
+                    ssr_device_ids = [ssr['id'] for ssr in site_ssrs]
+                    
+                    # Validate device IDs against org SSR inventory and check firmware versions
+                    validated_device_ids = []
+                    skipped_device_ids = []
+                    for device_id in ssr_device_ids:
+                        if device_id in org_ssr_inventory:
+                            ssr_info = org_ssr_inventory[device_id]
+                            current_version = ssr_info.get('version', '')
+                            
+                            # Check if device is already at target version
+                            if current_version == target_version:
+                                logger.info(f"Device {device_id} already at target version {target_version} - skipping")
+                                print(f"    -> Device {device_id} already at version {target_version} - skipping")
+                                skipped_device_ids.append(device_id)
+                            else:
+                                # Check for potential firmware downgrade
+                                if self._is_firmware_downgrade(current_version, target_version):
+                                    logger.warning(f"Device {device_id} downgrade detected: {current_version} -> {target_version} - skipping")
+                                    print(f"    ! Downgrade detected: {ssr_info['model']} ({current_version} -> {target_version}) - skipping")
+                                    skipped_device_ids.append(device_id)
+                                else:
+                                    validated_device_ids.append(device_id)
+                                    logger.info(f"Validated SSR device: {device_id} (model: {ssr_info['model']}, current: {current_version} -> target: {target_version})")
+                                    print(f"    -> Upgrade needed: {ssr_info['model']} ({current_version} -> {target_version})")
+                        else:
+                            logger.warning(f"Device {device_id} not found in org SSR inventory - skipping")
+                            print(f"    ⚠ Device {device_id} not in SSR inventory - skipping")
+                            skipped_device_ids.append(device_id)
+                    
+                    if not validated_device_ids:
+                        if skipped_device_ids:
+                            reason = "already at target version or not in SSR inventory"
+                            logger.info(f"All devices at {site_name} skipped: {reason}")
+                            print(f"  -> All devices at {site_name} skipped ({reason})")
+                        else:
+                            logger.warning(f"No validated SSR devices found at {site_name}")
+                            print(f"  -> No validated SSR devices at {site_name}, skipping")
+                        upgrade_results['sites_processed'] += 1
+                        upgrade_results['site_results'].append(site_result)
+                        continue
+                    
+                    print(f"  -> Initiating firmware upgrade for {len(validated_device_ids)} SSR(s) needing upgrade...")
+                    if skipped_device_ids:
+                        print(f"  -> Skipped {len(skipped_device_ids)} device(s) (already at target version or other issues)")
+                    logger.info(f"Initiating SSR firmware upgrade at {site_name} for validated devices: {validated_device_ids}")
+                    
+                    # Use Mist API to upgrade SSR firmware
+                    # SECURITY: SSR upgrades use org-level API with specific parameters
+                    upgrade_body = {
+                        'device_ids': validated_device_ids,
+                        'channel': firmware_channel,
+                        'version': target_version,
+                        'strategy': upgrade_strategy
+                    }
+                    
+                    # Add reboot timing if auto-reboot enabled
+                    if auto_reboot:
+                        # For auto-reboot, don't set reboot_at (use default timing)
+                        # The default is start_time, which enables reboot after download
+                        pass  # Let API use default reboot timing
+                    else:
+                        # Disable reboot if auto_reboot is False
+                        upgrade_body['reboot_at'] = -1
+                    
+                    # Debug: Log the upgrade request body
+                    logger.info(f"SSR upgrade request body: {upgrade_body}")
+                    print(f"  -> Request body: channel='{firmware_channel}', version='{target_version}', strategy='{upgrade_strategy}'")
+                    print(f"  -> Device IDs: {validated_device_ids}")
+                    
+                    # Execute the SSR-specific upgrade API call
+                    upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(
+                        self.apisession, 
+                        self.org_id,
+                        body=upgrade_body
+                    )
+                    
+                    if upgrade_response.status_code in [200, 202]:
+                        print(f"  ✓ Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
+                        site_result['upgrade_initiated'] = True
+                        upgrade_results['ssrs_upgraded'] += len(validated_device_ids)
+                        logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
+                    else:
+                        # Log response details for debugging
+                        try:
+                            # Try multiple ways to get response content
+                            if hasattr(upgrade_response, 'data') and upgrade_response.data:
+                                response_text = str(upgrade_response.data)
+                            elif hasattr(upgrade_response, 'text') and upgrade_response.text:
+                                response_text = upgrade_response.text
+                            elif hasattr(upgrade_response, 'content') and upgrade_response.content:
+                                response_text = upgrade_response.content.decode('utf-8')
+                            else:
+                                response_text = f"Status: {upgrade_response.status_code}, Headers: {dict(upgrade_response.headers) if hasattr(upgrade_response, 'headers') else 'None'}"
+                            
+                            # Check for specific error types
+                            if 'already at the requested fw version' in response_text.lower():
+                                # This is informational, not a real error
+                                logger.info(f"SSR upgrade skipped at {site_name}: devices already at target version")
+                                print(f"  ℹ SSRs at {site_name} already at target version {target_version}")
+                                site_result['upgrade_initiated'] = False
+                                site_result['skip_reason'] = 'already_at_version'
+                                # Don't count this as an error
+                            elif 'downgrade fw version not allowed' in response_text.lower():
+                                # This is a validation error, not a system error
+                                logger.warning(f"SSR downgrade rejected at {site_name}: API prevents firmware downgrades")
+                                print(f"  ! Firmware downgrade not allowed at {site_name} - API validation failed")
+                                site_result['upgrade_initiated'] = False
+                                site_result['skip_reason'] = 'downgrade_not_allowed'
+                                # Don't count this as a critical error
+                            else:
+                                logger.error(f"SSR upgrade API error response: {response_text}")
+                                print(f"  -> API Response: {response_text}")
+                                
+                                error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
+                                print(f"  ✗ {error_msg}")
+                                site_result['error'] = error_msg
+                                upgrade_results['errors'].append(error_msg)
+                                logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
+                                
+                        except Exception as e:
+                            logger.error(f"Could not read response details: {e}")
+                            print(f"  -> Could not read response: {e}")
+                            
+                            error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
+                            print(f"  ✗ {error_msg}")
+                            site_result['error'] = error_msg
+                            upgrade_results['errors'].append(error_msg)
+                            logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
+                    
+                except Exception as site_error:
+                    error_msg = f"Error processing site {site_name}: {str(site_error)}"
+                    print(f"  ✗ {error_msg}")
+                    site_result['error'] = error_msg
+                    upgrade_results['errors'].append(error_msg)
+                    logger.error(f"Site processing error for {site_name}: {str(site_error)}")
+                
+                upgrade_results['sites_processed'] += 1
+                upgrade_results['site_results'].append(site_result)
+            
+            # Operation completion
+            upgrade_results['end_time'] = datetime.now().isoformat()
+            
+            print(f"\n{'='*60}")
+            print("SSR FIRMWARE UPGRADE OPERATION COMPLETED")
+            print(f"{'='*60}")
+            print(f"Operation ID: {upgrade_results['operation_id']}")
+            print(f"Sites processed: {upgrade_results['sites_processed']}")
+            print(f"SSRs upgraded: {upgrade_results['ssrs_upgraded']}")
+            print(f"Errors encountered: {len(upgrade_results['errors'])}")
+            
+            if upgrade_results['errors']:
+                print(f"\nErrors:")
+                for error in upgrade_results['errors']:
+                    print(f"  - {error}")
+            
+            print(f"\nSSR upgrade operations have been initiated.")
+            print(f"Monitor progress through Mist dashboard or API.")
+            print(f"Check individual SSR status for completion and connectivity.")
+            print(f"Verify SD-WAN tunnel re-establishment after reboots.")
+            
+            logger.info(f"SSR firmware upgrade operation completed: {upgrade_results['operation_id']}")
+            return upgrade_results
+            
+        except Exception as e:
+            error_msg = f"Critical error in SSR firmware upgrade: {str(e)}"
+            print(f"\n✗ {error_msg}")
+            logger.error(error_msg)
+            
+            upgrade_results['end_time'] = datetime.now().isoformat()
+            upgrade_results['error'] = str(e)
+            
+            return upgrade_results
+
+    def upgrade_ssr_firmware_by_gateway_template(self):
+        """
+        Advanced SSR firmware upgrade organized by Gateway Template assignment.
+        
+        This method provides template-based SSR firmware upgrades with:
+        1. Interactive Gateway Template selection with site count display
+        2. Automatic site discovery for selected template (same logic as AP/switch systems)
+        3. SSR enumeration across all sites in template  
+        4. Model-based firmware version selection optimized for Session Smart Routers
+        5. Unified upgrade execution across template sites
+        6. SSR-specific safety measures and WAN connectivity disruption warnings
+        7. Comprehensive audit logging and progress monitoring
+        8. HA pair coordination and failover considerations
+        
+        Features:
+        - Template selection by index or name (reuses AP/switch template infrastructure)
+        - Site count and SSR count display per template
+        - SSR-specific upgrade parameters (reboot, snapshot, conservative strategy)
+        - Enhanced WAN connectivity warnings for production environments
+        - Maintains all existing safety confirmations and audit trails
+        
+        SECURITY: Template-based upgrades affect multiple sites simultaneously.
+        Ensure adequate maintenance windows and backup connectivity before proceeding.
+        """
+        logging.info("Starting template-based SSR firmware upgrade...")
+        logging.debug("FirmwareManager.upgrade_ssr_firmware_by_gateway_template() initiated")
+        
+        print(" Advanced SSR Firmware Upgrade by Gateway Template")
+        print("=" * 70)
+        
+        # Step 1: Ensure required CSVs are fresh (reuse AP/switch template infrastructure)
+        self._ensure_template_csv_freshness()
+        
+        # Step 2: Load template-to-sites mapping (same as AP/switch systems)
+        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
+        
+        if not template_sites_mapping:
+            print("\n! No Gateway Templates with assigned sites found.")
+            print("  Make sure sites are assigned to Gateway Templates and try again.")
+            logging.warning("No Gateway Templates with site assignments found")
+            return
+        
+        # Step 3: Template selection (reuse AP/switch template selection logic)
+        selected_template_id, selected_template_name = self._prompt_template_selection(
+            template_name_to_id, template_sites_mapping)
+        
+        if not selected_template_id:
+            print(" No template selected. Exiting.")
+            return
+        
+        # Step 4: Get sites for selected template
+        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
+        
+        print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
+        logging.info(f"Template {selected_template_name} has {len(sites_to_upgrade)} assigned sites")
+        
+        return self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)
+    
+    def _execute_template_based_ssr_upgrade(self, sites_to_upgrade, selected_template_name):
+        """Execute the template-based SSR upgrade with the existing SSR implementation."""
+        print(f"  Proceeding with SSR firmware upgrade for template: {selected_template_name}")
+        print(f"  Target sites: {len(sites_to_upgrade)}")
+        
+        # Use the SSR-specific bulk upgrade implementation
+        return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
+
 
 def check_firmware_upgrade_status_direct():
     """
@@ -18831,6 +19647,13 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             firmware_status_summary['devices_by_model'][device_model] = 0
         firmware_status_summary['devices_by_model'][device_model] += 1
         
+        # Track device type distribution
+        if 'devices_by_type' not in firmware_status_summary:
+            firmware_status_summary['devices_by_type'] = {}
+        if device_type not in firmware_status_summary['devices_by_type']:
+            firmware_status_summary['devices_by_type'][device_type] = 0
+        firmware_status_summary['devices_by_type'][device_type] += 1
+        
         firmware_status_summary['total_devices'] += 1
         
         # Apply scope filtering
@@ -18873,6 +19696,21 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
             print(f"   • {status}: {count} devices")
     
+    print(f"\n  Device Type Distribution:")
+    if 'devices_by_type' in firmware_status_summary and firmware_status_summary['devices_by_type']:
+        sorted_types = sorted(firmware_status_summary['devices_by_type'].items(), 
+                            key=lambda x: x[1], reverse=True)
+        for device_type, count in sorted_types:
+            type_display = {
+                'ap': 'Access Points',
+                'switch': 'Switches', 
+                'gateway': 'Gateways/SSRs',
+                'ssr': 'Session Smart Routers'
+            }.get(device_type, device_type.upper())
+            print(f"   • {type_display}: {count} devices")
+    else:
+        print(f"   • No device type information available")
+    
     print(f"\n  Version Distribution:")
     sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
                            key=lambda x: x[1], reverse=True)
@@ -18893,7 +19731,82 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     print(f"\n  Checking for active upgrade operations...")
     active_upgrades = []
     
-    # Check stored upgrade IDs from option 90
+    # Step 5a: Check for active SSR upgrade operations (org-level)
+    try:
+        print(f"   Checking for active SSR upgrade operations...")
+        ssr_upgrades_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, org_id)
+        
+        if ssr_upgrades_resp.status_code == 200 and hasattr(ssr_upgrades_resp, 'data'):
+            ssr_upgrades = ssr_upgrades_resp.data
+            if ssr_upgrades:
+                print(f"   ✓ Found {len(ssr_upgrades)} SSR upgrade operation(s)")
+                
+                for ssr_upgrade in ssr_upgrades:
+                    upgrade_id = ssr_upgrade.get('id', 'Unknown')
+                    status = ssr_upgrade.get('status', 'Unknown')
+                    strategy = ssr_upgrade.get('strategy', 'Unknown')
+                    channel = ssr_upgrade.get('channel', 'Unknown')
+                    device_type = ssr_upgrade.get('device_type', 'SSR')
+                    counts = ssr_upgrade.get('counts', {})
+                    versions = ssr_upgrade.get('versions', {})
+                    
+                    # Extract device count and version information
+                    total_devices = sum(counts.values()) if counts else 0
+                    upgrading_count = counts.get('upgrading', 0)
+                    success_count = counts.get('success', 0)
+                    failed_count = counts.get('failed', 0)
+                    queued_count = counts.get('queued', 0)
+                    
+                    # Try to extract version from versions mapping (take first available)
+                    target_versions = list(versions.values()) if versions else []
+                    version_info = f"→ {target_versions[0]}" if target_versions else "Multiple versions"
+                    if len(target_versions) > 1:
+                        version_info = f"Multiple versions ({len(target_versions)} different)"
+                    
+                    # Create status summary
+                    status_parts = []
+                    if upgrading_count > 0:
+                        status_parts.append(f"{upgrading_count} upgrading")
+                    if success_count > 0:
+                        status_parts.append(f"{success_count} completed")
+                    if failed_count > 0:
+                        status_parts.append(f"{failed_count} failed")
+                    if queued_count > 0:
+                        status_parts.append(f"{queued_count} queued")
+                    
+                    status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"
+                    
+                    print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
+                    print(f"         Channel: {channel} | Devices: {total_devices} | {version_info}")
+                    
+                    active_upgrades.append({
+                        'upgrade_id': upgrade_id,
+                        'site_id': 'N/A (Org-level)',
+                        'site_name': 'SSR Upgrade (Org-level)',
+                        'status': status,
+                        'strategy': strategy,
+                        'channel': channel,
+                        'device_type': device_type,
+                        'source': 'ssr_api',
+                        'total_devices': total_devices,
+                        'upgrading': upgrading_count,
+                        'success': success_count,
+                        'failed': failed_count,
+                        'queued': queued_count,
+                        'versions': versions,
+                        'details': ssr_upgrade
+                    })
+            else:
+                print(f"   → No active SSR upgrade operations found")
+        else:
+            print(f"   → Failed to retrieve SSR upgrade operations: {ssr_upgrades_resp.status_code}")
+            
+    except Exception as e:
+        print(f"   → Error checking SSR upgrade operations: {e}")
+        logging.warning(f"Failed to check SSR upgrade operations: {e}")
+    
+    # Step 5b: Check stored upgrade IDs from site-level upgrades (AP/Switch)
+    print(f"   Checking for site-level upgrade operations...")
     upgrade_tracking_file = "ActiveUpgrades.json"
     stored_upgrades = []
     
@@ -18903,12 +19816,10 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 stored_upgrades = json.load(f)
             
             if stored_upgrades:
-                print(f"   Found {len(stored_upgrades)} stored upgrade operations from ActiveUpgrades.json")
-                
                 # Filter to current org_id
                 org_upgrades = [u for u in stored_upgrades if u.get('org_id') == org_id]
                 if org_upgrades:
-                    print(f"   {len(org_upgrades)} upgrades match current organization")
+                    print(f"   ✓ Found {len(org_upgrades)} stored upgrade operation(s) from ActiveUpgrades.json")
                     
                     # Check status of each stored upgrade
                     for upgrade_record in org_upgrades:
@@ -18948,16 +19859,16 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                                 print(f"      Failed to check upgrade {upgrade_id[:8]}... at site '{site_name}': {e}")
                                 logging.warning(f"Failed to check stored upgrade {upgrade_id}: {e}")
                 else:
-                    print(f"   No stored upgrades match current organization ID")
+                    print(f"   → No stored upgrades match current organization")
         except Exception as e:
-            print(f"   Failed to read stored upgrade tracking data: {e}")
+            print(f"   → Failed to read stored upgrade tracking data: {e}")
             logging.warning(f"Failed to read stored upgrade tracking: {e}")
     else:
-        print(f"   No stored upgrade tracking file found (ActiveUpgrades.json)")
+        print(f"   → No site-level upgrade tracking file found (checking organization records)")
     
-    # Check organization audit logs for recent upgrade events
+    # Step 5c: Check organization audit logs for recent upgrade events
     try:
-        print(f"   Searching organization audit logs for recent upgrade events...")
+        print(f"   Checking organization audit logs for recent upgrade events...")
         
         # Search for upgrade-related audit events in the last 24 hours
         end_time = int(time.time())
@@ -18981,33 +19892,45 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     upgrade_events.append(log_entry)
             
             if upgrade_events:
-                print(f"      Found {len(upgrade_events)} upgrade-related audit events in last 24 hours")
+                print(f"   ✓ Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
                 
-                # Show recent upgrade events
-                for event in upgrade_events[-5:]:  # Show last 5 events
+                # Show recent upgrade events (most recent first)
+                for event in sorted(upgrade_events, key=lambda x: x.get('timestamp', 0), reverse=True)[:5]:
                     timestamp = event.get('timestamp', 0)
                     try:
                         event_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                     except:
                         event_time = 'Unknown'
                     
-                    admin_name = event.get('admin_name', 'Unknown')
+                    admin_name = event.get('admin_name', 'System')
                     message = event.get('message', 'No message')
                     site_name = event.get('site_name', 'Organization')
                     
-                    print(f"         � {event_time} | {admin_name} | {site_name}: {message}")
+                    # Clean up the message format for better readability
+                    if 'device[' in message.lower() and '] upgrade' in message.lower():
+                        # Extract device MAC and version from message
+                        import re
+                        device_match = re.search(r'device\[([^\]]+)\]', message, re.IGNORECASE)
+                        version_match = re.search(r'version\s+([^\s]+)', message, re.IGNORECASE)
+                        
+                        device_id = device_match.group(1) if device_match else 'Unknown Device'
+                        version = version_match.group(1) if version_match else 'Unknown Version'
+                        
+                        print(f"      → {event_time} | {admin_name} | Device {device_id} upgrade to {version}")
+                    else:
+                        print(f"      → {event_time} | {admin_name} | {site_name}: {message}")
             else:
-                print(f"      No upgrade-related events found in recent audit logs")
+                print(f"   → No upgrade-related events found in audit logs")
         else:
-            print(f"      No audit logs retrieved for the last 24 hours")
+            print(f"   → No audit logs available for the last 24 hours")
             
     except Exception as e:
-        print(f"   Failed to search organization audit logs: {e}")
+        print(f"   → Error checking audit logs: {e}")
         logging.warning(f"Failed to search org audit logs for upgrades: {e}")
     
-    # Check organization-level device events for upgrade activity
+    # Step 5d: Check organization-level device events for upgrade activity
     try:
-        print(f"   Searching organization device events for upgrade activity...")
+        print(f"   Checking organization device events for upgrade activity...")
         
         # Search for device upgrade events
         device_events_resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
@@ -19022,9 +19945,9 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         device_events = mistapi.get_all(response=device_events_resp, mist_session=apisession)
         
         if device_events:
-            print(f"      Found {len(device_events)} device upgrade events in last 24 hours")
+            print(f"   ✓ Found {len(device_events)} device upgrade event(s) in last 24 hours")
             
-            # Group events by type
+            # Group events by type for cleaner display
             events_by_type = {}
             for event in device_events:
                 event_type = event.get('type', 'Unknown')
@@ -19032,11 +19955,14 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     events_by_type[event_type] = []
                 events_by_type[event_type].append(event)
             
+            # Display summary by event type
             for event_type, type_events in events_by_type.items():
-                print(f"         � {event_type}: {len(type_events)} events")
+                # Clean up event type names for display
+                type_display = event_type.replace('SYSTEM_UPGRADE_', '').title()
+                print(f"      {type_display}: {len(type_events)} event(s)")
                 
-                # Show a few recent events of this type
-                for event in type_events[-3:]:  # Show last 3 of each type
+                # Show most recent events of this type
+                for event in sorted(type_events, key=lambda x: x.get('timestamp', 0), reverse=True)[:3]:
                     timestamp = event.get('timestamp', 0)
                     try:
                         event_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
@@ -19046,36 +19972,31 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     device_name = event.get('device_name', 'Unknown Device')
                     site_name = event.get('site_name', 'Unknown Site')
                     
-                    print(f"           - {event_time} | {device_name} at {site_name}")
+                    print(f"         → {event_time} | {device_name} at {site_name}")
         else:
-            print(f"      No device upgrade events found in last 24 hours")
+            print(f"   → No device upgrade events found in last 24 hours")
             
     except Exception as e:
-        print(f"   Failed to search device upgrade events: {e}")
+        print(f"   → Error checking device events: {e}")
         logging.warning(f"Failed to search device upgrade events: {e}")
     
-    # Check organization-level upgrades if not filtering by site (legacy approach)
-    if not site_filter and not active_upgrades:
-        try:
-            print(f"   Note: Organization-level upgrade tracking requires specific upgrade IDs")
-            print(f"        � Use the stored upgrade tracking above for ongoing operations")
-            print(f"        � Or check individual sites below for comprehensive status")
-        except Exception as e:
-            logging.warning(f"Failed to check org-level upgrades: {e}")
-    
-    # Check site-level upgrades
+    # Step 6: Check individual site upgrade operations
+    if not site_filter:
+        print(f"\n   Checking individual site upgrade operations (first 5 sites)...")
     sites_to_check = [site_filter] if site_filter else list(site_lookup.keys())
     
+    sites_with_upgrades = 0
     for site_id in sites_to_check[:5]:  # Limit to first 5 sites for performance
         try:
             site_name = site_lookup.get(site_id, 'Unknown')
-            print(f"   Checking site '{site_name}' for active upgrades...")
             
             upgrades_resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
             site_upgrades = mistapi.get_all(response=upgrades_resp, mist_session=apisession)
             
             if site_upgrades:
-                print(f"      Found {len(site_upgrades)} upgrade operations")
+                sites_with_upgrades += 1
+                print(f"   Site '{site_name}': ✓ {len(site_upgrades)} upgrade operation(s)")
+                
                 for upgrade in site_upgrades:
                     upgrade_id = upgrade.get('id', 'Unknown')
                     upgrade_status = upgrade.get('status', 'Unknown')
@@ -19085,12 +20006,33 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     enable_p2p = upgrade.get('enable_p2p', False)
                     counts = upgrade.get('counts', {})
                     
+                    # Format start time
                     start_time_str = "Unknown"
                     if start_time:
                         try:
                             start_time_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
                         except:
                             start_time_str = str(start_time)
+                    
+                    # Create progress summary
+                    total = counts.get('total', 0)
+                    downloaded = counts.get('downloaded', 0)
+                    rebooted = counts.get('rebooted', 0)
+                    failed = counts.get('failed', 0)
+                    
+                    progress_parts = []
+                    if total > 0:
+                        if downloaded > 0:
+                            progress_parts.append(f"{downloaded}/{total} downloaded")
+                        if rebooted > 0:
+                            progress_parts.append(f"{rebooted}/{total} rebooted")
+                        if failed > 0:
+                            progress_parts.append(f"{failed} failed")
+                    
+                    progress_info = " | ".join(progress_parts) if progress_parts else f"Status: {upgrade_status}"
+                    
+                    print(f"      Upgrade {upgrade_id[:8]}... [{upgrade_strategy}]: {progress_info}")
+                    print(f"         Target: {target_version} | Started: {start_time_str}")
                     
                     active_upgrades.append({
                         'site_id': site_id,
@@ -19111,12 +20053,17 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                         'source': 'site_lookup',
                         'timestamp': datetime.now(timezone.utc).isoformat()
                     })
-            else:
-                print(f"      No upgrade operations found")
+            # Don't print anything for sites with no upgrades to reduce noise
                 
         except Exception as e:
-            print(f"      Failed to check upgrades for site {site_id}: {e}")
+            print(f"   Site '{site_name}': → Error checking upgrades: {e}")
             logging.warning(f"Failed to check upgrades for site {site_id}: {e}")
+    
+    # Summary message for site-level checks
+    if not site_filter:
+        sites_without_upgrades = min(5, len(sites_to_check)) - sites_with_upgrades
+        if sites_without_upgrades > 0:
+            print(f"   → {sites_without_upgrades} site(s) have no active upgrade operations")
     
     # Step 6: Export results to CSV
     timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -22542,8 +23489,9 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
         return upgrade_results
 
 
+
 # ============================================================================
-# ANOMALY EXPORT SECTION - Site Anomaly Events for AI/ML Analysis
+# ANOMALY EXPORT SECTION - Site Anomaly Events for AI/ML Analysis  
 # ============================================================================
 
 
@@ -22590,13 +23538,13 @@ def get_potential_anomaly_metrics():
         
         # Sort by priority (known working metrics first)
         potential_metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-                    
-        logging.info(f"Discovered {len(potential_metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
+        
+        logging.info(f"Found {len(potential_metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
         return potential_metrics
         
     except Exception as e:
-        logging.warning(f"Failed to parse ConstInsightMetrics.csv for anomaly metrics: {e}")
-        # Fallback to known working metrics
+        logging.error(f"Error reading ConstInsightMetrics.csv: {str(e)}")
+        # Return fallback metrics if CSV parsing fails
         return [
             {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
             {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
@@ -22604,103 +23552,531 @@ def get_potential_anomaly_metrics():
         ]
 
 
-def export_site_anomaly_metrics_to_csv():
-    """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv."""
-    print("Export Site Anomaly Events:")
-    logging.info("Starting export of site anomaly events...")
+# The following section was corrupted during refactoring - removing orphaned content
+        print("✗ No sites selected")
+        return {"error": "No sites selected"}
+
+    # SSR firmware upgrade parameter selection
+    print(f"\n{'='*60}")
+    print("SSR FIRMWARE UPGRADE PARAMETER CONFIGURATION")
+    print(f"{'='*60}")
     
-    # Get site selection
-    site_id = prompt_site_selection()
-    if not site_id:
-        print("! No site selected. Exiting.")
-        return
+    # Strategy selection (conservative defaults for SSR routing infrastructure)
+    print("\nUpgrade Strategy Options (optimized for routing infrastructure):")
+    print("1. serial      - Upgrade SSRs one by one (safest for routing infrastructure)")  
+    print("2. big_bang    - Upgrade all SSRs simultaneously (higher risk)")
     
-    # Skip the rest of orphaned code - placeholder function for now
-    print("Function needs to be properly implemented")
-    return
+    while True:
+        strategy_choice = input("\nSelect upgrade strategy (1-2, recommend 1): ").strip()
+        if strategy_choice == '1':
+            upgrade_strategy = 'serial'
+            break
+        elif strategy_choice == '2':
+            upgrade_strategy = 'big_bang'
+            print("⚠ WARNING: big_bang strategy will upgrade all SSRs simultaneously")
+            print("   This may cause widespread WAN connectivity disruption")
+            break
+        else:
+            print("✗ Please enter 1 or 2")
+    
+    print(f"→ Selected strategy: {upgrade_strategy}")
+    
+    # Reboot timing selection (SSR-specific parameter)
+    print("\nReboot Timing Options:")
+    print("1. Automatic - Reboot immediately after firmware download (recommended)")
+    print("2. Manual    - Download firmware only, manual reboot required later")
+    
+    while True:
+        reboot_choice = input("\nReboot timing? (1-2): ").strip()
+        if reboot_choice == '1':
+            auto_reboot = True
+            break
+        elif reboot_choice == '2':
+            auto_reboot = False
+            print("⚠ WARNING: SSRs require manual reboot to activate new firmware")
+            print("   New firmware will not be operational until manual reboot")
+            break
+        else:
+            print("✗ Please enter 1 or 2")
+    
+    print(f"→ Auto reboot: {'Yes' if auto_reboot else 'No'}")
+    
+    # Channel selection for firmware versions  
+    print("\nFirmware Channel Options:")
+    print("1. stable - Production-ready releases (recommended)")
+    print("2. beta   - Pre-release versions for testing")
+    print("3. alpha  - Development versions (not recommended for production)")
+    
+    while True:
+        channel_choice = input("\nSelect firmware channel (1-3): ").strip()
+        if channel_choice == '1':
+            firmware_channel = 'stable'
+            break
+        elif channel_choice == '2':
+            firmware_channel = 'beta'
+            break
+        elif channel_choice == '3':
+            firmware_channel = 'alpha'
+            print("⚠ WARNING: alpha channel contains development versions")
+            print("   Not recommended for production environments")
+            break
+        else:
+            print("✗ Please enter 1, 2, or 3")
+    
+    print(f"→ Firmware channel: {firmware_channel}")
+
+    # SSR-specific firmware version selection
+    print(f"\n{'='*60}")
+    print("SSR FIRMWARE VERSION SELECTION")
+    print(f"{'='*60}")
+    
+    # Get available firmware versions for SSRs (Session Smart Routers)
+    print("\n→ Discovering available SSR firmware versions...")
+    try:
+        # Use the SSR-specific API to get available firmware versions
+        versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
+            apisession, org_id, channel=firmware_channel
+        )
+        
+        if versions_response.status_code != 200:
+            print(f"✗ Error retrieving SSR firmware versions: {versions_response.status_code}")
+            logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
+            return {"error": "Failed to retrieve SSR firmware versions"}
+        
+        available_versions = []
+        if hasattr(versions_response, 'data') and versions_response.data:
+            for version_obj in versions_response.data:
+                if isinstance(version_obj, dict):
+                    version = version_obj.get('version')
+                    package = version_obj.get('package', 'SSR')
+                    is_default = version_obj.get('default', False)
+                    if version:
+                        available_versions.append({
+                            'version': version,
+                            'package': package,
+                            'default': is_default
+                        })
+                elif isinstance(version_obj, str):
+                    # Handle case where API returns just version strings
+                    available_versions.append({
+                        'version': version_obj,
+                        'package': 'SSR',
+                        'default': False
+                    })
+        
+        if not available_versions:
+            print(f"✗ No SSR firmware versions available for {firmware_channel} channel")
+            print("   Please check with Juniper support for available SSR firmware versions")
+            print("   Or try a different firmware channel (stable/beta/alpha)")
+            return {"error": f"No SSR firmware versions available for {firmware_channel} channel"}
+        
+        print(f"✓ Found {len(available_versions)} available SSR firmware versions")
+        print(f"  Channel: {firmware_channel}")
+        
+        # Get SSR inventory to show current firmware versions  
+        print("\n→ Checking current SSR devices...")
+        ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+            apisession, org_id, type="gateway"
+        )
+        
+        current_firmware_versions = set()
+        ssr_models_found = set()
+        ssr_count = 0
+        
+        if ssrs_response.status_code == 200:
+            # Filter for Session Smart Router models specifically
+            all_gateways = ssrs_response.data
+            for gateway in all_gateways:
+                gateway_model = gateway.get('model', '')
+                gateway_type = gateway.get('type', '')
+                
+                # Check if this is an SSR by model or type
+                if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
+                    ssr_count += 1
+                    if gateway.get('version'):
+                        current_firmware_versions.add(gateway.get('version'))
+                    if gateway.get('model'):
+                        ssr_models_found.add(gateway.get('model'))
+        
+        if ssr_count > 0:
+            print(f"✓ Found {ssr_count} SSR device(s) in organization")
+            if ssr_models_found:
+                print(f"  Models: {', '.join(sorted(ssr_models_found))}")
+            if current_firmware_versions:
+                print(f"  Current versions: {', '.join(sorted(current_firmware_versions))}")
+        
+        # Present firmware version options
+        print(f"\n{'='*50}")
+        print("AVAILABLE SSR FIRMWARE VERSIONS")
+        print(f"{'='*50}")
+        
+        for i, version_info in enumerate(available_versions, 1):
+            version = version_info['version']
+            package = version_info['package']
+            is_default = version_info['default']
+            
+            default_marker = " (default)" if is_default else ""
+            print(f"{i:2d}. {version} [{package}]{default_marker}")
+        
+        # Allow user to select firmware version
+        while True:
+            try:
+                choice = input(f"\nSelect firmware version (1-{len(available_versions)}): ").strip()
+                if not choice:
+                    print("✗ Please enter a selection")
+                    continue
+                    
+                version_index = int(choice) - 1
+                if 0 <= version_index < len(available_versions):
+                    selected_version = available_versions[version_index]
+                    target_version = selected_version['version']
+                    break
+                else:
+                    print(f"✗ Please enter a number between 1 and {len(available_versions)}")
+            except ValueError:
+                print("✗ Please enter a valid number")
+        
+        print(f"→ Selected firmware version: {target_version}")
+        
+    except Exception as e:
+        print(f"✗ Error during SSR firmware discovery: {str(e)}")
+        logger.error(f"SSR firmware discovery failed: {str(e)}")
+        return {"error": f"SSR firmware discovery error: {str(e)}"}
+
+    # Configuration summary and confirmation
+    print(f"\n{'='*60}")
+    print("SSR UPGRADE CONFIGURATION SUMMARY")
+    print(f"{'='*60}")
+    print(f"Organization: {org_name}")
+    print(f"Sites to upgrade: {len(selected_sites)}")
+    print(f"Target firmware: {target_version}")
+    print(f"Firmware channel: {firmware_channel}")
+    print(f"Upgrade strategy: {upgrade_strategy}")
+    print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
+    
+    print(f"\n⚠ CRITICAL ROUTING INFRASTRUCTURE WARNING ⚠")
+    print("SSR firmware upgrades will cause WAN connectivity disruption!")
+    print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
+    print("- Branch offices may lose connectivity")
+    print("- Plan extended maintenance windows")
+    print("- Verify backup connectivity paths")
+    print("- Coordinate with network operations team")
+    print("- Monitor upgrade progress closely")
+    
+    print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
+    confirmation = input("Confirmation: ").strip()
+    
+    if confirmation != "UPGRADE":
+        print("→ Operation cancelled - incorrect confirmation")
+        logger.info("SSR firmware upgrade cancelled by user")
+        return {"cancelled": True}
+
+    # Execute upgrade operation
+    print(f"\n{'='*60}")
+    print("EXECUTING SSR FIRMWARE UPGRADE")
+    print(f"{'='*60}")
+    
+    # Initialize results tracking
+    upgrade_results = {
+        'operation_id': f"ssr_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        'target_version': target_version,
+        'strategy': upgrade_strategy,
+        'channel': firmware_channel,
+        'reboot': auto_reboot,
+        'sites_processed': 0,
+        'ssrs_upgraded': 0,
+        'errors': [],
+        'start_time': datetime.now().isoformat(),
+        'site_results': []
+    }
+    
+    logger.info(f"Starting SSR firmware upgrade operation: {upgrade_results['operation_id']}")
+    
+    # Define SSR model patterns for device filtering
+    ssr_models = ['SSR', '128T']  # Patterns to identify SSR devices
+    
+    # Get org-level SSR inventory for validation
+    print("-> Validating SSR devices from organization inventory...")
+    org_ssr_inventory = {}
+    try:
+        ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+            apisession, org_id, type="gateway"
+        )
+        if ssrs_response.status_code == 200:
+            for gateway in ssrs_response.data:
+                gateway_id = gateway.get('id')
+                gateway_model = gateway.get('model', '')
+                gateway_type = gateway.get('type', '')
+                
+                # Check if this is an SSR by model or type
+                if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
+                    org_ssr_inventory[gateway_id] = {
+                        'model': gateway_model,
+                        'type': gateway_type,
+                        'version': gateway.get('version', ''),
+                        'site_id': gateway.get('site_id', '')
+                    }
+            print(f"✓ Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
+        else:
+            logger.error(f"Failed to get org inventory: {ssrs_response.status_code}")
+            print("✗ Failed to validate SSR inventory")
+    except Exception as e:
+        logger.error(f"Error getting org SSR inventory: {e}")
+        print(f"✗ Error validating SSR inventory: {e}")
+    
+    try:
+        # Process each site for SSR upgrades
+        for site_index, site in enumerate(selected_sites, 1):
+            site_id = site.get('id')
+            site_name = site.get('name', 'Unknown')
+            
+            print(f"\n[{site_index}/{len(selected_sites)}] Processing site: {site_name}")
+            logger.info(f"Processing site {site_index}/{len(selected_sites)}: {site_name} (ID: {site_id})")
+            
+            site_result = {
+                'site_id': site_id,
+                'site_name': site_name,
+                'ssrs_found': 0,
+                'upgrade_initiated': False,
+                'error': None
+            }
+            
+            try:
+                # Get SSRs at this site
+                print(f"  -> Discovering SSRs at {site_name}...")
+                site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+                    apisession, site_id, type='gateway'
+                )
+                
+                if site_devices_response.status_code != 200:
+                    error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
+                    print(f"  ✗ {error_msg}")
+                    site_result['error'] = error_msg
+                    upgrade_results['errors'].append(error_msg)
+                    continue
+                
+                site_devices = site_devices_response.data
+                
+                # Filter for SSRs at this site
+                site_ssrs = []
+                for device in site_devices:
+                    device_model = device.get('model', '')
+                    device_type = device.get('type', '')
+                    device_id = device.get('id', '')
+                    
+                    # Debug: Log device details
+                    logger.debug(f"Device {device_id}: model='{device_model}', type='{device_type}'")
+                    
+                    # Check if this is an SSR
+                    if (device_type == 'gateway' and 
+                        (any(ssr_pattern in device_model for ssr_pattern in ssr_models) or 'SSR' in device_model)):
+                        site_ssrs.append(device)
+                        logger.info(f"Identified SSR device: {device_id} (model: {device_model}, type: {device_type})")
+                        print(f"    -> Identified SSR: {device_model} ({device_id})")
+                    else:
+                        logger.debug(f"Skipping non-SSR device: {device_id} (model: {device_model}, type: {device_type})")
+                
+                site_result['ssrs_found'] = len(site_ssrs)
+                
+                if not site_ssrs:
+                    print(f"  -> No SSRs found at {site_name}, skipping")
+                    logger.info(f"No SSRs found at site {site_name}")
+                    upgrade_results['sites_processed'] += 1
+                    upgrade_results['site_results'].append(site_result)
+                    continue
+                
+                print(f"  ✓ Found {len(site_ssrs)} SSR(s) at {site_name}")
+                
+                # Initiate firmware upgrade for SSRs at this site
+                ssr_device_ids = [ssr['id'] for ssr in site_ssrs]
+                
+                # Validate device IDs against org SSR inventory and check firmware versions
+                validated_device_ids = []
+                skipped_device_ids = []
+                for device_id in ssr_device_ids:
+                    if device_id in org_ssr_inventory:
+                        ssr_info = org_ssr_inventory[device_id]
+                        current_version = ssr_info.get('version', '')
+                        
+                        # Check if device is already at target version
+                        if current_version == target_version:
+                            logger.info(f"Device {device_id} already at target version {target_version} - skipping")
+                            print(f"    -> Device {device_id} already at version {target_version} - skipping")
+                            skipped_device_ids.append(device_id)
+                        else:
+                            # Check for potential firmware downgrade
+                            if self._is_firmware_downgrade(current_version, target_version):
+                                logger.warning(f"Device {device_id} downgrade detected: {current_version} -> {target_version} - skipping")
+                                print(f"    ! Downgrade detected: {ssr_info['model']} ({current_version} -> {target_version}) - skipping")
+                                skipped_device_ids.append(device_id)
+                            else:
+                                validated_device_ids.append(device_id)
+                                logger.info(f"Validated SSR device: {device_id} (model: {ssr_info['model']}, current: {current_version} -> target: {target_version})")
+                                print(f"    -> Upgrade needed: {ssr_info['model']} ({current_version} -> {target_version})")
+                    else:
+                        logger.warning(f"Device {device_id} not found in org SSR inventory - skipping")
+                        print(f"    ⚠ Device {device_id} not in SSR inventory - skipping")
+                        skipped_device_ids.append(device_id)
+                
+                if not validated_device_ids:
+                    if skipped_device_ids:
+                        reason = "already at target version or not in SSR inventory"
+                        logger.info(f"All devices at {site_name} skipped: {reason}")
+                        print(f"  -> All devices at {site_name} skipped ({reason})")
+                    else:
+                        logger.warning(f"No validated SSR devices found at {site_name}")
+                        print(f"  -> No validated SSR devices at {site_name}, skipping")
+                    upgrade_results['sites_processed'] += 1
+                    upgrade_results['site_results'].append(site_result)
+                    continue
+                
+                print(f"  -> Initiating firmware upgrade for {len(validated_device_ids)} SSR(s) needing upgrade...")
+                if skipped_device_ids:
+                    print(f"  -> Skipped {len(skipped_device_ids)} device(s) (already at target version or other issues)")
+                logger.info(f"Initiating SSR firmware upgrade at {site_name} for validated devices: {validated_device_ids}")
+                
+                # Use Mist API to upgrade SSR firmware
+                # SECURITY: SSR upgrades use org-level API with specific parameters
+                upgrade_body = {
+                    'device_ids': validated_device_ids,
+                    'channel': firmware_channel,
+                    'version': target_version,
+                    'strategy': upgrade_strategy
+                }
+                
+                # Add reboot timing if auto-reboot enabled
+                if auto_reboot:
+                    # For auto-reboot, don't set reboot_at (use default timing)
+                    # The default is start_time, which enables reboot after download
+                    pass  # Let API use default reboot timing
+                else:
+                    # Disable reboot if auto_reboot is False
+                    upgrade_body['reboot_at'] = -1
+                
+                # Debug: Log the upgrade request body
+                logger.info(f"SSR upgrade request body: {upgrade_body}")
+                print(f"  -> Request body: channel='{firmware_channel}', version='{target_version}', strategy='{upgrade_strategy}'")
+                print(f"  -> Device IDs: {validated_device_ids}")
+                
+                # Execute the SSR-specific upgrade API call
+                upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(
+                    apisession, 
+                    org_id,
+                    body=upgrade_body
+                )
+                
+                if upgrade_response.status_code in [200, 202]:
+                    print(f"  ✓ Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
+                    site_result['upgrade_initiated'] = True
+                    upgrade_results['ssrs_upgraded'] += len(validated_device_ids)
+                    logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
+                else:
+                    # Log response details for debugging
+                    try:
+                        # Try multiple ways to get response content
+                        if hasattr(upgrade_response, 'data') and upgrade_response.data:
+                            response_text = str(upgrade_response.data)
+                        elif hasattr(upgrade_response, 'text') and upgrade_response.text:
+                            response_text = upgrade_response.text
+                        elif hasattr(upgrade_response, 'content') and upgrade_response.content:
+                            response_text = upgrade_response.content.decode('utf-8')
+                        else:
+                            response_text = f"Status: {upgrade_response.status_code}, Headers: {dict(upgrade_response.headers) if hasattr(upgrade_response, 'headers') else 'None'}"
+                        
+                        # Check for specific error types
+                        if 'already at the requested fw version' in response_text.lower():
+                            # This is informational, not a real error
+                            logger.info(f"SSR upgrade skipped at {site_name}: devices already at target version")
+                            print(f"  ℹ SSRs at {site_name} already at target version {target_version}")
+                            site_result['upgrade_initiated'] = False
+                            site_result['skip_reason'] = 'already_at_version'
+                            # Don't count this as an error
+                        elif 'downgrade fw version not allowed' in response_text.lower():
+                            # This is a validation error, not a system error
+                            logger.warning(f"SSR downgrade rejected at {site_name}: API prevents firmware downgrades")
+                            print(f"  ! Firmware downgrade not allowed at {site_name} - API validation failed")
+                            site_result['upgrade_initiated'] = False
+                            site_result['skip_reason'] = 'downgrade_not_allowed'
+                            # Don't count this as a critical error
+                        else:
+                            logger.error(f"SSR upgrade API error response: {response_text}")
+                            print(f"  -> API Response: {response_text}")
+                            
+                            error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
+                            print(f"  ✗ {error_msg}")
+                            site_result['error'] = error_msg
+                            upgrade_results['errors'].append(error_msg)
+                            logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
+                            
+                    except Exception as e:
+                        logger.error(f"Could not read response details: {e}")
+                        print(f"  -> Could not read response: {e}")
+                        
+                        error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
+                        print(f"  ✗ {error_msg}")
+                        site_result['error'] = error_msg
+                        upgrade_results['errors'].append(error_msg)
+                        logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
+                
+            except Exception as site_error:
+                error_msg = f"Error processing site {site_name}: {str(site_error)}"
+                print(f"  ✗ {error_msg}")
+                site_result['error'] = error_msg
+                upgrade_results['errors'].append(error_msg)
+                logger.error(f"Site processing error for {site_name}: {str(site_error)}")
+            
+            upgrade_results['sites_processed'] += 1
+            upgrade_results['site_results'].append(site_result)
+        
+        # Operation completion
+        upgrade_results['end_time'] = datetime.now().isoformat()
+        
+        print(f"\n{'='*60}")
+        print("SSR FIRMWARE UPGRADE OPERATION COMPLETED")
+        print(f"{'='*60}")
+        print(f"Operation ID: {upgrade_results['operation_id']}")
+        print(f"Sites processed: {upgrade_results['sites_processed']}")
+        print(f"SSRs upgraded: {upgrade_results['ssrs_upgraded']}")
+        print(f"Errors encountered: {len(upgrade_results['errors'])}")
+        
+        if upgrade_results['errors']:
+            print(f"\nErrors:")
+            for error in upgrade_results['errors']:
+                print(f"  - {error}")
+        
+        print(f"\nSSR upgrade operations have been initiated.")
+        print(f"Monitor progress through Mist dashboard or API.")
+        print(f"Check individual SSR status for completion and connectivity.")
+        print(f"Verify SD-WAN tunnel re-establishment after reboots.")
+        
+        logger.info(f"SSR firmware upgrade operation completed: {upgrade_results['operation_id']}")
+        return upgrade_results
+        
+    except Exception as e:
+        error_msg = f"Critical error in SSR firmware upgrade: {str(e)}"
+        print(f"\n✗ {error_msg}")
+        logger.error(error_msg)
+        
+        upgrade_results['end_time'] = datetime.now().isoformat()
+        upgrade_results['error'] = str(e)
+        
+        return upgrade_results
+
+
+# ============================================================================
+# ANOMALY EXPORT SECTION - Site Anomaly Events for AI/ML Analysis
+# ============================================================================
+
+
+# Removed duplicate function definition - proper implementation exists above
+
+
+# Removed duplicate placeholder function - proper implementation below
 
 
 # Removed duplicate function definition - using the proper one below
 
-def get_potential_anomaly_metrics():
-    """Parse ConstInsightMetrics.csv to dynamically discover potential anomaly metrics.
-    
-    Returns metrics that are:
-    1. Site-scoped (have 'site' in scopes field)
-    2. Specifically related to anomaly detection (based on strict keyword matching)
-    3. More likely to be supported by the anomaly API endpoint
-    """
-    potential_metrics = []
-    
-    try:
-        # Ensure we have the latest const insight metrics
-        check_and_generate_csv("ConstInsightMetrics.csv", export_all_const_definitions_to_csv)
-        
-        const_metrics_path = get_csv_file_path("ConstInsightMetrics.csv")
-        
-        # Stricter anomaly-related keywords focused on actual anomaly metrics
-        anomaly_keywords = [
-            "roam", "availability", "coverage", "capacity", "connect", 
-            "success", "failure", "uptime"
-        ]
-        
-        # Metrics that we know work well with the anomaly endpoint
-        priority_metrics = [
-            "client-roam-band5", "client-roam-band24", "ap-availability",
-            "successful-connect", "time-to-connect", "client-coverage-band5", 
-            "client-coverage-band24", "client-capacity-band5", "client-capacity-band24"
-        ]
-        
-        with open(const_metrics_path, mode="r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            
-            for row in reader:
-                metric_name = row.get("metric_name", "").strip()
-                scopes = row.get("scopes", "").lower()
-                description = row.get("description", "").lower()
-                
-                # Prioritize known working metrics
-                if metric_name in priority_metrics and "site" in scopes:
-                    potential_metrics.append({
-                        "metric_name": metric_name,
-                        "description": row.get("description", ""),
-                        "scopes": row.get("scopes", ""),
-                        "type": row.get("type", ""),
-                        "priority": True
-                    })
-                # Then add others that match our stricter criteria
-                elif ("site" in scopes and 
-                      any(keyword in description or keyword in metric_name.lower() 
-                          for keyword in anomaly_keywords) and
-                      metric_name not in priority_metrics):
-                    
-                    # Skip metrics that are clearly not anomaly-focused
-                    if any(skip in metric_name.lower() or skip in description 
-                           for skip in ["top-", "num_", "bytes", "rate", "latency", "{ctype}", "call-", "app-", "wan-", "minis-"]):
-                        continue
-                        
-                    potential_metrics.append({
-                        "metric_name": metric_name,
-                        "description": row.get("description", ""),
-                        "scopes": row.get("scopes", ""),
-                        "type": row.get("type", ""),
-                        "priority": False
-                    })
-        
-        # Sort by priority (known working metrics first)
-        potential_metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-                    
-        logging.info(f"Discovered {len(potential_metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
-        return potential_metrics
-        
-    except Exception as e:
-        logging.warning(f"Failed to parse ConstInsightMetrics.csv for anomaly metrics: {e}")
-        # Fallback to known working metrics
-        return [
-            {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
-            {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
-            {"metric_name": "ap-availability", "description": "AP availability anomalies", "priority": True}
-        ]
+# Removed duplicate function definition - proper implementation exists at line 23437
 
 
 def export_site_anomaly_metrics_to_csv():
@@ -23415,6 +24791,11 @@ menu_actions = {
     # SWITCH FIRMWARE OPERATIONS
     # ==============================
     "99": (bulk_upgrade_switch_firmware_by_site, " DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
+    
+    # ==============================
+    # SSR FIRMWARE OPERATIONS
+    # ==============================
+    "100": (lambda: FirmwareManager(apisession, get_cached_or_prompted_org_id()).execute_ssr_firmware_upgrade_with_mode_selection(), " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
 }
 
 def run_systematic_test():
@@ -23500,7 +24881,8 @@ def run_systematic_test():
         "91": "DESTRUCTIVE: Device reboot operation", 
         "92": "DESTRUCTIVE: Virtual chassis conversion - WIP",
         "93": "DESTRUCTIVE: Virtual chassis conversion - bulk operation",
-        "99": "DESTRUCTIVE: Switch firmware upgrade operation"
+        "99": "DESTRUCTIVE: Switch firmware upgrade operation",
+        "100": "DESTRUCTIVE: SSR firmware upgrade operation"
     }
     
     # Get all available menu options
@@ -26204,7 +27586,7 @@ def main():
         device_id = None
         if args.device and site_id:
             logging.info(f"Resolving device name '{args.device}' at site_id '{site_id}'...")
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id)
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')
             devices = mistapi.get_all(response=response, mist_session=apisession)
             device_lookup = {dev["name"]: dev["id"] for dev in devices}
             device_id = device_lookup.get(args.device)
