@@ -19,16 +19,43 @@ import re
 import ipaddress
 import multiprocessing
 import csv
+import subprocess
+import traceback
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from threading import Lock
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict, Any, Union
 import paramiko
 from paramiko import SSHClient, AutoAddPolicy
-import sys
-import os
-import subprocess
-import logging
+
+# ============================================================================
+# EARLY LOGGING SETUP
+# ============================================================================
+# Configure logging IMMEDIATELY after imports to prevent Python from creating
+# a default handler that writes script.log to the root directory.
+# This configuration will be enhanced later by GlobalImportManager._setup_logging()
+# with additional handlers and formatting, but this ensures all early logging
+# calls go to the correct location.
+_early_log_dir = "data"
+os.makedirs(_early_log_dir, exist_ok=True)
+_early_log_path = os.path.join(_early_log_dir, "script.log")
+
+# Get log levels from environment (same as GlobalImportManager._setup_logging)
+_early_console_level = int(os.environ.get('CONSOLE_LOG_LEVEL', logging.INFO))
+_early_file_level = int(os.environ.get('LOGGING_LOG_LEVEL', logging.INFO))
+
+# Create handlers with appropriate levels
+_early_console_handler = logging.StreamHandler()
+_early_console_handler.setLevel(_early_console_level)
+_early_file_handler = logging.FileHandler(_early_log_path)
+_early_file_handler.setLevel(_early_file_level)
+
+logging.basicConfig(
+    level=logging.DEBUG,  # Root logger captures all, handlers filter
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[_early_file_handler, _early_console_handler],
+    force=True
+)
 
 # Debug mode detection helper
 def is_debug_mode():
@@ -70,26 +97,19 @@ class PerformanceMonitor:
         elapsed = time.time() - self.start_time
         if is_debug_mode():
             print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-import time
 
-# Standard library imports for static analysis
-import csv
+# Additional standard library imports
+from pathlib import Path
 import json
 import sqlite3
 import datetime
 from datetime import timezone, timedelta
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent.futures
 import ast
 import math
 import shutil
 import glob
-import traceback
-import argparse
-import re
 import difflib
 import unicodedata
 from collections import defaultdict
@@ -159,8 +179,10 @@ def listen_keyboard(*args, **kwargs):
     """Keyboard listener has been removed - this is a no-op fallback."""
     logging.info("Keyboard listener functionality has been removed")
     return None
-    def stop_listening():
-        pass
+
+def stop_listening():
+    """No-op fallback for removed keyboard listener functionality."""
+    pass
 
 # ============================================================================
 # CENTRALIZED PAGINATION DEFAULTS
@@ -183,7 +205,7 @@ if _parsed_limit != DEFAULT_API_PAGE_LIMIT:
         f"MIST_PAGE_LIMIT value {_parsed_limit} adjusted to {DEFAULT_API_PAGE_LIMIT} (valid range 1..1000)"
     )
 
-logging.info(f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}")
+logging.debug(f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}")
 
 def fetch_all_sites_with_limit(org_id):
     """Fetch all sites with unified pagination.
@@ -1438,7 +1460,7 @@ def clean_unicode_for_logging(message):
             '*': '*',
             '-': '-',
             '-': '-',
-            '—': '-',
+            '-': '-',
             ''': "'",
             ''': "'",
             '"': '"',
@@ -1454,6 +1476,51 @@ def clean_unicode_for_logging(message):
 def safe_print(message):
     """Print message with Unicode characters cleaned for Windows compatibility."""
     print(clean_unicode_for_logging(str(message)))
+
+def safe_input(prompt, default_value="", allow_empty=True, context="unknown"):
+    """
+    Safely handle user input with proper EOF and KeyboardInterrupt handling.
+    
+    Args:
+        prompt: The prompt message to display
+        default_value: Value to return if user provides empty input or EOF
+        allow_empty: Whether to allow empty input (only applies when default_value is not set)
+        context: Context description for logging
+    
+    Returns:
+        str: User input or default_value on EOF/empty input
+        None: On KeyboardInterrupt
+    """
+    try:
+        user_input = input(prompt).strip()
+        
+        # If user provided empty input and we have a default value, use it
+        if not user_input and default_value:
+            logging.debug(f"Empty input for {context}, using default: '{default_value}'")
+            return default_value
+        
+        # If user provided empty input, no default, but empty is allowed
+        if not user_input and allow_empty:
+            return user_input
+        
+        # If user provided empty input, no default, and empty not allowed
+        if not user_input and not allow_empty:
+            logging.warning(f"Empty input not allowed for {context}, returning None")
+            return None
+        
+        # User provided non-empty input
+        return user_input
+        
+    except EOFError:
+        # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
+        print(f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'")
+        logging.info(f"EOF encountered on input during {context} - returning default: '{default_value}'")
+        return default_value
+    except KeyboardInterrupt:
+        # Handle Ctrl+C
+        print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")
+        logging.info(f"KeyboardInterrupt encountered during {context}")
+        return None
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -2713,6 +2780,1255 @@ class WebSocketManager:
             self.command_results.clear()
 
 
+class PacketCaptureManager:
+    """
+    Comprehensive packet capture management for Juniper Mist environments.
+    
+    This class handles both organization-level and site-level packet captures with support
+    for multiple capture types:
+    - Client captures (wireless/wired)
+    - Gateway captures (wired/wireless)
+    - Scan captures (wireless radiotap)
+    - MxEdge captures (org-level only)
+    
+    All captures stream output via WebSocket for real-time monitoring.
+    
+    SECURITY:
+        - Validates all user inputs (MAC addresses, channels, durations)
+        - Enforces API constraints (max duration, packet counts)
+        - Requires explicit confirmation for capture initiation
+        - Logs all operations with full audit trail
+    
+    ARCHITECTURE:
+        - Leverages existing WebSocketManager for streaming
+        - Follows NASA/JPL defensive programming patterns
+        - Class-based design eliminates wrapper functions
+    """
+    
+    def __init__(self, mist_session, org_id=None):
+        """
+        Initialize packet capture manager.
+        
+        Args:
+            mist_session: Active Mist API session
+            org_id (str, optional): Organization ID for operations
+        """
+        self.mist_session = mist_session
+        self.org_id = org_id or get_cached_or_prompted_org_id()
+        self.websocket_manager = None
+        logging.debug(f"PacketCaptureManager initialized for org_id: {self.org_id}")
+    
+    @staticmethod
+    def validate_mac_address(mac_address: str) -> bool:
+        """
+        Validate MAC address format.
+        
+        Args:
+            mac_address (str): MAC address to validate
+            
+        Returns:
+            bool: True if valid, False otherwise
+            
+        SECURITY: Prevents injection of malformed MAC addresses into API calls
+        """
+        if not mac_address:
+            return False
+        
+        # Support common MAC formats: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff
+        mac_pattern = re.compile(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^[0-9A-Fa-f]{12}$')
+        return bool(mac_pattern.match(mac_address))
+    
+    @staticmethod
+    def normalize_mac_address(mac_address: str) -> str:
+        """
+        Normalize MAC address to colon-separated format.
+        
+        Args:
+            mac_address (str): MAC address in any common format
+            
+        Returns:
+            str: Normalized MAC address (aa:bb:cc:dd:ee:ff)
+        """
+        # Remove all separators
+        mac_clean = re.sub(r'[:-]', '', mac_address.lower())
+        # Insert colons every 2 characters
+        return ':'.join(mac_clean[i:i+2] for i in range(0, 12, 2))
+    
+    def _get_capture_format_selection(self):
+        """
+        Prompt user for capture format selection.
+        
+        Returns:
+            str: Selected format - 'pcap' or 'stream'
+        """
+        print("\nCapture format:")
+        print("  1. PCAP file - downloadable (default)")
+        print("  2. Stream to Mist Cloud")
+        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
+        return "pcap" if format_choice == "1" else "stream"
+    
+    def start_site_packet_capture(self):
+        """
+        Interactive menu for starting site-level packet captures.
+        
+        Presents user with capture type options and guides through configuration.
+        """
+        logging.info("ENTRY: PacketCaptureManager.start_site_packet_capture()")
+        
+        print("\n" + "=" * 80)
+        print(" SITE PACKET CAPTURE MANAGER")
+        print("=" * 80)
+        print("\nSelect capture type:")
+        print("  1. Client Capture (Wireless)")
+        print("  2. Client Capture (Wired)")
+        print("  3. Gateway Capture")
+        print("  4. New Association Capture")
+        print("  5. Scan Radio Capture")
+        print("  0. Cancel")
+        print("=" * 80)
+        
+        choice = safe_input("\nEnter your choice: ", context="site_capture_menu")
+        
+        if choice == "1":
+            self._start_site_client_capture_wireless()
+        elif choice == "2":
+            self._start_site_client_capture_wired()
+        elif choice == "3":
+            self._start_site_gateway_capture()
+        elif choice == "4":
+            self._start_site_new_association_capture()
+        elif choice == "5":
+            self._start_site_scan_capture()
+        elif choice == "0":
+            print("\n! Cancelled by user")
+            return
+        else:
+            print("\n! Invalid choice")
+            return
+    
+    def _start_site_client_capture_wireless(self):
+        """Start wireless client packet capture at site level."""
+        logging.info("Starting site wireless client capture")
+        
+        # Get site selection
+        site_id = prompt_and_log_site_selection()
+        if not site_id:
+            return
+        
+        # Get capture parameters
+        print("\n" + "-" * 80)
+        print(" WIRELESS CLIENT CAPTURE CONFIGURATION")
+        print("-" * 80)
+        
+        client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        if not self.validate_mac_address(client_mac):
+            print(f"\n! Invalid MAC address format: {client_mac}")
+            return
+        client_mac = self.normalize_mac_address(client_mac)
+        
+        # Optional AP MAC filter
+        print("\nOptional: Filter by specific AP")
+        print("  1. Select AP from list")
+        print("  2. Enter MAC manually")
+        print("  3. Skip (capture from any AP)")
+        ap_choice = safe_input("Enter choice (default 3): ", default_value="3", context="ap_filter")
+        
+        ap_mac = None
+        if ap_choice == "1":
+            ap_mac = prompt_select_ap_mac_from_site(site_id)
+            if ap_mac:
+                ap_mac = self.normalize_mac_address(ap_mac)
+        elif ap_choice == "2":
+            ap_mac = safe_input("Enter AP MAC address: ", context="ap_mac")
+            if not self.validate_mac_address(ap_mac):
+                print(f"\n! Invalid AP MAC address format: {ap_mac}")
+                return
+            ap_mac = self.normalize_mac_address(ap_mac)
+        
+        # Duration
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        # Number of packets
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Max packet length
+        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 512, max 2048): ", 
+                                    default_value="512", context="max_pkt_len")
+        try:
+            max_pkt_len = int(max_pkt_len_str)
+            if max_pkt_len < 64 or max_pkt_len > 2048:
+                print(f"\n! Max packet length must be between 64 and 2048 bytes")
+                return
+        except ValueError:
+            print(f"\n! Invalid max packet length: {max_pkt_len_str}")
+            return
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Build request payload
+        payload = {
+            "type": "client",
+            "client_mac": client_mac,
+            "duration": duration,
+            "num_packets": num_packets,
+            "max_pkt_len": max_pkt_len,
+            "format": capture_format
+        }
+        
+        if ap_mac:
+            payload["ap_mac"] = ap_mac
+        
+        # Display configuration and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Wireless Client")
+        print(f"  Client MAC: {client_mac}")
+        if ap_mac:
+            print(f"  AP MAC Filter: {ap_mac}")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
+        print(f"  Max Packet Length: {max_pkt_len} bytes")
+        print(f"  Format: {capture_format}")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        # Start capture via API
+        self._execute_site_capture(site_id, payload)
+    
+    def _start_site_client_capture_wired(self):
+        """Start wired client packet capture at site level."""
+        logging.info("Starting site wired client capture")
+        
+        # Get site selection
+        site_id = prompt_and_log_site_selection()
+        if not site_id:
+            return
+        
+        print("\n" + "-" * 80)
+        print(" WIRED CLIENT CAPTURE CONFIGURATION")
+        print("-" * 80)
+        
+        client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        if not self.validate_mac_address(client_mac):
+            print(f"\n! Invalid MAC address format: {client_mac}")
+            return
+        client_mac = self.normalize_mac_address(client_mac)
+        
+        # Duration and packet parameters (similar to wireless)
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Build payload
+        payload = {
+            "type": "client",
+            "client_mac": client_mac,
+            "duration": duration,
+            "num_packets": num_packets,
+            "format": capture_format
+        }
+        
+        # Display and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Wired Client")
+        print(f"  Client MAC: {client_mac}")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        self._execute_site_capture(site_id, payload)
+    
+    def _start_site_gateway_capture(self):
+        """Start gateway packet capture at site level."""
+        logging.info("Starting site gateway capture")
+        
+        site_id = prompt_and_log_site_selection()
+        if not site_id:
+            return
+        
+        print("\n" + "-" * 80)
+        print(" GATEWAY CAPTURE CONFIGURATION")
+        print("-" * 80)
+        
+        # Gateway selection - interactive list
+        logging.debug("Prompting for gateway selection from site inventory")
+        gateway_mac = prompt_select_gateway_mac_from_site(site_id)
+        if not gateway_mac:
+            logging.warning("No gateway selected or gateway selection failed - aborting capture")
+            return
+        
+        # Normalize MAC address (already validated by selection function)
+        gateway_mac = self.normalize_mac_address(gateway_mac)
+        logging.debug(f"Selected and normalized gateway MAC: {gateway_mac}")
+        
+        # Port selection
+        print("\nAvailable ports:")
+        print("  wan: WAN interfaces")
+        print("  lan: LAN interfaces")  
+        print("  all: All interfaces (default)")
+        port_choice = safe_input("Enter port selection (default 'all'): ", 
+                                default_value="all", context="port")
+        
+        # Duration
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Optional tcpdump expression
+        tcpdump_expr = safe_input("Enter tcpdump expression (optional, press Enter to skip): ", 
+                                 context="tcpdump", allow_empty=True)
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Build payload
+        payload = {
+            "type": "gateway",
+            "gateway_mac": gateway_mac,
+            "port_id": port_choice,
+            "duration": duration,
+            "num_packets": num_packets,
+            "format": capture_format
+        }
+        
+        if tcpdump_expr:
+            payload["tcpdump_expression"] = tcpdump_expr
+        
+        # Display and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Gateway")
+        print(f"  Gateway MAC: {gateway_mac}")
+        print(f"  Port: {port_choice}")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets}")
+        if tcpdump_expr:
+            print(f"  Filter: {tcpdump_expr}")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        self._execute_site_capture(site_id, payload)
+    
+    def _start_site_new_association_capture(self):
+        """Start new association packet capture at site level."""
+        logging.info("Starting site new association capture")
+        
+        site_id = prompt_and_log_site_selection()
+        if not site_id:
+            return
+        
+        print("\n" + "-" * 80)
+        print(" NEW ASSOCIATION CAPTURE CONFIGURATION")
+        print("-" * 80)
+        print("\nThis capture type monitors new client associations.")
+        
+        # Optional SSID filter
+        ssid = safe_input("\nEnter SSID to monitor (optional, press Enter for all): ", 
+                         context="ssid", allow_empty=True)
+        
+        # Duration
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Build payload
+        payload = {
+            "type": "new_assoc",
+            "duration": duration,
+            "format": capture_format
+        }
+        
+        if ssid:
+            payload["ssid"] = ssid
+        
+        # Display and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: New Association")
+        if ssid:
+            print(f"  SSID Filter: {ssid}")
+        else:
+            print(f"  SSID Filter: All SSIDs")
+        print(f"  Duration: {duration} seconds")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        self._execute_site_capture(site_id, payload)
+    
+    def _start_site_scan_capture(self):
+        """Start scan radio packet capture at site level."""
+        logging.info("Starting site scan capture")
+        
+        site_id = prompt_and_log_site_selection()
+        logging.debug(f"Site selection returned: {site_id}")
+        if not site_id:
+            logging.warning("No site_id returned from selection - aborting capture")
+            return
+        
+        logging.debug(f"Proceeding with scan capture configuration for site: {site_id}")
+        print("\n" + "-" * 80)
+        print(" SCAN RADIO CAPTURE CONFIGURATION")
+        print("-" * 80)
+        
+        # AP Selection - interactive list
+        logging.debug("Prompting for AP selection from site inventory")
+        ap_mac = prompt_select_ap_mac_from_site(site_id)
+        if not ap_mac:
+            logging.warning("No AP selected or AP selection failed - aborting capture")
+            return
+        
+        # Normalize MAC address (already validated by selection function)
+        ap_mac = self.normalize_mac_address(ap_mac)
+        logging.debug(f"Selected and normalized AP MAC: {ap_mac}")
+        
+        # Band selection
+        logging.debug("Prompting for band selection")
+        print("\nSelect band:")
+        print("  1. 2.4 GHz")
+        print("  2. 5 GHz (default)")
+        print("  3. 6 GHz")
+        band_choice = safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
+        
+        # Support both menu numbers (1,2,3) and actual band values (24, 5, 6)
+        band_map = {
+            "1": "24", "2": "5", "3": "6",    # Menu choices
+            "24": "24", "5": "5", "6": "6"     # Direct band values
+        }
+        band = band_map.get(band_choice, "5")
+        logging.debug(f"Band selected: {band} (choice: {band_choice})")
+        
+        # Channel
+        logging.debug("Prompting for channel")
+        if band == "24":
+            channel_str = safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
+        elif band == "5":
+            channel_str = safe_input("Enter channel (36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, default 36): ", 
+                                    default_value="36", context="channel")
+        else:  # band == "6"
+            channel_str = safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
+        
+        try:
+            channel = int(channel_str)
+            logging.debug(f"Channel selected: {channel}")
+        except ValueError:
+            print(f"\n! Invalid channel: {channel_str}")
+            logging.error(f"Invalid channel value: {channel_str}")
+            return
+        
+        # Bandwidth
+        logging.debug("Prompting for bandwidth")
+        print("\nSelect bandwidth:")
+        print("  1. 20 MHz")
+        print("  2. 40 MHz")
+        if band in ["5", "6"]:
+            print("  3. 80 MHz")
+        if band == "6":
+            print("  4. 160 MHz")
+        bw_choice = safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
+        bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
+        bandwidth = bw_map.get(bw_choice, "20")
+        logging.debug(f"Bandwidth selected: {bandwidth} MHz (choice: {bw_choice})")
+        
+        # Validate bandwidth for band
+        if band == "24" and bandwidth not in ["20", "40"]:
+            print(f"\n! Invalid bandwidth {bandwidth} for 2.4 GHz band")
+            logging.error(f"Invalid bandwidth {bandwidth} for 2.4 GHz band")
+            return
+        
+        # Duration
+        logging.debug("Prompting for duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                logging.error(f"Duration out of range: {duration}")
+                return
+            logging.debug(f"Duration set: {duration} seconds")
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            logging.error(f"Invalid duration value: {duration_str}")
+            return
+        
+        # Number of packets
+        logging.debug("Prompting for packet count")
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                logging.error(f"Packet count out of range: {num_packets}")
+                return
+            logging.debug(f"Packet count set: {num_packets}")
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            logging.error(f"Invalid packet count value: {num_packets_str}")
+            return
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Build payload
+        logging.debug("Building capture payload")
+        payload = {
+            "type": "scan",
+            "ap_mac": ap_mac,
+            "band": band,
+            "channel": channel,
+            "bandwidth": bandwidth,
+            "duration": duration,
+            "num_packets": num_packets,
+            "format": capture_format,
+            "max_pkt_len": 512
+        }
+        logging.debug(f"Payload constructed: {payload}")
+        
+        # Display and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Scan Radio")
+        print(f"  AP MAC: {ap_mac}")
+        print(f"  Band: {band} GHz")
+        print(f"  Channel: {channel}")
+        print(f"  Bandwidth: {bandwidth} MHz")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets}")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        logging.debug("Waiting for user confirmation")
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        logging.info("User confirmed - executing site capture")
+        self._execute_site_capture(site_id, payload)
+    
+    def _execute_site_capture(self, site_id: str, payload: dict):
+        """
+        Execute site-level packet capture via API.
+        
+        Args:
+            site_id (str): Site UUID
+            payload (dict): Capture configuration payload
+        """
+        try:
+            print(f"\n> Starting packet capture for site {site_id}...")
+            logging.info(f"Initiating site capture with payload: {payload}")
+            
+            # Call Mist API to start capture
+            response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
+                self.mist_session,
+                site_id,
+                payload
+            )
+            
+            if response.status_code == 200:
+                result = response.data
+                capture_id = result.get('id', 'unknown')
+                capture_format = result.get('format', 'unknown')
+                print(f"\n* Capture started successfully!")
+                print(f"  Capture ID: {capture_id}")
+                print(f"  Format: {capture_format}")
+                print(f"  Duration: {result.get('duration', 0)} seconds")
+                print(f"  Expires: {result.get('expiry', 'unknown')}")
+                
+                logging.info(f"Site capture started: capture_id={capture_id}, format={capture_format}")
+                
+                # Handle based on format
+                if capture_format == 'pcap':
+                    # PCAP file format - wait for file and download
+                    print(f"\n> Waiting for PCAP file to be ready...")
+                    print(f"  This may take a few moments after capture completes.")
+                    self._wait_and_download_pcap(site_id, capture_id, result.get('duration', 600))
+                elif capture_format == 'stream':
+                    # Stream format - subscribe to WebSocket
+                    self._subscribe_to_site_capture_stream(site_id, capture_id)
+                
+                # Export capture details to CSV
+                self._export_capture_info_to_csv(result, 'site', site_id)
+                
+            else:
+                print(f"\n! Failed to start capture: {response.status_code}")
+                error_details = response.data if hasattr(response, 'data') else 'No error details available'
+                print(f"  Error details: {error_details}")
+                logging.error(f"Capture failed: {response.status_code} - {error_details}")
+                
+        except Exception as error:
+            print(f"\n! Error starting capture: {error}")
+            logging.error(f"Exception in _execute_site_capture: {error}", exc_info=True)
+    
+    def start_org_packet_capture(self):
+        """
+        Interactive menu for starting org-level packet captures (MxEdge only).
+        
+        NOTE: Organization-level captures are for Mist Edges only.
+        Site-level Mist Edges should use site captures (option 9).
+        """
+        logging.info("ENTRY: PacketCaptureManager.start_org_packet_capture()")
+        
+        print("\n" + "=" * 80)
+        print(" ORGANIZATION PACKET CAPTURE MANAGER")
+        print("=" * 80)
+        print("\n! NOTE: Org-level captures are for organization-level Mist Edges ONLY")
+        print("  For site-level Mist Edges, use Site Packet Capture (option 9)")
+        print("\n" + "=" * 80)
+        
+        # Get MxEdge ID
+        mxedge_id = safe_input("\nEnter MxEdge ID (UUID): ", context="mxedge_id")
+        if not mxedge_id:
+            print("\n! MxEdge ID required")
+            return
+        
+        # Validate UUID format
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+        if not uuid_pattern.match(mxedge_id):
+            print(f"\n! Invalid MxEdge ID format: {mxedge_id}")
+            return
+        
+        # Format selection
+        print("\nCapture format:")
+        print("  1. Stream to Mist Cloud (default)")
+        print("  2. TZSP stream to remote host (Wireshark)")
+        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
+        
+        if format_choice == "2":
+            # TZSP configuration
+            tzsp_host = safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
+            if not tzsp_host:
+                print("\n! TZSP host required")
+                return
+            
+            tzsp_port_str = safe_input("Enter TZSP port (default 37008): ", 
+                                      default_value="37008", context="tzsp_port")
+            try:
+                tzsp_port = int(tzsp_port_str)
+                if tzsp_port < 1 or tzsp_port > 65535:
+                    print(f"\n! Port must be between 1 and 65535")
+                    return
+            except ValueError:
+                print(f"\n! Invalid port: {tzsp_port_str}")
+                return
+            
+            capture_format = "tzsp"
+        else:
+            capture_format = "stream"
+            tzsp_host = None
+            tzsp_port = None
+        
+        # Port selection for MxEdge
+        print("\nSelect port(s) to capture:")
+        print("  Enter port names (comma-separated, e.g., 'port0,port1')")
+        print("  Or press Enter to capture all ports")
+        port_input = safe_input("Port selection: ", context="ports", allow_empty=True)
+        
+        # Duration
+        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
+                                 default_value="600", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        # Number of packets
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Max packet length
+        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 128, max 2048): ", 
+                                    default_value="128", context="max_pkt_len")
+        try:
+            max_pkt_len = int(max_pkt_len_str)
+            if max_pkt_len < 64 or max_pkt_len > 2048:
+                print(f"\n! Max packet length must be between 64 and 2048 bytes")
+                return
+        except ValueError:
+            print(f"\n! Invalid max packet length: {max_pkt_len_str}")
+            return
+        
+        # Build payload
+        payload = {
+            "type": "mxedge",
+            "duration": duration,
+            "num_packets": num_packets,
+            "max_pkt_len": max_pkt_len,
+            "format": capture_format,
+            "mxedges": {
+                mxedge_id: {}
+            }
+        }
+        
+        if port_input:
+            # Parse port list
+            ports = [p.strip() for p in port_input.split(',')]
+            payload["mxedges"][mxedge_id]["ports"] = ports
+        
+        if capture_format == "tzsp":
+            payload["tzsp_host"] = tzsp_host
+            payload["tzsp_port"] = tzsp_port
+        
+        # Display configuration and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: MxEdge (Organization Level)")
+        print(f"  MxEdge ID: {mxedge_id}")
+        if port_input:
+            print(f"  Ports: {port_input}")
+        else:
+            print(f"  Ports: All")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
+        print(f"  Max Packet Length: {max_pkt_len} bytes")
+        print(f"  Format: {capture_format}")
+        if capture_format == "tzsp":
+            print(f"  TZSP Host: {tzsp_host}:{tzsp_port}")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        # Execute org capture
+        self._execute_org_capture(payload)
+    
+    def _execute_org_capture(self, payload: dict):
+        """
+        Execute org-level packet capture via API.
+        
+        Args:
+            payload (dict): Capture configuration payload
+        """
+        try:
+            print(f"\n> Starting organization packet capture...")
+            logging.info(f"Initiating org capture with payload: {payload}")
+            
+            # Call Mist API to start capture
+            response = mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(
+                self.mist_session,
+                self.org_id,
+                payload
+            )
+            
+            if response.status_code == 200:
+                result = response.data
+                capture_id = result.get('id', 'unknown')
+                print(f"\n* Capture started successfully!")
+                print(f"  Capture ID: {capture_id}")
+                print(f"  Format: {result.get('format', 'unknown')}")
+                print(f"  Duration: {result.get('duration', 0)} seconds")
+                print(f"  Expires: {result.get('expiry', 'unknown')}")
+                
+                logging.info(f"Org capture started: capture_id={capture_id}")
+                
+                # Handle based on format type
+                capture_format = payload.get('format', 'pcap')
+                
+                if capture_format == 'pcap':
+                    # Wait for PCAP file and download it
+                    # Note: For org captures, we need the org ID instead of site_id
+                    self._wait_and_download_pcap_org(self.org_id, capture_id, result.get('duration', 60))
+                elif capture_format == 'stream':
+                    # Subscribe to WebSocket for streaming results
+                    self._subscribe_to_org_capture_stream(capture_id)
+                
+                # Export capture details to CSV
+                self._export_capture_info_to_csv(result, 'org', self.org_id)
+                
+            else:
+                print(f"\n! Failed to start capture: {response.status_code}")
+                error_details = response.data if hasattr(response, 'data') else 'No error details available'
+                print(f"  Error details: {error_details}")
+                logging.error(f"Capture failed: {response.status_code} - {error_details}")
+                
+        except Exception as error:
+            print(f"\n! Error starting capture: {error}")
+            logging.error(f"Exception in _execute_org_capture: {error}", exc_info=True)
+    
+    def _subscribe_to_site_capture_stream(self, site_id: str, capture_id: str):
+        """
+        Subscribe to WebSocket stream for site capture results.
+        
+        Args:
+            site_id (str): Site UUID
+            capture_id (str): Capture session ID
+        """
+        try:
+            print(f"\n> Subscribing to capture stream...")
+            print(f"  Press Ctrl+C to stop monitoring")
+            
+            # Initialize WebSocket manager if needed
+            if not self.websocket_manager:
+                self.websocket_manager = WebSocketManager(self.mist_session)
+            
+            # Connect and subscribe
+            if not self.websocket_manager.connected:
+                self.websocket_manager.connect()
+            
+            channel = f"/sites/{site_id}/pcaps"
+            self.websocket_manager.subscribe_to_channel(channel)
+            
+            # Wait for subscription confirmation
+            confirmed = self.websocket_manager.wait_for_subscription_confirmation(channel, timeout_seconds=10)
+            if confirmed:
+                print(f"\n* Subscribed to capture stream")
+                print(f"  Capture ID: {capture_id}")
+                print(f"  Monitoring for packets...")
+                print("-" * 80)
+                
+                # Monitor for results (simplified - full implementation would parse pcap data)
+                packet_count = 0
+                start_time = time.time()
+                
+                try:
+                    while True:
+                        # Check for messages
+                        with self.websocket_manager.results_lock:
+                            messages = list(self.websocket_manager.command_results.values())
+                        
+                        for msg in messages:
+                            if msg.get('channel') == channel:
+                                data = msg.get('data', {})
+                                if data.get('capture_id') == capture_id:
+                                    packet_count += 1
+                                    if packet_count % 10 == 0:
+                                        elapsed = time.time() - start_time
+                                        print(f"  Received {packet_count} packets ({elapsed:.1f}s elapsed)")
+                                    
+                                    # Check for stop message
+                                    if data.get('pcap_dict') is None:
+                                        print(f"\n* Capture completed: {packet_count} packets received")
+                                        return
+                        
+                        time.sleep(0.1)
+                        
+                except KeyboardInterrupt:
+                    print(f"\n\n! Monitoring stopped by user")
+                    print(f"  Total packets received: {packet_count}")
+                    
+            else:
+                print(f"\n! Failed to subscribe to capture stream")
+                
+        except Exception as error:
+            print(f"\n! Error subscribing to stream: {error}")
+            logging.error(f"Exception in _subscribe_to_site_capture_stream: {error}", exc_info=True)
+    
+    def _subscribe_to_org_capture_stream(self, capture_id: str):
+        """
+        Subscribe to WebSocket stream for org capture results.
+        
+        Args:
+            capture_id (str): Capture session ID
+        """
+        try:
+            print(f"\n> Subscribing to capture stream...")
+            print(f"  Press Ctrl+C to stop monitoring")
+            
+            # Similar to site capture stream but uses org channel
+            if not self.websocket_manager:
+                self.websocket_manager = WebSocketManager(self.mist_session)
+            
+            if not self.websocket_manager.connected:
+                self.websocket_manager.connect()
+            
+            channel = f"/orgs/{self.org_id}/pcaps"
+            self.websocket_manager.subscribe_to_channel(channel)
+            
+            confirmed = self.websocket_manager.wait_for_subscription_confirmation(channel, timeout_seconds=10)
+            if confirmed:
+                print(f"\n* Subscribed to capture stream")
+                print(f"  Capture ID: {capture_id}")
+                print(f"  Monitoring for packets...")
+                print("-" * 80)
+                
+                packet_count = 0
+                start_time = time.time()
+                
+                try:
+                    while True:
+                        with self.websocket_manager.results_lock:
+                            messages = list(self.websocket_manager.command_results.values())
+                        
+                        for msg in messages:
+                            if msg.get('channel') == channel:
+                                data = msg.get('data', {})
+                                if data.get('capture_id') == capture_id:
+                                    packet_count += 1
+                                    if packet_count % 10 == 0:
+                                        elapsed = time.time() - start_time
+                                        print(f"  Received {packet_count} packets ({elapsed:.1f}s elapsed)")
+                                    
+                                    if data.get('pcap_dict') is None:
+                                        print(f"\n* Capture completed: {packet_count} packets received")
+                                        return
+                        
+                        time.sleep(0.1)
+                        
+                except KeyboardInterrupt:
+                    print(f"\n\n! Monitoring stopped by user")
+                    print(f"  Total packets received: {packet_count}")
+                    
+            else:
+                print(f"\n! Failed to subscribe to capture stream")
+                
+        except Exception as error:
+            print(f"\n! Error subscribing to stream: {error}")
+            logging.error(f"Exception in _subscribe_to_org_capture_stream: {error}", exc_info=True)
+    
+    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):
+        """
+        Wait for PCAP capture to complete and download the file.
+        
+        When format='pcap', the Mist cloud saves the capture as a PCAP file
+        and provides a download URL via the pcap_url field.
+        
+        Args:
+            site_id (str): Site UUID
+            capture_id (str): Capture session ID returned from API
+            duration (int): Expected capture duration in seconds
+        """
+        import time
+        import requests
+        from pathlib import Path
+        
+        try:
+            # Calculate expected completion time (capture duration + processing buffer)
+            processing_buffer = 30  # Extra time for cloud processing
+            estimated_wait = duration + processing_buffer
+            
+            print(f"\n* Capture initiated (ID: {capture_id})")
+            print(f"  Expected completion in approximately {estimated_wait} seconds")
+            print(f"  Waiting for capture to complete and process...")
+            
+            # Wait for the capture duration first
+            for remaining in range(duration, 0, -10):
+                print(f"  Capturing... {remaining}s remaining", end='\r')
+                time.sleep(min(10, remaining))
+            
+            print(f"\n  Capture complete. Processing and waiting for download URL...")
+            
+            # Poll for the PCAP file availability
+            max_polls = 20  # Poll for up to ~3 minutes after capture ends
+            poll_interval = 10  # seconds between polls
+            pcap_url = None
+            
+            for poll_attempt in range(1, max_polls + 1):
+                try:
+                    # List captures for this site to find our capture_id
+                    response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
+                        self.apisession,
+                        site_id
+                    )
+                    
+                    if response.status_code == 200:
+                        captures = response.data
+                        
+                        # Find our capture in the list
+                        for capture in captures:
+                            if capture.get('id') == capture_id:
+                                pcap_url = capture.get('pcap_url')
+                                
+                                if pcap_url:
+                                    print(f"\n* PCAP file ready for download")
+                                    break
+                        
+                        if pcap_url:
+                            break
+                    
+                    # Continue waiting if not found yet
+                    if poll_attempt < max_polls:
+                        print(f"  Waiting for PCAP file... (attempt {poll_attempt}/{max_polls})", end='\r')
+                        time.sleep(poll_interval)
+                    
+                except Exception as poll_error:
+                    logging.debug(f"Poll attempt {poll_attempt} error: {poll_error}")
+                    time.sleep(poll_interval)
+            
+            if not pcap_url:
+                print(f"\n! PCAP file URL not available after waiting {max_polls * poll_interval} seconds")
+                print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
+                return
+            
+            # Download the PCAP file
+            print(f"\n* Downloading PCAP file...")
+            download_response = requests.get(pcap_url, timeout=300)
+            
+            if download_response.status_code == 200:
+                # Save to data directory with sanitized filename
+                output_dir = Path("data")
+                output_dir.mkdir(exist_ok=True)
+                
+                output_filename = output_dir / f"PacketCapture_{capture_id}.pcap"
+                
+                with open(output_filename, 'wb') as pcap_file:
+                    pcap_file.write(download_response.content)
+                
+                file_size_mb = len(download_response.content) / (1024 * 1024)
+                print(f"\n* PCAP file downloaded successfully")
+                print(f"  Location: {output_filename}")
+                print(f"  Size: {file_size_mb:.2f} MB")
+                print(f"\n  Open with Wireshark or other PCAP analysis tools")
+                
+                logging.info(f"PCAP file downloaded: {output_filename} ({file_size_mb:.2f} MB)")
+                
+            else:
+                print(f"\n! Failed to download PCAP file")
+                print(f"  HTTP Status: {download_response.status_code}")
+                print(f"  You can try downloading manually from: {pcap_url}")
+                logging.error(f"PCAP download failed: HTTP {download_response.status_code}")
+        
+        except KeyboardInterrupt:
+            print(f"\n\n! Download cancelled by user")
+            print(f"  Capture ID: {capture_id}")
+            if pcap_url:
+                print(f"  Download manually from: {pcap_url}")
+        
+        except Exception as error:
+            print(f"\n! Error downloading PCAP file: {error}")
+            logging.error(f"Exception in _wait_and_download_pcap: {error}", exc_info=True)
+            if pcap_url:
+                print(f"  Try downloading manually from: {pcap_url}")
+    
+    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):
+        """
+        Wait for org-level PCAP capture to complete and download the file.
+        
+        When format='pcap', the Mist cloud saves the capture as a PCAP file
+        and provides a download URL via the pcap_url field.
+        
+        Args:
+            org_id (str): Organization UUID
+            capture_id (str): Capture session ID returned from API
+            duration (int): Expected capture duration in seconds
+        """
+        import time
+        import requests
+        from pathlib import Path
+        
+        try:
+            # Calculate expected completion time (capture duration + processing buffer)
+            processing_buffer = 30  # Extra time for cloud processing
+            estimated_wait = duration + processing_buffer
+            
+            print(f"\n* Capture initiated (ID: {capture_id})")
+            print(f"  Expected completion in approximately {estimated_wait} seconds")
+            print(f"  Waiting for capture to complete and process...")
+            
+            # Wait for the capture duration first
+            for remaining in range(duration, 0, -10):
+                print(f"  Capturing... {remaining}s remaining", end='\r')
+                time.sleep(min(10, remaining))
+            
+            print(f"\n  Capture complete. Processing and waiting for download URL...")
+            
+            # Poll for the PCAP file availability
+            max_polls = 20  # Poll for up to ~3 minutes after capture ends
+            poll_interval = 10  # seconds between polls
+            pcap_url = None
+            
+            for poll_attempt in range(1, max_polls + 1):
+                try:
+                    # List captures for this org to find our capture_id
+                    response = mistapi.api.v1.orgs.pcaps.listOrgPcapCaptures(
+                        self.apisession,
+                        org_id
+                    )
+                    
+                    if response.status_code == 200:
+                        captures = response.data
+                        
+                        # Find our capture in the list
+                        for capture in captures:
+                            if capture.get('id') == capture_id:
+                                pcap_url = capture.get('pcap_url')
+                                
+                                if pcap_url:
+                                    print(f"\n* PCAP file ready for download")
+                                    break
+                        
+                        if pcap_url:
+                            break
+                    
+                    # Continue waiting if not found yet
+                    if poll_attempt < max_polls:
+                        print(f"  Waiting for PCAP file... (attempt {poll_attempt}/{max_polls})", end='\r')
+                        time.sleep(poll_interval)
+                    
+                except Exception as poll_error:
+                    logging.debug(f"Poll attempt {poll_attempt} error: {poll_error}")
+                    time.sleep(poll_interval)
+            
+            if not pcap_url:
+                print(f"\n! PCAP file URL not available after waiting {max_polls * poll_interval} seconds")
+                print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
+                return
+            
+            # Download the PCAP file
+            print(f"\n* Downloading PCAP file...")
+            download_response = requests.get(pcap_url, timeout=300)
+            
+            if download_response.status_code == 200:
+                # Save to data directory with sanitized filename
+                output_dir = Path("data")
+                output_dir.mkdir(exist_ok=True)
+                
+                output_filename = output_dir / f"PacketCapture_org_{capture_id}.pcap"
+                
+                with open(output_filename, 'wb') as pcap_file:
+                    pcap_file.write(download_response.content)
+                
+                file_size_mb = len(download_response.content) / (1024 * 1024)
+                print(f"\n* PCAP file downloaded successfully")
+                print(f"  Location: {output_filename}")
+                print(f"  Size: {file_size_mb:.2f} MB")
+                print(f"\n  Open with Wireshark or other PCAP analysis tools")
+                
+                logging.info(f"Org PCAP file downloaded: {output_filename} ({file_size_mb:.2f} MB)")
+                
+            else:
+                print(f"\n! Failed to download PCAP file")
+                print(f"  HTTP Status: {download_response.status_code}")
+                print(f"  You can try downloading manually from: {pcap_url}")
+                logging.error(f"Org PCAP download failed: HTTP {download_response.status_code}")
+        
+        except KeyboardInterrupt:
+            print(f"\n\n! Download cancelled by user")
+            print(f"  Capture ID: {capture_id}")
+            if pcap_url:
+                print(f"  Download manually from: {pcap_url}")
+        
+        except Exception as error:
+            print(f"\n! Error downloading PCAP file: {error}")
+            logging.error(f"Exception in _wait_and_download_pcap_org: {error}", exc_info=True)
+            if pcap_url:
+                print(f"  Try downloading manually from: {pcap_url}")
+    
+    def _export_capture_info_to_csv(self, capture_data: dict, scope: str, scope_id: str):
+        """
+        Export capture session information to CSV.
+        
+        Args:
+            capture_data (dict): Capture response from API
+            scope (str): 'site' or 'org'
+            scope_id (str): Site or org UUID
+        """
+        try:
+            filename = f"PacketCapture_{scope}_{capture_data.get('id', 'unknown')}.csv"
+            
+            # Add scope context
+            export_data = {
+                'scope': scope,
+                'scope_id': scope_id,
+                **capture_data
+            }
+            
+            write_data_with_format_selection(
+                [export_data],
+                filename,
+                api_function_name='startSitePacketCapture' if scope == 'site' else 'startOrgPacketCapture'
+            )
+            
+            print(f"\n* Capture info exported to: {filename}")
+            logging.info(f"Capture info exported to {filename}")
+            
+        except Exception as error:
+            logging.error(f"Failed to export capture info: {error}", exc_info=True)
+
+
 class SFPTransceiverDataProcessor:
     """Process and correlate SFP / transceiver data with site & device context.
 
@@ -2834,7 +4150,7 @@ class SFPTransceiverDataProcessor:
 
     # NOTE: Legacy function name `process_and_merge_csv_for_sfp_address` removed; menu now invokes class method directly.
 
-def get_csv_file_path(filename):
+def get_csv_file_path(filename: str) -> str:
     """
     Helper function to ensure consistent CSV file paths in the data directory.
     
@@ -2855,10 +4171,10 @@ def get_csv_file_path(filename):
     # Otherwise, place it in the data directory
     return os.path.join(data_dir, filename)
 
-def is_running_in_container():
+def is_running_in_container() -> bool:
     """Determine if execution appears to be inside a container.
 
-    Detection strategy is deliberately multi‑factor and conservative. A positive
+    Detection strategy is deliberately multi-factor and conservative. A positive
     result enables continuous interactive looping behavior. False negatives can
     cause the menu to exit after one operation (observed issue when attaching
     via SSH inside the container with a different runtime user name).
@@ -2867,7 +4183,7 @@ def is_running_in_container():
       1. Explicit override environment variables:
          - MISTHELPER_FORCE_CONTAINER_LOOP
          - MISTHELPER_CONTAINER
-         Any of: '1','true','yes','on' (case‑insensitive)
+         Any of: '1','true','yes','on' (case-insensitive)
       2. Standard /.dockerenv sentinel file
       3. Well-known container environment variables
       4. cgroup markers
@@ -2922,7 +4238,7 @@ def is_running_in_container():
                 logging.debug("Container detection: running as user 'misthelper'")
                 return True
         except Exception:
-            # Non‑Unix or lookup failure; treat as non‑container for this heuristic step
+            # Non-Unix or lookup failure; treat as non-container for this heuristic step
             pass
 
         # Heuristic: application installed in canonical container path /app and script present
@@ -2942,7 +4258,7 @@ def is_running_in_container():
     logging.debug("Container detection: no container indicators found - running in direct mode")
     return False
 
-def validate_site_id(site_id, function_name="unknown"):
+def validate_site_id(site_id: Optional[str], function_name: str = "unknown") -> bool:
     """
     Validates that site_id is not None or empty before making API calls.
     
@@ -2968,7 +4284,7 @@ def validate_site_id(site_id, function_name="unknown"):
     
     return True
 
-def validate_device_id(device_id, function_name="unknown"):
+def validate_device_id(device_id: Optional[str], function_name: str = "unknown") -> bool:
     """
     Validates that device_id is not None or empty before making API calls.
     
@@ -2994,7 +4310,7 @@ def validate_device_id(device_id, function_name="unknown"):
     
     return True
 
-def create_missing_csv_template(filename, headers=None, sample_data=None):
+def create_missing_csv_template(filename: str, headers: Optional[List[str]] = None, sample_data: Optional[List[List[str]]] = None) -> str:
     """
     Creates a basic CSV file placeholder in the correct location.
     
@@ -3022,7 +4338,7 @@ def create_missing_csv_template(filename, headers=None, sample_data=None):
         logging.error(f"Failed to create template file {filename}: {e}")
         raise
 
-def safe_api_call(api_function, *args, **kwargs):
+def safe_api_call(api_function: Any, *args: Any, **kwargs: Any) -> Tuple[bool, Any, str]:
     """
     Safely calls an API function and handles common error conditions.
     
@@ -3077,7 +4393,7 @@ def get_csv_file_path(filename):
     # Otherwise, place it in the data directory
     return os.path.join(data_dir, filename)
 
-def get_cached_or_prompted_org_id():
+def get_cached_or_prompted_org_id() -> str:
     """
     Get organization ID from various sources in order of preference:
     1. Global variable
@@ -3113,7 +4429,7 @@ def get_cached_or_prompted_org_id():
     org_id = org_id_list[0]
     return org_id
 
-def fetch_organization_services():
+def fetch_organization_services() -> List[Dict[str, Any]]:
     """
     Fetch all services defined at the organization level using the Mist API.
     
@@ -3157,7 +4473,7 @@ def fetch_organization_services():
         logging.error(f"Failed to fetch organization services: {error}")
         return []
 
-def fetch_organization_tenants():
+def fetch_organization_tenants() -> List[str]:
     """
     Fetch all tenants defined in organization networks using the Mist API.
     
@@ -3209,7 +4525,7 @@ def fetch_organization_tenants():
         logging.error(f"Error fetching organization tenants from networks: {error}")
         return []
 
-def fetch_site_tenants(site_id):
+def fetch_site_tenants(site_id: str) -> List[str]:
     """
     Fetch all tenants defined in site-level derived networks using the Mist API.
     
@@ -3491,7 +4807,7 @@ def fetch_gateway_template_tenants(site_id=None):
         logging.error(f"Error fetching tenants from gateway templates: {error}")
         return []
 
-def flatten_dict_recursively(d, parent_key='', sep='_'):
+def flatten_dict_recursively(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
     """
     Recursively flattens a nested dictionary, joining keys with `sep`.
     Lists of dicts are flattened with indexed keys.
@@ -3521,7 +4837,7 @@ def flatten_dict_recursively(d, parent_key='', sep='_'):
     # logging.debug(f"Flattened dict at key '{parent_key}': {dict(items)}")
     return dict(items)
 
-def flatten_nested_fields_in_list(data):
+def flatten_nested_fields_in_list(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Flattens all nested fields in a list of dictionaries.
     - Attempts to parse stringified dicts/lists.
@@ -3722,7 +5038,7 @@ def escape_multiline_strings_for_csv(data):
                 entry[key] = value.replace('\n', '\\n').replace('\r', '')
     return data
 
-def write_dict_list_to_csv(data, csv_file):
+def write_dict_list_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
     """
     Writes a list of dictionaries to a CSV file.
     - Escapes multiline strings for CSV compatibility.
@@ -3782,7 +5098,7 @@ def write_dict_list_to_csv(data, csv_file):
         raise
 
 
-def determine_api_function_name_from_context():
+def determine_api_function_name_from_context() -> str:
     """
     Attempts to determine the API function name from the current call stack.
     This helps identify which endpoint strategy to use for table schema.
@@ -3810,7 +5126,7 @@ def determine_api_function_name_from_context():
     
     return 'unknown'
 
-def get_endpoint_strategy(api_function_name, data_fields):
+def get_endpoint_strategy(api_function_name: str, data_fields: List[str]) -> Dict[str, Any]:
     """
     Determines the appropriate database schema strategy for an API endpoint.
     
@@ -3846,7 +5162,7 @@ def get_endpoint_strategy(api_function_name, data_fields):
     logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
     return strategy
 
-def build_create_table_sql(table_name, fields, strategy):
+def build_create_table_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> str:
     """
     Builds the CREATE TABLE SQL statement based on the endpoint strategy.
     
@@ -3950,7 +5266,7 @@ def build_create_table_sql(table_name, fields, strategy):
     logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
     return create_sql
 
-def build_indexes_sql(table_name, fields, strategy):
+def build_indexes_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> List[str]:
     """
     Builds CREATE INDEX SQL statements for the specified strategy.
     
@@ -3978,7 +5294,7 @@ def build_indexes_sql(table_name, fields, strategy):
     
     return index_sqls
 
-def write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=None):
+def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any]], table_name: str, api_function_name: Optional[str] = None) -> bool:
     """
     Writes a list of dictionaries to a SQLite database table using hybrid primary key strategies.
     This new implementation eliminates artificial api_id fields and uses proper business keys.
@@ -4185,7 +5501,7 @@ def write_dict_list_to_sqlite_database_inside_container(data, table_name, api_fu
                 logging.error(f"Failed to close database connection: {e} at {timestamp}")
 
 
-def write_data_with_format_selection(data, filename_or_table, format_override=None, api_function_name=None):
+def write_data_with_format_selection(data: List[Dict[str, Any]], filename_or_table: str, format_override: Optional[str] = None, api_function_name: Optional[str] = None) -> bool:
     """
     Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
     Follows NASA/JPL coding standards with comprehensive logging.
@@ -4306,7 +5622,7 @@ class DataExporter:
             return 0
 
 
-def save_data_to_output(data, filename, api_function_name=None):
+def save_data_to_output(data: List[Dict[str, Any]], filename: str, api_function_name: Optional[str] = None) -> bool:
     """
     Wrapper function to replace write_dict_list_to_csv calls.
     Routes to appropriate output format based on global OUTPUT_FORMAT setting.
@@ -4403,7 +5719,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         logging.debug(f"EXIT: fetch_and_display_api_data - error")
         raise
 
-def execute_with_connection_pool_management(work_items, worker_function, batch_description="items", retry_function=None):
+def execute_with_connection_pool_management(work_items: List[Any], worker_function: Any, batch_description: str = "items", retry_function: Optional[Any] = None) -> Tuple[List[Any], List[Any]]:
     """
     Execute a list of work items using connection pool management and configurable threading.
     
@@ -4453,10 +5769,10 @@ def execute_with_connection_pool_management(work_items, worker_function, batch_d
     failed_items = []
     
     # Process items in batches
-    for i in range(0, len(work_items), batch_size):
+    for batch_index in range(0, len(work_items), batch_size):
         try:
-            batch = work_items[i:i + batch_size]
-            batch_number = (i // batch_size) + 1
+            batch = work_items[batch_index:batch_index + batch_size]
+            batch_number = (batch_index // batch_size) + 1
             total_batches = (len(work_items) + batch_size - 1) // batch_size
             logging.info(f"! Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch)/max_threads:.0f} per thread)")
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
@@ -4510,7 +5826,7 @@ def execute_with_connection_pool_management(work_items, worker_function, batch_d
         except Exception as batch_exc:
             # Log detailed context about the batch to aid debugging (e.g., dict+float arithmetic errors outside futures)
             logging.error(f"! Batch-level exception in execute_with_connection_pool_management: {batch_exc}")
-            logging.error(f"! Batch context: i={i}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}")
+            logging.error(f"! Batch context: batch_index={batch_index}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}")
             try:
                 import traceback as _tb2
                 formatted = ''.join(_tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__))
@@ -4531,7 +5847,7 @@ def execute_with_connection_pool_management(work_items, worker_function, batch_d
     logging.info(f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed")
     return successful_results, failed_items
 
-def prompt_select_device_id_from_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
+def prompt_select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> Optional[str]:
     """
     Prompts the user to select a device by index or name from the device inventory at a given site.
     Returns the corresponding device ID, or None if not found.
@@ -4673,7 +5989,7 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     # Log the table output for reference (debug mode only)
     logging.debug("\n" + table.get_string())
 
-def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
+def prompt_select_site_id_from_csv(csv_file: str = "SiteList.csv") -> Optional[str]:
     """
     Prompts the user to select a site by index or name from SiteList.csv.
     Returns the corresponding site ID.
@@ -4722,7 +6038,7 @@ def prompt_select_site_id_from_csv(csv_file="SiteList.csv"):
     logging.warning(f"Site not found by name or index: {user_input}")
     return None
 
-def prompt_and_log_site_selection():
+def prompt_and_log_site_selection() -> Optional[str]:
     """
     Prompts the user to select a site from the CSV list and logs the selection.
     """
@@ -4733,15 +6049,18 @@ def prompt_and_log_site_selection():
         # You can store or use the selected site_id as needed here
     else:
         logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
+    
+    # CRITICAL: Return the site_id so callers can use it
+    return site_id
 
-def prompt_site_selection():
+def prompt_site_selection() -> Optional[str]:
     """
     Prompts the user to select a site and returns the site_id.
     Uses the existing CSV-based site selection functionality.
     """
     return prompt_select_site_id_from_csv()
 
-def prompt_device_selection(site_id, device_type="all"):
+def prompt_device_selection(site_id: str, device_type: str = "all") -> Optional[str]:
     """
     Prompts the user to select a device from the specified site and returns the device_id.
     
@@ -4753,6 +6072,148 @@ def prompt_device_selection(site_id, device_type="all"):
         str: The selected device ID or None if no selection made
     """
     return prompt_select_device_id_from_inventory(site_id, device_type)
+
+def prompt_select_ap_mac_from_site(site_id: str) -> Optional[str]:
+    """
+    Prompts the user to select an AP from the specified site and returns the AP MAC address.
+    
+    Args:
+        site_id (str): The site ID to filter APs by
+    
+    Returns:
+        str: The selected AP MAC address (normalized) or None if no selection made
+    """
+    logging.debug(f"Fetching APs for site: {site_id}")
+    
+    # Fetch all devices, filter for APs
+    try:
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+        if not rawdata:
+            print("\n! No APs found at the selected site.")
+            logging.warning(f"No APs found for site_id: {site_id}")
+            return None
+        
+        logging.info(f"Found {len(rawdata)} APs at site")
+        
+        # Sort by name for easier selection
+        aps = sorted(rawdata, key=lambda x: x.get("name", ""))
+        
+        # Prepare selection table
+        table = PrettyTable()
+        table.field_names = ["Index", "Name", "MAC", "Model", "Status"]
+        index_to_ap = {}
+        
+        for idx, ap in enumerate(aps):
+            table.add_row([
+                idx,
+                ap.get("name", "Unknown"),
+                ap.get("mac", "Unknown"),
+                ap.get("model", "Unknown"),
+                ap.get("status", "Unknown")
+            ])
+            index_to_ap[idx] = ap
+        
+        print("\n" + "=" * 80)
+        print(" SELECT ACCESS POINT")
+        print("=" * 80)
+        print(table)
+        
+        user_input = safe_input("\nEnter the index number of the AP: ", context="ap_selection").strip()
+        logging.debug(f"User input for AP selection: {user_input}")
+        
+        # Validate index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_ap:
+                ap_mac = index_to_ap[idx].get("mac")
+                ap_name = index_to_ap[idx].get("name", "Unknown")
+                print(f"\n! Selected AP: {ap_name} (MAC: {ap_mac})")
+                logging.info(f"User selected AP by index: {idx} (name: {ap_name}, mac: {ap_mac})")
+                return ap_mac
+            else:
+                print("\n! Invalid index")
+                logging.error(f"Invalid AP index: {idx}")
+                return None
+        else:
+            print("\n! Please enter a valid index number")
+            logging.error(f"Non-numeric AP selection: {user_input}")
+            return None
+            
+    except Exception as error:
+        print(f"\n! Error fetching APs: {error}")
+        logging.error(f"Exception in prompt_select_ap_mac_from_site: {error}", exc_info=True)
+        return None
+
+def prompt_select_gateway_mac_from_site(site_id: str) -> Optional[str]:
+    """
+    Prompts the user to select a gateway from the specified site and returns the gateway MAC address.
+    
+    Args:
+        site_id (str): The site ID to filter gateways by
+    
+    Returns:
+        str: The selected gateway MAC address (normalized) or None if no selection made
+    """
+    logging.debug(f"Fetching gateways for site: {site_id}")
+    
+    # Fetch all devices, filter for gateways
+    try:
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway").data
+        if not rawdata:
+            print("\n! No gateways found at the selected site.")
+            logging.warning(f"No gateways found for site_id: {site_id}")
+            return None
+        
+        logging.info(f"Found {len(rawdata)} gateways at site")
+        
+        # Sort by name for easier selection
+        gateways = sorted(rawdata, key=lambda x: x.get("name", ""))
+        
+        # Prepare selection table
+        table = PrettyTable()
+        table.field_names = ["Index", "Name", "MAC", "Model", "Status"]
+        index_to_gateway = {}
+        
+        for idx, gateway in enumerate(gateways):
+            table.add_row([
+                idx,
+                gateway.get("name", "Unknown"),
+                gateway.get("mac", "Unknown"),
+                gateway.get("model", "Unknown"),
+                gateway.get("status", "Unknown")
+            ])
+            index_to_gateway[idx] = gateway
+        
+        print("\n" + "=" * 80)
+        print(" SELECT GATEWAY")
+        print("=" * 80)
+        print(table)
+        
+        user_input = safe_input("\nEnter the index number of the gateway: ", context="gateway_selection").strip()
+        logging.debug(f"User input for gateway selection: {user_input}")
+        
+        # Validate index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_gateway:
+                gateway_mac = index_to_gateway[idx].get("mac")
+                gateway_name = index_to_gateway[idx].get("name", "Unknown")
+                print(f"\n! Selected gateway: {gateway_name} (MAC: {gateway_mac})")
+                logging.info(f"User selected gateway by index: {idx} (name: {gateway_name}, mac: {gateway_mac})")
+                return gateway_mac
+            else:
+                print("\n! Invalid index")
+                logging.error(f"Invalid gateway index: {idx}")
+                return None
+        else:
+            print("\n! Please enter a valid index number")
+            logging.error(f"Non-numeric gateway selection: {user_input}")
+            return None
+            
+    except Exception as error:
+        print(f"\n! Error fetching gateways: {error}")
+        logging.error(f"Exception in prompt_select_gateway_mac_from_site: {error}", exc_info=True)
+        return None
 
 def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
     """
@@ -5223,9 +6684,9 @@ def ping_device_websocket():
         if debug_mode:
             print(f"[DEBUG] Ping count = {ping_count}")
         
-        print(f"\n→ Executing ping to {target_host} on device {device_id}...")
-        print(f"→ Ping count: {ping_count}")
-        print("→ Establishing WebSocket connection...")
+        print(f"\n-> Executing ping to {target_host} on device {device_id}...")
+        print(f"-> Ping count: {ping_count}")
+        print("-> Establishing WebSocket connection...")
         
         # Initialize WebSocket manager
         websocket_manager = WebSocketManager(apisession)
@@ -5251,7 +6712,7 @@ def ping_device_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
             
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
@@ -5262,7 +6723,7 @@ def ping_device_websocket():
             "count": ping_count
         }
         
-        print("→ Issuing ping command...")
+        print("-> Issuing ping command...")
         logging.debug(f"Ping payload: {ping_payload}")
         
         if debug_mode:
@@ -5309,8 +6770,8 @@ def ping_device_websocket():
             websocket_manager.disconnect()
             return
             
-        print(f"→ Ping command issued (session: {session_id[:8]}...)")
-        print("→ Waiting for ping results...")
+        print(f"-> Ping command issued (session: {session_id[:8]}...)")
+        print("-> Waiting for ping results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -5389,7 +6850,7 @@ def ping_device_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
                 
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
@@ -5436,9 +6897,9 @@ def show_mac_table_websocket():
             print(f"[DEBUG] Selected site_id = {site_id}")
             
         # Get device selection - MAC table is a Layer 2 switching feature
-        print("→ MAC table is available on switches (Layer 2 devices)")
-        print("→ Routers/gateways operate at Layer 3 and typically don't maintain MAC tables")
-        print("→ APs forward wireless traffic but don't maintain traditional MAC tables")
+        print("-> MAC table is available on switches (Layer 2 devices)")
+        print("-> Routers/gateways operate at Layer 3 and typically don't maintain MAC tables")
+        print("-> APs forward wireless traffic but don't maintain traditional MAC tables")
         device_id = prompt_select_device_id_from_inventory(site_id, device_type="switch")
         if not device_id:
             print("! No switch device selected. MAC table command requires Layer 2 switching devices.")
@@ -5448,8 +6909,8 @@ def show_mac_table_websocket():
         if debug_mode:
             print(f"[DEBUG] Selected device_id = {device_id}")
             
-        print(f"\n→ Executing show MAC table on device {device_id}...")
-        print("→ Establishing WebSocket connection...")
+        print(f"\n-> Executing show MAC table on device {device_id}...")
+        print("-> Establishing WebSocket connection...")
         
         # Initialize WebSocket manager
         websocket_manager = WebSocketManager(apisession)
@@ -5475,7 +6936,7 @@ def show_mac_table_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
             
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
@@ -5483,7 +6944,7 @@ def show_mac_table_websocket():
         # Issue show MAC table command via REST API
         mac_table_payload = {}  # show_mac_table typically doesn't require additional parameters
         
-        print("→ Issuing show MAC table command...")
+        print("-> Issuing show MAC table command...")
         logging.debug(f"MAC table payload: {mac_table_payload}")
         
         if debug_mode:
@@ -5530,8 +6991,8 @@ def show_mac_table_websocket():
             websocket_manager.disconnect()
             return
             
-        print(f"→ Show MAC table command issued (session: {session_id[:8]}...)")
-        print("→ Waiting for MAC table results...")
+        print(f"-> Show MAC table command issued (session: {session_id[:8]}...)")
+        print("-> Waiting for MAC table results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -5615,7 +7076,7 @@ def show_mac_table_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
                 
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
@@ -5680,37 +7141,37 @@ def arp_device_websocket():
                 
                 # Warn about device compatibility
                 if device_type == 'switch':
-                    print(f"⚠  WARNING: Switch detected (Model: {device_model})")
-                    print("   → Switches may have limited WebSocket ARP support")
-                    print("   → Consider using SSH-based ARP commands instead")
-                    print("   → This operation may timeout or return limited results")
+                    print(f"!?  WARNING: Switch detected (Model: {device_model})")
+                    print("   -> Switches may have limited WebSocket ARP support")
+                    print("   -> Consider using SSH-based ARP commands instead")
+                    print("   -> This operation may timeout or return limited results")
                     
-                    response = input("   → Continue anyway? (y/N): ").strip().lower()
+                    response = input("   -> Continue anyway? (y/N): ").strip().lower()
                     if response not in ['y', 'yes']:
                         print("! Operation cancelled by user")
                         return
                         
                 elif device_type == 'gateway':
-                    print(f"✓ Gateway detected (Model: {device_model})")
-                    print("   → Gateways have good WebSocket ARP support")
-                    print("   → Results may differ from Access Points")
+                    print(f"!? Gateway detected (Model: {device_model})")
+                    print("   -> Gateways have good WebSocket ARP support")
+                    print("   -> Results may differ from Access Points")
                     
                 elif device_type == 'ap':
-                    print(f"✓ Access Point detected (Model: {device_model})")
-                    print("   → Access Points have full WebSocket ARP support")
+                    print(f"!? Access Point detected (Model: {device_model})")
+                    print("   -> Access Points have full WebSocket ARP support")
                     
                 else:
                     print(f"? Unknown device type: {device_type} (Model: {device_model})")
-                    print("   → Proceeding with standard ARP command")
+                    print("   -> Proceeding with standard ARP command")
                     
         except Exception as device_check_error:
             logging.warning(f"Could not verify device compatibility: {device_check_error}")
             if debug_mode:
                 print(f"[DEBUG] Device check failed: {device_check_error}")
-            print("   → Proceeding with standard ARP command")
+            print("   -> Proceeding with standard ARP command")
         
-        print(f"\n→ Executing ARP command on device {device_id}...")
-        print("→ Establishing WebSocket connection...")
+        print(f"\n-> Executing ARP command on device {device_id}...")
+        print("-> Establishing WebSocket connection...")
         
         if debug_mode:
             print("[DEBUG] WebSocketManager initialized")
@@ -5736,12 +7197,12 @@ def arp_device_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
         
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
         
-        print("→ Issuing ARP command...")
+        print("-> Issuing ARP command...")
         
         # Get authentication details for direct HTTP request
         mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
@@ -5785,8 +7246,8 @@ def arp_device_websocket():
             websocket_manager.disconnect()
             return
             
-        print(f"→ ARP command issued (session: {session_id[:8]}...)")
-        print("→ Waiting for ARP results...")
+        print(f"-> ARP command issued (session: {session_id[:8]}...)")
+        print("-> Waiting for ARP results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -5798,11 +7259,11 @@ def arp_device_websocket():
             if device_type == 'switch':
                 # Switches often timeout, give them more time
                 timeout_seconds = 45
-                print("   → Using extended timeout for switch (45 seconds)")
+                print("   -> Using extended timeout for switch (45 seconds)")
             elif device_type == 'gateway':
                 # Gateways work but may be slower
                 timeout_seconds = 35
-                print("   → Using extended timeout for gateway (35 seconds)")
+                print("   -> Using extended timeout for gateway (35 seconds)")
             else:
                 # APs and unknown devices use standard timeout
                 timeout_seconds = 30
@@ -5928,9 +7389,9 @@ def arp_device_websocket():
                 print("No output data received")
                 if device_info and device_info.get('type') == 'switch':
                     print("\nTroubleshooting for switches:")
-                    print("→ Try using SSH-based commands instead")
-                    print("→ Some switches require specific ARP command syntax")
-                    print("→ WebSocket API may have limited switch support")
+                    print("-> Try using SSH-based commands instead")
+                    print("-> Some switches require specific ARP command syntax")
+                    print("-> WebSocket API may have limited switch support")
                 
             print("=" * 60)
             
@@ -5950,18 +7411,18 @@ def arp_device_websocket():
                 
                 if device_type == 'switch':
                     print(f"\nSwitch troubleshooting ({device_model}):")
-                    print("→ Switches often have limited WebSocket ARP support")
-                    print("→ Try using SSH-based 'show arp' commands instead")
-                    print("→ Some switch models require specific command syntax")
-                    print("→ Consider using Menu option for SSH device commands")
+                    print("-> Switches often have limited WebSocket ARP support")
+                    print("-> Try using SSH-based 'show arp' commands instead")
+                    print("-> Some switch models require specific command syntax")
+                    print("-> Consider using Menu option for SSH device commands")
                 elif device_type == 'gateway':
                     print(f"\nGateway troubleshooting ({device_model}):")
-                    print("→ Try increasing timeout or checking network connectivity")
-                    print("→ Gateway may require different ARP command format")
+                    print("-> Try increasing timeout or checking network connectivity")
+                    print("-> Gateway may require different ARP command format")
                 else:
                     print(f"\nGeneral troubleshooting ({device_type}):")
-                    print("→ Check device connectivity and WebSocket support")
-                    print("→ Some devices may require SSH-based commands")
+                    print("-> Check device connectivity and WebSocket support")
+                    print("-> Some devices may require SSH-based commands")
             
             logging.warning("WebSocket ARP operation timed out")
             
@@ -5976,7 +7437,7 @@ def arp_device_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
         except Exception as cleanup_error:
             logging.warning(f"WebSocket cleanup error: {cleanup_error}")
             
@@ -6028,29 +7489,29 @@ def service_ping_device_websocket():
                 
                 # Provide device-specific guidance
                 if device_type == 'gateway':
-                    print(f"✓ SSR Gateway detected (Model: {device_model})")
-                    print("   → Service Ping allows ping packets to follow service-specific paths")
-                    print("   → This is an SSR-specific feature")
+                    print(f"!? SSR Gateway detected (Model: {device_model})")
+                    print("   -> Service Ping allows ping packets to follow service-specific paths")
+                    print("   -> This is an SSR-specific feature")
                 elif device_type == 'ap':
-                    print(f"⚠ WARNING: Access Point detected (Model: {device_model})")
-                    print("   → Service Ping is designed for SSR gateways")
-                    print("   → This device may not support service ping functionality")
-                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    print(f"!? WARNING: Access Point detected (Model: {device_model})")
+                    print("   -> Service Ping is designed for SSR gateways")
+                    print("   -> This device may not support service ping functionality")
+                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
                     if choice != 'y':
                         print("Operation cancelled.")
                         return
                 elif device_type == 'switch':
-                    print(f"⚠ WARNING: Switch detected (Model: {device_model})")
-                    print("   → Service Ping is designed for SSR gateways")
-                    print("   → Switches typically do not support service ping")
-                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    print(f"!? WARNING: Switch detected (Model: {device_model})")
+                    print("   -> Service Ping is designed for SSR gateways")
+                    print("   -> Switches typically do not support service ping")
+                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
                     if choice != 'y':
                         print("Operation cancelled.")
                         return
                 else:
-                    print(f"⚠ WARNING: Unknown device type detected (Model: {device_model})")
-                    print("   → Service Ping is designed for SSR gateways")
-                    choice = input("   → Continue anyway? (y/N): ").strip().lower()
+                    print(f"!? WARNING: Unknown device type detected (Model: {device_model})")
+                    print("   -> Service Ping is designed for SSR gateways")
+                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
                     if choice != 'y':
                         print("Operation cancelled.")
                         return
@@ -6059,80 +7520,80 @@ def service_ping_device_websocket():
             logging.warning(f"Could not retrieve device details: {device_error}")
             if debug_mode:
                 print(f"[DEBUG] Device details error: {device_error}")
-            print("⚠ Cannot determine device type - proceeding with caution")
-            print("   → Service Ping is designed for SSR gateways")
-            choice = input("   → Continue anyway? (y/N): ").strip().lower()
+            print("!? Cannot determine device type - proceeding with caution")
+            print("   -> Service Ping is designed for SSR gateways")
+            choice = input("   -> Continue anyway? (y/N): ").strip().lower()
             if choice != 'y':
                 print("Operation cancelled.")
                 return
         
         # Fetch organization services first (primary source)
-        print("\n→ Fetching organization services...")
+        print("\n-> Fetching organization services...")
         org_services = fetch_organization_services()
         available_org_services = []
         
         if org_services:
             available_org_services = [svc['name'] for svc in org_services if svc.get('name')]
-            print(f"   → Found {len(available_org_services)} organization-level services")
+            print(f"   -> Found {len(available_org_services)} organization-level services")
             if debug_mode:
                 print(f"[DEBUG] Organization services: {available_org_services}")
         else:
-            print("   → No organization-level services found")
+            print("   -> No organization-level services found")
         
         # Fetch organization tenants from networks (primary source)
-        print("→ Fetching organization tenants...")
+        print("-> Fetching organization tenants...")
         org_tenants = fetch_organization_tenants()
         available_org_tenants = []
         
         if org_tenants:
             available_org_tenants = org_tenants
-            print(f"   → Found {len(available_org_tenants)} organization-level tenants")
+            print(f"   -> Found {len(available_org_tenants)} organization-level tenants")
             if debug_mode:
                 print(f"[DEBUG] Organization tenants: {available_org_tenants}")
         else:
-            print("   → No organization-level tenants found")
+            print("   -> No organization-level tenants found")
         
         # Fetch site tenants from derived networks (secondary source)
-        print("→ Fetching site tenants...")
+        print("-> Fetching site tenants...")
         site_tenants = fetch_site_tenants(site_id)
         available_site_tenants = []
         
         if site_tenants:
             available_site_tenants = site_tenants
-            print(f"   → Found {len(available_site_tenants)} site-level tenants")
+            print(f"   -> Found {len(available_site_tenants)} site-level tenants")
             if debug_mode:
                 print(f"[DEBUG] Site tenants: {available_site_tenants}")
         else:
-            print("   → No site-level tenants found")
+            print("   -> No site-level tenants found")
         
         # Fetch tenants from service policies (tertiary source)
-        print("→ Fetching service policy tenants...")
+        print("-> Fetching service policy tenants...")
         service_policy_tenants = fetch_service_policy_tenants(site_id)
         available_service_policy_tenants = []
         
         if service_policy_tenants:
             available_service_policy_tenants = service_policy_tenants
-            print(f"   → Found {len(available_service_policy_tenants)} service policy tenants")
+            print(f"   -> Found {len(available_service_policy_tenants)} service policy tenants")
             if debug_mode:
                 print(f"[DEBUG] Service policy tenants: {available_service_policy_tenants}")
         else:
-            print("   → No service policy tenants found")
+            print("   -> No service policy tenants found")
         
         # Fetch tenants from gateway templates (quaternary source)
-        print("→ Fetching gateway template tenants...")
+        print("-> Fetching gateway template tenants...")
         gateway_template_tenants = fetch_gateway_template_tenants(site_id)
         available_gateway_template_tenants = []
         
         if gateway_template_tenants:
             available_gateway_template_tenants = gateway_template_tenants
-            print(f"   → Found {len(available_gateway_template_tenants)} gateway template tenants")
+            print(f"   -> Found {len(available_gateway_template_tenants)} gateway template tenants")
             if debug_mode:
                 print(f"[DEBUG] Gateway template tenants: {available_gateway_template_tenants}")
         else:
-            print("   → No gateway template tenants found")
+            print("   -> No gateway template tenants found")
         
         # Fetch device configuration for additional tenant and service options (fallback)
-        print("→ Fetching device configuration for additional options...")
+        print("-> Fetching device configuration for additional options...")
         device_config = None
         available_device_tenants = []
         available_device_services = []
@@ -6227,20 +7688,20 @@ def service_ping_device_websocket():
             
             # Report device configuration results
             if not available_device_tenants:
-                print("   → No tenants found in device configuration")
+                print("   -> No tenants found in device configuration")
             else:
-                print(f"   → Found {len(available_device_tenants)} tenants from device configuration")
+                print(f"   -> Found {len(available_device_tenants)} tenants from device configuration")
                 
             if not available_device_services:
-                print("   → No additional services found in device configuration")
+                print("   -> No additional services found in device configuration")
             else:
-                print(f"   → Found {len(available_device_services)} additional services from device configuration")
+                print(f"   -> Found {len(available_device_services)} additional services from device configuration")
                 
         except Exception as config_error:
             logging.warning(f"Could not fetch device configuration: {config_error}")
             if debug_mode:
                 print(f"[DEBUG] Config error: {config_error}")
-            print("⚠ Cannot retrieve device configuration")
+            print("!? Cannot retrieve device configuration")
         
         # Combine organization, site, service policy, gateway template, and device tenants 
         # (precedence: org > site > service policy > gateway template > device)
@@ -6378,7 +7839,7 @@ def service_ping_device_websocket():
                         # Default behavior
                         if testing_tools_index is not None:
                             tenant = all_available_tenants[testing_tools_index]
-                            print(f"✓ Using default tenant: {tenant}")
+                            print(f"!? Using default tenant: {tenant}")
                         break
                     
                     selection_index = int(selection)
@@ -6387,21 +7848,21 @@ def service_ping_device_websocket():
                         
                         # Show which source the tenant came from
                         if tenant in available_org_tenants:
-                            print(f"✓ Selected organization tenant: {tenant}")
+                            print(f"!? Selected organization tenant: {tenant}")
                         elif tenant in available_site_tenants:
-                            print(f"✓ Selected site tenant: {tenant}")
+                            print(f"!? Selected site tenant: {tenant}")
                         elif tenant in available_service_policy_tenants:
-                            print(f"✓ Selected service policy tenant: {tenant}")
+                            print(f"!? Selected service policy tenant: {tenant}")
                         elif tenant in available_gateway_template_tenants:
-                            print(f"✓ Selected gateway template tenant: {tenant}")
+                            print(f"!? Selected gateway template tenant: {tenant}")
                         elif tenant in available_device_tenants:
-                            print(f"✓ Selected device configuration tenant: {tenant}")
+                            print(f"!? Selected device configuration tenant: {tenant}")
                         else:
-                            print(f"✓ Selected default/custom tenant: {tenant}")
+                            print(f"!? Selected default/custom tenant: {tenant}")
                         break
                     elif selection_index == len(all_available_tenants):
                         # Skip tenant selection
-                        print("✓ Skipping tenant selection")
+                        print("!? Skipping tenant selection")
                         break
                     else:
                         print(f"Please enter a number between 0 and {len(all_available_tenants)}")
@@ -6411,15 +7872,15 @@ def service_ping_device_websocket():
                     print("\nOperation cancelled")
                     return
         else:
-            print("\n→ No tenants found in organization networks, site networks, service policies, gateway templates, or device configuration")
+            print("\n-> No tenants found in organization networks, site networks, service policies, gateway templates, or device configuration")
             
             # For SSR service ping, tenant is often required, so offer manual entry
-            manual_tenant = input("→ Enter tenant name manually (or press Enter to skip): ").strip()
+            manual_tenant = input("-> Enter tenant name manually (or press Enter to skip): ").strip()
             if manual_tenant:
                 tenant = manual_tenant
-                print(f"✓ Manual tenant: {tenant}")
+                print(f"!? Manual tenant: {tenant}")
             else:
-                print("→ Proceeding without tenant (may cause service ping to fail)")
+                print("-> Proceeding without tenant (may cause service ping to fail)")
                 tenant = None
         
         # Service selection - now using combined organization and device services
@@ -6479,7 +7940,7 @@ def service_ping_device_websocket():
                             # Default behavior
                             if web_session_service_index is not None:
                                 service = all_available_services[web_session_service_index]
-                                print(f"✓ Using default service: {service}")
+                                print(f"!? Using default service: {service}")
                                 break
                             else:
                                 print("Please enter a service name or select from the list")
@@ -6491,7 +7952,7 @@ def service_ping_device_websocket():
                             
                             # Show which source the service came from
                             if service in available_org_services:
-                                print(f"✓ Selected organization service: {service}")
+                                print(f"!? Selected organization service: {service}")
                                 # Show service details if available
                                 service_details = next((svc for svc in org_services if svc['name'] == service), {})
                                 if service_details.get('description'):
@@ -6499,15 +7960,15 @@ def service_ping_device_websocket():
                                 if service_details.get('type'):
                                     print(f"  Type: {service_details['type']}")
                             elif service in available_device_services:
-                                print(f"✓ Selected device configuration service: {service}")
+                                print(f"!? Selected device configuration service: {service}")
                             else:
-                                print(f"✓ Selected default/custom service: {service}")
+                                print(f"!? Selected default/custom service: {service}")
                             break
                         elif selection_index == len(all_available_services):
                             # Enter custom service name
                             service = input("Enter custom service name: ").strip()
                             if service:
-                                print(f"✓ Custom service: {service}")
+                                print(f"!? Custom service: {service}")
                                 break
                             else:
                                 print("Service name cannot be empty")
@@ -6517,7 +7978,7 @@ def service_ping_device_websocket():
                         # Not a number, treat as custom service name
                         if selection:
                             service = selection
-                            print(f"✓ Custom service: {service}")
+                            print(f"!? Custom service: {service}")
                             break
                         else:
                             print("Please enter a service name or select from the list")
@@ -6526,11 +7987,11 @@ def service_ping_device_websocket():
                     return
         else:
             # If no services found in either source, require manual input
-            print("\n→ No services found in organization or device configuration")
+            print("\n-> No services found in organization or device configuration")
             while True:
                 service = input("Enter service name: ").strip()
                 if service:
-                    print(f"✓ Custom service: {service}")
+                    print(f"!? Custom service: {service}")
                     break
                 print("Service is required. Please enter a service name.")
         
@@ -6538,7 +7999,7 @@ def service_ping_device_websocket():
         host = input("\nEnter target host/IP to ping [default: 8.8.8.8]: ").strip()
         if not host:
             host = "8.8.8.8"
-            print("✓ Using default destination: 8.8.8.8")
+            print("!? Using default destination: 8.8.8.8")
         
         # Optional: Count (default 4)
         count_input = input("Enter ping count [default: 4]: ").strip()
@@ -6599,7 +8060,7 @@ def service_ping_device_websocket():
             else:
                 print(f"[DEBUG] Using custom service: {service} (may not exist on device)")
         
-        print(f"\n→ Executing Service Ping on device {device_id}...")
+        print(f"\n-> Executing Service Ping on device {device_id}...")
         
         # Initialize WebSocket manager
         websocket_manager = WebSocketManager(apisession)
@@ -6621,17 +8082,17 @@ def service_ping_device_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
         
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait for subscription confirmation before sending command
-        print("→ Waiting for subscription confirmation...")
+        print("-> Waiting for subscription confirmation...")
         if not websocket_manager.wait_for_subscription_confirmation(command_channel, timeout_seconds=15):
             print("! Subscription confirmation not received within timeout")
             print("! Proceeding anyway, but results may not be received")
         else:
-            print("→ Subscription confirmed")
+            print("-> Subscription confirmed")
         
-        print("→ Issuing Service Ping command...")
+        print("-> Issuing Service Ping command...")
         
         # Execute service ping using mistapi library
         if debug_mode:
@@ -6668,11 +8129,11 @@ def service_ping_device_websocket():
                     logging.debug(f"Service ping session_id: {session_id}")
                 if session_id:
                     short_session_id = session_id[:8] + "..." if len(session_id) > 8 else session_id
-                    print(f"→ Service Ping command issued (session: {short_session_id})")
+                    print(f"-> Service Ping command issued (session: {short_session_id})")
                     if debug_mode:
                         print(f"[DEBUG] Full session ID: {session_id}")
                 else:
-                    print("→ Service Ping command issued (no session ID returned)")
+                    print("-> Service Ping command issued (no session ID returned)")
                     session_id = None
             else:
                 error_msg = f"Failed to issue Service Ping command. mistapi status {response.status_code}: {response.data}"
@@ -6699,7 +8160,7 @@ def service_ping_device_websocket():
             return
         
         # Wait for WebSocket results
-        print("→ Waiting for Service Ping results...")
+        print("-> Waiting for Service Ping results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -6709,7 +8170,7 @@ def service_ping_device_websocket():
         if device_info and device_info.get('type') == 'gateway':
             timeout_seconds = 45  # Extended timeout for gateways
             activity_timeout_seconds = 5  # Longer activity timeout for service ping
-            print("   → Using extended timeout for SSR gateway (45 seconds total, 5 seconds activity)")
+            print("   -> Using extended timeout for SSR gateway (45 seconds total, 5 seconds activity)")
         else:
             timeout_seconds = 30  # Standard timeout for other devices
             activity_timeout_seconds = 3  # Moderate activity timeout for non-gateways
@@ -6752,7 +8213,7 @@ def service_ping_device_websocket():
                 device_name = device_info.get('name', 'Unknown Device')
                 
                 print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
-                print(f"Service: {service} → Host: {host}")
+                print(f"Service: {service} -> Host: {host}")
                 
                 if device_type == 'gateway':
                     print("Note: Service-specific routing path used for ping packets")
@@ -6779,9 +8240,9 @@ def service_ping_device_websocket():
                 print("No output data received")
                 if device_info and device_info.get('type') != 'gateway':
                     print("\nTroubleshooting for non-gateway devices:")
-                    print("→ Service Ping is designed specifically for SSR gateways")
-                    print("→ Try using regular ping (Menu 87) instead")
-                    print("→ Verify device supports service ping functionality")
+                    print("-> Service Ping is designed specifically for SSR gateways")
+                    print("-> Try using regular ping (Menu 87) instead")
+                    print("-> Verify device supports service ping functionality")
                 
             print("=" * 60)
             
@@ -6803,21 +8264,21 @@ def service_ping_device_websocket():
                 
                 if device_type == 'gateway':
                     print("\nTroubleshooting for SSR gateways:")
-                    print("→ Verify service name is valid for this SSR")
-                    print("→ Check if host is reachable through the specified service")
-                    print("→ Confirm SSR routing configuration for the service")
-                    print("→ Try with a different service name")
+                    print("-> Verify service name is valid for this SSR")
+                    print("-> Check if host is reachable through the specified service")
+                    print("-> Confirm SSR routing configuration for the service")
+                    print("-> Try with a different service name")
                 elif device_type == 'switch':
                     print("\nNote: Switches typically do not support service ping")
-                    print("→ Try using regular ping (Menu 87) for basic connectivity")
-                    print("→ Service ping is an SSR-specific feature")
+                    print("-> Try using regular ping (Menu 87) for basic connectivity")
+                    print("-> Service ping is an SSR-specific feature")
                 elif device_type == 'ap':
                     print("\nNote: Access Points do not support service ping")
-                    print("→ Try using regular ping (Menu 87) for basic connectivity") 
-                    print("→ Service ping is an SSR-specific feature")
+                    print("-> Try using regular ping (Menu 87) for basic connectivity") 
+                    print("-> Service ping is an SSR-specific feature")
                 else:
                     print("\nNote: Service ping is designed for SSR gateways")
-                    print("→ Try using regular ping (Menu 87) for basic connectivity")
+                    print("-> Try using regular ping (Menu 87) for basic connectivity")
                 
             logging.warning(f"Service ping timeout - no results received for device {device_id}")
             
@@ -6835,7 +8296,7 @@ def service_ping_device_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
         except Exception as cleanup_error:
             logging.warning(f"WebSocket cleanup error: {cleanup_error}")
             
@@ -6900,16 +8361,16 @@ def display_forwarding_table_summary(entries):
         entries (list): List of forwarding table entry dictionaries
     """
     if not entries:
-        print("→ No forwarding table entries found")
+        print("-> No forwarding table entries found")
         return
     
     # Handle raw data fallback
     if len(entries) == 1 and "raw_data" in entries[0]:
-        print("→ Raw forwarding table data (parsing failed):")
+        print("-> Raw forwarding table data (parsing failed):")
         print(entries[0]["raw_data"][:1000] + "..." if len(entries[0]["raw_data"]) > 1000 else entries[0]["raw_data"])
         return
     
-    print(f"→ Total forwarding table entries: {len(entries)}")
+    print(f"-> Total forwarding table entries: {len(entries)}")
     
     # Analyze the data for summary statistics
     prefixes = set()
@@ -6931,11 +8392,11 @@ def display_forwarding_table_summary(entries):
             interfaces.add(entry['next_hops_interface'])
     
     # Display summary statistics
-    print(f"→ Unique IP prefixes: {len(prefixes)}")
-    print(f"→ Unique services: {len(services)}")
-    print(f"→ Unique tenants: {len(tenants)}")
-    print(f"→ Protocols: {', '.join(sorted(protocols)) if protocols else 'None'}")
-    print(f"→ Next-hop interfaces: {len(interfaces)}")
+    print(f"-> Unique IP prefixes: {len(prefixes)}")
+    print(f"-> Unique services: {len(services)}")
+    print(f"-> Unique tenants: {len(tenants)}")
+    print(f"-> Protocols: {', '.join(sorted(protocols)) if protocols else 'None'}")
+    print(f"-> Next-hop interfaces: {len(interfaces)}")
     
     # Group entries by IP prefix for better readability
     prefix_groups = {}
@@ -6946,13 +8407,13 @@ def display_forwarding_table_summary(entries):
         prefix_groups[prefix].append(entry)
     
     # Display detailed table for all prefixes (removed artificial limiting)
-    print(f"\n→ Detailed forwarding table by IP prefix:")
+    print(f"\n-> Detailed forwarding table by IP prefix:")
     for prefix in sorted(prefix_groups.keys()):
         display_prefix_table(prefix, prefix_groups[prefix])
     
     # Show interface summary
     if interfaces:
-        print(f"\n→ Active next-hop interfaces:")
+        print(f"\n-> Active next-hop interfaces:")
         for interface in sorted(interfaces):
             if interface != '-':
                 interface_entries = [e for e in entries if e.get('next_hops_interface') == interface]
@@ -6970,7 +8431,7 @@ def display_prefix_table(prefix, entries):
     if not entries:
         return
     
-    print(f"\n→ Routes for {prefix} ({len(entries)} entries):")
+    print(f"\n-> Routes for {prefix} ({len(entries)} entries):")
     
     # Use prettytable if available, otherwise fall back to simple formatting
     try:
@@ -7433,14 +8894,14 @@ def display_routing_table_summary(route_entries, query_params):
         query_params (dict): Original query parameters for context
     """
     if not route_entries:
-        print("→ No routing table entries found")
+        print("-> No routing table entries found")
         if query_params:
-            print("  → Try adjusting query parameters:")
+            print("  -> Try adjusting query parameters:")
             for key, value in query_params.items():
                 print(f"    - {key}: {value}")
         return
     
-    print(f"→ Total routing table entries: {len(route_entries)}")
+    print(f"-> Total routing table entries: {len(route_entries)}")
     
     # Group routes by protocol for summary
     protocols = {}
@@ -7468,21 +8929,21 @@ def display_routing_table_summary(route_entries, query_params):
     
     # Display protocol summary  
     if protocols:
-        print(f"→ Protocols: {', '.join([f'{proto}({count})' for proto, count in protocols.items()])}")
+        print(f"-> Protocols: {', '.join([f'{proto}({count})' for proto, count in protocols.items()])}")
     
     # Display table summary if multiple tables
     if len(tables) > 1:
-        print(f"→ Routing tables: {', '.join(sorted(tables))}")
+        print(f"-> Routing tables: {', '.join(sorted(tables))}")
     
-    print(f"→ Unique destinations: {len(destinations)}")
-    print(f"→ Unique next hops: {len(next_hops)}")
-    print(f"→ Unique interfaces: {len(interfaces)}")
+    print(f"-> Unique destinations: {len(destinations)}")
+    print(f"-> Unique next hops: {len(next_hops)}")
+    print(f"-> Unique interfaces: {len(interfaces)}")
     
     if active_routes > 0:
-        print(f"→ Active routes (marked with >): {active_routes}")
+        print(f"-> Active routes (marked with >): {active_routes}")
     
     # Display detailed routing table
-    print(f"\n→ Detailed routing table:")
+    print(f"\n-> Detailed routing table:")
     display_routing_table_details(route_entries)
 
 
@@ -7585,9 +9046,9 @@ def display_ssr_routing_table(route_entries, query_params):
         query_params (dict): Original query parameters for context
     """
     if not route_entries:
-        print("→ No routing table entries found")
+        print("-> No routing table entries found")
         if query_params:
-            print("  → Try adjusting query parameters:")
+            print("  -> Try adjusting query parameters:")
             for key, value in query_params.items():
                 print(f"    - {key}: {value}")
         return
@@ -7610,15 +9071,15 @@ def display_ssr_routing_table(route_entries, query_params):
             next_hops.add(next_hop)
     
     # Display summary
-    print(f"→ Total routing table entries: {total_routes}")
+    print(f"-> Total routing table entries: {total_routes}")
     
     protocol_summary = ", ".join([f"{proto}({count})" for proto, count in protocols.items()])
-    print(f"→ Protocols: {protocol_summary}")
+    print(f"-> Protocols: {protocol_summary}")
     
     vrf_summary = ", ".join([f"{vrf}({count})" for vrf, count in vrfs.items()])
-    print(f"→ VRFs: {vrf_summary}")
+    print(f"-> VRFs: {vrf_summary}")
     
-    print(f"→ Unique next hops: {len(next_hops)}")
+    print(f"-> Unique next hops: {len(next_hops)}")
     
     # Display detailed table using prettytable
     try:
@@ -7655,12 +9116,12 @@ def display_ssr_routing_table(route_entries, query_params):
                 vrf
             ])
         
-        print(f"\n→ Detailed routing table:")
+        print(f"\n-> Detailed routing table:")
         print(table)
         
     except Exception as e:
         # Fallback to simple formatting
-        print(f"\n→ Detailed routing table:")
+        print(f"\n-> Detailed routing table:")
         print("   Destination | Next Hop | Protocol | Route Name | Status | Selection Reason | Weight | Metric | Local Pref | AS Path | VRF")
         print("   " + "-" * 140)
         for entry in route_entries:
@@ -7716,9 +9177,9 @@ def show_forwarding_table_websocket():
             print(f"[DEBUG] Selected site_id = {site_id}")
             
         # Get device selection - Forwarding table is a Layer 3 routing feature
-        print("→ Forwarding table is available on routers and gateways (Layer 3 devices)")
-        print("→ This shows the Forwarding Information Base (FIB) used for packet routing decisions")
-        print("→ SSR gateways provide the most comprehensive forwarding table information")
+        print("-> Forwarding table is available on routers and gateways (Layer 3 devices)")
+        print("-> This shows the Forwarding Information Base (FIB) used for packet routing decisions")
+        print("-> SSR gateways provide the most comprehensive forwarding table information")
         device_id = prompt_select_device_id_from_inventory(site_id, device_type="gateway")
         if not device_id:
             print("! No gateway device selected. Forwarding table command is optimized for Layer 3 routing devices.")
@@ -7745,24 +9206,24 @@ def show_forwarding_table_websocket():
                 # Provide device-specific guidance
                 if device_type == 'gateway':
                     if 'SSR' in device_model.upper() or '128T' in device_model:
-                        print(f"→ SSR gateway detected ({device_model}): Excellent forwarding table support")
+                        print(f"-> SSR gateway detected ({device_model}): Excellent forwarding table support")
                     else:
-                        print(f"→ Gateway device detected ({device_model}): Good forwarding table support")
+                        print(f"-> Gateway device detected ({device_model}): Good forwarding table support")
                 elif device_type == 'switch':
-                    print(f"⚠ Switch device ({device_model}): Limited forwarding table - primarily Layer 2")
-                    print("  → Consider using MAC table command for Layer 2 switching information")
+                    print(f"!? Switch device ({device_model}): Limited forwarding table - primarily Layer 2")
+                    print("  -> Consider using MAC table command for Layer 2 switching information")
                 elif device_type == 'ap':
-                    print(f"⚠ Access Point ({device_model}): No forwarding table - wireless bridging only")
-                    print("  → APs operate at Layer 2 and don't maintain routing tables")
+                    print(f"!? Access Point ({device_model}): No forwarding table - wireless bridging only")
+                    print("  -> APs operate at Layer 2 and don't maintain routing tables")
                     
         except Exception as device_check_error:
             logging.warning(f"Could not verify device compatibility: {device_check_error}")
             if debug_mode:
                 print(f"[DEBUG] Device check failed: {device_check_error}")
-            print("   → Proceeding with standard forwarding table command")
+            print("   -> Proceeding with standard forwarding table command")
             
-        print(f"\n→ Executing show forwarding table on device {device_id}...")
-        print("→ Establishing WebSocket connection...")
+        print(f"\n-> Executing show forwarding table on device {device_id}...")
+        print("-> Establishing WebSocket connection...")
         
         # Initialize WebSocket manager
         websocket_manager = WebSocketManager(apisession)
@@ -7788,7 +9249,7 @@ def show_forwarding_table_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
             
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
@@ -7817,7 +9278,7 @@ def show_forwarding_table_websocket():
             forwarding_table_payload["prefix"] = prefix_input
         else:
             forwarding_table_payload["prefix"] = "0.0.0.0/0"  # Default to show all routes
-            print("→ Using default prefix: 0.0.0.0/0 (all routes)")
+            print("-> Using default prefix: 0.0.0.0/0 (all routes)")
         
         # Add optional parameters if provided
         if service_name_input:
@@ -7829,7 +9290,7 @@ def show_forwarding_table_websocket():
         if node_input and node_input.lower() in ["node0", "node1"]:
             forwarding_table_payload["node"] = node_input.lower()
         
-        print("→ Issuing show forwarding table command...")
+        print("-> Issuing show forwarding table command...")
         logging.debug(f"Forwarding table payload: {forwarding_table_payload}")
         
         if debug_mode:
@@ -7876,8 +9337,8 @@ def show_forwarding_table_websocket():
             websocket_manager.disconnect()
             return
             
-        print(f"→ Show forwarding table command issued (session: {session_id[:8]}...)")
-        print("→ Waiting for forwarding table results...")
+        print(f"-> Show forwarding table command issued (session: {session_id[:8]}...)")
+        print("-> Waiting for forwarding table results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -7948,25 +9409,25 @@ def show_forwarding_table_websocket():
                 
                 if device_type == 'gateway':
                     print(f"\nGateway troubleshooting ({device_model}):")
-                    print("→ SSR gateways typically support forwarding table commands")
-                    print("→ Ensure the device is online and reachable")
-                    print("→ Check device CPU utilization - high load can delay responses")
-                    print("→ Try the command again or use SSH-based routing commands")
+                    print("-> SSR gateways typically support forwarding table commands")
+                    print("-> Ensure the device is online and reachable")
+                    print("-> Check device CPU utilization - high load can delay responses")
+                    print("-> Try the command again or use SSH-based routing commands")
                 elif device_type == 'switch':
                     print(f"\nSwitch troubleshooting ({device_model}):")
-                    print("→ Switches primarily operate at Layer 2")
-                    print("→ Use 'Show MAC Table' command for Layer 2 forwarding information")
-                    print("→ Layer 3 switches may support limited routing table commands")
+                    print("-> Switches primarily operate at Layer 2")
+                    print("-> Use 'Show MAC Table' command for Layer 2 forwarding information")
+                    print("-> Layer 3 switches may support limited routing table commands")
                 elif device_type == 'ap':
                     print(f"\nAccess Point troubleshooting ({device_model}):")
-                    print("→ APs operate at Layer 2 and don't maintain forwarding tables")
-                    print("→ Use wireless client statistics instead")
-                    print("→ Check AP connectivity and bridging status")
+                    print("-> APs operate at Layer 2 and don't maintain forwarding tables")
+                    print("-> Use wireless client statistics instead")
+                    print("-> Check AP connectivity and bridging status")
                 else:
                     print(f"\nGeneral troubleshooting ({device_model}):")
-                    print("→ Verify device supports Layer 3 routing features")
-                    print("→ Check device online status and connectivity")
-                    print("→ Consider using SSH commands for advanced routing diagnostics")
+                    print("-> Verify device supports Layer 3 routing features")
+                    print("-> Check device online status and connectivity")
+                    print("-> Consider using SSH commands for advanced routing diagnostics")
             
             logging.warning("WebSocket show forwarding table operation timed out")
             
@@ -7994,7 +9455,7 @@ def show_forwarding_table_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
                 
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
@@ -8044,10 +9505,10 @@ def show_routing_table_websocket():
             print(f"[DEBUG] Selected site_id = {site_id}")
             
         # Get device selection - Focus on switches with Layer 3 routing capabilities
-        print("→ Switch routing table information (Layer 3 routing protocols)")
-        print("→ This shows the Routing Information Base (RIB) maintained by routing protocols")
-        print("→ Includes routes from BGP, OSPF, static routes, direct routes, etc.")
-        print("→ For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
+        print("-> Switch routing table information (Layer 3 routing protocols)")
+        print("-> This shows the Routing Information Base (RIB) maintained by routing protocols")
+        print("-> Includes routes from BGP, OSPF, static routes, direct routes, etc.")
+        print("-> For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
         device_id = prompt_select_device_id_from_inventory(site_id, device_type="switch")
         if not device_id:
             print("! No device selected. Operation cancelled.")
@@ -8073,16 +9534,16 @@ def show_routing_table_websocket():
                 # Provide device-specific guidance for switch routing table support
                 if device_type == 'switch':
                     if 'EX' in device_model.upper():
-                        print(f"✓ Juniper EX switch detected ({device_model}): Excellent Layer 3 routing support")
+                        print(f"!? Juniper EX switch detected ({device_model}): Excellent Layer 3 routing support")
                     elif 'QFX' in device_model.upper():
-                        print(f"✓ Juniper QFX switch detected ({device_model}): Good Layer 3 routing support")
+                        print(f"!? Juniper QFX switch detected ({device_model}): Good Layer 3 routing support")
                     else:
-                        print(f"→ Switch device detected ({device_model}): Layer 3 routing table support")
-                    print("  → Shows routing protocol information if Layer 3 features are enabled")
+                        print(f"-> Switch device detected ({device_model}): Layer 3 routing table support")
+                    print("  -> Shows routing protocol information if Layer 3 features are enabled")
                 else:
-                    print(f"⚠ Non-switch device detected ({device_type}/{device_model})")
-                    print(f"  → For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
-                    print(f"  → For gateway forwarding tables, use Menu Option 6")
+                    print(f"!? Non-switch device detected ({device_type}/{device_model})")
+                    print(f"  -> For SSR/SRX devices, use Menu Option 8 (dedicated SSR/SRX routing API)")
+                    print(f"  -> For gateway forwarding tables, use Menu Option 6")
                     user_choice = input("Continue with switch routing command anyway? (y/N): ").strip().lower()
                     if user_choice not in ['y', 'yes']:
                         print("Operation cancelled.")
@@ -8092,10 +9553,10 @@ def show_routing_table_websocket():
             logging.warning(f"Could not verify device compatibility: {device_check_error}")
             if debug_mode:
                 print(f"[DEBUG] Device check failed: {device_check_error}")
-            print("   → Proceeding with standard routing table command")
+            print("   -> Proceeding with standard routing table command")
             
-        print(f"\n→ Executing show route on device {device_id}...")
-        print("→ Establishing WebSocket connection...")
+        print(f"\n-> Executing show route on device {device_id}...")
+        print("-> Establishing WebSocket connection...")
         
         # Initialize WebSocket manager
         websocket_manager = WebSocketManager(apisession)
@@ -8121,7 +9582,7 @@ def show_routing_table_websocket():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
             
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
@@ -8129,11 +9590,11 @@ def show_routing_table_websocket():
         # Issue show route command via REST API
         print("\n=== Routing Table Query Parameters ===")
         print("Configure the routing table query (all parameters are optional):")
-        print("  • Prefix: Specific route prefix to look up (e.g., 192.168.1.0/24)")
-        print("  • Protocol: Filter by routing protocol (bgp, ospf, static, direct, evpn, any)")
-        print("  • VRF: Virtual Routing and Forwarding instance name")
-        print("  • Neighbor: BGP neighbor IP (shows received/advertised routes)")
-        print("  • Node: For HA devices (node0/node1)")
+        print("  X  Prefix: Specific route prefix to look up (e.g., 192.168.1.0/24)")
+        print("  X  Protocol: Filter by routing protocol (bgp, ospf, static, direct, evpn, any)")
+        print("  X  VRF: Virtual Routing and Forwarding instance name")
+        print("  X  Neighbor: BGP neighbor IP (shows received/advertised routes)")
+        print("  X  Node: For HA devices (node0/node1)")
         
         # Get user input for routing table parameters
         prefix_input = input("\nEnter route prefix (press Enter to show all routes): ").strip()
@@ -8146,9 +9607,9 @@ def show_routing_table_websocket():
         
         if neighbor_input:
             print("\nRoute direction options for BGP neighbor:")
-            print("  • received: Routes received from neighbor")
-            print("  • advertised: Routes advertised to neighbor") 
-            print("  • (empty): Both received and advertised routes")
+            print("  X  received: Routes received from neighbor")
+            print("  X  advertised: Routes advertised to neighbor") 
+            print("  X  (empty): Both received and advertised routes")
             route_direction = input("Enter route direction (press Enter for both): ").strip()
         else:
             route_direction = ""
@@ -8166,7 +9627,7 @@ def show_routing_table_websocket():
             if protocol_input.lower() in ["bgp", "ospf", "static", "direct", "evpn", "any"]:
                 route_payload["protocol"] = protocol_input.lower()
             else:
-                print(f"⚠ Invalid protocol '{protocol_input}', using default 'any'")
+                print(f"!? Invalid protocol '{protocol_input}', using default 'any'")
                 route_payload["protocol"] = "any"
         else:
             route_payload["protocol"] = "any"  # Default protocol - shows all routes
@@ -8182,7 +9643,7 @@ def show_routing_table_websocket():
         if node_input and node_input.lower() in ["node0", "node1"]:
             route_payload["node"] = node_input.lower()
         
-        print("→ Issuing show route command...")
+        print("-> Issuing show route command...")
         logging.debug(f"Route payload: {route_payload}")
         
         if debug_mode:
@@ -8229,8 +9690,8 @@ def show_routing_table_websocket():
             websocket_manager.disconnect()
             return
             
-        print(f"→ Show route command issued (session: {session_id[:8]}...)")
-        print("→ Waiting for routing table results...")
+        print(f"-> Show route command issued (session: {session_id[:8]}...)")
+        print("-> Waiting for routing table results...")
         
         if debug_mode:
             print(f"[DEBUG] Full session ID = {session_id}")
@@ -8313,7 +9774,7 @@ def show_routing_table_websocket():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
                 
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
@@ -8370,9 +9831,9 @@ def show_ssr_routes_dedicated():
             print(f"[DEBUG] Selected site_id = {site_id}")
             
         # Get device selection - Focus on SSR and SRX devices
-        print("→ SSR/SRX routing table query using dedicated API function")
-        print("→ This function is optimized for SSR (128T) and SRX devices")
-        print("→ Provides structured routing table queries with advanced filtering")
+        print("-> SSR/SRX routing table query using dedicated API function")
+        print("-> This function is optimized for SSR (128T) and SRX devices")
+        print("-> Provides structured routing table queries with advanced filtering")
         device_id = prompt_select_device_id_from_inventory(site_id, device_type="gateway")
         if not device_id:
             print("! No device selected. Operation cancelled.")
@@ -8399,22 +9860,22 @@ def show_ssr_routes_dedicated():
                 # Check device compatibility for dedicated SSR/SRX API
                 if device_type == 'gateway':
                     if 'SSR' in device_model.upper() or '128T' in device_model:
-                        print(f"✓ SSR gateway detected ({device_model}): Fully compatible with dedicated API")
+                        print(f"!? SSR gateway detected ({device_model}): Fully compatible with dedicated API")
                         device_compatible = True
                     elif 'SRX' in device_model.upper():
-                        print(f"✓ SRX router detected ({device_model}): Fully compatible with dedicated API") 
+                        print(f"!? SRX router detected ({device_model}): Fully compatible with dedicated API") 
                         device_compatible = True
                     else:
-                        print(f"⚠ Gateway device ({device_model}): May have limited compatibility")
-                        print("  → This API function is optimized for SSR and SRX devices")
+                        print(f"!? Gateway device ({device_model}): May have limited compatibility")
+                        print("  -> This API function is optimized for SSR and SRX devices")
                         user_choice = input("Continue anyway? (y/N): ").strip().lower()
                         if user_choice not in ['y', 'yes']:
                             print("Operation cancelled.")
                             return
                         device_compatible = True
                 else:
-                    print(f"⚠ Non-gateway device detected ({device_type}/{device_model})")
-                    print("  → This API function is designed for SSR and SRX gateway devices")
+                    print(f"!? Non-gateway device detected ({device_type}/{device_model})")
+                    print("  -> This API function is designed for SSR and SRX gateway devices")
                     user_choice = input("Continue anyway? (y/N): ").strip().lower()
                     if user_choice not in ['y', 'yes']:
                         print("Operation cancelled.")
@@ -8425,7 +9886,7 @@ def show_ssr_routes_dedicated():
             logging.warning(f"Could not verify device compatibility: {device_check_error}")
             if debug_mode:
                 print(f"[DEBUG] Device check failed: {device_check_error}")
-            print("   → Proceeding with SSR/SRX routing table command")
+            print("   -> Proceeding with SSR/SRX routing table command")
             device_compatible = True
             
         if not device_compatible:
@@ -8434,36 +9895,36 @@ def show_ssr_routes_dedicated():
             
         print(f"\n=== SSR/SRX Routing Table Query Parameters ===")
         print("Configure the routing table query (all parameters are optional):")
-        print("  • Protocol: Filter by routing protocol")
-        print("  • Prefix: Specific route prefix to look up")
-        print("  • VRF: Virtual Routing and Forwarding instance")
-        print("  • Neighbor: BGP neighbor IP for route analysis")
-        print("  • Route Direction: For BGP neighbors (received/advertised)")
-        print("  • Node: For HA clusters (node0/node1)")
-        print("  • Refresh: Real-time updates (interval/duration)")
+        print("  X  Protocol: Filter by routing protocol")
+        print("  X  Prefix: Specific route prefix to look up")
+        print("  X  VRF: Virtual Routing and Forwarding instance")
+        print("  X  Neighbor: BGP neighbor IP for route analysis")
+        print("  X  Route Direction: For BGP neighbors (received/advertised)")
+        print("  X  Node: For HA clusters (node0/node1)")
+        print("  X  Refresh: Real-time updates (interval/duration)")
         print("")
-        print("→ Note: SSR devices work well with BGP protocol queries")
-        print("→ For comprehensive routing table, use 'any' protocol")
-        print("→ Or let the API choose its own default by skipping protocol")
+        print("-> Note: SSR devices work well with BGP protocol queries")
+        print("-> For comprehensive routing table, use 'any' protocol")
+        print("-> Or let the API choose its own default by skipping protocol")
         
         # Build the request body using utils_show_route schema
         request_body = {}
         
         # Protocol selection
         print("\nProtocol options:")
-        print("  • bgp - Border Gateway Protocol routes")
-        print("  • any - Show all routing protocols")
-        print("  • ospf - Open Shortest Path First routes")
-        print("  • static - Statically configured routes")
-        print("  • direct - Directly connected routes")
-        print("  • evpn - Ethernet VPN routes")
-        print("  • (none) - Let API use its default behavior")
+        print("  X  bgp - Border Gateway Protocol routes")
+        print("  X  any - Show all routing protocols")
+        print("  X  ospf - Open Shortest Path First routes")
+        print("  X  static - Statically configured routes")
+        print("  X  direct - Directly connected routes")
+        print("  X  evpn - Ethernet VPN routes")
+        print("  X  (none) - Let API use its default behavior")
         protocol_input = input("Enter protocol (press Enter to use API default): ").strip().lower()
         
         if protocol_input and protocol_input in ["any", "bgp", "ospf", "static", "direct", "evpn"]:
             request_body["protocol"] = protocol_input
         elif protocol_input:
-            print(f"⚠ Invalid protocol '{protocol_input}', skipping protocol filter")
+            print(f"!? Invalid protocol '{protocol_input}', skipping protocol filter")
             # Don't set protocol in request_body - let API use its default
         
         # Route prefix
@@ -8482,9 +9943,9 @@ def show_ssr_routes_dedicated():
             request_body["neighbor"] = neighbor_input
             
             print("\nBGP route direction options:")
-            print("  • received - Routes received from neighbor")
-            print("  • advertised - Routes advertised to neighbor") 
-            print("  • (empty) - Both received and advertised routes")
+            print("  X  received - Routes received from neighbor")
+            print("  X  advertised - Routes advertised to neighbor") 
+            print("  X  (empty) - Both received and advertised routes")
             route_direction = input("Enter route direction (press Enter for both): ").strip().lower()
             
             if route_direction and route_direction in ["received", "advertised"]:
@@ -8512,14 +9973,14 @@ def show_ssr_routes_dedicated():
                     else:
                         request_body["duration"] = 30  # Default 30 seconds
         
-        print(f"\n→ Executing SSR/SRX routing table query on device {device_id}...")
+        print(f"\n-> Executing SSR/SRX routing table query on device {device_id}...")
         logging.debug(f"Request body: {request_body}")
         
         if debug_mode:
             print(f"[DEBUG] Request body = {request_body}")
         
         # Initialize WebSocket manager for receiving results
-        print("→ Establishing WebSocket connection...")
+        print("-> Establishing WebSocket connection...")
         websocket_manager = WebSocketManager(apisession)
         
         if debug_mode:
@@ -8543,14 +10004,14 @@ def show_ssr_routes_dedicated():
         if debug_mode:
             print(f"[DEBUG] Subscribed to channel: {command_channel}")
             
-        print("→ WebSocket connected and subscribed")
+        print("-> WebSocket connected and subscribed")
         
         # Wait a moment for subscription to be established
         time.sleep(1)
         
         # Execute the dedicated SSR/SRX routing table API call
         try:
-            print("→ Calling dedicated SSR/SRX routing table API...")
+            print("-> Calling dedicated SSR/SRX routing table API...")
             if debug_mode:
                 print(f"[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")
                 print(f"[DEBUG] Parameters: site_id={site_id}, device_id={device_id}")
@@ -8594,8 +10055,8 @@ def show_ssr_routes_dedicated():
             if hasattr(response, 'data') and response.data:
                 session_id = response.data.get('session')
                 if session_id:
-                    print(f"→ Command initiated (session: {session_id[:8]}...)")
-                    print("→ Waiting for SSR/SRX routing table results...")
+                    print(f"-> Command initiated (session: {session_id[:8]}...)")
+                    print("-> Waiting for SSR/SRX routing table results...")
                     
                     if debug_mode:
                         print(f"[DEBUG] Full session ID: {session_id}")
@@ -8710,11 +10171,11 @@ def show_ssr_routes_dedicated():
                 print("[DEBUG] Full API error traceback:")
                 traceback.print_exc()
                 
-            print("\n→ Troubleshooting suggestions:")
-            print("  • Verify the device is an SSR or SRX gateway")
-            print("  • Check device connectivity and responsiveness")
-            print("  • Verify API permissions for device commands")
-            print("  • Try the generic routing table command (Menu 7) as fallback")
+            print("\n-> Troubleshooting suggestions:")
+            print("  X  Verify the device is an SSR or SRX gateway")
+            print("  X  Check device connectivity and responsiveness")
+            print("  X  Verify API permissions for device commands")
+            print("  X  Try the generic routing table command (Menu 7) as fallback")
             
     except KeyboardInterrupt:
         print("\n! Operation interrupted by user")
@@ -8734,7 +10195,7 @@ def show_ssr_routes_dedicated():
         try:
             if 'websocket_manager' in locals():
                 websocket_manager.disconnect()
-                print("→ WebSocket connection closed")
+                print("-> WebSocket connection closed")
                 
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
@@ -10629,22 +12090,22 @@ def export_org_insight_metrics_to_csv():
             # Summary data
             processed_summary = escape_multiline_strings_for_csv(all_summary_data)
             DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")
-            print(f"  ✓ {len(processed_summary)} summary records → OrgMetricsSummary.csv")
+            print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
             
             # Time series data
             processed_time_series = escape_multiline_strings_for_csv(all_time_series_data)
             DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")
-            print(f"  ✓ {len(processed_time_series)} time series records → OrgMetricsTimeSeries.csv")
+            print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
             
             # Results data
             processed_results = escape_multiline_strings_for_csv(all_results_data)
             DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")
-            print(f"  ✓ {len(processed_results)} results records → OrgMetricsResults.csv")
+            print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
             
             # Sites data
             processed_sites = escape_multiline_strings_for_csv(all_sites_data)
             DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")
-            print(f"  ✓ {len(processed_sites)} sites records → OrgSitesData.csv")
+            print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
             
             print(f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files")
             logging.info(f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files")
@@ -10653,7 +12114,7 @@ def export_org_insight_metrics_to_csv():
             processed_legacy = flatten_nested_fields_in_list(all_insight_data)
             processed_legacy = escape_multiline_strings_for_csv(processed_legacy)
             DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")
-            print(f"  ✓ Legacy format maintained → OrgInsightMetrics_Legacy.csv")
+            print(f"  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
             
         else:
             print(f"! 0 organization insight metrics exported (no data available)")
@@ -10803,7 +12264,7 @@ def export_org_licenses_to_csv():
         # Canonical endpoint: listOrgLicenses (paginated). We deliberately do NOT call the summary endpoint.
         list_func = getattr(mistapi.api.v1.orgs.licenses, 'listOrgLicenses', None)
         if list_func is None:
-            # Library wrapper absent – this is a version compatibility shim, not an alternate data source.
+            # Library wrapper absent - this is a version compatibility shim, not an alternate data source.
             logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
             raw_url = f"/api/v1/orgs/{org_id}/licenses"
             response = apisession.mist_get(raw_url)
@@ -12320,7 +13781,7 @@ def generate_support_package():
     for site_id, site_info in site_data.items():
         # Only generate support package if there are alarms or events for the site
         if not alarms_data.get(site_id) and not events_data.get(site_id):
-            logging.info(f"Skipping site {site_id} � no alarms or events.")
+            logging.info(f"Skipping site {site_id} !? no alarms or events.")
             continue
 
         logging.info(f"Generating support package for site: {site_id}")
@@ -12735,14 +14196,14 @@ def troubleshoot_client_connectivity():
                 if 'results' in response.data:
                     print("\n  Marvis Analysis Summary:")
                     for result in response.data.get('results', []):
-                        print(f"  � {result.get('description', 'Analysis result')}")
+                        print(f"  !? {result.get('description', 'Analysis result')}")
                         if result.get('action'):
                             print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
                     print("\n  Marvis Insights:")
                     insights = response.data.get('insights', [])
                     for insight in insights:
-                        print(f"  � {insight.get('description', insight)}")
+                        print(f"  !? {insight.get('description', insight)}")
                 else:
                     print(f"\n  Analysis Data: {len(data)} items processed")
         else:
@@ -12852,7 +14313,7 @@ def troubleshoot_device_performance():
                     logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
                     print("\n  Device Performance Analysis:")
                     for result in results:
-                        print(f"  � {result.get('description', 'Analysis result')}")
+                        print(f"  !? {result.get('description', 'Analysis result')}")
                         if result.get('action'):
                             print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
@@ -12860,7 +14321,7 @@ def troubleshoot_device_performance():
                     insights = response.data.get('insights', [])
                     logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
                     for insight in insights:
-                        print(f"  � {insight.get('description', insight)}")
+                        print(f"  !? {insight.get('description', insight)}")
                 else:
                     logging.debug("MARVIS DEBUG: No results or insights in device response")
                     print(f"\n  Analysis Data: {len(data)} items processed")
@@ -12948,7 +14409,7 @@ def troubleshoot_network_connectivity():
                     for idx, result in enumerate(results):
                         logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
                         description = result.get('description', 'Analysis result') if isinstance(result, dict) else str(result)
-                        print(f"  � {description}")
+                        print(f"  !? {description}")
                         if isinstance(result, dict) and result.get('action'):
                             print(f"    Recommended Action: {result['action']}")
                 elif 'insights' in response.data:
@@ -12958,7 +14419,7 @@ def troubleshoot_network_connectivity():
                     for idx, insight in enumerate(insights):
                         logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
                         description = insight.get('description', insight) if isinstance(insight, dict) else str(insight)
-                        print(f"  � {description}")
+                        print(f"  !? {description}")
                 else:
                     logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
                     logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
@@ -13016,7 +14477,7 @@ def view_marvis_insights():
             if marvis_features:
                 print("\n  Marvis/VNA Features Available:")
                 for feature in marvis_features:
-                    print(f"  � {feature}")
+                    print(f"  !? {feature}")
             else:
                 print("\n  No specific Marvis/VNA features detected in organization settings.")
             
@@ -13047,7 +14508,7 @@ def view_marvis_insights():
                                 print(f"\n  {endpoint_name}:")
                                 for insight in insights_data[:5]:  # Show first 5 insights
                                     description = insight.get('description', insight.get('type', insight.get('name', str(insight))))
-                                    print(f"  � {description}")
+                                    print(f"  !? {description}")
                                 
                                 if len(insights_data) > 5:
                                     print(f"  ... and {len(insights_data) - 5} more insights")
@@ -13084,19 +14545,19 @@ def view_marvis_insights():
             
             print("\n  Marvis (VNA - Virtual Network Assistant) Usage Guide:")
             print("   Targeted Troubleshooting:")
-            print("     � Use client troubleshooting for specific device connectivity issues")
-            print("     � Use device troubleshooting for AP, switch, or gateway performance")
-            print("     � Use network troubleshooting for site-wide connectivity analysis")
+            print("     !? Use client troubleshooting for specific device connectivity issues")
+            print("     !? Use device troubleshooting for AP, switch, or gateway performance")
+            print("     !? Use network troubleshooting for site-wide connectivity analysis")
             print()
             print("   Requirements:")
-            print("     � Marvis must be enabled for your organization")
-            print("     � Devices must be actively managed and reporting data")
-            print("     � Sufficient data history for meaningful analysis")
+            print("     !? Marvis must be enabled for your organization")
+            print("     !? Devices must be actively managed and reporting data")
+            print("     !? Sufficient data history for meaningful analysis")
             print()
             print("   Best Practices:")
-            print("     � Run troubleshooting when issues are actively occurring")
-            print("     � Provide specific timeframes when prompted")
-            print("     � Review saved CSV files for detailed analysis results")
+            print("     !? Run troubleshooting when issues are actively occurring")
+            print("     !? Provide specific timeframes when prompted")
+            print("     !? Review saved CSV files for detailed analysis results")
             
         else:
             print(" Could not retrieve organization information.")
@@ -13111,9 +14572,9 @@ def view_marvis_insights():
         print("   - Organization may not have Marvis licensing")
         print()
         print(" Contact your Mist administrator to:")
-        print("   � Verify Marvis/VNA licensing and enablement")
-        print("   � Confirm user permissions for AI troubleshooting")
-        print("   � Check organization feature settings")
+        print("   !? Verify Marvis/VNA licensing and enablement")
+        print("   !? Confirm user permissions for AI troubleshooting")
+        print("   !? Check organization feature settings")
 
 def export_current_guest_users_to_csv():
     """
@@ -13289,9 +14750,9 @@ def run_interactive_shell(shell_url, debug=False):
                     print(f"[DEBUG] Raw recv: {repr(data)}")
                 if data:
                     stream.feed(data)
-                    for y in sorted(screen.dirty):
-                        sys.stdout.write(f"\x1b[{y+1};1H")  # Move cursor to line y+1
-                        sys.stdout.write(screen.display[y] + "\x1b[K")  # Clear to end of line
+                    for row_index in sorted(screen.dirty):
+                        sys.stdout.write(f"\x1b[{row_index+1};1H")  # Move cursor to line row_index+1
+                        sys.stdout.write(screen.display[row_index] + "\x1b[K")  # Clear to end of line
                     sys.stdout.flush()
                     screen.dirty.clear()
             except Exception as e:
@@ -13463,7 +14924,7 @@ def _handle_ws_close(output_lines, debug=False):
             while len(row) < max_cols:
                 row.append("")
         table = PrettyTable()
-        table.field_names = [f"Col {i+1}" for i in range(max_cols)]
+        table.field_names = [f"Col {col_num+1}" for col_num in range(max_cols)]
         for row in parsed_rows:
             table.add_row(row)
 
@@ -17240,8 +18701,8 @@ def convert_virtual_chassis_to_virtual_mac():
     print(f"MAC: {selected.get('mac', '')}")
     print(f"This operation cannot be undone!")
     
-    confirm = input("\nType 'CONVERT' to proceed or anything else to cancel: ").strip()
-    if confirm != "CONVERT":
+    confirm = safe_input("\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation")
+    if confirm is None or confirm != "CONVERT":
         print(" Operation cancelled.")
         return
 
@@ -17542,14 +19003,14 @@ def check_virtual_chassis_conversion_status():
     if converted_count > 0:
         print(f"\n Converted Switches (vc_mac starts with '020003'):")
         for switch in converted_switches[:10]:  # Show first 10
-            print(f"   � {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
+            print(f"   !? {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
         if len(converted_switches) > 10:
             print(f"   ... and {len(converted_switches) - 10} more")
     
     if not_converted_count > 0:
         print(f"\n Not Converted Switches (vc_mac does NOT start with '020003'):")
         for switch in not_converted_switches[:10]:  # Show first 10
-            print(f"   � {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
+            print(f"   !? {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}...")
         if len(not_converted_switches) > 10:
             print(f"   ... and {len(not_converted_switches) - 10} more")
     
@@ -17578,9 +19039,9 @@ def check_virtual_chassis_conversion_status():
         logging.error(f"Error exporting conversion status results: {e}")
     
     print(f"\n  Usage Notes:")
-    print(f"   � Use option 92 to convert individual switches")
-    print(f"   � Use option 93 for bulk conversion by site list")
-    print(f"   � Virtual chassis switches without '020003' vc_mac prefix can be converted")
+    print(f"   !? Use option 92 to convert individual switches")
+    print(f"   !? Use option 93 for bulk conversion by site list")
+    print(f"   !? Virtual chassis switches without '020003' vc_mac prefix can be converted")
 
 def export_site_wifi_clients_to_csv(site_id=None):
     """
@@ -17942,19 +19403,19 @@ def reboot_devices_by_gateway_template_list():
         print(f"\n  Template: {template_name}")
         print(f"   {len(devices)} devices affected:")
         for device in devices:
-            print(f"      � {device['device_name']} (ID: {device['device_id']}) at site '{device['site_name']}'")
+            print(f"      !? {device['device_name']} (ID: {device['device_id']}) at site '{device['site_name']}'")
     
     # Display critical warnings in a cleaner format
     warning_lines = [
         " CRITICAL WARNING - READ CAREFULLY:",
-        "� This action will REBOOT network gateway devices",
-        "� Network connectivity will be TEMPORARILY LOST during reboot",
-        "� Users may experience service interruptions",
-        "� Remote sites may become inaccessible during reboot",
-        "� This is a DISRUPTIVE network operation",
-        "� Ensure you have alternative access methods if needed",
-        "� The script owner bears NO LIABILITY for any consequences",
-        "� Proceed only if you understand and accept these risks"
+        "!? This action will REBOOT network gateway devices",
+        "!? Network connectivity will be TEMPORARILY LOST during reboot",
+        "!? Users may experience service interruptions",
+        "!? Remote sites may become inaccessible during reboot",
+        "!? This is a DISRUPTIVE network operation",
+        "!? Ensure you have alternative access methods if needed",
+        "!? The script owner bears NO LIABILITY for any consequences",
+        "!? Proceed only if you understand and accept these risks"
     ]
     
     print("\n" + "??" * 50)
@@ -17963,9 +19424,9 @@ def reboot_devices_by_gateway_template_list():
     print("??" * 50)
     
     print(f"\n  Summary:")
-    print(f"   � Total devices to reboot: {len(reboot_targets)}")
-    print(f"   � Templates involved: {len(devices_by_template)}")
-    print(f"   � Sites affected: {len(set(target['site_name'] for target in reboot_targets))}")
+    print(f"   !? Total devices to reboot: {len(reboot_targets)}")
+    print(f"   !? Templates involved: {len(devices_by_template)}")
+    print(f"   !? Sites affected: {len(set(target['site_name'] for target in reboot_targets))}")
     
     # Get user confirmation with liability waiver
     print(f"\n  Do you want to proceed with rebooting {len(reboot_targets)} gateway devices?")
@@ -18369,9 +19830,9 @@ class FirmwareManager:
             template_index_map[str(idx)] = (template_id, template_name)
         
         print(f"\n  Selection Options:")
-        print(f"   � Enter index number (1-{len(sorted_templates)})")
-        print(f"   � Type exact template name") 
-        print(f"   � Press Enter to cancel")
+        print(f"   !? Enter index number (1-{len(sorted_templates)})")
+        print(f"   !? Type exact template name") 
+        print(f"   !? Press Enter to cancel")
         
         while True:
             try:
@@ -18548,10 +20009,10 @@ class FirmwareManager:
         print("  DESTRUCTIVE OPERATION WARNING")
         print("  ===========================")
         print("  Switch firmware upgrades will:")
-        print("  • Reboot switches during upgrade process")
-        print("  • Potentially disrupt network connectivity")
-        print("  • Affect production traffic flow")
-        print("  • Require recovery snapshots for Junos devices")
+        print("  X  Reboot switches during upgrade process")
+        print("  X  Potentially disrupt network connectivity")
+        print("  X  Affect production traffic flow")
+        print("  X  Require recovery snapshots for Junos devices")
         print("")
         
         # Step 1: Mode selection
@@ -18700,18 +20161,18 @@ class FirmwareManager:
         print("  CRITICAL ROUTING INFRASTRUCTURE WARNING")
         print("  ======================================")
         print("  SSR firmware upgrades will:")
-        print("  • Reboot Session Smart Routers")
-        print("  • Disrupt WAN and SD-WAN connectivity")
-        print("  • Affect branch office connectivity")
-        print("  • Impact tunnel establishment and failover")
-        print("  • Require careful HA pair coordination")
-        print("  • Potentially cause extended outages")
+        print("  X  Reboot Session Smart Routers")
+        print("  X  Disrupt WAN and SD-WAN connectivity")
+        print("  X  Affect branch office connectivity")
+        print("  X  Impact tunnel establishment and failover")
+        print("  X  Require careful HA pair coordination")
+        print("  X  Potentially cause extended outages")
         print("")
         print("  RECOMMENDED PRECAUTIONS:")
-        print("  • Schedule maintenance windows")
-        print("  • Verify backup connectivity paths")
-        print("  • Coordinate with network operations")
-        print("  • Monitor upgrade progress closely")
+        print("  X  Schedule maintenance windows")
+        print("  X  Verify backup connectivity paths")
+        print("  X  Coordinate with network operations")
+        print("  X  Monitor upgrade progress closely")
         print("")
         
         # Step 1: Mode selection
@@ -18777,16 +20238,16 @@ class FirmwareManager:
         try:
             org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)
             if org_info.status_code != 200:
-                print(f"✗ Error accessing organization: {org_info.status_code}")
+                print(f"X  Error accessing organization: {org_info.status_code}")
                 logger.error(f"Failed to access organization {self.org_id}: {org_info.status_code}")
                 return {"error": "Organization access failed"}
             
             org_name = org_info.data.get('name', 'Unknown')
-            print(f"✓ Organization: {org_name}")
+            print(f"!? Organization: {org_name}")
             logger.debug(f"Organization validated: {org_name}")
             
         except Exception as e:
-            print(f"✗ Error validating organization: {str(e)}")
+            print(f"X  Error validating organization: {str(e)}")
             logger.error(f"Organization validation failed: {str(e)}")
             return {"error": f"Organization validation error: {str(e)}"}
 
@@ -18800,11 +20261,11 @@ class FirmwareManager:
             try:
                 sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)
                 if sites_response.status_code != 200:
-                    print(f"✗ Error retrieving sites: {sites_response.status_code}")
+                    print(f"X  Error retrieving sites: {sites_response.status_code}")
                     return {"error": "Failed to retrieve sites"}
                 
                 all_sites = sites_response.data
-                print(f"✓ Found {len(all_sites)} total sites")
+                print(f"!? Found {len(all_sites)} total sites")
                 
                 # Present site selection to user
                 print("\nAvailable sites:")
@@ -18835,9 +20296,9 @@ class FirmwareManager:
                             part = part.strip()
                             if '-' in part:
                                 start, end = map(int, part.split('-'))
-                                for i in range(start-1, end):
-                                    if 0 <= i < len(all_sites):
-                                        selected_sites.append(all_sites[i])
+                                for device_index in range(start-1, end):
+                                    if 0 <= device_index < len(all_sites):
+                                        selected_sites.append(all_sites[device_index])
                             else:
                                 index = int(part) - 1
                                 if 0 <= index < len(all_sites):
@@ -18846,19 +20307,19 @@ class FirmwareManager:
                         print(f"-> Selected {len(selected_sites)} sites")
                         
                     except Exception as e:
-                        print(f"✗ Invalid site selection: {str(e)}")
+                        print(f"X  Invalid site selection: {str(e)}")
                         return {"error": "Invalid site selection"}
                 else:
-                    print("✗ Invalid selection")
+                    print("X  Invalid selection")
                     return {"error": "Invalid selection"}
                     
             except Exception as e:
-                print(f"✗ Error during site discovery: {str(e)}")
+                print(f"X  Error during site discovery: {str(e)}")
                 logger.error(f"Site discovery failed: {str(e)}")
                 return {"error": f"Site discovery error: {str(e)}"}
 
         if not selected_sites:
-            print("✗ No sites selected")
+            print("X  No sites selected")
             return {"error": "No sites selected"}
 
         # SSR firmware upgrade parameter selection
@@ -18878,11 +20339,11 @@ class FirmwareManager:
                 break
             elif strategy_choice == '2':
                 upgrade_strategy = 'big_bang'
-                print("⚠ WARNING: big_bang strategy will upgrade all SSRs simultaneously")
+                print("!? WARNING: big_bang strategy will upgrade all SSRs simultaneously")
                 print("   This may cause widespread WAN connectivity disruption")
                 break
             else:
-                print("✗ Please enter 1 or 2")
+                print("X  Please enter 1 or 2")
         
         print(f"-> Selected strategy: {upgrade_strategy}")
         
@@ -18898,11 +20359,11 @@ class FirmwareManager:
                 break
             elif reboot_choice == '2':
                 auto_reboot = False
-                print("⚠ WARNING: SSRs require manual reboot to activate new firmware")
+                print("!? WARNING: SSRs require manual reboot to activate new firmware")
                 print("   New firmware will not be operational until manual reboot")
                 break
             else:
-                print("✗ Please enter 1 or 2")
+                print("X  Please enter 1 or 2")
         
         print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
         
@@ -18922,11 +20383,11 @@ class FirmwareManager:
                 break
             elif channel_choice == '3':
                 firmware_channel = 'alpha'
-                print("⚠ WARNING: alpha channel contains development versions")
+                print("!? WARNING: alpha channel contains development versions")
                 print("   Not recommended for production environments")
                 break
             else:
-                print("✗ Please enter 1, 2, or 3")
+                print("X  Please enter 1, 2, or 3")
         
         print(f"-> Firmware channel: {firmware_channel}")
 
@@ -18944,7 +20405,7 @@ class FirmwareManager:
             )
             
             if versions_response.status_code != 200:
-                print(f"✗ Error retrieving SSR firmware versions: {versions_response.status_code}")
+                print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
                 logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
                 return {"error": "Failed to retrieve SSR firmware versions"}
             
@@ -18970,12 +20431,12 @@ class FirmwareManager:
                         })
             
             if not available_versions:
-                print(f"✗ No SSR firmware versions available for {firmware_channel} channel")
+                print(f"X  No SSR firmware versions available for {firmware_channel} channel")
                 print("   Please check with Juniper support for available SSR firmware versions")
                 print("   Or try a different firmware channel (stable/beta/alpha)")
                 return {"error": f"No SSR firmware versions available for {firmware_channel} channel"}
             
-            print(f"✓ Found {len(available_versions)} available SSR firmware versions")
+            print(f"!? Found {len(available_versions)} available SSR firmware versions")
             print(f"  Channel: {firmware_channel}")
             
             # Get SSR inventory to show current firmware versions  
@@ -19004,7 +20465,7 @@ class FirmwareManager:
                             ssr_models_found.add(gateway.get('model'))
             
             if ssr_count > 0:
-                print(f"✓ Found {ssr_count} SSR device(s) in organization")
+                print(f"!? Found {ssr_count} SSR device(s) in organization")
                 if ssr_models_found:
                     print(f"  Models: {', '.join(sorted(ssr_models_found))}")
                 if current_firmware_versions:
@@ -19028,7 +20489,7 @@ class FirmwareManager:
                 try:
                     choice = input(f"\nSelect firmware version (1-{len(available_versions)}): ").strip()
                     if not choice:
-                        print("✗ Please enter a selection")
+                        print("X  Please enter a selection")
                         continue
                         
                     version_index = int(choice) - 1
@@ -19037,14 +20498,14 @@ class FirmwareManager:
                         target_version = selected_version['version']
                         break
                     else:
-                        print(f"✗ Please enter a number between 1 and {len(available_versions)}")
+                        print(f"X  Please enter a number between 1 and {len(available_versions)}")
                 except ValueError:
-                    print("✗ Please enter a valid number")
+                    print("X  Please enter a valid number")
             
             print(f"-> Selected firmware version: {target_version}")
             
         except Exception as e:
-            print(f"✗ Error during SSR firmware discovery: {str(e)}")
+            print(f"X  Error during SSR firmware discovery: {str(e)}")
             logger.error(f"SSR firmware discovery failed: {str(e)}")
             return {"error": f"SSR firmware discovery error: {str(e)}"}
 
@@ -19059,7 +20520,7 @@ class FirmwareManager:
         print(f"Upgrade strategy: {upgrade_strategy}")
         print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
         
-        print(f"\n⚠ CRITICAL ROUTING INFRASTRUCTURE WARNING ⚠")
+        print(f"\n!? CRITICAL ROUTING INFRASTRUCTURE WARNING !?")
         print("SSR firmware upgrades will cause WAN connectivity disruption!")
         print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
         print("- Branch offices may lose connectivity")
@@ -19069,9 +20530,9 @@ class FirmwareManager:
         print("- Monitor upgrade progress closely")
         
         print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
-        confirmation = input("Confirmation: ").strip()
+        confirmation = safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
         
-        if confirmation != "UPGRADE":
+        if confirmation is None or confirmation != "UPGRADE":
             print("-> Operation cancelled - incorrect confirmation")
             logger.info("SSR firmware upgrade cancelled by user")
             return {"cancelled": True}
@@ -19121,13 +20582,13 @@ class FirmwareManager:
                             'version': gateway.get('version', ''),
                             'site_id': gateway.get('site_id', '')
                         }
-                print(f"✓ Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
+                print(f"!? Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
             else:
                 logger.error(f"Failed to get org inventory: {ssrs_response.status_code}")
-                print("✗ Failed to validate SSR inventory")
+                print("X  Failed to validate SSR inventory")
         except Exception as e:
             logger.error(f"Error getting org SSR inventory: {e}")
-            print(f"✗ Error validating SSR inventory: {e}")
+            print(f"X  Error validating SSR inventory: {e}")
         
         try:
             # Process each site for SSR upgrades
@@ -19155,7 +20616,7 @@ class FirmwareManager:
                     
                     if site_devices_response.status_code != 200:
                         error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
-                        print(f"  ✗ {error_msg}")
+                        print(f"  X  {error_msg}")
                         site_result['error'] = error_msg
                         upgrade_results['errors'].append(error_msg)
                         continue
@@ -19190,7 +20651,7 @@ class FirmwareManager:
                         upgrade_results['site_results'].append(site_result)
                         continue
                     
-                    print(f"  ✓ Found {len(site_ssrs)} SSR(s) at {site_name}")
+                    print(f"  !? Found {len(site_ssrs)} SSR(s) at {site_name}")
                     
                     # Initiate firmware upgrade for SSRs at this site
                     ssr_device_ids = [ssr['id'] for ssr in site_ssrs]
@@ -19220,7 +20681,7 @@ class FirmwareManager:
                                     print(f"    -> Upgrade needed: {ssr_info['model']} ({current_version} -> {target_version})")
                         else:
                             logger.warning(f"Device {device_id} not found in org SSR inventory - skipping")
-                            print(f"    ⚠ Device {device_id} not in SSR inventory - skipping")
+                            print(f"    !? Device {device_id} not in SSR inventory - skipping")
                             skipped_device_ids.append(device_id)
                     
                     if not validated_device_ids:
@@ -19271,7 +20732,7 @@ class FirmwareManager:
                     )
                     
                     if upgrade_response.status_code in [200, 202]:
-                        print(f"  ✓ Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
+                        print(f"  !? Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
                         site_result['upgrade_initiated'] = True
                         upgrade_results['ssrs_upgraded'] += len(validated_device_ids)
                         logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
@@ -19292,7 +20753,7 @@ class FirmwareManager:
                             if 'already at the requested fw version' in response_text.lower():
                                 # This is informational, not a real error
                                 logger.info(f"SSR upgrade skipped at {site_name}: devices already at target version")
-                                print(f"  ℹ SSRs at {site_name} already at target version {target_version}")
+                                print(f"  - SSRs at {site_name} already at target version {target_version}")
                                 site_result['upgrade_initiated'] = False
                                 site_result['skip_reason'] = 'already_at_version'
                                 # Don't count this as an error
@@ -19308,7 +20769,7 @@ class FirmwareManager:
                                 print(f"  -> API Response: {response_text}")
                                 
                                 error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                                print(f"  ✗ {error_msg}")
+                                print(f"  X  {error_msg}")
                                 site_result['error'] = error_msg
                                 upgrade_results['errors'].append(error_msg)
                                 logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
@@ -19318,14 +20779,14 @@ class FirmwareManager:
                             print(f"  -> Could not read response: {e}")
                             
                             error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                            print(f"  ✗ {error_msg}")
+                            print(f"  X  {error_msg}")
                             site_result['error'] = error_msg
                             upgrade_results['errors'].append(error_msg)
                             logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
                     
                 except Exception as site_error:
                     error_msg = f"Error processing site {site_name}: {str(site_error)}"
-                    print(f"  ✗ {error_msg}")
+                    print(f"  X  {error_msg}")
                     site_result['error'] = error_msg
                     upgrade_results['errors'].append(error_msg)
                     logger.error(f"Site processing error for {site_name}: {str(site_error)}")
@@ -19359,7 +20820,7 @@ class FirmwareManager:
             
         except Exception as e:
             error_msg = f"Critical error in SSR firmware upgrade: {str(e)}"
-            print(f"\n✗ {error_msg}")
+            print(f"\nX  {error_msg}")
             logger.error(error_msg)
             
             upgrade_results['end_time'] = datetime.now().isoformat()
@@ -19684,17 +21145,17 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     
     # Step 4: Display summary statistics
     print(f"\n  Firmware Status Summary:")
-    print(f"   • Total devices analyzed: {firmware_status_summary['total_devices']}")
-    print(f"   • Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
-    print(f"   • Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
-    print(f"   • Upgrades completed: {firmware_status_summary['upgrade_completed']}")
-    print(f"   • Upgrades failed: {firmware_status_summary['upgrade_failed']}")
-    print(f"   • Unknown status: {firmware_status_summary['upgrade_unknown']}")
+    print(f"   X  Total devices analyzed: {firmware_status_summary['total_devices']}")
+    print(f"   X  Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
+    print(f"   X  Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
+    print(f"   X  Upgrades completed: {firmware_status_summary['upgrade_completed']}")
+    print(f"   X  Upgrades failed: {firmware_status_summary['upgrade_failed']}")
+    print(f"   X  Unknown status: {firmware_status_summary['upgrade_unknown']}")
     
     if firmware_status_summary['devices_by_status']:
         print(f"\n  Status Distribution:")
         for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
-            print(f"   • {status}: {count} devices")
+            print(f"   X  {status}: {count} devices")
     
     print(f"\n  Device Type Distribution:")
     if 'devices_by_type' in firmware_status_summary and firmware_status_summary['devices_by_type']:
@@ -19707,15 +21168,15 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 'gateway': 'Gateways/SSRs',
                 'ssr': 'Session Smart Routers'
             }.get(device_type, device_type.upper())
-            print(f"   • {type_display}: {count} devices")
+            print(f"   X  {type_display}: {count} devices")
     else:
-        print(f"   • No device type information available")
+        print(f"   X  No device type information available")
     
     print(f"\n  Version Distribution:")
     sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
                            key=lambda x: x[1], reverse=True)
     for version, count in sorted_versions[:10]:  # Show top 10 versions
-        print(f"   • {version}: {count} devices")
+        print(f"   X  {version}: {count} devices")
     if len(sorted_versions) > 10:
         print(f"   ... and {len(sorted_versions) - 10} more versions")
     
@@ -19723,7 +21184,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     sorted_models = sorted(firmware_status_summary['devices_by_model'].items(), 
                           key=lambda x: x[1], reverse=True)
     for model, count in sorted_models[:10]:  # Show top 10 models
-        print(f"   • {model}: {count} devices")
+        print(f"   X  {model}: {count} devices")
     if len(sorted_models) > 10:
         print(f"   ... and {len(sorted_models) - 10} more models")
     
@@ -19739,7 +21200,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         if ssr_upgrades_resp.status_code == 200 and hasattr(ssr_upgrades_resp, 'data'):
             ssr_upgrades = ssr_upgrades_resp.data
             if ssr_upgrades:
-                print(f"   ✓ Found {len(ssr_upgrades)} SSR upgrade operation(s)")
+                print(f"   !? Found {len(ssr_upgrades)} SSR upgrade operation(s)")
                 
                 for ssr_upgrade in ssr_upgrades:
                     upgrade_id = ssr_upgrade.get('id', 'Unknown')
@@ -19759,7 +21220,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     
                     # Try to extract version from versions mapping (take first available)
                     target_versions = list(versions.values()) if versions else []
-                    version_info = f"→ {target_versions[0]}" if target_versions else "Multiple versions"
+                    version_info = f"-> {target_versions[0]}" if target_versions else "Multiple versions"
                     if len(target_versions) > 1:
                         version_info = f"Multiple versions ({len(target_versions)} different)"
                     
@@ -19797,12 +21258,12 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                         'details': ssr_upgrade
                     })
             else:
-                print(f"   → No active SSR upgrade operations found")
+                print(f"   -> No active SSR upgrade operations found")
         else:
-            print(f"   → Failed to retrieve SSR upgrade operations: {ssr_upgrades_resp.status_code}")
+            print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_upgrades_resp.status_code}")
             
     except Exception as e:
-        print(f"   → Error checking SSR upgrade operations: {e}")
+        print(f"   -> Error checking SSR upgrade operations: {e}")
         logging.warning(f"Failed to check SSR upgrade operations: {e}")
     
     # Step 5b: Check stored upgrade IDs from site-level upgrades (AP/Switch)
@@ -19819,7 +21280,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 # Filter to current org_id
                 org_upgrades = [u for u in stored_upgrades if u.get('org_id') == org_id]
                 if org_upgrades:
-                    print(f"   ✓ Found {len(org_upgrades)} stored upgrade operation(s) from ActiveUpgrades.json")
+                    print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s) from ActiveUpgrades.json")
                     
                     # Check status of each stored upgrade
                     for upgrade_record in org_upgrades:
@@ -19859,12 +21320,12 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                                 print(f"      Failed to check upgrade {upgrade_id[:8]}... at site '{site_name}': {e}")
                                 logging.warning(f"Failed to check stored upgrade {upgrade_id}: {e}")
                 else:
-                    print(f"   → No stored upgrades match current organization")
+                    print(f"   -> No stored upgrades match current organization")
         except Exception as e:
-            print(f"   → Failed to read stored upgrade tracking data: {e}")
+            print(f"   -> Failed to read stored upgrade tracking data: {e}")
             logging.warning(f"Failed to read stored upgrade tracking: {e}")
     else:
-        print(f"   → No site-level upgrade tracking file found (checking organization records)")
+        print(f"   -> No site-level upgrade tracking file found (checking organization records)")
     
     # Step 5c: Check organization audit logs for recent upgrade events
     try:
@@ -19892,7 +21353,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     upgrade_events.append(log_entry)
             
             if upgrade_events:
-                print(f"   ✓ Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
+                print(f"   !? Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
                 
                 # Show recent upgrade events (most recent first)
                 for event in sorted(upgrade_events, key=lambda x: x.get('timestamp', 0), reverse=True)[:5]:
@@ -19916,16 +21377,16 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                         device_id = device_match.group(1) if device_match else 'Unknown Device'
                         version = version_match.group(1) if version_match else 'Unknown Version'
                         
-                        print(f"      → {event_time} | {admin_name} | Device {device_id} upgrade to {version}")
+                        print(f"      -> {event_time} | {admin_name} | Device {device_id} upgrade to {version}")
                     else:
-                        print(f"      → {event_time} | {admin_name} | {site_name}: {message}")
+                        print(f"      -> {event_time} | {admin_name} | {site_name}: {message}")
             else:
-                print(f"   → No upgrade-related events found in audit logs")
+                print(f"   -> No upgrade-related events found in audit logs")
         else:
-            print(f"   → No audit logs available for the last 24 hours")
+            print(f"   -> No audit logs available for the last 24 hours")
             
     except Exception as e:
-        print(f"   → Error checking audit logs: {e}")
+        print(f"   -> Error checking audit logs: {e}")
         logging.warning(f"Failed to search org audit logs for upgrades: {e}")
     
     # Step 5d: Check organization-level device events for upgrade activity
@@ -19945,7 +21406,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         device_events = mistapi.get_all(response=device_events_resp, mist_session=apisession)
         
         if device_events:
-            print(f"   ✓ Found {len(device_events)} device upgrade event(s) in last 24 hours")
+            print(f"   !? Found {len(device_events)} device upgrade event(s) in last 24 hours")
             
             # Group events by type for cleaner display
             events_by_type = {}
@@ -19972,12 +21433,12 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                     device_name = event.get('device_name', 'Unknown Device')
                     site_name = event.get('site_name', 'Unknown Site')
                     
-                    print(f"         → {event_time} | {device_name} at {site_name}")
+                    print(f"         -> {event_time} | {device_name} at {site_name}")
         else:
-            print(f"   → No device upgrade events found in last 24 hours")
+            print(f"   -> No device upgrade events found in last 24 hours")
             
     except Exception as e:
-        print(f"   → Error checking device events: {e}")
+        print(f"   -> Error checking device events: {e}")
         logging.warning(f"Failed to search device upgrade events: {e}")
     
     # Step 6: Check individual site upgrade operations
@@ -19995,7 +21456,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             
             if site_upgrades:
                 sites_with_upgrades += 1
-                print(f"   Site '{site_name}': ✓ {len(site_upgrades)} upgrade operation(s)")
+                print(f"   Site '{site_name}': !? {len(site_upgrades)} upgrade operation(s)")
                 
                 for upgrade in site_upgrades:
                     upgrade_id = upgrade.get('id', 'Unknown')
@@ -20056,14 +21517,14 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             # Don't print anything for sites with no upgrades to reduce noise
                 
         except Exception as e:
-            print(f"   Site '{site_name}': → Error checking upgrades: {e}")
+            print(f"   Site '{site_name}': -> Error checking upgrades: {e}")
             logging.warning(f"Failed to check upgrades for site {site_id}: {e}")
     
     # Summary message for site-level checks
     if not site_filter:
         sites_without_upgrades = min(5, len(sites_to_check)) - sites_with_upgrades
         if sites_without_upgrades > 0:
-            print(f"   → {sites_without_upgrades} site(s) have no active upgrade operations")
+            print(f"   -> {sites_without_upgrades} site(s) have no active upgrade operations")
     
     # Step 6: Export results to CSV
     timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -20378,11 +21839,11 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 if missing_sites:
                     print(f"   Warning: {len(missing_sites)} site(s) not found in organization:")
                     for missing_site in missing_sites:
-                        print(f"      � '{missing_site}'")
+                        print(f"      !? '{missing_site}'")
                     print(f"   Available sites in organization:")
                     available_names = sorted(site_name_to_id.keys())
                     for name in available_names[:10]:  # Show first 10 as examples
-                        print(f"      � '{name}'")
+                        print(f"      !? '{name}'")
                     if len(available_names) > 10:
                         print(f"      ... and {len(available_names) - 10} more")
                         
@@ -20393,7 +21854,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 
                 print(f"! Successfully resolved {len(sites_to_upgrade)} site(s) for bulk upgrade:")
                 for site in sites_to_upgrade:
-                    print(f"   � {site['name']} (ID: {site['id']})")
+                    print(f"   !? {site['name']} (ID: {site['id']})")
                 
                 logging.info(f"Resolved {len(sites_to_upgrade)} sites for bulk upgrade from {bulk_upgrade_file}")
                 
@@ -20490,16 +21951,16 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
     sites_with_aps = len([s for s in all_sites_aps.values() if s['count'] > 0])
     
     print(f"\n  AP Discovery Summary:")
-    print(f"   � Total APs found: {total_aps}")
-    print(f"   � Sites with APs: {sites_with_aps}/{len(sites_to_upgrade)}")
+    print(f"   !? Total APs found: {total_aps}")
+    print(f"   !? Sites with APs: {sites_with_aps}/{len(sites_to_upgrade)}")
     
     for site_id, site_data in all_sites_aps.items():
         site_name = site_data['name']
         ap_count = site_data['count']
         if 'error' in site_data:
-            print(f"   � {site_name}: {ap_count} APs (Error: {site_data['error']})")
+            print(f"   !? {site_name}: {ap_count} APs (Error: {site_data['error']})")
         else:
-            print(f"   � {site_name}: {ap_count} APs")
+            print(f"   !? {site_name}: {ap_count} APs")
     
     logging.info(f"Total AP discovery: {total_aps} APs across {sites_with_aps} sites")
     
@@ -20663,9 +22124,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         if current_versions and "Unknown" not in current_versions:
             current_versions_sorted = sorted(current_versions, reverse=True)
             versions_text = ", ".join(current_versions_sorted)
-            print(f"   � {model}: {len(devices)} devices (Current versions: {versions_text})")
+            print(f"   !? {model}: {len(devices)} devices (Current versions: {versions_text})")
         else:
-            print(f"   � {model}: {len(devices)} devices (Current versions: Unknown)")
+            print(f"   !? {model}: {len(devices)} devices (Current versions: Unknown)")
             
         # Show individual device details with site information for better visibility
         if len(sites_to_upgrade) > 1:
@@ -20747,7 +22208,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
     for version, device_list in sorted(all_current_versions.items(), reverse=True):
         print(f"   Version {version}: {len(device_list)} devices")
         for device_info in device_list:
-            print(f"      � {device_info}")
+            print(f"      !? {device_info}")
     print()
     
     # Show summary of what was found
@@ -20869,7 +22330,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     else:
                         range_text = latest_version
                     
-                    print(f"      � {model}: {len(versions)} versions ({range_text})")
+                    print(f"      !? {model}: {len(versions)} versions ({range_text})")
         
         elif len(matching_models) == 1:
             model = list(matching_models)[0]
@@ -21098,9 +22559,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         print(f"   {model}: {device_count} devices firmware {version}")
     
     print(f"\n  Summary:")
-    print(f"   � Total models: {len(upgrade_plan)}")
-    print(f"   � Total devices: {total_devices_to_upgrade}")
-    print(f"   � Firmware versions: {len(selected_versions)}")
+    print(f"   !? Total models: {len(upgrade_plan)}")
+    print(f"   !? Total devices: {total_devices_to_upgrade}")
+    print(f"   !? Firmware versions: {len(selected_versions)}")
     
     # Highlight coordination considerations for mixed-version upgrades
     if len(selected_versions) > 1:
@@ -21130,10 +22591,10 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 print(f"   Multi-version upgrade is necessary due to model firmware constraints")
         
         print(f"\n   Coordination considerations:")
-        print(f"      � Each model will upgrade to its optimal version")
-        print(f"      � Network features may vary between firmware versions")
-        print(f"      � Monitor compatibility for shared network functions")
-        print(f"      � Consider upgrade timing to minimize impact")
+        print(f"      !? Each model will upgrade to its optimal version")
+        print(f"      !? Network features may vary between firmware versions")
+        print(f"      !? Monitor compatibility for shared network functions")
+        print(f"      !? Consider upgrade timing to minimize impact")
         
         logging.info(f"Multi-version upgrade plan: {len(selected_versions)} different versions across {len(models_in_plan)} models")
         
@@ -21227,7 +22688,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 try:
                     phases_input = input("Enter comma-separated percentages (e.g., 2,10,25,100): ").strip()
                     if phases_input:
-                        phases = [int(x.strip()) for x in phases_input.split(',')]
+                        phases = [int(phase_str.strip()) for phase_str in phases_input.split(',')]
                         if all(1 <= p <= 100 for p in phases) and phases[-1] == 100:
                             upgrade_config["canary_phases"] = phases
                             print(f"! Custom phases: {phases}")
@@ -21375,7 +22836,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             site_count = sum(1 for plan in upgrade_plan.values() 
                            for device in plan["devices"] 
                            if device.get("_site_id") == site_info['id'])
-            print(f"   � {site_info['name']}: {site_count} devices")
+            print(f"   !? {site_info['name']}: {site_count} devices")
     else:
         print(f"Site: {sites_to_upgrade[0]['name']}")
     
@@ -21403,7 +22864,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     mac = device.get("mac", "Unknown")
                     device_id = device.get("id")
                     current_version = ap_versions.get(device_id, "Unknown")
-                    print(f"      � {device_name} (MAC: {mac}) - Current: {current_version}")
+                    print(f"      !? {device_name} (MAC: {mac}) - Current: {current_version}")
         else:
             # Single site display
             for device in devices:
@@ -21411,24 +22872,24 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 mac = device.get("mac", "Unknown")
                 device_id = device.get("id")
                 current_version = ap_versions.get(device_id, "Unknown")
-                print(f"   � {device_name} (MAC: {mac}) - Current: {current_version}")
+                print(f"   !? {device_name} (MAC: {mac}) - Current: {current_version}")
     
     # Step 8: Display warnings and get user confirmation
     warning_lines = [
         " CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE OPERATION:",
-        "� This action will UPGRADE FIRMWARE on Access Point devices",
-        "� APs will REBOOT during the upgrade process",
-        "� Wi-Fi connectivity will be TEMPORARILY LOST during upgrades", 
-        "� Users will experience Wi-Fi service interruptions",
-        "� Firmware upgrades can take 5-15 minutes per device",
-        "� Failed upgrades may require manual recovery",
-        "� This is a DISRUPTIVE network operation",
-        "� Always ensure you have physical access to devices if recovery is needed",
-        f"� Upgrade strategy: {upgrade_config['strategy'].upper()}",
-        f"� Max failure tolerance: {upgrade_config['max_failure_percentage']}%",
-        "� P2P enabled: " + ("Yes" if upgrade_config['enable_p2p'] else "No"),
-        "� The script owner bears NO LIABILITY for any consequences",
-        "� Proceed only if you understand and accept these risks"
+        "!? This action will UPGRADE FIRMWARE on Access Point devices",
+        "!? APs will REBOOT during the upgrade process",
+        "!? Wi-Fi connectivity will be TEMPORARILY LOST during upgrades", 
+        "!? Users will experience Wi-Fi service interruptions",
+        "!? Firmware upgrades can take 5-15 minutes per device",
+        "!? Failed upgrades may require manual recovery",
+        "!? This is a DISRUPTIVE network operation",
+        "!? Always ensure you have physical access to devices if recovery is needed",
+        f"!? Upgrade strategy: {upgrade_config['strategy'].upper()}",
+        f"!? Max failure tolerance: {upgrade_config['max_failure_percentage']}%",
+        "!? P2P enabled: " + ("Yes" if upgrade_config['enable_p2p'] else "No"),
+        "!? The script owner bears NO LIABILITY for any consequences",
+        "!? Proceed only if you understand and accept these risks"
     ]
     
     print("\n" + "??" * 50)
@@ -21438,17 +22899,17 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
     
     print(f"\n  Summary:")
     if len(sites_to_upgrade) > 1:
-        print(f"   � Bulk upgrade across {len(sites_to_upgrade)} sites")
+        print(f"   !? Bulk upgrade across {len(sites_to_upgrade)} sites")
         sites_with_devices = len(set(device.get("_site_name") for plan in upgrade_plan.values() for device in plan["devices"]))
-        print(f"   � Sites with devices to upgrade: {sites_with_devices}")
+        print(f"   !? Sites with devices to upgrade: {sites_with_devices}")
     else:
-        print(f"   � Site: {sites_to_upgrade[0]['name']}")
-    print(f"   � Total APs to upgrade: {total_devices}")
-    print(f"   � Models affected: {len(upgrade_plan)}")
-    print(f"   � Strategy: {upgrade_config['strategy'].upper()}")
+        print(f"   !? Site: {sites_to_upgrade[0]['name']}")
+    print(f"   !? Total APs to upgrade: {total_devices}")
+    print(f"   !? Models affected: {len(upgrade_plan)}")
+    print(f"   !? Strategy: {upgrade_config['strategy'].upper()}")
     
     # Show target firmware versions for each model
-    print(f"   � Target firmware versions:")
+    print(f"   !? Target firmware versions:")
     for model, plan in upgrade_plan.items():
         version = plan["version"]
         device_count = len(plan["devices"])
@@ -21456,9 +22917,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
     
     if upgrade_config.get('start_time'):
         scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
-        print(f"   � Scheduled: {scheduled_time}")
+        print(f"   !? Scheduled: {scheduled_time}")
     else:
-        print(f"   � Scheduled: Immediate")
+        print(f"   !? Scheduled: Immediate")
     
     # Get user confirmation with liability waiver
     print(f"\n  Do you want to proceed with upgrading {total_devices} AP devices?")
@@ -21628,7 +23089,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     model_devices = model_info['devices']
                     model_device_ids = [device.get("id") for device in model_devices if device.get("id")]
                     
-                    print(f"         � {model}: {len(model_devices)} devices v{model_version}")
+                    print(f"         !? {model}: {len(model_devices)} devices v{model_version}")
                     
                     model_upgrade_body = {
                         "strategy": upgrade_config["strategy"],
@@ -21785,14 +23246,14 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     if current_auto_upgrade and current_auto_upgrade.get("enabled"):
                         logging.debug(f"Auto-upgrade currently enabled for site {site_name}")
                         print(f"   Current auto-upgrade settings:")
-                        print(f"      � Enabled: Yes")
-                        print(f"      � Version: {current_auto_upgrade.get('version', 'Not set')}")
-                        print(f"      � Time of day: {current_auto_upgrade.get('time_of_day', 'Not set')}")
+                        print(f"      !? Enabled: Yes")
+                        print(f"      !? Version: {current_auto_upgrade.get('version', 'Not set')}")
+                        print(f"      !? Time of day: {current_auto_upgrade.get('time_of_day', 'Not set')}")
                         day_of_week = current_auto_upgrade.get('day_of_week')
                         if day_of_week:
-                            print(f"      � Day of week: {day_of_week}")
+                            print(f"      !? Day of week: {day_of_week}")
                         else:
-                            print(f"      � Day of week: Every day")
+                            print(f"      !? Day of week: Every day")
                     else:
                         logging.debug(f"Auto-upgrade currently disabled or not configured for site {site_name}")
                         print(f"   Current auto-upgrade: Disabled or not configured")
@@ -21902,9 +23363,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                             family_count += 1
                             logging.debug(f"Family {family_count}: {models} with {len(signature)} firmware versions")
                             if len(models) > 1:
-                                print(f"      � AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
+                                print(f"      !? AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
                             else:
-                                print(f"      � {models[0]} ({len(signature)} firmware versions)")
+                                print(f"      !? {models[0]} ({len(signature)} firmware versions)")
                         
                         print(f"\n   Configure auto-upgrade for additional models:")
                         print(f"   Models with identical firmware versions are grouped together as families.")
@@ -22016,15 +23477,15 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     models_additionally_configured = total_models_configured - models_from_plan
                     
                     print(f"\n   Auto-upgrade coverage summary:")
-                    print(f"      � Models from upgrade plan: {models_from_plan}")
-                    print(f"      � Additional models configured: {models_additionally_configured}")
-                    print(f"      � Total models configured: {total_models_configured}")
+                    print(f"      !? Models from upgrade plan: {models_from_plan}")
+                    print(f"      !? Additional models configured: {models_additionally_configured}")
+                    print(f"      !? Total models configured: {total_models_configured}")
                     
                     if total_models_configured > 0:
                         print(f"\n   Complete auto-upgrade model configuration:")
                         for model, version in sorted(custom_versions.items()):
                             status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                            print(f"      � {model} firmware {version} ({status})")
+                            print(f"      !? {model} firmware {version} ({status})")
 
                     new_auto_upgrade = {
                         "enabled": True,
@@ -22094,7 +23555,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                             logging.debug(f"Auto-upgrade configured with {len(custom_versions)} custom model versions")
                             print(f"   New/replacement APs will auto-upgrade per model:")
                             for model, version in custom_versions.items():
-                                print(f"      � {model}: {version}")
+                                print(f"      !? {model}: {version}")
                             
                             # Log with model details
                             version_summary = ", ".join([f"{m}:{v}" for m, v in custom_versions.items()])
@@ -22178,7 +23639,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         print(f"   Multiple firmware versions in upgrade plan:")
         for version in sorted(target_versions):
             models_with_version = [model for model, plan in upgrade_plan.items() if plan["version"] == version]
-            print(f"      � Version {version}: {', '.join(models_with_version)}")
+            print(f"      !? Version {version}: {', '.join(models_with_version)}")
         
         print(f"\n   Auto-Upgrade Configuration for Mixed-Model Environment:")
         print(f"   Site auto-upgrade must handle different AP models with different firmware capabilities.")
@@ -22190,14 +23651,14 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         # Provide enhanced options for mixed-model auto-upgrade
         print(f"\n   Auto-upgrade options for mixed-model environment:")
         print(f"      [1] Configure custom versions per model (RECOMMENDED)")
-        print(f"         � Each AP model gets its optimal firmware version")
-        print(f"         � New APs will auto-upgrade to model-appropriate firmware")
-        print(f"         � Handles model compatibility constraints automatically")
+        print(f"         !? Each AP model gets its optimal firmware version")
+        print(f"         !? New APs will auto-upgrade to model-appropriate firmware")
+        print(f"         !? Handles model compatibility constraints automatically")
         print(f"      [2] Disable auto-upgrade")
-        print(f"         � Manual firmware management required for new APs")
-        print(f"         � Prevents version conflicts but requires more maintenance")
+        print(f"         !? Manual firmware management required for new APs")
+        print(f"         !? Prevents version conflicts but requires more maintenance")
         print(f"      [3] Skip auto-upgrade configuration")
-        print(f"         � Leave current auto-upgrade settings unchanged")
+        print(f"         !? Leave current auto-upgrade settings unchanged")
         
         auto_upgrade_choice = input("   Select auto-upgrade option (1-3, default=1): ").strip() or "1"
         
@@ -22321,9 +23782,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                     for signature, models in model_families.items():
                         family_count += 1
                         if len(models) > 1:
-                            print(f"      � AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
+                            print(f"      !? AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
                         else:
-                            print(f"      � {models[0]} ({len(signature)} firmware versions)")
+                            print(f"      !? {models[0]} ({len(signature)} firmware versions)")
                     
                     print(f"\n   Configure auto-upgrade for additional models:")
                     print(f"   Models with identical firmware versions are grouped together as families.")
@@ -22424,15 +23885,15 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 models_additionally_configured = total_models_configured - models_from_plan
                 
                 print(f"\n   Auto-upgrade coverage summary:")
-                print(f"      � Models from upgrade plan: {models_from_plan}")
-                print(f"      � Additional models configured: {models_additionally_configured}")
-                print(f"      � Total models configured: {total_models_configured}")
+                print(f"      !? Models from upgrade plan: {models_from_plan}")
+                print(f"      !? Additional models configured: {models_additionally_configured}")
+                print(f"      !? Total models configured: {total_models_configured}")
                 
                 if total_models_configured > 0:
                     print(f"\n   Complete auto-upgrade model configuration:")
                     for model, version in sorted(custom_versions.items()):
                         status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                        print(f"      � {model} firmware {version} ({status})")
+                        print(f"      !? {model} firmware {version} ({status})")
                 
                 # Configure auto-upgrade with comprehensive model-specific versions
                 new_auto_upgrade = {
@@ -22476,7 +23937,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 
                 # Show the configured versions
                 for model, version in custom_versions.items():
-                    print(f"      � New {model} APs firmware {version}")
+                    print(f"      !? New {model} APs firmware {version}")
                 
                 # Show time schedule
                 time_of_day = new_auto_upgrade.get("time_of_day", "02:00")
@@ -22683,7 +24144,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                         model_version = result.get("Target Version", "Unknown")
                         break
                 model_device_count = sum(1 for r in results if r.get("Model") == model and r.get("Status") != "ERROR")
-                print(f"      � {model}: {model_device_count} devices firmware {model_version}")
+                print(f"      !? {model}: {model_device_count} devices firmware {model_version}")
             print(f"   This is normal behavior when different AP models support different firmware ranges")
         else:
             single_version = list(unique_versions_used)[0] if unique_versions_used else "Unknown"
@@ -22693,27 +24154,27 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             print(f"   Primary Upgrade ID: {upgrade_id}")
         
         print(f"\n  Important Notes:")
-        print(f"   � Upgrades will continue in the background")
-        print(f"   � Monitor device status in Mist portal or API")
-        print(f"   � Strategy '{upgrade_config['strategy']}' controls rollout pace")
+        print(f"   !? Upgrades will continue in the background")
+        print(f"   !? Monitor device status in Mist portal or API")
+        print(f"   !? Strategy '{upgrade_config['strategy']}' controls rollout pace")
         if upgrade_config['enable_p2p']:
-            print(f"   � P2P enabled - APs will share firmware locally")
-        print(f"   � APs will reboot during upgrade process")
-        print(f"   � Full upgrade process may take 5-15 minutes per device")
+            print(f"   !? P2P enabled - APs will share firmware locally")
+        print(f"   !? APs will reboot during upgrade process")
+        print(f"   !? Full upgrade process may take 5-15 minutes per device")
         if upgrade_config['strategy'] in ['canary', 'rrm']:
-            print(f"   � Phased rollout will continue automatically based on strategy")
+            print(f"   !? Phased rollout will continue automatically based on strategy")
         if upgrade_config.get('start_time'):
             scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
-            print(f"   � Upgrade scheduled for: {scheduled_time}")
+            print(f"   !? Upgrade scheduled for: {scheduled_time}")
         
         # Check if auto-upgrade was configured or disabled
         auto_upgrade_configured = any(r.get("Device ID") == "SITE_CONFIG" and "Configured" in r.get("Status", "") for r in results)
         auto_upgrade_disabled = any(r.get("Device ID") == "SITE_CONFIG" and "Disabled" in r.get("Status", "") for r in results)
         
         if auto_upgrade_configured:
-            print(f"   � Site auto-upgrade configured - new APs will auto-upgrade")
+            print(f"   !? Site auto-upgrade configured - new APs will auto-upgrade")
         elif auto_upgrade_disabled:
-            print(f"   � Site auto-upgrade disabled - new APs will NOT auto-upgrade")
+            print(f"   !? Site auto-upgrade disabled - new APs will NOT auto-upgrade")
         
         logging.info(f"! Advanced AP firmware upgrade results written to {results_filename} ({len(results)} entries)")
         logging.info(f"Advanced firmware upgrade summary: {successful_upgrades} successful, {failed_upgrades} failed, strategy: {upgrade_config['strategy']}")
@@ -22764,38 +24225,38 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
     logger.debug(f"Starting bulk switch firmware upgrade - org_id: {org_id}")
     
     # Get organization information
-    print("\n→ Validating organization access...")
+    print("\n-> Validating organization access...")
     try:
         org_info = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
         if org_info.status_code != 200:
-            print(f"✗ Error accessing organization: {org_info.status_code}")
+            print(f"X  Error accessing organization: {org_info.status_code}")
             logger.error(f"Failed to access organization {org_id}: {org_info.status_code}")
             return {"error": "Organization access failed"}
         
         org_name = org_info.data.get('name', 'Unknown')
-        print(f"✓ Organization: {org_name}")
+        print(f"!? Organization: {org_name}")
         logger.debug(f"Organization validated: {org_name}")
         
     except Exception as e:
-        print(f"✗ Error validating organization: {str(e)}")
+        print(f"X  Error validating organization: {str(e)}")
         logger.error(f"Organization validation failed: {str(e)}")
         return {"error": f"Organization validation error: {str(e)}"}
 
     # Site selection logic
     if sites_to_upgrade_override:
         selected_sites = sites_to_upgrade_override
-        print(f"→ Using provided site list: {len(selected_sites)} sites")
+        print(f"-> Using provided site list: {len(selected_sites)} sites")
     else:
         # Get available sites
-        print("\n→ Discovering available sites...")
+        print("\n-> Discovering available sites...")
         try:
             sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
             if sites_response.status_code != 200:
-                print(f"✗ Error retrieving sites: {sites_response.status_code}")
+                print(f"X  Error retrieving sites: {sites_response.status_code}")
                 return {"error": "Failed to retrieve sites"}
             
             all_sites = sites_response.data
-            print(f"✓ Found {len(all_sites)} total sites")
+            print(f"!? Found {len(all_sites)} total sites")
             
             # Present site selection to user
             print("\nAvailable sites:")
@@ -22810,11 +24271,11 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             site_choice = input("\nEnter your choice (A/S/C): ").strip().upper()
             
             if site_choice == 'C':
-                print("→ Operation cancelled by user")
+                print("-> Operation cancelled by user")
                 return {"cancelled": True}
             elif site_choice == 'A':
                 selected_sites = all_sites
-                print(f"→ Selected all {len(selected_sites)} sites")
+                print(f"-> Selected all {len(selected_sites)} sites")
             elif site_choice == 'S':
                 selected_sites = []
                 print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
@@ -22826,30 +24287,30 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                         part = part.strip()
                         if '-' in part:
                             start, end = map(int, part.split('-'))
-                            for i in range(start-1, end):
-                                if 0 <= i < len(all_sites):
-                                    selected_sites.append(all_sites[i])
+                            for device_index in range(start-1, end):
+                                if 0 <= device_index < len(all_sites):
+                                    selected_sites.append(all_sites[device_index])
                         else:
                             index = int(part) - 1
                             if 0 <= index < len(all_sites):
                                 selected_sites.append(all_sites[index])
                     
-                    print(f"→ Selected {len(selected_sites)} sites")
+                    print(f"-> Selected {len(selected_sites)} sites")
                     
                 except Exception as e:
-                    print(f"✗ Invalid site selection: {str(e)}")
+                    print(f"X  Invalid site selection: {str(e)}")
                     return {"error": "Invalid site selection"}
             else:
-                print("✗ Invalid selection")
+                print("X  Invalid selection")
                 return {"error": "Invalid selection"}
                 
         except Exception as e:
-            print(f"✗ Error during site discovery: {str(e)}")
+            print(f"X  Error during site discovery: {str(e)}")
             logger.error(f"Site discovery failed: {str(e)}")
             return {"error": f"Site discovery error: {str(e)}"}
 
     if not selected_sites:
-        print("✗ No sites selected")
+        print("X  No sites selected")
         return {"error": "No sites selected"}
 
     # Switch firmware upgrade parameter selection
@@ -22875,9 +24336,9 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             upgrade_strategy = 'canary'
             break
         else:
-            print("✗ Please enter 1, 2, or 3")
+            print("X  Please enter 1, 2, or 3")
     
-    print(f"→ Selected strategy: {upgrade_strategy}")
+    print(f"-> Selected strategy: {upgrade_strategy}")
     
     # Force upgrade selection
     print("\nForce Upgrade Options:")
@@ -22893,9 +24354,9 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             force_upgrade = False
             break
         else:
-            print("✗ Please enter 1 or 2")
+            print("X  Please enter 1 or 2")
     
-    print(f"→ Force upgrade: {'Yes' if force_upgrade else 'No'}")
+    print(f"-> Force upgrade: {'Yes' if force_upgrade else 'No'}")
     
     # Reboot selection
     print("\nReboot Options:")
@@ -22909,12 +24370,12 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             break
         elif reboot_choice == '2':
             auto_reboot = False
-            print("⚠ WARNING: Switches typically require reboot to complete firmware upgrade")
+            print("!? WARNING: Switches typically require reboot to complete firmware upgrade")
             break
         else:
-            print("✗ Please enter 1 or 2")
+            print("X  Please enter 1 or 2")
     
-    print(f"→ Auto reboot: {'Yes' if auto_reboot else 'No'}")
+    print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
     
     # Recovery snapshot selection (Junos specific)
     print("\nRecovery Snapshot Options (Junos devices only):")
@@ -22930,9 +24391,9 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             take_snapshot = False
             break
         else:
-            print("✗ Please enter 1 or 2")
+            print("X  Please enter 1 or 2")
     
-    print(f"→ Recovery snapshot after reboot: {'Yes' if take_snapshot else 'No'}")
+    print(f"-> Recovery snapshot after reboot: {'Yes' if take_snapshot else 'No'}")
 
     # Firmware version selection
     print(f"\n{'='*60}")
@@ -22940,7 +24401,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
     print(f"{'='*60}")
     
     # Get available firmware versions for switches
-    print("\n→ Discovering available switch firmware versions...")
+    print("\n-> Discovering available switch firmware versions...")
     try:
         # Get switch inventory to determine current firmware and models
         switches_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
@@ -22948,15 +24409,15 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
         )
         
         if switches_response.status_code != 200:
-            print(f"✗ Error retrieving switch inventory: {switches_response.status_code}")
+            print(f"X  Error retrieving switch inventory: {switches_response.status_code}")
             return {"error": "Failed to retrieve switch inventory"}
         
         switches = switches_response.data
         if not switches:
-            print("✗ No switches found in organization")
+            print("X  No switches found in organization")
             return {"error": "No switches found"}
         
-        print(f"✓ Found {len(switches)} switches")
+        print(f"!? Found {len(switches)} switches")
         
         # Extract unique current firmware versions and models
         current_firmware_versions = set()
@@ -22967,15 +24428,15 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             if switch.get('model'):
                 switch_models.add(switch.get('model'))
         
-        print(f"→ Switch models found: {', '.join(sorted(switch_models))}")
-        print(f"→ Current firmware versions: {', '.join(sorted(current_firmware_versions))}")
+        print(f"-> Switch models found: {', '.join(sorted(switch_models))}")
+        print(f"-> Current firmware versions: {', '.join(sorted(current_firmware_versions))}")
         
         if not switch_models:
-            print("⚠ WARNING: No switch models detected - firmware filtering may not work properly")
+            print("!? WARNING: No switch models detected - firmware filtering may not work properly")
             logger.warning("No switch models found in inventory - firmware compatibility checking disabled")
         
         # Check for cached firmware data first, then query API if needed
-        print("\n→ Checking for cached firmware versions...")
+        print("\n-> Checking for cached firmware versions...")
         available_versions = []
         compatible_versions = {}  # Initialize here for scope
         firmware_data = []
@@ -22994,10 +24455,10 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     # Check if file has content before using it
                     file_size = os.path.getsize(cache_file)
                     if file_size == 0:
-                        print(f"→ Cache file exists but is empty, will query API")
+                        print(f"-> Cache file exists but is empty, will query API")
                         logger.info("Cache file is empty, will refresh from API")
                     else:
-                        print(f"✓ Found fresh cached firmware data ({file_age_hours:.1f} hours old)")
+                        print(f"!? Found fresh cached firmware data ({file_age_hours:.1f} hours old)")
                         logger.info(f"Using cached firmware data from {cache_file} (age: {file_age_hours:.1f} hours)")
                         
                         # Read cached data and validate content
@@ -23020,21 +24481,21 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                             use_cached_data = True
                             logger.info(f"Loaded {len(firmware_data)} firmware entries from cache")
                         else:
-                            print(f"→ Cache file has no valid data rows, will query API")
+                            print(f"-> Cache file has no valid data rows, will query API")
                             logger.info("Cache file exists but contains no valid data, will refresh from API")
                 else:
-                    print(f"→ Cache file exists but is stale ({file_age_hours:.1f} hours old, threshold: {cache_freshness_hours}h)")
+                    print(f"-> Cache file exists but is stale ({file_age_hours:.1f} hours old, threshold: {cache_freshness_hours}h)")
                     logger.info(f"Cache file stale, will refresh from API")
             except Exception as cache_error:
                 logger.warning(f"Error reading cache file: {cache_error}")
-                print("→ Cache file unreadable, will query API")
+                print("-> Cache file unreadable, will query API")
         else:
-            print("→ No cache file found, will query API")
+            print("-> No cache file found, will query API")
             logger.info("No cached firmware data found")
         
         # Query API if cache not used
         if not use_cached_data:
-            print("→ Querying available firmware versions from Mist API...")
+            print("-> Querying available firmware versions from Mist API...")
             try:
                 # Use the proper listOrgAvailableDeviceVersions API with type=switch parameter
                 logger.debug("Calling listOrgAvailableDeviceVersions API for switch firmware")
@@ -23069,12 +24530,12 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                                     }
                                     writer.writerow(cache_row)
                         
-                        print(f"✓ Cached {len(firmware_data)} firmware entries to {cache_file}")
+                        print(f"!? Cached {len(firmware_data)} firmware entries to {cache_file}")
                         logger.info(f"Saved {len(firmware_data)} firmware entries to cache file")
                         
                     except Exception as save_error:
                         logger.warning(f"Failed to save firmware cache: {save_error}")
-                        print(f"⚠ Warning: Could not cache firmware data: {save_error}")
+                        print(f"!? Warning: Could not cache firmware data: {save_error}")
                 
                 else:
                     logger.warning("API returned empty or invalid firmware data")
@@ -23082,13 +24543,13 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     
             except Exception as api_error:
                 logger.error(f"Failed to query switch firmware versions from API: {api_error}")
-                print(f"✗ Error querying firmware versions: {api_error}")
+                print(f"X  Error querying firmware versions: {api_error}")
                 print("   Cannot proceed without current firmware version list.")
                 return {"error": f"API firmware query failed: {api_error}"}
         
         # Process firmware data (works for both cached and fresh API data)
         if firmware_data:
-            print(f"→ Processing {len(firmware_data)} firmware entries...")
+            print(f"-> Processing {len(firmware_data)} firmware entries...")
             
             # Filter firmware versions by device model compatibility
             for firmware_entry in firmware_data:
@@ -23173,33 +24634,33 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                 logger.warning("No compatible firmware versions found for organization switch models")
         else:
             logger.error("No firmware data available for processing")
-            print("✗ No firmware data available")
+            print("X  No firmware data available")
             return {"error": "No firmware data available"}
             
         # Validate we have compatible firmware versions
         if not available_versions:
             if switch_models:
                 error_msg = f"No compatible firmware versions found for switch models: {', '.join(sorted(switch_models))}"
-                print(f"✗ {error_msg}")
+                print(f"X  {error_msg}")
                 print("   This may indicate:")
                 print("   - Switch models are not supported by current firmware releases")
                 print("   - API data may be incomplete or outdated")
                 print("   - Switch models may need manual firmware specification")
             else:
                 error_msg = "No switch firmware versions available from API"
-                print(f"✗ {error_msg}")
+                print(f"X  {error_msg}")
             
             logger.error(error_msg)
             
             # Offer manual firmware version entry as fallback
             print(f"\nFallback Option:")
             print("You can still proceed by manually specifying a firmware version.")
-            print("⚠ WARNING: Manual entry bypasses model compatibility checks!")
+            print("!? WARNING: Manual entry bypasses model compatibility checks!")
             print("Ensure the firmware version you enter is compatible with your switch models.")
             
             fallback_choice = input("\nProceed with manual firmware entry? (y/N): ").strip().lower()
             if fallback_choice not in ['y', 'yes']:
-                print("→ Operation cancelled")
+                print("-> Operation cancelled")
                 return {"error": "No compatible firmware versions and manual entry declined"}
                 
             # Manual firmware entry
@@ -23211,18 +24672,18 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                 manual_version = input("Enter firmware version: ").strip()
                 if manual_version:
                     target_version = manual_version
-                    print(f"⚠ Using manually specified firmware version: {target_version}")
+                    print(f"!? Using manually specified firmware version: {target_version}")
                     print("   Model compatibility has NOT been verified!")
                     logger.warning(f"Using manually specified firmware {target_version} - compatibility not verified for models: {sorted(switch_models)}")
                     break
                 else:
-                    print("✗ Firmware version is required")
+                    print("X  Firmware version is required")
             
             # Skip the normal selection process
             available_versions = [target_version]
         
         if available_versions:
-            print(f"✓ Found {len(available_versions)} compatible firmware versions")
+            print(f"!? Found {len(available_versions)} compatible firmware versions")
             
             # Present firmware versions as indexed list with model compatibility
             print("\nAvailable firmware versions (filtered by device model compatibility):")
@@ -23251,38 +24712,38 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     selection = input("Enter index number: ").strip()
                     
                     if not selection:
-                        print("✗ Selection required")
+                        print("X  Selection required")
                         continue
                         
                     selection_idx = int(selection) - 1  # Convert to 0-based index
                     
                     if 0 <= selection_idx < len(available_versions):
                         target_version = available_versions[selection_idx]
-                        print(f"→ Selected firmware version: {target_version}")
+                        print(f"-> Selected firmware version: {target_version}")
                         break
                     else:
-                        print(f"✗ Invalid selection. Please enter a number between 1 and {len(available_versions)}")
+                        print(f"X  Invalid selection. Please enter a number between 1 and {len(available_versions)}")
                         
                 except ValueError:
-                    print("✗ Invalid input. Please enter a number")
+                    print("X  Invalid input. Please enter a number")
                 except KeyboardInterrupt:
-                    print("\n→ Operation cancelled by user")
+                    print("\n-> Operation cancelled by user")
                     return {"cancelled": True}
         else:
             # Fallback to manual entry if no versions found
-            print("→ No firmware versions available from API, using manual entry")
+            print("-> No firmware versions available from API, using manual entry")
             print("\nPlease enter target firmware version manually:")
             print("Examples: 23.4R2.21, 22.4R3.25, 21.4R3.15, 20.4R3.8")
             
             target_version = input("Target firmware version: ").strip()
             if not target_version:
-                print("✗ Firmware version is required")
+                print("X  Firmware version is required")
                 return {"error": "No firmware version specified"}
         
-        print(f"→ Target firmware version: {target_version}")
+        print(f"-> Target firmware version: {target_version}")
         
     except Exception as e:
-        print(f"✗ Error during firmware discovery: {str(e)}")
+        print(f"X  Error during firmware discovery: {str(e)}")
         logger.error(f"Firmware discovery failed: {str(e)}")
         return {"error": f"Firmware discovery error: {str(e)}"}
 
@@ -23298,7 +24759,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
     print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
     print(f"Recovery snapshot after reboot: {'Yes' if take_snapshot else 'No'}")
     
-    print(f"\n⚠ CRITICAL WARNING ⚠")
+    print(f"\n!? CRITICAL WARNING !?")
     print("Switch firmware upgrades will cause network disruption!")
     print("- Switches will reboot and be offline during upgrade")
     print("- Plan appropriate maintenance windows") 
@@ -23306,10 +24767,10 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
     print("- Monitor upgrade progress closely")
     
     print(f"\nTo proceed with switch firmware upgrade, type: UPGRADE SWITCHES")
-    confirmation = input("Confirmation: ").strip()
+    confirmation = safe_input("Confirmation: ", "", True, "switch firmware upgrade confirmation")
     
-    if confirmation != "UPGRADE SWITCHES":
-        print("→ Operation cancelled - incorrect confirmation")
+    if confirmation is None or confirmation != "UPGRADE SWITCHES":
+        print("-> Operation cancelled - incorrect confirmation")
         logger.info("Switch firmware upgrade cancelled by user")
         return {"cancelled": True}
 
@@ -23342,7 +24803,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             site_id = site_info.get('id')
             site_name = site_info.get('name', 'Unknown Site')
             
-            print(f"\n→ Processing site {site_index}/{len(selected_sites)}: {site_name}")
+            print(f"\n-> Processing site {site_index}/{len(selected_sites)}: {site_name}")
             logger.debug(f"Processing site: {site_name} ({site_id})")
             
             try:
@@ -23352,7 +24813,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                 )
                 
                 if site_devices_response.status_code != 200:
-                    print(f"  ✗ Error retrieving devices: {site_devices_response.status_code}")
+                    print(f"  X  Error retrieving devices: {site_devices_response.status_code}")
                     upgrade_results['sites_failed'] += 1
                     upgrade_results['site_results'].append({
                         'site_id': site_id,
@@ -23365,7 +24826,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                 site_switches = [d for d in site_devices_response.data if d.get('type') == 'switch']
                 
                 if not site_switches:
-                    print(f"  → No switches found in site")
+                    print(f"  -> No switches found in site")
                     upgrade_results['sites_processed'] += 1
                     upgrade_results['site_results'].append({
                         'site_id': site_id,
@@ -23376,7 +24837,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     })
                     continue
                 
-                print(f"  → Found {len(site_switches)} switches")
+                print(f"  -> Found {len(site_switches)} switches")
                 
                 # Extract switch device IDs for targeted upgrade
                 switch_device_ids = [switch.get('id') for switch in site_switches if switch.get('id')]
@@ -23404,7 +24865,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     'device_ids': switch_device_ids  # Target only the switch devices
                 }
                 
-                print(f"  → Initiating firmware upgrade...")
+                print(f"  -> Initiating firmware upgrade...")
                 logger.debug(f"Upgrade request for site {site_name}: {upgrade_request}")
                 
                 # Execute upgrade via Mist API
@@ -23413,7 +24874,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                 )
                 
                 if upgrade_response.status_code in [200, 202]:
-                    print(f"  ✓ Upgrade initiated successfully")
+                    print(f"  !? Upgrade initiated successfully")
                     upgrade_results['sites_successful'] += 1
                     upgrade_results['site_results'].append({
                         'site_id': site_id,
@@ -23427,7 +24888,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     logger.info(f"Switch firmware upgrade initiated for site: {site_name}")
                     
                 else:
-                    print(f"  ✗ Upgrade failed: HTTP {upgrade_response.status_code}")
+                    print(f"  X  Upgrade failed: HTTP {upgrade_response.status_code}")
                     upgrade_results['sites_failed'] += 1
                     upgrade_results['site_results'].append({
                         'site_id': site_id,
@@ -23440,7 +24901,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
                     logger.error(f"Switch firmware upgrade failed for site {site_name}: {upgrade_response.status_code}")
             
             except Exception as e:
-                print(f"  ✗ Error processing site: {str(e)}")
+                print(f"  X  Error processing site: {str(e)}")
                 upgrade_results['sites_failed'] += 1
                 upgrade_results['site_results'].append({
                     'site_id': site_id,
@@ -23466,7 +24927,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
         print(f"Strategy: {upgrade_strategy}")
         
         if upgrade_results['sites_failed'] > 0:
-            print(f"\n⚠ {upgrade_results['sites_failed']} sites encountered errors:")
+            print(f"\n!? {upgrade_results['sites_failed']} sites encountered errors:")
             for result in upgrade_results['site_results']:
                 if result['status'] in ['failed', 'error']:
                     print(f"  - {result['site_name']}: {result.get('error', 'Unknown error')}")
@@ -23480,7 +24941,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
         
     except Exception as e:
         error_msg = f"Critical error in switch firmware upgrade: {str(e)}"
-        print(f"\n✗ {error_msg}")
+        print(f"\nX  {error_msg}")
         logger.error(error_msg)
         
         upgrade_results['end_time'] = datetime.now().isoformat()
@@ -23553,7 +25014,7 @@ def get_potential_anomaly_metrics():
 
 
 # The following section was corrupted during refactoring - removing orphaned content
-        print("✗ No sites selected")
+        print("X  No sites selected")
         return {"error": "No sites selected"}
 
     # SSR firmware upgrade parameter selection
@@ -23573,13 +25034,13 @@ def get_potential_anomaly_metrics():
             break
         elif strategy_choice == '2':
             upgrade_strategy = 'big_bang'
-            print("⚠ WARNING: big_bang strategy will upgrade all SSRs simultaneously")
+            print("!? WARNING: big_bang strategy will upgrade all SSRs simultaneously")
             print("   This may cause widespread WAN connectivity disruption")
             break
         else:
-            print("✗ Please enter 1 or 2")
+            print("X  Please enter 1 or 2")
     
-    print(f"→ Selected strategy: {upgrade_strategy}")
+    print(f"-> Selected strategy: {upgrade_strategy}")
     
     # Reboot timing selection (SSR-specific parameter)
     print("\nReboot Timing Options:")
@@ -23593,13 +25054,13 @@ def get_potential_anomaly_metrics():
             break
         elif reboot_choice == '2':
             auto_reboot = False
-            print("⚠ WARNING: SSRs require manual reboot to activate new firmware")
+            print("!? WARNING: SSRs require manual reboot to activate new firmware")
             print("   New firmware will not be operational until manual reboot")
             break
         else:
-            print("✗ Please enter 1 or 2")
+            print("X  Please enter 1 or 2")
     
-    print(f"→ Auto reboot: {'Yes' if auto_reboot else 'No'}")
+    print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
     
     # Channel selection for firmware versions  
     print("\nFirmware Channel Options:")
@@ -23617,13 +25078,13 @@ def get_potential_anomaly_metrics():
             break
         elif channel_choice == '3':
             firmware_channel = 'alpha'
-            print("⚠ WARNING: alpha channel contains development versions")
+            print("!? WARNING: alpha channel contains development versions")
             print("   Not recommended for production environments")
             break
         else:
-            print("✗ Please enter 1, 2, or 3")
+            print("X  Please enter 1, 2, or 3")
     
-    print(f"→ Firmware channel: {firmware_channel}")
+    print(f"-> Firmware channel: {firmware_channel}")
 
     # SSR-specific firmware version selection
     print(f"\n{'='*60}")
@@ -23631,7 +25092,7 @@ def get_potential_anomaly_metrics():
     print(f"{'='*60}")
     
     # Get available firmware versions for SSRs (Session Smart Routers)
-    print("\n→ Discovering available SSR firmware versions...")
+    print("\n-> Discovering available SSR firmware versions...")
     try:
         # Use the SSR-specific API to get available firmware versions
         versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
@@ -23639,7 +25100,7 @@ def get_potential_anomaly_metrics():
         )
         
         if versions_response.status_code != 200:
-            print(f"✗ Error retrieving SSR firmware versions: {versions_response.status_code}")
+            print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
             logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
             return {"error": "Failed to retrieve SSR firmware versions"}
         
@@ -23665,16 +25126,16 @@ def get_potential_anomaly_metrics():
                     })
         
         if not available_versions:
-            print(f"✗ No SSR firmware versions available for {firmware_channel} channel")
+            print(f"X  No SSR firmware versions available for {firmware_channel} channel")
             print("   Please check with Juniper support for available SSR firmware versions")
             print("   Or try a different firmware channel (stable/beta/alpha)")
             return {"error": f"No SSR firmware versions available for {firmware_channel} channel"}
         
-        print(f"✓ Found {len(available_versions)} available SSR firmware versions")
+        print(f"!? Found {len(available_versions)} available SSR firmware versions")
         print(f"  Channel: {firmware_channel}")
         
         # Get SSR inventory to show current firmware versions  
-        print("\n→ Checking current SSR devices...")
+        print("\n-> Checking current SSR devices...")
         ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
             apisession, org_id, type="gateway"
         )
@@ -23699,7 +25160,7 @@ def get_potential_anomaly_metrics():
                         ssr_models_found.add(gateway.get('model'))
         
         if ssr_count > 0:
-            print(f"✓ Found {ssr_count} SSR device(s) in organization")
+            print(f"!? Found {ssr_count} SSR device(s) in organization")
             if ssr_models_found:
                 print(f"  Models: {', '.join(sorted(ssr_models_found))}")
             if current_firmware_versions:
@@ -23723,7 +25184,7 @@ def get_potential_anomaly_metrics():
             try:
                 choice = input(f"\nSelect firmware version (1-{len(available_versions)}): ").strip()
                 if not choice:
-                    print("✗ Please enter a selection")
+                    print("X  Please enter a selection")
                     continue
                     
                 version_index = int(choice) - 1
@@ -23732,14 +25193,14 @@ def get_potential_anomaly_metrics():
                     target_version = selected_version['version']
                     break
                 else:
-                    print(f"✗ Please enter a number between 1 and {len(available_versions)}")
+                    print(f"X  Please enter a number between 1 and {len(available_versions)}")
             except ValueError:
-                print("✗ Please enter a valid number")
+                print("X  Please enter a valid number")
         
-        print(f"→ Selected firmware version: {target_version}")
+        print(f"-> Selected firmware version: {target_version}")
         
     except Exception as e:
-        print(f"✗ Error during SSR firmware discovery: {str(e)}")
+        print(f"X  Error during SSR firmware discovery: {str(e)}")
         logger.error(f"SSR firmware discovery failed: {str(e)}")
         return {"error": f"SSR firmware discovery error: {str(e)}"}
 
@@ -23754,7 +25215,7 @@ def get_potential_anomaly_metrics():
     print(f"Upgrade strategy: {upgrade_strategy}")
     print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
     
-    print(f"\n⚠ CRITICAL ROUTING INFRASTRUCTURE WARNING ⚠")
+    print(f"\n!? CRITICAL ROUTING INFRASTRUCTURE WARNING !?")
     print("SSR firmware upgrades will cause WAN connectivity disruption!")
     print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
     print("- Branch offices may lose connectivity")
@@ -23764,10 +25225,10 @@ def get_potential_anomaly_metrics():
     print("- Monitor upgrade progress closely")
     
     print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
-    confirmation = input("Confirmation: ").strip()
+    confirmation = safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
     
-    if confirmation != "UPGRADE":
-        print("→ Operation cancelled - incorrect confirmation")
+    if confirmation is None or confirmation != "UPGRADE":
+        print("-> Operation cancelled - incorrect confirmation")
         logger.info("SSR firmware upgrade cancelled by user")
         return {"cancelled": True}
 
@@ -23816,13 +25277,13 @@ def get_potential_anomaly_metrics():
                         'version': gateway.get('version', ''),
                         'site_id': gateway.get('site_id', '')
                     }
-            print(f"✓ Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
+            print(f"!? Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
         else:
             logger.error(f"Failed to get org inventory: {ssrs_response.status_code}")
-            print("✗ Failed to validate SSR inventory")
+            print("X  Failed to validate SSR inventory")
     except Exception as e:
         logger.error(f"Error getting org SSR inventory: {e}")
-        print(f"✗ Error validating SSR inventory: {e}")
+        print(f"X  Error validating SSR inventory: {e}")
     
     try:
         # Process each site for SSR upgrades
@@ -23850,7 +25311,7 @@ def get_potential_anomaly_metrics():
                 
                 if site_devices_response.status_code != 200:
                     error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
-                    print(f"  ✗ {error_msg}")
+                    print(f"  X  {error_msg}")
                     site_result['error'] = error_msg
                     upgrade_results['errors'].append(error_msg)
                     continue
@@ -23885,7 +25346,7 @@ def get_potential_anomaly_metrics():
                     upgrade_results['site_results'].append(site_result)
                     continue
                 
-                print(f"  ✓ Found {len(site_ssrs)} SSR(s) at {site_name}")
+                print(f"  !? Found {len(site_ssrs)} SSR(s) at {site_name}")
                 
                 # Initiate firmware upgrade for SSRs at this site
                 ssr_device_ids = [ssr['id'] for ssr in site_ssrs]
@@ -23915,7 +25376,7 @@ def get_potential_anomaly_metrics():
                                 print(f"    -> Upgrade needed: {ssr_info['model']} ({current_version} -> {target_version})")
                     else:
                         logger.warning(f"Device {device_id} not found in org SSR inventory - skipping")
-                        print(f"    ⚠ Device {device_id} not in SSR inventory - skipping")
+                        print(f"    !? Device {device_id} not in SSR inventory - skipping")
                         skipped_device_ids.append(device_id)
                 
                 if not validated_device_ids:
@@ -23966,7 +25427,7 @@ def get_potential_anomaly_metrics():
                 )
                 
                 if upgrade_response.status_code in [200, 202]:
-                    print(f"  ✓ Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
+                    print(f"  !? Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
                     site_result['upgrade_initiated'] = True
                     upgrade_results['ssrs_upgraded'] += len(validated_device_ids)
                     logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
@@ -23987,7 +25448,7 @@ def get_potential_anomaly_metrics():
                         if 'already at the requested fw version' in response_text.lower():
                             # This is informational, not a real error
                             logger.info(f"SSR upgrade skipped at {site_name}: devices already at target version")
-                            print(f"  ℹ SSRs at {site_name} already at target version {target_version}")
+                            print(f"  - SSRs at {site_name} already at target version {target_version}")
                             site_result['upgrade_initiated'] = False
                             site_result['skip_reason'] = 'already_at_version'
                             # Don't count this as an error
@@ -24003,7 +25464,7 @@ def get_potential_anomaly_metrics():
                             print(f"  -> API Response: {response_text}")
                             
                             error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                            print(f"  ✗ {error_msg}")
+                            print(f"  X  {error_msg}")
                             site_result['error'] = error_msg
                             upgrade_results['errors'].append(error_msg)
                             logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
@@ -24013,14 +25474,14 @@ def get_potential_anomaly_metrics():
                         print(f"  -> Could not read response: {e}")
                         
                         error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                        print(f"  ✗ {error_msg}")
+                        print(f"  X  {error_msg}")
                         site_result['error'] = error_msg
                         upgrade_results['errors'].append(error_msg)
                         logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
                 
             except Exception as site_error:
                 error_msg = f"Error processing site {site_name}: {str(site_error)}"
-                print(f"  ✗ {error_msg}")
+                print(f"  X  {error_msg}")
                 site_result['error'] = error_msg
                 upgrade_results['errors'].append(error_msg)
                 logger.error(f"Site processing error for {site_name}: {str(site_error)}")
@@ -24054,7 +25515,7 @@ def get_potential_anomaly_metrics():
         
     except Exception as e:
         error_msg = f"Critical error in SSR firmware upgrade: {str(e)}"
-        print(f"\n✗ {error_msg}")
+        print(f"\nX  {error_msg}")
         logger.error(error_msg)
         
         upgrade_results['end_time'] = datetime.now().isoformat()
@@ -24156,7 +25617,7 @@ def export_site_anomaly_metrics_to_csv():
                     anomaly_data['data_type'] = 'site_anomaly_events'
                     all_anomaly_data.append(anomaly_data)
                     metrics_retrieved += 1
-                    print(f"✓ Retrieved {metric} anomaly events")
+                    print(f"!? Retrieved {metric} anomaly events")
                     logging.debug(f"Successfully retrieved {metric} anomaly events for site {site_id}")
                 else:
                     print(f"! No {metric} anomaly events available")
@@ -24264,7 +25725,7 @@ def export_site_device_anomaly_to_csv():
                     device_anomaly_data['data_type'] = 'device_anomaly_events'
                     all_device_anomaly_data.append(device_anomaly_data)
                     metrics_retrieved += 1
-                    print(f"✓ Retrieved {metric} device anomaly data")
+                    print(f"!? Retrieved {metric} device anomaly data")
                     logging.debug(f"Successfully retrieved {metric} device anomaly data for {device_mac}")
                 else:
                     print(f"! No {metric} device anomaly data available")
@@ -24385,7 +25846,7 @@ def export_site_client_anomaly_to_csv():
                     client_anomaly_data['data_type'] = 'client_anomaly_events'
                     all_client_anomaly_data.append(client_anomaly_data)
                     metrics_retrieved += 1
-                    print(f"✓ Retrieved {metric} client anomaly data")
+                    print(f"!? Retrieved {metric} client anomaly data")
                     logging.debug(f"Successfully retrieved {metric} client anomaly data for {client_mac}")
                 else:
                     print(f"! No {metric} client anomaly data available")
@@ -24479,7 +25940,7 @@ def ssh_runner_interactive():
                 if host_input:
                     hosts = [h.strip() for h in host_input.split(',') if h.strip()]
                 else:
-                    print("✗ SSH host is required")
+                    print("X  SSH host is required")
                     return False
             except (EOFError, KeyboardInterrupt):
                 print("\n[CANCELLED] Operation cancelled by user")
@@ -24491,7 +25952,7 @@ def ssh_runner_interactive():
             try:
                 username = input("Enter SSH username: ").strip()
                 if not username:
-                    print("✗ SSH username is required")
+                    print("X  SSH username is required")
                     return False
             except (EOFError, KeyboardInterrupt):
                 print("\n[CANCELLED] Operation cancelled by user")
@@ -24504,7 +25965,7 @@ def ssh_runner_interactive():
                 import getpass
                 password = getpass.getpass("Enter SSH password: ")
                 if not password:
-                    print("✗ SSH password is required")
+                    print("X  SSH password is required")
                     return False
             except (EOFError, KeyboardInterrupt):
                 print("\n[CANCELLED] Operation cancelled by user")
@@ -24525,11 +25986,11 @@ def ssh_runner_interactive():
         
         # Show summary of what will be executed
         if missing_data:
-            print(f"\n★ Interactively provided: {', '.join(missing_data)}")
+            print(f"\n!? Interactively provided: {', '.join(missing_data)}")
         
-        print(f"★ Target hosts: {', '.join(hosts)}")
-        print(f"★ Username: {username}")
-        print(f"★ Commands: {len(commands)} command(s)")
+        print(f"!? Target hosts: {', '.join(hosts)}")
+        print(f"!? Username: {username}")
+        print(f"!? Commands: {len(commands)} command(s)")
         if commands:
             for idx, cmd in enumerate(commands, 1):
                 print(f"  {idx}. {cmd}")
@@ -24579,7 +26040,7 @@ def ssh_runner_interactive():
         
             # Handle multi-host execution if needed
             if len(hosts) > 1 or len(commands) > 1:
-                print(f"\n★ Executing {len(commands)} command(s) on {len(hosts)} host(s)")
+                print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
                 
                 # Use the EnhancedSSHRunner's multi-host execution directly
                 config = {
@@ -24599,9 +26060,9 @@ def ssh_runner_interactive():
                 successful = sum(1 for result in summary.values() if result.get('success', False))
                 total = len(summary)
                 
-                print(f"\n★ Execution Summary: {successful}/{total} hosts successful")
+                print(f"\n!? Execution Summary: {successful}/{total} hosts successful")
                 for host, result in summary.items():
-                    status = "✓" if result.get('success', False) else "✗"
+                    status = "!?" if result.get('success', False) else "X "
                     print(f"  {status} {host}: {result.get('status', 'Unknown')}")
                 
                 return successful > 0
@@ -24650,6 +26111,10 @@ menu_actions = {
     "6": (WebSocketCommands.show_forwarding_table, "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)"),
     "7": (WebSocketCommands.show_routing_table, "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)"),
     "8": (WebSocketCommands.show_ssr_routes, "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)"),
+
+    # > Packet Capture Operations
+    "9": (lambda: PacketCaptureManager(apisession, get_cached_or_prompted_org_id()).start_site_packet_capture(), "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming"),
+    "10": (lambda: PacketCaptureManager(apisession, get_cached_or_prompted_org_id()).start_org_packet_capture(), "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only"),
 
     # Organization-Level Exports
     "11": (export_all_sites_to_csv, "Export a list of all sites in the organization"),
@@ -24827,6 +26292,8 @@ def run_systematic_test():
         "18": "Site configurations - hits API rate limits after 7+ hours",
         
         # Interactive operations requiring user input
+        "9": "Packet capture - requires interactive configuration and site selection",
+        "10": "Packet capture - requires interactive configuration and MxEdge ID",
         "60": "Firmware upgrade status - requires interactive scope selection",
         "61": "CSV comparison - requires interactive file selection",
         "62": "Marvis troubleshooting - requires interactive option selection",
@@ -25156,7 +26623,7 @@ class EnhancedSSHRunner:
             sanitized = sanitized[:100]
         
         # Prevent reserved filenames on Windows
-        reserved_names = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{i}' for i in range(1, 10)] + [f'LPT{i}' for i in range(1, 10)]
+        reserved_names = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{port_num}' for port_num in range(1, 10)] + [f'LPT{port_num}' for port_num in range(1, 10)]
         if sanitized.upper() in reserved_names:
             sanitized = f"host_{sanitized}"
         
@@ -25339,7 +26806,7 @@ class EnhancedSSHRunner:
                 legacy_path = csv_file_path.replace("data/", "")
                 if os.path.exists(legacy_path):
                     try:
-                        print(f"• Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
+                        print(f"X  Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
                         csv_file_path = legacy_path
                     except Exception:
                         return commands
@@ -25623,7 +27090,7 @@ class EnhancedSSHRunner:
                 stderr_sample = stderr_output[:200].replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                 self.logger.warning(f"STDERR ({len(stderr_output)} chars): {stderr_sample}{'...' if len(stderr_output) > 200 else ''}")
             
-            print(f"Σ [{hostname}] Command completed with exit status: {exit_status}")
+            print(f"- [{hostname}] Command completed with exit status: {exit_status}")
             return exit_status == 0, stdout_output, stderr_output
             
         except Exception as e:
@@ -25637,7 +27104,7 @@ class EnhancedSSHRunner:
                 command_time = time.time() - start_time
                 
                 self.logger.debug(f"Command completed (no PTY) in {command_time:.2f} seconds with exit status: {exit_status}")
-                print(f"Σ [{hostname}] Command completed with exit status: {exit_status}")
+                print(f"- [{hostname}] Command completed with exit status: {exit_status}")
                 return exit_status == 0, stdout_output, stderr_output
             except Exception as e2:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
@@ -25709,7 +27176,7 @@ class EnhancedSSHRunner:
                     # Progress messages for long-running commands
                     if current_duration > 30:  # Show progress after 30 seconds
                         if chunk_count % 150 == 0:  # Every 150 chunks after 30 seconds
-                            print(f"⌛ [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)")
+                            print(f"- [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)")
                     
                     if shell.recv_ready():
                         chunk = shell.recv(131072).decode('utf-8', errors='ignore')  # Even larger buffer (128KB) for efficiency
@@ -25723,13 +27190,13 @@ class EnhancedSSHRunner:
                             self.logger.debug(f"Receiving data... {chunk_count} chunks, {output_mb:.1f}MB")
                             # Print progress for user feedback on large outputs
                             if output_mb > 5:
-                                print(f"↓ [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)")
+                                print(f"- [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)")
                         
                         # Check output size limit - but keep draining to prevent blocking
                         if len(output) > max_output_size:
                             self.logger.warning(f"Output size limit ({max_output_size // (1024*1024)}MB) reached, draining remaining data...")
                             output += f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024*1024)}MB reached]\n"
-                            print(f"§ [{hostname}] Output truncated at {max_output_size // (1024*1024)}MB, draining remaining data...")
+                            print(f"!? [{hostname}] Output truncated at {max_output_size // (1024*1024)}MB, draining remaining data...")
                             
                             # Continue draining data without storing it to prevent device blocking
                             drain_start = time.time()
@@ -25745,7 +27212,7 @@ class EnhancedSSHRunner:
                                     # Show drain progress
                                     if drained_chunks % 100 == 0:
                                         drain_duration = time.time() - drain_start
-                                        print(f"• [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)")
+                                        print(f"X  [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)")
                                         
                                 else:
                                     # Check if we've waited long enough since last data
@@ -25765,7 +27232,7 @@ class EnhancedSSHRunner:
                         time.sleep(0.05)  # Small sleep when no data available
                     
             except KeyboardInterrupt:
-                print(f"\n✗ [{hostname}] Ctrl+C detected! Interrupting command: {command}")
+                print(f"\nX  [{hostname}] Ctrl+C detected! Interrupting command: {command}")
                 self.logger.warning(f"Command interrupted by user: {command}")
                 output += f"\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"
                 # Don't return here, continue with cleanup and return what we have
@@ -25800,7 +27267,7 @@ class EnhancedSSHRunner:
                         break  # No more data, exit quickly
                         
             except KeyboardInterrupt:
-                print(f"✗ [{hostname}] Ctrl+C during cleanup - forcing shell close")
+                print(f"X  [{hostname}] Ctrl+C during cleanup - forcing shell close")
                 self.logger.warning("Command cleanup interrupted by user")
             except Exception as e:
                 self.logger.debug(f"Warning during cleanup: {e}")
@@ -26474,7 +27941,7 @@ Log file: {host_log_file}
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-        print(f"☁ [{hostname}] Logging to: {host_log_file}")
+        print(f"- [{hostname}] Logging to: {host_log_file}")
         
         def write_to_host_log(message: str):
             """Write message to host-specific log file only (not console)"""
@@ -26520,7 +27987,7 @@ Commands to execute: {len(commands)}
             if not runner.connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
-                write_to_host_log(f"✗ {error_msg}")
+                write_to_host_log(f"X  {error_msg}")
                 return False
             
             logger.debug(f"SSH connected to {hostname}, executing {len(commands)} commands")
@@ -26531,22 +27998,22 @@ Commands to execute: {len(commands)}
             for i, command in enumerate(commands, 1):
                 try:
                     separator = f"\n{'='*60}"
-                    command_header = f"• Command {i}/{len(commands)}: {command}"
+                    command_header = f"X  Command {i}/{len(commands)}: {command}"
                     separator_line = '='*60
                     
                     write_to_host_log(separator)
                     write_to_host_log(command_header)
                     write_to_host_log(separator_line)
                     
-                    print(f"⚡ [{hostname}] Executing command: {command}")
+                    print(f"!? [{hostname}] Executing command: {command}")
                     success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
                     
                     if stdout:
-                        write_to_host_log("→ OUTPUT:")
+                        write_to_host_log("-> OUTPUT:")
                         write_to_host_log(stdout)
                     
                     if stderr:
-                        write_to_host_log("→ ERRORS:")
+                        write_to_host_log("-> ERRORS:")
                         write_to_host_log(stderr)
                     
                     if success:
@@ -26564,7 +28031,7 @@ Commands to execute: {len(commands)}
                         time.sleep(0.5)
                         
                 except KeyboardInterrupt:
-                    print(f"\n✗ [{hostname}] Ctrl+C detected! Skipping remaining commands...")
+                    print(f"\nX  [{hostname}] Ctrl+C detected! Skipping remaining commands...")
                     interrupt_msg = f"\n[ERROR] Command {i} interrupted by user (Ctrl+C)\n[SKIP] Skipping remaining {len(commands) - i} commands"
                     write_to_host_log(interrupt_msg)
                     logger.warning(f"[{hostname}] Command execution interrupted by user at command {i}/{len(commands)}")
@@ -26661,7 +28128,7 @@ Log file: {host_log_file}
             safe_hostname = f"fallback_{safe_hostname}"
         
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-        print(f"☁ [{hostname}] Logging to: {host_log_file}")
+        print(f"- [{hostname}] Logging to: {host_log_file}")
         
         def write_to_host_log(message: str):
             """Write message to host-specific log file only (not console)"""
@@ -26706,7 +28173,7 @@ Command: {command}
             if not runner.connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
-                write_to_host_log(f"✗ {error_msg}")
+                write_to_host_log(f"X  {error_msg}")
                 return False
             
             logger.debug(f"SSH connected to {hostname}, executing single command")
@@ -26716,7 +28183,7 @@ Command: {command}
             
             # Display results
             separator = "\n" + "=" * 60
-            output_header = "§ COMMAND OUTPUT"
+            output_header = "!? COMMAND OUTPUT"
             separator_line = "=" * 60
             
             write_to_host_log(separator)
@@ -26724,15 +28191,15 @@ Command: {command}
             write_to_host_log(separator_line)
             
             if stdout:
-                write_to_host_log("→ STDOUT:")
+                write_to_host_log("-> STDOUT:")
                 write_to_host_log(stdout)
             
             if stderr:
-                write_to_host_log("→ STDERR:")
+                write_to_host_log("-> STDERR:")
                 write_to_host_log(stderr)
             
             if not stdout and not stderr:
-                write_to_host_log("• No output returned")
+                write_to_host_log("X  No output returned")
             
             write_to_host_log(separator_line)
             
@@ -27012,13 +28479,13 @@ Log file: {host_log_file}
         if not final_password and not args.secure:
             if final_username and final_hosts:
                 host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-                final_password = getpass.getpass(f"§ Enter password for {final_username}@{host_display}: ")
+                final_password = getpass.getpass(f"!? Enter password for {final_username}@{host_display}: ")
             else:
-                print("✗ Password required but not provided")
+                print("X  Password required but not provided")
                 return False
         elif args.secure and not final_password:
             host_display = final_hosts[0] if len(final_hosts) == 1 else f"{len(final_hosts)} hosts"
-            final_password = getpass.getpass(f"§ Enter password for {final_username}@{host_display}: ")
+            final_password = getpass.getpass(f"!? Enter password for {final_username}@{host_display}: ")
         # SECURITY: Password argument removed - this code block is no longer needed
         
         # Validate final parameters
@@ -27032,9 +28499,9 @@ Log file: {host_log_file}
                 invalid_hosts.append(host)
         
         if invalid_hosts:
-            print(f"✗ Invalid hosts detected: {', '.join(invalid_hosts)}")
+            print(f"X  Invalid hosts detected: {', '.join(invalid_hosts)}")
             if not validated_hosts:
-                print("✗ No valid hosts remaining")
+                print("X  No valid hosts remaining")
                 return False
             else:
                 print(f"[WARNING] Proceeding with {len(validated_hosts)} valid hosts")
@@ -27052,12 +28519,12 @@ Log file: {host_log_file}
             if not final_username: missing.append("username/SSH_USER") 
             if not final_password: missing.append("password/SSH_PASSWORD")
             
-            print(f"✗ Error: Missing required parameters: {', '.join(missing)}")
+            print(f"X  Error: Missing required parameters: {', '.join(missing)}")
             if use_env:
-                print("★ Add these to your .env file or provide as command line arguments")
-                print("★ Use --no-env flag to disable .env file loading")
+                print("!? Add these to your .env file or provide as command line arguments")
+                print("!? Use --no-env flag to disable .env file loading")
             else:
-                print("★ Provide as command line arguments or remove --no-env flag to use .env file")
+                print("!? Provide as command line arguments or remove --no-env flag to use .env file")
                 # Since we can't access the parser here, we'll let the caller handle help display
             return False
         
@@ -27078,7 +28545,7 @@ Log file: {host_log_file}
             if csv_commands:
                 commands_to_run = csv_commands
                 logger.info(f"Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
-                print(f"★ Loaded {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV")
+                print(f"!? Loaded {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV")
         # Priority 4: Interactive input
         else:
             # Check what command sources are available
@@ -27086,33 +28553,33 @@ Log file: {host_log_file}
             csv_commands = EnhancedSSHRunner.load_commands_from_csv() if not commands_to_run else []
             
             if env_commands and csv_commands:
-                command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env, or 'csv' for {len(csv_commands)} commands from CSV): ").strip()
+                command = input(f"!? Enter command to execute (or press Enter to use {len(env_commands)} commands from .env, or 'csv' for {len(csv_commands)} commands from CSV): ").strip()
                 if not command:
                     commands_to_run = env_commands
-                    print(f"★ Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                    print(f"!? Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
                 elif command.lower() == 'csv':
                     commands_to_run = csv_commands
-                    print(f"★ Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"!? Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             elif env_commands:
-                command = input(f"⚡ Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
+                command = input(f"!? Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
                 if not command:
                     commands_to_run = env_commands
-                    print(f"★ Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
+                    print(f"!? Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             elif csv_commands:
-                command = input(f"⚡ Enter command to execute (or press Enter to use {len(csv_commands)} commands from data/SSH_COMMANDS.CSV): ").strip()
+                command = input(f"!? Enter command to execute (or press Enter to use {len(csv_commands)} commands from data/SSH_COMMANDS.CSV): ").strip()
                 if not command:
                     commands_to_run = csv_commands
-                    print(f"★ Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
+                    print(f"!? Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
                 else:
                     commands_to_run = [command]
             else:
-                command = input("⚡ Enter command to execute: ").strip()
+                command = input("!? Enter command to execute: ").strip()
                 if not command:
-                    print("✗ No commands specified")
+                    print("X  No commands specified")
                     return False
                 commands_to_run = [command]
         
@@ -27128,16 +28595,16 @@ Log file: {host_log_file}
                 invalid_commands.append(invalid_cmd)
         
         if invalid_commands:
-            print(f"✗ Invalid commands detected: {', '.join(invalid_commands)}")
+            print(f"X  Invalid commands detected: {', '.join(invalid_commands)}")
             if not validated_commands:
-                print("✗ No valid commands remaining")
+                print("X  No valid commands remaining")
                 return False
             else:
-                print(f"⚠ Proceeding with {len(validated_commands)} valid commands")
+                print(f"!? Proceeding with {len(validated_commands)} valid commands")
                 commands_to_run = validated_commands
         
         if not commands_to_run:
-            print("✗ No commands to execute")
+            print("X  No commands to execute")
             return False
         
         # Determine shell mode (default is True unless --no-shell is specified)
@@ -27180,7 +28647,7 @@ Log file: {host_log_file}
                 max_threads = EnhancedSSHRunner.validate_thread_count(requested_threads, len(final_hosts))
                 
                 if max_threads != requested_threads:
-                    print(f"⚠ Adjusted thread count from {requested_threads} to {max_threads}")
+                    print(f"!? Adjusted thread count from {requested_threads} to {max_threads}")
                 
                 ssh_results = EnhancedSSHRunner.run_ssh_commands_multi_host(
                     final_hosts,
@@ -27206,7 +28673,7 @@ Log file: {host_log_file}
                 logger.debug(f"[DIAG] Type of exception object: {type(e)}")
             except Exception:
                 pass
-            print(f"✗ Fatal error: {e}")
+            print(f"X  Fatal error: {e}")
             return False
         finally:
             if tracer_installed:
@@ -27315,33 +28782,33 @@ SECURITY NOTES:
     @staticmethod
     def interactive_mode():
         """Interactive mode for SSH command execution with input validation"""
-        print("█ Enhanced SSH Command Runner v2 - Interactive Mode")
+        print("- Enhanced SSH Command Runner v2 - Interactive Mode")
         print("=" * 60)
         
         # Get connection details with validation
         while True:
-            hostname = input("☁ Enter hostname or IP address: ").strip()
+            hostname = input("- Enter hostname or IP address: ").strip()
             if not hostname:
-                print("✗ Hostname is required")
+                print("X  Hostname is required")
                 continue
             if not EnhancedSSHRunner.validate_hostname(hostname):
-                print("✗ Invalid hostname or IP address format")
+                print("X  Invalid hostname or IP address format")
                 continue
             break
         
         while True:
-            username = input("• Enter username: ").strip()
+            username = input("X  Enter username: ").strip()
             if not username:
-                print("✗ Username is required")
+                print("X  Username is required")
                 continue
             if not EnhancedSSHRunner.validate_username(username):
-                print("✗ Invalid username format (alphanumeric, underscore, hyphen, dot only)")
+                print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")
                 continue
             break
         
-        password = getpass.getpass("§ Enter password: ")
+        password = getpass.getpass("!? Enter password: ")
         if not password:
-            print("✗ Password is required")
+            print("X  Password is required")
             return False
         
         # Optional settings with validation
@@ -27353,38 +28820,38 @@ SECURITY NOTES:
                     break
                 port = int(port_input)
                 if not EnhancedSSHRunner.validate_port(port):
-                    print("✗ Port must be between 1 and 65535")
+                    print("X  Port must be between 1 and 65535")
                     continue
                 break
             except ValueError:
-                print("✗ Port must be a valid number")
+                print("X  Port must be a valid number")
         
         while True:
             try:
-                timeout_input = input("⌛ Enter timeout in seconds (default 30): ").strip()
+                timeout_input = input("- Enter timeout in seconds (default 30): ").strip()
                 if not timeout_input:
                     timeout = 30
                     break
                 timeout = int(timeout_input)
                 if not EnhancedSSHRunner.validate_timeout(timeout):
-                    print("✗ Timeout must be between 1 and 3600 seconds")
+                    print("X  Timeout must be between 1 and 3600 seconds")
                     continue
                 break
             except ValueError:
-                print("✗ Timeout must be a valid number")
+                print("X  Timeout must be a valid number")
         
         # Execution mode
-        shell_mode = input("• Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
+        shell_mode = input("X  Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
         use_shell = shell_mode in ['y', 'yes', 'true', '1']
         
         # Get command with validation
         while True:
-            command = input("⚡ Enter command to execute: ").strip()
+            command = input("!? Enter command to execute: ").strip()
             if not command:
-                print("✗ Command is required")
+                print("X  Command is required")
                 continue
             if not EnhancedSSHRunner.validate_command(command):
-                print("✗ Invalid command (too long or contains null bytes)")
+                print("X  Invalid command (too long or contains null bytes)")
                 continue
             break
         
@@ -27646,7 +29113,21 @@ def main():
             func, description = menu_actions[key]
             print(f"{key}: {description}")
         
-        iwant = input("\nEnter your selection number now: ").strip()
+        try:
+            iwant = input("\nEnter your selection number now: ").strip()
+        except EOFError:
+            # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
+            print("\n[EOF] Input stream closed. Exiting gracefully...")
+            logging.info("EOF encountered on input - user disconnected or input stream closed")
+            if container_mode:
+                print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")
+            break
+        except KeyboardInterrupt:
+            # Handle Ctrl+C
+            print("\n[INTERRUPT] User interrupted. Exiting...")
+            logging.info("KeyboardInterrupt encountered - user pressed Ctrl+C")
+            break
+            
         # Graceful handling of empty input: simply redisplay menu without logging an error
         if iwant == "":
             if container_mode:

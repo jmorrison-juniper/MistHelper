@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 101 actionable menu entries (1–8, 11–89, 90–100) with some gaps for future expansion.
+**Operation Count:** The code currently defines 103 actionable menu entries (1–10, 11–89, 90–100) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -225,6 +225,8 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | Range | Focus | Highlights |
 |-------|-------|-----------|
 | 1–4 | Alarms & Definitions | Org alarms, device events, audit logs (24h), gateway management IPs |
+| 5–8 | WebSocket Commands | MAC table (switches), forwarding table (gateways), routing table (switches - BGP/OSPF/Static), SSR/SRX routing (128T/SRX gateways - Advanced BGP analysis) |
+| 9–10 | Packet Capture | Site & org-level packet captures (wireless/wired/gateway/scan/MxEdge) with WebSocket streaming |
 | 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
 | 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
 | 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
@@ -238,7 +240,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
 | 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
 | 81–86 | Advanced Insights | Device insights, const definitions, organization insights, anomaly metrics |
-| 5–8, 87–89 | WebSocket Commands | MAC table (switches), forwarding table (gateways), routing table (switches - BGP/OSPF/Static), SSR/SRX routing (128T/SRX gateways - Advanced BGP analysis), device ping, ARP, and service ping via WebSocket (real-time output) |
+| 87–89 | WebSocket Device Commands | Device ping, ARP, and service ping via WebSocket (real-time output) |
 | 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
 | 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
 | 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
@@ -464,6 +466,72 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 
 ---
 ## 21. Changelog
+
+### Version 25.01.06.17.28
+- **CRITICAL FIX**: Error handling now properly displays API error messages when captures fail
+- **Fixed**: AttributeError when capture fails - Changed from `response.text` to `response.data` for mistapi APIResponse objects
+- **Enhanced**: Error output now shows detailed error information from Mist API for troubleshooting
+- **Fixed**: Both site and org-level capture error handlers updated with proper APIResponse handling
+
+### Version 25.01.06.17.23
+- **MAJOR ENHANCEMENT**: Packet capture now defaults to downloadable PCAP file format instead of WebSocket streaming
+- **Added**: Automatic PCAP file download - Mist cloud saves capture as PCAP file and provides download URL
+- **Added**: `_wait_and_download_pcap()` method - Polls for capture completion and downloads PCAP file to local data directory
+- **Added**: `_wait_and_download_pcap_org()` method - Organization-level PCAP download support for MxEdge captures
+- **Added**: `_get_capture_format_selection()` helper method - Centralized format selection logic to avoid code duplication
+- **Enhanced**: Format selection UI - Changed default from stream to PCAP file (option 1 now default)
+- **Enhanced**: Capture workflow - Conditional branching based on format type (pcap vs stream vs tzsp)
+- **Improved**: User experience - Progress display during capture wait period with countdown timer
+- **Improved**: File output - PCAP files saved to `data/PacketCapture_{capture_id}.pcap` for easy Wireshark analysis
+- **Added**: Polling mechanism - Smart retry logic waits up to 3 minutes for PCAP file URL after capture completes
+- **Added**: Download validation - HTTP status checking and file size reporting for successful downloads
+- **Enhanced**: Error handling - Provides manual download URL if automatic download fails
+- **Fixed**: API function names - Corrected from startSitePcapCapture to startSitePacketCapture
+- **Fixed**: All capture types now support format selection - Added to wireless client, wired client, gateway, new association, and scan radio captures
+- **Fixed**: Site and org-level capture methods - Both now properly handle pcap format with file downloads
+- **Aligned**: Documentation - Updated inline comments to reflect new default behavior (PCAP files vs streaming)
+
+### Version 25.10.06.17.00
+- **Added**: Menu options 9-10 - Comprehensive packet capture management for Juniper Mist environments
+- **Added**: PacketCaptureManager class - Full-featured packet capture orchestration with WebSocket streaming
+- **Added**: Site packet capture (Option 9) - Wireless client, wired client, gateway, new association, and scan radio captures
+- **Added**: Organization packet capture (Option 10) - MxEdge captures for org-level Mist Edges with TZSP support
+- **Enhanced**: Capture type support - Client (wireless/wired), Gateway, New Association, Scan Radio, and MxEdge capture modes
+- **Enhanced**: Interactive configuration - Guided parameter collection with validation for all capture types
+- **Added**: WebSocket streaming integration - Real-time packet monitoring with progress display
+- **Added**: MAC address validation - Format checking and normalization for all MAC address inputs
+- **Added**: Capture format options - Stream to Mist Cloud or TZSP stream to remote host (Wireshark)
+- **Added**: Advanced scan capture - Band selection (2.4/5/6 GHz), channel, bandwidth, and tcpdump expression support
+- **Enhanced**: Safety validations - Duration limits (60-86400s), packet count constraints (0-10000), max packet length (64-2048 bytes)
+- **Added**: Capture session export - Automatic CSV/SQLite export of capture configuration and session details
+- **Enhanced**: Documentation - Comprehensive inline documentation with API endpoint references and usage examples
+- **Enhanced**: Operation count - Updated to 103 total menu operations (added packet capture operations)
+- **Fixed**: Test harness - Added options 9-10 to systematic test skip list (interactive operations)
+
+### Version 25.01.06.11.40
+- **Enhanced**: Console log level filtering - Early logging setup now respects CONSOLE_LOG_LEVEL environment variable (defaults to INFO)
+- **Improved**: Startup experience - Changed API page size configuration message from INFO to DEBUG level to reduce console clutter
+- **Fixed**: Early logging handler configuration - Console and file handlers now properly respect environment-specified log levels from startup
+- **Optimized**: Log output clarity - DEBUG messages only appear in file logs, keeping console output clean for normal operation
+- **Aligned**: Configuration consistency - Early logging setup now matches GlobalImportManager._setup_logging() pattern for log level handling
+
+### Version 25.01.06.11.22
+- **CRITICAL FIX**: Early logging configuration - Moved logging setup to execute immediately after imports to prevent Python from creating default handler
+- **Fixed**: Root directory pollution - Eliminated blank script.log file creation in root directory by configuring logging before any logging calls
+- **Enhanced**: Module-level logging safety - Early logging setup ensures all module-level logging calls (lines 63, 151, 175, 179, 215, 217) write to data/script.log
+- **Improved**: Logging initialization timing - Added early basicConfig() call with FileHandler for data/script.log before PerformanceMonitor and other early code executes
+- **Documentation**: Identified root cause - Python's logging module creates default handler in current directory when logging methods called before configuration
+- **Added**: ASCII character map - Comprehensive emoji to ASCII replacement table added to agents.md for NASA/JPL compliance (21 emoji replacements documented)
+
+### Version 25.10.02.16.07
+- **CRITICAL FIX**: SSH EOF handling - Added comprehensive EOF (End-of-File) error handling for all interactive input() calls to prevent SSH session crashes
+- **Added**: safe_input() helper function - Centralized input handling with proper EOF and KeyboardInterrupt exception management
+- **Enhanced**: Container SSH stability - Fixed "EOF when reading a line" errors in SSH sessions by wrapping input calls with graceful exception handling
+- **Improved**: Session disconnection handling - SSH disconnections now gracefully exit with proper error logging instead of crashing the application
+- **Fixed**: Container ForceCommand execution - Corrected background process issue that was breaking interactive terminal input in SSH environment
+- **Added**: Non-ASCII character cleanup - Systematically replaced remaining Unicode characters with ASCII equivalents throughout codebase for NASA/JPL compliance
+- **Enhanced**: Destructive operation safety - Applied EOF protection to critical confirmation prompts for virtual MAC conversion, firmware upgrades, and device conversions
+- **Optimized**: Containerfile efficiency - Removed duplicate dependency installations and improved container build process for faster deployments
 
 ### Version 25.09.30.15.52
 - **CRITICAL FIX**: Unicode encoding error - Replaced Unicode arrow characters (→) with ASCII equivalents (->) to prevent Windows logging crashes

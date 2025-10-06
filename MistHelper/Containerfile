@@ -2,10 +2,15 @@
 # Straightforward approach using pip with trusted hosts
 FROM python:3.11-slim
 
-# Metadata
+# Metadata following OCI standards
+LABEL org.opencontainers.image.title="MistHelper"
+LABEL org.opencontainers.image.description="Juniper Mist API data export tool with SSH access for corporate environments"
+LABEL org.opencontainers.image.version="2.1.0-simple-ssl"
+LABEL org.opencontainers.image.vendor="MistHelper Development Team"
+LABEL org.opencontainers.image.authors="MistHelper Development Team"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
-LABEL description="Simplified MistHelper container with SSL bypass for corporate environments"
-LABEL version="2.1.0-simple-ssl"
 
 # Install minimal system dependencies including SSH server
 RUN apt-get update && \
@@ -24,6 +29,9 @@ RUN mkdir -p /var/run/sshd && \
     echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config.d/misthelper.conf && \
     echo "AuthorizedKeysFile .ssh/authorized_keys" >> /etc/ssh/sshd_config.d/misthelper.conf && \
     echo "X11Forwarding no" >> /etc/ssh/sshd_config.d/misthelper.conf && \
+    echo "PermitTTY yes" >> /etc/ssh/sshd_config.d/misthelper.conf && \
+    echo "PermitUserEnvironment no" >> /etc/ssh/sshd_config.d/misthelper.conf && \
+    echo "UsePAM yes" >> /etc/ssh/sshd_config.d/misthelper.conf && \
     echo "AllowUsers misthelper" >> /etc/ssh/sshd_config.d/misthelper.conf && \
     echo "ForceCommand /usr/local/bin/misthelper-session" >> /etc/ssh/sshd_config.d/misthelper.conf && \
     ssh-keygen -A
@@ -49,12 +57,7 @@ RUN echo '#!/bin/bash' > /usr/local/bin/misthelper-session && \
     echo '' >> /usr/local/bin/misthelper-session && \
     echo '# Function to cleanup session on exit' >> /usr/local/bin/misthelper-session && \
     echo 'cleanup_session() {' >> /usr/local/bin/misthelper-session && \
-    echo '    echo "[SESSION] Cleaning up session $SESSION_ID"' >> /usr/local/bin/misthelper-session && \
-    echo '    if [[ -f "$SESSION_PID_FILE" ]]; then' >> /usr/local/bin/misthelper-session && \
-    echo '        PID=$(cat "$SESSION_PID_FILE")' >> /usr/local/bin/misthelper-session && \
-    echo '        kill $PID 2>/dev/null || true' >> /usr/local/bin/misthelper-session && \
-    echo '        rm -f "$SESSION_PID_FILE"' >> /usr/local/bin/misthelper-session && \
-    echo '    fi' >> /usr/local/bin/misthelper-session && \
+    echo '    echo "[SESSION] Cleaning up session $SESSION_ID" >> /app/data/ssh.log' >> /usr/local/bin/misthelper-session && \
     echo '    rm -f "$SESSION_FILE"' >> /usr/local/bin/misthelper-session && \
     echo '    exit 0' >> /usr/local/bin/misthelper-session && \
     echo '}' >> /usr/local/bin/misthelper-session && \
@@ -75,7 +78,6 @@ RUN echo '#!/bin/bash' > /usr/local/bin/misthelper-session && \
     echo '# Main session loop' >> /usr/local/bin/misthelper-session && \
     echo 'while true; do' >> /usr/local/bin/misthelper-session && \
     echo '    echo "[SESSION] Starting MistHelper..."' >> /usr/local/bin/misthelper-session && \
-    echo '    echo "$!" > "$SESSION_PID_FILE"' >> /usr/local/bin/misthelper-session && \
     echo '    ' >> /usr/local/bin/misthelper-session && \
     echo '    # Run MistHelper and capture exit code' >> /usr/local/bin/misthelper-session && \
     echo '    python MistHelper.py' >> /usr/local/bin/misthelper-session && \
@@ -91,7 +93,7 @@ RUN echo '#!/bin/bash' > /usr/local/bin/misthelper-session && \
     echo '    fi' >> /usr/local/bin/misthelper-session && \
     echo 'done' >> /usr/local/bin/misthelper-session && \
     echo '' >> /usr/local/bin/misthelper-session && \
-    echo 'echo "[SESSION] Session $SESSION_ID terminated."' >> /usr/local/bin/misthelper-session && \
+    echo 'echo "[SESSION] Session $SESSION_ID terminated." >> /app/data/ssh.log' >> /usr/local/bin/misthelper-session && \
     chmod +x /usr/local/bin/misthelper-session
 
 # Create welcome script and add to bashrc for automatic display on SSH login
@@ -131,24 +133,10 @@ COPY requirements.txt ./
 COPY pyproject.toml ./
 
 # Install Python dependencies with SSL bypass for corporate environments
-RUN echo "🚀 Installing Python dependencies with trusted hosts..." && \
-    pip install --no-cache-dir -r requirements.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host pypi.org \
         --trusted-host pypi.python.org \
-        --trusted-host files.pythonhosted.org && \
-    echo "✅ All dependencies installed successfully with pip"
-
-# Copy dependency files
-COPY requirements.txt ./
-COPY pyproject.toml ./
-
-# Install Python dependencies with SSL bypass for corporate environments
-RUN echo "🚀 Installing Python dependencies with trusted hosts..." && \
-    pip install --no-cache-dir -r requirements.txt \
-        --trusted-host pypi.org \
-        --trusted-host pypi.python.org \
-        --trusted-host files.pythonhosted.org && \
-    echo "✅ All dependencies installed successfully with pip"
+        --trusted-host files.pythonhosted.org
 
 # Copy application files
 COPY MistHelper.py __init__.py ./
@@ -173,7 +161,7 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo '' >> /start.sh && \
     echo '# If a different username is requested, create it (idempotent).' >> /start.sh && \
     echo 'if ! id "$USERNAME" >/dev/null 2>&1; then' >> /start.sh && \
-    echo '  echo "[SSH] Creating user $USERNAME"' >> /start.sh && \
+    echo '  echo "[SSH] Creating user $USERNAME" >> /app/data/ssh.log' >> /start.sh && \
     echo '  useradd -m -s /bin/bash "$USERNAME" || true' >> /start.sh && \
     echo '  usermod -aG sudo "$USERNAME" || true' >> /start.sh && \
     echo '  # Ensure /app readable; retain original ownership on writable paths' >> /start.sh && \
@@ -183,9 +171,9 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo '# Update password if provided (non-empty).' >> /start.sh && \
     echo 'if [ -n "$PASSWORD" ]; then' >> /start.sh && \
     echo '  echo "$USERNAME:$PASSWORD" | chpasswd' >> /start.sh && \
-    echo '  echo "[SSH] Applied runtime password for $USERNAME"' >> /start.sh && \
+    echo '  echo "[SSH] Applied runtime password for $USERNAME" >> /app/data/ssh.log' >> /start.sh && \
     echo 'else' >> /start.sh && \
-    echo '  echo "[SSH] No runtime password override provided; using build-time password."' >> /start.sh && \
+    echo '  echo "[SSH] No runtime password override provided; using build-time password." >> /app/data/ssh.log' >> /start.sh && \
     echo 'fi' >> /start.sh && \
     echo '' >> /start.sh && \
     echo '# Adjust AllowUsers directive to reflect chosen username.' >> /start.sh && \
@@ -197,10 +185,10 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo '  fi' >> /start.sh && \
     echo 'fi' >> /start.sh && \
     echo '' >> /start.sh && \
-    echo 'echo "[SSH] Starting MistHelper SSH Service on port 2200..."' >> /start.sh && \
-    echo 'echo "[SSH] Each SSH connection spawns its own MistHelper session."' >> /start.sh && \
-    echo 'echo "[SSH] Connect with: ssh -p 2200 $USERNAME@<container-ip>"' >> /start.sh && \
-    echo 'echo "[SSH] Use option 0 in MistHelper to disconnect."' >> /start.sh && \
+    echo 'echo "[SSH] Starting MistHelper SSH Service on port 2200..." >> /app/data/ssh.log' >> /start.sh && \
+    echo 'echo "[SSH] Each SSH connection spawns its own MistHelper session." >> /app/data/ssh.log' >> /start.sh && \
+    echo 'echo "[SSH] Connect with: ssh -p 2200 $USERNAME@<container-ip>" >> /app/data/ssh.log' >> /start.sh && \
+    echo 'echo "[SSH] Use option 0 in MistHelper to disconnect." >> /app/data/ssh.log' >> /start.sh && \
     echo '' >> /start.sh && \
     echo '# Run SSH daemon in foreground' >> /start.sh && \
     echo 'exec /usr/sbin/sshd -D' >> /start.sh && \
