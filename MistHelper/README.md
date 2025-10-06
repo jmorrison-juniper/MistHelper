@@ -467,6 +467,72 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ---
 ## 21. Changelog
 
+### Version 25.01.06.18.15
+- **CRITICAL FIX**: Multi-AP scan captures now use single API call with `aps` dictionary (correct API pattern)
+- **MAJOR REFACTOR**: Changed from sequential per-AP API calls to single POST with all APs in one payload
+- **API COMPLIANCE**: Properly uses `aps` field per Mist API schema for multi-AP scan captures
+- **PERFORMANCE**: Reduced API calls from N (one per AP) to 1 (single call for all APs)
+- **IMPROVED**: Multi-AP captures return single capture ID that covers all specified APs
+- **SIMPLIFIED**: Removed per-AP success/failure tracking - API handles all APs in one transaction
+- **ENHANCED**: Error handling now correctly detects multi-AP conflicts (e.g., "Recording already in progress")
+- **TECHNICAL**: Payload structure: `{"type": "scan", "band": "5", ..., "aps": {"mac1": {...}, "mac2": {...}}}`
+- **SCHEMA**: Per-AP configs in `aps` dict inherit from parent values if not specified
+- **BENEFIT**: More reliable capture launches, better API efficiency, single capture ID to track
+
+### Version 25.01.06.18.10
+- **CRITICAL FIX**: Scan radio captures now enforce Mist API minimum duration of 60 seconds
+- **API DISCOVERY**: Mist API documentation reveals scan captures have 60-second minimum, 600-second default
+- **CORRECTED**: Single AP scan capture duration changed from 30s default to 60s (API minimum)
+- **CORRECTED**: Multi-AP scan capture duration changed from 30s default to 60s (API minimum)
+- **ENHANCED**: Duration validation now shows "API requirement" in error messages for clarity
+- **ADDED**: Warning message before duration prompt: "Mist API requires minimum 60 seconds for scan captures"
+- **TECHNICAL**: API schema constraint: `"minimum": 60.0, "default": 600` for scan capture duration
+- **NOTE**: Other capture types (wireless, wired, gateway, new association) still support 30-second minimum
+- **DOCUMENTATION**: Updated prompts to show correct range: "default 60, min 60, max 86400"
+- **USER IMPACT**: Prevents confusion when API ignores duration values below 60 seconds
+
+### Version 25.01.06.18.05
+- **CRITICAL ENHANCEMENT**: Added pre-check for existing captures before launching new ones
+- **IMPROVED**: Single AP captures now check for existing captures on that specific AP before starting
+- **IMPROVED**: Multi-AP captures now check for existing captures across all site APs before batch launch
+- **ENHANCED**: User-friendly warning messages when capture conflicts detected: "Mist only allows one capture per AP at a time"
+- **ADDED**: Confirmation prompt allows users to cancel or proceed when conflicts detected
+- **IMPROVED**: Error handling now detects "Recording already in progress" API errors specifically
+- **ENHANCED**: Clear error messages replace raw API responses: "Capture already in progress on this AP"
+- **ADDED**: Actionable guidance when captures fail: "Wait for existing captures to complete or check Mist portal to stop them"
+- **TECHNICAL**: Pre-check calls `listSitePcapCaptures()` API to query active/recent captures before launch
+- **MULTI-AP**: Multi-AP feature now shows count of existing captures and offers cancellation before launching
+- **RELIABILITY**: Prevents wasted API calls and improves user experience during capture conflicts
+
+### Version 25.01.06.17.50
+- **MAJOR FEATURE**: Multi-AP scan captures - Select 'all' when choosing AP to launch simultaneous captures for all APs
+- **ADDED**: New option in AP selection menu to capture from all APs at once
+- **ADDED**: `_start_site_scan_capture_all_aps()` method - Orchestrates multi-AP capture launches
+- **ADDED**: `get_all_ap_macs_from_site()` helper function - Fetches all AP MACs from a site
+- **ENHANCED**: AP selection displays special 'all' option for launching captures across entire site
+- **IMPROVED**: Multi-AP captures show progress indicator (e.g., "[3/15] Starting capture for AP...")
+- **IMPROVED**: Summary report shows successful vs failed captures after multi-AP launch
+- **FEATURE**: Batch PCAP download option - When using PCAP format with 'all' APs, offers to download all files sequentially
+- **USE CASE**: Perfect for site-wide wireless surveys, interference analysis, or comprehensive RF troubleshooting
+
+### Version 25.01.06.17.44
+- **CRITICAL FIX**: PCAP download polling now starts immediately instead of waiting full capture duration
+- **PERFORMANCE**: Changed polling interval from 10 seconds to 5 seconds for faster file detection
+- **PERFORMANCE**: Removed blocking countdown timer that made script appear hung during capture
+- **IMPROVED**: Progress display now shows elapsed time dynamically during polling
+- **IMPROVED**: Changed max wait time from 3+ minutes to capture duration + 2 minutes
+- **IMPROVED**: User sees immediate feedback with "Polling for PCAP file availability" message
+- **ENHANCED**: Clearer Ctrl+C cancellation message reminds users they can check portal manually
+- **TECHNICAL**: Capture runs asynchronously on Mist cloud - no need to block locally
+
+### Version 25.01.06.17.35
+- **CONFIGURATION CHANGE**: Packet capture default duration changed from 600 seconds (10 minutes) to 30 seconds for faster testing
+- **CONFIGURATION CHANGE**: Packet capture default max packet length changed from 512 bytes to 1300 bytes for better payload visibility
+- **Enhanced**: All capture types (wireless, wired, gateway, new association, scan) now use consistent 30-second default duration
+- **Enhanced**: Scan radio captures now use 1300 byte max packet length by default (previously hardcoded to 512)
+- **Updated**: Duration validation minimum changed from 60 seconds to 30 seconds across all capture types
+- **Improved**: User prompts updated to reflect new default values for better user experience
+
 ### Version 25.01.06.17.28
 - **CRITICAL FIX**: Error handling now properly displays API error messages when captures fail
 - **Fixed**: AttributeError when capture fails - Changed from `response.text` to `response.data` for mistapi APIResponse objects

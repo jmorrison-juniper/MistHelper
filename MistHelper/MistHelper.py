@@ -2946,12 +2946,12 @@ class PacketCaptureManager:
             ap_mac = self.normalize_mac_address(ap_mac)
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+                                 default_value="30", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+            if duration < 30 or duration > 86400:
+                print(f"\n! Duration must be between 30 and 86400 seconds")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -2970,8 +2970,8 @@ class PacketCaptureManager:
             return
         
         # Max packet length
-        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 512, max 2048): ", 
-                                    default_value="512", context="max_pkt_len")
+        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 1300, max 2048): ", 
+                                    default_value="1300", context="max_pkt_len")
         try:
             max_pkt_len = int(max_pkt_len_str)
             if max_pkt_len < 64 or max_pkt_len > 2048:
@@ -3037,12 +3037,12 @@ class PacketCaptureManager:
         client_mac = self.normalize_mac_address(client_mac)
         
         # Duration and packet parameters (similar to wireless)
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+                                 default_value="30", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+            if duration < 30 or duration > 86400:
+                print(f"\n! Duration must be between 30 and 86400 seconds")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3118,12 +3118,12 @@ class PacketCaptureManager:
                                 default_value="all", context="port")
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+                                 default_value="30", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+            if duration < 30 or duration > 86400:
+                print(f"\n! Duration must be between 30 and 86400 seconds")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3196,12 +3196,12 @@ class PacketCaptureManager:
                          context="ssid", allow_empty=True)
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+                                 default_value="30", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+            if duration < 30 or duration > 86400:
+                print(f"\n! Duration must be between 30 and 86400 seconds")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3257,6 +3257,12 @@ class PacketCaptureManager:
         ap_mac = prompt_select_ap_mac_from_site(site_id)
         if not ap_mac:
             logging.warning("No AP selected or AP selection failed - aborting capture")
+            return
+        
+        # Check if user selected all APs
+        if ap_mac == 'ALL_APS':
+            logging.info("User selected all APs - launching multi-AP captures")
+            self._start_site_scan_capture_all_aps(site_id)
             return
         
         # Normalize MAC address (already validated by selection function)
@@ -3319,12 +3325,13 @@ class PacketCaptureManager:
         
         # Duration
         logging.debug("Prompting for duration")
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        print("\n! NOTE: Mist API requires minimum 60 seconds for scan captures")
+        duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
+                                 default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"\n! Duration must be between 60 and 86400 seconds (API requirement)")
                 logging.error(f"Duration out of range: {duration}")
                 return
             logging.debug(f"Duration set: {duration} seconds")
@@ -3363,7 +3370,7 @@ class PacketCaptureManager:
             "duration": duration,
             "num_packets": num_packets,
             "format": capture_format,
-            "max_pkt_len": 512
+            "max_pkt_len": 1300
         }
         logging.debug(f"Payload constructed: {payload}")
         
@@ -3384,8 +3391,254 @@ class PacketCaptureManager:
         logging.debug("Waiting for user confirmation")
         safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
+        # Check for existing captures on this AP
+        print(f"\n> Checking for existing captures on AP {ap_mac}...")
+        try:
+            response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
+                self.mist_session,
+                site_id
+            )
+            
+            if response.status_code == 200:
+                existing_captures = response.data or []
+                ap_has_capture = any(
+                    cap.get('ap_mac', '').replace(':', '').replace('-', '').lower() == ap_mac.replace(':', '').replace('-', '').lower()
+                    for cap in existing_captures
+                )
+                
+                if ap_has_capture:
+                    print(f"\n! WARNING: This AP already has a capture in progress or recently completed")
+                    print(f"  Mist only allows one capture per AP at a time")
+                    print(f"  The new capture may fail with 'Recording already in progress'")
+                    
+                    proceed = safe_input("\nContinue anyway? (y/n, default n): ", 
+                                       default_value="n", context="capture_conflict_confirmation").lower()
+                    if proceed != 'y':
+                        print("\n* Capture cancelled by user")
+                        logging.info("User cancelled capture due to existing capture on AP")
+                        return
+        except Exception as error:
+            logging.warning(f"Failed to check for existing captures: {error}")
+            # Continue anyway - this is just a courtesy check
+        
         logging.info("User confirmed - executing site capture")
         self._execute_site_capture(site_id, payload)
+    
+    def _start_site_scan_capture_all_aps(self, site_id: str):
+        """
+        Start scan radio packet captures for ALL APs at a site simultaneously.
+        
+        Args:
+            site_id (str): Site UUID
+        """
+        logging.info(f"Starting multi-AP scan capture for site: {site_id}")
+        
+        # Get all AP MACs from site
+        ap_macs = get_all_ap_macs_from_site(site_id)
+        if not ap_macs:
+            print("\n! No APs found at site")
+            return
+        
+        print(f"\n* Found {len(ap_macs)} APs at site")
+        
+        # Check for existing captures at this site
+        print(f"  Checking for existing captures...")
+        try:
+            response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
+                self.mist_session,
+                site_id
+            )
+            
+            if response.status_code == 200:
+                existing_captures = response.data or []
+                if existing_captures:
+                    print(f"\n! WARNING: {len(existing_captures)} capture(s) already in progress or recently completed")
+                    print(f"  Mist only allows one capture per AP at a time")
+                    print(f"  Existing captures may cause launch failures")
+                    
+                    proceed = safe_input("\nContinue anyway? (y/n, default n): ", 
+                                       default_value="n", context="proceed")
+                    if proceed.lower() != 'y':
+                        print("\n! Cancelled by user")
+                        return
+        except Exception as check_error:
+            logging.warning(f"Could not check for existing captures: {check_error}")
+            print(f"  Warning: Could not check for existing captures")
+        
+        print(f"  Preparing to launch {len(ap_macs)} simultaneous captures...")
+        
+        # Get common capture parameters for all APs
+        print("\n" + "-" * 80)
+        print(" SCAN RADIO CAPTURE CONFIGURATION (All APs)")
+        print("-" * 80)
+        
+        # Band selection
+        print("\nSelect band:")
+        print("  1. 2.4 GHz")
+        print("  2. 5 GHz (default)")
+        print("  3. 6 GHz")
+        band_choice = safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
+        
+        band_map = {"1": "24", "2": "5", "3": "6", "24": "24", "5": "5", "6": "6"}
+        band = band_map.get(band_choice, "5")
+        
+        # Channel
+        if band == "24":
+            channel_str = safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
+        elif band == "5":
+            channel_str = safe_input("Enter channel (36-144, default 36): ", default_value="36", context="channel")
+        else:  # band == "6"
+            channel_str = safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
+        
+        try:
+            channel = int(channel_str)
+        except ValueError:
+            print(f"\n! Invalid channel: {channel_str}")
+            return
+        
+        # Bandwidth
+        print("\nSelect bandwidth:")
+        print("  1. 20 MHz")
+        print("  2. 40 MHz")
+        if band in ["5", "6"]:
+            print("  3. 80 MHz")
+        if band == "6":
+            print("  4. 160 MHz")
+        bw_choice = safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
+        bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
+        bandwidth = bw_map.get(bw_choice, "20")
+        
+        # Duration
+        print("\n! NOTE: Mist API requires minimum 60 seconds for scan captures")
+        duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
+                                 default_value="60", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds (API requirement)")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        # Number of packets
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Display configuration summary
+        print("\n" + "=" * 80)
+        print(" MULTI-AP CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Scan Radio (All APs)")
+        print(f"  Number of APs: {len(ap_macs)}")
+        print(f"  Band: {band} GHz")
+        print(f"  Channel: {channel}")
+        print(f"  Bandwidth: {bandwidth} MHz")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets}")
+        print(f"  Format: {capture_format}")
+        print("=" * 80)
+        
+        confirmation = safe_input(f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ", 
+                                 context="confirmation", allow_empty=True)
+        
+        # Build single payload with aps dictionary for all APs
+        print(f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call...")
+        
+        # Build the aps dictionary - each AP uses the same parent configuration
+        aps_dict = {}
+        for ap_mac in ap_macs:
+            normalized_mac = self.normalize_mac_address(ap_mac)
+            # Per-AP config inherits from parent, so we can leave empty or specify overrides
+            aps_dict[normalized_mac] = {
+                "band": band,
+                "channel": str(channel),
+                "width": str(bandwidth)
+            }
+        
+        # Build single payload with parent config + aps dictionary
+        payload = {
+            "type": "scan",
+            "band": band,
+            "channel": channel,
+            "bandwidth": bandwidth,
+            "duration": duration,
+            "num_packets": num_packets,
+            "format": capture_format,
+            "max_pkt_len": 1300,
+            "aps": aps_dict
+        }
+        
+        logging.debug(f"Multi-AP payload constructed for {len(ap_macs)} APs")
+        
+        try:
+            response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
+                self.mist_session,
+                site_id,
+                payload
+            )
+            
+            if response.status_code == 200:
+                result = response.data
+                capture_id = result.get('id', 'unknown')
+                ap_count = result.get('ap_count', len(ap_macs))
+                
+                print(f"\n* Multi-AP capture started successfully!")
+                print(f"  Capture ID: {capture_id}")
+                print(f"  AP Count: {ap_count}")
+                print(f"  Format: {capture_format}")
+                print(f"  Duration: {duration} seconds")
+                print(f"  Expires: {result.get('expiry', 'unknown')}")
+                
+                logging.info(f"Multi-AP capture started: capture_id={capture_id}, ap_count={ap_count}")
+                
+                # Export capture details
+                self._export_capture_info_to_csv(result, 'site', site_id)
+                
+                # Handle based on format
+                if capture_format == 'pcap':
+                    print(f"\n> Waiting for PCAP file to be ready...")
+                    print(f"  This may take a few moments after capture completes.")
+                    self._wait_and_download_pcap(site_id, capture_id, duration)
+                elif capture_format == 'stream':
+                    print(f"\n> Stream format selected - subscribe to WebSocket for real-time data")
+                    self._subscribe_to_site_capture_stream(site_id, capture_id)
+                
+            else:
+                error_details = response.data if hasattr(response, 'data') else 'Unknown error'
+                
+                # Check for common errors
+                if response.status_code == 400 and isinstance(error_details, dict):
+                    detail = error_details.get('detail', '')
+                    if 'Recording already in progress' in detail:
+                        print(f"\n! Capture(s) already in progress on one or more APs")
+                        print(f"  Mist only allows one capture per AP at a time")
+                        print(f"  Wait for existing captures to complete or check Mist portal to stop them")
+                    else:
+                        print(f"\n! Failed to start capture: {response.status_code}")
+                        print(f"  Error details: {error_details}")
+                else:
+                    print(f"\n! Failed to start capture: {response.status_code}")
+                    print(f"  Error details: {error_details}")
+                
+                logging.error(f"Multi-AP capture failed: {response.status_code} - {error_details}")
+                
+        except Exception as error:
+            print(f"\n! Error starting multi-AP capture: {error}")
+            logging.error(f"Exception launching multi-AP capture: {error}", exc_info=True)
+        
+        logging.info(f"Multi-AP scan capture function completed")
     
     def _execute_site_capture(self, site_id: str, payload: dict):
         """
@@ -3432,8 +3685,18 @@ class PacketCaptureManager:
                 self._export_capture_info_to_csv(result, 'site', site_id)
                 
             else:
-                print(f"\n! Failed to start capture: {response.status_code}")
                 error_details = response.data if hasattr(response, 'data') else 'No error details available'
+                
+                # Check for specific "Recording already in progress" error
+                if response.status_code == 400 and isinstance(error_details, dict):
+                    if 'Recording already in progress' in error_details.get('detail', ''):
+                        print(f"\n! Capture already in progress on this AP")
+                        print(f"  Only one capture per AP is allowed at a time")
+                        print(f"  Wait for the existing capture to complete or check the Mist portal to stop it")
+                        logging.error(f"Capture conflict: Recording already in progress on AP")
+                        return
+                
+                print(f"\n! Failed to start capture: {response.status_code}")
                 print(f"  Error details: {error_details}")
                 logging.error(f"Capture failed: {response.status_code} - {error_details}")
                 
@@ -3506,12 +3769,12 @@ class PacketCaptureManager:
         port_input = safe_input("Port selection: ", context="ports", allow_empty=True)
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 600, max 86400): ", 
-                                 default_value="600", context="duration")
+        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+                                 default_value="30", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print(f"\n! Duration must be between 60 and 86400 seconds")
+            if duration < 30 or duration > 86400:
+                print(f"\n! Duration must be between 30 and 86400 seconds")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3786,28 +4049,23 @@ class PacketCaptureManager:
         from pathlib import Path
         
         try:
-            # Calculate expected completion time (capture duration + processing buffer)
-            processing_buffer = 30  # Extra time for cloud processing
-            estimated_wait = duration + processing_buffer
-            
             print(f"\n* Capture initiated (ID: {capture_id})")
-            print(f"  Expected completion in approximately {estimated_wait} seconds")
-            print(f"  Waiting for capture to complete and process...")
-            
-            # Wait for the capture duration first
-            for remaining in range(duration, 0, -10):
-                print(f"  Capturing... {remaining}s remaining", end='\r')
-                time.sleep(min(10, remaining))
-            
-            print(f"\n  Capture complete. Processing and waiting for download URL...")
+            print(f"  Duration: {duration} seconds (plus processing time)")
+            print(f"  Polling for PCAP file availability...")
+            print(f"  Press Ctrl+C to cancel wait and check portal manually")
             
             # Poll for the PCAP file availability
-            max_polls = 20  # Poll for up to ~3 minutes after capture ends
-            poll_interval = 10  # seconds between polls
+            # Start polling immediately - the capture runs on the Mist cloud
+            max_wait_time = duration + 120  # Capture duration + 2 minutes buffer
+            poll_interval = 5  # Check every 5 seconds
+            max_polls = max_wait_time // poll_interval
             pcap_url = None
+            start_time = time.time()
             
             for poll_attempt in range(1, max_polls + 1):
                 try:
+                    elapsed = int(time.time() - start_time)
+                    
                     # List captures for this site to find our capture_id
                     response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
                         self.apisession,
@@ -3823,7 +4081,7 @@ class PacketCaptureManager:
                                 pcap_url = capture.get('pcap_url')
                                 
                                 if pcap_url:
-                                    print(f"\n* PCAP file ready for download")
+                                    print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
                                     break
                         
                         if pcap_url:
@@ -3831,7 +4089,7 @@ class PacketCaptureManager:
                     
                     # Continue waiting if not found yet
                     if poll_attempt < max_polls:
-                        print(f"  Waiting for PCAP file... (attempt {poll_attempt}/{max_polls})", end='\r')
+                        print(f"  Waiting for PCAP file... {elapsed}s elapsed (checking every {poll_interval}s)    ", end='\r')
                         time.sleep(poll_interval)
                     
                 except Exception as poll_error:
@@ -3839,7 +4097,8 @@ class PacketCaptureManager:
                     time.sleep(poll_interval)
             
             if not pcap_url:
-                print(f"\n! PCAP file URL not available after waiting {max_polls * poll_interval} seconds")
+                elapsed_total = int(time.time() - start_time)
+                print(f"\r! PCAP file URL not available after waiting {elapsed_total} seconds                    ")
                 print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
                 return
             
@@ -3900,28 +4159,23 @@ class PacketCaptureManager:
         from pathlib import Path
         
         try:
-            # Calculate expected completion time (capture duration + processing buffer)
-            processing_buffer = 30  # Extra time for cloud processing
-            estimated_wait = duration + processing_buffer
-            
             print(f"\n* Capture initiated (ID: {capture_id})")
-            print(f"  Expected completion in approximately {estimated_wait} seconds")
-            print(f"  Waiting for capture to complete and process...")
-            
-            # Wait for the capture duration first
-            for remaining in range(duration, 0, -10):
-                print(f"  Capturing... {remaining}s remaining", end='\r')
-                time.sleep(min(10, remaining))
-            
-            print(f"\n  Capture complete. Processing and waiting for download URL...")
+            print(f"  Duration: {duration} seconds (plus processing time)")
+            print(f"  Polling for PCAP file availability...")
+            print(f"  Press Ctrl+C to cancel wait and check portal manually")
             
             # Poll for the PCAP file availability
-            max_polls = 20  # Poll for up to ~3 minutes after capture ends
-            poll_interval = 10  # seconds between polls
+            # Start polling immediately - the capture runs on the Mist cloud
+            max_wait_time = duration + 120  # Capture duration + 2 minutes buffer
+            poll_interval = 5  # Check every 5 seconds
+            max_polls = max_wait_time // poll_interval
             pcap_url = None
+            start_time = time.time()
             
             for poll_attempt in range(1, max_polls + 1):
                 try:
+                    elapsed = int(time.time() - start_time)
+                    
                     # List captures for this org to find our capture_id
                     response = mistapi.api.v1.orgs.pcaps.listOrgPcapCaptures(
                         self.apisession,
@@ -3937,7 +4191,7 @@ class PacketCaptureManager:
                                 pcap_url = capture.get('pcap_url')
                                 
                                 if pcap_url:
-                                    print(f"\n* PCAP file ready for download")
+                                    print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
                                     break
                         
                         if pcap_url:
@@ -3945,7 +4199,7 @@ class PacketCaptureManager:
                     
                     # Continue waiting if not found yet
                     if poll_attempt < max_polls:
-                        print(f"  Waiting for PCAP file... (attempt {poll_attempt}/{max_polls})", end='\r')
+                        print(f"  Waiting for PCAP file... {elapsed}s elapsed (checking every {poll_interval}s)    ", end='\r')
                         time.sleep(poll_interval)
                     
                 except Exception as poll_error:
@@ -3953,7 +4207,8 @@ class PacketCaptureManager:
                     time.sleep(poll_interval)
             
             if not pcap_url:
-                print(f"\n! PCAP file URL not available after waiting {max_polls * poll_interval} seconds")
+                elapsed_total = int(time.time() - start_time)
+                print(f"\r! PCAP file URL not available after waiting {elapsed_total} seconds                    ")
                 print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
                 return
             
@@ -6117,9 +6372,17 @@ def prompt_select_ap_mac_from_site(site_id: str) -> Optional[str]:
         print(" SELECT ACCESS POINT")
         print("=" * 80)
         print(table)
+        print("\nSpecial options:")
+        print("  'all' - Select all APs (launches simultaneous captures)")
         
-        user_input = safe_input("\nEnter the index number of the AP: ", context="ap_selection").strip()
+        user_input = safe_input("\nEnter the index number of the AP or 'all': ", context="ap_selection").strip()
         logging.debug(f"User input for AP selection: {user_input}")
+        
+        # Check for 'all' option
+        if user_input.lower() == 'all':
+            print(f"\n! Selected: All APs ({len(aps)} APs)")
+            logging.info(f"User selected all APs: {len(aps)} APs")
+            return 'ALL_APS'  # Special marker for all APs
         
         # Validate index selection
         if user_input.isdigit():
@@ -6143,6 +6406,32 @@ def prompt_select_ap_mac_from_site(site_id: str) -> Optional[str]:
         print(f"\n! Error fetching APs: {error}")
         logging.error(f"Exception in prompt_select_ap_mac_from_site: {error}", exc_info=True)
         return None
+
+def get_all_ap_macs_from_site(site_id: str) -> list:
+    """
+    Fetch all AP MAC addresses from a site.
+    
+    Args:
+        site_id (str): The site ID to fetch APs from
+    
+    Returns:
+        list: List of AP MAC addresses, or empty list if error/none found
+    """
+    logging.debug(f"Fetching all AP MACs for site: {site_id}")
+    
+    try:
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+        if not rawdata:
+            logging.warning(f"No APs found for site_id: {site_id}")
+            return []
+        
+        ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
+        logging.info(f"Found {len(ap_macs)} AP MACs at site")
+        return ap_macs
+        
+    except Exception as error:
+        logging.error(f"Exception in get_all_ap_macs_from_site: {error}", exc_info=True)
+        return []
 
 def prompt_select_gateway_mac_from_site(site_id: str) -> Optional[str]:
     """
