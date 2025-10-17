@@ -467,697 +467,1072 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ---
 ## 21. Changelog
 
-### Version 25.10.14.17.00
-- **MAJOR REDESIGN**: Loop mode now uses intelligent polling strategy instead of background threading
-- **Enhanced**: Loop checks API for completed PCAPs (24hr window), downloads missing files, then starts new capture
-- **Improved**: No duplicate downloads - checks local filesystem before downloading
-- **Fixed**: Downloads now complete reliably without threading complexity
-- **Changed**: Loop naturally paces based on capture completion times
-- **Removed**: Queue-based background downloader (replaced with simpler synchronous approach)
-
-
-
-### Version 25.10.07.16.15
-- **CRITICAL FIX**: Wired client API module - Corrected import path to `mistapi.api.v1.sites.wired_clients` (separate module from wireless clients)
-- **Fixed**: AttributeError on wired client fetch - Resolved "module 'mistapi.api.v1.sites.clients' has no attribute 'searchSiteWiredClients'" error
-- **Verified**: Wireless clients use `mistapi.api.v1.sites.clients.searchSiteWirelessClients`
-- **Verified**: Wired clients use `mistapi.api.v1.sites.wired_clients.searchSiteWiredClients`
-
-
-
-### Version 25.10.06.18.30
-- **CRITICAL FIX**: Corrected session attribute in PCAP polling functions
-- **BUG**: Site PCAP polling used `self.apisession` instead of `self.mist_session` (PacketCaptureManager attribute)
-- **BUG**: Org PCAP polling used `self.apisession` instead of `self.mist_session` (PacketCaptureManager attribute)
-- **FIXED**: Changed `self.apisession` to `self.mist_session` in `_wait_and_download_pcap()` (line 4072)
-- **FIXED**: Changed `self.apisession` to `self.mist_session` in `_wait_and_download_pcap_org()` (line 4212)
-- **IMPACT**: PCAP downloads now work correctly - polling no longer throws AttributeError
-- **ROOT CAUSE**: PacketCaptureManager.__init__ stores session as `self.mist_session`, not `self.apisession`
-- **DISCOVERED BY**: Enhanced debug logging immediately revealed the AttributeError
-
-
-
-### Version 25.10.06.18.25
-- **ENHANCED**: Added comprehensive debug logging to PCAP download polling functions
-- **DEBUGGING**: Site-level PCAP polling now logs every poll attempt with detailed capture state
-- **DEBUGGING**: Org-level PCAP polling now logs every poll attempt with detailed capture state
-- **ADDED**: Logs response status code, number of captures returned, and capture found/not found status
-- **ADDED**: When capture found, logs all relevant fields: enabled, format, type, duration, expiry, timestamp, pcap_url
-- **ADDED**: Logs when pcap_url is "NOT SET YET" vs when it becomes available
-- **ADDED**: Logs available capture IDs when our capture is not found in the list
-- **IMPROVED**: Exception handling now uses `exc_info=True` for full traceback in logs
-- **TROUBLESHOOTING**: Debug logs will reveal why PCAP downloads timeout (capture not found, pcap_url never set, API errors)
-- **USE CASE**: Run with `--debug` flag to see detailed polling behavior in script.log
-
-
-
-### Version 25.10.06.18.20
-- **CRITICAL FIX**: Corrected mistapi function names for listing packet captures
-- **FIXED**: Changed `listSitePcapCaptures` to correct `listSitePacketCaptures` (3 occurrences)
-- **FIXED**: Changed `listOrgPcapCaptures` to correct `listOrgPacketCaptures` (1 occurrence)
-- **BUG**: Previous function names caused AttributeError when checking for existing captures
-- **IMPACT**: Pre-check for existing captures now works correctly before launching new ones
-- **LOCATIONS**: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
-- **API COMPLIANCE**: Function names now match mistapi SDK and Mist API operationId values
-- **TECHNICAL**: `operationId: listSitePacketCaptures` and `operationId: listOrgPacketCaptures` per OpenAPI spec
-
-
-
-### Version 25.10.06.18.15
-- **CRITICAL FIX**: Multi-AP scan captures now use single API call with `aps` dictionary (correct API pattern)
-- **MAJOR REFACTOR**: Changed from sequential per-AP API calls to single POST with all APs in one payload
-- **API COMPLIANCE**: Properly uses `aps` field per Mist API schema for multi-AP scan captures
-- **PERFORMANCE**: Reduced API calls from N (one per AP) to 1 (single call for all APs)
-- **IMPROVED**: Multi-AP captures return single capture ID that covers all specified APs
-- **SIMPLIFIED**: Removed per-AP success/failure tracking - API handles all APs in one transaction
-- **ENHANCED**: Error handling now correctly detects multi-AP conflicts (e.g., "Recording already in progress")
-- **TECHNICAL**: Payload structure: `{"type": "scan", "band": "5", ..., "aps": {"mac1": {...}, "mac2": {...}}}`
-- **SCHEMA**: Per-AP configs in `aps` dict inherit from parent values if not specified
-- **BENEFIT**: More reliable capture launches, better API efficiency, single capture ID to track
-
-
-
-### Version 25.10.06.18.10
-- **CRITICAL FIX**: Scan radio captures now enforce Mist API minimum duration of 60 seconds
-- **API DISCOVERY**: Mist API documentation reveals scan captures have 60-second minimum, 600-second default
-- **CORRECTED**: Single AP scan capture duration changed from 30s default to 60s (API minimum)
-- **CORRECTED**: Multi-AP scan capture duration changed from 30s default to 60s (API minimum)
-- **ENHANCED**: Duration validation now shows "API requirement" in error messages for clarity
-- **ADDED**: Warning message before duration prompt: "Mist API requires minimum 60 seconds for scan captures"
-- **TECHNICAL**: API schema constraint: `"minimum": 60.0, "default": 600` for scan capture duration
-- **NOTE**: Other capture types (wireless, wired, gateway, new association) still support 30-second minimum
-- **DOCUMENTATION**: Updated prompts to show correct range: "default 60, min 60, max 86400"
-- **USER IMPACT**: Prevents confusion when API ignores duration values below 60 seconds
-
-
-
-### Version 25.10.06.18.09
-- **CRITICAL FIX**: Switch port stats now retrieved using correct API endpoint
-- **API ENDPOINT**: Uses `searchSiteSwOrGwPorts` for switches/gateways instead of `getSiteDeviceStats`
-- **ROOT CAUSE**: `getSiteDeviceStats` does not return port-level statistics for switches
-- **DEDICATED API**: `searchSiteSwOrGwPorts` provides detailed port statistics (speed, duplex, status)
-- **MAC FILTERING**: Filters port results by device MAC address to get specific switch ports
-- **RESULT PARSING**: Extracts port objects from "results" array and converts to dict by port_id
-- **AP COMPATIBILITY**: APs continue using `getSiteDeviceStats` with port_stat field
-- **DEVICE TYPE AWARE**: Code now branches based on device_type (switch/gateway vs ap)
-- **ERROR HANDLING**: Graceful fallback to config when port search API unavailable
-- **DEBUG LOGGING**: Enhanced logging shows sample port data for troubleshooting
-
-
-
-### Version 25.10.06.18.06
-- **CRITICAL ENHANCEMENT**: Added pre-check for existing captures before launching new ones
-- **IMPROVED**: Single AP captures now check for existing captures on that specific AP before starting
-- **IMPROVED**: Multi-AP captures now check for existing captures across all site APs before batch launch
-- **ENHANCED**: User-friendly warning messages when capture conflicts detected: "Mist only allows one capture per AP at a time"
-- **ADDED**: Confirmation prompt allows users to cancel or proceed when conflicts detected
-- **IMPROVED**: Error handling now detects "Recording already in progress" API errors specifically
-- **ENHANCED**: Clear error messages replace raw API responses: "Capture already in progress on this AP"
-- **ADDED**: Actionable guidance when captures fail: "Wait for existing captures to complete or check Mist portal to stop them"
-- **TECHNICAL**: Pre-check calls `listSitePcapCaptures()` API to query active/recent captures before launch
-- **MULTI-AP**: Multi-AP feature now shows count of existing captures and offers cancellation before launching
-- **RELIABILITY**: Prevents wasted API calls and improves user experience during capture conflicts
-
-
-
-### Version 25.10.06.18.05
-- **CRITICAL FIX**: Switch port stats now correctly retrieved from API
-- **API STRUCTURE**: Switches use "ports" array field, not "port_stat" dict field
-- **DEVICE DIFFERENCES**: APs use "port_stat" (dict), Switches use "ports" (array of port objects)
-- **AUTOMATIC CONVERSION**: Converts switch ports array to dict format for consistency
-- **PORT ID MAPPING**: Uses "port_id" field from switch port objects as dict keys
-- **LOGGING ENHANCED**: Clearly indicates which format detected (AP-style vs switch-style)
-- **FALLBACK PRESERVED**: Config-based fallback still works when stats unavailable
-- **OPERATIONAL DATA**: Now correctly shows actual speed/duplex from switch statistics
-- **OPENAPI VERIFIED**: Implementation matches Mist API OpenAPI 3.0 specification
-- **STATS_SWITCH_PORT**: Uses correct "stats_switch_port" schema with speed and full_duplex fields
-
-
-
-### Version 25.10.06.18.00
-- **CRITICAL FIX**: Speed and Duplex now show actual operational values from live stats, not configured values
-- **DATA SOURCE CLARIFICATION**: Speed/Duplex from port_stat (actual), Profile/Description from port_config (configured)
-- **STATS PRIORITY**: When getSiteDeviceStats available, shows real-time operational speed and duplex
-- **CONFIG DATA**: Port profile and description always pulled from port_config or device template
-- **FALLBACK INDICATOR**: When stats unavailable, displays note "Speed/Duplex showing configured values"
-- **ACCURATE OPERATIONS**: Users see what ports are actually running at, not what they're configured for
-- **TROUBLESHOOTING**: Can identify speed/duplex mismatches between configured and actual
-- **PROFILE SOURCE**: Port profile from port_config.port_profile field
-- **TEMPLATE SUPPORT**: Ready for template-based profile lookup (future enhancement)
-- **NO OVERWRITE**: Stats no longer overwritten by config - each has its proper source
-
-
-
-### Version 25.10.06.17.55
-- **CRITICAL FIX**: Port table now displays accurate Speed, Duplex, and Profile from device config
-- **DATA SOURCE**: Pulls speed and duplex from port_config instead of using placeholder values
-- **SPEED FORMATTING**: Handles "auto", "1g", "10g" formats and converts to "1000 Mbps", "10000 Mbps"
-- **DUPLEX DISPLAY**: Shows actual mode - "Full", "Half", or "Auto" instead of just "Yes/No"
-- **CONFIG ENRICHMENT**: Merges port_stat with port_config to show configured values
-- **FALLBACK LOGIC**: When port_stat unavailable, uses real config data instead of hardcoded "Unknown"
-- **PORT PROFILE**: Now correctly displays from port_config ("Access", "Trunk", custom names)
-- **INTELLIGENT MERGE**: Combines live stats with config to show most accurate information
-- **SPEED HANDLING**: Recognizes integer Mbps values, string formats ("1g"), and "auto"
-- **STRING FORMATTING**: Capitalizes duplex modes for clean display
-- **NULL HANDLING**: Gracefully handles missing or null values with "N/A" or "Auto"
-
-
-
-### Version 25.10.06.17.51
-- **MAJOR FEATURE**: Multi-AP scan captures - Select 'all' when choosing AP to launch simultaneous captures for all APs
-- **ADDED**: New option in AP selection menu to capture from all APs at once
-- **ADDED**: `_start_site_scan_capture_all_aps()` method - Orchestrates multi-AP capture launches
-- **ADDED**: `get_all_ap_macs_from_site()` helper function - Fetches all AP MACs from a site
-- **ENHANCED**: AP selection displays special 'all' option for launching captures across entire site
-- **IMPROVED**: Multi-AP captures show progress indicator (e.g., "[3/15] Starting capture for AP...")
-- **IMPROVED**: Summary report shows successful vs failed captures after multi-AP launch
-- **FEATURE**: Batch PCAP download option - When using PCAP format with 'all' APs, offers to download all files sequentially
-- **USE CASE**: Perfect for site-wide wireless surveys, interference analysis, or comprehensive RF troubleshooting
-
-
-
-### Version 25.10.06.17.50
-- **ENHANCEMENT**: Port selection table now displays Port Profile and Description columns
-- **ADDITIONAL CONTEXT**: Shows port configuration details for better port identification
-- **PROFILE COLUMN**: Displays assigned port profile (e.g., "Access", "Trunk", custom profiles)
-- **DESCRIPTION COLUMN**: Shows user-friendly port descriptions from device config
-- **TRUNCATION**: Descriptions longer than 30 characters are truncated with "..." for display
-- **ALIGNMENT**: Descriptions and profiles left-aligned for readability
-- **WIDTH**: Table expands to 120 characters to accommodate new columns
-- **CONFIG MAPPING**: Handles port range expansion to individual port configs correctly
-- **FALLBACK**: Shows "N/A" for profile and "-" for description when not configured
-- **USER BENEFIT**: Easier port identification without needing to check device config separately
-- **API EFFICIENT**: Fetches device config once and maps to all individual ports
-
-
-
-### Version 25.10.06.17.44
-- **CRITICAL FIX**: PCAP download polling now starts immediately instead of waiting full capture duration
-- **PERFORMANCE**: Changed polling interval from 10 seconds to 5 seconds for faster file detection
-- **PERFORMANCE**: Removed blocking countdown timer that made script appear hung during capture
-- **IMPROVED**: Progress display now shows elapsed time dynamically during polling
-- **IMPROVED**: Changed max wait time from 3+ minutes to capture duration + 2 minutes
-- **IMPROVED**: User sees immediate feedback with "Polling for PCAP file availability" message
-- **ENHANCED**: Clearer Ctrl+C cancellation message reminds users they can check portal manually
-- **TECHNICAL**: Capture runs asynchronously on Mist cloud - no need to block locally
-
-
-
-### Version 25.10.06.17.40
-- **MAJOR ENHANCEMENT**: Comprehensive tcpdump expression library with 40 pre-configured filters
-- **INSPIRED BY**: Daniel Miessler's tcpdump tutorial (danielmiessler.com/blog/tcpdump)
-- **CATEGORIES**: Basic filters, Protocol filters, Direction filters, Combined filters, Advanced filters, Application protocols, Security & troubleshooting
-- **BASIC FILTERS**: All traffic, HTTPS, HTTP/HTTPS, DNS, SSH, FTP, SMTP, ICMP, ARP
-- **PROTOCOL FILTERS**: TCP only, UDP only, Not ICMP
-- **DIRECTION FILTERS**: Outbound to port 443, Inbound from port 80
-- **COMBINED FILTERS**: Multi-port (80/443/53), Exclude SSH, TCP flags (SYN, SYN-ACK, RST, FIN)
-- **ADVANCED FILTERS**: Non-standard ports (>1024), Exclude ARP+DNS, Broadcast, Multicast, IPv6, VLAN
-- **APPLICATION PROTOCOLS**: SMB/CIFS (445), RDP (3389), NTP (123), SNMP (161), Syslog (514), DHCP (67/68), LDAP (389), MySQL (3306)
-- **SECURITY FILTERS**: Port scans (SYN without ACK), Fragmented packets, Large packets (>1500 bytes), Retransmissions
-- **TCP FLAG FILTERS**: Connection attempts (SYN), Replies (SYN-ACK), Resets (RST), Close (FIN)
-- **USER EXPERIENCE**: Organized menu with clear categories and descriptions
-- **CUSTOM OPTION**: Still allows custom tcpdump expressions for advanced users
-- **DISPLAY**: Shows applied filter expression after selection for confirmation
-- **EXAMPLES**: Includes helpful examples for custom expressions (host, net, port)
-- **FORMATTING**: 80-character wide formatted menu for readability
-
-
-
-### Version 25.10.06.17.35
-- **CONFIGURATION CHANGE**: Packet capture default duration changed from 600 seconds (10 minutes) to 30 seconds for faster testing
-- **CONFIGURATION CHANGE**: Packet capture default max packet length changed from 512 bytes to 1300 bytes for better payload visibility
-- **Enhanced**: All capture types (wireless, wired, gateway, new association, scan) now use consistent 30-second default duration
-- **Enhanced**: Scan radio captures now use 1300 byte max packet length by default (previously hardcoded to 512)
-- **Updated**: Duration validation minimum changed from 60 seconds to 30 seconds across all capture types
-- **Improved**: User prompts updated to reflect new default values for better user experience
-
-
-
-### Version 25.10.06.17.30
-- **CRITICAL FIX**: Port range expansion for devices using port_config fallback
-- **PARSER**: New helper function `_expand_port_range_string()` expands port ranges like "ge-0/0/0-2, ge-0/1/2-3"
-- **DISPLAY FIX**: Port selection table now shows individual ports, not compressed ranges
-- **EXAMPLE**: "ge-0/0/0-2" now expands to 3 separate entries: ge-0/0/0, ge-0/0/1, ge-0/0/2
-- **ACCURATE COUNT**: Port count validation now works correctly with expanded ports
-- **API COMPATIBILITY**: Each port sent to API as individual entry (required by Mist API)
-- **REGEX PARSING**: Handles complex patterns like "mge-0/2/0, xe-0/1/0-3" correctly
-- **FALLBACK LOGIC**: Only applies when device uses port_config instead of port_stat
-- **LOGGING**: Debug logs show range expansion for troubleshooting
-- **USER CLARITY**: Each index in table now represents exactly one port
-
-
-
-### Version 25.10.06.17.28
-- **CRITICAL FIX**: Error handling now properly displays API error messages when captures fail
-- **Fixed**: AttributeError when capture fails - Changed from `response.text` to `response.data` for mistapi APIResponse objects
-- **Enhanced**: Error output now shows detailed error information from Mist API for troubleshooting
-- **Fixed**: Both site and org-level capture error handlers updated with proper APIResponse handling
-
-
-
-### Version 25.10.06.17.23
-- **MAJOR ENHANCEMENT**: Packet capture now defaults to downloadable PCAP file format instead of WebSocket streaming
-- **Added**: Automatic PCAP file download - Mist cloud saves capture as PCAP file and provides download URL
-- **Added**: `_wait_and_download_pcap()` method - Polls for capture completion and downloads PCAP file to local data directory
-- **Added**: `_wait_and_download_pcap_org()` method - Organization-level PCAP download support for MxEdge captures
-- **Added**: `_get_capture_format_selection()` helper method - Centralized format selection logic to avoid code duplication
-- **Enhanced**: Format selection UI - Changed default from stream to PCAP file (option 1 now default)
-- **Enhanced**: Capture workflow - Conditional branching based on format type (pcap vs stream vs tzsp)
-- **Improved**: User experience - Progress display during capture wait period with countdown timer
-- **Improved**: File output - PCAP files saved to `data/PacketCapture_{capture_id}.pcap` for easy Wireshark analysis
-- **Added**: Polling mechanism - Smart retry logic waits up to 3 minutes for PCAP file URL after capture completes
-- **Added**: Download validation - HTTP status checking and file size reporting for successful downloads
-- **Enhanced**: Error handling - Provides manual download URL if automatic download fails
-- **Fixed**: API function names - Corrected from startSitePcapCapture to startSitePacketCapture
-- **Fixed**: All capture types now support format selection - Added to wireless client, wired client, gateway, new association, and scan radio captures
-- **Fixed**: Site and org-level capture methods - Both now properly handle pcap format with file downloads
-- **Aligned**: Documentation - Updated inline comments to reflect new default behavior (PCAP files vs streaming)
-
-
-
-### Version 25.10.06.17.20
-- **CRITICAL FIX**: Enforced API limit of maximum 6 ports per packet capture
-- **VALIDATION**: Port selection now rejects more than 6 ports with clear error message
-- **USER GUIDANCE**: When device has more than 6 ports, "all ports" option is disabled
-- **ERROR PREVENTION**: API was returning "400 - max 6 ports allowed" error - now caught before submission
-- **DISPLAY**: Added prominent warning banner showing "API LIMITATION: Maximum 6 ports per capture"
-- **SMART DEFAULT**: "All ports" only available when device has 6 or fewer ports
-- **SPECIFIC SELECTION**: Users must select up to 6 individual ports when more are available
-- **RANGE VALIDATION**: Validates port count after range expansion (e.g., "0-3" = 4 ports)
-- **LOGGING**: Enhanced error logging when user attempts to exceed 6-port limit
-- **UX CLARITY**: Prompt now says "Enter your choice (up to 6 ports)" instead of "default: all ports"
-
-
-
-### Version 25.10.06.17.10
-- **CRITICAL FIX**: Ports dict now lists actual port names instead of empty {} when "all ports" selected
-- **BUG FIX**: Resolved issue where captures started but no PCAP files downloaded
-- **ROOT CAUSE**: Empty ports dict {} violated API spec requirement for explicit port name listing
-- **SOLUTION**: When user selects "all ports", helper now returns both selection AND available ports list
-- **IMPLEMENTATION**: Payload building now always includes actual port names (e.g., ge-0/0/0, ge-0/0/1)
-- **NEW FEATURE**: Interactive tcpdump expression menu with common filter examples
-- **FILTER OPTIONS**: All traffic, HTTPS (443), HTTP/HTTPS, DNS (53), SSH (22), ICMP, ARP, or custom
-- **USER EXPERIENCE**: Replaced free-text expression entry with guided menu selection
-- **CLARITY**: Menu shows exactly what each filter does (e.g., "port 443" for HTTPS)
-- **FORMAT HANDLING**: Added documentation note about pcap vs stream format
-- **API DISCOVERY**: API docs show "stream" only, but testing confirms "pcap" works and generates downloads
-- **DEFAULT IMPROVED**: PCAP format now labeled as "recommended" for downloadable files
-- **TESTING VALIDATED**: Confirmed GUI successfully creates PCAP files with proper port listing
-- **SWITCH CAPTURES**: Fixed for both specific port selection and "all ports" scenarios
-- **GATEWAY CAPTURES**: Same fix applied - actual port names now listed in payload
-- **PAYLOAD STRUCTURE**: Correct format: `switches: {MAC: {ports: {ge-0/0/0: {}, ge-0/0/1: {}}}}`
-- **LOOP MODE READY**: Fixes enable proper PCAP downloads during continuous capture loops
-- **DEBUGGING**: Enhanced logging shows port list expansion when "all ports" selected
-
-
-
-### Version 25.10.06.17.05
-- **MAJOR ENHANCEMENT**: Interactive port selection with live status for switch and gateway captures
-- **NEW HELPER**: Added `prompt_select_ports_from_device()` - displays port status from device stats
-- **INTELLIGENT**: Fetches real-time port information via `getSiteDeviceStats()` API
-- **DISPLAY**: Shows port name, status (UP/DOWN), speed (Mbps), and duplex mode
-- **FLEXIBLE**: Supports single port, multiple ports (comma-separated), ranges (0-3), or 'all'
-- **SMART DEFAULT**: Press Enter with no input to capture on ALL ports (simplified from connected-only)
-- **FILTERS**: Automatically excludes management/internal ports (fxp, em, me, vme, irb, lo, vlan)
-- **NATURAL SORTING**: Ports displayed in logical order (ge-0/0/0, ge-0/0/1, ge-0/0/2, etc.)
-- **UPDATED**: Switch capture now uses interactive port selector instead of manual entry
-- **UPDATED**: Gateway capture now uses interactive port selector instead of manual entry
-- **UX IMPROVEMENT**: Visual table with 80-character formatted display
-- **REQUIREMENTS**: Port selection now mandatory - API requires at least one port or all ports specified
-- **GUI PARITY**: Matches Mist GUI behavior where users see available ports and select visually
-- **VALIDATION**: Range validation prevents selecting non-existent port indices
-- **LOGGING**: Full debug trace of port discovery, selection parsing, and user choices
-- **ERROR HANDLING**: Graceful fallback if stats unavailable or device not found
-- **INTEGRATION**: Seamless drop-in replacement for previous text-based port input
-- **BUG FIX**: MAC address comparison now normalizes both input and device MACs (removes colons/hyphens)
-- **FIXED**: "Device not found" error when API returns MAC in different format (with or without colons)
-- **ROBUST**: Handles MAC addresses as strings with colons (20:93:39:05:17:80) or plain integers (209339051780)
-- **FALLBACK LOGIC**: When port_stat unavailable, automatically tries device port_config instead
-- **OFFLINE DEVICES**: Gracefully handles switches that are offline or not yet reporting stats
-- **DEBUG ENHANCED**: Added logging of available stats keys and config keys for troubleshooting
-- **USER FRIENDLY**: Clear messaging when device has no port information available
-- **UX REFINEMENT**: Default behavior changed - pressing Enter now selects ALL ports (not just connected)
-- **SIMPLIFIED**: Removed "all connected ports" option - use Enter for all, or specify individual ports
-
-
-
-### Version 25.10.06.17.02
-- **ADDED**: Switch packet capture support (Menu 9, Option 4)
-- **NEW FEATURE**: Full switch packet capture with port selection and filtering
-- **CAPABILITY**: Capture from all ports or specify individual ports (e.g., ge-0/0/0,ge-0/0/1)
-- **CAPABILITY**: Per-port or global tcpdump expressions for traffic filtering
-- **CAPABILITY**: Loop mode support for continuous switch monitoring
-- **HELPER**: Added `prompt_select_switch_mac_from_site()` for interactive switch selection
-- **API**: Leverages `type: "switch"` with switches configuration structure
-- **CONSISTENT**: Follows same patterns as gateway and client captures (60s min duration, format selection)
-- **LOCATIONS**: Menu option 4 in site packet capture, new `_start_site_switch_capture()` method
-- **DOCUMENTATION**: Updated copilot-instructions.md to reflect switch capture capability
-- **ENHANCED**: Clarified capture type descriptions in menu and configuration screens
-- **CLARIFICATION**: Client Capture (Wireless) = Ongoing traffic from ALREADY CONNECTED clients
-- **CLARIFICATION**: New Association Capture = NEW connection attempts (802.11 auth/assoc handshakes only)
-- **IMPROVED**: Menu now shows brief description of each capture type for easier selection
-- **ADDED**: Multicast traffic filtering option for wireless and wired client captures
-- **FEATURE**: New `includes_mcast` parameter (default: false) to include/exclude multicast traffic
-- **VERIFICATION**: Confirmed all client capture payloads match API specification exactly
-- **CRITICAL FIX**: Corrected gateway capture payload structure to match API specification
-- **BUG**: Gateway capture was using flat `gateway_mac` and `port_id` fields (incorrect)
-- **FIXED**: Gateway capture now uses `gateways` object with MAC as key and nested `ports` structure
-- **FIXED**: Changed port selection from simple "wan/lan/all" to specific port names (e.g., ge-0/0/0)
-- **FIXED**: Added `max_pkt_len: 1500` to gateway payloads (API requirement)
-- **PREVENTS**: Error 400 "No connected SSRs or feature not supported" due to malformed payload
-- **MATCHES**: Gateway payload structure now identical to switch payload pattern
-
-
-
-### Version 25.10.06.17.00
-- **Added**: Menu options 9-10 - Comprehensive packet capture management for Juniper Mist environments
-- **Added**: PacketCaptureManager class - Full-featured packet capture orchestration with WebSocket streaming
-- **Added**: Site packet capture (Option 9) - Wireless client, wired client, gateway, new association, and scan radio captures
-- **Added**: Organization packet capture (Option 10) - MxEdge captures for org-level Mist Edges with TZSP support
-- **Enhanced**: Capture type support - Client (wireless/wired), Gateway, New Association, Scan Radio, and MxEdge capture modes
-- **Enhanced**: Interactive configuration - Guided parameter collection with validation for all capture types
-- **Added**: WebSocket streaming integration - Real-time packet monitoring with progress display
-- **Added**: MAC address validation - Format checking and normalization for all MAC address inputs
-- **Added**: Capture format options - Stream to Mist Cloud or TZSP stream to remote host (Wireshark)
-- **Added**: Advanced scan capture - Band selection (2.4/5/6 GHz), channel, bandwidth, and tcpdump expression support
-- **Enhanced**: Safety validations - Duration limits (60-86400s), packet count constraints (0-10000), max packet length (64-2048 bytes)
-- **Added**: Capture session export - Automatic CSV/SQLite export of capture configuration and session details
-- **Enhanced**: Documentation - Comprehensive inline documentation with API endpoint references and usage examples
-- **Enhanced**: Operation count - Updated to 103 total menu operations (added packet capture operations)
-- **Fixed**: Test harness - Added options 9-10 to systematic test skip list (interactive operations)
-
-
-
-### Version 25.10.06.11.40
-- **Enhanced**: Console log level filtering - Early logging setup now respects CONSOLE_LOG_LEVEL environment variable (defaults to INFO)
-- **Improved**: Startup experience - Changed API page size configuration message from INFO to DEBUG level to reduce console clutter
-- **Fixed**: Early logging handler configuration - Console and file handlers now properly respect environment-specified log levels from startup
-- **Optimized**: Log output clarity - DEBUG messages only appear in file logs, keeping console output clean for normal operation
-- **Aligned**: Configuration consistency - Early logging setup now matches GlobalImportManager._setup_logging() pattern for log level handling
-
-
-
-### Version 25.10.06.11.22
-- **CRITICAL FIX**: Early logging configuration - Moved logging setup to execute immediately after imports to prevent Python from creating default handler
-- **Fixed**: Root directory pollution - Eliminated blank script.log file creation in root directory by configuring logging before any logging calls
-- **Enhanced**: Module-level logging safety - Early logging setup ensures all module-level logging calls (lines 63, 151, 175, 179, 215, 217) write to data/script.log
-- **Improved**: Logging initialization timing - Added early basicConfig() call with FileHandler for data/script.log before PerformanceMonitor and other early code executes
-- **Documentation**: Identified root cause - Python's logging module creates default handler in current directory when logging methods called before configuration
-- **Added**: ASCII character map - Comprehensive emoji to ASCII replacement table added to agents.md for NASA/JPL compliance (21 emoji replacements documented)
-
-
-
-### Version 25.10.02.16.07
-- **CRITICAL FIX**: SSH EOF handling - Added comprehensive EOF (End-of-File) error handling for all interactive input() calls to prevent SSH session crashes
-- **Added**: safe_input() helper function - Centralized input handling with proper EOF and KeyboardInterrupt exception management
-- **Enhanced**: Container SSH stability - Fixed "EOF when reading a line" errors in SSH sessions by wrapping input calls with graceful exception handling
-- **Improved**: Session disconnection handling - SSH disconnections now gracefully exit with proper error logging instead of crashing the application
-- **Fixed**: Container ForceCommand execution - Corrected background process issue that was breaking interactive terminal input in SSH environment
-- **Added**: Non-ASCII character cleanup - Systematically replaced remaining Unicode characters with ASCII equivalents throughout codebase for NASA/JPL compliance
-- **Enhanced**: Destructive operation safety - Applied EOF protection to critical confirmation prompts for virtual MAC conversion, firmware upgrades, and device conversions
-- **Optimized**: Containerfile efficiency - Removed duplicate dependency installations and improved container build process for faster deployments
-
-
-
-### Version 25.09.30.18.30
-- **Added**: Menu option 100 - SSR firmware upgrade with comprehensive mode selection (site-based and Gateway Template-based upgrades)
-- **Enhanced**: FirmwareManager class - Extended with complete SSR firmware upgrade capabilities following established patterns from AP and switch upgrades
-- **Added**: SSR-specific safety framework - Enhanced critical infrastructure warnings for WAN connectivity disruption, SD-WAN tunnel impact, and branch office connectivity
-- **Added**: Session Smart Router detection - Smart filtering for SSR models (SSR120, SSR130, SSR1200, SSR1300, SSR1400, VM-SSR) from gateway inventory
-- **Enhanced**: Template-based upgrades - Reuses existing Gateway Template infrastructure for unified SSR upgrade orchestration across multiple sites
-- **Added**: Conservative upgrade defaults - Serial upgrade strategy and recovery snapshots enabled by default for routing infrastructure safety
-- **Enhanced**: Upgrade parameter configuration - SSR-optimized settings including reboot requirements, snapshot management, and HA coordination considerations
-- **Added**: Comprehensive confirmation system - Multi-layer safety confirmations with "UPGRADE SSR FIRMWARE" typed confirmation requirement
-- **Enhanced**: Audit logging - Complete operation tracking with SSR-specific context and routing infrastructure impact documentation
-- **Enhanced**: Error handling - SSR-specific error scenarios with WAN connectivity and SD-WAN tunnel re-establishment guidance
-- **Fixed**: Menu structure - Clean integration without wrapper functions, direct FirmwareManager method calls for consistent architecture
-- **Enhanced**: Systematic testing - Added menu option 100 to destructive operations skip list for safe automated testing
-
-
-
-### Version 25.09.30.15.52
-- **CRITICAL FIX**: Unicode encoding error - Replaced Unicode arrow characters (→) with ASCII equivalents (->) to prevent Windows logging crashes
-- **Added**: Firmware downgrade detection - Added intelligent version comparison to prevent API-rejected downgrades before upgrade attempts
-- **Enhanced**: Downgrade validation - Pre-flight version checking identifies and skips devices requiring downgrades with clear user messaging
-- **Improved**: Error classification - "Downgrade fw version not allowed" API responses now treated as validation warnings rather than critical errors
-- **Added**: Version comparison algorithm - Robust firmware version parsing handles SSR version formats (6.3.4-7.r2, 6.3.5-37.sts)
-- **Fixed**: Windows compatibility - All console output now uses ASCII-safe characters to prevent encoding errors on Windows systems
-
-
-
-### Version 25.09.30.15.47
-- **Enhanced**: Firmware version validation - Added pre-upgrade version checking to skip devices already at target firmware version
-- **Improved**: Smart error handling - "Already at requested fw version" API responses now treated as informational rather than errors
-- **Added**: Version comparison logic - Cross-references current device firmware versions against target version before upgrade attempts
-- **Enhanced**: User feedback - Clear messaging about devices skipped due to version matches, with upgrade vs skip counts
-- **Fixed**: Error classification - Devices already at target version no longer counted as upgrade failures in operation summary
-- **Improved**: Debug information - Enhanced logging shows current → target version transitions for devices needing upgrades
-
-
-
-### Version 25.09.30.15.45
-- **CRITICAL FIX**: SSR reboot parameter logic - Corrected inverted reboot_at logic that was disabling reboots when auto_reboot=True
-- **Fixed**: API parameter validation - When auto_reboot=True, now omits reboot_at parameter to use API default timing instead of setting reboot_at=-1 (which disables reboot)
-- **Enhanced**: Error response extraction - Improved API error response parsing to capture detailed error information from multiple response attributes
-- **Improved**: Debug logging - Enhanced response debugging to show status codes, headers, and response content when text is unavailable
-- **Documentation**: Added clear parameter behavior - reboot_at=-1 disables reboot, omitting parameter uses default timing
-
-
-
-### Version 25.09.30.15.41
-- **Enhanced**: SSR device validation - Added comprehensive validation against organization SSR inventory before upgrade attempts
-- **Added**: Cross-reference validation - SSR devices are now validated against org-level inventory to ensure they are recognized as upgradeable SSRs
-- **Enhanced**: Debug logging - Added detailed request body logging and device validation status for troubleshooting SSR upgrade issues
-- **Improved**: Error handling - Enhanced error response logging to capture API response details for 400 Bad Request errors
-- **Added**: Device eligibility checks - Only devices confirmed in organization SSR inventory proceed to upgrade process
-- **Enhanced**: Progress reporting - More detailed status messages showing validated device counts and inventory verification
-
-
-
-### Version 25.09.30.15.31
-- **Fixed**: SSR upgrade API 400 Bad Request error - Added missing required 'channel' parameter to upgrade request body
-- **Enhanced**: SSR upgrade confirmation - Simplified confirmation phrase from "UPGRADE SSR FIRMWARE" to "UPGRADE" for user convenience
-- **Fixed**: Undefined variable error - Added proper ssr_models definition before device filtering in upgrade execution
-- **Improved**: API compliance - SSR upgrade requests now include all required parameters per OpenAPI schema (device_ids, channel, version, strategy)
-
-
-
-### Version 25.09.30.15.24
-- **Fixed**: SSR firmware upgrade implementation - Corrected API endpoints from sites.devices.upgradeDevices to orgs.ssr.upgradeOrgSsrs with proper parameter mapping
-- **Added**: SSR firmware version discovery - Implemented listOrgAvailableSsrVersions API with indexed selection interface for proper version management
-- **Fixed**: Parameter validation - Removed invalid force, reboot, and snapshot parameters; replaced with proper SSR parameters (device_ids, version, channel, strategy, reboot_at)
-- **Enhanced**: Upgrade monitoring (Option 60) - Added comprehensive SSR upgrade monitoring using listOrgSsrUpgrades API with device type distribution tracking
-- **Fixed**: Device discovery for SSRs - Updated listSiteDevices calls to use type='gateway' parameter for proper SSR device filtering
-- **Enhanced**: Option 100 SSR upgrade - Corrected undefined variable errors and implemented proper org-level SSR upgrade workflow
-- **Added**: Device type tracking - Enhanced upgrade status monitoring to display distribution across AP, Switch, and SSR device types
-- **Fixed**: API endpoint corrections - All SSR operations now use proper mistapi.api.v1.orgs.ssr module instead of generic device endpoints
-
-
-
-### Version 25.09.29.17.05
-- **Enhanced**: Menu option 7 title - Updated to "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)" for clarity
-- **Enhanced**: Menu option 8 title - Updated to "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)" for device specificity
-- **Enhanced**: SSR routing table display - Added complete data table with all BGP attributes including Route Name, Selection Reason, Weight, Metric, Local Preference, AS Path, and VRF
-- **Enhanced**: Protocol selection flexibility - Users can now skip protocol specification to let API use its default behavior, choose specific protocols (bgp/any/ospf/static/direct/evpn), or get comprehensive routing views
-- **Enhanced**: Data presentation - Comprehensive routing table with full untruncated data display showing complete BGP route analysis including peer names, selection criteria, and all BGP path attributes
-- **Enhanced**: Menu categorization - Clear device-specific separation between switch routing (Option 7) and SSR/SRX gateway routing (Option 8) for improved operational clarity
-
-
-
-### Version 25.09.29.16.15
-- **Added**: Menu option 8 - SSR/SRX routing table using dedicated API function (advanced BGP/OSPF analysis with VRF support)
-- **Enhanced**: Dedicated SSR/SRX routing API - Uses mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes for structured routing queries
-- **Added**: Advanced routing table parameters - Protocol filtering, BGP neighbor analysis, VRF-aware queries, HA cluster node selection
-- **Added**: BGP route direction analysis - Received/advertised route inspection for BGP neighbors with structured output
-- **Enhanced**: Device compatibility validation - Specific checks for SSR (128T) and SRX devices with compatibility warnings
-- **Added**: Real-time refresh options - Configurable interval and duration for dynamic routing table monitoring
-- **Enhanced**: Parameter validation - Structured input validation using utils_show_route schema from OpenAPI specification
-- **Added**: Routing table comparison - Option 8 (dedicated API) vs Option 7 (generic WebSocket) for different use cases
-- **Enhanced**: Documentation - Clear distinction between generic routing table (7) and SSR-specific routing table (8) functions
-- **Fixed**: Menu organization - Filled gap at option 8 to improve numerical sequence and reduce confusion
-
-
-
-### Version 25.09.29.14.45
-- **Added**: Menu option 7 - Show routing table command for switches/routers/SSR devices via WebSocket (RIB - Routing Information Base)
-- **Enhanced**: Routing table diagnostics - Comprehensive routing protocol information (BGP, OSPF, static routes) with filtering capabilities
-- **Added**: Multi-format routing table parsing - Support for various device vendor output formats with intelligent parsing strategies
-- **Enhanced**: Interactive parameter collection - Optional filtering by protocol, prefix, VRF, neighbor, and node for targeted routing analysis
-- **Added**: Routing vs forwarding table distinction - Clear documentation explaining RIB (Routing Information Base) vs FIB (Forwarding Information Base)
-- **Enhanced**: Device compatibility validation - Comprehensive checks for Layer 3 routing capabilities on switches, routers, and SSR devices
-- **Enhanced**: Default protocol behavior - Changed default from 'bgp' to 'any' to show all route types unless specifically filtered
-- **Enhanced**: Juniper routing table parsing - Improved multi-line route entry parsing with proper protocol/admin distance extraction
-- **Enhanced**: Table display formatting - Removed truncation limits to show full routing data without ellipsis cutoffs
-- **Fixed**: prettytable import errors - Corrected class reference from prettytable.PrettyTable() to PrettyTable() following established import patterns
-- **Fixed**: Syntax errors - Resolved orphaned elif statements from parser refactoring
-
-
-
-### Version 25.09.26.16.45
-- **CRITICAL FIX**: Switch firmware model filtering - Added missing device model compatibility validation for option 99 (switch firmware upgrades)
-- **Enhanced**: Firmware version selection - Now filters available firmware versions by actual switch models in the organization inventory
-- **Enhanced**: Model compatibility display - Firmware version selection now shows compatible switch models for each available version
-- **Enhanced**: Safety improvements - Prevents selection of incompatible firmware versions that could cause upgrade failures
-- **Added**: Fallback firmware entry - Manual firmware version specification with compatibility warnings when no compatible versions found
-- **Enhanced**: Error handling - Improved messaging when no compatible firmware versions are available for detected switch models
-- **Fixed**: Security vulnerability - Eliminated potential firmware compatibility mismatches that could cause network device failures
-
-
-
-### Version 25.09.26.14.30
-- **Fixed**: Menu option 60 (Firmware status check) - Eliminated double scope selection prompts by creating direct FirmwareManager path
-- **Fixed**: DateTime error handling - Enhanced timestamp validation for firmware upgrade status with proper type checking and exception handling
-- **Fixed**: Firmware status implementation - Removed duplicate scope selection logic in check_firmware_upgrade_status_impl()
-- **Enhanced**: Error reporting - Improved datetime.fromtimestamp() error handling with specific exception types and debug logging
-- **Enhanced**: Code stability - Added input validation for timestamp values before datetime conversion
-- **Fixed**: User experience - Single scope selection prompt for option 60 eliminating confusing double prompts
-
-
-
-### Version 25.09.26.14.14
-- **Added**: Menu option 99 - Advanced Switch firmware upgrade with mode selection (By Site or By Template)
-- **Added**: Switch firmware upgrade system - Complete enterprise-grade switch firmware management 
-- **Added**: FirmwareManager class - Extended with comprehensive switch firmware methods including execute_switch_firmware_upgrade_with_mode_selection(), bulk_upgrade_switch_firmware_by_site(), upgrade_switch_firmware_by_gateway_template()
-- **Added**: Switch-specific API parameters - Proper reboot=True, snapshot=True for Junos devices, no P2P support
-- **Added**: Gateway Template integration for switches - Reuses existing template infrastructure for consistent site grouping
-- **Added**: Switch device discovery - Automatic enumeration using listSiteDevices(type="switch") with proper filtering
-- **Added**: Switch firmware validation - Version availability checking via listOrgAvailableDeviceVersions(type="switch")
-- **Added**: Switch upgrade strategies - Big bang, canary, RRM, and serial upgrade modes with network-aware safety warnings
-- **Added**: Enhanced safety prompts - Network disruption warnings specific to switch operations requiring maintenance windows
-- **Enhanced**: Destructive operation tracking - Added option 99 to systematic test exclusions for safe automated testing
-- **Enhanced**: Documentation - Updated README with switch firmware capabilities and operation count (now 98 total menu options)
-- **Enhanced**: CSV export system - Switch upgrades export to data/ActiveSwitchUpgradeOperations.csv with comprehensive tracking
-
-
-
-### Version 25.09.26.11.15
-- **Added**: FirmwareManager class - Comprehensive firmware management system for Mist Access Points
-- **Enhanced**: Menu option 90 - Consolidated firmware upgrade with mode selection (By Site or By Template)
-- **Added**: Interactive mode selection - Choose between site-based or template-based upgrades at runtime
-- **Added**: Template-based AP firmware upgrades with Gateway Template selection and site count display
-- **Enhanced**: Firmware upgrade architecture - Refactored existing functions into class-based structure
-- **Added**: Automatic site discovery and AP enumeration across all sites in selected template
-- **Enhanced**: User experience - Single menu option with clear workflow branching
-- **Enhanced**: Backward compatibility - All existing functionality maintained with improved organization
-- **Enhanced**: Code organization - NASA/JPL compliant safety architecture with comprehensive validation
-- **Documented**: Complete firmware upgrade workflow including site auto-upgrade configuration behavior
-
-
-
-### Version 25.09.25.14.30
-- **Fixed**: Menu option 78 (Generate support package) file path permissions - now properly writes to data/ directory
-- **Fixed**: Menu option 80 (ARP WebSocket output) file path permissions - now properly saves to data/ directory  
-- **Fixed**: Menu option 85 variable scope error - removed duplicate logging statement
-- **Fixed**: SSH logging operations - all SSH functions now use proper data/per-host-logs/ directory structure
-- **Enhanced**: Container security compliance - all file I/O operations now respect container volume mounting
-- **Enhanced**: Configuration management - moved all hardcoded values from run-misthelper.py to .env file
-- **Added**: Configurable SSL settings (PYTHONHTTPSVERIFY, SSL_VERIFY, CA bundles) in .env
-- **Added**: Configurable container networking (network name, subnet, driver) in .env
-- **Added**: Configurable package management settings (UV check, auto-install, dependencies) in .env
-- **Added**: Configurable container runtime settings (image name, container names, SSH port) in .env
-- **Added**: Configurable file paths (data directory, script log, env file locations) in .env
-- **Added**: Configurable container mount paths for custom deployment scenarios in .env
-- **Enhanced**: sample.env template with complete configuration options and documentation
-- **Verified**: Comprehensive network data capture functionality working correctly
-
-
-
-### Version 25.09.23.00.00
-- Initial comprehensive README rewrite to match current codebase
-- Added SSH remote access capabilities with containerized deployment
-- Enhanced menu operation documentation with current truth from code
-- Added systematic test mode and performance optimization features
-
-
-
-### Version 25.01.08.15.30
-- **Added**: Menu option 5 - MAC table WebSocket command for switches with real-time streaming output
-- **Enhanced**: WebSocket completion detection - Fixed chunking issue in message parsing for improved performance  
-- **Enhanced**: Device filtering - Fixed type=all parameter handling to correctly show switches in device selection
-- **Enhanced**: MAC table completion - Smart detection completes in ~5 seconds instead of 60s timeout when all entries received
-- **Enhanced**: WebSocket debugging - Added comprehensive debug logging for troubleshooting message segmentation
-- **Added**: Switch-only filtering for MAC table operations to ensure compatibility with supported device types
-- **Enhanced**: Pattern matching - Robust handling of "ethernet switching table" vs "thernet switching table" chunking variations
-- **Verified**: MAC table retrieval tested on EX4100-F-12P switch with 44 entries, optimal performance confirmed
-
-
-
-### Version 25.01.07.11.35
-- **CRITICAL FIX**: Client selection API endpoints - Corrected to use `searchSiteWirelessClients` and `searchSiteWiredClients` (not list* functions)
-- **Enhanced**: API response handling - Properly extracts 'results' key from search endpoint pagination structure
-- **Fixed**: AttributeError on client fetch - Resolved "module has no attribute 'listSiteWirelessClients'" error
-
-
-
-### Version 25.01.07.11.30
-- **NEW FEATURE**: Interactive client selection for wireless/wired captures - Browse currently connected clients with hostname, IP, SSID/VLAN info
-- **Added**: Client selection helper function `prompt_select_client_mac_from_site()` - Lists all wireless and wired clients at selected site
-- **Enhanced**: Client capture workflow - Choose from live client list or manually enter MAC address (fallback option)
-- **Added**: Loop Mode to ALL capture types - Wireless Client (1), Wired Client (2), Gateway (3), New Association (4), Scan Radio (5)
-- **Enhanced**: Unified loop mode prompt across all capture types - Consistent user experience for continuous monitoring
-- **Display**: Rich client table with Index, Hostname/User, MAC, IP, Connection Type (Wireless/Wired), SSID/VLAN columns
-- **Validation**: Manual MAC entry option ('m') if client not in connected list or for offline planning
-
-
-
-### Version 25.01.07.11.00
-- **NEW FEATURE**: Continuous Loop Mode for packet captures - Automatically restarts captures when complete for continuous monitoring
-- **Enhanced**: Intelligent capture completion detection - Polls for capture completion (enabled=False or duration elapsed) separately from PCAP download availability
-- **Added**: Background download queue - PCAP files download in background thread while next capture starts immediately
-- **Added**: Graceful interruption - Ctrl+C cleanly stops loop and waits for pending downloads to complete
-- **Enhanced**: Loop mode workflow - 5-second delay between captures to avoid API rate limits, 30-second retry on conflicts
-- **Added**: Per-capture iteration tracking - Each capture numbered and logged for easy correlation with downloaded files
-- **Architecture**: Threaded downloader with Queue-based job management for efficient background processing
-
-
-
-### Version 25.01.07.10.25
-- **Enhanced**: User experience - Removed repetitive warning about existing captures already in progress (moved to debug logging only)
-- **Enhanced**: User experience - Removed redundant "NOTE: Mist API requires minimum 60 seconds" message (validation still enforced, just cleaner UI)
-- **Simplified**: Packet capture workflow - Reduced visual clutter while maintaining all validation and safety checks in background
-
-
-
-### Version 25.01.07.10.20
-- **CRITICAL FIX**: Packet capture duration validation - Updated ALL capture types (wireless client, wired client, gateway, new association) to enforce API-mandated 60-second minimum
-- **Enhanced**: Duration defaults - Changed from 30s to 60s across all capture types to match API requirements and prevent silent API overrides to 600s default
-- **Fixed**: Duration validation messages - Added explicit API constraint explanations: "Mist API requires minimum 60 seconds for all packet captures"
-- **Enhanced**: API compliance - Prevents user confusion when requesting 30s captures but receiving 600s captures due to API rejecting sub-60s durations
-- **Documentation**: API discovery - Confirmed via OpenAPI spec that ALL capture types (client, new_assoc, gateway, radiotap, scan) have `minimum: 60` and `default: 600` constraints
-
-
-
-### Version 25.01.07.10.15
-- **CRITICAL FIX**: PCAP download polling - Fixed API response structure handling (response.data contains dict with 'results' key, not direct list)
-- **Enhanced**: Response type detection - Added logic to extract 'results' key from dict or handle direct list responses for both site and org-level captures
-- **Fixed**: Warning spam - Eliminated "Expected list but got dict" warnings by properly parsing API pagination structure
-- **Enhanced**: Debug logging - Improved clarity of polling logs showing when results extraction occurs vs direct list handling
-
-
-
-### Version 25.01.07.10.05
-- **CRITICAL FIX**: Added type checking and defensive handling for API response data in PCAP polling
-- **BUG**: listSitePacketCaptures sometimes returns list of strings instead of list of dictionaries
-- **FIXED**: Added isinstance() checks before calling .get() on capture objects
-- **ADDED**: Logs data type of response.data (e.g., "Received data type: <class 'list'>")
-- **ADDED**: Logs raw captures data to reveal unexpected response structures
-- **ADDED**: Skip non-dict items in capture list with warning instead of crashing
-- **ADDED**: Safe ID extraction that handles both dict and string items
-- **IMPROVED**: Continues polling after encountering unexpected data types
-- **LOCATIONS**: Both _wait_and_download_pcap() and _wait_and_download_pcap_org() functions
-- **PREVENTS**: AttributeError: 'str' object has no attribute 'get'
-
-
-
-### Version 25.01.02.18.30
-- **Added**: Menu option 6 - Show forwarding table command for gateway/SSR devices via WebSocket (Layer 3 routing table)
-- **Enhanced**: WebSocket device commands - Expanded support for both Layer 2 (MAC table) and Layer 3 (forwarding table) operations
-- **Added**: Gateway/SSR compatibility checks - Device-specific guidance and troubleshooting for forwarding table operations
-- **Enhanced**: Menu organization - Filled numbering gap between option 5 and 11 to improve menu structure
-- **Added**: Layer 3 routing diagnostics - Comprehensive forwarding table information for packet routing decisions
-- **Enhanced**: Device type validation - Improved device compatibility warnings for Layer 3 vs Layer 2 operations
-
-
+```json
+{
+  "changelog": [
+    {
+      "version": "25.10.14.17.00",
+      "date": "2025-10-14",
+      "changes": {
+        "feature_additions": [
+          "Loop mode now uses intelligent polling strategy instead of background threading",
+          "Loop checks API for completed PCAPs (24hr window), downloads missing files, then starts new capture",
+          "No duplicate downloads - checks local filesystem before downloading",
+          "Loop naturally paces based on capture completion times"
+        ],
+        "fixes": [
+          "Downloads now complete reliably without threading complexity"
+        ],
+        "removals": [
+          "Queue-based background downloader (replaced with simpler synchronous approach)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.07.16.15",
+      "date": "2025-10-07",
+      "changes": {
+        "fixes": [
+          "Wired client API module - Corrected import path to mistapi.api.v1.sites.wired_clients (separate module from wireless clients)",
+          "AttributeError on wired client fetch - Resolved 'module has no attribute searchSiteWiredClients' error",
+          "Verified: Wireless clients use mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+          "Verified: Wired clients use mistapi.api.v1.sites.wired_clients.searchSiteWiredClients"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.30",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Corrected session attribute in PCAP polling functions",
+          "Site PCAP polling used self.apisession instead of self.mist_session (PacketCaptureManager attribute)",
+          "Org PCAP polling used self.apisession instead of self.mist_session (PacketCaptureManager attribute)",
+          "Changed self.apisession to self.mist_session in _wait_and_download_pcap() (line 4072)",
+          "Changed self.apisession to self.mist_session in _wait_and_download_pcap_org() (line 4212)",
+          "PCAP downloads now work correctly - polling no longer throws AttributeError",
+          "Root cause: PacketCaptureManager.__init__ stores session as self.mist_session, not self.apisession"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.25",
+      "date": "2025-10-06",
+      "changes": {
+        "enhancements": [
+          "Added comprehensive debug logging to PCAP download polling functions",
+          "Site-level PCAP polling now logs every poll attempt with detailed capture state",
+          "Org-level PCAP polling now logs every poll attempt with detailed capture state",
+          "Logs response status code, number of captures returned, and capture found/not found status",
+          "When capture found, logs all relevant fields: enabled, format, type, duration, expiry, timestamp, pcap_url",
+          "Logs when pcap_url is NOT SET YET vs when it becomes available",
+          "Logs available capture IDs when our capture is not found in the list",
+          "Exception handling now uses exc_info=True for full traceback in logs",
+          "Debug logs will reveal why PCAP downloads timeout (capture not found, pcap_url never set, API errors)",
+          "Run with --debug flag to see detailed polling behavior in script.log"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.20",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Corrected mistapi function names for listing packet captures",
+          "Changed listSitePcapCaptures to correct listSitePacketCaptures (3 occurrences)",
+          "Changed listOrgPcapCaptures to correct listOrgPacketCaptures (1 occurrence)",
+          "Previous function names caused AttributeError when checking for existing captures",
+          "Pre-check for existing captures now works correctly before launching new ones",
+          "Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling",
+          "Function names now match mistapi SDK and Mist API operationId values",
+          "operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec"
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Note**: The changelog above shows the most recent entries in JSON format according to agents.md guidelines (grouped by topic: fixes, enhancements, feature_additions, removals). Older entries below remain in legacy markdown format for historical reference.
+
+---
+
+### Legacy Entries (Converting to JSON format)
+
+```json
+{
+  "changelog": [
+    {
+      "version": "25.10.06.18.15",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Multi-AP scan captures now use single API call with aps dictionary (correct API pattern)",
+          "Changed from sequential per-AP API calls to single POST with all APs in one payload",
+          "API compliance: Properly uses aps field per Mist API schema for multi-AP scan captures",
+          "Error handling now correctly detects multi-AP conflicts (e.g., Recording already in progress)"
+        ],
+        "enhancements": [
+          "Performance: Reduced API calls from N (one per AP) to 1 (single call for all APs)",
+          "Multi-AP captures return single capture ID that covers all specified APs",
+          "Removed per-AP success/failure tracking - API handles all APs in one transaction",
+          "Payload structure: {type: scan, band: 5, ..., aps: {mac1: {...}, mac2: {...}}}",
+          "Per-AP configs in aps dict inherit from parent values if not specified",
+          "More reliable capture launches, better API efficiency, single capture ID to track"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.10",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Scan radio captures now enforce Mist API minimum duration of 60 seconds",
+          "Single AP scan capture duration changed from 30s default to 60s (API minimum)",
+          "Multi-AP scan capture duration changed from 30s default to 60s (API minimum)",
+          "Prevents confusion when API ignores duration values below 60 seconds"
+        ],
+        "enhancements": [
+          "Duration validation now shows API requirement in error messages for clarity",
+          "Warning message before duration prompt: Mist API requires minimum 60 seconds for scan captures",
+          "Updated prompts to show correct range: default 60, min 60, max 86400"
+        ],
+        "documentation": [
+          "API discovery: Mist API documentation reveals scan captures have 60-second minimum, 600-second default",
+          "API schema constraint: minimum: 60.0, default: 600 for scan capture duration",
+          "Note: Other capture types (wireless, wired, gateway, new association) still support 30-second minimum"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.09",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Switch port stats now retrieved using correct API endpoint",
+          "Uses searchSiteSwOrGwPorts for switches/gateways instead of getSiteDeviceStats",
+          "Root cause: getSiteDeviceStats does not return port-level statistics for switches",
+          "Filters port results by device MAC address to get specific switch ports",
+          "Extracts port objects from results array and converts to dict by port_id"
+        ],
+        "enhancements": [
+          "searchSiteSwOrGwPorts provides detailed port statistics (speed, duplex, status)",
+          "APs continue using getSiteDeviceStats with port_stat field",
+          "Code now branches based on device_type (switch/gateway vs ap)",
+          "Graceful fallback to config when port search API unavailable",
+          "Enhanced logging shows sample port data for troubleshooting"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.06",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Added pre-check for existing captures before launching new ones",
+          "Single AP captures now check for existing captures on that specific AP before starting",
+          "Multi-AP captures now check for existing captures across all site APs before batch launch",
+          "Confirmation prompt allows users to cancel or proceed when conflicts detected",
+          "Pre-check calls listSitePcapCaptures() API to query active/recent captures before launch"
+        ],
+        "enhancements": [
+          "User-friendly warning messages when capture conflicts detected: Mist only allows one capture per AP at a time",
+          "Error handling now detects Recording already in progress API errors specifically",
+          "Clear error messages replace raw API responses: Capture already in progress on this AP",
+          "Actionable guidance when captures fail: Wait for existing captures to complete or check Mist portal to stop them",
+          "Multi-AP feature now shows count of existing captures and offers cancellation before launching",
+          "Prevents wasted API calls and improves user experience during capture conflicts"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.05",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Switch port stats now correctly retrieved from API",
+          "API structure: Switches use ports array field, not port_stat dict field",
+          "Device differences: APs use port_stat (dict), Switches use ports (array of port objects)",
+          "Automatic conversion: Converts switch ports array to dict format for consistency",
+          "Port ID mapping: Uses port_id field from switch port objects as dict keys"
+        ],
+        "enhancements": [
+          "Logging enhanced: Clearly indicates which format detected (AP-style vs switch-style)",
+          "Fallback preserved: Config-based fallback still works when stats unavailable",
+          "Operational data: Now correctly shows actual speed/duplex from switch statistics"
+        ],
+        "documentation": [
+          "OpenAPI verified: Implementation matches Mist API OpenAPI 3.0 specification",
+          "Uses correct stats_switch_port schema with speed and full_duplex fields"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.18.00",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Speed and Duplex now show actual operational values from live stats, not configured values",
+          "Data source clarification: Speed/Duplex from port_stat (actual), Profile/Description from port_config (configured)",
+          "When getSiteDeviceStats available, shows real-time operational speed and duplex",
+          "Port profile and description always pulled from port_config or device template",
+          "Stats no longer overwritten by config - each has its proper source"
+        ],
+        "enhancements": [
+          "When stats unavailable, displays note: Speed/Duplex showing configured values",
+          "Users see what ports are actually running at, not what they're configured for",
+          "Can identify speed/duplex mismatches between configured and actual",
+          "Port profile from port_config.port_profile field",
+          "Ready for template-based profile lookup (future enhancement)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.55",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Port table now displays accurate Speed, Duplex, and Profile from device config",
+          "Pulls speed and duplex from port_config instead of using placeholder values",
+          "When port_stat unavailable, uses real config data instead of hardcoded Unknown"
+        ],
+        "enhancements": [
+          "Speed formatting: Handles auto, 1g, 10g formats and converts to 1000 Mbps, 10000 Mbps",
+          "Duplex display: Shows actual mode - Full, Half, or Auto instead of just Yes/No",
+          "Config enrichment: Merges port_stat with port_config to show configured values",
+          "Port profile: Now correctly displays from port_config (Access, Trunk, custom names)",
+          "Intelligent merge: Combines live stats with config to show most accurate information",
+          "Speed handling: Recognizes integer Mbps values, string formats (1g), and auto",
+          "String formatting: Capitalizes duplex modes for clean display",
+          "Null handling: Gracefully handles missing or null values with N/A or Auto"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.51",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Multi-AP scan captures - Select 'all' when choosing AP to launch simultaneous captures for all APs",
+          "New option in AP selection menu to capture from all APs at once",
+          "_start_site_scan_capture_all_aps() method - Orchestrates multi-AP capture launches",
+          "get_all_ap_macs_from_site() helper function - Fetches all AP MACs from a site",
+          "Batch PCAP download option - When using PCAP format with 'all' APs, offers to download all files sequentially"
+        ],
+        "enhancements": [
+          "AP selection displays special 'all' option for launching captures across entire site",
+          "Multi-AP captures show progress indicator (e.g., [3/15] Starting capture for AP...)",
+          "Summary report shows successful vs failed captures after multi-AP launch",
+          "Perfect for site-wide wireless surveys, interference analysis, or comprehensive RF troubleshooting"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.50",
+      "date": "2025-10-06",
+      "changes": {
+        "enhancements": [
+          "Port selection table now displays Port Profile and Description columns",
+          "Shows port configuration details for better port identification",
+          "Profile column: Displays assigned port profile (e.g., Access, Trunk, custom profiles)",
+          "Description column: Shows user-friendly port descriptions from device config",
+          "Descriptions longer than 30 characters are truncated with ... for display",
+          "Descriptions and profiles left-aligned for readability",
+          "Table expands to 120 characters to accommodate new columns",
+          "Config mapping: Handles port range expansion to individual port configs correctly",
+          "Fallback: Shows N/A for profile and - for description when not configured",
+          "Easier port identification without needing to check device config separately",
+          "API efficient: Fetches device config once and maps to all individual ports"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.44",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "PCAP download polling now starts immediately instead of waiting full capture duration",
+          "Removed blocking countdown timer that made script appear hung during capture"
+        ],
+        "enhancements": [
+          "Performance: Changed polling interval from 10 seconds to 5 seconds for faster file detection",
+          "Progress display now shows elapsed time dynamically during polling",
+          "Changed max wait time from 3+ minutes to capture duration + 2 minutes",
+          "User sees immediate feedback with Polling for PCAP file availability message",
+          "Clearer Ctrl+C cancellation message reminds users they can check portal manually",
+          "Technical note: Capture runs asynchronously on Mist cloud - no need to block locally"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.40",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Comprehensive tcpdump expression library with 40 pre-configured filters",
+          "Inspired by Daniel Miessler's tcpdump tutorial (danielmiessler.com/blog/tcpdump)",
+          "Basic filters: All traffic, HTTPS, HTTP/HTTPS, DNS, SSH, FTP, SMTP, ICMP, ARP",
+          "Protocol filters: TCP only, UDP only, Not ICMP",
+          "Direction filters: Outbound to port 443, Inbound from port 80",
+          "Combined filters: Multi-port (80/443/53), Exclude SSH, TCP flags (SYN, SYN-ACK, RST, FIN)",
+          "Advanced filters: Non-standard ports (>1024), Exclude ARP+DNS, Broadcast, Multicast, IPv6, VLAN",
+          "Application protocols: SMB/CIFS (445), RDP (3389), NTP (123), SNMP (161), Syslog (514), DHCP (67/68), LDAP (389), MySQL (3306)",
+          "Security filters: Port scans (SYN without ACK), Fragmented packets, Large packets (>1500 bytes), Retransmissions",
+          "TCP flag filters: Connection attempts (SYN), Replies (SYN-ACK), Resets (RST), Close (FIN)"
+        ],
+        "enhancements": [
+          "Organized menu with clear categories and descriptions",
+          "Still allows custom tcpdump expressions for advanced users",
+          "Shows applied filter expression after selection for confirmation",
+          "Includes helpful examples for custom expressions (host, net, port)",
+          "80-character wide formatted menu for readability"
+        ]
+      }
+    }
+  ]
+    },
+    {
+      "version": "25.10.06.17.35",
+      "date": "2025-10-06",
+      "changes": {
+        "configuration_changes": [
+          "Packet capture default duration changed from 600 seconds (10 minutes) to 30 seconds for faster testing",
+          "Packet capture default max packet length changed from 512 bytes to 1300 bytes for better payload visibility",
+          "Duration validation minimum changed from 60 seconds to 30 seconds across all capture types"
+        ],
+        "enhancements": [
+          "All capture types (wireless, wired, gateway, new association, scan) now use consistent 30-second default duration",
+          "Scan radio captures now use 1300 byte max packet length by default (previously hardcoded to 512)",
+          "User prompts updated to reflect new default values for better user experience"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.30",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Port range expansion for devices using port_config fallback",
+          "Port selection table now shows individual ports, not compressed ranges",
+          "Example: ge-0/0/0-2 now expands to 3 separate entries: ge-0/0/0, ge-0/0/1, ge-0/0/2",
+          "Port count validation now works correctly with expanded ports",
+          "Each port sent to API as individual entry (required by Mist API)"
+        ],
+        "feature_additions": [
+          "New helper function _expand_port_range_string() expands port ranges like ge-0/0/0-2, ge-0/1/2-3",
+          "Regex parsing: Handles complex patterns like mge-0/2/0, xe-0/1/0-3 correctly"
+        ],
+        "enhancements": [
+          "Fallback logic: Only applies when device uses port_config instead of port_stat",
+          "Debug logs show range expansion for troubleshooting",
+          "Each index in table now represents exactly one port"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.28",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Error handling now properly displays API error messages when captures fail",
+          "AttributeError when capture fails - Changed from response.text to response.data for mistapi APIResponse objects",
+          "Both site and org-level capture error handlers updated with proper APIResponse handling"
+        ],
+        "enhancements": [
+          "Error output now shows detailed error information from Mist API for troubleshooting"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.23",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Packet capture now defaults to downloadable PCAP file format instead of WebSocket streaming",
+          "Automatic PCAP file download - Mist cloud saves capture as PCAP file and provides download URL",
+          "_wait_and_download_pcap() method - Polls for capture completion and downloads PCAP file to local data directory",
+          "_wait_and_download_pcap_org() method - Organization-level PCAP download support for MxEdge captures",
+          "_get_capture_format_selection() helper method - Centralized format selection logic to avoid code duplication",
+          "Polling mechanism - Smart retry logic waits up to 3 minutes for PCAP file URL after capture completes",
+          "Download validation - HTTP status checking and file size reporting for successful downloads"
+        ],
+        "enhancements": [
+          "Format selection UI - Changed default from stream to PCAP file (option 1 now default)",
+          "Capture workflow - Conditional branching based on format type (pcap vs stream vs tzsp)",
+          "User experience - Progress display during capture wait period with countdown timer",
+          "File output - PCAP files saved to data/PacketCapture_{capture_id}.pcap for easy Wireshark analysis",
+          "Error handling - Provides manual download URL if automatic download fails"
+        ],
+        "fixes": [
+          "API function names - Corrected from startSitePcapCapture to startSitePacketCapture",
+          "All capture types now support format selection - Added to wireless client, wired client, gateway, new association, and scan radio captures",
+          "Site and org-level capture methods - Both now properly handle pcap format with file downloads"
+        ],
+        "documentation": [
+          "Updated inline comments to reflect new default behavior (PCAP files vs streaming)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.20",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Enforced API limit of maximum 6 ports per packet capture",
+          "Port selection now rejects more than 6 ports with clear error message",
+          "API was returning 400 - max 6 ports allowed error - now caught before submission"
+        ],
+        "enhancements": [
+          "User guidance: When device has more than 6 ports, all ports option is disabled",
+          "Added prominent warning banner showing API LIMITATION: Maximum 6 ports per capture",
+          "Smart default: All ports only available when device has 6 or fewer ports",
+          "Specific selection: Users must select up to 6 individual ports when more are available",
+          "Range validation: Validates port count after range expansion (e.g., 0-3 = 4 ports)",
+          "Enhanced error logging when user attempts to exceed 6-port limit",
+          "UX clarity: Prompt now says Enter your choice (up to 6 ports) instead of default: all ports"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.10",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Ports dict now lists actual port names instead of empty {} when all ports selected",
+          "Resolved issue where captures started but no PCAP files downloaded",
+          "Root cause: Empty ports dict {} violated API spec requirement for explicit port name listing",
+          "Solution: When user selects all ports, helper now returns both selection AND available ports list",
+          "Payload building now always includes actual port names (e.g., ge-0/0/0, ge-0/0/1)",
+          "Switch captures: Fixed for both specific port selection and all ports scenarios",
+          "Gateway captures: Same fix applied - actual port names now listed in payload",
+          "Payload structure: Correct format switches: {MAC: {ports: {ge-0/0/0: {}, ge-0/0/1: {}}}}"
+        ],
+        "feature_additions": [
+          "Interactive tcpdump expression menu with common filter examples",
+          "Filter options: All traffic, HTTPS (443), HTTP/HTTPS, DNS (53), SSH (22), ICMP, ARP, or custom"
+        ],
+        "enhancements": [
+          "User experience: Replaced free-text expression entry with guided menu selection",
+          "Clarity: Menu shows exactly what each filter does (e.g., port 443 for HTTPS)",
+          "PCAP format now labeled as recommended for downloadable files",
+          "Testing validated: Confirmed GUI successfully creates PCAP files with proper port listing",
+          "Loop mode ready: Fixes enable proper PCAP downloads during continuous capture loops",
+          "Enhanced logging shows port list expansion when all ports selected"
+        ],
+        "documentation": [
+          "Added documentation note about pcap vs stream format",
+          "API discovery: API docs show stream only, but testing confirms pcap works and generates downloads"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.05",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Interactive port selection with live status for switch and gateway captures",
+          "Added prompt_select_ports_from_device() helper - displays port status from device stats",
+          "Fetches real-time port information via getSiteDeviceStats() API",
+          "Display shows port name, status (UP/DOWN), speed (Mbps), and duplex mode",
+          "Supports single port, multiple ports (comma-separated), ranges (0-3), or all",
+          "Automatically excludes management/internal ports (fxp, em, me, vme, irb, lo, vlan)",
+          "Natural sorting: Ports displayed in logical order (ge-0/0/0, ge-0/0/1, ge-0/0/2, etc.)"
+        ],
+        "enhancements": [
+          "Smart default: Press Enter with no input to capture on ALL ports (simplified from connected-only)",
+          "Switch capture now uses interactive port selector instead of manual entry",
+          "Gateway capture now uses interactive port selector instead of manual entry",
+          "Visual table with 80-character formatted display",
+          "Port selection now mandatory - API requires at least one port or all ports specified",
+          "GUI parity: Matches Mist GUI behavior where users see available ports and select visually",
+          "Range validation prevents selecting non-existent port indices",
+          "Full debug trace of port discovery, selection parsing, and user choices",
+          "Graceful fallback if stats unavailable or device not found",
+          "Seamless drop-in replacement for previous text-based port input",
+          "Clear messaging when device has no port information available",
+          "Default behavior changed - pressing Enter now selects ALL ports (not just connected)",
+          "Removed all connected ports option - use Enter for all, or specify individual ports"
+        ],
+        "fixes": [
+          "MAC address comparison now normalizes both input and device MACs (removes colons/hyphens)",
+          "Device not found error when API returns MAC in different format (with or without colons)",
+          "Handles MAC addresses as strings with colons (20:93:39:05:17:80) or plain integers (209339051780)",
+          "Fallback logic: When port_stat unavailable, automatically tries device port_config instead",
+          "Gracefully handles switches that are offline or not yet reporting stats",
+          "Added logging of available stats keys and config keys for troubleshooting"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.02",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Switch packet capture support (Menu 9, Option 4)",
+          "Full switch packet capture with port selection and filtering",
+          "Capture from all ports or specify individual ports (e.g., ge-0/0/0,ge-0/0/1)",
+          "Per-port or global tcpdump expressions for traffic filtering",
+          "Loop mode support for continuous switch monitoring",
+          "Added prompt_select_switch_mac_from_site() helper for interactive switch selection",
+          "Multicast traffic filtering option for wireless and wired client captures",
+          "New includes_mcast parameter (default: false) to include/exclude multicast traffic"
+        ],
+        "enhancements": [
+          "API leverages type: switch with switches configuration structure",
+          "Follows same patterns as gateway and client captures (60s min duration, format selection)",
+          "Clarified capture type descriptions in menu and configuration screens",
+          "Client Capture (Wireless) = Ongoing traffic from ALREADY CONNECTED clients",
+          "New Association Capture = NEW connection attempts (802.11 auth/assoc handshakes only)",
+          "Menu now shows brief description of each capture type for easier selection",
+          "Confirmed all client capture payloads match API specification exactly"
+        ],
+        "fixes": [
+          "Corrected gateway capture payload structure to match API specification",
+          "Gateway capture was using flat gateway_mac and port_id fields (incorrect)",
+          "Gateway capture now uses gateways object with MAC as key and nested ports structure",
+          "Changed port selection from simple wan/lan/all to specific port names (e.g., ge-0/0/0)",
+          "Added max_pkt_len: 1500 to gateway payloads (API requirement)",
+          "Prevents Error 400 No connected SSRs or feature not supported due to malformed payload",
+          "Gateway payload structure now identical to switch payload pattern"
+        ],
+        "documentation": [
+          "Updated copilot-instructions.md to reflect switch capture capability",
+          "Menu option 4 in site packet capture, new _start_site_switch_capture() method"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.17.00",
+      "date": "2025-10-06",
+      "changes": {
+        "feature_additions": [
+          "Menu options 9-10 - Comprehensive packet capture management for Juniper Mist environments",
+          "PacketCaptureManager class - Full-featured packet capture orchestration with WebSocket streaming",
+          "Site packet capture (Option 9) - Wireless client, wired client, gateway, new association, and scan radio captures",
+          "Organization packet capture (Option 10) - MxEdge captures for org-level Mist Edges with TZSP support",
+          "WebSocket streaming integration - Real-time packet monitoring with progress display",
+          "MAC address validation - Format checking and normalization for all MAC address inputs",
+          "Capture format options - Stream to Mist Cloud or TZSP stream to remote host (Wireshark)",
+          "Advanced scan capture - Band selection (2.4/5/6 GHz), channel, bandwidth, and tcpdump expression support",
+          "Capture session export - Automatic CSV/SQLite export of capture configuration and session details"
+        ],
+        "enhancements": [
+          "Capture type support - Client (wireless/wired), Gateway, New Association, Scan Radio, and MxEdge capture modes",
+          "Interactive configuration - Guided parameter collection with validation for all capture types",
+          "Safety validations - Duration limits (60-86400s), packet count constraints (0-10000), max packet length (64-2048 bytes)",
+          "Documentation - Comprehensive inline documentation with API endpoint references and usage examples",
+          "Operation count - Updated to 103 total menu operations (added packet capture operations)"
+        ],
+        "fixes": [
+          "Test harness - Added options 9-10 to systematic test skip list (interactive operations)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.11.40",
+      "date": "2025-10-06",
+      "changes": {
+        "enhancements": [
+          "Console log level filtering - Early logging setup now respects CONSOLE_LOG_LEVEL environment variable (defaults to INFO)",
+          "Startup experience - Changed API page size configuration message from INFO to DEBUG level to reduce console clutter",
+          "Log output clarity - DEBUG messages only appear in file logs, keeping console output clean for normal operation",
+          "Configuration consistency - Early logging setup now matches GlobalImportManager._setup_logging() pattern for log level handling"
+        ],
+        "fixes": [
+          "Early logging handler configuration - Console and file handlers now properly respect environment-specified log levels from startup"
+        ]
+      }
+    },
+    {
+      "version": "25.10.06.11.22",
+      "date": "2025-10-06",
+      "changes": {
+        "fixes": [
+          "Early logging configuration - Moved logging setup to execute immediately after imports to prevent Python from creating default handler",
+          "Root directory pollution - Eliminated blank script.log file creation in root directory by configuring logging before any logging calls",
+          "Logging initialization timing - Added early basicConfig() call with FileHandler for data/script.log before PerformanceMonitor and other early code executes"
+        ],
+        "enhancements": [
+          "Module-level logging safety - Early logging setup ensures all module-level logging calls (lines 63, 151, 175, 179, 215, 217) write to data/script.log"
+        ],
+        "documentation": [
+          "Identified root cause - Python's logging module creates default handler in current directory when logging methods called before configuration",
+          "ASCII character map - Comprehensive emoji to ASCII replacement table added to agents.md for NASA/JPL compliance (21 emoji replacements documented)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.02.16.07",
+      "date": "2025-10-02",
+      "changes": {
+        "fixes": [
+          "SSH EOF handling - Added comprehensive EOF (End-of-File) error handling for all interactive input() calls to prevent SSH session crashes",
+          "Container SSH stability - Fixed EOF when reading a line errors in SSH sessions by wrapping input calls with graceful exception handling",
+          "Container ForceCommand execution - Corrected background process issue that was breaking interactive terminal input in SSH environment"
+        ],
+        "feature_additions": [
+          "safe_input() helper function - Centralized input handling with proper EOF and KeyboardInterrupt exception management",
+          "Non-ASCII character cleanup - Systematically replaced remaining Unicode characters with ASCII equivalents throughout codebase for NASA/JPL compliance"
+        ],
+        "enhancements": [
+          "Session disconnection handling - SSH disconnections now gracefully exit with proper error logging instead of crashing the application",
+          "Destructive operation safety - Applied EOF protection to critical confirmation prompts for virtual MAC conversion, firmware upgrades, and device conversions",
+          "Containerfile efficiency - Removed duplicate dependency installations and improved container build process for faster deployments"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.18.30",
+      "date": "2025-09-30",
+      "changes": {
+        "feature_additions": [
+          "Menu option 100 - SSR firmware upgrade with comprehensive mode selection (site-based and Gateway Template-based upgrades)",
+          "SSR-specific safety framework - Enhanced critical infrastructure warnings for WAN connectivity disruption, SD-WAN tunnel impact, and branch office connectivity",
+          "Session Smart Router detection - Smart filtering for SSR models (SSR120, SSR130, SSR1200, SSR1300, SSR1400, VM-SSR) from gateway inventory",
+          "Conservative upgrade defaults - Serial upgrade strategy and recovery snapshots enabled by default for routing infrastructure safety",
+          "Comprehensive confirmation system - Multi-layer safety confirmations with UPGRADE SSR FIRMWARE typed confirmation requirement"
+        ],
+        "enhancements": [
+          "FirmwareManager class - Extended with complete SSR firmware upgrade capabilities following established patterns from AP and switch upgrades",
+          "Template-based upgrades - Reuses existing Gateway Template infrastructure for unified SSR upgrade orchestration across multiple sites",
+          "Upgrade parameter configuration - SSR-optimized settings including reboot requirements, snapshot management, and HA coordination considerations",
+          "Audit logging - Complete operation tracking with SSR-specific context and routing infrastructure impact documentation",
+          "Error handling - SSR-specific error scenarios with WAN connectivity and SD-WAN tunnel re-establishment guidance",
+          "Systematic testing - Added menu option 100 to destructive operations skip list for safe automated testing"
+        ],
+        "fixes": [
+          "Menu structure - Clean integration without wrapper functions, direct FirmwareManager method calls for consistent architecture"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.52",
+      "date": "2025-09-30",
+      "changes": {
+        "fixes": [
+          "Unicode encoding error - Replaced Unicode arrow characters (→) with ASCII equivalents (->) to prevent Windows logging crashes",
+          "Windows compatibility - All console output now uses ASCII-safe characters to prevent encoding errors on Windows systems"
+        ],
+        "feature_additions": [
+          "Firmware downgrade detection - Added intelligent version comparison to prevent API-rejected downgrades before upgrade attempts",
+          "Version comparison algorithm - Robust firmware version parsing handles SSR version formats (6.3.4-7.r2, 6.3.5-37.sts)"
+        ],
+        "enhancements": [
+          "Downgrade validation - Pre-flight version checking identifies and skips devices requiring downgrades with clear user messaging",
+          "Error classification - Downgrade fw version not allowed API responses now treated as validation warnings rather than critical errors"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.47",
+      "date": "2025-09-30",
+      "changes": {
+        "feature_additions": [
+          "Version comparison logic - Cross-references current device firmware versions against target version before upgrade attempts"
+        ],
+        "enhancements": [
+          "Firmware version validation - Added pre-upgrade version checking to skip devices already at target firmware version",
+          "Smart error handling - Already at requested fw version API responses now treated as informational rather than errors",
+          "User feedback - Clear messaging about devices skipped due to version matches, with upgrade vs skip counts",
+          "Debug information - Enhanced logging shows current to target version transitions for devices needing upgrades"
+        ],
+        "fixes": [
+          "Error classification - Devices already at target version no longer counted as upgrade failures in operation summary"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.45",
+      "date": "2025-09-30",
+      "changes": {
+        "fixes": [
+          "SSR reboot parameter logic - Corrected inverted reboot_at logic that was disabling reboots when auto_reboot=True",
+          "API parameter validation - When auto_reboot=True, now omits reboot_at parameter to use API default timing instead of setting reboot_at=-1 (which disables reboot)"
+        ],
+        "enhancements": [
+          "Error response extraction - Improved API error response parsing to capture detailed error information from multiple response attributes",
+          "Debug logging - Enhanced response debugging to show status codes, headers, and response content when text is unavailable"
+        ],
+        "documentation": [
+          "Added clear parameter behavior - reboot_at=-1 disables reboot, omitting parameter uses default timing"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.41",
+      "date": "2025-09-30",
+      "changes": {
+        "feature_additions": [
+          "Cross-reference validation - SSR devices are now validated against org-level inventory to ensure they are recognized as upgradeable SSRs",
+          "Device eligibility checks - Only devices confirmed in organization SSR inventory proceed to upgrade process"
+        ],
+        "enhancements": [
+          "SSR device validation - Added comprehensive validation against organization SSR inventory before upgrade attempts",
+          "Debug logging - Added detailed request body logging and device validation status for troubleshooting SSR upgrade issues",
+          "Error handling - Enhanced error response logging to capture API response details for 400 Bad Request errors",
+          "Progress reporting - More detailed status messages showing validated device counts and inventory verification"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.31",
+      "date": "2025-09-30",
+      "changes": {
+        "fixes": [
+          "SSR upgrade API 400 Bad Request error - Added missing required channel parameter to upgrade request body",
+          "Undefined variable error - Added proper ssr_models definition before device filtering in upgrade execution"
+        ],
+        "enhancements": [
+          "SSR upgrade confirmation - Simplified confirmation phrase from UPGRADE SSR FIRMWARE to UPGRADE for user convenience",
+          "API compliance - SSR upgrade requests now include all required parameters per OpenAPI schema (device_ids, channel, version, strategy)"
+        ]
+      }
+    },
+    {
+      "version": "25.09.30.15.24",
+      "date": "2025-09-30",
+      "changes": {
+        "fixes": [
+          "SSR firmware upgrade implementation - Corrected API endpoints from sites.devices.upgradeDevices to orgs.ssr.upgradeOrgSsrs with proper parameter mapping",
+          "Parameter validation - Removed invalid force, reboot, and snapshot parameters; replaced with proper SSR parameters (device_ids, version, channel, strategy, reboot_at)",
+          "Device discovery for SSRs - Updated listSiteDevices calls to use type=gateway parameter for proper SSR device filtering",
+          "Option 100 SSR upgrade - Corrected undefined variable errors and implemented proper org-level SSR upgrade workflow",
+          "API endpoint corrections - All SSR operations now use proper mistapi.api.v1.orgs.ssr module instead of generic device endpoints"
+        ],
+        "feature_additions": [
+          "SSR firmware version discovery - Implemented listOrgAvailableSsrVersions API with indexed selection interface for proper version management",
+          "Device type tracking - Enhanced upgrade status monitoring to display distribution across AP, Switch, and SSR device types"
+        ],
+        "enhancements": [
+          "Upgrade monitoring (Option 60) - Added comprehensive SSR upgrade monitoring using listOrgSsrUpgrades API with device type distribution tracking"
+        ]
+      }
+    },
+    {
+      "version": "25.09.29.17.05",
+      "date": "2025-09-29",
+      "changes": {
+        "enhancements": [
+          "Menu option 7 title - Updated to Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static) for clarity",
+          "Menu option 8 title - Updated to Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis) for device specificity",
+          "SSR routing table display - Added complete data table with all BGP attributes including Route Name, Selection Reason, Weight, Metric, Local Preference, AS Path, and VRF",
+          "Protocol selection flexibility - Users can now skip protocol specification to let API use its default behavior, choose specific protocols (bgp/any/ospf/static/direct/evpn), or get comprehensive routing views",
+          "Data presentation - Comprehensive routing table with full untruncated data display showing complete BGP route analysis including peer names, selection criteria, and all BGP path attributes",
+          "Menu categorization - Clear device-specific separation between switch routing (Option 7) and SSR/SRX gateway routing (Option 8) for improved operational clarity"
+        ]
+      }
+    },
+    {
+      "version": "25.09.29.16.15",
+      "date": "2025-09-29",
+      "changes": {
+        "feature_additions": [
+          "Menu option 8 - SSR/SRX routing table using dedicated API function (advanced BGP/OSPF analysis with VRF support)",
+          "Advanced routing table parameters - Protocol filtering, BGP neighbor analysis, VRF-aware queries, HA cluster node selection",
+          "BGP route direction analysis - Received/advertised route inspection for BGP neighbors with structured output",
+          "Real-time refresh options - Configurable interval and duration for dynamic routing table monitoring",
+          "Routing table comparison - Option 8 (dedicated API) vs Option 7 (generic WebSocket) for different use cases"
+        ],
+        "enhancements": [
+          "Dedicated SSR/SRX routing API - Uses mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes for structured routing queries",
+          "Device compatibility validation - Specific checks for SSR (128T) and SRX devices with compatibility warnings",
+          "Parameter validation - Structured input validation using utils_show_route schema from OpenAPI specification",
+          "Documentation - Clear distinction between generic routing table (7) and SSR-specific routing table (8) functions"
+        ],
+        "fixes": [
+          "Menu organization - Filled gap at option 8 to improve numerical sequence and reduce confusion"
+        ]
+      }
+    },
+    {
+      "version": "25.09.29.14.45",
+      "date": "2025-09-29",
+      "changes": {
+        "feature_additions": [
+          "Menu option 7 - Show routing table command for switches/routers/SSR devices via WebSocket (RIB - Routing Information Base)",
+          "Multi-format routing table parsing - Support for various device vendor output formats with intelligent parsing strategies",
+          "Routing vs forwarding table distinction - Clear documentation explaining RIB (Routing Information Base) vs FIB (Forwarding Information Base)"
+        ],
+        "enhancements": [
+          "Routing table diagnostics - Comprehensive routing protocol information (BGP, OSPF, static routes) with filtering capabilities",
+          "Interactive parameter collection - Optional filtering by protocol, prefix, VRF, neighbor, and node for targeted routing analysis",
+          "Device compatibility validation - Comprehensive checks for Layer 3 routing capabilities on switches, routers, and SSR devices",
+          "Default protocol behavior - Changed default from bgp to any to show all route types unless specifically filtered",
+          "Juniper routing table parsing - Improved multi-line route entry parsing with proper protocol/admin distance extraction",
+          "Table display formatting - Removed truncation limits to show full routing data without ellipsis cutoffs"
+        ],
+        "fixes": [
+          "prettytable import errors - Corrected class reference from prettytable.PrettyTable() to PrettyTable() following established import patterns",
+          "Syntax errors - Resolved orphaned elif statements from parser refactoring"
+        ]
+      }
+    },
+    {
+      "version": "25.09.26.16.45",
+      "date": "2025-09-26",
+      "changes": {
+        "fixes": [
+          "Switch firmware model filtering - Added missing device model compatibility validation for option 99 (switch firmware upgrades)",
+          "Security vulnerability - Eliminated potential firmware compatibility mismatches that could cause network device failures"
+        ],
+        "feature_additions": [
+          "Fallback firmware entry - Manual firmware version specification with compatibility warnings when no compatible versions found"
+        ],
+        "enhancements": [
+          "Firmware version selection - Now filters available firmware versions by actual switch models in the organization inventory",
+          "Model compatibility display - Firmware version selection now shows compatible switch models for each available version",
+          "Safety improvements - Prevents selection of incompatible firmware versions that could cause upgrade failures",
+          "Error handling - Improved messaging when no compatible firmware versions are available for detected switch models"
+        ]
+      }
+    },
+    {
+      "version": "25.09.26.14.30",
+      "date": "2025-09-26",
+      "changes": {
+        "fixes": [
+          "Menu option 60 (Firmware status check) - Eliminated double scope selection prompts by creating direct FirmwareManager path",
+          "DateTime error handling - Enhanced timestamp validation for firmware upgrade status with proper type checking and exception handling",
+          "Firmware status implementation - Removed duplicate scope selection logic in check_firmware_upgrade_status_impl()",
+          "User experience - Single scope selection prompt for option 60 eliminating confusing double prompts"
+        ],
+        "enhancements": [
+          "Error reporting - Improved datetime.fromtimestamp() error handling with specific exception types and debug logging",
+          "Code stability - Added input validation for timestamp values before datetime conversion"
+        ]
+      }
+    },
+    {
+      "version": "25.09.26.14.14",
+      "date": "2025-09-26",
+      "changes": {
+        "feature_additions": [
+          "Menu option 99 - Advanced Switch firmware upgrade with mode selection (By Site or By Template)",
+          "Switch firmware upgrade system - Complete enterprise-grade switch firmware management",
+          "FirmwareManager class - Extended with comprehensive switch firmware methods including execute_switch_firmware_upgrade_with_mode_selection(), bulk_upgrade_switch_firmware_by_site(), upgrade_switch_firmware_by_gateway_template()",
+          "Switch-specific API parameters - Proper reboot=True, snapshot=True for Junos devices, no P2P support",
+          "Gateway Template integration for switches - Reuses existing template infrastructure for consistent site grouping",
+          "Switch device discovery - Automatic enumeration using listSiteDevices(type=switch) with proper filtering",
+          "Switch firmware validation - Version availability checking via listOrgAvailableDeviceVersions(type=switch)",
+          "Switch upgrade strategies - Big bang, canary, RRM, and serial upgrade modes with network-aware safety warnings",
+          "Enhanced safety prompts - Network disruption warnings specific to switch operations requiring maintenance windows"
+        ],
+        "enhancements": [
+          "Destructive operation tracking - Added option 99 to systematic test exclusions for safe automated testing",
+          "Documentation - Updated README with switch firmware capabilities and operation count (now 98 total menu options)",
+          "CSV export system - Switch upgrades export to data/ActiveSwitchUpgradeOperations.csv with comprehensive tracking"
+        ]
+      }
+    },
+    {
+      "version": "25.09.26.11.15",
+      "date": "2025-09-26",
+      "changes": {
+        "feature_additions": [
+          "FirmwareManager class - Comprehensive firmware management system for Mist Access Points",
+          "Interactive mode selection - Choose between site-based or template-based upgrades at runtime",
+          "Template-based AP firmware upgrades with Gateway Template selection and site count display",
+          "Automatic site discovery and AP enumeration across all sites in selected template"
+        ],
+        "enhancements": [
+          "Menu option 90 - Consolidated firmware upgrade with mode selection (By Site or By Template)",
+          "Firmware upgrade architecture - Refactored existing functions into class-based structure",
+          "User experience - Single menu option with clear workflow branching",
+          "Backward compatibility - All existing functionality maintained with improved organization",
+          "Code organization - NASA/JPL compliant safety architecture with comprehensive validation"
+        ],
+        "documentation": [
+          "Complete firmware upgrade workflow including site auto-upgrade configuration behavior"
+        ]
+      }
+    },
+    {
+      "version": "25.09.25.14.30",
+      "date": "2025-09-25",
+      "changes": {
+        "fixes": [
+          "Menu option 78 (Generate support package) file path permissions - now properly writes to data/ directory",
+          "Menu option 80 (ARP WebSocket output) file path permissions - now properly saves to data/ directory",
+          "Menu option 85 variable scope error - removed duplicate logging statement",
+          "SSH logging operations - all SSH functions now use proper data/per-host-logs/ directory structure"
+        ],
+        "configuration_changes": [
+          "Configurable SSL settings (PYTHONHTTPSVERIFY, SSL_VERIFY, CA bundles) in .env",
+          "Configurable container networking (network name, subnet, driver) in .env",
+          "Configurable package management settings (UV check, auto-install, dependencies) in .env",
+          "Configurable container runtime settings (image name, container names, SSH port) in .env",
+          "Configurable file paths (data directory, script log, env file locations) in .env",
+          "Configurable container mount paths for custom deployment scenarios in .env"
+        ],
+        "enhancements": [
+          "Container security compliance - all file I/O operations now respect container volume mounting",
+          "Configuration management - moved all hardcoded values from run-misthelper.py to .env file",
+          "sample.env template with complete configuration options and documentation",
+          "Comprehensive network data capture functionality working correctly"
+        ]
+      }
+    },
+    {
+      "version": "25.09.23.00.00",
+      "date": "2025-09-23",
+      "changes": {
+        "documentation": [
+          "Initial comprehensive README rewrite to match current codebase",
+          "Enhanced menu operation documentation with current truth from code"
+        ],
+        "feature_additions": [
+          "SSH remote access capabilities with containerized deployment",
+          "Systematic test mode and performance optimization features"
+        ]
+      }
+    },
+    {
+      "version": "25.01.08.15.30",
+      "date": "2025-01-08",
+      "changes": {
+        "feature_additions": [
+          "Menu option 5 - MAC table WebSocket command for switches with real-time streaming output",
+          "Switch-only filtering for MAC table operations to ensure compatibility with supported device types"
+        ],
+        "enhancements": [
+          "WebSocket completion detection - Fixed chunking issue in message parsing for improved performance",
+          "Device filtering - Fixed type=all parameter handling to correctly show switches in device selection",
+          "MAC table completion - Smart detection completes in ~5 seconds instead of 60s timeout when all entries received",
+          "WebSocket debugging - Added comprehensive debug logging for troubleshooting message segmentation",
+          "Pattern matching - Robust handling of ethernet switching table vs thernet switching table chunking variations",
+          "MAC table retrieval tested on EX4100-F-12P switch with 44 entries, optimal performance confirmed"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.11.35",
+      "date": "2025-01-07",
+      "changes": {
+        "fixes": [
+          "Client selection API endpoints - Corrected to use searchSiteWirelessClients and searchSiteWiredClients (not list* functions)",
+          "AttributeError on client fetch - Resolved module has no attribute listSiteWirelessClients error"
+        ],
+        "enhancements": [
+          "API response handling - Properly extracts results key from search endpoint pagination structure"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.11.30",
+      "date": "2025-01-07",
+      "changes": {
+        "feature_additions": [
+          "Interactive client selection for wireless/wired captures - Browse currently connected clients with hostname, IP, SSID/VLAN info",
+          "Client selection helper function prompt_select_client_mac_from_site() - Lists all wireless and wired clients at selected site",
+          "Loop Mode to ALL capture types - Wireless Client (1), Wired Client (2), Gateway (3), New Association (4), Scan Radio (5)",
+          "Rich client table with Index, Hostname/User, MAC, IP, Connection Type (Wireless/Wired), SSID/VLAN columns",
+          "Manual MAC entry option (m) if client not in connected list or for offline planning"
+        ],
+        "enhancements": [
+          "Client capture workflow - Choose from live client list or manually enter MAC address (fallback option)",
+          "Unified loop mode prompt across all capture types - Consistent user experience for continuous monitoring"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.11.00",
+      "date": "2025-01-07",
+      "changes": {
+        "feature_additions": [
+          "Continuous Loop Mode for packet captures - Automatically restarts captures when complete for continuous monitoring",
+          "Background download queue - PCAP files download in background thread while next capture starts immediately",
+          "Graceful interruption - Ctrl+C cleanly stops loop and waits for pending downloads to complete",
+          "Per-capture iteration tracking - Each capture numbered and logged for easy correlation with downloaded files",
+          "Threaded downloader with Queue-based job management for efficient background processing"
+        ],
+        "enhancements": [
+          "Intelligent capture completion detection - Polls for capture completion (enabled=False or duration elapsed) separately from PCAP download availability",
+          "Loop mode workflow - 5-second delay between captures to avoid API rate limits, 30-second retry on conflicts"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.10.25",
+      "date": "2025-01-07",
+      "changes": {
+        "enhancements": [
+          "User experience - Removed repetitive warning about existing captures already in progress (moved to debug logging only)",
+          "User experience - Removed redundant NOTE: Mist API requires minimum 60 seconds message (validation still enforced, just cleaner UI)",
+          "Packet capture workflow - Reduced visual clutter while maintaining all validation and safety checks in background"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.10.20",
+      "date": "2025-01-07",
+      "changes": {
+        "fixes": [
+          "Packet capture duration validation - Updated ALL capture types (wireless client, wired client, gateway, new association) to enforce API-mandated 60-second minimum",
+          "Duration validation messages - Added explicit API constraint explanations: Mist API requires minimum 60 seconds for all packet captures"
+        ],
+        "enhancements": [
+          "Duration defaults - Changed from 30s to 60s across all capture types to match API requirements and prevent silent API overrides to 600s default",
+          "API compliance - Prevents user confusion when requesting 30s captures but receiving 600s captures due to API rejecting sub-60s durations"
+        ],
+        "documentation": [
+          "API discovery - Confirmed via OpenAPI spec that ALL capture types (client, new_assoc, gateway, radiotap, scan) have minimum: 60 and default: 600 constraints"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.10.15",
+      "date": "2025-01-07",
+      "changes": {
+        "fixes": [
+          "PCAP download polling - Fixed API response structure handling (response.data contains dict with results key, not direct list)",
+          "Warning spam - Eliminated Expected list but got dict warnings by properly parsing API pagination structure"
+        ],
+        "enhancements": [
+          "Response type detection - Added logic to extract results key from dict or handle direct list responses for both site and org-level captures",
+          "Debug logging - Improved clarity of polling logs showing when results extraction occurs vs direct list handling"
+        ]
+      }
+    },
+    {
+      "version": "25.01.07.10.05",
+      "date": "2025-01-07",
+      "changes": {
+        "fixes": [
+          "Added type checking and defensive handling for API response data in PCAP polling",
+          "listSitePacketCaptures sometimes returns list of strings instead of list of dictionaries",
+          "Added isinstance() checks before calling .get() on capture objects",
+          "Prevents AttributeError: str object has no attribute get"
+        ],
+        "feature_additions": [
+          "Logs data type of response.data (e.g., Received data type: class list)",
+          "Logs raw captures data to reveal unexpected response structures",
+          "Skip non-dict items in capture list with warning instead of crashing",
+          "Safe ID extraction that handles both dict and string items"
+        ],
+        "enhancements": [
+          "Continues polling after encountering unexpected data types",
+          "Both _wait_and_download_pcap() and _wait_and_download_pcap_org() functions enhanced"
+        ]
+      }
+    },
+    {
+      "version": "25.01.02.18.30",
+      "date": "2025-01-02",
+      "changes": {
+        "feature_additions": [
+          "Menu option 6 - Show forwarding table command for gateway/SSR devices via WebSocket (Layer 3 routing table)",
+          "Gateway/SSR compatibility checks - Device-specific guidance and troubleshooting for forwarding table operations",
+          "Layer 3 routing diagnostics - Comprehensive forwarding table information for packet routing decisions"
+        ],
+        "enhancements": [
+          "WebSocket device commands - Expanded support for both Layer 2 (MAC table) and Layer 3 (forwarding table) operations",
+          "Menu organization - Filled numbering gap between option 5 and 11 to improve menu structure",
+          "Device type validation - Improved device compatibility warnings for Layer 3 vs Layer 2 operations"
+        ]
+      }
+    }
+  ]
+}
 
 ---
 **MistHelper** – Practical, transparent data operations for Juniper Mist Cloud.

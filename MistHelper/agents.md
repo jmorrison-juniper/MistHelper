@@ -2,7 +2,7 @@
 
 Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maintainers) to safely extend, refactor, and diagnose the MistHelper codebase without breaking production conventions or security guarantees. 
 
-As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to the current date and time of when changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too. When recording the changlog, keep it in JSOn formatting with grouped topics, like " documentation, fixs, feature additions.
+As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to the current date and time of when changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too. When recording the changlog, keep it in JSON formatting with grouped topics, like "api-changes, logging/analytics, compatability, documentation, bug fixes, feature additions, performance, security, refactoring, testing/validation". Keep newest events at the top of the changelog and oldest last. An idea or item should not be spread over multiple topics. We dont need over complicated or "wordy" changelog.
 
 Everytime you update the changelog in the readme, do a "stage" in git.
 
