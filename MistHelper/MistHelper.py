@@ -2854,16 +2854,165 @@ class PacketCaptureManager:
         # Insert colons every 2 characters
         return ':'.join(mac_clean[i:i+2] for i in range(0, 12, 2))
     
+    def _get_tcpdump_expression_selection(self):
+        """
+        Prompt user for tcpdump expression with comprehensive examples.
+        Based on Daniel Miessler's tcpdump tutorial (danielmiessler.com/blog/tcpdump)
+        
+        Returns:
+            str: tcpdump expression or empty string to skip
+        """
+        print("\n" + "=" * 80)
+        print(" PACKET FILTER SELECTION (tcpdump expression)")
+        print("=" * 80)
+        print("\n--- BASIC FILTERS ---")
+        print("  1.  All traffic (no filter)")
+        print("  2.  HTTPS only (port 443)")
+        print("  3.  HTTP/HTTPS (port 80 or 443)")
+        print("  4.  DNS (port 53)")
+        print("  5.  SSH (port 22)")
+        print("  6.  FTP (port 21)")
+        print("  7.  SMTP Email (port 25)")
+        print("  8.  ICMP/ping")
+        print("  9.  ARP")
+        
+        print("\n--- PROTOCOL FILTERS ---")
+        print("  10. TCP only")
+        print("  11. UDP only")
+        print("  12. Not ICMP (exclude ping)")
+        
+        print("\n--- DIRECTION FILTERS ---")
+        print("  13. Outbound to port 443")
+        print("  14. Inbound from port 80")
+        
+        print("\n--- COMBINED FILTERS ---")
+        print("  15. HTTP or HTTPS or DNS (port 80 or 443 or 53)")
+        print("  16. All except SSH (not port 22)")
+        print("  17. TCP SYN packets (connection attempts)")
+        print("  18. TCP SYN-ACK packets (connection replies)")
+        print("  19. TCP RST packets (connection resets)")
+        print("  20. TCP FIN packets (connection close)")
+        
+        print("\n--- ADVANCED FILTERS ---")
+        print("  21. Non-standard ports (>1024)")
+        print("  22. All except ARP and DNS")
+        print("  23. TCP traffic on non-standard ports")
+        print("  24. Broadcast traffic")
+        print("  25. Multicast traffic")
+        print("  26. IPv6 only")
+        print("  27. VLAN tagged traffic")
+        
+        print("\n--- APPLICATION PROTOCOLS ---")
+        print("  28. SMB/CIFS file sharing (port 445)")
+        print("  29. RDP Remote Desktop (port 3389)")
+        print("  30. NTP time sync (port 123)")
+        print("  31. SNMP monitoring (port 161)")
+        print("  32. Syslog (port 514)")
+        print("  33. DHCP (port 67 or 68)")
+        print("  34. LDAP directory (port 389)")
+        print("  35. MySQL database (port 3306)")
+        
+        print("\n--- SECURITY & TROUBLESHOOTING ---")
+        print("  36. Port scans (SYN without ACK)")
+        print("  37. Fragmented packets")
+        print("  38. Large packets (>1500 bytes)")
+        print("  39. Retransmissions (duplicate SEQ)")
+        print("  40. Custom expression")
+        
+        print("=" * 80)
+        
+        choice = safe_input("\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter")
+        
+        expressions = {
+            # Basic filters
+            "1": "",  # No filter
+            "2": "port 443",
+            "3": "port 80 or port 443",
+            "4": "port 53",
+            "5": "port 22",
+            "6": "port 21",
+            "7": "port 25",
+            "8": "icmp",
+            "9": "arp",
+            
+            # Protocol filters
+            "10": "tcp",
+            "11": "udp",
+            "12": "not icmp",
+            
+            # Direction filters
+            "13": "dst port 443",
+            "14": "src port 80",
+            
+            # Combined filters
+            "15": "port 80 or port 443 or port 53",
+            "16": "not port 22",
+            "17": "tcp[tcpflags] & tcp-syn != 0",
+            "18": "tcp[tcpflags] = 0x12",
+            "19": "tcp[tcpflags] & tcp-rst != 0",
+            "20": "tcp[tcpflags] & tcp-fin != 0",
+            
+            # Advanced filters
+            "21": "tcp[0:2] > 1024 or udp[0:2] > 1024",
+            "22": "not arp and not port 53",
+            "23": "tcp and port > 1024",
+            "24": "ether broadcast",
+            "25": "ether multicast",
+            "26": "ip6",
+            "27": "vlan",
+            
+            # Application protocols
+            "28": "port 445",
+            "29": "port 3389",
+            "30": "port 123",
+            "31": "port 161",
+            "32": "port 514",
+            "33": "port 67 or port 68",
+            "34": "port 389",
+            "35": "port 3306",
+            
+            # Security & troubleshooting
+            "36": "tcp[tcpflags] & (tcp-syn) != 0 and tcp[tcpflags] & (tcp-ack) = 0",
+            "37": "ip[6:2] & 0x1fff != 0",
+            "38": "greater 1500",
+            "39": "tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst|tcp-push|tcp-ack|tcp-urg) = 0"
+        }
+        
+        if choice in expressions:
+            expr = expressions[choice]
+            if expr:
+                print(f"\n! Filter applied: {expr}")
+            else:
+                print("\n! Filter: None (capturing all traffic)")
+            return expr
+        elif choice == "40":
+            print("\nEnter custom tcpdump expression:")
+            print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")
+            custom_expr = safe_input("Expression: ", context="tcpdump_custom", allow_empty=True)
+            if custom_expr:
+                print(f"\n! Filter applied: {custom_expr}")
+                return custom_expr
+            else:
+                print("\n! No filter applied")
+                return ""
+        else:
+            print(f"\n! Invalid choice, using no filter")
+            return ""
+    
     def _get_capture_format_selection(self):
         """
         Prompt user for capture format selection.
+        
+        NOTE: API documentation shows switches/gateways only support "stream" format,
+        but testing confirms "pcap" format works and generates downloadable files.
+        We offer both options and let the API reject if unsupported.
         
         Returns:
             str: Selected format - 'pcap' or 'stream'
         """
         print("\nCapture format:")
-        print("  1. PCAP file - downloadable (default)")
-        print("  2. Stream to Mist Cloud")
+        print("  1. PCAP file - downloadable (default, recommended)")
+        print("  2. Stream to Mist Cloud (WebSocket real-time)")
         format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
         return "pcap" if format_choice == "1" else "stream"
     
@@ -2879,11 +3028,12 @@ class PacketCaptureManager:
         print(" SITE PACKET CAPTURE MANAGER")
         print("=" * 80)
         print("\nSelect capture type:")
-        print("  1. Client Capture (Wireless)")
-        print("  2. Client Capture (Wired)")
-        print("  3. Gateway Capture")
-        print("  4. New Association Capture")
-        print("  5. Scan Radio Capture")
+        print("  1. Client Capture (Wireless) - Captures ongoing traffic from connected clients")
+        print("  2. Client Capture (Wired) - Captures wired client traffic")
+        print("  3. Gateway Capture - Captures WAN/LAN gateway port traffic")
+        print("  4. Switch Capture - Captures switch port traffic")
+        print("  5. New Association Capture - Captures NEW connection attempts (auth/assoc handshakes)")
+        print("  6. Scan Radio Capture - Captures raw 802.11 frames on specific channel")
         print("  0. Cancel")
         print("=" * 80)
         
@@ -2896,8 +3046,10 @@ class PacketCaptureManager:
         elif choice == "3":
             self._start_site_gateway_capture()
         elif choice == "4":
-            self._start_site_new_association_capture()
+            self._start_site_switch_capture()
         elif choice == "5":
+            self._start_site_new_association_capture()
+        elif choice == "6":
             self._start_site_scan_capture()
         elif choice == "0":
             print("\n! Cancelled by user")
@@ -2919,8 +3071,24 @@ class PacketCaptureManager:
         print("\n" + "-" * 80)
         print(" WIRELESS CLIENT CAPTURE CONFIGURATION")
         print("-" * 80)
+        print("\nThis capture type monitors ongoing traffic from ALREADY CONNECTED wireless clients.")
+        print("Note: To capture new connection attempts (auth/assoc handshakes), use New Association Capture instead.")
         
-        client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        # Client MAC selection
+        print("\nClient selection:")
+        print("  1. Select from connected clients")
+        print("  2. Manually enter MAC address")
+        client_choice = safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
+        
+        client_mac = None
+        if client_choice == "1":
+            client_mac = prompt_select_client_mac_from_site(site_id)
+            if not client_mac:
+                print("\n! No client selected")
+                return
+        else:
+            client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        
         if not self.validate_mac_address(client_mac):
             print(f"\n! Invalid MAC address format: {client_mac}")
             return
@@ -2945,13 +3113,14 @@ class PacketCaptureManager:
                 return
             ap_mac = self.normalize_mac_address(ap_mac)
         
-        # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
-                                 default_value="30", context="duration")
+        # Duration (Mist API enforces minimum 60 seconds for all captures)
+        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+                                 default_value="60", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 30 or duration > 86400:
-                print(f"\n! Duration must be between 30 and 86400 seconds")
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"  (Mist API requires minimum 60 seconds for all packet captures)")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -2981,8 +3150,21 @@ class PacketCaptureManager:
             print(f"\n! Invalid max packet length: {max_pkt_len_str}")
             return
         
+        # Multicast option
+        includes_mcast_input = safe_input("Include multicast traffic? (y/n, default n): ", 
+                                         default_value="n", context="includes_mcast")
+        includes_mcast = includes_mcast_input.lower() == 'y'
+        
         # Format selection
         capture_format = self._get_capture_format_selection()
+        
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
         
         # Build request payload
         payload = {
@@ -2991,6 +3173,7 @@ class PacketCaptureManager:
             "duration": duration,
             "num_packets": num_packets,
             "max_pkt_len": max_pkt_len,
+            "includes_mcast": includes_mcast,
             "format": capture_format
         }
         
@@ -3008,14 +3191,19 @@ class PacketCaptureManager:
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
         print(f"  Max Packet Length: {max_pkt_len} bytes")
+        print(f"  Include Multicast: {'Yes' if includes_mcast else 'No'}")
         print(f"  Format: {capture_format}")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         # Start capture via API
-        self._execute_site_capture(site_id, payload)
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
     
     def _start_site_client_capture_wired(self):
         """Start wired client packet capture at site level."""
@@ -3030,19 +3218,34 @@ class PacketCaptureManager:
         print(" WIRED CLIENT CAPTURE CONFIGURATION")
         print("-" * 80)
         
-        client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        # Client MAC selection
+        print("\nClient selection:")
+        print("  1. Select from connected clients")
+        print("  2. Manually enter MAC address")
+        client_choice = safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
+        
+        client_mac = None
+        if client_choice == "1":
+            client_mac = prompt_select_client_mac_from_site(site_id)
+            if not client_mac:
+                print("\n! No client selected")
+                return
+        else:
+            client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+        
         if not self.validate_mac_address(client_mac):
             print(f"\n! Invalid MAC address format: {client_mac}")
             return
         client_mac = self.normalize_mac_address(client_mac)
         
-        # Duration and packet parameters (similar to wireless)
-        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
-                                 default_value="30", context="duration")
+        # Duration (Mist API enforces minimum 60 seconds for all captures)
+        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+                                 default_value="60", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 30 or duration > 86400:
-                print(f"\n! Duration must be between 30 and 86400 seconds")
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"  (Mist API requires minimum 60 seconds for all packet captures)")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3059,8 +3262,21 @@ class PacketCaptureManager:
             print(f"\n! Invalid number of packets: {num_packets_str}")
             return
         
+        # Multicast option
+        includes_mcast_input = safe_input("Include multicast traffic? (y/n, default n): ", 
+                                         default_value="n", context="includes_mcast")
+        includes_mcast = includes_mcast_input.lower() == 'y'
+        
         # Format selection
         capture_format = self._get_capture_format_selection()
+        
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
         
         # Build payload
         payload = {
@@ -3068,6 +3284,7 @@ class PacketCaptureManager:
             "client_mac": client_mac,
             "duration": duration,
             "num_packets": num_packets,
+            "includes_mcast": includes_mcast,
             "format": capture_format
         }
         
@@ -3079,12 +3296,17 @@ class PacketCaptureManager:
         print(f"  Client MAC: {client_mac}")
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
+        print(f"  Include Multicast: {'Yes' if includes_mcast else 'No'}")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
-        self._execute_site_capture(site_id, payload)
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
     
     def _start_site_gateway_capture(self):
         """Start gateway packet capture at site level."""
@@ -3109,21 +3331,29 @@ class PacketCaptureManager:
         gateway_mac = self.normalize_mac_address(gateway_mac)
         logging.debug(f"Selected and normalized gateway MAC: {gateway_mac}")
         
-        # Port selection
-        print("\nAvailable ports:")
-        print("  wan: WAN interfaces")
-        print("  lan: LAN interfaces")  
-        print("  all: All interfaces (default)")
-        port_choice = safe_input("Enter port selection (default 'all'): ", 
-                                default_value="all", context="port")
+        # Port selection - now using interactive port selector with status information
+        logging.debug("Prompting for port selection from gateway")
+        port_list, available_ports = prompt_select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
         
-        # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
-                                 default_value="30", context="duration")
+        if port_list is None:
+            logging.warning("Port selection failed or cancelled - aborting capture")
+            return
+        
+        # If port_list is empty (all ports), populate with all available port names
+        if not port_list and available_ports:
+            port_list = [port_name for port_name, _ in available_ports]
+            logging.debug(f"User selected all ports - expanded to: {port_list}")
+        else:
+            logging.debug(f"User selected specific ports: {port_list}")
+        
+        # Duration (Mist API enforces minimum 60 seconds for all captures)
+        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+                                 default_value="60", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 30 or duration > 86400:
-                print(f"\n! Duration must be between 30 and 86400 seconds")
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"  (Mist API requires minimum 60 seconds for all packet captures)")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3140,25 +3370,41 @@ class PacketCaptureManager:
             print(f"\n! Invalid number of packets: {num_packets_str}")
             return
         
-        # Optional tcpdump expression
-        tcpdump_expr = safe_input("Enter tcpdump expression (optional, press Enter to skip): ", 
-                                 context="tcpdump", allow_empty=True)
+        # Packet filter selection (applies to all selected ports)
+        tcpdump_expr = self._get_tcpdump_expression_selection()
         
         # Format selection
         capture_format = self._get_capture_format_selection()
         
-        # Build payload
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
+        
+        # Build payload - CORRECT structure per API spec
         payload = {
             "type": "gateway",
-            "gateway_mac": gateway_mac,
-            "port_id": port_choice,
             "duration": duration,
             "num_packets": num_packets,
+            "max_pkt_len": 1500,  # API example uses 1500 for gateways
             "format": capture_format
         }
         
-        if tcpdump_expr:
-            payload["tcpdump_expression"] = tcpdump_expr
+        # Build gateways structure with actual port names
+        gateways_config = {}
+        ports_config = {}
+        
+        # Always list actual port names (never empty dict)
+        for port in port_list:
+            ports_config[port] = {}
+            if tcpdump_expr:
+                ports_config[port]["tcpdump_expression"] = tcpdump_expr
+        
+        gateways_config[gateway_mac] = {"ports": ports_config}
+        payload["gateways"] = gateways_config
         
         # Display and confirm
         print("\n" + "=" * 80)
@@ -3166,17 +3412,149 @@ class PacketCaptureManager:
         print("=" * 80)
         print(f"  Capture Type: Gateway")
         print(f"  Gateway MAC: {gateway_mac}")
-        print(f"  Port: {port_choice}")
+        if port_list:
+            print(f"  Ports: {', '.join(port_list)}")
+        else:
+            print(f"  Ports: All ports")
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets}")
+        print(f"  Max Packet Length: 1500 bytes")
         if tcpdump_expr:
             print(f"  Filter: {tcpdump_expr}")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
-        self._execute_site_capture(site_id, payload)
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
+    
+    def _start_site_switch_capture(self):
+        """Start switch packet capture at site level."""
+        logging.info("Starting site switch capture")
+        
+        site_id = prompt_and_log_site_selection()
+        if not site_id:
+            return
+        
+        print("\n" + "-" * 80)
+        print(" SWITCH CAPTURE CONFIGURATION")
+        print("-" * 80)
+        
+        # Switch selection - interactive list
+        logging.debug("Prompting for switch selection from site inventory")
+        switch_mac = prompt_select_switch_mac_from_site(site_id)
+        if not switch_mac:
+            logging.warning("No switch selected or switch selection failed - aborting capture")
+            return
+        
+        # Normalize MAC address (already validated by selection function)
+        switch_mac = self.normalize_mac_address(switch_mac)
+        logging.debug(f"Selected and normalized switch MAC: {switch_mac}")
+        
+        # Port selection - now using interactive port selector with status information
+        logging.debug("Prompting for port selection from switch")
+        port_list, available_ports = prompt_select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
+        
+        if port_list is None:
+            logging.warning("Port selection failed or cancelled - aborting capture")
+            return
+        
+        # If port_list is empty (all ports), populate with all available port names
+        if not port_list and available_ports:
+            port_list = [port_name for port_name, _ in available_ports]
+            logging.debug(f"User selected all ports - expanded to: {port_list}")
+        else:
+            logging.debug(f"User selected specific ports: {port_list}")
+        
+        # Duration (Mist API enforces minimum 60 seconds for all captures)
+        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+                                 default_value="60", context="duration")
+        try:
+            duration = int(duration_str)
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"  (Mist API requires minimum 60 seconds for all packet captures)")
+                return
+        except ValueError:
+            print(f"\n! Invalid duration: {duration_str}")
+            return
+        
+        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+                                    default_value="1024", context="num_packets")
+        try:
+            num_packets = int(num_packets_str)
+            if num_packets < 0 or num_packets > 10000:
+                print(f"\n! Number of packets must be between 0 and 10000")
+                return
+        except ValueError:
+            print(f"\n! Invalid number of packets: {num_packets_str}")
+            return
+        
+        # Packet filter selection (applies to all selected ports)
+        tcpdump_expr = self._get_tcpdump_expression_selection()
+        
+        # Format selection
+        capture_format = self._get_capture_format_selection()
+        
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
+        
+        # Build payload
+        payload = {
+            "type": "switch",
+            "duration": duration,
+            "num_packets": num_packets,
+            "max_pkt_len": 1500,  # API example uses 1500 for switches
+            "format": capture_format
+        }
+        
+        # Build switches structure with actual port names
+        switches_config = {}
+        ports_config = {}
+        
+        # Always list actual port names (never empty dict)
+        for port in port_list:
+            ports_config[port] = {}
+            if tcpdump_expr:
+                ports_config[port]["tcpdump_expression"] = tcpdump_expr
+        
+        switches_config[switch_mac] = {"ports": ports_config}
+        payload["switches"] = switches_config
+        
+        # Display and confirm
+        print("\n" + "=" * 80)
+        print(" CAPTURE CONFIGURATION SUMMARY")
+        print("=" * 80)
+        print(f"  Capture Type: Switch")
+        print(f"  Switch MAC: {switch_mac}")
+        if port_list:
+            print(f"  Ports: {', '.join(port_list)}")
+        else:
+            print(f"  Ports: All ports")
+        print(f"  Duration: {duration} seconds")
+        print(f"  Packets: {num_packets}")
+        print(f"  Max Packet Length: 1500 bytes")
+        if tcpdump_expr:
+            print(f"  Filter: {tcpdump_expr}")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
+        print("=" * 80)
+        
+        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
+        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
     
     def _start_site_new_association_capture(self):
         """Start new association packet capture at site level."""
@@ -3189,19 +3567,21 @@ class PacketCaptureManager:
         print("\n" + "-" * 80)
         print(" NEW ASSOCIATION CAPTURE CONFIGURATION")
         print("-" * 80)
-        print("\nThis capture type monitors new client associations.")
+        print("\nThis capture type monitors NEW client connection attempts (802.11 auth/assoc handshakes).")
+        print("Note: To capture ongoing traffic from already-connected clients, use Client Capture (Wireless) instead.")
         
         # Optional SSID filter
         ssid = safe_input("\nEnter SSID to monitor (optional, press Enter for all): ", 
                          context="ssid", allow_empty=True)
         
-        # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
-                                 default_value="30", context="duration")
+        # Duration (Mist API enforces minimum 60 seconds for new_assoc captures)
+        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+                                 default_value="60", context="duration")
         try:
             duration = int(duration_str)
-            if duration < 30 or duration > 86400:
-                print(f"\n! Duration must be between 30 and 86400 seconds")
+            if duration < 60 or duration > 86400:
+                print(f"\n! Duration must be between 60 and 86400 seconds")
+                print(f"  (Mist API requires minimum 60 seconds for new association captures)")
                 return
         except ValueError:
             print(f"\n! Invalid duration: {duration_str}")
@@ -3209,6 +3589,14 @@ class PacketCaptureManager:
         
         # Format selection
         capture_format = self._get_capture_format_selection()
+        
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
         
         # Build payload
         payload = {
@@ -3230,12 +3618,16 @@ class PacketCaptureManager:
         else:
             print(f"  SSID Filter: All SSIDs")
         print(f"  Duration: {duration} seconds")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
-        self._execute_site_capture(site_id, payload)
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
     
     def _start_site_scan_capture(self):
         """Start scan radio packet capture at site level."""
@@ -3325,7 +3717,6 @@ class PacketCaptureManager:
         
         # Duration
         logging.debug("Prompting for duration")
-        print("\n! NOTE: Mist API requires minimum 60 seconds for scan captures")
         duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
@@ -3359,6 +3750,14 @@ class PacketCaptureManager:
         # Format selection
         capture_format = self._get_capture_format_selection()
         
+        # Loop mode option
+        print("\nLoop Mode:")
+        print("  Automatically start a new capture when the current one completes")
+        print("  Downloads happen in background while next capture runs")
+        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+                              default_value="n", context="loop_mode")
+        enable_loop = loop_mode.lower() == 'y'
+        
         # Build payload
         logging.debug("Building capture payload")
         payload = {
@@ -3385,6 +3784,7 @@ class PacketCaptureManager:
         print(f"  Bandwidth: {bandwidth} MHz")
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets}")
+        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
@@ -3394,7 +3794,7 @@ class PacketCaptureManager:
         # Check for existing captures on this AP
         print(f"\n> Checking for existing captures on AP {ap_mac}...")
         try:
-            response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
+            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
                 self.mist_session,
                 site_id
             )
@@ -3422,7 +3822,10 @@ class PacketCaptureManager:
             # Continue anyway - this is just a courtesy check
         
         logging.info("User confirmed - executing site capture")
-        self._execute_site_capture(site_id, payload)
+        if enable_loop:
+            self._execute_site_capture_loop(site_id, payload)
+        else:
+            self._execute_site_capture(site_id, payload)
     
     def _start_site_scan_capture_all_aps(self, site_id: str):
         """
@@ -3444,26 +3847,18 @@ class PacketCaptureManager:
         # Check for existing captures at this site
         print(f"  Checking for existing captures...")
         try:
-            response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
+            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
                 self.mist_session,
                 site_id
             )
             
             if response.status_code == 200:
                 existing_captures = response.data or []
+                # Silently log existing captures but don't warn user
                 if existing_captures:
-                    print(f"\n! WARNING: {len(existing_captures)} capture(s) already in progress or recently completed")
-                    print(f"  Mist only allows one capture per AP at a time")
-                    print(f"  Existing captures may cause launch failures")
-                    
-                    proceed = safe_input("\nContinue anyway? (y/n, default n): ", 
-                                       default_value="n", context="proceed")
-                    if proceed.lower() != 'y':
-                        print("\n! Cancelled by user")
-                        return
+                    logging.debug(f"{len(existing_captures)} capture(s) already in progress or recently completed")
         except Exception as check_error:
-            logging.warning(f"Could not check for existing captures: {check_error}")
-            print(f"  Warning: Could not check for existing captures")
+            logging.debug(f"Could not check for existing captures: {check_error}")
         
         print(f"  Preparing to launch {len(ap_macs)} simultaneous captures...")
         
@@ -3509,7 +3904,6 @@ class PacketCaptureManager:
         bandwidth = bw_map.get(bw_choice, "20")
         
         # Duration
-        print("\n! NOTE: Mist API requires minimum 60 seconds for scan captures")
         duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
@@ -3703,6 +4097,312 @@ class PacketCaptureManager:
         except Exception as error:
             print(f"\n! Error starting capture: {error}")
             logging.error(f"Exception in _execute_site_capture: {error}", exc_info=True)
+    
+    def _execute_site_capture_loop(self, site_id: str, payload: dict):
+        """
+        Execute site-level packet captures in continuous loop mode.
+        
+        New Strategy:
+        1. Check API for completed PCAPs (last 24 hours)
+        2. Download any we don't already have
+        3. Start new capture if minimum time has elapsed
+        4. Repeat
+        
+        Args:
+            site_id (str): Site UUID
+            payload (dict): Capture configuration payload (reused for each iteration)
+        """
+        import time
+        import os
+        from datetime import datetime, timedelta
+        
+        iteration = 0
+        last_capture_time = None
+        min_capture_interval = payload.get('duration', 60)  # Minimum time between captures
+        download_folder = os.path.join(os.getcwd(), 'data')
+        
+        print(f"\n{'=' * 80}")
+        print(f" CONTINUOUS CAPTURE MODE ACTIVE")
+        print(f"{'=' * 80}")
+        print(f"  Press Ctrl+C to stop and exit gracefully")
+        print(f"  Capture duration: {payload.get('duration', 60)} seconds")
+        print(f"  Strategy: Download existing PCAPs, then start new captures")
+        print(f"{'=' * 80}\n")
+        
+        try:
+            while True:
+                iteration += 1
+                loop_start_time = time.time()
+                
+                print(f"\n{'=' * 60}")
+                print(f"Loop Iteration #{iteration}")
+                print(f"{'=' * 60}")
+                
+                # Step 1: Get list of all PCAPs from last 24 hours
+                print(f"\n[Step 1/3] Checking for completed PCAPs in last 24 hours...")
+                logging.info(f"Loop iteration {iteration}: Fetching PCAP list from API")
+                
+                try:
+                    pcaps_response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
+                        self.mist_session,
+                        site_id,
+                        duration='1d',  # Last 24 hours
+                        limit=100
+                    )
+                    
+                    if pcaps_response.status_code == 200:
+                        pcaps_data = pcaps_response.data
+                        
+                        # Handle pagination structure
+                        if isinstance(pcaps_data, dict) and 'results' in pcaps_data:
+                            pcap_list = pcaps_data.get('results', [])
+                        else:
+                            pcap_list = pcaps_data if isinstance(pcaps_data, list) else []
+                        
+                        # Filter for completed PCAPs with download URLs
+                        completed_pcaps = [
+                            pcap for pcap in pcap_list 
+                            if pcap.get('pcap_url') and pcap.get('format') == 'pcap'
+                        ]
+                        
+                        print(f"  Found {len(completed_pcaps)} completed PCAP(s) with download URLs")
+                        logging.info(f"Loop iteration {iteration}: Found {len(completed_pcaps)} completed PCAPs")
+                        
+                        # Step 2: Download any PCAPs we don't have yet
+                        if completed_pcaps:
+                            print(f"\n[Step 2/3] Checking for new PCAPs to download...")
+                            downloads_this_round = 0
+                            
+                            for pcap in completed_pcaps:
+                                capture_id = pcap.get('id')
+                                pcap_url = pcap.get('pcap_url')
+                                
+                                # Check if we already have this file
+                                expected_filename = f"PacketCapture_{capture_id}.pcap"
+                                local_path = os.path.join(download_folder, expected_filename)
+                                
+                                if os.path.exists(local_path):
+                                    logging.debug(f"  Skipping {capture_id} - already downloaded")
+                                    continue
+                                
+                                # Download this PCAP
+                                print(f"\n  --> Downloading PCAP: {capture_id}")
+                                try:
+                                    download_response = requests.get(pcap_url, stream=True)
+                                    
+                                    if download_response.status_code == 200:
+                                        with open(local_path, 'wb') as pcap_file:
+                                            for chunk in download_response.iter_content(chunk_size=8192):
+                                                pcap_file.write(chunk)
+                                        
+                                        file_size_mb = os.path.getsize(local_path) / (1024 * 1024)
+                                        print(f"      Downloaded: {expected_filename} ({file_size_mb:.2f} MB)")
+                                        logging.info(f"Downloaded PCAP {capture_id}: {file_size_mb:.2f} MB")
+                                        downloads_this_round += 1
+                                    else:
+                                        print(f"      Failed to download: HTTP {download_response.status_code}")
+                                        logging.error(f"Download failed for {capture_id}: {download_response.status_code}")
+                                        
+                                except Exception as download_error:
+                                    print(f"      Error downloading: {download_error}")
+                                    logging.error(f"Download exception for {capture_id}: {download_error}", exc_info=True)
+                            
+                            if downloads_this_round > 0:
+                                print(f"\n  Downloaded {downloads_this_round} new PCAP file(s) this round")
+                            else:
+                                print(f"\n  No new PCAPs to download (all already exist locally)")
+                        else:
+                            print(f"\n[Step 2/3] No completed PCAPs available for download")
+                    
+                    else:
+                        print(f"  Warning: Could not fetch PCAP list (HTTP {pcaps_response.status_code})")
+                        logging.warning(f"Failed to list PCAPs: {pcaps_response.status_code}")
+                        
+                except Exception as list_error:
+                    print(f"  Error fetching PCAP list: {list_error}")
+                    logging.error(f"Exception listing PCAPs: {list_error}", exc_info=True)
+                
+                # Step 3: Determine if we should start a new capture
+                print(f"\n[Step 3/3] Checking if ready to start new capture...")
+                
+                should_capture = False
+                wait_time = 0
+                
+                if last_capture_time is None:
+                    should_capture = True
+                    print(f"  First capture of this session - starting now")
+                else:
+                    elapsed = time.time() - last_capture_time
+                    if elapsed >= min_capture_interval:
+                        should_capture = True
+                        print(f"  {elapsed:.0f}s elapsed since last capture (>= {min_capture_interval}s) - ready")
+                    else:
+                        wait_time = min_capture_interval - elapsed
+                        print(f"  Only {elapsed:.0f}s elapsed - waiting {wait_time:.0f}s more...")
+                
+                if should_capture:
+                    print(f"\n  Starting new packet capture...")
+                    logging.info(f"Loop iteration {iteration}: Starting new capture with payload: {payload}")
+                    
+                    try:
+                        response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
+                            self.mist_session,
+                            site_id,
+                            payload
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.data
+                            capture_id = result.get('id', 'unknown')
+                            duration = result.get('duration', 600)
+                            
+                            print(f"  Capture started successfully!")
+                            print(f"    Capture ID: {capture_id}")
+                            print(f"    Duration: {duration} seconds")
+                            
+                            logging.info(f"Loop iteration {iteration}: Capture started - ID={capture_id}")
+                            last_capture_time = time.time()
+                            
+                            # Export capture metadata
+                            self._export_capture_info_to_csv(result, 'site', site_id)
+                            
+                        else:
+                            error_details = response.data if hasattr(response, 'data') else 'No error details'
+                            print(f"  Failed to start capture: HTTP {response.status_code}")
+                            print(f"    Error: {error_details}")
+                            logging.error(f"Loop iteration {iteration} capture failed: {response.status_code} - {error_details}")
+                            
+                            # Check for conflict
+                            if response.status_code == 400 and isinstance(error_details, dict):
+                                if 'Recording already in progress' in error_details.get('detail', ''):
+                                    print(f"    Capture conflict detected - will retry next loop")
+                                    
+                    except Exception as capture_error:
+                        print(f"  Error starting capture: {capture_error}")
+                        logging.error(f"Exception starting capture: {capture_error}", exc_info=True)
+                
+                # Calculate sleep time for next iteration
+                loop_duration = time.time() - loop_start_time
+                
+                if wait_time > 0:
+                    sleep_time = wait_time
+                elif loop_duration < 30:
+                    # If loop was very fast, wait at least 30 seconds before next check
+                    sleep_time = 30 - loop_duration
+                else:
+                    sleep_time = 10
+                
+                print(f"\n{'=' * 60}")
+                print(f"Loop iteration #{iteration} complete")
+                print(f"Waiting {sleep_time:.0f} seconds before next check...")
+                print(f"{'=' * 60}\n")
+                
+                time.sleep(sleep_time)
+                        
+        except KeyboardInterrupt:
+            print(f"\n\n{'=' * 80}")
+            print(f" LOOP MODE INTERRUPTED BY USER")
+            print(f"{'=' * 80}")
+            print(f"  Completed {iteration} loop iteration(s)")
+            print(f"  All available PCAPs have been downloaded")
+            print(f"  Exiting gracefully...")
+            logging.info(f"Capture loop stopped by user after {iteration} iterations")
+        
+        except Exception as loop_error:
+            print(f"\n! Unexpected error in capture loop: {loop_error}")
+            logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
+    
+    def _wait_for_capture_completion(self, site_id: str, capture_id: str, expected_duration: int) -> bool:
+        """
+        Poll for capture completion status (separate from PCAP download availability).
+        Returns as soon as capture completes, does not wait for PCAP file URL.
+        
+        Args:
+            site_id (str): Site UUID
+            capture_id (str): Capture session ID
+            expected_duration (int): Expected capture duration in seconds
+            
+        Returns:
+            bool: True if capture confirmed complete, False if timeout/error
+        """
+        import time
+        
+        # Poll more frequently for completion detection
+        poll_interval = 3  # Check every 3 seconds
+        max_wait = expected_duration + 30  # Duration + 30 second buffer
+        max_polls = max_wait // poll_interval
+        
+        start_time = time.time()
+        
+        for poll_attempt in range(1, max_polls + 1):
+            try:
+                elapsed = int(time.time() - start_time)
+                
+                response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
+                    self.mist_session,
+                    site_id
+                )
+                
+                if response.status_code == 200:
+                    raw_data = response.data
+                    
+                    # Extract results list
+                    if isinstance(raw_data, dict) and 'results' in raw_data:
+                        captures = raw_data['results']
+                    elif isinstance(raw_data, list):
+                        captures = raw_data
+                    else:
+                        logging.warning(f"Completion check: Unexpected data structure")
+                        time.sleep(poll_interval)
+                        continue
+                    
+                    # Find our capture
+                    for capture in captures:
+                        if not isinstance(capture, dict):
+                            continue
+                        
+                        if capture.get('id') == capture_id:
+                            # Check if capture is complete
+                            # Capture is complete when:
+                            # 1. It has been running for at least the expected duration
+                            # 2. The 'enabled' field is False (capture stopped)
+                            enabled = capture.get('enabled', True)
+                            timestamp = capture.get('timestamp', 0)
+                            
+                            # Check if enough time has passed
+                            time_running = time.time() - timestamp if timestamp else elapsed
+                            
+                            if not enabled:
+                                # Capture explicitly stopped
+                                logging.debug(f"Capture {capture_id} completed (enabled=False)")
+                                return True
+                            elif time_running >= expected_duration:
+                                # Capture has run for expected duration
+                                logging.debug(f"Capture {capture_id} completed (duration reached)")
+                                return True
+                            else:
+                                # Still running
+                                remaining = int(expected_duration - time_running)
+                                if poll_attempt % 5 == 0:  # Log every 15 seconds
+                                    print(f"  ...capture in progress (~{remaining}s remaining)", end='\r')
+                                logging.debug(f"Capture {capture_id} still running ({remaining}s remaining)")
+                    
+                    # Capture not found - might be very new or very old
+                    if elapsed < 10:
+                        # Give it time to appear in API
+                        logging.debug(f"Capture {capture_id} not found yet (elapsed={elapsed}s)")
+                    else:
+                        logging.warning(f"Capture {capture_id} not found in list (elapsed={elapsed}s)")
+                
+                time.sleep(poll_interval)
+                
+            except Exception as poll_error:
+                logging.error(f"Completion poll error: {poll_error}", exc_info=True)
+                time.sleep(poll_interval)
+        
+        # Timeout reached
+        logging.warning(f"Capture {capture_id} completion check timed out after {max_wait}s")
+        return False
     
     def start_org_packet_capture(self):
         """
@@ -4067,25 +4767,79 @@ class PacketCaptureManager:
                     elapsed = int(time.time() - start_time)
                     
                     # List captures for this site to find our capture_id
-                    response = mistapi.api.v1.sites.pcaps.listSitePcapCaptures(
-                        self.apisession,
+                    logging.debug(f"Poll attempt {poll_attempt}: Querying listSitePacketCaptures for site {site_id}")
+                    response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
+                        self.mist_session,
                         site_id
                     )
                     
+                    logging.debug(f"Poll attempt {poll_attempt}: Response status={response.status_code}")
+                    
                     if response.status_code == 200:
-                        captures = response.data
+                        raw_data = response.data
+                        logging.debug(f"Poll attempt {poll_attempt}: Received raw data type: {type(raw_data)}")
+                        
+                        # Handle case where API returns dict with 'results' key
+                        if isinstance(raw_data, dict) and 'results' in raw_data:
+                            captures = raw_data['results']
+                            logging.debug(f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items")
+                        elif isinstance(raw_data, list):
+                            captures = raw_data
+                            logging.debug(f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items")
+                        else:
+                            logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
+                            logging.warning(f"  Raw data: {raw_data}")
+                            time.sleep(poll_interval)
+                            continue
+                        
+                        # Log the captures list structure
+                        if captures:
+                            logging.debug(f"Poll attempt {poll_attempt}: Processing {len(captures)} captures")
                         
                         # Find our capture in the list
+                        found_capture = False
                         for capture in captures:
-                            if capture.get('id') == capture_id:
+                            # Handle case where capture might be a string or other type
+                            if not isinstance(capture, dict):
+                                logging.warning(f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}")
+                                continue
+                            
+                            cap_id = capture.get('id')
+                            if cap_id == capture_id:
+                                found_capture = True
                                 pcap_url = capture.get('pcap_url')
+                                
+                                # Log all relevant fields from the capture object
+                                logging.debug(f"Poll attempt {poll_attempt}: Found our capture {capture_id}")
+                                logging.debug(f"  - enabled: {capture.get('enabled')}")
+                                logging.debug(f"  - format: {capture.get('format')}")
+                                logging.debug(f"  - type: {capture.get('type')}")
+                                logging.debug(f"  - ap_count: {capture.get('ap_count')}")
+                                logging.debug(f"  - duration: {capture.get('duration')}")
+                                logging.debug(f"  - expiry: {capture.get('expiry')}")
+                                logging.debug(f"  - timestamp: {capture.get('timestamp')}")
+                                logging.debug(f"  - pcap_url: {pcap_url if pcap_url else 'NOT SET YET'}")
                                 
                                 if pcap_url:
                                     print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
+                                    logging.info(f"PCAP URL available after {elapsed}s: {pcap_url}")
                                     break
+                                else:
+                                    logging.debug(f"  - Capture found but pcap_url not yet available (still processing)")
+                        
+                        if not found_capture:
+                            logging.debug(f"Poll attempt {poll_attempt}: Our capture {capture_id} not found in list of {len(captures)} captures")
+                            if captures:
+                                # Safely extract IDs, handling non-dict items
+                                capture_ids = [c.get('id') if isinstance(c, dict) else str(c) for c in captures]
+                                logging.debug(f"  Available capture IDs: {capture_ids}")
                         
                         if pcap_url:
                             break
+                    else:
+                        logging.warning(f"Poll attempt {poll_attempt}: API returned status {response.status_code}")
+                        error_detail = response.data if hasattr(response, 'data') else 'No details'
+                        logging.warning(f"  Error details: {error_detail}")
                     
                     # Continue waiting if not found yet
                     if poll_attempt < max_polls:
@@ -4093,7 +4847,7 @@ class PacketCaptureManager:
                         time.sleep(poll_interval)
                     
                 except Exception as poll_error:
-                    logging.debug(f"Poll attempt {poll_attempt} error: {poll_error}")
+                    logging.error(f"Poll attempt {poll_attempt} exception: {poll_error}", exc_info=True)
                     time.sleep(poll_interval)
             
             if not pcap_url:
@@ -4177,25 +4931,78 @@ class PacketCaptureManager:
                     elapsed = int(time.time() - start_time)
                     
                     # List captures for this org to find our capture_id
-                    response = mistapi.api.v1.orgs.pcaps.listOrgPcapCaptures(
-                        self.apisession,
+                    logging.debug(f"Poll attempt {poll_attempt}: Querying listOrgPacketCaptures for org {org_id}")
+                    response = mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures(
+                        self.mist_session,
                         org_id
                     )
                     
+                    logging.debug(f"Poll attempt {poll_attempt}: Response status={response.status_code}")
+                    
                     if response.status_code == 200:
-                        captures = response.data
+                        raw_data = response.data
+                        logging.debug(f"Poll attempt {poll_attempt}: Received raw data type: {type(raw_data)}")
+                        
+                        # Handle case where API returns dict with 'results' key
+                        if isinstance(raw_data, dict) and 'results' in raw_data:
+                            captures = raw_data['results']
+                            logging.debug(f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items")
+                        elif isinstance(raw_data, list):
+                            captures = raw_data
+                            logging.debug(f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items")
+                        else:
+                            logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
+                            logging.warning(f"  Raw data: {raw_data}")
+                            time.sleep(poll_interval)
+                            continue
+                        
+                        # Log the captures list structure
+                        if captures:
+                            logging.debug(f"Poll attempt {poll_attempt}: Processing {len(captures)} captures")
                         
                         # Find our capture in the list
+                        found_capture = False
                         for capture in captures:
-                            if capture.get('id') == capture_id:
+                            # Handle case where capture might be a string or other type
+                            if not isinstance(capture, dict):
+                                logging.warning(f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}")
+                                continue
+                            
+                            cap_id = capture.get('id')
+                            if cap_id == capture_id:
+                                found_capture = True
                                 pcap_url = capture.get('pcap_url')
+                                
+                                # Log all relevant fields from the capture object
+                                logging.debug(f"Poll attempt {poll_attempt}: Found our capture {capture_id}")
+                                logging.debug(f"  - enabled: {capture.get('enabled')}")
+                                logging.debug(f"  - format: {capture.get('format')}")
+                                logging.debug(f"  - type: {capture.get('type')}")
+                                logging.debug(f"  - duration: {capture.get('duration')}")
+                                logging.debug(f"  - expiry: {capture.get('expiry')}")
+                                logging.debug(f"  - timestamp: {capture.get('timestamp')}")
+                                logging.debug(f"  - pcap_url: {pcap_url if pcap_url else 'NOT SET YET'}")
                                 
                                 if pcap_url:
                                     print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
+                                    logging.info(f"PCAP URL available after {elapsed}s: {pcap_url}")
                                     break
+                                else:
+                                    logging.debug(f"  - Capture found but pcap_url not yet available (still processing)")
+                        
+                        if not found_capture:
+                            logging.debug(f"Poll attempt {poll_attempt}: Our capture {capture_id} not found in list of {len(captures)} captures")
+                            if captures:
+                                # Safely extract IDs, handling non-dict items
+                                capture_ids = [c.get('id') if isinstance(c, dict) else str(c) for c in captures]
+                                logging.debug(f"  Available capture IDs: {capture_ids}")
                         
                         if pcap_url:
                             break
+                    else:
+                        logging.warning(f"Poll attempt {poll_attempt}: API returned status {response.status_code}")
+                        error_detail = response.data if hasattr(response, 'data') else 'No details'
+                        logging.warning(f"  Error details: {error_detail}")
                     
                     # Continue waiting if not found yet
                     if poll_attempt < max_polls:
@@ -4203,7 +5010,7 @@ class PacketCaptureManager:
                         time.sleep(poll_interval)
                     
                 except Exception as poll_error:
-                    logging.debug(f"Poll attempt {poll_attempt} error: {poll_error}")
+                    logging.error(f"Poll attempt {poll_attempt} exception: {poll_error}", exc_info=True)
                     time.sleep(poll_interval)
             
             if not pcap_url:
@@ -6433,6 +7240,128 @@ def get_all_ap_macs_from_site(site_id: str) -> list:
         logging.error(f"Exception in get_all_ap_macs_from_site: {error}", exc_info=True)
         return []
 
+def prompt_select_client_mac_from_site(site_id: str) -> Optional[str]:
+    """
+    Prompts the user to select a client from currently connected clients at the site.
+    
+    Args:
+        site_id (str): The site ID to fetch clients from
+    
+    Returns:
+        str: The selected client MAC address (normalized) or None if no selection made
+    """
+    logging.debug(f"Fetching connected clients for site: {site_id}")
+    
+    try:
+        # Fetch wireless clients using search endpoint (from clients module)
+        wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
+        wireless_clients = wireless_response.data.get('results', []) if hasattr(wireless_response.data, 'get') else wireless_response.data
+        
+        # Fetch wired clients using search endpoint (from separate wired_clients module)
+        wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
+        wired_clients = wired_response.data.get('results', []) if hasattr(wired_response.data, 'get') else wired_response.data
+        
+        all_clients = []
+        
+        # Process wireless clients
+        if wireless_clients:
+            for client in wireless_clients:
+                client['connection_type'] = 'Wireless'
+                all_clients.append(client)
+        
+        # Process wired clients
+        if wired_clients:
+            for client in wired_clients:
+                client['connection_type'] = 'Wired'
+                all_clients.append(client)
+        
+        if not all_clients:
+            print("\n! No connected clients found at the selected site.")
+            logging.warning(f"No clients found for site_id: {site_id}")
+            return None
+        
+        logging.info(f"Found {len(all_clients)} connected clients at site ({len(wireless_clients or [])} wireless, {len(wired_clients or [])} wired)")
+        
+        # Sort by hostname/username for easier selection
+        all_clients = sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("username", "")))
+        
+        # Prepare selection table
+        table = PrettyTable()
+        table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]
+        table.max_width["Hostname/User"] = 25
+        index_to_client = {}
+        
+        for idx, client in enumerate(all_clients):
+            hostname = client.get("hostname", client.get("username", "Unknown"))[:25]
+            mac = client.get("mac", "Unknown")
+            ip = client.get("ip", "Unknown")
+            conn_type = client.get("connection_type", "Unknown")
+            
+            # SSID for wireless, VLAN for wired
+            if conn_type == "Wireless":
+                network = client.get("ssid", "N/A")
+            else:
+                network = f"VLAN {client.get('vlan_id', 'N/A')}"
+            
+            table.add_row([
+                idx,
+                hostname,
+                mac,
+                ip,
+                conn_type,
+                network
+            ])
+            index_to_client[idx] = client
+        
+        print("\n" + "=" * 80)
+        print(" SELECT CONNECTED CLIENT")
+        print("=" * 80)
+        print(f"  Found {len(all_clients)} connected clients")
+        print("=" * 80)
+        print(table)
+        print("\nOptions:")
+        print("  - Enter index number to select a client")
+        print("  - Enter 'm' to manually type MAC address")
+        print("  - Enter 'c' to cancel")
+        
+        user_input = safe_input("\nEnter your choice: ", context="client_selection").strip()
+        logging.debug(f"User input for client selection: {user_input}")
+        
+        # Check for manual entry
+        if user_input.lower() == 'm':
+            manual_mac = safe_input("Enter client MAC address: ", context="manual_mac")
+            logging.info(f"User chose manual MAC entry: {manual_mac}")
+            return manual_mac
+        
+        # Check for cancel
+        if user_input.lower() == 'c':
+            logging.info("User cancelled client selection")
+            return None
+        
+        # Validate index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_client:
+                client_mac = index_to_client[idx].get("mac")
+                client_hostname = index_to_client[idx].get("hostname", index_to_client[idx].get("username", "Unknown"))
+                conn_type = index_to_client[idx].get("connection_type", "Unknown")
+                print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
+                logging.info(f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})")
+                return client_mac
+            else:
+                print("\n! Invalid index")
+                logging.error(f"Invalid client index: {idx}")
+                return None
+        else:
+            print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
+            logging.error(f"Invalid client selection input: {user_input}")
+            return None
+            
+    except Exception as error:
+        print(f"\n! Error fetching clients: {error}")
+        logging.error(f"Exception in prompt_select_client_mac_from_site: {error}", exc_info=True)
+        return None
+
 def prompt_select_gateway_mac_from_site(site_id: str) -> Optional[str]:
     """
     Prompts the user to select a gateway from the specified site and returns the gateway MAC address.
@@ -6502,6 +7431,520 @@ def prompt_select_gateway_mac_from_site(site_id: str) -> Optional[str]:
     except Exception as error:
         print(f"\n! Error fetching gateways: {error}")
         logging.error(f"Exception in prompt_select_gateway_mac_from_site: {error}", exc_info=True)
+        return None
+
+def prompt_select_switch_mac_from_site(site_id: str) -> Optional[str]:
+    """
+    Prompts the user to select a switch from the specified site and returns the switch MAC address.
+    
+    Args:
+        site_id (str): The site ID to filter switches by
+    
+    Returns:
+        str: The selected switch MAC address (normalized) or None if no selection made
+    """
+    logging.debug(f"Fetching switches for site: {site_id}")
+    
+    # Fetch all devices, filter for switches
+    try:
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="switch").data
+        if not rawdata:
+            print("\n! No switches found at the selected site.")
+            logging.warning(f"No switches found for site_id: {site_id}")
+            return None
+        
+        logging.info(f"Found {len(rawdata)} switches at site")
+        
+        # Sort by name for easier selection
+        switches = sorted(rawdata, key=lambda x: x.get("name", ""))
+        
+        # Prepare selection table
+        table = PrettyTable()
+        table.field_names = ["Index", "Name", "MAC", "Model", "Status"]
+        index_to_switch = {}
+        
+        for idx, switch in enumerate(switches):
+            table.add_row([
+                idx,
+                switch.get("name", "Unknown"),
+                switch.get("mac", "Unknown"),
+                switch.get("model", "Unknown"),
+                switch.get("status", "Unknown")
+            ])
+            index_to_switch[idx] = switch
+        
+        print("\n" + "=" * 80)
+        print(" SELECT SWITCH")
+        print("=" * 80)
+        print(table)
+        
+        user_input = safe_input("\nEnter the index number of the switch: ", context="switch_selection").strip()
+        logging.debug(f"User input for switch selection: {user_input}")
+        
+        # Validate index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_switch:
+                switch_mac = index_to_switch[idx].get("mac")
+                switch_name = index_to_switch[idx].get("name", "Unknown")
+                print(f"\n! Selected switch: {switch_name} (MAC: {switch_mac})")
+                logging.info(f"User selected switch by index: {idx} (name: {switch_name}, mac: {switch_mac})")
+                return switch_mac
+            else:
+                print("\n! Invalid index")
+                logging.error(f"Invalid switch index: {idx}")
+                return None
+        else:
+            print("\n! Please enter a valid index number")
+            logging.error(f"Non-numeric switch selection: {user_input}")
+            return None
+            
+    except Exception as error:
+        print(f"\n! Error fetching switches: {error}")
+        logging.error(f"Exception in prompt_select_switch_mac_from_site: {error}", exc_info=True)
+        return None
+
+def _expand_port_range_string(port_range_string: str) -> list:
+    """
+    Expands a port range string from device config into individual port names.
+    
+    Examples:
+        "ge-0/0/0" -> ["ge-0/0/0"]
+        "ge-0/0/0-2" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
+        "ge-0/0/0-2, ge-0/1/2-3" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "ge-0/1/2", "ge-0/1/3"]
+        "mge-0/2/0, xe-0/1/0-3" -> ["mge-0/2/0", "xe-0/1/0", "xe-0/1/1", "xe-0/1/2", "xe-0/1/3"]
+    
+    Args:
+        port_range_string (str): Port name or range specification from port_config
+    
+    Returns:
+        list: List of individual port names
+    """
+    import re
+    expanded_ports = []
+    
+    # Split by comma to handle multiple ranges
+    port_parts = [part.strip() for part in port_range_string.split(',')]
+    
+    for port_part in port_parts:
+        # Check if this is a range (e.g., "ge-0/0/0-2")
+        if '-' in port_part:
+            # Try to match pattern like "ge-0/0/0-2"
+            match = re.match(r'^(.+/)(\d+)-(\d+)$', port_part)
+            if match:
+                prefix = match.group(1)  # e.g., "ge-0/0/"
+                start_num = int(match.group(2))  # e.g., 0
+                end_num = int(match.group(3))    # e.g., 2
+                
+                # Expand the range
+                for port_num in range(start_num, end_num + 1):
+                    expanded_ports.append(f"{prefix}{port_num}")
+            else:
+                # Couldn't parse as range, treat as single port
+                expanded_ports.append(port_part)
+        else:
+            # Single port name
+            expanded_ports.append(port_part)
+    
+    return expanded_ports
+
+def prompt_select_ports_from_device(site_id: str, device_mac: str, device_type: str = "switch", return_available: bool = False):
+    """
+    Prompts the user to select one or more ports from a device (switch or gateway).
+    Displays port status information from device stats.
+    
+    Args:
+        site_id (str): The site ID where the device is located
+        device_mac (str): The MAC address of the device
+        device_type (str): Type of device ("switch" or "gateway") for display purposes
+        return_available (bool): If True, return tuple of (selected_ports, available_ports)
+    
+    Returns:
+        list or tuple: List of selected port names (e.g., ["ge-0/0/0", "ge-0/0/1"]) or empty list for all ports, or None on error.
+                      If return_available=True, returns (selected_ports, available_ports) where available_ports is list of (name, data) tuples.
+    """
+    logging.debug(f"Fetching port information for {device_type} {device_mac} at site {site_id}")
+    
+    try:
+        # Normalize the input MAC for comparison (remove colons, lowercase)
+        normalized_input_mac = str(device_mac).replace(":", "").replace("-", "").lower()
+        logging.debug(f"Normalized input MAC for comparison: {normalized_input_mac}")
+        
+        # First get device ID from MAC
+        devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type)
+        devices = devices_response.data
+        
+        device = None
+        for dev in devices:
+            dev_mac = dev.get("mac", "")
+            # Normalize device MAC for comparison
+            normalized_dev_mac = str(dev_mac).replace(":", "").replace("-", "").lower()
+            logging.debug(f"Comparing device {dev.get('name', 'Unknown')}: {dev_mac} (normalized: {normalized_dev_mac})")
+            
+            if normalized_dev_mac == normalized_input_mac:
+                device = dev
+                logging.debug(f"MAC match found for device: {dev.get('name', 'Unknown')}")
+                break
+        
+        if not device:
+            print(f"\n! Could not find {device_type} with MAC {device_mac}")
+            logging.error(f"Device not found with MAC: {device_mac} (normalized: {normalized_input_mac})")
+            logging.error(f"Available devices: {[d.get('mac') for d in devices]}")
+            return None
+        
+        device_id = device.get("id")
+        device_name = device.get("name", "Unknown")
+        
+        # Get device stats which includes port information
+        logging.debug(f"Fetching device stats for device_id: {device_id}")
+        # Get port statistics using the appropriate API for the device type
+        # Switches and Gateways: Use searchSiteSwOrGwPorts for detailed port-level stats
+        # APs: Use getSiteDeviceStats which includes port_stat
+        port_stat = {}
+        
+        if device_type in ["switch", "gateway"]:
+            # For switches/gateways, use dedicated port search API
+            logging.info(f"Fetching switch/gateway port stats using searchSiteSwOrGwPorts for device {device_id}")
+            try:
+                ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+                    apisession, 
+                    site_id,
+                    mac=device_mac,  # Filter by device MAC
+                    limit=1000  # Get all ports
+                )
+                ports_results = ports_search_response.data.get("results", [])
+                logging.info(f"Retrieved {len(ports_results)} port stat entries from searchSiteSwOrGwPorts")
+                
+                # Convert array of port objects to dict keyed by port_id
+                for port_obj in ports_results:
+                    port_id = port_obj.get("port_id")
+                    if port_id:
+                        port_stat[port_id] = port_obj
+                        
+                if port_stat:
+                    logging.info(f"Successfully converted {len(port_stat)} switch/gateway ports to dict format")
+                    # Log sample port for debugging
+                    if port_stat:
+                        sample_port = list(port_stat.keys())[0]
+                        sample_data = port_stat[sample_port]
+                        logging.debug(f"Sample port '{sample_port}' data: speed={sample_data.get('speed')}, full_duplex={sample_data.get('full_duplex')}, up={sample_data.get('up')}")
+                else:
+                    logging.warning(f"searchSiteSwOrGwPorts returned no port data for device {device_mac}")
+                    
+            except Exception as port_search_error:
+                logging.error(f"Error fetching switch/gateway port stats: {port_search_error}")
+                logging.debug(f"Traceback: ", exc_info=True)
+        else:
+            # For APs, use getSiteDeviceStats which includes port_stat
+            logging.info(f"Fetching AP port stats using getSiteDeviceStats for device {device_id}")
+            stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+            stats_data = stats_response.data
+            
+            if "port_stat" in stats_data:
+                port_stat = stats_data.get("port_stat", {})
+                logging.info(f"Found port_stat (AP-style) with {len(port_stat)} ports")
+            else:
+                logging.warning(f"No port_stat found in AP stats for device {device_id}")
+        
+        # Also get device config for port profiles and descriptions
+        # This is needed regardless of whether port_stat exists
+        logging.debug(f"Fetching device config for port profiles and descriptions")
+        try:
+            device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            device_config = device_config_response.data
+            port_config = device_config.get("port_config", {})
+        except Exception as cfg_error:
+            logging.warning(f"Could not fetch device config for port details: {cfg_error}")
+            port_config = {}
+        
+        # Build a mapping from individual port names to their config (handles port ranges)
+        port_to_config = {}
+        if port_config:
+            logging.info(f"Building port_to_config mapping from {len(port_config)} port_config entries")
+            for port_range_key, cfg in port_config.items():
+                expanded_ports = _expand_port_range_string(port_range_key)
+                logging.debug(f"Port config key '{port_range_key}' expands to {len(expanded_ports)} ports, has profile: {cfg.get('port_profile', 'NONE')}")
+                for individual_port in expanded_ports:
+                    port_to_config[individual_port] = cfg
+            logging.info(f"Created port_to_config mapping with {len(port_to_config)} individual port entries")
+        else:
+            logging.warning("No port_config available to build mapping")
+        
+        if not port_stat:
+            logging.warning(f"No port_stat found in device stats for device {device_id}")
+            logging.debug(f"Attempting to get port configuration from device config instead")
+            
+            # Fallback: Try to get port information from device configuration
+            # Note: port_config was already fetched above, so we can use it here
+            try:
+                if port_config:
+                    logging.info(f"Found {len(port_config)} configured port entries in device config")
+                    # Use port_config as source instead of port_stat
+                    # Convert port_config format to port_stat-like format for consistency
+                    # NOTE: port_config keys may be port RANGES like "ge-0/0/0-2, ge-0/1/2-3"
+                    # We need to expand these to individual port names for display and API submission
+                    port_stat = {}
+                    for port_range_key, port_cfg in port_config.items():
+                        # Expand port ranges to individual port names
+                        expanded_ports = _expand_port_range_string(port_range_key)
+                        logging.debug(f"Expanded port range '{port_range_key}' to {len(expanded_ports)} ports: {expanded_ports}")
+                        
+                        for individual_port in expanded_ports:
+                            # Create a port_stat-like entry from port_config
+                            # NOTE: These are CONFIGURED values, not actual operational stats
+                            # When stats are unavailable, we show config as a fallback
+                            usage = port_cfg.get("usage", "")
+                            
+                            # Determine if port is up based on usage
+                            port_up = usage not in ["disabled", "", None]
+                            
+                            # Get speed from port_config (configured, not actual)
+                            speed_value = port_cfg.get("speed", "N/A")
+                            
+                            # Get duplex from port_config (configured, not actual)
+                            duplex_value = port_cfg.get("duplex", "N/A")
+                            full_duplex = duplex_value == "full" or duplex_value == "auto"
+                            
+                            port_stat[individual_port] = {
+                                "up": port_up,
+                                "speed": speed_value,
+                                "full_duplex": full_duplex,
+                                "duplex": duplex_value,
+                                "_fallback": True  # Flag to indicate this is config, not stats
+                            }
+                    
+                    logging.info(f"Expanded to {len(port_stat)} individual ports")
+                else:
+                    print(f"\n! No port information available for {device_type}: {device_name}")
+                    print(f"  This device may be offline or not yet reporting statistics.")
+                    logging.warning(f"No port_stat or port_config found for device {device_id}")
+                    return None
+                    
+            except Exception as config_error:
+                print(f"\n! No port information available for {device_type}: {device_name}")
+                print(f"  This device may be offline or not yet reporting statistics.")
+                logging.error(f"Could not fetch device config: {config_error}")
+                return None
+        
+        # NOTE: We do NOT enrich port_stat with config data for speed/duplex
+        # Speed and duplex should come from live stats (actual operational values)
+        # Only port_profile and description come from config
+        
+        # Filter and sort ports (exclude management/internal ports and DOWN ports)
+        # Management/service ports to exclude: fxp, em, me, vme, irb, lo, vlan, bme, cbp, jsrv, pip
+        exclude_prefixes = ["fxp", "em", "me", "vme", "irb", "lo", "vlan", "bme", "cbp", "jsrv", "pip"]
+        available_ports = []
+        
+        for port_name, port_info in port_stat.items():
+            # Skip internal/management/service ports
+            if any(port_name.startswith(prefix) for prefix in exclude_prefixes):
+                logging.debug(f"Excluding management/service port: {port_name}")
+                continue
+            
+            # Skip DOWN ports to keep table focused on active connections
+            port_up = port_info.get("up", False)
+            if not port_up:
+                logging.debug(f"Excluding DOWN port: {port_name}")
+                continue
+                
+            available_ports.append((port_name, port_info))
+        
+        if not available_ports:
+            print(f"\n! No network ports available for {device_type}: {device_name}")
+            logging.warning(f"No user-facing ports found for device {device_id}")
+            return None
+        
+        # Sort ports naturally (ge-0/0/0, ge-0/0/1, etc.)
+        def natural_sort_key(port_tuple):
+            port_name = port_tuple[0]
+            # Extract numbers for sorting
+            import re
+            parts = re.split(r'(\d+)', port_name)
+            return [int(part) if part.isdigit() else part for part in parts]
+        
+        available_ports = sorted(available_ports, key=natural_sort_key)
+        
+        # Prepare selection table with profile and description
+        table = PrettyTable()
+        table.field_names = ["Index", "Port Name", "Status", "Speed", "Duplex", "Profile", "Description"]
+        table.max_width = 120  # Allow wider table for descriptions
+        table.align["Description"] = "l"  # Left-align descriptions
+        table.align["Profile"] = "l"  # Left-align profiles
+        index_to_port = {}
+        
+        for idx, (port_name, port_info) in enumerate(available_ports):
+            port_up = port_info.get("up", False)
+            status = "UP" if port_up else "DOWN"
+            
+            # Get speed - handle various formats
+            speed = port_info.get("speed", "N/A")
+            if isinstance(speed, str):
+                # Handle string values like "auto", "1g", "10g"
+                speed_str = speed.upper()
+                if speed_str == "AUTO":
+                    speed_str = "Auto"
+                elif speed_str.endswith("G"):
+                    # Convert "1g" to "1000 Mbps", "10g" to "10000 Mbps"
+                    try:
+                        gig_value = int(speed_str[:-1])
+                        speed_str = f"{gig_value * 1000} Mbps"
+                    except ValueError:
+                        speed_str = speed
+            elif isinstance(speed, (int, float)) and speed > 0:
+                speed_str = f"{speed} Mbps"
+            else:
+                speed_str = "N/A"
+            
+            # Get duplex - show actual mode (Full/Half/Auto)
+            duplex_value = port_info.get("duplex", "")
+            if duplex_value:
+                if duplex_value == "full":
+                    duplex_str = "Full"
+                elif duplex_value == "half":
+                    duplex_str = "Half"
+                elif duplex_value == "auto":
+                    duplex_str = "Auto"
+                else:
+                    duplex_str = str(duplex_value).capitalize()
+            else:
+                # Fallback to full_duplex boolean
+                full_duplex = port_info.get("full_duplex", False)
+                duplex_str = "Full" if full_duplex else "Half"
+            
+            # Get port profile and description from config mapping
+            port_cfg = port_to_config.get(port_name, {})
+            port_profile = port_cfg.get("port_profile", "N/A")
+            port_description = port_cfg.get("description", "")
+            
+            # Log if we have config but no profile
+            if port_cfg and port_profile == "N/A":
+                logging.debug(f"Port {port_name} has config but no port_profile field. Config keys: {list(port_cfg.keys())}")
+            
+            # Truncate description if too long
+            if len(port_description) > 30:
+                port_description = port_description[:27] + "..."
+            if not port_description:
+                port_description = "-"
+            
+            table.add_row([
+                idx,
+                port_name,
+                status,
+                speed_str,
+                duplex_str,
+                port_profile,
+                port_description
+            ])
+            index_to_port[idx] = port_name
+        
+        print("\n" + "=" * 80)
+        print(f" SELECT PORTS FROM {device_type.upper()}: {device_name}")
+        print("=" * 80)
+        print(f"  Device MAC: {device_mac}")
+        print(f"  Available Ports: {len(available_ports)}")
+        
+        # Check if we're showing fallback data
+        using_fallback = any(port_info.get("_fallback", False) for _, port_info in available_ports)
+        if using_fallback:
+            print(f"  NOTE: Speed/Duplex showing configured values (device stats unavailable)")
+        
+        print("=" * 80)
+        print(table)
+        print("\n" + "!" * 80)
+        print("  API LIMITATION: Maximum 6 ports per capture")
+        print("!" * 80)
+        print("\nPort Selection Options:")
+        print("  - Enter a single index (e.g., '0') for one port")
+        print("  - Enter multiple indices separated by commas (e.g., '0,2,5')")
+        print("  - Enter a range (e.g., '0-3' for ports 0, 1, 2, 3)")
+        if len(available_ports) <= 6:
+            print("  - Press Enter with no input to capture on ALL ports (default)")
+        else:
+            print("  - Press Enter with no input to capture on ALL ports (NOT AVAILABLE - exceeds 6 port limit)")
+        print("  - Enter 'c' to cancel")
+        
+        user_input = safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
+        logging.debug(f"User input for port selection: {user_input}")
+        
+        # Handle cancel
+        if user_input.lower() == 'c':
+            print("\n! Port selection cancelled")
+            logging.info("Port selection cancelled by user")
+            return None
+        
+        # Handle empty input or 'all' - check if within 6-port limit
+        if not user_input or user_input.lower() == 'all':
+            if len(available_ports) > 6:
+                print(f"\n! ERROR: Cannot select all {len(available_ports)} ports - API maximum is 6 ports per capture")
+                print(f"  Please select up to 6 specific ports from the list above")
+                logging.error(f"User attempted to select all {len(available_ports)} ports, exceeds API limit of 6")
+                return None
+            
+            print(f"\n! Selected ALL {len(available_ports)} ports for capture")
+            logging.info(f"User selected all {len(available_ports)} ports (within 6-port limit)")
+            if return_available:
+                return [], available_ports
+            return []  # Empty list signals "all ports"
+        
+        # Parse user selection
+        selected_indices = set()
+        
+        try:
+            # Split by commas
+            parts = user_input.split(',')
+            for part in parts:
+                part = part.strip()
+                
+                # Check for range (e.g., "0-3")
+                if '-' in part:
+                    range_parts = part.split('-')
+                    if len(range_parts) == 2:
+                        start_idx = int(range_parts[0].strip())
+                        end_idx = int(range_parts[1].strip())
+                        for i in range(start_idx, end_idx + 1):
+                            if i in index_to_port:
+                                selected_indices.add(i)
+                            else:
+                                print(f"\n! Warning: Index {i} is out of range, skipping")
+                                logging.warning(f"Invalid port index in range: {i}")
+                else:
+                    # Single index
+                    idx = int(part)
+                    if idx in index_to_port:
+                        selected_indices.add(idx)
+                    else:
+                        print(f"\n! Warning: Index {idx} is out of range, skipping")
+                        logging.warning(f"Invalid port index: {idx}")
+            
+            if not selected_indices:
+                print("\n! No valid ports selected")
+                logging.error("No valid port indices provided")
+                return None
+            
+            # Convert indices to port names
+            selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]
+            
+            # Validate 6-port API limit
+            if len(selected_ports) > 6:
+                print(f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture")
+                print(f"  Please refine your selection to 6 or fewer ports")
+                logging.error(f"User selected {len(selected_ports)} ports, exceeds API limit of 6")
+                return None
+            
+            print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")
+            logging.info(f"User selected ports: {selected_ports}")
+            if return_available:
+                return selected_ports, available_ports
+            return selected_ports
+            
+        except ValueError as value_error:
+            print(f"\n! Invalid input format: {value_error}")
+            logging.error(f"Port selection parse error: {value_error}")
+            return None
+            
+    except Exception as error:
+        print(f"\n! Error fetching port information: {error}")
+        logging.error(f"Exception in prompt_select_ports_from_device: {error}", exc_info=True)
         return None
 
 def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
