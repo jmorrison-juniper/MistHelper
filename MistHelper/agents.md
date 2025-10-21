@@ -6,6 +6,8 @@ As we make updates and commits, update the ReadMe's changlelog with the current 
 
 Everytime you update the changelog in the readme, do a "stage" in git.
 
+Mist API responses are sometimes "nested". Be prepaired to handle that with JSON or otherwise.
+
 Friendly note (new/junior engineers): This guide is meant to be calm and confidence‑building. Most operations are read-only unless clearly marked DESTRUCTIVE. If unsure, read the function header, log what you plan, then proceed in small steps.
 
 Target audience is always a Junior NOC engineer. Language needs to match that of a business professional—avoiding abbreviations or technical jargon—while still making correct Junior NOC level references in the style of Fred Rogers (Mr. Rogers) or Bob Ross (the painter).

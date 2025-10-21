@@ -263,3 +263,4 @@ MistHelper/data/mist_data.db
 MistHelper/data/test_mist_data.db
 MistHelper/ActiveUpgrades.json
 MistHelper/junk/compareadd.py
+MistHelper/.github/copilot-instructions.md

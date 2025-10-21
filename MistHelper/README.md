@@ -471,6 +471,323 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.10.21.15.00",
+      "date": "2025-10-21",
+      "changes": {
+        "feature_additions": [
+          "Interactive results grid popup - tabular API results displayed in scrollable grid",
+          "Auto-detection of grid-worthy data - dicts with 'results' array of dict items",
+          "Results viewer mode with dedicated navigation (Up/Down scroll, Esc to close)",
+          "Grid shows 15 rows at a time with scroll indicators (showing X-Y of N)",
+          "Metadata display - shows total, limit, distinct values in grid title"
+        ],
+        "enhancements": [
+          "Results grid uses Rich Table with DOUBLE box style for prominence",
+          "Columns auto-detected from first result item keys",
+          "Scroll position tracked with results_scroll_offset state variable",
+          "Help text dynamically shows grid controls when viewing results",
+          "Grid appears automatically after successful API call with tabular data",
+          "Execution state now includes 'viewing_results' for grid display mode"
+        ],
+        "refactoring": [
+          "New _should_show_results_grid() method - determines if data is grid-displayable",
+          "New _create_results_grid() method - builds Rich Table from results array",
+          "Grid display integrated into create_layout() - overlays main UI",
+          "Grid navigation integrated into handle_input() - Up/Down/Esc handling"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.14.55",
+      "date": "2025-10-21",
+      "changes": {
+        "bug_fixes": [
+          "Optional parameters with blank input now properly skipped from API calls",
+          "Fixed issue where empty optional fields were added to function params causing unwanted filters",
+          "Blank Enter on optional parameter no longer adds empty string to query parameters"
+        ],
+        "enhancements": [
+          "Parameter submission logic clarified with explicit handling for required vs optional",
+          "Debug logging differentiates between 'stored' and 'skipped' parameters",
+          "API calls now only include parameters explicitly provided by user or auto-filled from .env"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.14.50",
+      "date": "2025-10-21",
+      "changes": {
+        "logging_analytics": [
+          "Debug result saving now captures COMPLETE raw response with all attributes",
+          "New make_serializable() function preserves all object properties and nested structures",
+          "Raw response saved with __type__ markers showing original class names",
+          "Public attributes extracted from APIResponse objects (data, status_code, headers, etc.)",
+          "Parameters properly serialized including complex objects like APISession",
+          "No data loss during JSON conversion - all accessible attributes preserved"
+        ],
+        "enhancements": [
+          "Debug JSON files now include both raw_response (complete) and parsed_data (extracted)",
+          "Object introspection via dir() and getattr() captures all non-private attributes",
+          "Handles nested objects recursively to preserve full response hierarchy",
+          "Graceful fallback to string representation for non-serializable types"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.14.45",
+      "date": "2025-10-21",
+      "changes": {
+        "feature_additions": [
+          "Hierarchical result display - API responses formatted with indented tree structure",
+          "Recursive value formatting - nested dicts and lists displayed with proper hierarchy",
+          "Smart truncation - long values preview with ellipsis, full data in debug JSON"
+        ],
+        "enhancements": [
+          "Results show structure depth with indentation (dict keys, list items, nested objects)",
+          "Dictionary items display with type and count header (e.g., 'results: dict (5 keys)')",
+          "List items show count and preview first N items with key-value pairs",
+          "Nested structures recursively formatted up to 3 levels deep",
+          "Sample item display shows first 3 key-value pairs per dict in list",
+          "Value strings truncated to 60 chars in nested views, 200 chars at top level"
+        ],
+        "refactoring": [
+          "Split result formatting into _format_result_output and _format_value_hierarchical",
+          "Removed old flat formatting code (_format_result_output_old)",
+          "Recursive formatter handles arbitrary nesting depth with indent tracking"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.14.30",
+      "date": "2025-10-21",
+      "changes": {
+        "logging_analytics": [
+          "Comprehensive debug logging added to all TUI navigation keys (UP, DOWN, Enter, Escape, Q)",
+          "Main run() loop now logs every iteration, keyboard input, and state changes",
+          "Terminal restoration tracked with before/after logs and exception handling",
+          "Each key press logs: key type, current path, selection index, execution state",
+          "Navigation operations log: start, item selection changes, completion status",
+          "Loop metrics: iteration count, running flag status, Live() context entry/exit"
+        ],
+        "bug_fixes": [
+          "Fixed syntax error from try-except indentation in create_layout",
+          "Removed complex exception handling that caused indentation cascading issues",
+          "Terminal restoration wrapped in try-except with detailed error logging"
+        ],
+        "testing_validation": [
+          "Debug logging identifies exact operation before crashes occur",
+          "Terminal mode transitions logged (raw mode entry, restoration, cleanup)",
+          "Keyboard input traced from detection through handling to screen update"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.12.18",
+      "date": "2025-10-21",
+      "changes": {
+        "feature_additions": [
+          "Dynamic JSON response parsing - extracts data from mistapi.APIResponse objects automatically",
+          "Debug result logging - API responses saved to data/tui_debug_results/ when --debug flag set",
+          "Smart data extraction - detects and unwraps APIResponse.data attribute",
+          "Timestamped result files - each execution saved as {function_name}_{timestamp}.json"
+        ],
+        "enhancements": [
+          "Improved result display - shows sample keys and values for dict items in lists",
+          "Better preview formatting - displays first 3 items with key-value pairs for API results",
+          "Result metadata - shows function name, parameters (redacted), timestamp, and parsed data structure",
+          "Debug file notifications - output panel shows where debug results were saved",
+          "Tip messages - suggests viewing debug logs for large datasets"
+        ],
+        "logging_analytics": [
+          "Debug results saved as JSON with full structure (function, timestamp, parameters, data)",
+          "Sensitive parameter values (password, token, key, secret) redacted in saved files",
+          "Automatic directory creation - data/tui_debug_results/ created if missing",
+          "Error logging for failed result saves with full traceback",
+          "Debug log entries for APIResponse detection and data extraction"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.12.12",
+      "date": "2025-10-21",
+      "changes": {
+        "enhancements": [
+          "Parameter prompts now display in prominent input boxes with clear headers",
+          "Box-style input prompts show parameter name, requirement status, and default value",
+          "Current input highlighted with white-on-gray background for visibility",
+          "Previously entered parameters shown below with checkmarks",
+          "Progress indicator shows N/M parameters completed",
+          "Visual hierarchy: Current prompt (bold yellow box) → Previous inputs (dim with checkmarks)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.12.09",
+      "date": "2025-10-21",
+      "changes": {
+        "feature_additions": [
+          "TUI now has dedicated Output panel at bottom for API results and execution feedback",
+          "Input prompts now appear within TUI (no more exiting to terminal)",
+          "Real-time parameter input with visual cursor and inline editing",
+          "State machine for input handling - smooth transitions between navigation and input modes"
+        ],
+        "enhancements": [
+          "TUI stays active during function execution - no screen clearing or context switches",
+          "Output panel shows execution progress (prompting → executing → completed)",
+          "Previously entered parameters visible while prompting for next parameter",
+          "Backspace support for editing input inline",
+          "Escape cancels execution and returns to navigation mode",
+          "Help text changes based on mode (navigation vs input)",
+          "Smart result formatting in output panel (type, count, preview)",
+          "Input mode clearly indicated with magenta Output panel border"
+        ],
+        "refactoring": [
+          "Removed exit/re-enter Live() pattern - all interaction now within TUI",
+          "Replaced external input() calls with internal state machine",
+          "Added execution_state, input_buffer, output_lines state tracking",
+          "Separated parameter collection (_start_function_execution), submission (_submit_parameter), and execution (_execute_function)",
+          "Result formatting moved to dedicated _format_result_output method"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.12.04",
+      "date": "2025-10-21",
+      "changes": {
+        "enhancements": [
+          "TUI now automatically uses values from .env file for function parameters",
+          "Parameters like org_id, site_id, device_id automatically filled from environment variables",
+          "No need to manually enter org_id when executing functions if configured in .env",
+          "Environment values displayed with [from .env] indicator for transparency"
+        ],
+        "compatibility": [
+          "TUI respects .env configuration for consistent behavior with menu mode",
+          "All environment variable parameters (org_id, site_id, etc.) auto-populated before prompting"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.11.58",
+      "date": "2025-10-21",
+      "changes": {
+        "bug_fixes": [
+          "Fixed TUI freezing after executing functions or cancelling with Ctrl+C",
+          "Fixed console.clear() conflicts with Live() context causing display corruption",
+          "Fixed terminal hanging when waiting for keypress after function execution",
+          "Execution now properly exits Live() context before prompting for parameters"
+        ],
+        "refactoring": [
+          "Function execution moved outside Live() context to prevent display conflicts",
+          "Added pending_execution flag to defer execution until after Live() exit",
+          "Replaced Rich console.print() with plain print() during function execution (outside Live context)",
+          "TUI now exits Live(), executes function, waits for keypress, then re-enters Live() for navigation",
+          "Cleaner separation between TUI display (Live context) and function execution (normal terminal)"
+        ],
+        "enhancements": [
+          "Function execution no longer interferes with TUI display refresh cycle",
+          "Ctrl+C during execution properly returns to TUI without freezing",
+          "Terminal mode properly managed across Live() context transitions"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.11.52",
+      "date": "2025-10-21",
+      "changes": {
+        "bug_fixes": [
+          "Fixed OOM (Out Of Memory) errors when executing API functions that return large results",
+          "Fixed TUI crashes when displaying large API responses (thousands of items)",
+          "Fixed terminal mode not being restored properly after function execution on Unix systems",
+          "Terminal now properly returns to raw mode for TUI navigation after function execution completes"
+        ],
+        "enhancements": [
+          "Smart result preview system - shows type, count, and sample items without converting entire result to string",
+          "Lists/tuples: Shows item count and first 3 items with truncation indicators",
+          "Dicts: Shows key count and first 5 keys for large dictionaries",
+          "Strings: Truncates at 200 characters with length indicator",
+          "Memory-safe handling: Never converts full result to string, uses repr() with limits",
+          "Helpful tip displayed for large results (>10 items) suggesting use of main menu CSV/SQLite export options"
+        ],
+        "security": [
+          "Result preview limits prevent memory exhaustion attacks from malformed API responses",
+          "Safe repr() usage with character limits prevents infinite recursion or excessive memory use"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.11.49",
+      "date": "2025-10-21",
+      "changes": {
+        "bug_fixes": [
+          "TUI items list now scrolls to follow cursor selection (viewport scrolling implemented)",
+          "Items list maintains selection in center of viewport when scrolling through long lists",
+          "Fixed issue where navigating to bottom items left selection off-screen"
+        ],
+        "enhancements": [
+          "Added intelligent viewport scrolling - visible window follows cursor through item list",
+          "Viewport height automatically calculated based on available panel height (minus borders)",
+          "Selection stays centered in viewport when possible, adjusts near top/bottom boundaries",
+          "Debug logging for viewport calculations when --debug flag is set (selection position, scroll range, visible items)"
+        ],
+        "logging_analytics": [
+          "Added debug logs for viewport scrolling (viewport range, total items, visible items count)",
+          "Added debug logs for selection highlighting (index, item name, type, viewport position)",
+          "Added debug logs for scroll indicator state (can scroll up/down flags)",
+          "All viewport/selection logs only appear with --debug flag to avoid log spam"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.11.43",
+      "date": "2025-10-21",
+      "changes": {
+        "performance": [
+          "TUI keyboard input responsiveness improved by 10x (sleep reduced from 100ms to 10ms)",
+          "TUI refresh rate increased from 4 FPS to 10 FPS for smoother visual feedback",
+          "Unix escape sequence timeout reduced from 100ms to 10ms for instant escape key response",
+          "Exit handling improved with explicit break check after input handling"
+        ],
+        "bug_fixes": [
+          "TUI exit keys (Q and Escape at root) now work immediately without requiring Ctrl+C",
+          "Eliminated sluggish navigation feel caused by excessive sleep intervals",
+          "Fixed event loop not checking running flag properly after input handling"
+        ]
+      }
+    },
+    {
+      "version": "25.10.21.17.30",
+      "date": "2025-10-21",
+      "changes": {
+        "feature_additions": [
+          "TUI Mode - Hierarchical API Explorer for mistapi package navigation",
+          "Launch with --tui flag for interactive exploration of Thomas Munzer's mistapi library structure",
+          "Dynamic module discovery - browse mistapi.api.v1 hierarchy (orgs, sites, msps, const, etc.)",
+          "Function introspection - view signatures, parameters, and docstrings inline",
+          "Interactive execution - prompt for parameters and run API calls directly from explorer",
+          "Three-panel layout: breadcrumb navigation, items list, and details panel",
+          "Visual indicators: modules (folder icon), functions (lightning icon), selection highlighting",
+          "Cross-platform keyboard support (Windows msvcrt, Unix select) - works over SSH and containers",
+          "Complete documentation in TUI_MODE_GUIDE.md with hierarchical navigation examples"
+        ],
+        "enhancements": [
+          "MistHelperTUI class redesigned with hierarchical navigation state (current_path, breadcrumb)",
+          "Dynamic discovery using Python inspect and importlib for package introspection",
+          "Parameter prompting system with required/optional detection and default value support",
+          "Result display with formatted preview and error handling",
+          "Automatic apisession initialization and injection for API call execution",
+          "Drill-down navigation (Enter on modules) and back navigation (Escape key)",
+          "Real-time function signature and documentation display",
+          "Educational design - learn API structure by exploring"
+        ],
+        "refactoring": [
+          "Replaced category-based TUI with hierarchical package explorer",
+          "Removed static menu_actions organization in favor of dynamic mistapi introspection",
+          "Updated navigation model: drill-down/back instead of left-right category switching",
+          "Enhanced layout: breadcrumb + items + details instead of categories + items"
+        ]
+      }
+    },
+    {
       "version": "25.10.14.17.00",
       "date": "2025-10-14",
       "changes": {
