@@ -27987,14 +27987,16 @@ class MistHelperTUI:
             console_height = self.console.size.height
             
             # Account for UI chrome when viewing results grid:
-            # - Panel top border: 1 line
-            # - Panel title: 1 line
+            # - Main panel top border: 1 line
+            # - Main panel title (breadcrumb): 1 line  
+            # - Results grid panel top border: 1 line
+            # - Results grid panel title (Result X of Y...): 1 line
             # - Table header row (Field | Value): 1 line
-            # - Panel bottom border: 1 line
-            # - Empty line before help text: 1 line
-            # - Help text: 1-2 lines (use 2 to be safe)
-            # Total overhead: 7 lines
-            ui_overhead = 7
+            # - Results grid panel bottom border: 1 line
+            # - Help text inside main panel footer: 2 lines
+            # - Main panel bottom border: 1 line
+            # Total overhead: 9 lines minimum
+            ui_overhead = 10  # Extra buffer for safety
             
             # Calculate available rows for TABLE DATA only, with minimum of 10
             available_rows = max(10, console_height - ui_overhead)
@@ -28005,9 +28007,9 @@ class MistHelperTUI:
             
             return available_rows
             
-        except Exception as e:
+        except Exception as error:
             if self.debug_mode:
-                logging.debug(f"TUI_DEBUG: Could not detect terminal height: {e}, defaulting to 20 rows")
+                logging.debug(f"TUI_DEBUG: Could not detect terminal height: {error}, defaulting to 20 rows")
             return 20  # Fallback default
     
     def _discover_current_level(self):
@@ -28131,6 +28133,8 @@ class MistHelperTUI:
                     # Handle multi-byte sequences for arrow keys and page keys
                     if key == b'\xe0' or key == b'\x00':
                         key = self.msvcrt.getch()
+                        if self.debug_mode:
+                            logging.debug(f"TUI_DEBUG: Special key detected - byte value: {repr(key)}")
                         if key == b'H':  # Up arrow
                             return 'up'
                         elif key == b'P':  # Down arrow
@@ -28139,16 +28143,28 @@ class MistHelperTUI:
                             return 'left'
                         elif key == b'M':  # Right arrow
                             return 'right'
-                        elif key == b'I':  # Page Up
+                        elif key == b'I':  # Page Up (0x49)
+                            if self.debug_mode:
+                                logging.debug("TUI_DEBUG: Page Up key detected")
                             return 'page_up'
-                        elif key == b'Q':  # Page Down
+                        elif key == b'Q':  # Page Down (0x51)
+                            if self.debug_mode:
+                                logging.debug("TUI_DEBUG: Page Down key detected")
                             return 'page_down'
+                        elif key == b'G':  # Home
+                            return 'h'
+                        elif key == b'O':  # End
+                            return 'e'
+                        else:
+                            # Log unhandled special keys for debugging
+                            if self.debug_mode:
+                                logging.debug(f"TUI_DEBUG: Unhandled special key: {repr(key)}")
                     return key.decode('utf-8', errors='ignore').lower()
             else:
                 # Unix/Linux: Use select for non-blocking check
                 if self.select.select([sys.stdin], [], [], 0)[0]:
                     key = sys.stdin.read(1)
-                    # Handle escape sequences for arrow keys
+                    # Handle escape sequences for arrow keys and special keys
                     if key == '\x1b':  # ESC
                         # Check if this is part of an escape sequence (reduced timeout for responsiveness)
                         if self.select.select([sys.stdin], [], [], 0.01)[0]:
@@ -28163,6 +28179,24 @@ class MistHelperTUI:
                                     return 'right'
                                 elif arrow == 'D':
                                     return 'left'
+                                elif arrow == '5':  # Page Up starts with ESC[5~
+                                    if self.select.select([sys.stdin], [], [], 0.01)[0]:
+                                        tilde = sys.stdin.read(1)
+                                        if tilde == '~':
+                                            if self.debug_mode:
+                                                logging.debug("TUI_DEBUG: Page Up key detected (Unix)")
+                                            return 'page_up'
+                                elif arrow == '6':  # Page Down starts with ESC[6~
+                                    if self.select.select([sys.stdin], [], [], 0.01)[0]:
+                                        tilde = sys.stdin.read(1)
+                                        if tilde == '~':
+                                            if self.debug_mode:
+                                                logging.debug("TUI_DEBUG: Page Down key detected (Unix)")
+                                            return 'page_down'
+                                elif arrow == 'H':  # Home
+                                    return 'h'
+                                elif arrow == 'F':  # End
+                                    return 'e'
                         return 'escape'
                     return key.lower()
         except Exception as error:
@@ -28208,8 +28242,31 @@ class MistHelperTUI:
         # btop-inspired color scheme: cyan borders, green accents, orange highlights
         
         # Create current level items column with btop-style colors and scrolling viewport
+        # Calculate maximum name length for dynamic column width
+        max_name_length = max((len(item.get('name', '')) for item in self.current_items), default=10)
+        
+        # Get terminal width and calculate percentage-based width for left panel
+        # Use 40% of terminal width to ensure full names display without truncation
+        import shutil
+        terminal_width, _ = shutil.get_terminal_size()
+        percentage_width = int(terminal_width * 0.40)
+        
+        # Account for Rich table/panel overhead:
+        # - Table padding: (0, 1) = 2 chars left+right
+        # - Grid padding: 1 = 2 chars 
+        # - Row content: prefix(1) + icon(2) + spaces(3) = 6 chars
+        # Total overhead: ~10 chars
+        content_width_needed = max_name_length + 10
+        
+        # Use percentage width, but ensure it fits content (min 35 chars for readability)
+        column_width = max(35, min(content_width_needed, percentage_width))
+        
+        if self.debug_mode:
+            logging.debug(f"TUI_DEBUG: Column sizing - terminal_width={terminal_width}, max_name={max_name_length}, "
+                        f"percentage_width={percentage_width}, final_column_width={column_width}")
+        
         items_table = self.Table(show_header=False, box=self.box.ROUNDED, padding=(0, 1))
-        items_table.add_column("Item", style="white", no_wrap=True, width=22)
+        items_table.add_column("Item", style="white", width=column_width, no_wrap=False, overflow="ellipsis")
         
         # Calculate viewport for scrolling (show items around current selection)
         # Reserve 2 lines for panel borders, use remaining for items
@@ -28270,8 +28327,8 @@ class MistHelperTUI:
                 prefix = " "
                 style = ""
             
-            # Truncate long names to fit column width
-            display_name = item_name[:18] if len(item_name) > 18 else item_name
+            # Don't truncate - let the full name show
+            display_name = item_name
             
             if style:
                 items_table.add_row(f"[{style} {color}]{prefix} {icon} {display_name}[/{style} {color}]")
@@ -28285,12 +28342,14 @@ class MistHelperTUI:
         
         # Current level column with btop-style cyan border
         level_name = self.current_path[-1] if self.current_path else "root"
+        # Dynamic width based on content, plus padding for borders (4 chars)
+        panel_width = column_width + 4
         items_panel = self.Panel(
             items_table,
             title=f"[bold bright_cyan]{level_name}[/bold bright_cyan]",
             border_style="bright_cyan",
             height=available_height,
-            width=26
+            width=panel_width
         )
         
         # Create details panel (right panel)
@@ -28460,7 +28519,8 @@ class MistHelperTUI:
         # Combine into side-by-side layout using Table.grid for reliable column rendering
         from rich.table import Table as RichTable
         layout_table = RichTable.grid(padding=1, expand=True)
-        layout_table.add_column(width=26, no_wrap=True)  # Items column (fixed 24 chars + padding)
+        # Use dynamic panel width (already includes border padding)
+        layout_table.add_column(width=panel_width, no_wrap=True)
         layout_table.add_column(ratio=1)  # Details column (fills remaining space)
         layout_table.add_row(items_panel, details_panel)
         
@@ -28478,15 +28538,24 @@ class MistHelperTUI:
         if self.execution_state == 'viewing_results':
             results_grid = self._create_results_grid()
             if results_grid:
-                # Grid is already a Panel - add help text below it using Group
-                grid_with_help = Group(
-                    results_grid,
-                    "",
-                    "[yellow]Controls: [bright_yellow]←→[/bright_yellow] Results | [bright_yellow]↑↓[/bright_yellow] Scroll (10) | [bright_yellow]PgUp/PgDn[/bright_yellow] Scroll (20) | [bright_yellow]H[/bright_yellow] Top | [bright_yellow]E[/bright_yellow] End | [bright_yellow]ESC[/bright_yellow] Close | [bright_yellow]Q[/bright_yellow] Quit[/yellow]"
+                # Create a Layout to properly position help text at the bottom
+                # Use minimum_size=0 to prevent width constraints
+                results_layout = self.Layout(minimum_size=0)
+                results_layout.split_column(
+                    self.Layout(results_grid, name="results", ratio=95, minimum_size=0),
+                    self.Layout(
+                        self.Panel(
+                            "[yellow]Controls: [bright_yellow]←→[/bright_yellow] Results | [bright_yellow]↑↓[/bright_yellow] Scroll (10) | [bright_yellow]PgUp/PgDn[/bright_yellow] Scroll (20) | [bright_yellow]H[/bright_yellow] Top | [bright_yellow]E[/bright_yellow] End | [bright_yellow]ESC[/bright_yellow] Close | [bright_yellow]Q[/bright_yellow] Quit[/yellow]",
+                            border_style="dim",
+                            box=self.box.SIMPLE
+                        ),
+                        name="footer",
+                        size=3  # Fixed height for footer (1 line text + 2 lines borders)
+                    )
                 )
                 if self.debug_mode:
-                    logging.debug("TUI_DEBUG: create_layout() returning results grid with help text")
-                return grid_with_help
+                    logging.debug("TUI_DEBUG: create_layout() returning results grid with footer layout")
+                return results_layout
         
         if self.debug_mode:
             logging.debug("TUI_DEBUG: create_layout() completed successfully - returning main_panel")
@@ -28516,6 +28585,9 @@ class MistHelperTUI:
         
         # Handle results viewing mode
         if self.execution_state == 'viewing_results':
+            if self.debug_mode:
+                logging.debug(f"TUI_DEBUG: In viewing_results mode - testing key {repr(key)} against handlers")
+            
             if key == 'left':
                 # Previous result
                 self.results_scroll_offset = max(0, self.results_scroll_offset - 1)
@@ -28533,15 +28605,17 @@ class MistHelperTUI:
                         logging.debug(f"TUI_DEBUG: Next result - offset now {self.results_scroll_offset} (max {max_offset})")
             elif key == 'up':
                 # Scroll up within current result (show earlier rows) - 10 rows at a time for faster navigation
+                old_scroll = self.result_row_scroll
                 self.result_row_scroll = max(0, self.result_row_scroll - 10)
                 if self.debug_mode:
-                    logging.debug(f"TUI_DEBUG: Scroll up - row offset now {self.result_row_scroll}")
+                    logging.debug(f"TUI_DEBUG: UP key - row scroll {old_scroll} -> {self.result_row_scroll}")
             elif key == 'down':
                 # Scroll down within current result (show later rows) - 10 rows at a time for faster navigation
                 # Don't cap here - let _create_results_grid() handle bounds checking
+                old_scroll = self.result_row_scroll
                 self.result_row_scroll += 10
                 if self.debug_mode:
-                    logging.debug(f"TUI_DEBUG: Scroll down - row offset now {self.result_row_scroll}")
+                    logging.debug(f"TUI_DEBUG: DOWN key - row scroll {old_scroll} -> {self.result_row_scroll}")
             elif key == 'page_up':
                 # Page up - scroll up 20 rows at a time (2x faster than arrow keys)
                 self.result_row_scroll = max(0, self.result_row_scroll - 20)
@@ -28578,6 +28652,10 @@ class MistHelperTUI:
                 self.running = False
                 if self.debug_mode:
                     logging.debug("TUI_DEBUG: Q pressed in results view - quitting")
+            else:
+                # Unhandled key in results view
+                if self.debug_mode:
+                    logging.debug(f"TUI_DEBUG: Unhandled key in viewing_results mode: {repr(key)}")
             return  # Don't process navigation commands while viewing results
         
         # Handle input mode for parameter collection
@@ -29104,22 +29182,25 @@ class MistHelperTUI:
             show_header=True,
             header_style="bold bright_cyan on grey15",
             box=self.box.HEAVY,  # Heavy box for better visual separation
-            expand=True,
+            expand=True,  # Allow table to fill available space
             show_lines=True,  # Show lines between rows for grouping
             padding=(0, 1),
-            row_styles=["", "on grey3"]  # Alternate row backgrounds
+            row_styles=["", "on grey3"],  # Alternate row backgrounds
+            width=None  # Let it auto-size to fill panel
         )
         
-        # Two columns: Field and Value
-        table.add_column("Field", style="bright_white", ratio=2, no_wrap=False)
-        table.add_column("Value", style="bright_white", ratio=3, no_wrap=False)
+        # Two columns: Field and Value with ratio-based widths that respect expand=True
+        # Field gets 35%, Value gets 65% of available width
+        table.add_column("Field", style="bright_white", ratio=35, no_wrap=False, overflow="fold")
+        table.add_column("Value", style="bright_white", ratio=65, no_wrap=False, overflow="fold")
         
         # Add rows for this result with visual grouping and scrolling
         all_rows = flatten_for_display(result)
         total_rows = len(all_rows)
         
         # Calculate visible window based on actual terminal height
-        max_visible = self._get_terminal_height()
+        # Cap at 25 rows max for better scrolling UX even on large terminals
+        max_visible = min(25, self._get_terminal_height())
         start_row = min(self.result_row_scroll, max(0, total_rows - max_visible))
         end_row = min(start_row + max_visible, total_rows)
         
@@ -29145,11 +29226,20 @@ class MistHelperTUI:
         nav_info = f"Result {current_result_idx + 1} of {len(results)}"
         result_pct = int(((current_result_idx + 1) / len(results)) * 100) if len(results) > 0 else 100
         
-        # Row scroll info
+        # Row scroll info with scroll indicators
         if total_rows > max_visible:
-            row_info = f" | Rows {start_row + 1}-{end_row} of {total_rows}"
+            can_scroll_up = start_row > 0
+            can_scroll_down = end_row < total_rows
+            scroll_indicator = ""
+            if can_scroll_up and can_scroll_down:
+                scroll_indicator = " [bright_yellow]↕[/bright_yellow]"
+            elif can_scroll_up:
+                scroll_indicator = " [bright_yellow]↑[/bright_yellow]"
+            elif can_scroll_down:
+                scroll_indicator = " [bright_yellow]↓[/bright_yellow]"
+            row_info = f" | Rows {start_row + 1}-{end_row} of {total_rows}{scroll_indicator}"
         else:
-            row_info = f" | {total_rows} rows"
+            row_info = f" | All {total_rows} rows visible"
         
         title = (f"[bold bright_yellow]{nav_info}[/bold bright_yellow] "
                 f"| Total: {total} | Limit: {actual_limit} | Distinct: {distinct} "
@@ -29835,7 +29925,65 @@ menu_actions = {
     # SSR FIRMWARE OPERATIONS
     # ==============================
     "100": (lambda: FirmwareManager(apisession, get_cached_or_prompted_org_id()).execute_ssr_firmware_upgrade_with_mode_selection(), " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
+    
+    # ==============================
+    # TERMINAL USER INTERFACE MODE
+    # ==============================
+    "101": (lambda: _launch_tui_from_menu(), "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration"),
 }
+
+def _launch_tui_from_menu():
+    """Launch Terminal User Interface mode from interactive menu.
+    
+    This function replicates the --tui CLI flag behavior but returns to menu
+    instead of exiting. Provides an interactive, keyboard-driven API browser.
+    
+    SECURITY: Read-only browser mode with safe API exploration
+    """
+    logging.info("TUI_MODE: Starting Terminal User Interface mode from menu")
+    print("\n>> Terminal User Interface mode activated")
+    print(">> Use arrow keys to navigate, Enter to select, Q to quit")
+    
+    # Initialize Mist API session for TUI mode if needed
+    global apisession
+    if not apisession:
+        print(">> Initializing Mist API session...")
+        if not initialize_mist_session():
+            print("[ERROR] Failed to initialize Mist API session")
+            logging.error("TUI_MODE: Could not initialize API session")
+            return
+        print(">> API session initialized successfully")
+    
+    # Remove console handler during TUI mode to prevent log messages from interfering with Rich display
+    root_logger = logging.getLogger()
+    console_handlers = [h for h in root_logger.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
+    for handler in console_handlers:
+        root_logger.removeHandler(handler)
+        logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")
+    
+    try:
+        # Get debug mode from global args if available
+        debug_mode = globals().get('args', type('obj', (), {'debug': False})()).debug if hasattr(globals().get('args', type('obj', (), {'debug': False})()), 'debug') else False
+        tui = MistHelperTUI(debug_mode=debug_mode)
+        # Pass the global apisession to TUI for API call execution
+        tui.apisession = apisession
+        if debug_mode:
+            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")
+        tui.run()
+    except KeyboardInterrupt:
+        logging.info("TUI_MODE: User interrupted with Ctrl+C")
+        print("\n[EXIT] TUI mode stopped by user")
+    except Exception as error:
+        logging.error(f"TUI_MODE: Fatal error - {error}", exc_info=True)
+        print(f"\n[ERROR] TUI mode crashed: {error}")
+    finally:
+        # Restore console handler after TUI mode exits
+        for handler in console_handlers:
+            root_logger.addHandler(handler)
+        logging.debug("TUI_MODE: Restored console handler after TUI exit")
+    
+    logging.info("TUI_MODE: TUI mode completed successfully")
+    print("\n>> Returned from TUI mode to main menu")
 
 def run_systematic_test():
     """
