@@ -31196,6 +31196,9 @@ def run_systematic_test():
     
     # Define unsafe menu options that should be skipped during testing
     unsafe_options = {
+        # Control operations that should not be tested
+        "0": "Exit option - would terminate the test prematurely",
+        
         # Resource-intensive operations that consistently fail or take excessive time
         "14": "Port-level statistics - extremely resource intensive (8+ hours, often fails)",
         "18": "Site configurations - hits API rate limits after 7+ hours",
