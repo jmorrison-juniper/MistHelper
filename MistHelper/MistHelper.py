@@ -31203,12 +31203,23 @@ def run_systematic_test():
         "14": "Port-level statistics - extremely resource intensive (8+ hours, often fails)",
         "18": "Site configurations - hits API rate limits after 7+ hours",
         
+        # WebSocket operations requiring interactive site and device selection
+        "5": "WebSocket ping - requires interactive site and device selection",
+        "6": "WebSocket traceroute - requires interactive site and device selection",
+        "7": "WebSocket release DHCP - requires interactive site and device selection",
+        "8": "WebSocket cable test - requires interactive site and device selection",
+        "87": "WebSocket bounce port - requires interactive site and device selection",
+        "88": "WebSocket ARP - requires interactive site and device selection",
+        "89": "WebSocket service ping - requires interactive site and device selection",
+        
         # Interactive operations requiring user input
         "9": "Packet capture - requires interactive configuration and site selection",
         "10": "Packet capture - requires interactive configuration and MxEdge ID",
         "60": "Firmware upgrade status - requires interactive scope selection",
         "61": "CSV comparison - requires interactive file selection",
         "62": "Marvis troubleshooting - requires interactive option selection",
+        "101": "Interactive TUI API browser - keyboard navigation required",
+        "102": "WLAN RADIUS timer management - requires interactive site selection",
         
         # Site-specific operations requiring site selection
         "29": "Requires site selection",
@@ -31254,6 +31265,10 @@ def run_systematic_test():
         "79": "Interactive CLI shell session",
         "80": "WebSocket operation",
         "81": "Shell command execution via WebSocket",
+        
+        # SSH operations requiring interactive host/command input
+        "97": "Enhanced SSH Command Runner - requires interactive host and command input",
+        "98": "SSH Runner by gateway template - requires interactive template and command input",
         
         # DESTRUCTIVE operations - absolutely skip
         "90": "DESTRUCTIVE: AP firmware upgrade operation",
