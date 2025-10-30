@@ -471,6 +471,182 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.10.30.17.50",
+      "date": "2025-10-30",
+      "changes": {
+        "bug_fixes": [
+          "Fixed dependency installation workflow to follow correct sequence",
+          "Corrected UV installation logic: now installs UV with pip if missing before attempting package installs"
+        ],
+        "refactoring": [
+          "Restructured _early_dependency_check() to follow proper workflow:",
+          "1. Check for missing dependencies",
+          "2. Check if UV installed",
+          "3. Install UV with pip if missing",
+          "4. Verify UV available",
+          "5. Use UV for packages (with per-package pip fallback)",
+          "Added UV installation verification step after pip install of UV",
+          "Improved logging to show UV installation and verification process"
+        ]
+      }
+    },
+    {
+      "version": "25.10.30.19.50",
+      "date": "2025-10-30",
+      "changes": {
+        "bug_fixes": [
+          "CRITICAL: Fixed ModuleNotFoundError for paramiko when running script directly without virtual environment",
+          "Fixed 'Rich library required for TUI mode' error by making dependency check dynamic",
+          "Fixed UV hardlink error on Windows (os error 396) by adding automatic pip fallback",
+          "Moved paramiko import from direct import (line 29) to try/except fallback block for graceful degradation"
+        ],
+        "feature_additions": [
+          "Added _parse_requirements_file() to dynamically read all dependencies from requirements.txt",
+          "Auto-installer now checks ALL packages from requirements.txt, not just hardcoded subset",
+          "Added PACKAGE_IMPORT_MAP dictionary for package-to-import-name translations (websocket-client -> websocket, etc.)",
+          "Enhanced logging: shows UV detection status and installation success/failure counts",
+          "Auto-installer attempts UV first, automatically falls back to pip on any UV failure",
+          "Added per-package retry logic: UV failure -> pip fallback for maximum compatibility",
+          "Respects DISABLE_AUTO_INSTALL environment variable for container deployments"
+        ],
+        "refactoring": [
+          "Replaced hardcoded critical_packages dict with dynamic requirements.txt parser",
+          "Centralized package name mapping in PACKAGE_IMPORT_MAP constant",
+          "Improved error handling for requirements.txt parsing (FileNotFoundError, parse errors)",
+          "Restructured import order: early dependency check -> stdlib imports -> third-party with fallbacks",
+          "Added null checks in EnhancedSSHRunner.connect() to provide clear error when paramiko unavailable",
+          "Improved error messaging: suggests 'pip install paramiko' if SSH functionality unavailable"
+        ],
+        "compatibility": [
+          "Script now runnable directly via 'python MistHelper.py' without pre-installing dependencies",
+          "All requirements.txt packages auto-installed on first run (rich, sshkeyboard, pyte, etc.)",
+          "Maintains backward compatibility with virtual environment workflow",
+          "Container deployments unaffected (DISABLE_AUTO_INSTALL=true by default in containers)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.29.13.55",
+      "date": "2025-10-29",
+      "changes": {
+        "bug_fixes": [
+          "CRITICAL: Fixed menu 102 WLAN update failure - script failed with 'Unknown inheritance level: org_wlan_with_template' when applying timer changes",
+          "Corrected inheritance level checks from 'wlan_template' to 'org_wlan_with_template' throughout update logic",
+          "Fixed API call - now uses updateOrgWlan() to update org-level WLANs directly instead of trying to modify templates",
+          "Fixed debug logging pollution - debug flag now only sets FileHandlers to DEBUG, console StreamHandlers remain at INFO",
+          "Console output now clean (INFO+ only) while script.log captures full DEBUG traces"
+        ],
+        "refactoring": [
+          "Updated WLAN update logic for org_wlan_with_template inheritance level",
+          "Simplified update messages to reflect actual API operations"
+        ]
+      }
+    },
+    {
+      "version": "25.10.29.00.15",
+      "date": "2025-10-29",
+      "changes": {
+        "bug_fixes": [
+          "CRITICAL FIX: Corrected WLAN template architecture completely in menu option 102",
+          "Previous logic tried to extract WLANs FROM templates (templates had empty wlans arrays)",
+          "Now correctly fetches org WLANs that REFERENCE templates via template_id field",
+          "Fixed logic: 1) Fetch WLAN templates, 2) Determine which assigned to site, 3) Fetch org WLANs, 4) Match WLANs with template_id to assigned templates"
+        ],
+        "refactoring": [
+          "Complete rewrite of org WLAN template section (lines 28066-28173)",
+          "Renamed filtered_org_template_wlans to filtered_org_wlans for accuracy",
+          "Updated inheritance level from 'wlan_template' to 'org_wlan_with_template'",
+          "Simplified inheritance source description: 'Org WLAN using template: {name}'"
+        ],
+        "enhancements": [
+          "Converted remaining progress messages to logging (only user-facing data remains as print)",
+          "Debug logs now show template assignment determination before WLAN fetching",
+          "Added logging for org WLAN filtering process with template_id matching"
+        ],
+        "documentation": [
+          "Clarified architecture: WLAN templates are configuration containers, not WLAN collections",
+          "Org WLANs exist independently and optionally reference templates for config inheritance",
+          "Templates define what configuration to apply; WLANs reference them via template_id"
+        ]
+      }
+    },
+    {
+      "version": "25.10.28.23.15",
+      "date": "2025-10-28",
+      "changes": {
+        "feature_additions": [
+          "Added debug flag support to menu option 102 for verbose WLAN template troubleshooting",
+          "Debug mode shows detailed WLAN template structure, applies fields, and assignment logic in logs",
+          "Use: python MistHelper.py --menu 102 --debug (output goes to data/script.log)"
+        ],
+        "enhancements": [
+          "Debug output written to log file instead of console for cleaner user experience",
+          "Detailed logging shows applies.site_ids, applies.sitegroup_ids, applies.wxtag_ids, applies.org_id",
+          "Shows WLAN structure type (list vs dict) and WLAN count per template in debug logs"
+        ]
+      }
+    },
+    {
+      "version": "25.10.28.22.30",
+      "date": "2025-10-28",
+      "changes": {
+        "bug_fixes": [
+          "Corrected fundamental misunderstanding of Mist template architecture in menu option 102",
+          "Now correctly distinguishes between Site Templates and WLAN Templates (separate concepts)",
+          "Fixed to fetch WLAN templates via /orgs/{org_id}/templates (not /wlans)",
+          "Properly checks WLAN template assignment via applies.site_ids, sitegroup_ids, wxtag_ids, org_id"
+        ],
+        "refactoring": [
+          "Renamed inheritance level from 'org_template' to 'wlan_template' for clarity",
+          "Updated API routing to use updateOrgTemplate for WLAN template modifications",
+          "Improved WLAN template update logic to fetch full template, modify WLAN, then update"
+        ],
+        "documentation": [
+          "Site Templates (/sitetemplates): Full site configs with embedded WLANs",
+          "WLAN Templates (/templates): WLAN-specific templates assignable to sites",
+          "Org WLANs (/wlans): Standalone org-level WLANs (not template-based)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.28.22.09",
+      "date": "2025-10-28",
+      "changes": {
+        "bug_fixes": [
+          "Fixed org WLAN template detection in menu option 102 - now correctly matches WLANs by template_id",
+          "Corrected logic to compare wlan['template_id'] with site's assigned sitetemplate_id",
+          "Removed incorrect site_ids array checking (field does not exist in org WLAN API response)"
+        ],
+        "refactoring": [
+          "Simplified org WLAN filtering to only run when site has assigned template",
+          "Improved logging clarity for org WLAN template assignment detection"
+        ]
+      }
+    },
+    {
+      "version": "25.10.28.21.00",
+      "date": "2025-10-28",
+      "changes": {
+        "feature_additions": [
+          "Menu option 102 now supports org-level WLAN templates in addition to site templates",
+          "Detects org WLANs applied via explicit site assignment, org-wide, or WxTag matching",
+          "Displays assignment method for org templates (explicit/org-wide/tag-based)"
+        ],
+        "enhancements": [
+          "Enhanced WLAN inheritance detection across three levels: site, site_template, org_template",
+          "Org WLAN template modifications now show clear impact scope (which sites affected)",
+          "Improved warning messages distinguish between site template and org template changes",
+          "API routing automatically selects correct update endpoint based on WLAN source level"
+        ],
+        "api_changes": [
+          "Added listOrgWlans API call to fetch org-level WLAN templates",
+          "Added updateOrgWlan API call to modify org-level WLAN templates",
+          "Org WLAN filtering checks apply_to field (site/org/wxtags) and site_ids array",
+          "WxTag matching compares wxtag_ids between org WLANs and site configuration"
+        ]
+      }
+    },
+    {
       "version": "25.10.21.15.00",
       "date": "2025-10-21",
       "changes": {
@@ -1600,6 +1776,142 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
           "Model compatibility display - Firmware version selection now shows compatible switch models for each available version",
           "Safety improvements - Prevents selection of incompatible firmware versions that could cause upgrade failures",
           "Error handling - Improved messaging when no compatible firmware versions are available for detected switch models"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.17.00",
+      "date": "2025-10-27",
+      "changes": {
+        "feature_additions": [
+          "Menu option 60 - NEW: Continuous monitoring mode (option 5) for real-time upgrade tracking",
+          "Auto-refresh capability - Monitors active upgrades with 7-second refresh cycle until completion or cancellation",
+          "Full device scanning - Each refresh queries ALL devices (not just initial set), detecting new upgrades automatically",
+          "Live dashboard - Clear screen display showing only devices currently upgrading with progress bars",
+          "Smart exit - Automatically exits when all upgrades complete or user presses Ctrl+C",
+          "Monitoring iterations - Displays refresh count and active device count per cycle"
+        ],
+        "enhancements": [
+          "Scope options expanded - Added option 5 for continuous monitoring alongside existing 1-4 scopes",
+          "Operational visibility - NOC engineers can now monitor upgrade progress without manual refreshes",
+          "Dynamic device tracking - New devices starting upgrades mid-monitoring are detected and displayed",
+          "Real-time progress - Each iteration fetches fresh API data showing current progress percentages",
+          "Stale filtering - Monitoring mode applies same stale upgrade detection as standard mode"
+        ],
+        "user_interface": [
+          "Clear screen refresh - Platform-aware screen clearing (cls/clear) for clean display updates",
+          "Exit instructions - Clear prompts showing Ctrl+C to exit and auto-exit on completion",
+          "Progress tracking - Visual progress bars and status display updated every 7 seconds",
+          "Scan notification - Each refresh shows 'Scanning all devices' to indicate fresh API query"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.16.45",
+      "date": "2025-10-27",
+      "changes": {
+        "fixes": [
+          "Menu option 60 - CRITICAL FIX: Stale completed upgrades no longer shown in real-time progress table",
+          "Progress filtering - Devices showing 100% complete for more than 1 hour are treated as completed, not active",
+          "Status accuracy - Fixed issue where APs with 'inprogress' status at 100% from weeks ago appeared as actively upgrading",
+          "Active upgrades scope - Option 3 now correctly excludes stale completed upgrades from results"
+        ],
+        "api_changes": [
+          "Stale status handling - Mist API sometimes leaves devices in 'inprogress' status after completion; now detected by checking progress=100 + timestamp age",
+          "Completion detection - Upgrades older than 1 hour at 100% progress are automatically reclassified as completed"
+        ],
+        "enhancements": [
+          "Smart filtering - Real-time dashboard only shows genuinely active upgrades, not old completed ones with stale API status",
+          "CSV clarity - Stale upgrades marked as '[===============] 100% (Complete - Stale)' to distinguish from active upgrades",
+          "Summary accuracy - Upgrades in progress count now excludes stale 100% completions for accurate operational visibility"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.16.30",
+      "date": "2025-10-27",
+      "changes": {
+        "fixes": [
+          "Menu option 60 - CRITICAL FIX: SSR upgrade progress now included in real-time progress table display",
+          "Status handling - Added 'downloading' as recognized active upgrade status alongside 'inprogress' and 'upgrading'",
+          "Progress display - SSR devices in downloading phase now show progress bars in CSV export and console dashboard",
+          "Scope filtering - Active upgrades filter (option 3) now properly includes SSR devices with downloading status"
+        ],
+        "api_changes": [
+          "SSR upgrade status support - Mist API returns 'downloading' status for SSR/Gateway devices during firmware download phase",
+          "Multi-stage upgrade tracking - Full lifecycle support: downloading -> upgrading/inprogress -> success/upgraded/completed"
+        ],
+        "enhancements": [
+          "Complete device coverage - All device types (AP, Switch, Gateway, SSR) now tracked across all upgrade phases",
+          "Progress visibility - SSR downloads with progress percentages (e.g., 90%) now visible in dashboard table"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.16.15",
+      "date": "2025-10-27",
+      "changes": {
+        "fixes": [
+          "Menu option 60 - CRITICAL FIX: Organization-wide device stats now properly includes all device fields and fwupdate data",
+          "API field retrieval - Using fields='*' parameter to retrieve all available fields including fwupdate for complete device information",
+          "Data completeness - Org-wide queries now return device ID, name, MAC, model, type, version, site info AND firmware upgrade status"
+        ],
+        "api_changes": [
+          "API behavior discovery - Mist listOrgDevicesStats requires explicit fields parameter, using fields='*' to get comprehensive data including fwupdate field",
+          "Field specification - When fields parameter is used with specific field name, only that field is returned; fields='*' gets all fields including optional ones"
+        ],
+        "enhancements": [
+          "Org-wide status monitoring - Now fully functional with complete device information and upgrade progress tracking across all sites",
+          "Data consistency - Organization-wide and site-specific queries now return equivalent device and firmware status information"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.16.00",
+      "date": "2025-10-27",
+      "changes": {
+        "fixes": [
+          "Menu option 60 - Fixed status categorization to handle actual API response values (success/upgrading) in addition to documented values (upgraded/inprogress)",
+          "Progress display logic - Corrected to show completion status for devices with 'success' status instead of showing N/A",
+          "Status filtering - Active upgrades filter now properly includes both 'inprogress' and 'upgrading' status devices",
+          "Upgrade completed counter - Now properly counts devices with both 'upgraded' and 'success' status values"
+        ],
+        "api_changes": [
+          "API inconsistency handling - Added support for actual API response values that differ from OpenAPI schema documentation",
+          "Device type variance - Gateway/SSR devices return 'upgrading' and 'success' while APs use 'inprogress' and 'upgraded'"
+        ],
+        "enhancements": [
+          "Status value mapping - Code now handles both documented enum values and actual device-specific response values",
+          "Error resilience - Progress tracking works correctly regardless of which status value variant the API returns"
+        ]
+      }
+    },
+    {
+      "version": "25.10.27.15.30",
+      "date": "2025-10-27",
+      "changes": {
+        "feature_additions": [
+          "Real-time progress monitoring - Menu option 60 now displays live upgrade progress with ASCII progress bars showing percentage completion (0-100%)",
+          "Visual progress indicators - Added create_progress_bar() helper function generating [=========>          ] style progress bars for console and CSV output",
+          "Progress analytics - Average progress calculation across all in-progress upgrades with visual representation",
+          "Progress distribution tracking - Devices categorized into progress ranges (0-25%, 26-50%, 51-75%, 76-99%, 100%) for quick status assessment",
+          "Active upgrade dashboard - Dedicated section showing up to 20 devices currently upgrading with device name, type, site, and real-time progress",
+          "Enhanced CSV export - New FW Progress Display field with visual progress bars exported alongside numeric percentage for spreadsheet analysis"
+        ],
+        "enhancements": [
+          "Menu option 60 - Comprehensive firmware upgrade status monitoring leveraging fwupdate.progress field from Mist API device stats",
+          "Progress tracking infrastructure - Added progress_total, progress_count, and devices_upgrading tracking to firmware status summary",
+          "API field utilization - Full implementation of fwupdate_stat schema including progress (0-100), status (inprogress/failed/upgraded), timestamp, and will_retry fields",
+          "User experience - Clear tabular display of upgrading devices sorted by progress percentage (highest first) showing devices closest to completion",
+          "Status visualization - Progress bars adapt to upgrade state: active progress for inprogress, Complete for upgraded, FAILED for failed upgrades"
+        ],
+        "api_changes": [
+          "Device stats API integration - Leverages listOrgDevicesStats and listSiteDevicesStats endpoints to retrieve fwupdate field with real-time progress data",
+          "API field documentation - Confirmed fwupdate_stat schema from Mist OpenAPI spec with progress (0-100 integer), status enum, status_id, timestamp, and will_retry boolean"
+        ],
+        "documentation": [
+          "API research findings - Documented fwupdate field structure and upgrade status tracking capabilities available in Mist API",
+          "Progress monitoring guide - Clear explanation of how progress percentage maps to upgrade stages and device states"
         ]
       }
     },

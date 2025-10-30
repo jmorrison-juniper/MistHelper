@@ -26,8 +26,6 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from threading import Lock
 from typing import Tuple, Optional, List, Dict, Any, Union
-import paramiko
-from paramiko import SSHClient, AutoAddPolicy
 
 # ============================================================================
 # EARLY LOGGING SETUP
@@ -99,6 +97,197 @@ class PerformanceMonitor:
         if is_debug_mode():
             print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
 
+# ============================================================================
+# EARLY DEPENDENCY AUTO-INSTALLER
+# ============================================================================
+# This section attempts to auto-install critical dependencies BEFORE any imports
+# that might fail. This enables running the script directly without pre-setup.
+
+# Package name to import name mapping for special cases
+PACKAGE_IMPORT_MAP = {
+    'websocket-client': 'websocket',
+    'python-dotenv': 'dotenv',
+    'usaddress-scourgify': 'scourgify',
+    'pillow': 'PIL',
+    'beautifulsoup4': 'bs4',
+    'pyyaml': 'yaml',
+    'python-dateutil': 'dateutil',
+    'msgpack-python': 'msgpack',
+}
+
+def _parse_requirements_file(filepath='requirements.txt'):
+    """
+    Parse requirements.txt and return list of package specifications.
+    
+    SECURITY: Only reads from requirements.txt - no arbitrary file access.
+    Skips commented lines, empty lines, and development dependencies.
+    
+    Returns:
+        List of (package_name, package_spec) tuples
+    """
+    packages = []
+    try:
+        with open(filepath, 'r', encoding='utf-8') as requirements_file:
+            for line in requirements_file:
+                line = line.strip()
+                
+                # Skip empty lines and comments
+                if not line or line.startswith('#'):
+                    continue
+                
+                # Skip commented-out dev dependencies
+                if line.startswith('# pytest') or line.startswith('# coverage'):
+                    continue
+                
+                # Extract package name from spec (e.g., "requests>=2.28.0" -> "requests")
+                package_spec = line
+                package_name = re.split(r'[><=!]', package_spec)[0].strip()
+                
+                packages.append((package_name, package_spec))
+                
+        logging.debug(f"Parsed {len(packages)} packages from {filepath}")
+        return packages
+    except FileNotFoundError:
+        logging.warning(f"Requirements file not found: {filepath}")
+        return []
+    except Exception as parse_error:
+        logging.warning(f"Error parsing requirements file: {parse_error}")
+        return []
+
+def _early_dependency_check():
+    """
+    Check and auto-install critical dependencies before they're imported.
+    
+    WORKFLOW:
+    1. Check for missing dependencies
+    2. Check if UV is installed
+    3. If UV missing -> install UV with pip
+    4. Verify UV is now available
+    5. Use UV to install/update packages (with per-package pip fallback)
+    
+    SECURITY: Only installs from requirements.txt - no arbitrary package execution.
+    This runs before main import logic to enable direct script execution.
+    """
+    # Check if auto-install is disabled
+    if os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true":
+        logging.debug("Early dependency auto-install disabled via DISABLE_AUTO_INSTALL")
+        return
+    
+    # Parse requirements.txt for all dependencies
+    all_packages = _parse_requirements_file()
+    if not all_packages:
+        logging.warning("No packages found in requirements.txt - skipping dependency check")
+        return
+    
+    # Quick check: try importing each package
+    missing_packages = []
+    for package_name, package_spec in all_packages:
+        # Handle package name vs import name differences
+        import_name = PACKAGE_IMPORT_MAP.get(package_name, package_name)
+        
+        try:
+            __import__(import_name)
+        except ImportError:
+            missing_packages.append((package_name, package_spec))
+            logging.info(f"Missing dependency detected: {package_name}")
+    
+    if not missing_packages:
+        logging.debug(f"All {len(all_packages)} dependencies from requirements.txt present")
+        return
+    
+    logging.info(f"Attempting to auto-install {len(missing_packages)} missing dependencies...")
+    
+    # Step 1: Check if UV is installed
+    use_uv = False
+    try:
+        uv_result = subprocess.run(['uv', '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+        use_uv = uv_result.returncode == 0
+        if use_uv:
+            logging.info(f"UV package manager detected: {uv_result.stdout.strip()}")
+    except (FileNotFoundError, subprocess.SubprocessError):
+        logging.info("UV package manager not found")
+    
+    # Step 2: If UV not installed, try to install it with pip
+    if not use_uv:
+        logging.info("Attempting to install UV package manager with pip...")
+        try:
+            install_result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', 'uv'],
+                capture_output=True, text=True, timeout=30
+            )
+            if install_result.returncode == 0:
+                logging.info("UV package manager installed successfully")
+                # Step 3: Verify UV is now available
+                try:
+                    verify_result = subprocess.run(['uv', '--version'],
+                                                  capture_output=True, text=True, timeout=5)
+                    use_uv = verify_result.returncode == 0
+                    if use_uv:
+                        logging.info(f"UV verified: {verify_result.stdout.strip()}")
+                except (FileNotFoundError, subprocess.SubprocessError):
+                    logging.warning("UV installation succeeded but uv command not found in PATH")
+                    use_uv = False
+            else:
+                logging.warning(f"Failed to install UV with pip: {install_result.stderr.strip()}")
+        except Exception as install_error:
+            logging.warning(f"Could not install UV: {install_error}")
+    
+    # Log installation strategy
+    if use_uv:
+        logging.info("Using UV for package installations (pip fallback per package if needed)")
+    else:
+        logging.info("Using pip for package installations (UV unavailable)")
+    
+    # Step 4: Install/update missing packages
+    success_count = 0
+    failure_count = 0
+    
+    for package_name, package_spec in missing_packages:
+        installed = False
+        
+        # Try UV first if available
+        if use_uv:
+            try:
+                cmd = ['uv', 'pip', 'install', '--python', sys.executable, package_spec]
+                logging.info(f"Installing {package_spec} with UV...")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    logging.info(f"Successfully installed {package_spec} with UV")
+                    success_count += 1
+                    installed = True
+                else:
+                    # UV failed - log and try pip fallback
+                    logging.warning(f"UV installation failed for {package_spec}: {result.stderr.strip()}")
+                    logging.info(f"Retrying {package_spec} with pip fallback...")
+            except Exception as uv_error:
+                logging.warning(f"UV installation error for {package_spec}: {uv_error}")
+                logging.info(f"Retrying {package_spec} with pip fallback...")
+        
+        # Try pip if UV not available or UV failed
+        if not installed:
+            try:
+                cmd = [sys.executable, '-m', 'pip', 'install', package_spec]
+                logging.info(f"Installing {package_spec} with pip...")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    logging.info(f"Successfully installed {package_spec} with pip")
+                    success_count += 1
+                    installed = True
+                else:
+                    logging.error(f"Pip installation failed for {package_spec}: {result.stderr.strip()}")
+                    failure_count += 1
+            except Exception as pip_error:
+                logging.error(f"Could not install {package_spec} with pip: {pip_error}")
+                failure_count += 1
+    
+    logging.info(f"Early dependency check completed: {success_count} installed, {failure_count} failed")
+
+# Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
+_early_dependency_check()
+
 # Additional standard library imports
 from pathlib import Path
 import json
@@ -160,6 +349,14 @@ try:
     import pyte
 except ImportError:
     pyte = None
+
+try:
+    import paramiko
+    from paramiko import SSHClient, AutoAddPolicy
+except ImportError:
+    paramiko = None
+    SSHClient = None
+    AutoAddPolicy = None
 
 # Optional imports with fallbacks
 try:
@@ -21374,15 +21571,16 @@ class FirmwareManager:
             print("   [2] Specific site status")
             print("   [3] Active upgrade operations only")
             print("   [4] Failed upgrades only")
+            print("   [5] Continuous monitoring mode (auto-refresh until complete)")
             
             while True:
                 try:
-                    scope_choice = input("Select scope (1-4): ").strip()
-                    if scope_choice in ['1', '2', '3', '4']:
+                    scope_choice = input("Select scope (1-5): ").strip()
+                    if scope_choice in ['1', '2', '3', '4', '5']:
                         logging.debug(f"User selected scope: {scope_choice}")
                         break
                     else:
-                        print(" Invalid selection. Please choose 1-4.")
+                        print(" Invalid selection. Please choose 1-5.")
                         logging.debug(f"Invalid scope selection: {scope_choice}")
                 except KeyboardInterrupt:
                     print("\n Operation cancelled by user.")
@@ -21398,8 +21596,188 @@ class FirmwareManager:
                 return
             logging.debug(f"Selected site filter: {site_filter}")
         
+        # Handle monitoring mode (option 5)
+        if scope_choice == '5':
+            logging.info("Entering continuous monitoring mode")
+            return self._continuous_monitoring_mode(site_filter)
+        
         # Continue with the existing implementation...
         return self._execute_status_check(scope_choice, site_filter)
+    
+    def _continuous_monitoring_mode(self, site_filter=None):
+        """
+        Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled.
+        
+        Features:
+        - Auto-refresh every 7 seconds with full device scan each iteration
+        - Clear screen between refreshes
+        - Show only devices actively upgrading
+        - Detects new devices that start upgrading after monitoring begins
+        - Exit automatically when all upgrades complete
+        - Press Ctrl+C to exit at any time
+        
+        Note: Each refresh queries ALL devices (not just initial set), so new upgrades
+        started after monitoring begins will be detected and displayed.
+        
+        Args:
+            site_filter: Optional site ID to filter monitoring
+        """
+        import os
+        import platform
+        
+        print("\n  Continuous Monitoring Mode")
+        print("=" * 70)
+        print("   Monitoring active firmware upgrades...")
+        print("   Press Ctrl+C to exit at any time")
+        print("   Auto-refreshing every 7 seconds")
+        print("   NOTE: Each refresh scans ALL devices for active upgrades")
+        print("=" * 70)
+        
+        logging.info("Starting continuous monitoring mode with 7-second refresh interval")
+        iteration = 0
+        
+        try:
+            while True:
+                iteration += 1
+                
+                # Clear screen for cleaner display (platform-specific)
+                if platform.system() == "Windows":
+                    os.system('cls')
+                else:
+                    os.system('clear')
+                
+                # Display header
+                print("\n  Firmware Upgrade Monitoring - Live View")
+                print("=" * 70)
+                print(f"   Refresh #{iteration} | Press Ctrl+C to exit")
+                print(f"   Scanning all devices for active upgrades...")
+                print("=" * 70)
+                
+                # Execute status check for active upgrades only
+                # NOTE: This queries ALL devices each time, not just initial set
+                # New devices that start upgrading will be detected automatically
+                result = self._execute_monitoring_check(site_filter)
+                
+                if result is None:
+                    print("\n   Error fetching upgrade status. Retrying...")
+                    logging.warning(f"Monitoring iteration {iteration} failed")
+                elif result == 0:
+                    # No active upgrades found
+                    print("\n  All upgrades completed!")
+                    print("   No active firmware upgrades detected.")
+                    print("   Exiting monitoring mode.")
+                    logging.info("Monitoring mode exiting - all upgrades complete")
+                    break
+                else:
+                    print(f"\n   Found {result} device(s) actively upgrading")
+                    print("   Next refresh in 7 seconds...")
+                
+                # Wait 7 seconds before next refresh
+                time.sleep(7)
+                
+        except KeyboardInterrupt:
+            print("\n\n  Monitoring mode cancelled by user.")
+            logging.info("Continuous monitoring mode cancelled by user")
+            return
+    
+    def _execute_monitoring_check(self, site_filter=None):
+        """
+        Execute a single monitoring check iteration.
+        
+        This method performs a FULL fresh query of all devices on each call.
+        It does NOT track specific devices from the first iteration - instead,
+        it queries the API for ALL devices and checks their current upgrade status.
+        
+        This means:
+        - New devices that start upgrading will be detected
+        - Devices that complete will drop off automatically
+        - Progress percentages are always current/live
+        
+        Returns:
+            int: Number of devices actively upgrading, or None if error
+        """
+        try:
+            # Fetch FRESH device statistics from API (not cached from previous iteration)
+            all_device_stats = []
+            
+            if site_filter:
+                # Query specific site for current device stats
+                stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                    self.apisession, 
+                    site_filter,
+                    type="all",
+                    limit=1000
+                )
+                site_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
+                all_device_stats.extend(site_stats)
+            else:
+                # Query entire org for current device stats
+                stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+                    self.apisession, 
+                    self.org_id,
+                    type="all",
+                    fields="*",
+                    limit=1000
+                )
+                org_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
+                all_device_stats.extend(org_stats)
+            
+            # Scan through ALL devices to find active upgrades
+            active_upgrades = []
+            
+            for device_stat in all_device_stats:
+                fwupdate = device_stat.get('fwupdate')
+                if not fwupdate:
+                    continue
+                
+                fw_status = fwupdate.get('status', 'unknown')
+                fw_progress = fwupdate.get('progress', 0)
+                fw_timestamp = fwupdate.get('timestamp', 0)
+                
+                # Check if this is truly an active upgrade (not stale)
+                is_active = fw_status in ('inprogress', 'upgrading', 'downloading')
+                
+                if is_active and fw_progress == 100 and fw_timestamp:
+                    # Check for stale upgrade
+                    try:
+                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
+                        if upgrade_age_hours > 1:
+                            is_active = False  # Stale, skip it
+                    except (ValueError, OSError, TypeError):
+                        pass
+                
+                if is_active:
+                    device_name = device_stat.get('name', 'Unnamed')
+                    device_type = device_stat.get('type', 'unknown')
+                    device_model = device_stat.get('model', 'Unknown')
+                    
+                    active_upgrades.append({
+                        'name': device_name,
+                        'type': device_type,
+                        'model': device_model,
+                        'progress': fw_progress if fw_progress is not None else 0,
+                        'status': fw_status
+                    })
+            
+            # Display active upgrades table
+            if active_upgrades:
+                print("\n  Devices Currently Upgrading:")
+                print("  " + "=" * 86)
+                print(f"  {'Device Name':<25} {'Type':<10} {'Model':<15} {'Status':<12} {'Progress':<20}")
+                print("  " + "-" * 86)
+                
+                for upgrade in active_upgrades:
+                    progress_bar = create_progress_bar(upgrade['progress'], bar_length=15)
+                    print(f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
+                          f"{upgrade['status']:<12} {progress_bar}")
+                
+                print("  " + "=" * 86)
+            
+            return len(active_upgrades)
+            
+        except Exception as e:
+            logging.error(f"Error in monitoring check: {e}", exc_info=True)
+            return None
     
     def upgrade_ap_firmware_by_gateway_template(self):
         """
@@ -22628,6 +23006,37 @@ class FirmwareManager:
         return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
+def create_progress_bar(progress_percentage, bar_length=20):
+    """
+    Create an ASCII progress bar visualization for upgrade progress.
+    
+    Args:
+        progress_percentage (int): Progress value from 0 to 100
+        bar_length (int): Total length of the progress bar in characters
+    
+    Returns:
+        str: Formatted progress bar string like "[=========>          ] 45%"
+    """
+    if progress_percentage is None or progress_percentage < 0:
+        progress_percentage = 0
+    elif progress_percentage > 100:
+        progress_percentage = 100
+    
+    filled_length = int(bar_length * progress_percentage / 100)
+    
+    if filled_length == bar_length:
+        # Complete: all filled
+        bar = '=' * bar_length
+    elif filled_length == 0:
+        # Just started: all empty
+        bar = ' ' * bar_length
+    else:
+        # In progress: filled portion + arrow + empty portion
+        bar = '=' * (filled_length - 1) + '>' + ' ' * (bar_length - filled_length)
+    
+    return f"[{bar}] {progress_percentage:3d}%"
+
+
 def check_firmware_upgrade_status_direct():
     """
     Direct firmware status check using FirmwareManager.
@@ -22718,10 +23127,13 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             # Organization-wide mode
             print(f"   Fetching organization-wide device statistics...")
             logging.debug(f"Fetching organization-wide stats for org: {org_id}")
+            # Request all standard fields plus fwupdate field for firmware upgrade status
+            # Using fields=* to get all available fields including fwupdate
             stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
                 apisession, 
                 org_id,
                 type="all",
+                fields="*",
                 limit=1000
             )
             org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
@@ -22751,7 +23163,10 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         'upgrade_unknown': 0,
         'devices_by_status': {},
         'devices_by_version': {},
-        'devices_by_model': {}
+        'devices_by_model': {},
+        'progress_total': 0,
+        'progress_count': 0,
+        'devices_upgrading': []
     }
     
     # Get site information for enrichment
@@ -22786,11 +23201,45 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             fw_will_retry = fwupdate.get('will_retry', False)
             
             # Categorize by status
-            if fw_status == 'inprogress':
-                firmware_status_summary['upgrade_in_progress'] += 1
+            # Note: API documentation says inprogress/failed/upgraded but actual responses 
+            # may return success/upgrading/downloading/failed due to device type differences
+            if fw_status in ('inprogress', 'upgrading', 'downloading'):
+                # Check if this is a stale completed upgrade (100% complete but status not updated)
+                is_stale_upgrade = False
+                if fw_progress == 100 and fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
+                    try:
+                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
+                        if upgrade_age_hours > 1:  # More than 1 hour old at 100%
+                            is_stale_upgrade = True
+                            logging.debug(f"Device {device_name} shows 100% complete {upgrade_age_hours:.1f}h ago but still marked '{fw_status}' - treating as completed")
+                    except (ValueError, OSError, TypeError) as e:
+                        logging.debug(f"Could not calculate upgrade age for {device_name}: {e}")
+                
+                if is_stale_upgrade:
+                    # Treat as completed rather than in-progress
+                    firmware_status_summary['upgrade_completed'] += 1
+                else:
+                    firmware_status_summary['upgrade_in_progress'] += 1
+                    # Track progress statistics for in-progress upgrades
+                    if fw_progress is not None and isinstance(fw_progress, (int, float)):
+                        firmware_status_summary['progress_total'] += fw_progress
+                        firmware_status_summary['progress_count'] += 1
+                        
+                    # Track device details for progress display (only truly active upgrades)
+                    firmware_status_summary['devices_upgrading'].append({
+                        'device_name': device_name,
+                        'device_mac': device_mac,
+                        'device_type': device_type,
+                        'device_model': device_model,
+                        'site_name': site_name,
+                        'current_version': device_version,
+                        'progress': fw_progress if fw_progress is not None else 0,
+                        'fw_time_str': None,  # Will be set below
+                        'fw_timestamp': fw_timestamp  # Store for later filtering
+                    })
             elif fw_status == 'failed':
                 firmware_status_summary['upgrade_failed'] += 1
-            elif fw_status == 'upgraded':
+            elif fw_status in ('upgraded', 'success'):
                 firmware_status_summary['upgrade_completed'] += 1
             else:
                 firmware_status_summary['upgrade_unknown'] += 1
@@ -22808,6 +23257,10 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 except (ValueError, OSError, TypeError) as e:
                     logging.debug(f"Invalid firmware timestamp {fw_timestamp}: {e}")
                     fw_time_str = f"Invalid timestamp: {fw_timestamp}"
+            
+            # Update timestamp in devices_upgrading if device was added
+            if fw_status in ('inprogress', 'upgrading', 'downloading') and firmware_status_summary['devices_upgrading']:
+                firmware_status_summary['devices_upgrading'][-1]['fw_time_str'] = fw_time_str
             
             last_seen_str = "Unknown"
             if last_seen and isinstance(last_seen, (int, float)) and last_seen > 0:
@@ -22852,12 +23305,46 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         
         # Apply scope filtering
         include_device = True
-        if scope_choice == '3':  # Active upgrades only
-            include_device = fw_status == 'inprogress'
+        if scope_choice == '3':  # Active upgrades only - exclude stale completed upgrades
+            is_active_upgrade = fw_status in ('inprogress', 'upgrading', 'downloading')
+            if is_active_upgrade and fw_progress == 100:
+                # Check if it's a stale upgrade
+                if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
+                    try:
+                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
+                        if upgrade_age_hours > 1:
+                            is_active_upgrade = False  # Exclude from active upgrades filter
+                    except (ValueError, OSError, TypeError):
+                        pass
+            include_device = is_active_upgrade
         elif scope_choice == '4':  # Failed upgrades only
             include_device = fw_status == 'failed'
         
         if include_device:
+            # Create a visual progress display for CSV
+            progress_display = "N/A"
+            
+            # Check if this is a stale completed upgrade (for display purposes)
+            is_stale_display = False
+            if fw_status in ('inprogress', 'upgrading', 'downloading') and fw_progress == 100:
+                if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
+                    try:
+                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
+                        if upgrade_age_hours > 1:
+                            is_stale_display = True
+                    except (ValueError, OSError, TypeError):
+                        pass
+            
+            if is_stale_display:
+                # Show as complete in CSV even though API status says inprogress
+                progress_display = "[===============] 100% (Complete - Stale)"
+            elif fw_status in ('inprogress', 'upgrading', 'downloading') and fw_progress is not None:
+                progress_display = create_progress_bar(fw_progress, bar_length=15)
+            elif fw_status in ('upgraded', 'success'):
+                progress_display = "[===============] 100% (Complete)"
+            elif fw_status == 'failed':
+                progress_display = "[!!!!! FAILED !!!!!]"
+            
             upgrade_results.append({
                 'Site ID': site_id,
                 'Site Name': site_name,
@@ -22870,6 +23357,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 'Last Seen': last_seen_str,
                 'FW Upgrade Status': fw_status,
                 'FW Progress %': fw_progress,
+                'FW Progress Display': progress_display,
                 'FW Status ID': fw_status_id,
                 'FW Will Retry': fw_will_retry,
                 'FW Timestamp': fw_time_str,
@@ -22881,6 +23369,13 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     print(f"   X  Total devices analyzed: {firmware_status_summary['total_devices']}")
     print(f"   X  Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
     print(f"   X  Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
+    
+    # Calculate and display average progress for in-progress upgrades
+    if firmware_status_summary['progress_count'] > 0:
+        avg_progress = firmware_status_summary['progress_total'] / firmware_status_summary['progress_count']
+        progress_bar = create_progress_bar(int(avg_progress))
+        print(f"   X  Average upgrade progress: {progress_bar}")
+    
     print(f"   X  Upgrades completed: {firmware_status_summary['upgrade_completed']}")
     print(f"   X  Upgrades failed: {firmware_status_summary['upgrade_failed']}")
     print(f"   X  Unknown status: {firmware_status_summary['upgrade_unknown']}")
@@ -22920,6 +23415,59 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         print(f"   X  {model}: {count} devices")
     if len(sorted_models) > 10:
         print(f"   ... and {len(sorted_models) - 10} more models")
+    
+    # Step 4b: Display detailed progress for devices currently upgrading
+    if firmware_status_summary['devices_upgrading']:
+        print(f"\n  Devices Currently Upgrading (Real-Time Progress):")
+        print(f"  {'='*90}")
+        
+        # Sort by progress (highest first) to show devices closest to completion
+        sorted_upgrading = sorted(firmware_status_summary['devices_upgrading'], 
+                                 key=lambda x: x['progress'], reverse=True)
+        
+        # Display header
+        print(f"  {'Device Name':<25} {'Type':<8} {'Site':<20} {'Progress':<30}")
+        print(f"  {'-'*25} {'-'*8} {'-'*20} {'-'*30}")
+        
+        for device in sorted_upgrading[:20]:  # Show top 20 upgrading devices
+            device_name_short = device['device_name'][:24] if device['device_name'] else 'Unnamed'
+            device_type_short = device['device_type'][:7] if device['device_type'] else 'Unknown'
+            site_name_short = device['site_name'][:19] if device['site_name'] else 'Unknown'
+            progress_bar = create_progress_bar(device['progress'], bar_length=15)
+            
+            print(f"  {device_name_short:<25} {device_type_short:<8} {site_name_short:<20} {progress_bar}")
+        
+        if len(sorted_upgrading) > 20:
+            print(f"  ... and {len(sorted_upgrading) - 20} more devices upgrading")
+        
+        print(f"  {'='*90}")
+        
+        # Show progress distribution
+        progress_ranges = {
+            '0-25%': 0,
+            '26-50%': 0,
+            '51-75%': 0,
+            '76-99%': 0,
+            '100%': 0
+        }
+        
+        for device in sorted_upgrading:
+            progress = device['progress']
+            if progress == 0 or progress <= 25:
+                progress_ranges['0-25%'] += 1
+            elif progress <= 50:
+                progress_ranges['26-50%'] += 1
+            elif progress <= 75:
+                progress_ranges['51-75%'] += 1
+            elif progress < 100:
+                progress_ranges['76-99%'] += 1
+            else:
+                progress_ranges['100%'] += 1
+        
+        print(f"\n  Progress Distribution:")
+        for range_label, count in progress_ranges.items():
+            if count > 0:
+                print(f"   X  {range_label}: {count} device(s)")
     
     # Step 5: Check for active upgrade operations
     print(f"\n  Checking for active upgrade operations...")
@@ -23266,8 +23814,8 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
         device_status_file = f"FirmwareUpgradeStatus_{timestamp_suffix}.csv"
         fieldnames = ['Site ID', 'Site Name', 'Device ID', 'Device Name', 'Device MAC', 
                      'Device Model', 'Device Type', 'Current Version', 'Last Seen',
-                     'FW Upgrade Status', 'FW Progress %', 'FW Status ID', 'FW Will Retry',
-                     'FW Timestamp', 'Timestamp']
+                     'FW Upgrade Status', 'FW Progress %', 'FW Progress Display', 
+                     'FW Status ID', 'FW Will Retry', 'FW Timestamp', 'Timestamp']
         
         try:
             DataExporter.save_data_to_output(upgrade_results, device_status_file)
@@ -27609,6 +28157,567 @@ def export_site_client_anomaly_to_csv():
             logging.getLogger(logger_name).setLevel(original_level)
 
 
+# ============================================================================
+# WLAN RADIUS AUTHENTICATION TIMER MANAGEMENT
+# ============================================================================
+
+def manage_wlan_radius_auth_timers(debug=False):
+    """
+    Interactive WLAN RADIUS authentication timer management.
+    
+    Workflow:
+    1. Select site
+    2. List WLANs using RADIUS/RadSec authentication
+    3. Show inheritance information (site-level vs template-level)
+    4. Allow modification of auth_servers_timeout, auth_servers_retries, 
+       auth_server_selection, and fast_dot1x_timers
+    5. Push changes to appropriate endpoint (site WLAN or template)
+    
+    SECURITY: Modifies WLAN authentication configuration - requires explicit confirmation.
+    
+    Args:
+        debug (bool): Enable verbose debug output
+    """
+    logging.info("Starting WLAN RADIUS authentication timer management")
+    
+    # Enable debug logging if requested
+    if debug:
+        original_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug("Debug mode enabled - verbose output active for WLAN template troubleshooting")
+    
+    # Step 1: Select site
+    site_id = prompt_and_log_site_selection()
+    if not site_id:
+        logging.warning("No site selected for WLAN management")
+        print("\n[!] No site selected. Exiting.")
+        return
+    
+    org_id = get_cached_or_prompted_org_id()
+    if not org_id:
+        logging.error("Could not determine organization ID")
+        print("\n[!] Unable to determine organization ID. Exiting.")
+        return
+    
+    # Step 2: Fetch site information
+    logging.info(f"Fetching site information for site ID: {site_id}")
+    try:
+        site_response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, site_id)
+        if site_response.status_code != 200:
+            logging.error(f"Failed to fetch site info: HTTP {site_response.status_code}")
+            print(f"\n[!] Failed to fetch site information. Exiting.")
+            return
+        
+        site_info = site_response.data
+        site_name = site_info.get('name', 'Unknown Site')
+        site_template_id = site_info.get('sitetemplate_id')
+        
+        logging.info(f"Site: {site_name}")
+        if site_template_id:
+            logging.info(f"Site Template ID: {site_template_id}")
+        else:
+            logging.info("No site template assigned")
+            
+    except Exception as error:
+        logging.error(f"Error fetching site info: {error}")
+        print(f"\n[!] Error fetching site information: {error}")
+        return
+    
+    # Step 3: Fetch site-level WLANs
+    logging.info("Fetching WLANs configured at site level...")
+    site_wlans = []
+    try:
+        site_wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id)
+        if site_wlans_response.status_code == 200:
+            site_wlans = site_wlans_response.data
+            logging.info(f"Found {len(site_wlans)} site-level WLANs")
+        else:
+            logging.warning(f"Failed to fetch site WLANs: HTTP {site_wlans_response.status_code}")
+    except Exception as error:
+        logging.error(f"Error fetching site WLANs: {error}")
+    
+    # Step 4: Fetch template-level WLANs if site template is assigned
+    site_template_wlans = []
+    template_name = None
+    if site_template_id:
+        logging.info("Fetching WLANs from site template...")
+        try:
+            # Get template info first for name
+            template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+                apisession, org_id, site_template_id
+            )
+            if template_response.status_code == 200:
+                template_data = template_response.data
+                template_name = template_data.get('name', 'Unknown Template')
+                
+                # Extract WLANs from template
+                if 'wlans' in template_data and template_data['wlans']:
+                    site_template_wlans = list(template_data['wlans'].values())
+                    logging.info(f"Found {len(site_template_wlans)} site template-level WLANs")
+            else:
+                logging.warning(f"Failed to fetch site template: HTTP {template_response.status_code}")
+        except Exception as error:
+            logging.error(f"Error fetching site template: {error}")
+    
+    # Step 5: Fetch org-level WLANs and check if they use templates assigned to this site
+    logging.info("Fetching org-level WLANs to check for template-based configurations...")
+    org_wlans = []
+    assigned_template_ids = set()
+    
+    try:
+        # First, get all WLAN templates and determine which are assigned to this site
+        logging.debug("Fetching WLAN templates to determine which are assigned to this site")
+        wlan_templates_response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, org_id)
+        if wlan_templates_response.status_code == 200:
+            wlan_templates = wlan_templates_response.data
+            logging.info(f"Found {len(wlan_templates)} org-level WLAN templates")
+            logging.debug(f"Retrieved {len(wlan_templates)} WLAN templates from API")
+            
+            # Determine which templates are assigned to this site
+            for wlan_template in wlan_templates:
+                template_id = wlan_template.get('id')
+                template_name_wlan = wlan_template.get('name', 'Unknown Template')
+                
+                logging.debug(f"Checking WLAN template: {template_name_wlan} (ID: {template_id})")
+                
+                # Check if this WLAN template is applied to our site
+                applies = wlan_template.get('applies', {})
+                assigned_site_ids = applies.get('site_ids', []) if isinstance(applies, dict) else []
+                assigned_sitegroup_ids = applies.get('sitegroup_ids', []) if isinstance(applies, dict) else []
+                assigned_wxtag_ids = applies.get('wxtag_ids', []) if isinstance(applies, dict) else []
+                org_id_apply = applies.get('org_id') if isinstance(applies, dict) else None
+                
+                logging.debug(f"  applies field: {applies}")
+                logging.debug(f"  assigned_site_ids: {assigned_site_ids}")
+                logging.debug(f"  assigned_sitegroup_ids: {assigned_sitegroup_ids}")
+                logging.debug(f"  assigned_wxtag_ids: {assigned_wxtag_ids}")
+                logging.debug(f"  org_id_apply: {org_id_apply}")
+                
+                # Check various application methods
+                is_assigned = False
+                assignment_method = None
+                
+                if org_id_apply:
+                    is_assigned = True
+                    assignment_method = 'Org-wide (all sites)'
+                elif site_id in assigned_site_ids:
+                    is_assigned = True
+                    assignment_method = 'Explicit site assignment'
+                elif assigned_sitegroup_ids:
+                    site_groups = site_info.get('sitegroup_ids', [])
+                    if any(sg in assigned_sitegroup_ids for sg in site_groups):
+                        is_assigned = True
+                        assignment_method = 'Site group assignment'
+                elif assigned_wxtag_ids:
+                    site_tags = site_info.get('wxtag_ids', [])
+                    if any(tag in assigned_wxtag_ids for tag in site_tags):
+                        is_assigned = True
+                        assignment_method = 'WxTag matching'
+                
+                if is_assigned:
+                    assigned_template_ids.add(template_id)
+                    logging.debug(f"  Template {template_name_wlan} IS assigned via: {assignment_method}")
+                else:
+                    logging.debug(f"  Template {template_name_wlan} is NOT assigned to this site")
+            
+            logging.info(f"Found {len(assigned_template_ids)} WLAN templates assigned to this site")
+            logging.debug(f"Assigned template IDs: {assigned_template_ids}")
+        else:
+            logging.warning(f"Failed to fetch WLAN templates: HTTP {wlan_templates_response.status_code}")
+        
+        # Now fetch org WLANs and check if they reference assigned templates
+        logging.debug("Fetching org WLANs to find those using assigned templates")
+        org_wlans_response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, org_id)
+        if org_wlans_response.status_code == 200:
+            all_org_wlans = org_wlans_response.data
+            logging.info(f"Found {len(all_org_wlans)} total org WLANs")
+            logging.debug(f"Retrieved {len(all_org_wlans)} org WLANs from API")
+            
+            # Filter to WLANs that use templates assigned to this site
+            for wlan in all_org_wlans:
+                wlan_template_id = wlan.get('template_id')
+                wlan_ssid = wlan.get('ssid', 'Unknown')
+                
+                logging.debug(f"Checking org WLAN: {wlan_ssid} (template_id: {wlan_template_id})")
+                
+                if wlan_template_id and wlan_template_id in assigned_template_ids:
+                    # This WLAN uses a template assigned to this site
+                    wlan['_inheritance_level'] = 'org_wlan_with_template'
+                    wlan['_wlan_template_id'] = wlan_template_id
+                    
+                    # Find template name for reference
+                    template_info = next((t for t in wlan_templates if t.get('id') == wlan_template_id), None)
+                    if template_info:
+                        wlan['_wlan_template_name'] = template_info.get('name', 'Unknown Template')
+                    else:
+                        wlan['_wlan_template_name'] = 'Unknown Template'
+                    
+                    org_wlans.append(wlan)
+                    logging.info(f"Org WLAN '{wlan_ssid}' uses template '{wlan.get('_wlan_template_name')}' assigned to this site")
+                    logging.debug(f"  Added org WLAN: {wlan_ssid}")
+                elif wlan_template_id:
+                    logging.debug(f"  WLAN uses template {wlan_template_id} which is NOT assigned to this site - skipping")
+                else:
+                    logging.debug(f"  WLAN has no template_id - skipping")
+            
+            if org_wlans:
+                logging.info(f"Found {len(org_wlans)} org WLANs using templates assigned to this site")
+            else:
+                logging.info("No org WLANs found using templates assigned to this site")
+        else:
+            logging.warning(f"Failed to fetch org WLANs: HTTP {org_wlans_response.status_code}")
+            
+    except Exception as error:
+        logging.error(f"Error fetching org WLANs or templates: {error}")
+    
+    # Step 6: Filter WLANs to only those using RADIUS or RadSec
+    def uses_radius_auth(wlan):
+        """Check if WLAN uses RADIUS or RadSec authentication."""
+        ssid = wlan.get('ssid', 'Unknown')
+        
+        # Check for RADIUS servers
+        has_auth_servers = bool(wlan.get('auth_servers'))
+        
+        # Check for RadSec configuration
+        has_radsec = False
+        radsec_config = wlan.get('radsec', {})
+        if isinstance(radsec_config, dict):
+            has_radsec = radsec_config.get('enabled', False)
+        
+        # Check auth type
+        auth_config = wlan.get('auth', {})
+        if isinstance(auth_config, dict):
+            auth_type = auth_config.get('type', '')
+            uses_eap = auth_type in ['eap', 'eap192']
+        else:
+            uses_eap = False
+            auth_type = 'none'
+        
+        # Debug logging
+        logging.debug(f"WLAN '{ssid}': auth_servers={has_auth_servers}, radsec={has_radsec}, auth_type={auth_type}, uses_eap={uses_eap}")
+        
+        return has_auth_servers or has_radsec or uses_eap
+    
+    # Filter site WLANs
+    filtered_site_wlans = []
+    for wlan in site_wlans:
+        if uses_radius_auth(wlan):
+            wlan['_inheritance_level'] = 'site'
+            wlan['_inheritance_source'] = f"Site: {site_name}"
+            filtered_site_wlans.append(wlan)
+    
+    # Filter site template WLANs
+    filtered_site_template_wlans = []
+    for wlan in site_template_wlans:
+        if uses_radius_auth(wlan):
+            wlan['_inheritance_level'] = 'site_template'
+            wlan['_inheritance_source'] = f"Site Template: {template_name}"
+            wlan['_template_id'] = site_template_id
+            filtered_site_template_wlans.append(wlan)
+    
+    # Filter org WLANs (those using templates assigned to this site)
+    filtered_org_wlans = []
+    for wlan in org_wlans:
+        if uses_radius_auth(wlan):
+            # Metadata already set during org WLAN fetching
+            template_name_wlan = wlan.get('_wlan_template_name', 'Unknown Template')
+            wlan['_inheritance_source'] = f"Org WLAN using template: {template_name_wlan}"
+            filtered_org_wlans.append(wlan)
+    
+    # Combine all filtered WLANs
+    all_radius_wlans = filtered_site_wlans + filtered_site_template_wlans + filtered_org_wlans
+    
+    if not all_radius_wlans:
+        print(f"\n[!] No WLANs using RADIUS or RadSec authentication found at this site.")
+        print(f"[!] Only WLANs with RADIUS auth servers or RadSec configuration are shown.")
+        logging.info("No RADIUS/RadSec WLANs found")
+        return
+    
+    # Step 6: Display WLANs with current configuration
+    print(f"\n{'='*100}")
+    print(f"RADIUS/RadSec Authenticated WLANs at Site: {site_name}")
+    print(f"{'='*100}\n")
+    
+    for index, wlan in enumerate(all_radius_wlans, start=1):
+        ssid = wlan.get('ssid', 'Unknown SSID')
+        wlan_id = wlan.get('id', 'Unknown ID')
+        enabled = wlan.get('enabled', False)
+        inheritance = wlan.get('_inheritance_level', 'unknown')
+        source = wlan.get('_inheritance_source', 'Unknown')
+        
+        # Get current timer values
+        timeout = wlan.get('auth_servers_timeout', 5)
+        retries = wlan.get('auth_servers_retries', 2)
+        selection = wlan.get('auth_server_selection', 'ordered')
+        fast_timers = wlan.get('fast_dot1x_timers', False)
+        
+        # Get auth server info
+        auth_servers = wlan.get('auth_servers', [])
+        server_count = len(auth_servers) if auth_servers else 0
+        
+        # Get RadSec info
+        radsec_enabled = False
+        radsec_config = wlan.get('radsec', {})
+        if isinstance(radsec_config, dict):
+            radsec_enabled = radsec_config.get('enabled', False)
+        
+        print(f"[{index}] SSID: {ssid}")
+        print(f"    ID: {wlan_id}")
+        print(f"    Status: {'Enabled' if enabled else 'Disabled'}")
+        print(f"    Inheritance: {inheritance.upper()} - {source}")
+        print(f"    ")
+        print(f"    Authentication Configuration:")
+        print(f"      - RADIUS Servers: {server_count}")
+        print(f"      - RadSec: {'Enabled' if radsec_enabled else 'Disabled'}")
+        print(f"    ")
+        print(f"    Current Timer Settings:")
+        print(f"      - auth_servers_timeout: {timeout} seconds")
+        print(f"      - auth_servers_retries: {retries}")
+        print(f"      - auth_server_selection: {selection}")
+        print(f"      - fast_dot1x_timers: {fast_timers}")
+        print(f"")
+    
+    print(f"{'='*100}\n")
+    
+    # Step 7: Prompt for WLAN selection
+    try:
+        selection_input = safe_input(
+            f"Select WLAN to modify (1-{len(all_radius_wlans)}) or 'q' to quit: ",
+            context="wlan_selection"
+        ).strip().lower()
+        
+        if selection_input == 'q':
+            print("\n[*] Exiting WLAN management.")
+            return
+        
+        selected_index = int(selection_input) - 1
+        if selected_index < 0 or selected_index >= len(all_radius_wlans):
+            print(f"\n[!] Invalid selection. Must be between 1 and {len(all_radius_wlans)}.")
+            return
+        
+        selected_wlan = all_radius_wlans[selected_index]
+        
+    except ValueError:
+        print(f"\n[!] Invalid input. Please enter a number between 1 and {len(all_radius_wlans)}.")
+        return
+    
+    # Step 8: Display current configuration and prompt for new values
+    print(f"\n{'='*100}")
+    print(f"Modifying WLAN: {selected_wlan.get('ssid')}")
+    print(f"Inheritance: {selected_wlan.get('_inheritance_level').upper()}")
+    print(f"{'='*100}\n")
+    
+    print(f"Current Configuration:")
+    print(f"  auth_servers_timeout: {selected_wlan.get('auth_servers_timeout', 5)} seconds")
+    print(f"  auth_servers_retries: {selected_wlan.get('auth_servers_retries', 2)}")
+    print(f"  auth_server_selection: {selected_wlan.get('auth_server_selection', 'ordered')}")
+    print(f"  fast_dot1x_timers: {selected_wlan.get('fast_dot1x_timers', False)}")
+    print(f"")
+    
+    # Prompt for new values (press Enter to keep current)
+    print(f"Enter new values (press Enter to keep current):\n")
+    
+    try:
+        # Timeout
+        timeout_input = safe_input(
+            f"auth_servers_timeout (1-30) [{selected_wlan.get('auth_servers_timeout', 5)}]: ",
+            default_value=str(selected_wlan.get('auth_servers_timeout', 5)),
+            context="timeout_input"
+        ).strip()
+        new_timeout = int(timeout_input) if timeout_input else selected_wlan.get('auth_servers_timeout', 5)
+        if new_timeout < 1 or new_timeout > 30:
+            print(f"\n[!] Timeout must be between 1 and 30 seconds. Using current value.")
+            new_timeout = selected_wlan.get('auth_servers_timeout', 5)
+        
+        # Retries
+        retries_input = safe_input(
+            f"auth_servers_retries (0-10) [{selected_wlan.get('auth_servers_retries', 2)}]: ",
+            default_value=str(selected_wlan.get('auth_servers_retries', 2)),
+            context="retries_input"
+        ).strip()
+        new_retries = int(retries_input) if retries_input else selected_wlan.get('auth_servers_retries', 2)
+        if new_retries < 0 or new_retries > 10:
+            print(f"\n[!] Retries must be between 0 and 10. Using current value.")
+            new_retries = selected_wlan.get('auth_servers_retries', 2)
+        
+        # Selection mode
+        selection_input = safe_input(
+            f"auth_server_selection (ordered/unordered) [{selected_wlan.get('auth_server_selection', 'ordered')}]: ",
+            default_value=selected_wlan.get('auth_server_selection', 'ordered'),
+            context="selection_input"
+        ).strip().lower()
+        new_selection = selection_input if selection_input in ['ordered', 'unordered'] else selected_wlan.get('auth_server_selection', 'ordered')
+        
+        # Fast timers
+        fast_input = safe_input(
+            f"fast_dot1x_timers (true/false) [{str(selected_wlan.get('fast_dot1x_timers', False)).lower()}]: ",
+            default_value=str(selected_wlan.get('fast_dot1x_timers', False)).lower(),
+            context="fast_timers_input"
+        ).strip().lower()
+        new_fast = fast_input == 'true' if fast_input in ['true', 'false'] else selected_wlan.get('fast_dot1x_timers', False)
+        
+    except ValueError as error:
+        print(f"\n[!] Invalid input: {error}. Exiting.")
+        return
+    
+    # Step 9: Confirm changes
+    print(f"\n{'='*100}")
+    print(f"Proposed Changes:")
+    print(f"{'='*100}")
+    print(f"  auth_servers_timeout: {selected_wlan.get('auth_servers_timeout', 5)} -> {new_timeout}")
+    print(f"  auth_servers_retries: {selected_wlan.get('auth_servers_retries', 2)} -> {new_retries}")
+    print(f"  auth_server_selection: {selected_wlan.get('auth_server_selection', 'ordered')} -> {new_selection}")
+    print(f"  fast_dot1x_timers: {selected_wlan.get('fast_dot1x_timers', False)} -> {new_fast}")
+    print(f"")
+    
+    if selected_wlan.get('_inheritance_level') == 'site_template':
+        print(f"[!] WARNING: This WLAN is inherited from site template: {selected_wlan.get('_inheritance_source')}")
+        print(f"[!] Changes will affect ALL sites using this template!")
+    elif selected_wlan.get('_inheritance_level') == 'org_wlan_with_template':
+        print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {selected_wlan.get('_inheritance_source')}")
+        assignment = selected_wlan.get('_org_template_assignment', 'assigned sites')
+        template_name_wlan = selected_wlan.get('_wlan_template_name', 'Unknown')
+        print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
+    
+    print(f"")
+    confirmation = safe_input(
+        "Type 'APPLY' to apply these changes: ",
+        context="confirmation"
+    ).strip()
+    
+    if confirmation != 'APPLY':
+        print("\n[*] Changes cancelled. No modifications made.")
+        logging.info("User cancelled WLAN authentication timer changes")
+        return
+    
+    # Step 10: Build update payload
+    update_payload = {
+        'auth_servers_timeout': new_timeout,
+        'auth_servers_retries': new_retries,
+        'auth_server_selection': new_selection,
+        'fast_dot1x_timers': new_fast
+    }
+    
+    # Step 11: Apply changes to appropriate endpoint
+    try:
+        if selected_wlan.get('_inheritance_level') == 'site':
+            # Update site-level WLAN
+            print(f"\n[*] Updating site-level WLAN...")
+            logging.info(f"Updating site WLAN {selected_wlan.get('id')} with payload: {update_payload}")
+            
+            response = mistapi.api.v1.sites.wlans.updateSiteWlan(
+                apisession,
+                site_id,
+                selected_wlan.get('id'),
+                update_payload
+            )
+            
+            if response.status_code == 200:
+                print(f"[+] Successfully updated WLAN: {selected_wlan.get('ssid')}")
+                logging.info(f"Successfully updated site WLAN {selected_wlan.get('id')}")
+            else:
+                print(f"[!] Failed to update WLAN: HTTP {response.status_code}")
+                logging.error(f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}")
+                
+        elif selected_wlan.get('_inheritance_level') == 'site_template':
+            # Update site template-level WLAN
+            print(f"\n[*] Updating site template-level WLAN...")
+            template_id = selected_wlan.get('_template_id')
+            wlan_id = selected_wlan.get('id')
+            
+            logging.info(f"Updating site template WLAN {wlan_id} in template {template_id} with payload: {update_payload}")
+            
+            # First, get the full template to modify
+            template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+                apisession, org_id, template_id
+            )
+            
+            if template_response.status_code != 200:
+                print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
+                logging.error(f"Failed to fetch site template for update: HTTP {template_response.status_code}")
+                return
+            
+            template_data = template_response.data
+            
+            # Update the specific WLAN in the template's wlans dictionary
+            if 'wlans' not in template_data or not isinstance(template_data['wlans'], dict):
+                print(f"[!] Site template does not contain wlans data structure")
+                logging.error("Site template missing wlans dictionary")
+                return
+            
+            # Find and update the WLAN
+            wlan_found = False
+            for wlan_key, wlan_data in template_data['wlans'].items():
+                if wlan_data.get('id') == wlan_id:
+                    # Update the WLAN configuration
+                    wlan_data.update(update_payload)
+                    wlan_found = True
+                    break
+            
+            if not wlan_found:
+                print(f"[!] WLAN not found in site template")
+                logging.error(f"WLAN {wlan_id} not found in site template {template_id}")
+                return
+            
+            # Push the updated template back
+            update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
+                apisession,
+                org_id,
+                template_id,
+                template_data
+            )
+            
+            if update_response.status_code == 200:
+                print(f"[+] Successfully updated site template WLAN: {selected_wlan.get('ssid')}")
+                print(f"[+] All sites using this template will inherit these changes")
+                logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
+            else:
+                print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
+                logging.error(f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}")
+        
+        elif selected_wlan.get('_inheritance_level') == 'org_wlan_with_template':
+            # Update org-level WLAN (which references a template)
+            print(f"\n[*] Updating org-level WLAN...")
+            wlan_id = selected_wlan.get('id')
+            
+            if not wlan_id:
+                print(f"[!] Missing WLAN ID - cannot update")
+                logging.error(f"Missing WLAN id for org WLAN update")
+                return
+            
+            logging.info(f"Updating org WLAN {wlan_id} with payload: {update_payload}")
+            
+            # Update the org WLAN directly
+            response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
+                apisession,
+                org_id,
+                wlan_id,
+                update_payload
+            )
+            
+            if response.status_code == 200:
+                print(f"[+] Successfully updated org WLAN: {selected_wlan.get('ssid')}")
+                template_name = selected_wlan.get('_wlan_template_name', 'Unknown')
+                print(f"[+] WLAN uses template '{template_name}' for its base configuration")
+                logging.info(f"Successfully updated org WLAN {wlan_id}")
+            else:
+                print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")
+                logging.error(f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}")
+        
+        else:
+            print(f"[!] Unknown inheritance level: {selected_wlan.get('_inheritance_level')}")
+            logging.error(f"Unknown inheritance level for WLAN")
+            return
+            
+    except Exception as error:
+        print(f"\n[!] Error applying changes: {error}")
+        logging.error(f"Error applying WLAN authentication timer changes: {error}", exc_info=True)
+        return
+    
+    print(f"\n[+] WLAN authentication timer management completed successfully")
+    logging.info("WLAN authentication timer management completed")
+
+
 def ssh_runner_main():
     """SSH Runner entry point - delegates to class-based application logic"""
     try:
@@ -28130,11 +29239,13 @@ class MistHelperTUI:
                 # Windows: Use msvcrt for non-blocking keyboard check
                 if self.msvcrt.kbhit():
                     key = self.msvcrt.getch()
+                    if self.debug_mode:
+                        logging.debug(f"TUI_DEBUG: Raw key byte received: {repr(key)}")
                     # Handle multi-byte sequences for arrow keys and page keys
                     if key == b'\xe0' or key == b'\x00':
                         key = self.msvcrt.getch()
                         if self.debug_mode:
-                            logging.debug(f"TUI_DEBUG: Special key detected - byte value: {repr(key)}")
+                            logging.debug(f"TUI_DEBUG: Special key detected - second byte value: {repr(key)}")
                         if key == b'H':  # Up arrow
                             return 'up'
                         elif key == b'P':  # Down arrow
@@ -28159,44 +29270,105 @@ class MistHelperTUI:
                             # Log unhandled special keys for debugging
                             if self.debug_mode:
                                 logging.debug(f"TUI_DEBUG: Unhandled special key: {repr(key)}")
-                    return key.decode('utf-8', errors='ignore').lower()
+                    decoded = key.decode('utf-8', errors='ignore').lower()
+                    if self.debug_mode:
+                        logging.debug(f"TUI_DEBUG: Decoded key: {repr(decoded)}")
+                    return decoded
             else:
                 # Unix/Linux: Use select for non-blocking check
                 if self.select.select([sys.stdin], [], [], 0)[0]:
                     key = sys.stdin.read(1)
+                    if self.debug_mode:
+                        logging.debug(f"TUI_DEBUG: Unix - Raw key received: {repr(key)}")
                     # Handle escape sequences for arrow keys and special keys
                     if key == '\x1b':  # ESC
-                        # Check if this is part of an escape sequence (reduced timeout for responsiveness)
-                        if self.select.select([sys.stdin], [], [], 0.01)[0]:
-                            next_char = sys.stdin.read(1)
-                            if next_char == '[':
-                                arrow = sys.stdin.read(1)
-                                if arrow == 'A':
-                                    return 'up'
-                                elif arrow == 'B':
-                                    return 'down'
-                                elif arrow == 'C':
-                                    return 'right'
-                                elif arrow == 'D':
-                                    return 'left'
-                                elif arrow == '5':  # Page Up starts with ESC[5~
-                                    if self.select.select([sys.stdin], [], [], 0.01)[0]:
-                                        tilde = sys.stdin.read(1)
-                                        if tilde == '~':
-                                            if self.debug_mode:
-                                                logging.debug("TUI_DEBUG: Page Up key detected (Unix)")
-                                            return 'page_up'
-                                elif arrow == '6':  # Page Down starts with ESC[6~
-                                    if self.select.select([sys.stdin], [], [], 0.01)[0]:
-                                        tilde = sys.stdin.read(1)
-                                        if tilde == '~':
-                                            if self.debug_mode:
-                                                logging.debug("TUI_DEBUG: Page Down key detected (Unix)")
-                                            return 'page_down'
-                                elif arrow == 'H':  # Home
-                                    return 'h'
-                                elif arrow == 'F':  # End
-                                    return 'e'
+                        if self.debug_mode:
+                            logging.debug("TUI_DEBUG: Unix - ESC character detected, checking for arrow sequence...")
+                        
+                        # CRITICAL FIX: Container/TTY environments have extreme latency.
+                        # Arrow keys send 3-byte sequences: ESC [ {A|B|C|D}
+                        # The ESC arrives first, then the remaining bytes with significant latency.
+                        # Container SSH forwarding can introduce >200ms inter-byte delays.
+                        import time
+                        
+                        # Progressive read strategy with multiple waits to handle variable latency
+                        remaining_chars = ''
+                        max_attempts = 4
+                        wait_increment = 0.05  # 50ms per attempt = up to 200ms total
+                        
+                        for attempt in range(max_attempts):
+                            # Check if data already available
+                            if self.select.select([sys.stdin], [], [], 0)[0]:
+                                # Read all currently buffered data
+                                while self.select.select([sys.stdin], [], [], 0)[0]:
+                                    char = sys.stdin.read(1)
+                                    remaining_chars += char
+                                    if self.debug_mode:
+                                        esc_char = '\x1b'
+                                        full_sequence = esc_char + remaining_chars
+                                        logging.debug(f"TUI_DEBUG: Unix - Read char: {repr(char)}, sequence so far: {repr(full_sequence)}")
+                                
+                                # If we got a complete arrow sequence, stop waiting
+                                if remaining_chars.startswith('[') and len(remaining_chars) >= 2:
+                                    if remaining_chars[1] in 'ABCD':
+                                        if self.debug_mode:
+                                            logging.debug(f"TUI_DEBUG: Unix - Complete arrow sequence detected early (attempt {attempt+1})")
+                                        break
+                            
+                            # If this isn't the last attempt and we haven't found a complete sequence, wait for more data
+                            if attempt < max_attempts - 1:
+                                time.sleep(wait_increment)
+                                if self.debug_mode:
+                                    logging.debug(f"TUI_DEBUG: Unix - Waiting for more bytes (attempt {attempt+1}/{max_attempts})")
+                        
+                        if self.debug_mode:
+                            esc_char = '\x1b'
+                            full_sequence = esc_char + remaining_chars
+                            logging.debug(f"TUI_DEBUG: Unix - Complete escape sequence: {repr(full_sequence)}")
+                        
+                        # Parse the complete escape sequence
+                        if remaining_chars.startswith('['):
+                            arrow_code = remaining_chars[1:2] if len(remaining_chars) > 1 else ''
+                            
+                            if arrow_code == 'A':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Unix - UP arrow detected")
+                                return 'up'
+                            elif arrow_code == 'B':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Unix - DOWN arrow detected")
+                                return 'down'
+                            elif arrow_code == 'C':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Unix - RIGHT arrow detected")
+                                return 'right'
+                            elif arrow_code == 'D':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Unix - LEFT arrow detected")
+                                return 'left'
+                            elif arrow_code == '5' and len(remaining_chars) > 2 and remaining_chars[2] == '~':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Page Up key detected (Unix)")
+                                return 'page_up'
+                            elif arrow_code == '6' and len(remaining_chars) > 2 and remaining_chars[2] == '~':
+                                if self.debug_mode:
+                                    logging.debug("TUI_DEBUG: Page Down key detected (Unix)")
+                                return 'page_down'
+                            elif arrow_code == 'H':  # Home
+                                return 'h'
+                            elif arrow_code == 'F':  # End
+                                return 'e'
+                            else:
+                                if self.debug_mode:
+                                    logging.debug(f"TUI_DEBUG: Unix - Unrecognized escape sequence: ESC[{arrow_code}")
+                                return None
+                        elif remaining_chars:
+                            if self.debug_mode:
+                                logging.debug(f"TUI_DEBUG: Unix - ESC followed by non-bracket sequence: {repr(remaining_chars)}")
+                            return None
+                        else:
+                            if self.debug_mode:
+                                logging.debug("TUI_DEBUG: Unix - Standalone ESCAPE key (no following characters)")
                         return 'escape'
                     return key.lower()
         except Exception as error:
@@ -28581,7 +29753,8 @@ class MistHelperTUI:
             key (str): Key pressed by user
         """
         if self.debug_mode:
-            logging.debug(f"TUI_DEBUG: Key pressed: {repr(key)} (state={self.execution_state}, path={self.current_path}, selection={self.current_selection})")
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            logging.debug(f"TUI_DEBUG: [{timestamp}] Key pressed: {repr(key)} (state={self.execution_state}, path={self.current_path}, selection={self.current_selection})")
         
         # Handle results viewing mode
         if self.execution_state == 'viewing_results':
@@ -29693,7 +30866,8 @@ class MistHelperTUI:
                     key = self.check_keyboard_input()
                     if key:
                         if self.debug_mode:
-                            logging.debug(f"TUI_DEBUG: Keyboard input detected in main loop: {repr(key)}")
+                            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                            logging.debug(f"TUI_DEBUG: [{timestamp}] Keyboard input detected in main loop: {repr(key)}")
                         
                         self.handle_input(key)
                         
@@ -29746,12 +30920,18 @@ class MistHelperTUI:
                 if self.debug_mode:
                     logging.debug("TUI_DEBUG: Windows platform - no terminal restoration needed")
             
+            if self.debug_mode:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logging.debug(f"TUI_DEBUG: [{timestamp}] Explorer exiting - run() finally block executing")
+            
             logging.info("TUI: Explorer exited cleanly")
             if self.debug_mode:
-                logging.debug("TUI_DEBUG: run() method ending - about to print exit message")
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logging.debug(f"TUI_DEBUG: [{timestamp}] run() method ending - about to print exit message")
             print("\n[EXIT] MistHelper TUI - Hierarchical API Explorer closed")
             if self.debug_mode:
-                logging.debug("TUI_DEBUG: Exit message printed - run() method complete")
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logging.debug(f"TUI_DEBUG: [{timestamp}] Exit message printed - run() method complete")
 
 
 menu_actions = {
@@ -29839,6 +31019,7 @@ menu_actions = {
     "51": (export_site_maps_to_csv, "Export map information for a selected site"),
     "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
     "53": (export_site_insights_to_csv, "Export SLE (Service Level Experience) metrics insights for a selected site"),
+    "102": (manage_wlan_radius_auth_timers, "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
     # Organization Management (Read-Only)
     "54": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
@@ -29981,6 +31162,12 @@ def _launch_tui_from_menu():
         for handler in console_handlers:
             root_logger.addHandler(handler)
         logging.debug("TUI_MODE: Restored console handler after TUI exit")
+    
+    # Get debug mode from global args if available for final timestamp
+    debug_mode = globals().get('args', type('obj', (), {'debug': False})()).debug if hasattr(globals().get('args', type('obj', (), {'debug': False})()), 'debug') else False
+    if debug_mode:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        logging.debug(f"TUI_DEBUG: [{timestamp}] TUI_MODE function completed - returning to caller")
     
     logging.info("TUI_MODE: TUI mode completed successfully")
     print("\n>> Returned from TUI mode to main menu")
@@ -30679,6 +31866,14 @@ class EnhancedSSHRunner:
             error_msg = "Password cannot be empty"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
+            return False
+        
+        # Check if paramiko is available
+        if SSHClient is None or paramiko is None:
+            error_msg = "SSH functionality unavailable: paramiko module not installed"
+            self.logger.error(error_msg)
+            print(f"[ERROR] {error_msg}")
+            print("Install paramiko with: pip install paramiko")
             return False
         
         try:
@@ -32730,9 +33925,12 @@ def main():
     # Enable debug logging if --debug flag is provided
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
-        # Also set all handlers to DEBUG level to ensure debug messages are written
+        # Set ONLY file handlers to DEBUG level, keep console at INFO
         for handler in logging.getLogger().handlers:
-            handler.setLevel(logging.DEBUG)
+            if isinstance(handler, logging.FileHandler):
+                handler.setLevel(logging.DEBUG)
+            elif isinstance(handler, logging.StreamHandler):
+                handler.setLevel(logging.INFO)
         logging.debug("Debug logging enabled via --debug flag")
         logging.debug(f"Command line arguments: {' '.join(sys.argv)}")
         logging.debug("Performance monitoring will trigger circuit breakers for infinite loops")
@@ -32778,12 +33976,22 @@ def main():
                 logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")
             tui.run()
         except KeyboardInterrupt:
+            if args.debug:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logging.debug(f"TUI_DEBUG: [{timestamp}] KeyboardInterrupt caught - user pressed Ctrl+C")
             logging.info("TUI_MODE: User interrupted with Ctrl+C")
             print("\n[EXIT] TUI mode stopped by user")
         except Exception as error:
+            if args.debug:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logging.debug(f"TUI_DEBUG: [{timestamp}] Exception caught in TUI mode: {type(error).__name__}: {error}")
             logging.error(f"TUI_MODE: Fatal error - {error}", exc_info=True)
             print(f"\n[ERROR] TUI mode crashed: {error}")
             sys.exit(1)
+        
+        if args.debug:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            logging.debug(f"TUI_DEBUG: [{timestamp}] TUI mode completed successfully - about to exit")
         logging.info("TUI_MODE: TUI mode completed successfully")
         sys.exit(0)
     

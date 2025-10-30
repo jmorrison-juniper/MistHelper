@@ -284,8 +284,11 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
         ssh_port = os.environ.get("MISTHELPER_SSH_PORT", "2200")
         run_cmd.extend(["-p", f"{ssh_port}:{ssh_port}"])
 
-    # Interactive only when no menu and not in SSH daemon mode
-    if not menu and not ssh_mode:
+    # Interactive mode required for:
+    # 1. No menu specified (interactive menu selection)
+    # 2. Menu 101 (TUI mode requires terminal control)
+    # 3. Not in SSH daemon mode (daemon runs detached)
+    if (not menu or menu == "101") and not ssh_mode:
         run_cmd.append("-it")
 
     # Volume option differences: Podman benefits from :Z, Docker may not support.
