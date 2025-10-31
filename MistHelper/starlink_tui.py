@@ -387,17 +387,22 @@ class StarlinkTUI:
         azimuth_target = stats.get('azimuth_target', 0.0)
         elevation_target = stats.get('elevation_target', 0.0)
         
-        # Calculate accuracy for azimuth (±180° range)
-        # For azimuth using ±180° range, simple absolute difference works
+        # Calculate alignment deltas
         azimuth_diff = abs(azimuth_current - azimuth_target)
-        
-        # Elevation uses 0-90° range typically
         elevation_diff = abs(elevation_current - elevation_target)
         
-        # Calculate accuracy percentage (0-5° = 100%, 5-10° = 75%, 10-20° = 50%, >20° = 0%)
-        # Using gentler scaling: accuracy = 100 - (diff * 5)
-        azimuth_accuracy = max(0, min(100, 100 - (azimuth_diff * 5)))
-        elevation_accuracy = max(0, min(100, 100 - (elevation_diff * 5)))
+        # Calculate accuracy percentage based on Starlink API documented ranges:
+        # - Azimuth: 0-360° (compass bearing, 0=North, 90=East, 180=South, 270=West)
+        # - Elevation: 0-90° (0=vertical/upright, 90=horizontal/flat)
+        # 
+        # Accuracy calculation: error% = (angular_diff / total_range) * 100
+        # Then: accuracy% = 100 - error%
+        
+        azimuth_error_pct = (azimuth_diff / 360.0) * 100
+        azimuth_accuracy = max(0, min(100, 100 - azimuth_error_pct))
+        
+        elevation_error_pct = (elevation_diff / 90.0) * 100
+        elevation_accuracy = max(0, min(100, 100 - elevation_error_pct))
         
         # Create table
         table = Table(show_header=True, box=None, padding=(0, 1))
@@ -406,8 +411,9 @@ class StarlinkTUI:
         table.add_column("Target", justify="right", width=10)
         table.add_column("Accuracy & Delta", width=40)
         
-        # Azimuth row with color based on accuracy
-        azimuth_color = "green" if azimuth_diff < 5 else "yellow" if azimuth_diff < 15 else "red"
+        # Azimuth row with color based on accuracy percentage
+        # Green: >98% accurate (<7.2° error), Yellow: >95% accurate (<18° error), Red: otherwise
+        azimuth_color = "green" if azimuth_accuracy > 98 else "yellow" if azimuth_accuracy > 95 else "red"
         azimuth_bar = self.create_progress_bar(azimuth_accuracy, azimuth_color)
         diff_display = f"[dim](Δ {azimuth_diff:.1f}°)[/]" if azimuth_diff > 0.5 else ""
         table.add_row(
@@ -417,8 +423,9 @@ class StarlinkTUI:
             f"{azimuth_bar} {diff_display}"
         )
         
-        # Elevation row with color based on accuracy
-        elevation_color = "green" if elevation_diff < 5 else "yellow" if elevation_diff < 15 else "red"
+        # Elevation row with color based on accuracy percentage
+        # Green: >98% accurate (<1.8° error), Yellow: >95% accurate (<4.5° error), Red: otherwise
+        elevation_color = "green" if elevation_accuracy > 98 else "yellow" if elevation_accuracy > 95 else "red"
         elevation_bar = self.create_progress_bar(elevation_accuracy, elevation_color)
         diff_display = f"[dim](Δ {elevation_diff:.1f}°)[/]" if elevation_diff > 0.5 else ""
         table.add_row(
