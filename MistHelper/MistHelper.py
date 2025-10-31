@@ -20235,7 +20235,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     
     Report includes for OVERRIDDEN ports only:
     - Gateway Router Device Name  
-    - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2
+    - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2, {{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}
     - Port status (up/down)
     - Port admin status (disabled/enabled)
     - Port gateway IP address
@@ -20244,6 +20244,9 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     - Port config type (DHCP or STATIC)
     - Port name/number
     - Whether port is overridden from template (always "Yes" for filtered results)
+    
+    Searches 6 total ports: 3 hardcoded (ge-0/0/0, ge-0/0/1, ge-0/0/2) + 3 variable-based 
+    ({{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}) for comprehensive coverage.
     """
     print("Gateway Ports Overridden from Template (Compliance Outliers):")
     logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
@@ -20273,7 +20276,8 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
         logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
 
     overridden_port_info = []
-    target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
+    # Target ports: original 3 hardcoded ports + 3 variable-based ports (6 total)
+    target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
 
     # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
     logging.info(" First pass: Identifying devices with port overrides...")
@@ -20305,7 +20309,11 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
         device_overridden_ports = []
         for port_name in target_ports:
             # Check if port is overridden from template by looking for port_config fields in the CSV
-            port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
+            # Need to check for both base port (port_config_{port}_*) and subinterfaces (port_config_{port}.*) 
+            # to catch configurations like {{wan2_interface}}.70 or ge-0/0/1.100
+            port_config_fields = [col for col in row if 
+                col.startswith(f"port_config_{port_name}_") or 
+                col.startswith(f"port_config_{port_name}.")]
             
             # Check for non-empty values (excluding vpn_paths which are template-inherited)
             override_fields = []
@@ -20337,9 +20345,9 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
         # Still create empty CSV file with proper headers
         output_file = "GatewayOverriddenPorts.csv"
         fieldnames = [
-            "gateway_device_name", "site_name", "template_name", "port_name", "port_description",
-            "port_status", "port_admin_status", "port_gateway_ip", "port_ip_address", "port_netmask",
-            "port_config_type", "port_usage", "overridden_from_template",
+            "gateway_device_name", "site_name", "template_name", "port_name", "recommended_variable",
+            "port_description", "port_status", "port_admin_status", "port_gateway_ip", "port_ip_address",
+            "port_netmask", "port_config_type", "port_usage", "overridden_from_template",
             "device_id", "site_id", "template_id"
         ]
         output_path = get_csv_file_path(output_file)
@@ -20555,12 +20563,15 @@ def set_wan2_interface_site_variable():
     
     Workflow:
     1. Prompts for site selection (single or multiple)
-    2. For each site, checks for existing ge-0/0/1 port overrides
+    2. For each site, checks for existing WAN2 port overrides (ge-0/0/1 OR {{wan2_interface}})
     3. Sets site variable 'wan2_interface'='ge-0/0/1' via updateSiteSettings API
     4. Generates report showing:
        - Sites with variable successfully set
-       - Sites with ge-0/0/1 port overrides (flagged for manual review)
-       - Current ge-0/0/1 configuration details
+       - Sites with WAN2 port overrides (flagged for manual review)
+       - Current WAN2 configuration details
+    
+    Override Detection: Checks BOTH hardcoded 'ge-0/0/1' AND variable-based '{{wan2_interface}}'
+    port configurations to identify any device-level overrides requiring manual review.
     
     SECURITY: Read current settings before write to preserve other configurations.
     Safe operation - only modifies site variables, not device or template configs.
@@ -20648,14 +20659,25 @@ def set_wan2_interface_site_variable():
     with open(gateway_configs_path, encoding="utf-8") as f:
         gateway_configs = list(csv.DictReader(f))
     
-    # Build override detection map: site_id -> list of devices with ge-0/0/1 overrides
+    # Build override detection map: site_id -> list of devices with ge-0/0/1 or {{wan2_interface}} overrides
     site_overrides_map = {}
     for config_row in gateway_configs:
         site_id = config_row.get("site_id", "").strip()
         device_name = config_row.get("name", "").strip()
         
-        # Check if ge-0/0/1 has any port_config overrides
-        ge_001_fields = [col for col in config_row if col.startswith("port_config_ge-0/0/1_")]
+        # Check if ge-0/0/1 OR {{wan2_interface}} (with or without subinterfaces) has any port_config overrides
+        # This catches ALL variations:
+        # - port_config_ge-0/0/1_* (hardcoded base port: ge-0/0/1_usage, ge-0/0/1_ip_config, etc.)
+        # - port_config_ge-0/0/1.* (hardcoded subinterface: ge-0/0/1.70_usage, ge-0/0/1.100_ip_config, etc.)
+        # - port_config_{{wan2_interface}}_* (variable base port: {{wan2_interface}}_usage, {{wan2_interface}}_ip_config, etc.)
+        # - port_config_{{wan2_interface}}.* (variable subinterface: {{wan2_interface}}.70_usage, {{wan2_interface}}.100_ip_config, etc.)
+        # 
+        # Note: Variable ports may or may not use subinterfaces depending on VLAN configuration
+        ge_001_fields = [col for col in config_row if 
+            col.startswith("port_config_ge-0/0/1_") or 
+            col.startswith("port_config_ge-0/0/1.") or
+            col.startswith("port_config_{{wan2_interface}}_") or
+            col.startswith("port_config_{{wan2_interface}}.")]
         has_override = any(
             config_row.get(field, "").strip().lower() not in ["", "null", "none"]
             for field in ge_001_fields
@@ -20743,7 +20765,7 @@ def set_wan2_interface_site_variable():
             "site_id": result["site_id"],
             "wan2_variable_set": "Yes" if result["variable_set"] else "No",
             "status": result["status"],
-            "has_ge001_overrides": "Yes" if result["has_overrides"] else "No",
+            "has_wan2_overrides": "Yes" if result["has_overrides"] else "No",
             "override_device_count": len(result["override_devices"]),
             "override_devices": ", ".join(result["override_devices"]) if result["override_devices"] else "",
             "requires_manual_review": "Yes" if result["has_overrides"] else "No",
@@ -20763,12 +20785,13 @@ def set_wan2_interface_site_variable():
     print(f"=" * 70)
     print(f"  Sites Processed: {len(results)}")
     print(f"  Variables Set: {success_count}")
-    print(f"  Sites with ge-0/0/1 Overrides (Manual Review): {override_count}")
+    print(f"  Sites with WAN2 Overrides (Manual Review): {override_count}")
     print(f"\n  Report saved to: {output_file}")
     print(f"=" * 70)
     
     if override_count > 0:
-        print(f"\n  !? ATTENTION: {override_count} sites have device-level ge-0/0/1 overrides")
+        print(f"\n  !? ATTENTION: {override_count} sites have device-level WAN2 port overrides")
+        print(f"  Detected: ge-0/0/1 OR {{{{wan2_interface}}}} configurations")
         print(f"  These require manual review before template migration (Menu #104)")
         print(f"  Check the 'requires_manual_review' column in the report.")
     

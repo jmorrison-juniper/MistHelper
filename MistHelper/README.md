@@ -2002,6 +2002,54 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
+      "version": "25.10.31.15.15",
+      "date": "2025-10-31",
+      "changes": {
+        "bug_fixes": [
+          "Menu #28: Fixed subinterface detection - Now checks for both underscore and dot patterns",
+          "Override detection now includes port_config_{port}_ AND port_config_{port}. patterns",
+          "Resolves issue where subinterface configs (e.g., {{wan2_interface}}.70, ge-0/0/1.100) were not detected"
+        ]
+      }
+    },
+    {
+      "version": "25.10.31.15.00",
+      "date": "2025-10-31",
+      "changes": {
+        "bug_fixes": [
+          "Menu #103: Fixed subinterface detection pattern - Now checks for dot notation (e.g., {{wan2_interface}}.70)",
+          "Override detection now includes: ge-0/0/1_, ge-0/0/1., {{wan2_interface}}_, {{wan2_interface}}.",
+          "Resolves issue where variable-based subinterface configs ({{wan2_interface}}.70) were not detected"
+        ]
+      }
+    },
+    {
+      "version": "25.10.31.14.30",
+      "date": "2025-10-31",
+      "changes": {
+        "bug_fixes": [
+          "Menu #103: Fixed override detection to include {{wan2_interface}} configurations",
+          "Override detection now checks BOTH ge-0/0/1 AND {{wan2_interface}} port names",
+          "Resolves issue where sites with variable-based port configs were not flagged for manual review"
+        ],
+        "enhancements": [
+          "Updated CSV report column from 'has_ge001_overrides' to 'has_wan2_overrides' for clarity",
+          "Improved console output messaging to reflect dual detection (hardcoded + variable ports)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.31.14.00",
+      "date": "2025-10-31",
+      "changes": {
+        "enhancements": [
+          "Menu #28: Expanded port coverage - Now searches 6 total ports for overrides instead of 3",
+          "Added variable-based port detection - Now includes {{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}} in addition to ge-0/0/0, ge-0/0/1, ge-0/0/2",
+          "Comprehensive WAN interface auditing - Identifies both hardcoded and variable-based port configurations"
+        ]
+      }
+    },
+    {
       "version": "25.10.31.11.30",
       "date": "2025-10-31",
       "changes": {
