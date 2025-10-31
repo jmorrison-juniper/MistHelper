@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 103 actionable menu entries (1–10, 11–89, 90–100) with some gaps for future expansion.
+**Operation Count:** The code currently defines 105 actionable menu entries (1–10, 11–89, 90–104) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -1998,6 +1998,43 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
           "Configuration management - moved all hardcoded values from run-misthelper.py to .env file",
           "sample.env template with complete configuration options and documentation",
           "Comprehensive network data capture functionality working correctly"
+        ]
+      }
+    },
+    {
+      "version": "25.10.31.11.30",
+      "date": "2025-10-31",
+      "changes": {
+        "enhancements": [
+          "Menu #104: Enhanced subinterface support - Now handles port subinterfaces like 'ge-0/0/1.70' by replacing only port prefix",
+          "Smart pattern replacement - Converts 'ge-0/0/1.70' to '{{wan2_interface}}.70' preserving VLAN/unit suffixes",
+          "Improved port detection logic - Distinguishes between exact matches, subinterfaces, and complex port ranges"
+        ]
+      }
+    },
+    {
+      "version": "25.10.30.19.45",
+      "date": "2025-10-30",
+      "changes": {
+        "feature_additions": [
+          "Menu #103: Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable across selected sites",
+          "Menu #104: Update Gateway Templates to Use WAN2 Variable (DESTRUCTIVE) - Replace hardcoded 'ge-0/0/1' port references with {{wan2_interface}} variable",
+          "Site variable management - Set 'wan2_interface'='ge-0/0/1' via updateSiteSettings API for template-based WAN migration",
+          "Gateway template modification - Replace hardcoded port names with variable placeholders in port_config",
+          "Override detection and flagging - Identify sites with ge-0/0/1 device-level overrides requiring manual review",
+          "Audit reporting - CSV reports for variable assignment status and template modification results"
+        ],
+        "enhancements": [
+          "WAN migration workflow - Two-phase approach: site variable setup (103) then template migration (104)",
+          "Safety confirmations - Menu #104 requires uppercase 'MIGRATE' confirmation before modifying templates",
+          "Bulk operations - Support for all sites or selective site/template targeting",
+          "API integration - Uses getSiteSetting, updateSiteSettings, getOrgGatewayTemplate, updateOrgGatewayTemplate",
+          "Comprehensive reporting - WAN2_SiteVariable_Report.csv and GatewayTemplate_WAN2_Migration_Audit.csv"
+        ],
+        "documentation": [
+          "Updated operation count to 105 total menu entries",
+          "Added gateway template variable operations section to menu structure",
+          "Documented WAN2 migration workflow and safety requirements"
         ]
       }
     },

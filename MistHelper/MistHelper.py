@@ -20546,6 +20546,534 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     if total_overridden_ports == 0:
         print(" No template overrides found - all gateways are compliant with their assigned templates!")
 
+def set_wan2_interface_site_variable():
+    """
+    Menu #103: Set WAN2 Interface Site Variable
+    
+    Creates and sets the {{wan2_interface}} site variable to 'ge-0/0/1' across selected sites.
+    This prepares sites for template-based WAN2 interface configuration migration.
+    
+    Workflow:
+    1. Prompts for site selection (single or multiple)
+    2. For each site, checks for existing ge-0/0/1 port overrides
+    3. Sets site variable 'wan2_interface'='ge-0/0/1' via updateSiteSettings API
+    4. Generates report showing:
+       - Sites with variable successfully set
+       - Sites with ge-0/0/1 port overrides (flagged for manual review)
+       - Current ge-0/0/1 configuration details
+    
+    SECURITY: Read current settings before write to preserve other configurations.
+    Safe operation - only modifies site variables, not device or template configs.
+    """
+    print("\n  Set WAN2 Interface Site Variable")
+    print("=" * 70)
+    print("  This operation will set the 'wan2_interface' site variable to 'ge-0/0/1'")
+    print("  across selected sites, preparing them for template-based WAN migration.")
+    print("=" * 70)
+    
+    logging.info("Menu #103: Set WAN2 Interface Site Variable operation started")
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Ensure required CSVs are fresh
+    print("\n  Preparing site and gateway configuration data...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    
+    # Step 2: Load site data
+    site_list_path = get_csv_file_path("SiteList.csv")
+    with open(site_list_path, encoding="utf-8") as f:
+        sites = list(csv.DictReader(f))
+    
+    if not sites:
+        print(" No sites found in organization.")
+        logging.warning("No sites available for WAN2 variable assignment")
+        return
+    
+    # Step 3: Site selection
+    print(f"\n  Found {len(sites)} sites in organization")
+    print("  Site Selection:")
+    print("   1. Select individual sites")
+    print("   2. All sites in organization")
+    print("   3. Cancel")
+    
+    selection_choice = input("\n  Choose selection method (1-3): ").strip()
+    
+    sites_to_configure = []
+    
+    if selection_choice == "1":
+        # Individual site selection
+        print("\n  Available Sites:")
+        for index, site in enumerate(sites, start=1):
+            site_name = site.get("name", "Unnamed Site")
+            site_id = site.get("id", "")
+            print(f"   [{index}] {site_name} ({site_id})")
+        
+        print("\n  Enter site numbers to configure (comma-separated, e.g., 1,3,5):")
+        site_indices_input = input("  Site numbers: ").strip()
+        
+        try:
+            selected_indices = [int(idx.strip()) - 1 for idx in site_indices_input.split(",")]
+            sites_to_configure = [sites[idx] for idx in selected_indices if 0 <= idx < len(sites)]
+        except (ValueError, IndexError) as e:
+            print(f" Invalid site selection: {e}")
+            logging.error(f"Invalid site selection in Menu #103: {e}")
+            return
+            
+    elif selection_choice == "2":
+        # All sites
+        sites_to_configure = sites
+        
+    else:
+        print(" Operation cancelled.")
+        logging.info("Menu #103 cancelled by user")
+        return
+    
+    if not sites_to_configure:
+        print(" No sites selected.")
+        return
+    
+    print(f"\n  Will configure {len(sites_to_configure)} sites with wan2_interface variable.")
+    
+    # Confirmation
+    confirm = input("\n  Proceed with setting site variables? (yes/no): ").strip().lower()
+    if confirm not in ['yes', 'y']:
+        print(" Operation cancelled.")
+        logging.info("Menu #103 cancelled by user at confirmation prompt")
+        return
+    
+    # Step 4: Load gateway configs to check for ge-0/0/1 overrides
+    gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
+    with open(gateway_configs_path, encoding="utf-8") as f:
+        gateway_configs = list(csv.DictReader(f))
+    
+    # Build override detection map: site_id -> list of devices with ge-0/0/1 overrides
+    site_overrides_map = {}
+    for config_row in gateway_configs:
+        site_id = config_row.get("site_id", "").strip()
+        device_name = config_row.get("name", "").strip()
+        
+        # Check if ge-0/0/1 has any port_config overrides
+        ge_001_fields = [col for col in config_row if col.startswith("port_config_ge-0/0/1_")]
+        has_override = any(
+            config_row.get(field, "").strip().lower() not in ["", "null", "none"]
+            for field in ge_001_fields
+            if "_vpn_paths_" not in field  # Exclude VPN paths (template-inherited)
+        )
+        
+        if has_override:
+            if site_id not in site_overrides_map:
+                site_overrides_map[site_id] = []
+            site_overrides_map[site_id].append(device_name)
+    
+    # Step 5: Process each site
+    results = []
+    print("\n  Processing sites...")
+    
+    for site in tqdm(sites_to_configure, desc="Configuring sites", unit="site"):
+        site_id = site.get("id", "")
+        site_name = site.get("name", "Unnamed Site")
+        
+        result = {
+            "site_id": site_id,
+            "site_name": site_name,
+            "variable_set": False,
+            "has_overrides": False,
+            "override_devices": [],
+            "status": "",
+            "error": ""
+        }
+        
+        # Check for overrides
+        if site_id in site_overrides_map:
+            result["has_overrides"] = True
+            result["override_devices"] = site_overrides_map[site_id]
+        
+        try:
+            # Fetch current site settings
+            logging.debug(f"Fetching current settings for site {site_name} ({site_id})")
+            settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
+            current_settings = settings_resp.data if hasattr(settings_resp, 'data') else {}
+            
+            if not isinstance(current_settings, dict):
+                current_settings = {}
+            
+            # Get existing vars or create new dict
+            site_vars = current_settings.get("vars", {})
+            if not isinstance(site_vars, dict):
+                site_vars = {}
+            
+            # Set the wan2_interface variable
+            site_vars["wan2_interface"] = "ge-0/0/1"
+            
+            # Update settings with new vars
+            current_settings["vars"] = site_vars
+            
+            # Write back to API
+            logging.debug(f"Updating site settings for {site_name} with wan2_interface variable")
+            update_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
+                apisession,
+                site_id,
+                body=current_settings
+            )
+            
+            if update_resp.status_code == 200:
+                result["variable_set"] = True
+                result["status"] = "SUCCESS"
+                logging.info(f"Successfully set wan2_interface variable for site {site_name}")
+            else:
+                result["status"] = "FAILED"
+                result["error"] = f"API returned status {update_resp.status_code}"
+                logging.error(f"Failed to set variable for site {site_name}: status {update_resp.status_code}")
+        
+        except Exception as e:
+            result["status"] = "ERROR"
+            result["error"] = str(e)
+            logging.error(f"Error setting variable for site {site_name}: {e}")
+            logging.error(traceback.format_exc())
+        
+        results.append(result)
+    
+    # Step 6: Generate report
+    report_data = []
+    for result in results:
+        report_entry = {
+            "site_name": result["site_name"],
+            "site_id": result["site_id"],
+            "wan2_variable_set": "Yes" if result["variable_set"] else "No",
+            "status": result["status"],
+            "has_ge001_overrides": "Yes" if result["has_overrides"] else "No",
+            "override_device_count": len(result["override_devices"]),
+            "override_devices": ", ".join(result["override_devices"]) if result["override_devices"] else "",
+            "requires_manual_review": "Yes" if result["has_overrides"] else "No",
+            "error": result["error"]
+        }
+        report_data.append(report_entry)
+    
+    # Save report
+    output_file = "WAN2_SiteVariable_Report.csv"
+    DataExporter.save_data_to_output(report_data, output_file)
+    
+    # Print summary
+    success_count = sum(1 for r in results if r["variable_set"])
+    override_count = sum(1 for r in results if r["has_overrides"])
+    
+    print(f"\n  Configuration Complete!")
+    print(f"=" * 70)
+    print(f"  Sites Processed: {len(results)}")
+    print(f"  Variables Set: {success_count}")
+    print(f"  Sites with ge-0/0/1 Overrides (Manual Review): {override_count}")
+    print(f"\n  Report saved to: {output_file}")
+    print(f"=" * 70)
+    
+    if override_count > 0:
+        print(f"\n  !? ATTENTION: {override_count} sites have device-level ge-0/0/1 overrides")
+        print(f"  These require manual review before template migration (Menu #104)")
+        print(f"  Check the 'requires_manual_review' column in the report.")
+    
+    logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured, {override_count} sites flagged for manual review")
+
+def update_gateway_templates_wan2_variable():
+    """
+    Menu #104: Update Gateway Templates to Use WAN2 Variable (DESTRUCTIVE)
+    
+    Updates selected gateway templates to replace hardcoded 'ge-0/0/1' port references
+    with the {{wan2_interface}} variable placeholder.
+    
+    Workflow:
+    1. Lists all gateway templates with site assignment counts
+    2. Allows selection of specific templates to update
+    3. For each template:
+       - Fetches current template configuration
+       - Identifies any port_config entries using 'ge-0/0/1'
+       - Replaces hardcoded port names with '{{wan2_interface}}' variable
+       - Shows preview of changes
+    4. Requires uppercase 'MIGRATE' confirmation before applying
+    5. Updates templates via updateOrgGatewayTemplate API
+    6. Generates audit report of changes
+    
+    SECURITY: DESTRUCTIVE operation requiring explicit confirmation.
+    This modifies production gateway templates affecting multiple sites.
+    Templates using {{wan2_interface}} will resolve to site variable values.
+    """
+    print("\n  DESTRUCTIVE: Update Gateway Templates for WAN2 Variable Migration")
+    print("=" * 70)
+    print("  !? WARNING: This operation modifies gateway templates")
+    print("  !? All sites using affected templates will inherit the change")
+    print("  !? Ensure sites have 'wan2_interface' variable set (Menu #103)")
+    print("=" * 70)
+    
+    logging.warning("Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started")
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Ensure required data is fresh
+    print("\n  Loading gateway template data...")
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    # Load templates
+    templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    with open(templates_path, encoding="utf-8") as f:
+        template_rows = list(csv.DictReader(f))
+    
+    if not template_rows:
+        print(" No gateway templates found.")
+        logging.warning("No gateway templates available for modification")
+        return
+    
+    # Build template name to ID mapping and count sites per template
+    sites_path = get_csv_file_path("SiteList.csv")
+    with open(sites_path, encoding="utf-8") as f:
+        sites = list(csv.DictReader(f))
+    
+    template_site_counts = {}
+    for site in sites:
+        template_id = site.get("gatewaytemplate_id", "").strip()
+        if template_id:
+            template_site_counts[template_id] = template_site_counts.get(template_id, 0) + 1
+    
+    # Step 2: Display templates with site counts
+    print(f"\n  Available Gateway Templates ({len(template_rows)}):")
+    template_list = []
+    for idx, template in enumerate(template_rows, start=1):
+        template_id = template.get("id", "")
+        template_name = template.get("name", "Unnamed Template")
+        site_count = template_site_counts.get(template_id, 0)
+        template_list.append({
+            "id": template_id,
+            "name": template_name,
+            "site_count": site_count
+        })
+        print(f"   [{idx}] {template_name} ({site_count} sites)")
+    
+    # Step 3: Template selection
+    print("\n  Template Selection:")
+    print("   Enter template numbers to modify (comma-separated, e.g., 1,3,5)")
+    print("   Or 'all' to modify all templates")
+    print("   Or 'cancel' to abort")
+    
+    selection_input = input("\n  Selection: ").strip().lower()
+    
+    if selection_input == "cancel":
+        print(" Operation cancelled.")
+        logging.info("Menu #104 cancelled by user at template selection")
+        return
+    
+    templates_to_modify = []
+    if selection_input == "all":
+        templates_to_modify = template_list
+    else:
+        try:
+            selected_indices = [int(idx.strip()) - 1 for idx in selection_input.split(",")]
+            templates_to_modify = [template_list[idx] for idx in selected_indices if 0 <= idx < len(template_list)]
+        except (ValueError, IndexError) as e:
+            print(f" Invalid selection: {e}")
+            logging.error(f"Invalid template selection in Menu #104: {e}")
+            return
+    
+    if not templates_to_modify:
+        print(" No templates selected.")
+        return
+    
+    print(f"\n  Selected {len(templates_to_modify)} templates for modification:")
+    total_affected_sites = sum(t["site_count"] for t in templates_to_modify)
+    for template in templates_to_modify:
+        print(f"   - {template['name']} ({template['site_count']} sites)")
+    print(f"\n  Total sites affected: {total_affected_sites}")
+    
+    # Step 4: Fetch and analyze templates for changes
+    print("\n  Analyzing templates for ge-0/0/1 port configurations...")
+    templates_with_changes = []
+    
+    for template_info in tqdm(templates_to_modify, desc="Analyzing templates", unit="template"):
+        template_id = template_info["id"]
+        template_name = template_info["name"]
+        
+        try:
+            # Fetch full template configuration
+            logging.debug(f"Fetching template configuration for {template_name}")
+            template_resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+                apisession,
+                org_id,
+                template_id
+            )
+            template_config = template_resp.data if hasattr(template_resp, 'data') else {}
+            
+            if not isinstance(template_config, dict):
+                logging.warning(f"Template {template_name} returned invalid data structure")
+                continue
+            
+            # Check for port_config with ge-0/0/1
+            port_config = template_config.get("port_config", {})
+            if not isinstance(port_config, dict):
+                logging.debug(f"Template {template_name} has no port_config")
+                continue
+            
+            # Find ge-0/0/1 entries (including subinterfaces like ge-0/0/1.70)
+            changes_needed = False
+            ports_to_replace = []  # List of (original_key, new_key) tuples
+            
+            # Check all port keys for ge-0/0/1 references
+            for port_key in port_config.keys():
+                if port_key == "ge-0/0/1":
+                    # Exact match - simple replacement
+                    changes_needed = True
+                    ports_to_replace.append((port_key, "{{wan2_interface}}"))
+                elif port_key.startswith("ge-0/0/1."):
+                    # Subinterface (e.g., ge-0/0/1.70) - replace prefix only
+                    suffix = port_key[len("ge-0/0/1"):]  # Extract ".70" or similar
+                    new_key = f"{{{{wan2_interface}}}}{suffix}"
+                    changes_needed = True
+                    ports_to_replace.append((port_key, new_key))
+                    logging.info(f"Found subinterface in template {template_name}: {port_key} -> {new_key}")
+                elif "ge-0/0/1" in port_key:
+                    # Port range or other pattern (e.g., "ge-0/0/0-2") - skip with warning
+                    logging.warning(f"Found complex port pattern in template {template_name}: {port_key}")
+                    print(f"\n  !? Template '{template_name}' uses complex port pattern: '{port_key}'")
+                    print(f"     This requires manual review - cannot automatically replace ranges")
+            
+            if changes_needed:
+                templates_with_changes.append({
+                    "id": template_id,
+                    "name": template_name,
+                    "site_count": template_info["site_count"],
+                    "config": template_config,
+                    "ports_to_replace": ports_to_replace  # List of (old_key, new_key) tuples
+                })
+        
+        except Exception as e:
+            logging.error(f"Error analyzing template {template_name}: {e}")
+            logging.error(traceback.format_exc())
+            print(f"\n  !? Error analyzing template '{template_name}': {e}")
+    
+    if not templates_with_changes:
+        print("\n  No templates found with ge-0/0/1 port configurations.")
+        print("  No changes needed.")
+        logging.info("Menu #104: No templates require modification")
+        return
+    
+    # Step 5: Show preview and confirm
+    print(f"\n  Preview of Changes:")
+    print(f"  {len(templates_with_changes)} templates will be modified:")
+    for template in templates_with_changes:
+        print(f"\n   Template: {template['name']}")
+        print(f"   Sites Affected: {template['site_count']}")
+        print(f"   Changes:")
+        for old_key, new_key in template['ports_to_replace']:
+            print(f"     Port key '{old_key}' -> '{new_key}'")
+    
+    print(f"\n  {'=' * 70}")
+    print(f"  !? CRITICAL: This operation will modify {len(templates_with_changes)} templates")
+    print(f"  !? affecting {sum(t['site_count'] for t in templates_with_changes)} sites")
+    print(f"  !? Type 'MIGRATE' (all caps) to proceed or anything else to cancel")
+    print(f"  {'=' * 70}")
+    
+    confirmation = input("\n  Confirmation: ").strip()
+    if confirmation != "MIGRATE":
+        print(" Operation cancelled.")
+        logging.info("Menu #104 cancelled by user at final confirmation")
+        return
+    
+    # Step 6: Apply changes
+    print("\n  Applying template modifications...")
+    results = []
+    
+    for template in tqdm(templates_with_changes, desc="Updating templates", unit="template"):
+        template_id = template["id"]
+        template_name = template["name"]
+        template_config = template["config"]
+        
+        result = {
+            "template_name": template_name,
+            "template_id": template_id,
+            "site_count": template["site_count"],
+            "status": "",
+            "changes_made": "",
+            "error": ""
+        }
+        
+        try:
+            # Modify port_config: replace all ge-0/0/1 references with {{wan2_interface}}
+            port_config = template_config.get("port_config", {})
+            changes_list = []
+            
+            # Process each port replacement
+            for old_key, new_key in template["ports_to_replace"]:
+                if old_key in port_config:
+                    # Save the port configuration
+                    port_config_data = port_config[old_key]
+                    
+                    # Remove old key
+                    del port_config[old_key]
+                    
+                    # Add new key with variable
+                    port_config[new_key] = port_config_data
+                    
+                    changes_list.append(f"'{old_key}' -> '{new_key}'")
+                    logging.debug(f"Template {template_name}: Replaced {old_key} with {new_key}")
+            
+            if changes_list:
+                # Update template config
+                template_config["port_config"] = port_config
+                
+                result["changes_made"] = "; ".join(changes_list)
+                
+                # Push update to API
+                logging.debug(f"Updating template {template_name} via API")
+                update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                    apisession,
+                    org_id,
+                    template_id,
+                    body=template_config
+                )
+                
+                if update_resp.status_code == 200:
+                    result["status"] = "SUCCESS"
+                    logging.info(f"Successfully updated template {template_name}")
+                else:
+                    result["status"] = "FAILED"
+                    result["error"] = f"API returned status {update_resp.status_code}"
+                    logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
+            else:
+                result["status"] = "SKIPPED"
+                result["error"] = "No matching ports found in configuration"
+        
+        except Exception as e:
+            result["status"] = "ERROR"
+            result["error"] = str(e)
+            logging.error(f"Error updating template {template_name}: {e}")
+            logging.error(traceback.format_exc())
+        
+        results.append(result)
+    
+    # Step 7: Generate audit report
+    output_file = "GatewayTemplate_WAN2_Migration_Audit.csv"
+    DataExporter.save_data_to_output(results, output_file)
+    
+    # Print summary
+    success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+    failure_count = len(results) - success_count
+    
+    print(f"\n  Migration Complete!")
+    print(f"=" * 70)
+    print(f"  Templates Processed: {len(results)}")
+    print(f"  Successfully Updated: {success_count}")
+    print(f"  Failed: {failure_count}")
+    print(f"\n  Audit report saved to: {output_file}")
+    print(f"=" * 70)
+    
+    if success_count > 0:
+        print(f"\n  !? {success_count} templates now use {{{{wan2_interface}}}} variable")
+        print(f"  !? Ensure all affected sites have the variable set (Menu #103)")
+        print(f"  !? Sites without the variable may experience gateway connectivity issues")
+    
+    if failure_count > 0:
+        print(f"\n  !? {failure_count} templates failed to update - check audit report")
+    
+    logging.warning(f"Menu #104 DESTRUCTIVE operation complete: {success_count} templates updated, {failure_count} failed")
+
 def convert_virtual_chassis_to_virtual_mac():
     """
     Presents a list of sites first, then shows switches that are virtual chassis at the selected site,
@@ -31019,6 +31547,13 @@ menu_actions = {
     "51": (export_site_maps_to_csv, "Export map information for a selected site"),
     "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
     "53": (export_site_insights_to_csv, "Export SLE (Service Level Experience) metrics insights for a selected site"),
+    
+    # ==============================
+    # GATEWAY TEMPLATE VARIABLE OPERATIONS
+    # ==============================
+    "103": (set_wan2_interface_site_variable, "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
+    "104": (update_gateway_templates_wan2_variable, " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation)"),
+    
     "102": (manage_wlan_radius_auth_timers, "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
     # Organization Management (Read-Only)
