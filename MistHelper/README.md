@@ -2002,6 +2002,41 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
+      "version": "25.11.03.17.15",
+      "date": "2025-11-03",
+      "changes": {
+        "enhancements": [
+          "Menu #102: Enhanced to always show calculated 802.1X timer values regardless of fast_dot1x_timers setting",
+          "When fast_dot1x_timers disabled: Shows both current standard defaults AND what calculated values would be if enabled",
+          "Provides complete visibility into timer behavior for informed decision-making"
+        ]
+      }
+    },
+    {
+      "version": "25.11.03.17.00",
+      "date": "2025-11-03",
+      "changes": {
+        "feature_additions": [
+          "Menu #102: Added behavior calculation preview before applying RADIUS timer changes",
+          "Displays calculated authentication timeout behavior based on server count and retry settings",
+          "Shows fast_dot1x_timers impact with calculated quiet-period, transmit-period, and other 802.1X values",
+          "Provides expected client experience timing for success and failure scenarios",
+          "Includes server selection mode impact (ordered vs unordered failover behavior)"
+        ]
+      }
+    },
+    {
+      "version": "25.10.31.16.00",
+      "date": "2025-10-31",
+      "changes": {
+        "security": [
+          "Menu #103: Added VRE site exclusion - Sites beginning with 'VRE' now automatically skipped",
+          "Menu #104: Added VRE site filtering - VRE sites excluded from template impact analysis",
+          "VRE sites protected from WAN2 interface variable operations per security policy"
+        ]
+      }
+    },
+    {
       "version": "25.10.31.15.15",
       "date": "2025-10-31",
       "changes": {

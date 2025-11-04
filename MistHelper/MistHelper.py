@@ -20645,6 +20645,23 @@ def set_wan2_interface_site_variable():
         print(" No sites selected.")
         return
     
+    # Filter out VRE sites (SECURITY: VRE sites excluded from WAN2 variable operations)
+    original_count = len(sites_to_configure)
+    sites_to_configure = [
+        site for site in sites_to_configure 
+        if not site.get("name", "").startswith("VRE")
+    ]
+    filtered_count = original_count - len(sites_to_configure)
+    
+    if filtered_count > 0:
+        print(f"\n  !? SECURITY: Excluded {filtered_count} VRE sites from configuration")
+        logging.info(f"Menu #103: Excluded {filtered_count} VRE sites from WAN2 variable operation")
+    
+    if not sites_to_configure:
+        print(" No sites remaining after filtering VRE sites.")
+        logging.warning("Menu #103: All selected sites were VRE sites - operation cancelled")
+        return
+    
     print(f"\n  Will configure {len(sites_to_configure)} sites with wan2_interface variable.")
     
     # Confirmation
@@ -20850,6 +20867,15 @@ def update_gateway_templates_wan2_variable():
     sites_path = get_csv_file_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
         sites = list(csv.DictReader(f))
+    
+    # Filter out VRE sites (SECURITY: VRE sites excluded from WAN2 template operations)
+    original_site_count = len(sites)
+    sites = [site for site in sites if not site.get("name", "").startswith("VRE")]
+    vre_filtered_count = original_site_count - len(sites)
+    
+    if vre_filtered_count > 0:
+        print(f"\n  !? SECURITY: Excluded {vre_filtered_count} VRE sites from template impact analysis")
+        logging.info(f"Menu #104: Excluded {vre_filtered_count} VRE sites from WAN2 template operation")
     
     template_site_counts = {}
     for site in sites:
@@ -29111,9 +29137,91 @@ def manage_wlan_radius_auth_timers(debug=False):
         print(f"\n[!] Invalid input: {error}. Exiting.")
         return
     
-    # Step 9: Confirm changes
+    # Step 9: Calculate and display behavior impact
     print(f"\n{'='*100}")
-    print(f"Proposed Changes:")
+    print(f"Calculated Authentication Behavior:")
+    print(f"{'='*100}\n")
+    
+    # Get number of RADIUS servers configured
+    auth_servers = selected_wlan.get('auth_servers', [])
+    server_count = len(auth_servers) if auth_servers else 1  # Assume at least 1 for calculation
+    
+    # Calculate timing behavior
+    single_server_max_time = new_timeout * new_retries
+    all_servers_max_time = single_server_max_time * server_count
+    
+    print(f"RADIUS Server Configuration:")
+    print(f"  - Configured servers: {server_count}")
+    print(f"  - Server selection mode: {new_selection}")
+    print(f"")
+    
+    print(f"Timeout Behavior:")
+    print(f"  - Timeout per attempt: {new_timeout} seconds")
+    print(f"  - Retry attempts per server: {new_retries}")
+    print(f"  - Maximum time per server: {single_server_max_time} seconds ({new_timeout}s x {new_retries} retries)")
+    print(f"")
+    
+    if server_count > 1:
+        if new_selection == 'ordered':
+            print(f"Failover Behavior (ordered mode):")
+            print(f"  - Primary server: Server #1 (always tries first)")
+            print(f"  - Failover sequence: Server #1 -> Server #2 -> ... -> Server #{server_count}")
+            print(f"  - Returns to Server #1 for next authentication")
+            print(f"  - Maximum time if all servers fail: {all_servers_max_time} seconds")
+        else:
+            print(f"Load Balancing Behavior (unordered mode):")
+            print(f"  - Server selection: Round-robin or random")
+            print(f"  - No server preference")
+            print(f"  - Maximum time if all servers fail: {all_servers_max_time} seconds")
+    else:
+        print(f"Single Server Behavior:")
+        print(f"  - Maximum authentication failure time: {single_server_max_time} seconds")
+    
+    print(f"")
+    
+    # Always calculate fast dot1x timer values for reference
+    quiet_period = new_timeout / 2
+    transmit_period = new_timeout / 2
+    supplicant_timeout = 10  # Fixed default
+    max_requests = 3  # Fixed default
+    
+    if new_fast:
+        print(f"Fast 802.1X Timers (ENABLED):")
+        print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"  - retries: {new_retries} (from auth_servers_retries)")
+        print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+        print(f"  - max-requests: {max_requests} (fixed default)")
+        print(f"")
+        print(f"  Impact: Faster authentication and retry cycles")
+        print(f"  Best for: Modern clients, stable networks, quick roaming")
+    else:
+        print(f"Standard 802.1X Timers (DISABLED):")
+        print(f"  - Current mode: Uses standard 802.1X defaults")
+        print(f"  - quiet-period: ~60 seconds (standard default)")
+        print(f"  - transmit-period: ~30 seconds (standard default)")
+        print(f"")
+        print(f"  If fast_dot1x_timers were enabled, would calculate:")
+        print(f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"    - retries: {new_retries} (from auth_servers_retries)")
+        print(f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+        print(f"    - max-requests: {max_requests} (fixed default)")
+        print(f"")
+        print(f"  Impact: Slower but more conservative authentication")
+        print(f"  Best for: Legacy clients, unstable networks, maximum compatibility")
+    
+    print(f"")
+    print(f"Expected Client Experience:")
+    print(f"  - Success case: 1-3 seconds (single request/response)")
+    print(f"  - First server timeout: ~{single_server_max_time} seconds")
+    if server_count > 1:
+        print(f"  - All servers fail: ~{all_servers_max_time} seconds")
+    print(f"")
+    
+    # Step 10: Confirm changes
+    print(f"{'='*100}")
+    print(f"Proposed Configuration Changes:")
     print(f"{'='*100}")
     print(f"  auth_servers_timeout: {selected_wlan.get('auth_servers_timeout', 5)} -> {new_timeout}")
     print(f"  auth_servers_retries: {selected_wlan.get('auth_servers_retries', 2)} -> {new_retries}")
@@ -29141,7 +29249,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         logging.info("User cancelled WLAN authentication timer changes")
         return
     
-    # Step 10: Build update payload
+    # Step 11: Build update payload
     update_payload = {
         'auth_servers_timeout': new_timeout,
         'auth_servers_retries': new_retries,
@@ -29149,7 +29257,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         'fast_dot1x_timers': new_fast
     }
     
-    # Step 11: Apply changes to appropriate endpoint
+    # Step 12: Apply changes to appropriate endpoint
     try:
         if selected_wlan.get('_inheritance_level') == 'site':
             # Update site-level WLAN
