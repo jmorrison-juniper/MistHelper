@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 105 actionable menu entries (1–10, 11–89, 90–104) with some gaps for future expansion.
+**Operation Count:** The code currently defines 107 actionable menu entries (1–10, 11–89, 90–106) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -247,6 +247,10 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
 | 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
 | 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR firmware upgrade with mode selection |
+| 102 | WLAN RADIUS Timers | Manage WLAN RADIUS authentication timers for site or template WLANs |
+| 103–104 | Gateway Template WAN2 | Set site variables & migrate templates to use {{wan2_interface}} variable |
+| 105 | Template Config Extract | Extract DIA_Pico (traffic steering) & Picocell (application policy) to JSON |
+| 106 | Template Config Apply | **DESTRUCTIVE**: Replicate extracted configs to other templates with confirmation |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -2096,7 +2100,38 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.10.30.19.45",
+      "version": "25.11.05.14.36",
+      "date": "2025-11-05",
+      "changes": {
+        "enhancements": [
+          "Menu #106: Smart policy positioning - When 14+ policies exist, Picocell inserted at position 14 (pushes policies 14+ back one position)",
+          "Menu #106: Enhanced audit logging - Position tracking for policy insertions"
+        ]
+      }
+    },
+    {
+      "version": "25.11.05.00.00",
+      "date": "2025-11-05",
+      "changes": {
+        "feature_additions": [
+          "Menu #105: Extract Gateway Template Configuration - Save DIA_Pico (traffic steering) and Picocell (application policy) configs to JSON",
+          "Menu #106: Apply Gateway Template Configuration (DESTRUCTIVE) - Replicate extracted configs to other templates with preview and confirmation",
+          "JSON-based config replication system for SSR gateway template standardization"
+        ],
+        "enhancements": [
+          "Two-phase extraction/application workflow with JSON intermediate storage",
+          "Configuration preview before destructive operations",
+          "Audit trail CSV report generation for applied configurations",
+          "Support for multiple destination template selection (comma-separated)",
+          "Merge logic for updating existing or adding new path preferences and service policies"
+        ],
+        "documentation": [
+          "Updated operation count to 107 total menu entries"
+        ]
+      }
+    },
+    {
+      "version": "25.10.30.00.00",
       "date": "2025-10-30",
       "changes": {
         "feature_additions": [

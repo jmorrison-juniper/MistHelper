@@ -31593,6 +31593,597 @@ class MistHelperTUI:
                 logging.debug(f"TUI_DEBUG: [{timestamp}] Exit message printed - run() method complete")
 
 
+# ============================================================================
+# GATEWAY TEMPLATE CONFIGURATION EXTRACTION AND APPLICATION (Menu 105-106)
+# ============================================================================
+
+def extract_gateway_template_configuration():
+    """
+    Menu Option 105: Extract specific configuration sections from a gateway template.
+    
+    This function:
+    1. Lists all gateway templates with indexed selection
+    2. Retrieves the selected template's full configuration
+    3. Extracts "Traffic Steering" (path_preferences) - specifically "DIA_Pico"
+    4. Extracts "Application Policies" (service_policies) - specifically "Picocell"
+    5. Saves both sections to a JSON file named after the template
+    
+    Use Case: Extract configuration patterns for replication to other templates
+    via Menu Option 106.
+    
+    SECURITY: Read-only operation, no modifications to templates.
+    """
+    print("\n  Extract Gateway Template Configuration (Menu 105)")
+    print("=" * 70)
+    logging.info("Menu #105: Starting gateway template configuration extraction")
+    
+    # Step 1: Get organization ID
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 2: Fetch all gateway templates
+    print("\n  Fetching gateway templates...")
+    try:
+        response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
+            apisession, 
+            org_id, 
+            limit=1000
+        )
+        templates = mistapi.get_all(response=response, mist_session=apisession)
+        
+        if not templates:
+            print("  No gateway templates found for this organization.")
+            logging.warning("Menu #105: No gateway templates found")
+            return
+            
+    except Exception as error:
+        print(f"  Error fetching gateway templates: {error}")
+        logging.error(f"Menu #105: Failed to fetch templates: {error}")
+        return
+    
+    # Step 3: Display indexed list of templates
+    print(f"\n  Available Gateway Templates ({len(templates)} found):")
+    print("-" * 70)
+    
+    index_to_template = {}
+    for index, template in enumerate(templates):
+        template_name = template.get("name", "Unnamed Template")
+        template_id = template.get("id", "No ID")
+        template_type = template.get("type", "standalone")
+        print(f"  [{index}] {template_name:40} Type: {template_type:10} ID: {template_id}")
+        index_to_template[index] = template
+    
+    # Step 4: Get user selection
+    print()
+    try:
+        user_input = safe_input(
+            f"Enter template index to extract [0-{len(templates)-1}]: ",
+            context="menu_105_template_selection"
+        ).strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Operation cancelled.")
+        logging.info("Menu #105: User cancelled template selection")
+        return
+    
+    if not user_input.isdigit():
+        print("  Invalid input. Please enter a numeric index.")
+        logging.warning(f"Menu #105: Invalid input: {user_input}")
+        return
+    
+    selected_index = int(user_input)
+    if selected_index not in index_to_template:
+        print(f"  Invalid index. Please select between 0 and {len(templates)-1}.")
+        logging.warning(f"Menu #105: Index out of range: {selected_index}")
+        return
+    
+    selected_template_summary = index_to_template[selected_index]
+    template_id = selected_template_summary.get("id")
+    template_name = selected_template_summary.get("name", "Unnamed Template")
+    
+    print(f"\n  Selected Template: {template_name}")
+    print(f"  Template ID: {template_id}")
+    
+    # Step 5: Fetch full template configuration
+    print("\n  Fetching full template configuration...")
+    try:
+        template_response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+            apisession,
+            org_id,
+            template_id
+        )
+        template_config = template_response.data if hasattr(template_response, 'data') else {}
+        
+        if not isinstance(template_config, dict):
+            print("  Error: Template configuration is not in expected format.")
+            logging.error(f"Menu #105: Invalid template config format for {template_name}")
+            return
+            
+    except Exception as error:
+        print(f"  Error fetching template configuration: {error}")
+        logging.error(f"Menu #105: Failed to fetch template {template_name}: {error}")
+        return
+    
+    # Step 6: Extract Traffic Steering (path_preferences) - specifically "DIA_Pico"
+    print("\n  Extracting Traffic Steering configuration...")
+    path_preferences = template_config.get("path_preferences", {})
+    
+    dia_pico_config = None
+    if isinstance(path_preferences, dict):
+        dia_pico_config = path_preferences.get("DIA_Pico")
+        if dia_pico_config:
+            print(f"  -> Found 'DIA_Pico' in Traffic Steering (path_preferences)")
+            logging.info(f"Menu #105: Found DIA_Pico in template {template_name}")
+        else:
+            print(f"  -> 'DIA_Pico' not found in Traffic Steering")
+            logging.warning(f"Menu #105: DIA_Pico not found in template {template_name}")
+    else:
+        print("  -> No path_preferences found in template")
+        logging.warning(f"Menu #105: No path_preferences in template {template_name}")
+    
+    # Step 7: Extract Application Policies (service_policies) - specifically "Picocell"
+    print("\n  Extracting Application Policies configuration...")
+    service_policies = template_config.get("service_policies", [])
+    
+    picocell_policy = None
+    if isinstance(service_policies, list):
+        # Search through service_policies array for an item with name "Picocell"
+        for policy in service_policies:
+            if isinstance(policy, dict) and policy.get("name") == "Picocell":
+                picocell_policy = policy
+                print(f"  -> Found 'Picocell' in Application Policies (service_policies)")
+                logging.info(f"Menu #105: Found Picocell policy in template {template_name}")
+                break
+        
+        if not picocell_policy:
+            print(f"  -> 'Picocell' not found in Application Policies")
+            logging.warning(f"Menu #105: Picocell policy not found in template {template_name}")
+    else:
+        print("  -> No service_policies found in template")
+        logging.warning(f"Menu #105: No service_policies in template {template_name}")
+    
+    # Step 8: Check if we found anything to extract
+    if not dia_pico_config and not picocell_policy:
+        print("\n  Warning: Neither 'DIA_Pico' nor 'Picocell' configurations were found.")
+        print("  No extraction file will be created.")
+        logging.warning(f"Menu #105: No target configs found in template {template_name}")
+        return
+    
+    # Step 9: Prepare extraction data
+    extraction_data = {
+        "source_template_name": template_name,
+        "source_template_id": template_id,
+        "extraction_timestamp": datetime.now(timezone.utc).isoformat(),
+        "extracted_by": "MistHelper Menu #105",
+        "configurations": {
+            "traffic_steering": {
+                "DIA_Pico": dia_pico_config
+            },
+            "application_policies": {
+                "Picocell": picocell_policy
+            }
+        }
+    }
+    
+    # Step 10: Save to JSON file in data/ directory
+    # Sanitize template name for filename
+    safe_filename = EnhancedSSHRunner.sanitize_filename(template_name)
+    json_filename = f"{safe_filename}_extracted_config.json"
+    json_filepath = get_csv_file_path(json_filename)  # Uses data/ directory
+    
+    try:
+        with open(json_filepath, 'w', encoding='utf-8') as json_file:
+            json.dump(extraction_data, json_file, indent=2, ensure_ascii=False)
+        
+        print(f"\n  Success! Configuration extracted and saved to:")
+        print(f"  -> {json_filepath}")
+        print(f"\n  Extracted Components:")
+        if dia_pico_config:
+            print(f"     [+] Traffic Steering: DIA_Pico")
+        else:
+            print(f"     [ ] Traffic Steering: DIA_Pico (not found)")
+        if picocell_policy:
+            print(f"     [+] Application Policies: Picocell")
+        else:
+            print(f"     [ ] Application Policies: Picocell (not found)")
+        
+        print(f"\n  Use Menu Option 106 to apply this configuration to other templates.")
+        logging.info(f"Menu #105: Successfully extracted config to {json_filepath}")
+        
+    except Exception as error:
+        print(f"\n  Error saving extraction file: {error}")
+        logging.error(f"Menu #105: Failed to save JSON file: {error}")
+        return
+
+
+def apply_gateway_template_configuration():
+    """
+    Menu Option 106: Apply extracted configuration to gateway template(s).
+    
+    This function:
+    1. Lists available extracted configuration JSON files
+    2. Lists all gateway templates for destination selection
+    3. Shows preview of what will be applied
+    4. Requires uppercase "APPLY" confirmation
+    5. Applies the configuration to selected template(s)
+    
+    Use Case: Replicate configuration patterns extracted via Menu Option 105
+    to other gateway templates for consistency.
+    
+    SECURITY: DESTRUCTIVE operation - modifies gateway templates.
+    Requires explicit uppercase confirmation.
+    """
+    print("\n  Apply Gateway Template Configuration (Menu 106)")
+    print("=" * 70)
+    print("  !? DESTRUCTIVE: This operation modifies gateway templates")
+    print("=" * 70)
+    logging.info("Menu #106: Starting gateway template configuration application")
+    
+    # Step 1: Get organization ID
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 2: Find available extraction JSON files in data/ directory
+    data_dir = "data"
+    if not os.path.exists(data_dir):
+        print(f"\n  Error: Data directory '{data_dir}' not found.")
+        logging.error("Menu #106: Data directory not found")
+        return
+    
+    # Look for files matching pattern: *_extracted_config.json
+    extraction_files = []
+    try:
+        for filename in os.listdir(data_dir):
+            if filename.endswith("_extracted_config.json"):
+                filepath = os.path.join(data_dir, filename)
+                extraction_files.append({
+                    "filename": filename,
+                    "filepath": filepath
+                })
+    except Exception as error:
+        print(f"\n  Error scanning for extraction files: {error}")
+        logging.error(f"Menu #106: Error scanning data directory: {error}")
+        return
+    
+    if not extraction_files:
+        print("\n  No extracted configuration files found.")
+        print("  Use Menu Option 105 to extract configurations first.")
+        logging.warning("Menu #106: No extraction files found")
+        return
+    
+    # Step 3: Display available extraction files
+    print(f"\n  Available Extracted Configurations ({len(extraction_files)} found):")
+    print("-" * 70)
+    
+    index_to_file = {}
+    for index, file_info in enumerate(extraction_files):
+        filename = file_info["filename"]
+        filepath = file_info["filepath"]
+        
+        # Try to read metadata from file
+        try:
+            with open(filepath, 'r', encoding='utf-8') as json_file:
+                data = json.load(json_file)
+                source_template = data.get("source_template_name", "Unknown")
+                timestamp = data.get("extraction_timestamp", "Unknown")
+                
+                # Parse and format timestamp
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    formatted_time = dt.strftime('%Y-%m-%d %H:%M UTC')
+                except:
+                    formatted_time = timestamp
+                
+                print(f"  [{index}] Source: {source_template:30} Extracted: {formatted_time}")
+                print(f"       File: {filename}")
+        except Exception as error:
+            print(f"  [{index}] File: {filename} (Error reading metadata: {error})")
+            logging.warning(f"Menu #106: Could not read metadata from {filename}: {error}")
+        
+        index_to_file[index] = file_info
+    
+    # Step 4: Get user selection for source configuration
+    print()
+    try:
+        config_input = safe_input(
+            f"Enter configuration file index to use [0-{len(extraction_files)-1}]: ",
+            context="menu_106_config_selection"
+        ).strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Operation cancelled.")
+        logging.info("Menu #106: User cancelled configuration selection")
+        return
+    
+    if not config_input.isdigit():
+        print("  Invalid input. Please enter a numeric index.")
+        logging.warning(f"Menu #106: Invalid config input: {config_input}")
+        return
+    
+    config_index = int(config_input)
+    if config_index not in index_to_file:
+        print(f"  Invalid index. Please select between 0 and {len(extraction_files)-1}.")
+        logging.warning(f"Menu #106: Config index out of range: {config_index}")
+        return
+    
+    selected_file = index_to_file[config_index]
+    config_filepath = selected_file["filepath"]
+    
+    # Step 5: Load the extraction data
+    print(f"\n  Loading configuration from: {selected_file['filename']}")
+    try:
+        with open(config_filepath, 'r', encoding='utf-8') as json_file:
+            extraction_data = json.load(json_file)
+    except Exception as error:
+        print(f"  Error loading configuration file: {error}")
+        logging.error(f"Menu #106: Failed to load {config_filepath}: {error}")
+        return
+    
+    # Validate extraction data structure
+    if not isinstance(extraction_data, dict) or "configurations" not in extraction_data:
+        print("  Error: Invalid configuration file format.")
+        logging.error(f"Menu #106: Invalid format in {config_filepath}")
+        return
+    
+    configs = extraction_data.get("configurations", {})
+    dia_pico_config = configs.get("traffic_steering", {}).get("DIA_Pico")
+    picocell_policy = configs.get("application_policies", {}).get("Picocell")
+    
+    if not dia_pico_config and not picocell_policy:
+        print("  Error: No valid configurations found in file.")
+        logging.error(f"Menu #106: No configs in {config_filepath}")
+        return
+    
+    source_template_name = extraction_data.get("source_template_name", "Unknown")
+    print(f"  Source Template: {source_template_name}")
+    
+    # Step 6: Fetch all gateway templates for destination selection
+    print("\n  Fetching available gateway templates...")
+    try:
+        response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
+            apisession, 
+            org_id, 
+            limit=1000
+        )
+        templates = mistapi.get_all(response=response, mist_session=apisession)
+        
+        if not templates:
+            print("  No gateway templates found for this organization.")
+            logging.warning("Menu #106: No gateway templates found")
+            return
+            
+    except Exception as error:
+        print(f"  Error fetching gateway templates: {error}")
+        logging.error(f"Menu #106: Failed to fetch templates: {error}")
+        return
+    
+    # Step 7: Display indexed list of templates
+    print(f"\n  Available Destination Templates ({len(templates)} found):")
+    print("-" * 70)
+    
+    index_to_template = {}
+    for index, template in enumerate(templates):
+        template_name = template.get("name", "Unnamed Template")
+        template_id = template.get("id", "No ID")
+        template_type = template.get("type", "standalone")
+        
+        # Mark source template
+        marker = " (SOURCE)" if template_name == source_template_name else ""
+        print(f"  [{index}] {template_name:40} Type: {template_type:10}{marker}")
+        index_to_template[index] = template
+    
+    # Step 8: Get user selection for destination template(s)
+    print()
+    print("  Enter destination template index (or comma-separated list for multiple)")
+    try:
+        dest_input = safe_input(
+            f"Destination template(s) [0-{len(templates)-1}]: ",
+            context="menu_106_destination_selection"
+        ).strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Operation cancelled.")
+        logging.info("Menu #106: User cancelled destination selection")
+        return
+    
+    # Parse destination input (supports comma-separated indices)
+    destination_templates = []
+    try:
+        indices = [int(idx.strip()) for idx in dest_input.split(',')]
+        for idx in indices:
+            if idx in index_to_template:
+                destination_templates.append(index_to_template[idx])
+            else:
+                print(f"  Warning: Invalid index {idx}, skipping.")
+                logging.warning(f"Menu #106: Invalid destination index: {idx}")
+    except ValueError:
+        print("  Invalid input format. Please enter numeric indices separated by commas.")
+        logging.warning(f"Menu #106: Invalid destination input: {dest_input}")
+        return
+    
+    if not destination_templates:
+        print("  No valid destination templates selected.")
+        logging.warning("Menu #106: No valid destinations")
+        return
+    
+    # Step 9: Show preview of what will be applied
+    print(f"\n  Configuration Preview:")
+    print("=" * 70)
+    print(f"  Source: {source_template_name}")
+    print(f"  Destination(s): {len(destination_templates)} template(s)")
+    for template in destination_templates:
+        print(f"    -> {template.get('name', 'Unnamed')}")
+    
+    print(f"\n  Configuration to Apply:")
+    if dia_pico_config:
+        print(f"    [+] Traffic Steering (path_preferences): DIA_Pico")
+        # Show summary of configuration
+        if isinstance(dia_pico_config, dict):
+            for key, value in list(dia_pico_config.items())[:3]:  # Show first 3 keys
+                print(f"        {key}: {str(value)[:50]}...")
+            if len(dia_pico_config) > 3:
+                print(f"        ... and {len(dia_pico_config) - 3} more fields")
+    
+    if picocell_policy:
+        print(f"    [+] Application Policies (service_policies): Picocell")
+        # Show summary of policy
+        if isinstance(picocell_policy, dict):
+            policy_name = picocell_policy.get("name", "Unnamed")
+            print(f"        Policy Name: {policy_name}")
+            # Show key fields
+            for key in ["action", "services", "tenants", "idp"]:
+                if key in picocell_policy:
+                    value = picocell_policy[key]
+                    print(f"        {key}: {str(value)[:50]}...")
+    
+    # Step 10: Confirmation prompt
+    print(f"\n  {'=' * 70}")
+    print(f"  !? CRITICAL: This will modify {len(destination_templates)} template(s)")
+    print(f"  !? The configurations will be merged/updated (existing data preserved)")
+    print(f"  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
+    print(f"  {'=' * 70}")
+    
+    try:
+        confirmation = safe_input("\n  Confirmation: ", context="menu_106_confirmation").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Operation cancelled.")
+        logging.info("Menu #106: User cancelled at confirmation")
+        return
+    
+    if confirmation != "APPLY":
+        print("  Operation cancelled.")
+        logging.info("Menu #106: User did not confirm with APPLY")
+        return
+    
+    # Step 11: Apply configuration to destination template(s)
+    print("\n  Applying configuration to destination templates...")
+    results = []
+    
+    for template_summary in tqdm(destination_templates, desc="Updating templates", unit="template"):
+        template_id = template_summary.get("id")
+        template_name = template_summary.get("name", "Unnamed Template")
+        
+        result = {
+            "template_name": template_name,
+            "template_id": template_id,
+            "status": "",
+            "changes_made": [],
+            "error": ""
+        }
+        
+        try:
+            # Fetch current template configuration
+            template_response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+                apisession,
+                org_id,
+                template_id
+            )
+            current_config = template_response.data if hasattr(template_response, 'data') else {}
+            
+            if not isinstance(current_config, dict):
+                result["status"] = "FAILED"
+                result["error"] = "Invalid template configuration format"
+                results.append(result)
+                logging.error(f"Menu #106: Invalid config format for {template_name}")
+                continue
+            
+            # Apply Traffic Steering (path_preferences) if present
+            if dia_pico_config:
+                if "path_preferences" not in current_config:
+                    current_config["path_preferences"] = {}
+                
+                current_config["path_preferences"]["DIA_Pico"] = dia_pico_config
+                result["changes_made"].append("Added/Updated DIA_Pico in path_preferences")
+                logging.info(f"Menu #106: Added DIA_Pico to {template_name}")
+            
+            # Apply Application Policies (service_policies) if present
+            if picocell_policy:
+                if "service_policies" not in current_config:
+                    current_config["service_policies"] = []
+                
+                # Check if Picocell policy already exists
+                existing_index = None
+                for idx, policy in enumerate(current_config["service_policies"]):
+                    if isinstance(policy, dict) and policy.get("name") == "Picocell":
+                        existing_index = idx
+                        break
+                
+                if existing_index is not None:
+                    # Update existing policy
+                    current_config["service_policies"][existing_index] = picocell_policy
+                    result["changes_made"].append("Updated existing Picocell in service_policies")
+                    logging.info(f"Menu #106: Updated Picocell policy in {template_name}")
+                else:
+                    # Add new policy - check if we need to insert at position 14
+                    policy_count = len(current_config["service_policies"])
+                    
+                    if policy_count >= 14:
+                        # Insert at position 14 (0-indexed position 13), pushing existing policies back
+                        current_config["service_policies"].insert(13, picocell_policy)
+                        result["changes_made"].append(f"Inserted Picocell at position 14 (pushed {policy_count - 13} policies back)")
+                        logging.info(f"Menu #106: Inserted Picocell at position 14 in {template_name}, pushed {policy_count - 13} policies back")
+                    else:
+                        # Not enough policies, append to end
+                        current_config["service_policies"].append(picocell_policy)
+                        result["changes_made"].append(f"Added new Picocell to service_policies (position {policy_count + 1})")
+                        logging.info(f"Menu #106: Added new Picocell policy to {template_name} at position {policy_count + 1}")
+            
+            # Push update to API
+            update_response = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                apisession,
+                org_id,
+                template_id,
+                body=current_config
+            )
+            
+            if update_response.status_code == 200:
+                result["status"] = "SUCCESS"
+                logging.info(f"Menu #106: Successfully updated template {template_name}")
+            else:
+                result["status"] = "FAILED"
+                result["error"] = f"API returned status {update_response.status_code}"
+                logging.error(f"Menu #106: API error updating {template_name}: {update_response.status_code}")
+        
+        except Exception as error:
+            result["status"] = "FAILED"
+            result["error"] = str(error)
+            logging.error(f"Menu #106: Exception updating {template_name}: {error}")
+        
+        results.append(result)
+    
+    # Step 12: Generate audit report
+    output_file = "GatewayTemplate_Config_Application_Audit.csv"
+    
+    # Prepare results for CSV export
+    csv_results = []
+    for result in results:
+        csv_results.append({
+            "template_name": result["template_name"],
+            "template_id": result["template_id"],
+            "status": result["status"],
+            "changes_made": "; ".join(result["changes_made"]) if result["changes_made"] else "",
+            "error": result["error"]
+        })
+    
+    DataExporter.save_data_to_output(csv_results, output_file)
+    
+    # Step 13: Print summary
+    success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+    failure_count = len(results) - success_count
+    
+    print(f"\n  Configuration Application Complete!")
+    print(f"=" * 70)
+    print(f"  Templates Processed: {len(results)}")
+    print(f"  Successfully Updated: {success_count}")
+    print(f"  Failed: {failure_count}")
+    print(f"\n  Audit report saved to: {output_file}")
+    print(f"=" * 70)
+    
+    if success_count > 0:
+        print(f"\n  !? {success_count} template(s) now have the applied configurations")
+        print(f"  !? Verify configurations in Mist portal before deploying to production")
+    
+    if failure_count > 0:
+        print(f"\n  !? {failure_count} template(s) failed to update - check audit report")
+    
+    logging.warning(f"Menu #106 DESTRUCTIVE operation complete: {success_count} templates updated, {failure_count} failed")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -31684,6 +32275,8 @@ menu_actions = {
     # ==============================
     "103": (set_wan2_interface_site_variable, "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
     "104": (update_gateway_templates_wan2_variable, " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation)"),
+    "105": (extract_gateway_template_configuration, "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"),
+    "106": (apply_gateway_template_configuration, " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"),
     
     "102": (manage_wlan_radius_auth_timers, "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
