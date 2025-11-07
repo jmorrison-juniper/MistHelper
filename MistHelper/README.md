@@ -2100,6 +2100,131 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
+      "version": "25.11.07.00.10",
+      "date": "2025-11-07",
+      "changes": {
+        "feature_additions": [
+          "Menu #9: Added tcpdump packet filter selection to Wireless Client Capture (option 1)",
+          "Menu #9: Added tcpdump packet filter selection to Wired Client Capture (option 2)",
+          "Menu #9: Both client capture types now have access to 40 pre-canned filter options"
+        ],
+        "enhancements": [
+          "Menu #9: Client captures can now filter by protocol, port, direction, application, and security patterns",
+          "Menu #9: Consistent filtering capabilities across all applicable capture types (Client, Gateway, Switch, MxEdge)"
+        ]
+      }
+    },
+    {
+      "version": "25.11.07.00.05",
+      "date": "2025-11-07",
+      "changes": {
+        "feature_additions": [
+          "Menu #10: Added tcpdump packet filter selection with 40 pre-canned filter options",
+          "Menu #10: Comprehensive filter categories - Basic, Protocol, Direction, Combined, Advanced, Application, Security",
+          "Menu #10: Custom tcpdump expression support for advanced filtering",
+          "Menu #10: Filter examples include HTTPS, DNS, SSH, TCP flags, port scans, fragmented packets, and more"
+        ],
+        "enhancements": [
+          "Menu #10: Packet filter now displayed in capture configuration summary",
+          "Menu #10: Reuses existing _get_tcpdump_expression_selection() method from site captures (menu 9)"
+        ]
+      }
+    },
+    {
+      "version": "25.11.07.00.01",
+      "date": "2025-11-07",
+      "changes": {
+        "bug_fixes": [
+          "Menu #10: Enforced Mist API limitation - Only 1 MxEdge can be captured at a time for organization-level captures",
+          "Menu #10: Enforced Mist API limitation - Only 1 port can be captured per MxEdge",
+          "Menu #10: Removed multi-selection options that exceeded API constraints",
+          "Menu #10: Updated user prompts to clearly indicate single MxEdge/single port requirement",
+          "Menu #10: Simplified configuration summary for single MxEdge/port captures"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.57",
+      "date": "2025-11-06",
+      "changes": {
+        "enhancements": [
+          "Menu #10: Enhanced MxEdge selection display with comprehensive status information",
+          "Menu #10: Shows mxagent running state (Running/Stopped)",
+          "Menu #10: Shows tunterm running state (Running/Stopped)",
+          "Menu #10: Displays uptime in days and hours format",
+          "Menu #10: Improved display layout with clearer service status indicators"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.51",
+      "date": "2025-11-06",
+      "changes": {
+        "bug_fixes": [
+          "Menu #10: Fixed MxEdge status retrieval - Now correctly fetches status from listOrgMxEdgesStats API endpoint",
+          "Menu #10: Status field only available in stats API, not in base listOrgMxEdges call - Added proper stats fetch before display"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.42",
+      "date": "2025-11-06",
+      "changes": {
+        "enhancements": [
+          "Menu #10: Indexed port selection - Select ports by index number (0,1,2) instead of typing port names",
+          "Menu #10: Per-MxEdge port selection - Individual port selection for each selected MxEdge",
+          "Menu #10: Improved workflow - Port selection happens before format/duration configuration",
+          "Menu #10: Clear ONLINE/OFFLINE status display for MxEdges (instead of generic 'connected' status)",
+          "Menu #10: Enhanced configuration summary showing selected ports per MxEdge"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.35",
+      "date": "2025-11-06",
+      "changes": {
+        "feature_additions": [
+          "Menu #10: Multiple MxEdge selection support - Capture from multiple MxEdges simultaneously using comma-separated indices",
+          "Menu #10: Interface status display - Shows UP/DOWN status, speed, and MAC address for each port before capture",
+          "Menu #10: Real-time interface discovery via getOrgMxEdgeStats API for informed port selection"
+        ],
+        "enhancements": [
+          "Menu #10: Improved user workflow with interface visibility before configuration",
+          "Menu #10: Multi-device payload building for organization-level captures"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.31",
+      "date": "2025-11-06",
+      "changes": {
+        "bug_fixes": [
+          "Menu #10: Fixed payload structure for MxEdge packet captures - Changed from 'ports' array to 'interfaces' object per API specification",
+          "Menu #10: Corrected API request format to match Mist API documentation for organization-level MxEdge captures"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.28",
+      "date": "2025-11-06",
+      "changes": {
+        "bug_fixes": [
+          "Menu #10: Fixed AttributeError - Corrected self.apisession reference to self.mist_session to match PacketCaptureManager initialization"
+        ]
+      }
+    },
+    {
+      "version": "25.11.06.23.22",
+      "date": "2025-11-06",
+      "changes": {
+        "enhancements": [
+          "Menu #10: Organization Packet Capture now fetches and displays indexed list of MxEdges for selection",
+          "Menu #10: Shows MxEdge name, model, and online status for easier identification",
+          "Menu #10: Eliminated manual UUID entry requirement - automated selection workflow"
+        ]
+      }
+    },
+    {
       "version": "25.11.05.14.36",
       "date": "2025-11-05",
       "changes": {

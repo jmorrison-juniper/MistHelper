@@ -3353,6 +3353,9 @@ class PacketCaptureManager:
                                          default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == 'y'
         
+        # Tcpdump filter selection
+        tcpdump_expr = self._get_tcpdump_expression_selection()
+        
         # Format selection
         capture_format = self._get_capture_format_selection()
         
@@ -3378,6 +3381,10 @@ class PacketCaptureManager:
         if ap_mac:
             payload["ap_mac"] = ap_mac
         
+        # Add tcpdump filter if specified
+        if tcpdump_expr:
+            payload["tcpdump_expression"] = tcpdump_expr
+        
         # Display configuration and confirm
         print("\n" + "=" * 80)
         print(" CAPTURE CONFIGURATION SUMMARY")
@@ -3386,6 +3393,10 @@ class PacketCaptureManager:
         print(f"  Client MAC: {client_mac}")
         if ap_mac:
             print(f"  AP MAC Filter: {ap_mac}")
+        if tcpdump_expr:
+            print(f"  Packet Filter: {tcpdump_expr}")
+        else:
+            print(f"  Packet Filter: None (all traffic)")
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
         print(f"  Max Packet Length: {max_pkt_len} bytes")
@@ -3465,6 +3476,9 @@ class PacketCaptureManager:
                                          default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == 'y'
         
+        # Tcpdump filter selection
+        tcpdump_expr = self._get_tcpdump_expression_selection()
+        
         # Format selection
         capture_format = self._get_capture_format_selection()
         
@@ -3486,12 +3500,20 @@ class PacketCaptureManager:
             "format": capture_format
         }
         
+        # Add tcpdump filter if specified
+        if tcpdump_expr:
+            payload["tcpdump_expression"] = tcpdump_expr
+        
         # Display and confirm
         print("\n" + "=" * 80)
         print(" CAPTURE CONFIGURATION SUMMARY")
         print("=" * 80)
         print(f"  Capture Type: Wired Client")
         print(f"  Client MAC: {client_mac}")
+        if tcpdump_expr:
+            print(f"  Packet Filter: {tcpdump_expr}")
+        else:
+            print(f"  Packet Filter: None (all traffic)")
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
         print(f"  Include Multicast: {'Yes' if includes_mcast else 'No'}")
@@ -4618,56 +4640,233 @@ class PacketCaptureManager:
         print("  For site-level Mist Edges, use Site Packet Capture (option 9)")
         print("\n" + "=" * 80)
         
-        # Get MxEdge ID
-        mxedge_id = safe_input("\nEnter MxEdge ID (UUID): ", context="mxedge_id")
-        if not mxedge_id:
-            print("\n! MxEdge ID required")
-            return
-        
-        # Validate UUID format
-        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
-        if not uuid_pattern.match(mxedge_id):
-            print(f"\n! Invalid MxEdge ID format: {mxedge_id}")
-            return
-        
-        # Format selection
-        print("\nCapture format:")
-        print("  1. Stream to Mist Cloud (default)")
-        print("  2. TZSP stream to remote host (Wireshark)")
-        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
-        
-        if format_choice == "2":
-            # TZSP configuration
-            tzsp_host = safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
-            if not tzsp_host:
-                print("\n! TZSP host required")
-                return
+        # Fetch list of MxEdges
+        print("\n  Fetching available MxEdges...")
+        try:
+            response = mistapi.api.v1.orgs.mxedges.listOrgMxEdges(
+                self.mist_session,
+                self.org_id,
+                limit=1000
+            )
+            mxedges = mistapi.get_all(response=response, mist_session=self.mist_session)
             
-            tzsp_port_str = safe_input("Enter TZSP port (default 37008): ", 
-                                      default_value="37008", context="tzsp_port")
+            if not mxedges:
+                print("\n! No MxEdges found for this organization")
+                logging.warning("Menu #10: No MxEdges found")
+                return
+                
+        except Exception as error:
+            print(f"\n! Error fetching MxEdges: {error}")
+            logging.error(f"Menu #10: Failed to fetch MxEdges: {error}")
+            return
+        
+        # Fetch stats to get status information
+        print(f"  Fetching MxEdge status information...")
+        mxedge_stats_map = {}
+        try:
+            stats_response = mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(
+                self.mist_session,
+                self.org_id,
+                limit=1000
+            )
+            stats_data = mistapi.get_all(response=stats_response, mist_session=self.mist_session)
+            
+            if stats_data:
+                for stat in stats_data:
+                    mxedge_id = stat.get("id")
+                    if mxedge_id:
+                        mxedge_stats_map[mxedge_id] = stat
+        except Exception as error:
+            logging.warning(f"Menu #10: Failed to fetch MxEdge stats: {error}")
+            # Continue without status information
+        
+        # Display indexed list of MxEdges with detailed status
+        print(f"\n  Available MxEdges ({len(mxedges)} found):")
+        print("=" * 120)
+        
+        index_to_mxedge = {}
+        for index, mxedge in enumerate(mxedges):
+            mxedge_name = mxedge.get("name", "Unnamed MxEdge")
+            mxedge_id = mxedge.get("id", "No ID")
+            model = mxedge.get("model", "Unknown")
+            
+            # Get detailed stats for this MxEdge
+            stat = mxedge_stats_map.get(mxedge_id, {})
+            status = stat.get("status", "unknown")
+            uptime = stat.get("uptime", 0)
+            service_stat = stat.get("service_stat", {})
+            
+            # Format uptime
+            if uptime > 0:
+                uptime_days = uptime // 86400
+                uptime_hours = (uptime % 86400) // 3600
+                uptime_str = f"{uptime_days}d {uptime_hours}h"
+            else:
+                uptime_str = "N/A"
+            
+            # Get service states
+            mxagent_stat = service_stat.get("mxagent", {})
+            tunterm_stat = service_stat.get("tunterm", {})
+            
+            mxagent_state = mxagent_stat.get("running_state", "Unknown")
+            tunterm_state = tunterm_stat.get("running_state", "Unknown")
+            
+            # Show online/offline status
+            if status == "connected":
+                status_marker = "ONLINE"
+            elif status == "disconnected":
+                status_marker = "OFFLINE"
+            else:
+                status_marker = status.upper()
+            
+            print(f"  [{index}] {mxedge_name:30} | Model: {model:10} | Status: {status_marker:8} | Uptime: {uptime_str:10}")
+            print(f"       mxagent: {mxagent_state:15} | tunterm: {tunterm_state:15}")
+            index_to_mxedge[index] = mxedge
+        
+        # Get user selection (API limitation: only 1 MxEdge allowed for org-level captures)
+        print()
+        print("  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures")
+        try:
+            selection_input = safe_input(
+                f"Select MxEdge index [0-{len(mxedges)-1}]: ",
+                context="mxedge_selection"
+            ).strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n! Operation cancelled")
+            logging.info("Menu #10: User cancelled MxEdge selection")
+            return
+        
+        # Parse selection (single MxEdge only)
+        selected_mxedges = []
+        try:
+            idx = int(selection_input)
+            if idx in index_to_mxedge:
+                selected_mxedges.append(index_to_mxedge[idx])
+            else:
+                print(f"\n! Invalid index {idx}. Please select from 0-{len(mxedges)-1}")
+                logging.warning(f"Menu #10: Invalid MxEdge index: {idx}")
+                return
+        except ValueError:
+            print(f"\n! Invalid input format. Please enter a single numeric index.")
+            logging.warning(f"Menu #10: Invalid selection input: {selection_input}")
+            return
+        
+        if not selected_mxedges:
+            print(f"\n! No valid MxEdge selected")
+            logging.warning("Menu #10: No valid MxEdge selected")
+            return
+        
+        print(f"\n  Selected MxEdge:")
+        for mxedge in selected_mxedges:
+            print(f"    -> {mxedge.get('name', 'Unnamed')} (ID: {mxedge.get('id')})")
+        
+        # Fetch and display interface status for selected MxEdges with indexed selection
+        print(f"\n  Fetching interface status for selected MxEdge(s)...")
+        mxedge_interfaces = {}
+        all_ports_by_mxedge = {}
+        
+        for mxedge in selected_mxedges:
+            mxedge_id = mxedge.get("id")
+            mxedge_name = mxedge.get("name", "Unnamed MxEdge")
+            
             try:
-                tzsp_port = int(tzsp_port_str)
-                if tzsp_port < 1 or tzsp_port > 65535:
-                    print(f"\n! Port must be between 1 and 65535")
-                    return
-            except ValueError:
-                print(f"\n! Invalid port: {tzsp_port_str}")
+                stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(
+                    self.mist_session,
+                    self.org_id,
+                    mxedge_id
+                )
+                
+                if stats_response.status_code == 200:
+                    stats_data = stats_response.data if hasattr(stats_response, 'data') else {}
+                    port_stat = stats_data.get('port_stat', {})
+                    
+                    if port_stat:
+                        mxedge_interfaces[mxedge_id] = {
+                            'name': mxedge_name,
+                            'ports': port_stat
+                        }
+                        
+                        # Build indexed port list for this MxEdge
+                        port_list = []
+                        print(f"\n  {mxedge_name} - Available Interfaces:")
+                        print(f"  {'-' * 70}")
+                        for port_index, (port_name, port_info) in enumerate(sorted(port_stat.items())):
+                            status = "UP" if port_info.get('up', False) else "DOWN"
+                            speed = port_info.get('speed', 0)
+                            speed_str = f"{speed}Mbps" if speed else "N/A"
+                            mac = port_info.get('mac', 'N/A')
+                            print(f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}")
+                            port_list.append(port_name)
+                        
+                        all_ports_by_mxedge[mxedge_id] = {
+                            'name': mxedge_name,
+                            'ports': port_list
+                        }
+                    else:
+                        print(f"\n  {mxedge_name} - No interface stats available")
+                        mxedge_interfaces[mxedge_id] = {'name': mxedge_name, 'ports': {}}
+                        all_ports_by_mxedge[mxedge_id] = {'name': mxedge_name, 'ports': []}
+                else:
+                    print(f"\n  {mxedge_name} - Failed to fetch stats (HTTP {stats_response.status_code})")
+                    mxedge_interfaces[mxedge_id] = {'name': mxedge_name, 'ports': {}}
+                    all_ports_by_mxedge[mxedge_id] = {'name': mxedge_name, 'ports': []}
+                    
+            except Exception as error:
+                print(f"\n  {mxedge_name} - Error fetching stats: {error}")
+                logging.error(f"Menu #10: Failed to fetch stats for {mxedge_name}: {error}")
+                mxedge_interfaces[mxedge_id] = {'name': mxedge_name, 'ports': {}}
+                all_ports_by_mxedge[mxedge_id] = {'name': mxedge_name, 'ports': []}
+        
+        # Port selection using indices (API limitation: only 1 port allowed)
+        print(f"\n  Port Selection:")
+        print(f"  ! API Limitation: Only 1 port can be captured at a time")
+        
+        selected_ports_by_mxedge = {}
+        for mxedge_id, port_info in all_ports_by_mxedge.items():
+            mxedge_name = port_info['name']
+            port_list = port_info['ports']
+            
+            if not port_list:
+                print(f"\n  {mxedge_name}: No ports available, skipping...")
+                selected_ports_by_mxedge[mxedge_id] = []
+                continue
+            
+            try:
+                port_input = safe_input(
+                    f"\n  {mxedge_name} - Select a single port index [0-{len(port_list)-1}]: ",
+                    context=f"port_selection_{mxedge_id}"
+                ).strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\n! Operation cancelled")
+                logging.info("Menu #10: User cancelled port selection")
                 return
             
-            capture_format = "tzsp"
-        else:
-            capture_format = "stream"
-            tzsp_host = None
-            tzsp_port = None
+            if not port_input:
+                print(f"\n! Port selection is required. Please select a port index.")
+                logging.warning("Menu #10: No port selected")
+                return
+            else:
+                # Parse single port index
+                try:
+                    idx = int(port_input)
+                    if 0 <= idx < len(port_list):
+                        selected_port = port_list[idx]
+                        selected_ports_by_mxedge[mxedge_id] = [selected_port]
+                        print(f"    -> Selected port: {selected_port}")
+                    else:
+                        print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list)-1})")
+                        logging.warning(f"Menu #10: Invalid port index: {idx}")
+                        return
+                except ValueError:
+                    print(f"\n! Invalid input format. Please enter a single numeric index.")
+                    logging.warning(f"Menu #10: Invalid port input: {port_input}")
+                    return
         
-        # Port selection for MxEdge
-        print("\nSelect port(s) to capture:")
-        print("  Enter port names (comma-separated, e.g., 'port0,port1')")
-        print("  Or press Enter to capture all ports")
-        port_input = safe_input("Port selection: ", context="ports", allow_empty=True)
+        # Tcpdump filter selection
+        tcpdump_expr = self._get_tcpdump_expression_selection()
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 30, max 86400): ", 
+        duration_str = safe_input("\nEnter capture duration in seconds (default 30, max 86400): ", 
                                  default_value="30", context="duration")
         try:
             duration = int(duration_str)
@@ -4702,22 +4901,60 @@ class PacketCaptureManager:
             print(f"\n! Invalid max packet length: {max_pkt_len_str}")
             return
         
-        # Build payload
+        # Format selection (moved to end of prompts)
+        print("\nCapture format:")
+        print("  1. Stream to Mist Cloud (default)")
+        print("  2. TZSP stream to remote host (Wireshark)")
+        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
+        
+        if format_choice == "2":
+            # TZSP configuration
+            tzsp_host = safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
+            if not tzsp_host:
+                print("\n! TZSP host required")
+                return
+            
+            tzsp_port_str = safe_input("Enter TZSP port (default 37008): ", 
+                                      default_value="37008", context="tzsp_port")
+            try:
+                tzsp_port = int(tzsp_port_str)
+                if tzsp_port < 1 or tzsp_port > 65535:
+                    print(f"\n! Port must be between 1 and 65535")
+                    return
+            except ValueError:
+                print(f"\n! Invalid port: {tzsp_port_str}")
+                return
+            
+            capture_format = "tzsp"
+        else:
+            capture_format = "stream"
+            tzsp_host = None
+            tzsp_port = None
+        
+        # Build payload for multiple MxEdges with selected ports
         payload = {
             "type": "mxedge",
             "duration": duration,
             "num_packets": num_packets,
             "max_pkt_len": max_pkt_len,
             "format": capture_format,
-            "mxedges": {
-                mxedge_id: {}
-            }
+            "mxedges": {}
         }
         
-        if port_input:
-            # Parse port list
-            ports = [p.strip() for p in port_input.split(',')]
-            payload["mxedges"][mxedge_id]["ports"] = ports
+        # Add tcpdump filter if specified
+        if tcpdump_expr:
+            payload["tcpdump_expression"] = tcpdump_expr
+        
+        # Add each selected MxEdge to payload with their selected ports
+        for mxedge_id, port_names in selected_ports_by_mxedge.items():
+            payload["mxedges"][mxedge_id] = {}
+            
+            if port_names:
+                # Build interfaces structure per API specification
+                # API expects: "interfaces": { "port_name": {} }
+                payload["mxedges"][mxedge_id]["interfaces"] = {}
+                for port_name in port_names:
+                    payload["mxedges"][mxedge_id]["interfaces"][port_name] = {}
         
         if capture_format == "tzsp":
             payload["tzsp_host"] = tzsp_host
@@ -4728,11 +4965,18 @@ class PacketCaptureManager:
         print(" CAPTURE CONFIGURATION SUMMARY")
         print("=" * 80)
         print(f"  Capture Type: MxEdge (Organization Level)")
-        print(f"  MxEdge ID: {mxedge_id}")
-        if port_input:
-            print(f"  Ports: {port_input}")
+        print(f"  MxEdge: {selected_mxedges[0].get('name', 'Unnamed')} (ID: {selected_mxedges[0].get('id')})")
+        
+        mxedge_id = selected_mxedges[0].get('id')
+        selected_ports = selected_ports_by_mxedge.get(mxedge_id, [])
+        port_str = selected_ports[0] if selected_ports else 'None'
+        print(f"  Port: {port_str}")
+        
+        if tcpdump_expr:
+            print(f"  Packet Filter: {tcpdump_expr}")
         else:
-            print(f"  Ports: All")
+            print(f"  Packet Filter: None (all traffic)")
+        
         print(f"  Duration: {duration} seconds")
         print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
         print(f"  Max Packet Length: {max_pkt_len} bytes")
