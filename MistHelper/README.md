@@ -475,6 +475,86 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.01.13.16.15",
+      "date": "2025-01-13",
+      "changes": {
+        "feature_additions": [
+          "Menu 104: CRITICAL - Added automatic device override migration to preserve static IPs during template migration",
+          "Menu 104: After template migration, automatically identifies devices with ge-0/0/1 port overrides",
+          "Menu 104: Renames device port_config keys from 'ge-0/0/1' to '{{wan2_interface}}' to preserve static IP configurations",
+          "Menu 104: Handles both base ports and subinterfaces (e.g., ge-0/0/1.70 -> {{wan2_interface}}.70)",
+          "Menu 104: Generates separate device migration report (GatewayDevice_WAN2_Override_Migration.csv)",
+          "Menu 104: Prevents connectivity loss at sites with locally unique static IPs (e.g., Morrison House 2.3.4.5/24)"
+        ],
+        "api_changes": [
+          "Menu 104: Now uses updateSiteDevice API to migrate device-level port configurations",
+          "Menu 104: Loads AllSiteGatewayConfigs.csv to identify devices needing override migration"
+        ],
+        "logging_analytics": [
+          "Menu 104: Enhanced summary shows both template AND device migration statistics",
+          "Menu 104: Separate success/failure tracking for template vs device migrations",
+          "Menu 104: Warnings if device migrations fail (potential static IP loss)"
+        ],
+        "documentation": [
+          "Menu 104: Updated docstring explains device override preservation critical safety feature",
+          "Menu 104: Console output clearly shows two-phase migration: templates then device overrides",
+          "Menu 104: Explains risk of static IP loss without device override migration"
+        ]
+      }
+    },
+    {
+      "version": "25.01.13.15.45",
+      "date": "2025-01-13",
+      "changes": {
+        "bug_fixes": [
+          "CRITICAL: Menu 103 now correctly detects IP overrides on WAN subinterfaces (e.g., ge-0/0/1.70)",
+          "Fixed IP config parsing to handle BOTH base ports (JSON format) and subinterfaces (flattened CSV columns)",
+          "Morrison House static IP override (2.3.4.5/24 on ge-0/0/1.70) now properly detected and classified"
+        ],
+        "feature_additions": [
+          "Menu 103: Added subinterface IP config detection - handles VLAN-tagged WAN ports",
+          "Menu 103: Enhanced override reporting includes port/subinterface identifier (e.g., device@ge-0/0/1.70)",
+          "Menu 103: Template subinterface comparison - checks template config for matching subinterfaces"
+        ],
+        "refactoring": [
+          "Menu 103: Dual-path IP config extraction - tries subinterfaces first, falls back to base port JSON",
+          "Menu 103: Improved logging shows which port/subinterface was detected with IP config",
+          "Menu 103: Override details now format as device@port(severity:template->device:ip/netmask)"
+        ]
+      }
+    },
+    {
+      "version": "25.01.13.14.30",
+      "date": "2025-01-13",
+      "changes": {
+        "feature_additions": [
+          "Menu 103: Enhanced WAN2 override detection with intelligent IP type conflict analysis",
+          "Menu 103: Distinguishes CRITICAL (DHCP->Static) vs WARNING (Static->DHCP) vs INFO (same-type) overrides",
+          "Menu 103: Added template vs device IP configuration comparison for all sites attached to gateway templates",
+          "Menu 103: Multi-site detection - automatically checks ALL devices across ALL stores assigned to same template",
+          "Menu 103: New report columns - total_override_count, critical_override_count, warning_override_count, info_override_count, override_details",
+          "Menu 103: Override details include severity classification, template IP type, device IP type, and static IP addresses"
+        ],
+        "api_changes": [
+          "Menu 103: Now loads OrgGatewayTemplates.csv for template IP type analysis and comparison"
+        ],
+        "logging_analytics": [
+          "Menu 103: Added IP type mismatch severity classification (CRITICAL/WARNING/INFO/UNKNOWN)",
+          "Menu 103: Defensive JSON parsing with graceful error handling for malformed ip_config data",
+          "Menu 103: Enhanced logging shows template-to-site mapping and IP config extraction details"
+        ],
+        "compatibility": [
+          "Menu 103: Maintains backward compatibility - override_devices field preserved for existing workflows",
+          "Menu 103: Report now includes both legacy and enhanced override tracking"
+        ],
+        "documentation": [
+          "Menu 103: CRITICAL overrides (DHCP->Static) clearly flagged for manual review priority",
+          "Menu 103: User guidance explains static IPs will be lost if template DHCP applied without device overrides",
+          "Menu 103: Console output shows breakdown of override severity levels with actionable next steps"
+        ]
+      }
+    },
+    {
       "version": "25.10.30.17.50",
       "date": "2025-10-30",
       "changes": {

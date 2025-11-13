@@ -20920,6 +20920,60 @@ def set_wan2_interface_site_variable():
     with open(gateway_configs_path, encoding="utf-8") as f:
         gateway_configs = list(csv.DictReader(f))
     
+    # Step 4a: Load gateway templates to analyze IP configuration types for comparison
+    # This enables intelligent DHCP vs Static IP conflict detection
+    template_configs_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    with open(template_configs_path, encoding="utf-8") as f:
+        template_data = list(csv.DictReader(f))
+    
+    # Step 4b: Build site-to-template mapping for IP type comparison
+    # Extract gatewaytemplate_id from SiteList.csv to link sites to templates
+    site_to_template_id = {}
+    for site in sites:
+        site_id = site.get("id", "").strip()
+        template_id = site.get("gatewaytemplate_id", "").strip()
+        if site_id and template_id:
+            site_to_template_id[site_id] = template_id
+    
+    logging.info(f"Mapped {len(site_to_template_id)} sites to gateway templates for IP type analysis")
+    
+    # Step 4c: Extract IP config type from templates for ge-0/0/1 port
+    # Enables DHCP vs Static conflict detection (CRITICAL vs INFO severity classification)
+    template_port_configs = {}
+    for template_row in template_data:
+        template_id = template_row.get("id", "").strip()
+        if not template_id:
+            continue
+        
+        # Parse ip_config JSON from template CSV column (SECURITY: validate JSON structure)
+        ip_config_raw = template_row.get("port_config_ge-0/0/1_ip_config", "").strip()
+        ip_type = ""
+        ip_address = ""
+        netmask = ""
+        gateway = ""
+        
+        if ip_config_raw:
+            try:
+                import json
+                ip_config_data = json.loads(ip_config_raw) if ip_config_raw else {}
+                ip_type = ip_config_data.get("type", "").lower()
+                if ip_type == "static":
+                    ip_address = ip_config_data.get("ip", "")
+                    netmask = ip_config_data.get("netmask", "")
+                    gateway = ip_config_data.get("gateway", "")
+            except json.JSONDecodeError as json_error:
+                logging.warning(f"Failed to parse template IP config for template {template_id}: {json_error}")
+                ip_type = "parse_error"
+        
+        template_port_configs[template_id] = {
+            "ip_type": ip_type if ip_type else "not_configured",
+            "ip": ip_address,
+            "netmask": netmask,
+            "gateway": gateway
+        }
+    
+    logging.info(f"Loaded port IP configs for {len(template_port_configs)} gateway templates")
+    
     # Build override detection map: site_id -> list of devices with ge-0/0/1 or {{wan2_interface}} overrides
     site_overrides_map = {}
     for config_row in gateway_configs:
@@ -20939,6 +20993,93 @@ def set_wan2_interface_site_variable():
             col.startswith("port_config_ge-0/0/1.") or
             col.startswith("port_config_{{wan2_interface}}_") or
             col.startswith("port_config_{{wan2_interface}}.")]
+        
+        # Step 4d: Parse device IP config to compare with template (DHCP vs Static detection)
+        # Handle BOTH base ports (JSON) and subinterfaces (flattened CSV columns)
+        device_ip_type = ""
+        device_static_ip = ""
+        device_netmask = ""
+        device_gateway = ""
+        port_identifier = ""  # Track which port/subinterface had the config
+        
+        # First, try to find subinterface IP configs (e.g., ge-0/0/1.70_ip_config_type)
+        # Subinterfaces are already flattened in CSV, no JSON parsing needed
+        subinterface_ip_configs = []
+        for col in config_row:
+            # Match: port_config_ge-0/0/1.XX_ip_config_type or port_config_{{wan2_interface}}.XX_ip_config_type
+            if (col.startswith("port_config_ge-0/0/1.") or col.startswith("port_config_{{wan2_interface}}.")) and col.endswith("_ip_config_type"):
+                subif_ip_type = config_row.get(col, "").strip().lower()
+                if subif_ip_type:
+                    # Extract subinterface name from column (e.g., "ge-0/0/1.70" from "port_config_ge-0/0/1.70_ip_config_type")
+                    subif_name = col.replace("port_config_", "").replace("_ip_config_type", "")
+                    
+                    # Get IP details from flattened columns
+                    ip_col_base = f"port_config_{subif_name}_ip_config"
+                    subif_ip = config_row.get(f"{ip_col_base}_ip", "").strip()
+                    subif_netmask = config_row.get(f"{ip_col_base}_netmask", "").strip()
+                    subif_gateway = config_row.get(f"{ip_col_base}_gateway", "").strip()
+                    
+                    subinterface_ip_configs.append({
+                        "port": subif_name,
+                        "type": subif_ip_type,
+                        "ip": subif_ip,
+                        "netmask": subif_netmask,
+                        "gateway": subif_gateway
+                    })
+        
+        # Use first subinterface config if found (most common case for WAN2 with VLANs)
+        if subinterface_ip_configs:
+            first_subif = subinterface_ip_configs[0]
+            device_ip_type = first_subif["type"]
+            device_static_ip = first_subif["ip"]
+            device_netmask = first_subif["netmask"]
+            device_gateway = first_subif["gateway"]
+            port_identifier = first_subif["port"]
+            logging.debug(f"Found subinterface IP config for {device_name}: {port_identifier} = {device_ip_type}")
+        
+        # Fallback: Try base port JSON config (e.g., port_config_ge-0/0/1_ip_config)
+        if not device_ip_type:
+            device_ip_config_raw = config_row.get("port_config_ge-0/0/1_ip_config", "").strip()
+            if device_ip_config_raw:
+                try:
+                    import json
+                    device_ip_data = json.loads(device_ip_config_raw) if device_ip_config_raw else {}
+                    device_ip_type = device_ip_data.get("type", "").lower()
+                    if device_ip_type == "static":
+                        device_static_ip = device_ip_data.get("ip", "")
+                        device_netmask = device_ip_data.get("netmask", "")
+                        device_gateway = device_ip_data.get("gateway", "")
+                    port_identifier = "ge-0/0/1"
+                    logging.debug(f"Found base port IP config for {device_name}: {port_identifier} = {device_ip_type}")
+                except json.JSONDecodeError as json_error:
+                    logging.warning(f"Failed to parse device IP config JSON for {device_name} at site {site_id}: {json_error}")
+                    device_ip_type = "parse_error"
+                    port_identifier = "ge-0/0/1 (parse_error)"
+        
+        # Step 4e: Get template IP config for comparison (check both base and subinterface)
+        template_id_for_site = site_to_template_id.get(site_id, "")
+        template_config = template_port_configs.get(template_id_for_site, {})
+        template_ip_type = template_config.get("ip_type", "unknown")
+        
+        # If device has subinterface, also check template for same subinterface
+        if port_identifier and "." in port_identifier:
+            # Look for template subinterface config in flattened columns
+            template_subif_col = f"port_config_{port_identifier}_ip_config_type"
+            for template_row in template_data:
+                if template_row.get("id", "").strip() == template_id_for_site:
+                    template_subif_type = template_row.get(template_subif_col, "").strip().lower()
+                    if template_subif_type:
+                        template_ip_type = template_subif_type
+                        logging.debug(f"Found template subinterface IP config for {port_identifier}: {template_ip_type}")
+                    break
+        
+        # Step 4f: Determine override severity based on IP type mismatch
+        # CRITICAL: Template=DHCP but Device=Static (locally unique IPs that must be preserved)
+        # WARNING: Template=Static but Device=DHCP (unusual configuration)
+        # INFO: Same IP type but other fields overridden (description, usage, etc.)
+        override_severity = "NONE"
+        ip_type_conflict = False
+        
         has_override = any(
             config_row.get(field, "").strip().lower() not in ["", "null", "none"]
             for field in ge_001_fields
@@ -20946,9 +21087,38 @@ def set_wan2_interface_site_variable():
         )
         
         if has_override:
+            # Classify override severity for intelligent manual review prioritization
+            if template_ip_type == "dhcp" and device_ip_type == "static":
+                override_severity = "CRITICAL"
+                ip_type_conflict = True
+            elif template_ip_type == "static" and device_ip_type == "dhcp":
+                override_severity = "WARNING"
+                ip_type_conflict = True
+            elif template_ip_type == device_ip_type and device_ip_type in ["dhcp", "static"]:
+                override_severity = "INFO"
+                ip_type_conflict = False
+            else:
+                override_severity = "UNKNOWN"
+                ip_type_conflict = False
+            
+            # Store detailed override information for reporting
             if site_id not in site_overrides_map:
                 site_overrides_map[site_id] = []
-            site_overrides_map[site_id].append(device_name)
+            
+            # Build port display string (include subinterface if present)
+            port_display = port_identifier if port_identifier else "ge-0/0/1"
+            
+            site_overrides_map[site_id].append({
+                "device_name": device_name,
+                "port_identifier": port_display,
+                "template_ip_type": template_ip_type.upper(),
+                "device_ip_type": device_ip_type.upper() if device_ip_type else "NOT_CONFIGURED",
+                "device_static_ip": device_static_ip,
+                "device_netmask": device_netmask,
+                "device_gateway": device_gateway,
+                "override_severity": override_severity,
+                "ip_type_conflict": ip_type_conflict
+            })
     
     # Step 5: Process each site
     results = []
@@ -20964,14 +21134,53 @@ def set_wan2_interface_site_variable():
             "variable_set": False,
             "has_overrides": False,
             "override_devices": [],
+            "critical_override_count": 0,
+            "warning_override_count": 0,
+            "info_override_count": 0,
+            "total_override_count": 0,
             "status": "",
             "error": ""
         }
         
-        # Check for overrides
+        # Check for overrides with IP type conflict analysis
         if site_id in site_overrides_map:
             result["has_overrides"] = True
-            result["override_devices"] = site_overrides_map[site_id]
+            override_details = site_overrides_map[site_id]
+            
+            # Extract device names for backward compatibility
+            result["override_devices"] = [d["device_name"] for d in override_details]
+            
+            # Count overrides by severity level
+            critical_overrides = [d for d in override_details if d["override_severity"] == "CRITICAL"]
+            warning_overrides = [d for d in override_details if d["override_severity"] == "WARNING"]
+            info_overrides = [d for d in override_details if d["override_severity"] == "INFO"]
+            
+            result["critical_override_count"] = len(critical_overrides)
+            result["warning_override_count"] = len(warning_overrides)
+            result["info_override_count"] = len(info_overrides)
+            result["total_override_count"] = len(override_details)
+            
+            # Flatten override details for CSV export (one row per site with comma-separated details)
+            # Format: device_name@port(severity:template_type->device_type:static_ip)
+            override_summaries = []
+            for override_detail in override_details:
+                device_name = override_detail["device_name"]
+                port_id = override_detail.get("port_identifier", "ge-0/0/1")
+                severity = override_detail["override_severity"]
+                template_ip = override_detail["template_ip_type"]
+                device_ip = override_detail["device_ip_type"]
+                static_ip = override_detail["device_static_ip"]
+                netmask = override_detail["device_netmask"]
+                
+                if static_ip and netmask:
+                    summary = f"{device_name}@{port_id}({severity}:{template_ip}->{device_ip}:{static_ip}{netmask})"
+                elif static_ip:
+                    summary = f"{device_name}@{port_id}({severity}:{template_ip}->{device_ip}:{static_ip})"
+                else:
+                    summary = f"{device_name}@{port_id}({severity}:{template_ip}->{device_ip})"
+                override_summaries.append(summary)
+            
+            result["override_details"] = "; ".join(override_summaries)
         
         try:
             # Fetch current site settings
@@ -21018,7 +21227,7 @@ def set_wan2_interface_site_variable():
         
         results.append(result)
     
-    # Step 6: Generate report
+    # Step 6: Generate report with IP type conflict analysis
     report_data = []
     for result in results:
         report_entry = {
@@ -21027,9 +21236,13 @@ def set_wan2_interface_site_variable():
             "wan2_variable_set": "Yes" if result["variable_set"] else "No",
             "status": result["status"],
             "has_wan2_overrides": "Yes" if result["has_overrides"] else "No",
-            "override_device_count": len(result["override_devices"]),
+            "total_override_count": result.get("total_override_count", 0),
+            "critical_override_count": result.get("critical_override_count", 0),
+            "warning_override_count": result.get("warning_override_count", 0),
+            "info_override_count": result.get("info_override_count", 0),
             "override_devices": ", ".join(result["override_devices"]) if result["override_devices"] else "",
-            "requires_manual_review": "Yes" if result["has_overrides"] else "No",
+            "override_details": result.get("override_details", ""),
+            "requires_manual_review": "CRITICAL" if result.get("critical_override_count", 0) > 0 else ("WARNING" if result.get("warning_override_count", 0) > 0 else ("INFO" if result.get("info_override_count", 0) > 0 else "No")),
             "error": result["error"]
         }
         report_data.append(report_entry)
@@ -21038,48 +21251,78 @@ def set_wan2_interface_site_variable():
     output_file = "WAN2_SiteVariable_Report.csv"
     DataExporter.save_data_to_output(report_data, output_file)
     
-    # Print summary
+    # Print summary with IP type conflict breakdown
     success_count = sum(1 for r in results if r["variable_set"])
     override_count = sum(1 for r in results if r["has_overrides"])
+    critical_sites = sum(1 for r in results if r.get("critical_override_count", 0) > 0)
+    warning_sites = sum(1 for r in results if r.get("warning_override_count", 0) > 0)
+    info_sites = sum(1 for r in results if r.get("has_overrides") and r.get("critical_override_count", 0) == 0 and r.get("warning_override_count", 0) == 0)
     
     print(f"\n  Configuration Complete!")
     print(f"=" * 70)
     print(f"  Sites Processed: {len(results)}")
     print(f"  Variables Set: {success_count}")
-    print(f"  Sites with WAN2 Overrides (Manual Review): {override_count}")
+    print(f"  Sites with WAN2 Overrides: {override_count}")
+    print(f"    -> CRITICAL (DHCP->Static IP conflicts): {critical_sites}")
+    print(f"    -> WARNING (Static->DHCP conflicts): {warning_sites}")
+    print(f"    -> INFO (Same IP type, other overrides): {info_sites}")
     print(f"\n  Report saved to: {output_file}")
     print(f"=" * 70)
     
-    if override_count > 0:
-        print(f"\n  !? ATTENTION: {override_count} sites have device-level WAN2 port overrides")
-        print(f"  Detected: ge-0/0/1 OR {{{{wan2_interface}}}} configurations")
-        print(f"  These require manual review before template migration (Menu #104)")
-        print(f"  Check the 'requires_manual_review' column in the report.")
+    if critical_sites > 0:
+        print(f"\n  !? CRITICAL ATTENTION: {critical_sites} sites have DHCP->Static IP conflicts")
+        print(f"  Template specifies DHCP but devices use locally unique static IPs")
+        print(f"  These MUST be manually reviewed before template migration (Menu #104)")
+        print(f"  Static IPs will be lost if template DHCP is applied without device overrides")
+        print(f"  Check 'override_details' column for device names and static IP addresses")
     
-    logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured, {override_count} sites flagged for manual review")
+    if warning_sites > 0:
+        print(f"\n  ! WARNING: {warning_sites} sites have Static->DHCP conflicts")
+        print(f"  Template specifies Static IP but devices configured for DHCP")
+        print(f"  Review recommended before template migration")
+    
+    if info_sites > 0:
+        print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
+        print(f"  Template and device use same IP configuration type (both DHCP or both Static)")
+        print(f"  Overrides may be for description, usage, or other non-critical fields")
+    
+    logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured")
+    logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
 
 def update_gateway_templates_wan2_variable():
     """
     Menu #104: Update Gateway Templates to Use WAN2 Variable (DESTRUCTIVE)
     
     Updates selected gateway templates to replace hardcoded 'ge-0/0/1' port references
-    with the {{wan2_interface}} variable placeholder.
+    with the {{wan2_interface}} variable placeholder, AND preserves device-level static IP
+    overrides by migrating port_config keys on affected devices.
     
     Workflow:
     1. Lists all gateway templates with site assignment counts
     2. Allows selection of specific templates to update
     3. For each template:
        - Fetches current template configuration
-       - Identifies any port_config entries using 'ge-0/0/1'
+       - Identifies any port_config entries using 'ge-0/0/1' (including subinterfaces)
        - Replaces hardcoded port names with '{{wan2_interface}}' variable
        - Shows preview of changes
     4. Requires uppercase 'MIGRATE' confirmation before applying
     5. Updates templates via updateOrgGatewayTemplate API
-    6. Generates audit report of changes
+    6. CRITICAL: Identifies devices with ge-0/0/1 port overrides (static IPs)
+    7. For each device with override:
+       - Renames port_config keys from 'ge-0/0/1' to '{{wan2_interface}}'
+       - Preserves static IP configurations (IP, netmask, gateway)
+       - Updates device via updateSiteDevice API
+    8. Generates audit reports for both template and device migrations
     
     SECURITY: DESTRUCTIVE operation requiring explicit confirmation.
-    This modifies production gateway templates affecting multiple sites.
+    This modifies production gateway templates AND device configurations.
+    
+    CRITICAL SAFETY FEATURE: Without device override migration, sites with static IP
+    overrides (e.g., Morrison House with 2.3.4.5/24 on ge-0/0/1.70) would LOSE their
+    static IPs when template migration occurs, causing connectivity loss.
+    
     Templates using {{wan2_interface}} will resolve to site variable values.
+    Device overrides using {{wan2_interface}} will continue to override template config.
     """
     print("\n  DESTRUCTIVE: Update Gateway Templates for WAN2 Variable Migration")
     print("=" * 70)
@@ -21341,7 +21584,175 @@ def update_gateway_templates_wan2_variable():
         
         results.append(result)
     
-    # Step 7: Generate audit report
+    # Step 7: Migrate device-level overrides to preserve static IPs
+    # CRITICAL: Devices with ge-0/0/1 overrides need port_config keys renamed to {{wan2_interface}}
+    # Without this, static IP overrides would be lost when template changes take effect
+    print(f"\n  Step 7: Migrating device-level port overrides...")
+    print(f"  !? CRITICAL: Preserving static IP configurations on devices")
+    
+    # Load gateway configs and sites to find devices with overrides
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
+    gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
+    with open(gateway_configs_path, encoding="utf-8") as f:
+        gateway_configs = list(csv.DictReader(f))
+    
+    # Build set of template IDs that were successfully migrated
+    migrated_template_ids = {r["template_id"] for r in results if r["status"] == "SUCCESS"}
+    
+    # Build site-to-template mapping
+    site_to_template = {}
+    for site in sites:
+        site_id = site.get("id", "").strip()
+        template_id = site.get("gatewaytemplate_id", "").strip()
+        if site_id and template_id:
+            site_to_template[site_id] = template_id
+    
+    # Find devices with ge-0/0/1 overrides at sites using migrated templates
+    devices_needing_migration = []
+    for config_row in gateway_configs:
+        site_id = config_row.get("site_id", "").strip()
+        device_id = config_row.get("id", "").strip()
+        device_name = config_row.get("name", "").strip()
+        
+        # Skip if site not using a migrated template
+        if site_to_template.get(site_id) not in migrated_template_ids:
+            continue
+        
+        # Check for ge-0/0/1 or ge-0/0/1.* port overrides
+        ge_001_fields = [col for col in config_row if 
+            col.startswith("port_config_ge-0/0/1_") or 
+            col.startswith("port_config_ge-0/0/1.")]
+        
+        has_override = any(
+            config_row.get(field, "").strip().lower() not in ["", "null", "none"]
+            for field in ge_001_fields
+            if "_vpn_paths_" not in field  # Exclude VPN paths (template-inherited)
+        )
+        
+        if has_override:
+            devices_needing_migration.append({
+                "site_id": site_id,
+                "device_id": device_id,
+                "device_name": device_name,
+                "template_id": site_to_template.get(site_id)
+            })
+    
+    logging.info(f"Found {len(devices_needing_migration)} devices with ge-0/0/1 overrides needing migration")
+    
+    if devices_needing_migration:
+        print(f"\n  Found {len(devices_needing_migration)} devices with port overrides to migrate")
+        print(f"  These devices will have port_config keys renamed from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
+        print(f"  This preserves static IP configurations after template migration")
+        
+        device_migration_results = []
+        
+        for device_info in tqdm(devices_needing_migration, desc="Migrating device overrides", unit="device"):
+            device_id = device_info["device_id"]
+            device_name = device_info["device_name"]
+            site_id = device_info["site_id"]
+            
+            device_result = {
+                "device_name": device_name,
+                "device_id": device_id,
+                "site_id": site_id,
+                "template_id": device_info["template_id"],
+                "status": "",
+                "ports_migrated": "",
+                "error": ""
+            }
+            
+            try:
+                # Fetch current device configuration
+                logging.debug(f"Fetching device config for {device_name} ({device_id})")
+                device_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                device_config = getattr(device_resp, "data", {})
+                
+                if not isinstance(device_config, dict):
+                    device_result["status"] = "SKIPPED"
+                    device_result["error"] = "Invalid device config structure"
+                    device_migration_results.append(device_result)
+                    continue
+                
+                # Get port_config section
+                port_config = device_config.get("port_config", {})
+                if not isinstance(port_config, dict):
+                    device_result["status"] = "SKIPPED"
+                    device_result["error"] = "No port_config found"
+                    device_migration_results.append(device_result)
+                    continue
+                
+                # Find and rename ge-0/0/1 port keys
+                ports_renamed = []
+                for port_key in list(port_config.keys()):  # list() to allow modification during iteration
+                    new_key = None
+                    
+                    if port_key == "ge-0/0/1":
+                        new_key = "{{wan2_interface}}"
+                    elif port_key.startswith("ge-0/0/1."):
+                        # Subinterface (e.g., ge-0/0/1.70)
+                        suffix = port_key[len("ge-0/0/1"):]
+                        new_key = f"{{{{wan2_interface}}}}{suffix}"
+                    
+                    if new_key:
+                        # Preserve port configuration under new key
+                        port_config[new_key] = port_config[port_key]
+                        del port_config[port_key]
+                        ports_renamed.append(f"{port_key}->{new_key}")
+                        logging.debug(f"Device {device_name}: Renamed {port_key} to {new_key}")
+                
+                if ports_renamed:
+                    # Update device config
+                    device_config["port_config"] = port_config
+                    device_result["ports_migrated"] = "; ".join(ports_renamed)
+                    
+                    # Push update to API
+                    logging.debug(f"Updating device {device_name} via API")
+                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+                        apisession,
+                        site_id,
+                        device_id,
+                        body=device_config
+                    )
+                    
+                    if update_resp.status_code == 200:
+                        device_result["status"] = "SUCCESS"
+                        logging.info(f"Successfully migrated port overrides for device {device_name}")
+                    else:
+                        device_result["status"] = "FAILED"
+                        device_result["error"] = f"API returned status {update_resp.status_code}"
+                        logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
+                else:
+                    device_result["status"] = "SKIPPED"
+                    device_result["error"] = "No ge-0/0/1 ports found in config"
+            
+            except Exception as e:
+                device_result["status"] = "ERROR"
+                device_result["error"] = str(e)
+                logging.error(f"Error migrating device {device_name}: {e}")
+                logging.error(traceback.format_exc())
+            
+            device_migration_results.append(device_result)
+        
+        # Generate device migration report
+        device_output_file = "GatewayDevice_WAN2_Override_Migration.csv"
+        DataExporter.save_data_to_output(device_migration_results, device_output_file)
+        
+        # Summary for device migrations
+        device_success_count = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+        device_failure_count = len(device_migration_results) - device_success_count
+        
+        print(f"\n  Device Override Migration Complete!")
+        print(f"  Devices Processed: {len(device_migration_results)}")
+        print(f"  Successfully Migrated: {device_success_count}")
+        print(f"  Failed: {device_failure_count}")
+        print(f"  Device migration report: {device_output_file}")
+        
+        logging.info(f"Device override migration: {device_success_count} successful, {device_failure_count} failed")
+    else:
+        print(f"\n  No devices with ge-0/0/1 overrides found - no device migrations needed")
+        logging.info("No device-level override migrations required")
+    
+    # Step 8: Generate audit report
     output_file = "GatewayTemplate_WAN2_Migration_Audit.csv"
     DataExporter.save_data_to_output(results, output_file)
     
@@ -21349,23 +21760,49 @@ def update_gateway_templates_wan2_variable():
     success_count = sum(1 for r in results if r["status"] == "SUCCESS")
     failure_count = len(results) - success_count
     
-    print(f"\n  Migration Complete!")
+    print(f"\n  WAN2 Variable Migration Complete!")
     print(f"=" * 70)
-    print(f"  Templates Processed: {len(results)}")
-    print(f"  Successfully Updated: {success_count}")
-    print(f"  Failed: {failure_count}")
-    print(f"\n  Audit report saved to: {output_file}")
+    print(f"  TEMPLATE MIGRATION:")
+    print(f"    Templates Processed: {len(results)}")
+    print(f"    Successfully Updated: {success_count}")
+    print(f"    Failed: {failure_count}")
+    
+    if devices_needing_migration:
+        device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+        device_failed = len(device_migration_results) - device_success
+        print(f"\n  DEVICE OVERRIDE MIGRATION:")
+        print(f"    Devices Processed: {len(device_migration_results)}")
+        print(f"    Static IPs Preserved: {device_success}")
+        print(f"    Failed: {device_failed}")
+    
+    print(f"\n  REPORTS:")
+    print(f"    Template audit: {output_file}")
+    if devices_needing_migration:
+        print(f"    Device migration: GatewayDevice_WAN2_Override_Migration.csv")
     print(f"=" * 70)
     
     if success_count > 0:
         print(f"\n  !? {success_count} templates now use {{{{wan2_interface}}}} variable")
-        print(f"  !? Ensure all affected sites have the variable set (Menu #103)")
+        if devices_needing_migration:
+            device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+            print(f"  !? {device_success} devices had static IP overrides preserved")
+            print(f"  !? Port configs migrated from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
+        print(f"  !? Ensure all affected sites have 'wan2_interface' variable set (Menu #103)")
         print(f"  !? Sites without the variable may experience gateway connectivity issues")
     
     if failure_count > 0:
         print(f"\n  !? {failure_count} templates failed to update - check audit report")
     
+    if devices_needing_migration:
+        device_failed = len(device_migration_results) - sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+        if device_failed > 0:
+            print(f"\n  !? WARNING: {device_failed} devices failed override migration")
+            print(f"  !? These devices may lose static IP configurations")
+            print(f"  !? Check GatewayDevice_WAN2_Override_Migration.csv for details")
+    
     logging.warning(f"Menu #104 DESTRUCTIVE operation complete: {success_count} templates updated, {failure_count} failed")
+    if devices_needing_migration:
+        logging.warning(f"Device override migration: {device_success} successful, {device_failed} failed")
 
 def convert_virtual_chassis_to_virtual_mac():
     """
