@@ -475,8 +475,51 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
-      "version": "25.01.13.16.15",
-      "date": "2025-01-13",
+      "version": "25.11.25.09.30",
+      "date": "2025-11-25",
+      "changes": {
+        "feature_additions": [
+          "Menu 25: Added master CSV export with simplified column headers (serial, model, Street Address, City, State, Zip)",
+          "Menu 25: Master inventory file exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv",
+          "Menu 25: Maintains all existing weekly CSV files and summary report functionality"
+        ],
+        "documentation": [
+          "Menu 25: Updated function docstring to document all three output files (weekly, summary, master)"
+        ]
+      }
+    },
+    {
+      "version": "25.11.21.17.00",
+      "date": "2025-11-21",
+      "changes": {
+        "performance": [
+          "Menu 104: Integrated fast mode for parallel device override migration with connection pooling",
+          "Menu 104: Processes devices concurrently when fast=True and >5 devices need migration",
+          "Menu 104: Uses execute_with_connection_pool_management() for semaphore-based connection limiting (8 max)",
+          "Menu 104: Automatic threading strategy - connection-aware mode limits threads to connection pool capacity",
+          "Menu 104: Example performance - 50 devices: Sequential ~50 API calls, Fast mode ~13 seconds with 8 parallel workers"
+        ],
+        "feature_additions": [
+          "Menu 104: Added fast parameter to function signature for fast mode support",
+          "Menu 104: Worker function migrate_single_device_override() for parallel device migrations",
+          "Menu 104: Conditional execution - uses fast mode for >5 devices, falls back to sequential for smaller batches",
+          "Menu 104: Retry logic inherited from execute_with_connection_pool_management() for transient failures"
+        ],
+        "refactoring": [
+          "Menu 104: Extracted device migration logic into reusable worker function",
+          "Menu 104: Sequential mode uses same worker function with dummy semaphore for code consistency",
+          "Menu 104: Menu actions updated to lambda wrapper passing fast parameter"
+        ],
+        "logging_analytics": [
+          "Menu 104: Console output shows fast mode status and connection pool usage",
+          "Menu 104: Progress tracking via execute_with_connection_pool_management() batch progress bars",
+          "Menu 104: Debug logging shows connection-aware vs CPU-aware threading mode selection"
+        ]
+      }
+    },
+    {
+      "version": "25.11.13.16.15",
+      "date": "2025-11-13",
       "changes": {
         "feature_additions": [
           "Menu 104: CRITICAL - Added automatic device override migration to preserve static IPs during template migration",
@@ -503,8 +546,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.13.15.45",
-      "date": "2025-01-13",
+      "version": "25.11.13.15.45",
+      "date": "2025-11-13",
       "changes": {
         "bug_fixes": [
           "CRITICAL: Menu 103 now correctly detects IP overrides on WAN subinterfaces (e.g., ge-0/0/1.70)",
@@ -524,8 +567,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.13.14.30",
-      "date": "2025-01-13",
+      "version": "25.11.13.14.30",
+      "date": "2025-11-13",
       "changes": {
         "feature_additions": [
           "Menu 103: Enhanced WAN2 override detection with intelligent IP type conflict analysis",
@@ -2376,8 +2419,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.08.15.30",
-      "date": "2025-01-08",
+      "version": "25.07.08.15.30",
+      "date": "2025-07-08",
       "changes": {
         "feature_additions": [
           "Menu option 5 - MAC table WebSocket command for switches with real-time streaming output",
@@ -2394,8 +2437,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.11.35",
-      "date": "2025-01-07",
+      "version": "25.07.07.11.35",
+      "date": "2025-07-07",
       "changes": {
         "fixes": [
           "Client selection API endpoints - Corrected to use searchSiteWirelessClients and searchSiteWiredClients (not list* functions)",
@@ -2407,8 +2450,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.11.30",
-      "date": "2025-01-07",
+      "version": "25.07.07.11.30",
+      "date": "2025-07-07",
       "changes": {
         "feature_additions": [
           "Interactive client selection for wireless/wired captures - Browse currently connected clients with hostname, IP, SSID/VLAN info",
@@ -2424,8 +2467,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.11.00",
-      "date": "2025-01-07",
+      "version": "25.07.07.11.00",
+      "date": "2025-07-07",
       "changes": {
         "feature_additions": [
           "Continuous Loop Mode for packet captures - Automatically restarts captures when complete for continuous monitoring",
@@ -2441,8 +2484,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.10.25",
-      "date": "2025-01-07",
+      "version": "25.07.07.10.25",
+      "date": "2025-07-07",
       "changes": {
         "enhancements": [
           "User experience - Removed repetitive warning about existing captures already in progress (moved to debug logging only)",
@@ -2452,8 +2495,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.10.20",
-      "date": "2025-01-07",
+      "version": "25.07.07.10.20",
+      "date": "2025-07-07",
       "changes": {
         "fixes": [
           "Packet capture duration validation - Updated ALL capture types (wireless client, wired client, gateway, new association) to enforce API-mandated 60-second minimum",
@@ -2469,8 +2512,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.10.15",
-      "date": "2025-01-07",
+      "version": "25.07.07.10.15",
+      "date": "2025-07-07",
       "changes": {
         "fixes": [
           "PCAP download polling - Fixed API response structure handling (response.data contains dict with results key, not direct list)",
@@ -2483,8 +2526,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.07.10.05",
-      "date": "2025-01-07",
+      "version": "25.07.07.10.05",
+      "date": "2025-07-07",
       "changes": {
         "fixes": [
           "Added type checking and defensive handling for API response data in PCAP polling",
@@ -2505,8 +2548,8 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       }
     },
     {
-      "version": "25.01.02.18.30",
-      "date": "2025-01-02",
+      "version": "25.07.02.18.30",
+      "date": "2025-07-02",
       "changes": {
         "feature_additions": [
           "Menu option 6 - Show forwarding table command for gateway/SSR devices via WebSocket (Layer 3 routing table)",

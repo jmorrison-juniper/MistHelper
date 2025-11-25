@@ -18142,6 +18142,12 @@ def export_combined_inventory_with_site_info():
     Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
     grouped by calendar week based on 'created_time' field.
     Also generates a summary report with device counts per week.
+    
+    Outputs:
+        - Weekly CSV files: data/CombinedInventory_ByWeek/YYYY_Week_##.csv
+        - Summary report: data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv
+        - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
+          (with simplified headers: serial, model, Street Address, City, State, Zip)
     """
     print("Combined Inventory with Site Info by Calendar Week:")
 
@@ -18215,11 +18221,31 @@ def export_combined_inventory_with_site_info():
         for (year, week), count in sorted(summary_data.items()):
             writer.writerow([year, week, count])
 
+    # Export master CSV with simplified column headers
+    master_csv_data = []
+    for device in site_configs:
+        master_csv_data.append({
+            "serial": device.get("serial", ""),
+            "model": device.get("model", ""),
+            "Street Address": device.get("street", ""),
+            "City": device.get("city", ""),
+            "State": device.get("state", ""),
+            "Zip": device.get("zip_code", "")
+        })
+    
+    master_csv_file = os.path.join(output_folder, "CombinedInventory_Master.csv")
+    master_csv_fieldnames = ["serial", "model", "Street Address", "City", "State", "Zip"]
+    with open(master_csv_file, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=master_csv_fieldnames)
+        writer.writeheader()
+        writer.writerows(master_csv_data)
+
     # Count the total weekly files created
     total_weeks = len(weekly_data)
     total_devices = len(site_configs)
     print(f"! {total_weeks} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)")
     print(f"! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
+    print(f"! Master inventory exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv ({len(master_csv_data)} devices)")
 
 def normalize_zip_code(zip_code):
     """
@@ -21289,7 +21315,7 @@ def set_wan2_interface_site_variable():
     logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured")
     logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
 
-def update_gateway_templates_wan2_variable():
+def update_gateway_templates_wan2_variable(fast: bool = False):
     """
     Menu #104: Update Gateway Templates to Use WAN2 Variable (DESTRUCTIVE)
     
@@ -21644,9 +21670,9 @@ def update_gateway_templates_wan2_variable():
         print(f"  These devices will have port_config keys renamed from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
         print(f"  This preserves static IP configurations after template migration")
         
-        device_migration_results = []
-        
-        for device_info in tqdm(devices_needing_migration, desc="Migrating device overrides", unit="device"):
+        # Worker function for parallel device migration
+        def migrate_single_device_override(device_info, connection_semaphore):
+            """Worker function for parallel device override migration with connection pooling"""
             device_id = device_info["device_id"]
             device_name = device_info["device_name"]
             site_id = device_info["site_id"]
@@ -21662,76 +21688,108 @@ def update_gateway_templates_wan2_variable():
             }
             
             try:
-                # Fetch current device configuration
-                logging.debug(f"Fetching device config for {device_name} ({device_id})")
-                device_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-                device_config = getattr(device_resp, "data", {})
-                
-                if not isinstance(device_config, dict):
-                    device_result["status"] = "SKIPPED"
-                    device_result["error"] = "Invalid device config structure"
-                    device_migration_results.append(device_result)
-                    continue
-                
-                # Get port_config section
-                port_config = device_config.get("port_config", {})
-                if not isinstance(port_config, dict):
-                    device_result["status"] = "SKIPPED"
-                    device_result["error"] = "No port_config found"
-                    device_migration_results.append(device_result)
-                    continue
-                
-                # Find and rename ge-0/0/1 port keys
-                ports_renamed = []
-                for port_key in list(port_config.keys()):  # list() to allow modification during iteration
-                    new_key = None
+                with connection_semaphore:  # Acquire connection slot
+                    # Fetch current device configuration
+                    logging.debug(f"Fetching device config for {device_name} ({device_id})")
+                    device_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                    device_config = getattr(device_resp, "data", {})
                     
-                    if port_key == "ge-0/0/1":
-                        new_key = "{{wan2_interface}}"
-                    elif port_key.startswith("ge-0/0/1."):
-                        # Subinterface (e.g., ge-0/0/1.70)
-                        suffix = port_key[len("ge-0/0/1"):]
-                        new_key = f"{{{{wan2_interface}}}}{suffix}"
+                    if not isinstance(device_config, dict):
+                        device_result["status"] = "SKIPPED"
+                        device_result["error"] = "Invalid device config structure"
+                        return device_result
                     
-                    if new_key:
-                        # Preserve port configuration under new key
-                        port_config[new_key] = port_config[port_key]
-                        del port_config[port_key]
-                        ports_renamed.append(f"{port_key}->{new_key}")
-                        logging.debug(f"Device {device_name}: Renamed {port_key} to {new_key}")
-                
-                if ports_renamed:
-                    # Update device config
-                    device_config["port_config"] = port_config
-                    device_result["ports_migrated"] = "; ".join(ports_renamed)
+                    # Get port_config section
+                    port_config = device_config.get("port_config", {})
+                    if not isinstance(port_config, dict):
+                        device_result["status"] = "SKIPPED"
+                        device_result["error"] = "No port_config found"
+                        return device_result
                     
-                    # Push update to API
-                    logging.debug(f"Updating device {device_name} via API")
-                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                        apisession,
-                        site_id,
-                        device_id,
-                        body=device_config
-                    )
+                    # Find and rename ge-0/0/1 port keys
+                    ports_renamed = []
+                    for port_key in list(port_config.keys()):  # list() to allow modification during iteration
+                        new_key = None
+                        
+                        if port_key == "ge-0/0/1":
+                            new_key = "{{wan2_interface}}"
+                        elif port_key.startswith("ge-0/0/1."):
+                            # Subinterface (e.g., ge-0/0/1.70)
+                            suffix = port_key[len("ge-0/0/1"):]
+                            new_key = f"{{{{wan2_interface}}}}{suffix}"
+                        
+                        if new_key:
+                            # Preserve port configuration under new key
+                            port_config[new_key] = port_config[port_key]
+                            del port_config[port_key]
+                            ports_renamed.append(f"{port_key}->{new_key}")
+                            logging.debug(f"Device {device_name}: Renamed {port_key} to {new_key}")
                     
-                    if update_resp.status_code == 200:
-                        device_result["status"] = "SUCCESS"
-                        logging.info(f"Successfully migrated port overrides for device {device_name}")
+                    if ports_renamed:
+                        # Update device config
+                        device_config["port_config"] = port_config
+                        device_result["ports_migrated"] = "; ".join(ports_renamed)
+                        
+                        # Push update to API
+                        logging.debug(f"Updating device {device_name} via API")
+                        update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+                            apisession,
+                            site_id,
+                            device_id,
+                            body=device_config
+                        )
+                        
+                        if update_resp.status_code == 200:
+                            device_result["status"] = "SUCCESS"
+                            logging.info(f"Successfully migrated port overrides for device {device_name}")
+                        else:
+                            device_result["status"] = "FAILED"
+                            device_result["error"] = f"API returned status {update_resp.status_code}"
+                            logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
                     else:
-                        device_result["status"] = "FAILED"
-                        device_result["error"] = f"API returned status {update_resp.status_code}"
-                        logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
-                else:
-                    device_result["status"] = "SKIPPED"
-                    device_result["error"] = "No ge-0/0/1 ports found in config"
-            
+                        device_result["status"] = "SKIPPED"
+                        device_result["error"] = "No ge-0/0/1 ports found in config"
+                
             except Exception as e:
                 device_result["status"] = "ERROR"
                 device_result["error"] = str(e)
                 logging.error(f"Error migrating device {device_name}: {e}")
                 logging.error(traceback.format_exc())
             
-            device_migration_results.append(device_result)
+            return device_result
+        
+        # Determine processing mode: fast mode with connection pooling or sequential
+        use_fast_mode = fast and len(devices_needing_migration) > 5
+        
+        if use_fast_mode:
+            print(f"\n  !? Fast mode enabled: Processing {len(devices_needing_migration)} devices with connection pooling")
+            logging.info(f"Fast mode: Using connection pool for {len(devices_needing_migration)} device migrations")
+            
+            # Use connection pool management for parallel processing
+            device_migration_results, failed_devices = execute_with_connection_pool_management(
+                work_items=devices_needing_migration,
+                worker_function=migrate_single_device_override,
+                batch_description="devices"
+            )
+            
+            if failed_devices:
+                logging.warning(f"Fast mode: {len(failed_devices)} device migrations failed")
+        else:
+            if fast and len(devices_needing_migration) <= 5:
+                print(f"\n  Sequential mode: Processing {len(devices_needing_migration)} devices (fast mode requires >5 devices)")
+            elif not fast:
+                print(f"\n  Sequential mode: Processing {len(devices_needing_migration)} devices")
+            
+            logging.info(f"Sequential mode: Processing {len(devices_needing_migration)} devices one at a time")
+            device_migration_results = []
+            
+            # Sequential mode fallback: process devices one at a time with progress bar
+            # Create dummy semaphore for sequential processing (no actual limiting)
+            dummy_semaphore = threading.Semaphore(1)
+            
+            for device_info in tqdm(devices_needing_migration, desc="Migrating device overrides", unit="device"):
+                result = migrate_single_device_override(device_info, dummy_semaphore)
+                device_migration_results.append(result)
         
         # Generate device migration report
         device_output_file = "GatewayDevice_WAN2_Override_Migration.csv"
@@ -32955,7 +33013,7 @@ menu_actions = {
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
     "103": (set_wan2_interface_site_variable, "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
-    "104": (update_gateway_templates_wan2_variable, " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation)"),
+    "104": (lambda fast=False: update_gateway_templates_wan2_variable(fast=fast), " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation)"),
     "105": (extract_gateway_template_configuration, "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"),
     "106": (apply_gateway_template_configuration, " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"),
     
