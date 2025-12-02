@@ -19033,6 +19033,8 @@ def ssh_runner_by_gateway_template(fast=False):
         print("! No gateway templates found in the data.")
         return
     
+    template_names.sort()
+    
     print(f"\n  2. Available gateway templates:")
     for i, template_name in enumerate(template_names, 1):
         gateway_count = sum(1 for gw in gateways if gw.get("Gateway Template") == template_name)
@@ -22882,9 +22884,11 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
             template_site_counts[template_id] = template_site_counts.get(template_id, 0) + 1
     
     # Step 2: Display templates with site counts
-    print(f"\n  Available Gateway Templates ({len(template_rows)}):")
+    template_rows_sorted = sorted(template_rows, key=lambda t: t.get("name", "Unnamed Template").lower())
+    
+    print(f"\n  Available Gateway Templates ({len(template_rows_sorted)}):")
     template_list = []
-    for idx, template in enumerate(template_rows, start=1):
+    for idx, template in enumerate(template_rows_sorted, start=1):
         template_id = template.get("id", "")
         template_name = template.get("name", "Unnamed Template")
         site_count = template_site_counts.get(template_id, 0)
@@ -34008,11 +34012,13 @@ def extract_gateway_template_configuration():
         return
     
     # Step 3: Display indexed list of templates
-    print(f"\n  Available Gateway Templates ({len(templates)} found):")
+    templates_sorted = sorted(templates, key=lambda t: t.get("name", "Unnamed Template").lower())
+    
+    print(f"\n  Available Gateway Templates ({len(templates_sorted)} found):")
     print("-" * 70)
     
     index_to_template = {}
-    for index, template in enumerate(templates):
+    for index, template in enumerate(templates_sorted):
         template_name = template.get("name", "Unnamed Template")
         template_id = template.get("id", "No ID")
         template_type = template.get("type", "standalone")
@@ -34023,7 +34029,7 @@ def extract_gateway_template_configuration():
     print()
     try:
         user_input = safe_input(
-            f"Enter template index to extract [0-{len(templates)-1}]: ",
+            f"Enter template index to extract [0-{len(templates_sorted)-1}]: ",
             context="menu_105_template_selection"
         ).strip()
     except (EOFError, KeyboardInterrupt):
@@ -34744,8 +34750,10 @@ def clone_gateway_templates_by_state_and_country():
         logging.error("No gateway templates available for cloning")
         return
     
-    print(f"\n  Available Gateway Templates ({len(template_rows)}):")
-    for idx, template in enumerate(template_rows, start=1):
+    template_rows_sorted = sorted(template_rows, key=lambda t: t.get("name", "Unnamed Template").lower())
+    
+    print(f"\n  Available Gateway Templates ({len(template_rows_sorted)}):")
+    for idx, template in enumerate(template_rows_sorted, start=1):
         template_name = template.get("name", "Unnamed Template")
         template_id = template.get("id", "")
         print(f"   [{idx}] {template_name}")
@@ -34761,10 +34769,10 @@ def clone_gateway_templates_by_state_and_country():
     
     try:
         selected_idx = int(selection_input) - 1
-        if selected_idx < 0 or selected_idx >= len(template_rows):
+        if selected_idx < 0 or selected_idx >= len(template_rows_sorted):
             print(" Invalid selection.")
             return
-        source_template = template_rows[selected_idx]
+        source_template = template_rows_sorted[selected_idx]
         source_template_id = source_template.get("id", "")
         source_template_name = source_template.get("name", "")
     except ValueError:

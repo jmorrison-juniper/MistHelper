@@ -479,6 +479,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.02.17.15",
+      "date": "2025-12-02",
+      "changes": {
+        "feature_additions": [
+          "Gateway template lists now sorted alphabetically across all menus (93, 104, 105, 111)",
+          "Improved user experience with consistent template ordering in selection prompts"
+        ],
+        "documentation": [
+          "Updated agents.md Git workflow - clarified that staging alone does not create checkpoints",
+          "Added minimal Git workflow instructions for local commits and rollback procedures",
+          "Removed verbose workflow examples, keeping only essential commands for AI agents"
+        ]
+      }
+    },
+    {
       "version": "25.12.02.16.43",
       "date": "2025-12-02",
       "changes": {
