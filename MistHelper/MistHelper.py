@@ -1524,9 +1524,9 @@ import_manager = GlobalImportManager()
 _initialize_imports_now = True
 
 # Check for test mode or skip-deps from command line
-if '--test' in sys.argv or '--skip-deps' in sys.argv:
+if '--test' in sys.argv or '--testinteractive' in sys.argv or '--skip-deps' in sys.argv:
     _initialize_imports_now = False
-    if '--test' in sys.argv and '--skip-deps' not in sys.argv:
+    if ('--test' in sys.argv or '--testinteractive' in sys.argv) and '--skip-deps' not in sys.argv:
         logging.info("Deferring import initialization for test mode (dependencies will still be checked)")
     elif '--skip-deps' in sys.argv:
         logging.info("Deferring import initialization due to --skip-deps flag")
@@ -1562,7 +1562,7 @@ else:
 # TEST MODE GLOBALS & DYNAMIC LOOKBACK HELPER
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
-IS_TEST_MODE = '--test' in sys.argv
+IS_TEST_MODE = '--test' in sys.argv or '--testinteractive' in sys.argv
 
 def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
     """Return lookback hours adjusted for test mode.
@@ -8595,7 +8595,22 @@ def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs
     # fetch_and_display_api_data expects org_id as the second parameter
     try:
         logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
-        response = api_call(apisession, site_id, limit=1000, **api_kwargs)
+        
+        # Try to determine if the API function supports 'limit' parameter
+        # Use introspection to check function signature
+        try:
+            sig = inspect.signature(api_call)
+            supports_limit = 'limit' in sig.parameters
+        except Exception:
+            # If introspection fails, assume limit is supported (safer default for most APIs)
+            supports_limit = True
+        
+        # Call API with or without limit parameter based on support
+        if supports_limit:
+            response = api_call(apisession, site_id, limit=1000, **api_kwargs)
+        else:
+            logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
+            response = api_call(apisession, site_id, **api_kwargs)
         
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
         if rawdata is None:
@@ -22772,46 +22787,56 @@ def set_wan2_interface_site_variable():
     logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured")
     logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
 
-def update_gateway_templates_wan2_variable(fast: bool = False):
+def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = False):
     """
-    Menu #104: Update Gateway Templates to Use WAN2 Variable (DESTRUCTIVE)
+    Menu #104: Update Gateway Templates for WAN2 Variable Migration (DESTRUCTIVE - Bidirectional)
     
-    Updates selected gateway templates to replace hardcoded 'ge-0/0/1' port references
-    with the {{wan2_interface}} variable placeholder, AND preserves device-level static IP
-    overrides by migrating port_config keys on affected devices.
+    Bidirectional operation supporting both APPLY and REVERT modes:
+    - APPLY: Replace hardcoded 'ge-0/0/1' port references with {{wan2_interface}} variable
+    - REVERT: Replace {{wan2_interface}} variable with hardcoded 'ge-0/0/1' (undo migration)
+    
+    Both modes preserve device-level static IP overrides by migrating port_config keys.
+    
+    Args:
+        fast: Enable parallel processing with connection pooling
+        dry_run: Show what would be changed without making actual API calls
     
     Workflow:
     1. Lists all gateway templates with site assignment counts
     2. Allows selection of specific templates to update
-    3. For each template:
+    3. Prompts for operation direction (APPLY variable or REVERT to hardcoded)
+    4. For each template:
        - Fetches current template configuration
-       - Identifies any port_config entries using 'ge-0/0/1' (including subinterfaces)
-       - Replaces hardcoded port names with '{{wan2_interface}}' variable
+       - Identifies port_config entries matching search pattern (including subinterfaces)
+       - Replaces port names according to selected direction
        - Shows preview of changes
-    4. Requires uppercase 'MIGRATE' confirmation before applying
-    5. Updates templates via updateOrgGatewayTemplate API
-    6. CRITICAL: Identifies devices with ge-0/0/1 port overrides (static IPs)
-    7. For each device with override:
-       - Renames port_config keys from 'ge-0/0/1' to '{{wan2_interface}}'
+    5. Requires uppercase 'MIGRATE' confirmation before applying
+    6. Updates templates via updateOrgGatewayTemplate API
+    7. CRITICAL: Identifies devices with port overrides matching the pattern
+    8. For each device with override:
+       - Renames port_config keys to match template migration direction
        - Preserves static IP configurations (IP, netmask, gateway)
        - Updates device via updateSiteDevice API
-    8. Generates audit reports for both template and device migrations
+    9. Generates audit reports for both template and device migrations
     
     SECURITY: DESTRUCTIVE operation requiring explicit confirmation.
     This modifies production gateway templates AND device configurations.
     
     CRITICAL SAFETY FEATURE: Without device override migration, sites with static IP
-    overrides (e.g., Morrison House with 2.3.4.5/24 on ge-0/0/1.70) would LOSE their
-    static IPs when template migration occurs, causing connectivity loss.
+    overrides would LOSE their static IPs when template migration occurs.
     
-    Templates using {{wan2_interface}} will resolve to site variable values.
-    Device overrides using {{wan2_interface}} will continue to override template config.
+    APPLY mode: Templates using {{wan2_interface}} will resolve to site variable values.
+    REVERT mode: Useful for undoing variable migration or troubleshooting.
     """
     print("\n  DESTRUCTIVE: Update Gateway Templates for WAN2 Variable Migration")
     print("=" * 70)
-    print("  !? WARNING: This operation modifies gateway templates")
-    print("  !? All sites using affected templates will inherit the change")
-    print("  !? Ensure sites have 'wan2_interface' variable set (Menu #103)")
+    if dry_run:
+        print("  >> DRY-RUN MODE: No changes will be made to templates or devices")
+        print("  >> This will show what WOULD be changed without modifying anything")
+    else:
+        print("  !? WARNING: This operation modifies gateway templates")
+        print("  !? All sites using affected templates will inherit the change")
+        print("  !? Ensure sites have 'wan2_interface' variable set (Menu #103)")
     print("=" * 70)
     
     logging.warning("Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started")
@@ -22833,19 +22858,22 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
         logging.warning("No gateway templates available for modification")
         return
     
-    # Build template name to ID mapping and count sites per template
+    # Load and EARLY FILTER sites (OPTIMIZATION: filter VRE sites immediately to reduce processing)
     sites_path = get_csv_file_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
-        sites = list(csv.DictReader(f))
+        all_sites = list(csv.DictReader(f))
     
-    # Filter out VRE sites (SECURITY: VRE sites excluded from WAN2 template operations)
-    original_site_count = len(sites)
-    sites = [site for site in sites if not site.get("name", "").startswith("VRE")]
+    # OPTIMIZATION: Filter out VRE sites BEFORE any processing (not after)
+    # This reduces memory usage and speeds up all subsequent operations
+    original_site_count = len(all_sites)
+    sites = [site for site in all_sites if not site.get("name", "").startswith("VRE")]
     vre_filtered_count = original_site_count - len(sites)
     
     if vre_filtered_count > 0:
-        print(f"\n  !? SECURITY: Excluded {vre_filtered_count} VRE sites from template impact analysis")
-        logging.info(f"Menu #104: Excluded {vre_filtered_count} VRE sites from WAN2 template operation")
+        print(f"\n  !? SECURITY: Excluded {vre_filtered_count} VRE sites from template impact analysis (early filter)")
+        logging.info(f"Menu #104: Excluded {vre_filtered_count} VRE sites from WAN2 template operation (early optimization)")
+    
+    logging.info(f"Processing {len(sites)} non-VRE sites for template assignment counts")
     
     template_site_counts = {}
     for site in sites:
@@ -22902,11 +22930,44 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
         print(f"   - {template['name']} ({template['site_count']} sites)")
     print(f"\n  Total sites affected: {total_affected_sites}")
     
+    # Step 3.5: Ask user for operation direction (apply variable or revert to hardcoded)
+    print("\n  Operation Direction:")
+    print("   [1] Replace hardcoded ports with {{wan2_interface}} variable (standard migration)")
+    print("   [2] Replace {{wan2_interface}} variable with hardcoded 'ge-0/0/1' (revert/undo)")
+    print("   [cancel] Abort operation")
+    
+    direction_input = input("\n  Select operation [1/2/cancel]: ").strip().lower()
+    
+    if direction_input == "cancel":
+        print(" Operation cancelled.")
+        logging.info("Menu #104 cancelled by user at operation direction selection")
+        return
+    
+    if direction_input == "2":
+        operation_mode = "revert"
+        search_pattern = "{{wan2_interface}}"
+        replacement_value = "ge-0/0/1"
+        print("\n  !? REVERT MODE: Will replace {{wan2_interface}} with hardcoded 'ge-0/0/1'")
+        logging.info("Menu #104: User selected REVERT mode (variable -> hardcoded)")
+    elif direction_input == "1":
+        operation_mode = "apply"
+        search_pattern = "ge-0/0/1"
+        replacement_value = "{{wan2_interface}}"
+        print("\n  APPLY MODE: Will replace hardcoded 'ge-0/0/1' with {{wan2_interface}} variable")
+        logging.info("Menu #104: User selected APPLY mode (hardcoded -> variable)")
+    else:
+        print(" Invalid selection. Operation cancelled.")
+        logging.info("Menu #104 cancelled - invalid operation direction")
+        return
+    
     # Step 4: Fetch and analyze templates for changes
-    print("\n  Analyzing templates for ge-0/0/1 port configurations...")
+    print(f"\n  Analyzing templates for {search_pattern} port configurations...")
     templates_with_changes = []
     
-    for template_info in tqdm(templates_to_modify, desc="Analyzing templates", unit="template"):
+    # OPTIMIZATION: Parallelize template configuration fetches to reduce wall-clock time
+    # For large template sets, this reduces sequential API waits significantly
+    def fetch_template_config(template_info):
+        """Worker function to fetch and analyze a single template configuration"""
         template_id = template_info["id"]
         template_name = template_info["name"]
         
@@ -22922,59 +22983,84 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
             
             if not isinstance(template_config, dict):
                 logging.warning(f"Template {template_name} returned invalid data structure")
-                continue
+                return None
             
-            # Check for port_config with ge-0/0/1
+            # Check for port_config with search pattern
             port_config = template_config.get("port_config", {})
             if not isinstance(port_config, dict):
                 logging.debug(f"Template {template_name} has no port_config")
-                continue
+                return None
             
-            # Find ge-0/0/1 entries (including subinterfaces like ge-0/0/1.70)
+            # Find entries matching search pattern (including subinterfaces)
             changes_needed = False
             ports_to_replace = []  # List of (original_key, new_key) tuples
             
-            # Check all port keys for ge-0/0/1 references
+            # Check all port keys for search pattern references
             for port_key in port_config.keys():
-                if port_key == "ge-0/0/1":
+                if port_key == search_pattern:
                     # Exact match - simple replacement
                     changes_needed = True
-                    ports_to_replace.append((port_key, "{{wan2_interface}}"))
-                elif port_key.startswith("ge-0/0/1."):
-                    # Subinterface (e.g., ge-0/0/1.70) - replace prefix only
-                    suffix = port_key[len("ge-0/0/1"):]  # Extract ".70" or similar
-                    new_key = f"{{{{wan2_interface}}}}{suffix}"
+                    ports_to_replace.append((port_key, replacement_value))
+                elif port_key.startswith(f"{search_pattern}."):
+                    # Subinterface (e.g., ge-0/0/1.70 or {{wan2_interface}}.70) - replace prefix only
+                    suffix = port_key[len(search_pattern):]  # Extract ".70" or similar
+                    new_key = f"{replacement_value}{suffix}"
                     changes_needed = True
                     ports_to_replace.append((port_key, new_key))
                     logging.info(f"Found subinterface in template {template_name}: {port_key} -> {new_key}")
-                elif "ge-0/0/1" in port_key:
-                    # Port range or other pattern (e.g., "ge-0/0/0-2") - skip with warning
+                elif search_pattern in port_key:
+                    # Complex pattern that contains search string but doesn't start with it
+                    # Log warning but don't attempt replacement (might be port range like "ge-0/0/0-2")
                     logging.warning(f"Found complex port pattern in template {template_name}: {port_key}")
                     print(f"\n  !? Template '{template_name}' uses complex port pattern: '{port_key}'")
-                    print(f"     This requires manual review - cannot automatically replace ranges")
+                    print(f"     This requires manual review - cannot automatically replace")
             
             if changes_needed:
-                templates_with_changes.append({
+                return {
                     "id": template_id,
                     "name": template_name,
                     "site_count": template_info["site_count"],
                     "config": template_config,
                     "ports_to_replace": ports_to_replace  # List of (old_key, new_key) tuples
-                })
+                }
+            return None
         
         except Exception as e:
             logging.error(f"Error analyzing template {template_name}: {e}")
             logging.error(traceback.format_exc())
             print(f"\n  !? Error analyzing template '{template_name}': {e}")
+            return None
+    
+    # Use ThreadPoolExecutor for parallel template fetches
+    max_workers = min(10, len(templates_to_modify))  # Limit concurrent API calls
+    logging.info(f"Fetching {len(templates_to_modify)} template configurations in parallel (max {max_workers} workers)")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all template fetch tasks
+        future_to_template = {
+            executor.submit(fetch_template_config, template_info): template_info
+            for template_info in templates_to_modify
+        }
+        
+        # Collect results with progress bar
+        # CRITICAL FIX: Use fully qualified concurrent.futures.as_completed to avoid tqdm parameter conflicts
+        import concurrent.futures
+        for future in tqdm(concurrent.futures.as_completed(future_to_template), 
+                          total=len(templates_to_modify),
+                          desc="Analyzing templates", 
+                          unit="template"):
+            template_result = future.result()
+            if template_result:
+                templates_with_changes.append(template_result)
     
     if not templates_with_changes:
-        print("\n  No templates found with ge-0/0/1 port configurations.")
+        print(f"\n  No templates found with {search_pattern} port configurations.")
         print("  No changes needed.")
-        logging.info("Menu #104: No templates require modification")
+        logging.info(f"Menu #104: No templates require modification (searched for {search_pattern})")
         return
     
     # Step 5: Show preview and confirm
-    print(f"\n  Preview of Changes:")
+    print(f"\n  Preview of Changes ({operation_mode.upper()} mode):")
     print(f"  {len(templates_with_changes)} templates will be modified:")
     for template in templates_with_changes:
         print(f"\n   Template: {template['name']}")
@@ -22984,16 +23070,22 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
             print(f"     Port key '{old_key}' -> '{new_key}'")
     
     print(f"\n  {'=' * 70}")
-    print(f"  !? CRITICAL: This operation will modify {len(templates_with_changes)} templates")
-    print(f"  !? affecting {sum(t['site_count'] for t in templates_with_changes)} sites")
-    print(f"  !? Type 'MIGRATE' (all caps) to proceed or anything else to cancel")
+    if dry_run:
+        print(f"  >> DRY-RUN: Would modify {len(templates_with_changes)} templates")
+        print(f"  >> affecting {sum(t['site_count'] for t in templates_with_changes)} sites")
+        print(f"  >> No confirmation needed in dry-run mode - proceeding with preview")
+    else:
+        print(f"  !? CRITICAL: This operation will modify {len(templates_with_changes)} templates")
+        print(f"  !? affecting {sum(t['site_count'] for t in templates_with_changes)} sites")
+        print(f"  !? Type 'MIGRATE' (all caps) to proceed or anything else to cancel")
     print(f"  {'=' * 70}")
     
-    confirmation = input("\n  Confirmation: ").strip()
-    if confirmation != "MIGRATE":
-        print(" Operation cancelled.")
-        logging.info("Menu #104 cancelled by user at final confirmation")
-        return
+    if not dry_run:
+        confirmation = input("\n  Confirmation: ").strip()
+        if confirmation != "MIGRATE":
+            print(" Operation cancelled.")
+            logging.info("Menu #104 cancelled by user at final confirmation")
+            return
     
     # Step 6: Apply changes
     print("\n  Applying template modifications...")
@@ -23039,22 +23131,26 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
                 
                 result["changes_made"] = "; ".join(changes_list)
                 
-                # Push update to API
-                logging.debug(f"Updating template {template_name} via API")
-                update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
-                    apisession,
-                    org_id,
-                    template_id,
-                    body=template_config
-                )
-                
-                if update_resp.status_code == 200:
-                    result["status"] = "SUCCESS"
-                    logging.info(f"Successfully updated template {template_name}")
+                # Push update to API (skip in dry-run mode)
+                if dry_run:
+                    result["status"] = "DRY-RUN"
+                    logging.info(f"DRY-RUN: Would update template {template_name} with changes: {result['changes_made']}")
                 else:
-                    result["status"] = "FAILED"
-                    result["error"] = f"API returned status {update_resp.status_code}"
-                    logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
+                    logging.debug(f"Updating template {template_name} via API")
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                        apisession,
+                        org_id,
+                        template_id,
+                        body=template_config
+                    )
+                    
+                    if update_resp.status_code == 200:
+                        result["status"] = "SUCCESS"
+                        logging.info(f"Successfully updated template {template_name}")
+                    else:
+                        result["status"] = "FAILED"
+                        result["error"] = f"API returned status {update_resp.status_code}"
+                        logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
             else:
                 result["status"] = "SKIPPED"
                 result["error"] = "No matching ports found in configuration"
@@ -23068,57 +23164,96 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
         results.append(result)
     
     # Step 7: Migrate device-level overrides to preserve static IPs
-    # CRITICAL: Devices with ge-0/0/1 overrides need port_config keys renamed to {{wan2_interface}}
+    # CRITICAL: Devices with port overrides need port_config keys updated to match template changes
     # Without this, static IP overrides would be lost when template changes take effect
-    print(f"\n  Step 7: Migrating device-level port overrides...")
-    print(f"  !? CRITICAL: Preserving static IP configurations on devices")
-    
-    # Load gateway configs and sites to find devices with overrides
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
-    gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
-    with open(gateway_configs_path, encoding="utf-8") as f:
-        gateway_configs = list(csv.DictReader(f))
+    print(f"\n  Step 7: Migrating device-level port overrides ({operation_mode.upper()} mode)...")
+    if operation_mode == "apply":
+        print(f"  !? CRITICAL: Preserving static IP configurations on devices")
+        print(f"  !? Renaming device overrides from '{search_pattern}' to '{replacement_value}'")
+    else:
+        print(f"  !? REVERT: Updating device overrides to match template reversion")
+        print(f"  !? Renaming device overrides from '{search_pattern}' to '{replacement_value}'")
     
     # Build set of template IDs that were successfully migrated
     migrated_template_ids = {r["template_id"] for r in results if r["status"] == "SUCCESS"}
     
-    # Build site-to-template mapping
+    # OPTIMIZATION: Build site-to-template mapping and filter to only sites using migrated templates
+    # This reduces API calls from 3300+ sites to only affected sites (typically <100)
+    # Also filters out VRE sites from device migration scope (already filtered from sites list earlier)
     site_to_template = {}
+    affected_site_ids = set()
     for site in sites:
         site_id = site.get("id", "").strip()
+        site_name = site.get("name", "").strip()
         template_id = site.get("gatewaytemplate_id", "").strip()
+        
+        # Skip VRE sites (redundant safety check - already filtered from sites list)
+        if site_name.startswith("VRE"):
+            logging.debug(f"Skipping VRE site {site_name} from device migration scope")
+            continue
+            
         if site_id and template_id:
             site_to_template[site_id] = template_id
+            # Only track sites using successfully migrated templates
+            if template_id in migrated_template_ids:
+                affected_site_ids.add(site_id)
     
-    # Find devices with ge-0/0/1 overrides at sites using migrated templates
+    logging.info(f"Device migration scope: {len(affected_site_ids)} sites using migrated templates (out of {len(sites)} total sites)")
+    print(f"  >> Optimization: Checking only {len(affected_site_ids)} affected sites (not all {len(sites)} sites)")
+    
+    # OPTIMIZATION: Fetch device configs ONLY for affected sites instead of entire org
+    # This dramatically reduces API calls for large orgs (3300 sites -> ~50-200 sites)
     devices_needing_migration = []
-    for config_row in gateway_configs:
-        site_id = config_row.get("site_id", "").strip()
-        device_id = config_row.get("id", "").strip()
-        device_name = config_row.get("name", "").strip()
+    
+    if affected_site_ids:
+        print(f"  >> Fetching gateway device configurations for {len(affected_site_ids)} affected sites...")
         
-        # Skip if site not using a migrated template
-        if site_to_template.get(site_id) not in migrated_template_ids:
-            continue
-        
-        # Check for ge-0/0/1 or ge-0/0/1.* port overrides
-        ge_001_fields = [col for col in config_row if 
-            col.startswith("port_config_ge-0/0/1_") or 
-            col.startswith("port_config_ge-0/0/1.")]
-        
-        has_override = any(
-            config_row.get(field, "").strip().lower() not in ["", "null", "none"]
-            for field in ge_001_fields
-            if "_vpn_paths_" not in field  # Exclude VPN paths (template-inherited)
-        )
-        
-        if has_override:
-            devices_needing_migration.append({
-                "site_id": site_id,
-                "device_id": device_id,
-                "device_name": device_name,
-                "template_id": site_to_template.get(site_id)
-            })
+        for site_id in tqdm(affected_site_ids, desc="Checking site devices", unit="site"):
+            try:
+                # Fetch devices for this specific site (type='gateway' to filter)
+                device_resp = mistapi.api.v1.sites.devices.listSiteDevices(
+                    apisession,
+                    site_id,
+                    type='gateway'
+                )
+                site_devices = mistapi.get_all(response=device_resp, mist_session=apisession)
+                
+                # For each gateway device, check for port overrides matching search pattern
+                for device in site_devices:
+                    device_id = device.get("id", "").strip()
+                    device_name = device.get("name", "").strip()
+                    
+                    # Fetch full device config to check port_config
+                    device_config_resp = mistapi.api.v1.sites.devices.getSiteDevice(
+                        apisession,
+                        site_id,
+                        device_id
+                    )
+                    device_config = getattr(device_config_resp, "data", {})
+                    
+                    # Check for port overrides matching search pattern
+                    port_config = device_config.get("port_config", {})
+                    if not isinstance(port_config, dict):
+                        continue
+                    
+                    # Check if any port key matches search pattern
+                    has_override = any(
+                        port_key == search_pattern or port_key.startswith(f"{search_pattern}.")
+                        for port_key in port_config.keys()
+                    )
+                    
+                    if has_override:
+                        devices_needing_migration.append({
+                            "site_id": site_id,
+                            "device_id": device_id,
+                            "device_name": device_name,
+                            "template_id": site_to_template.get(site_id)
+                        })
+                        logging.info(f"Found device '{device_name}' with {search_pattern} override at site {site_id}")
+                        
+            except Exception as e:
+                logging.error(f"Error checking devices at site {site_id}: {e}")
+                continue
     
     logging.info(f"Found {len(devices_needing_migration)} devices with ge-0/0/1 overrides needing migration")
     
@@ -23163,17 +23298,17 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
                         device_result["error"] = "No port_config found"
                         return device_result
                     
-                    # Find and rename ge-0/0/1 port keys
+                    # Find and rename port keys matching search pattern
                     ports_renamed = []
                     for port_key in list(port_config.keys()):  # list() to allow modification during iteration
                         new_key = None
                         
-                        if port_key == "ge-0/0/1":
-                            new_key = "{{wan2_interface}}"
-                        elif port_key.startswith("ge-0/0/1."):
-                            # Subinterface (e.g., ge-0/0/1.70)
-                            suffix = port_key[len("ge-0/0/1"):]
-                            new_key = f"{{{{wan2_interface}}}}{suffix}"
+                        if port_key == search_pattern:
+                            new_key = replacement_value
+                        elif port_key.startswith(f"{search_pattern}."):
+                            # Subinterface (e.g., ge-0/0/1.70 or {{wan2_interface}}.70)
+                            suffix = port_key[len(search_pattern):]
+                            new_key = f"{replacement_value}{suffix}"
                         
                         if new_key:
                             # Preserve port configuration under new key
@@ -23187,25 +23322,32 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
                         device_config["port_config"] = port_config
                         device_result["ports_migrated"] = "; ".join(ports_renamed)
                         
-                        # Push update to API
-                        logging.debug(f"Updating device {device_name} via API")
-                        update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                            apisession,
-                            site_id,
-                            device_id,
-                            body=device_config
-                        )
+                        # Push update to API (skip in dry-run mode)
+                        # Access dry_run from enclosing scope (closure)
+                        is_dry_run = globals().get('args', type('obj', (), {'dry_run': False})()).dry_run if hasattr(globals().get('args', type('obj', (), {'dry_run': False})()), 'dry_run') else False
                         
-                        if update_resp.status_code == 200:
-                            device_result["status"] = "SUCCESS"
-                            logging.info(f"Successfully migrated port overrides for device {device_name}")
+                        if is_dry_run:
+                            device_result["status"] = "DRY-RUN"
+                            logging.info(f"DRY-RUN: Would migrate port overrides for device {device_name}: {device_result['ports_migrated']}")
                         else:
-                            device_result["status"] = "FAILED"
-                            device_result["error"] = f"API returned status {update_resp.status_code}"
-                            logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
+                            logging.debug(f"Updating device {device_name} via API")
+                            update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+                                apisession,
+                                site_id,
+                                device_id,
+                                body=device_config
+                            )
+                            
+                            if update_resp.status_code == 200:
+                                device_result["status"] = "SUCCESS"
+                                logging.info(f"Successfully migrated port overrides for device {device_name}")
+                            else:
+                                device_result["status"] = "FAILED"
+                                device_result["error"] = f"API returned status {update_resp.status_code}"
+                                logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
                     else:
                         device_result["status"] = "SKIPPED"
-                        device_result["error"] = "No ge-0/0/1 ports found in config"
+                        device_result["error"] = f"No {search_pattern} ports found in config"
                 
             except Exception as e:
                 device_result["status"] = "ERROR"
@@ -23272,23 +23414,40 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
     DataExporter.save_data_to_output(results, output_file)
     
     # Print summary
-    success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-    failure_count = len(results) - success_count
-    
-    print(f"\n  WAN2 Variable Migration Complete!")
-    print(f"=" * 70)
-    print(f"  TEMPLATE MIGRATION:")
-    print(f"    Templates Processed: {len(results)}")
-    print(f"    Successfully Updated: {success_count}")
-    print(f"    Failed: {failure_count}")
+    if dry_run:
+        dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
+        print(f"\n  WAN2 Variable Migration DRY-RUN Complete!")
+        print(f"=" * 70)
+        print(f"  >> DRY-RUN MODE: No actual changes were made")
+        print(f"  TEMPLATE MIGRATION PREVIEW:")
+        print(f"    Templates Analyzed: {len(results)}")
+        print(f"    Would Be Updated: {dry_run_count}")
+        print(f"    Skipped: {len(results) - dry_run_count}")
+    else:
+        success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+        failure_count = len(results) - success_count
+        
+        print(f"\n  WAN2 Variable Migration Complete!")
+        print(f"=" * 70)
+        print(f"  TEMPLATE MIGRATION:")
+        print(f"    Templates Processed: {len(results)}")
+        print(f"    Successfully Updated: {success_count}")
+        print(f"    Failed: {failure_count}")
     
     if devices_needing_migration:
-        device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
-        device_failed = len(device_migration_results) - device_success
-        print(f"\n  DEVICE OVERRIDE MIGRATION:")
-        print(f"    Devices Processed: {len(device_migration_results)}")
-        print(f"    Static IPs Preserved: {device_success}")
-        print(f"    Failed: {device_failed}")
+        if dry_run:
+            dry_run_device_count = sum(1 for r in device_migration_results if r["status"] == "DRY-RUN")
+            print(f"\n  DEVICE OVERRIDE MIGRATION PREVIEW:")
+            print(f"    Devices Analyzed: {len(device_migration_results)}")
+            print(f"    Would Preserve Static IPs: {dry_run_device_count}")
+            print(f"    Skipped: {len(device_migration_results) - dry_run_device_count}")
+        else:
+            device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+            device_failed = len(device_migration_results) - device_success
+            print(f"\n  DEVICE OVERRIDE MIGRATION:")
+            print(f"    Devices Processed: {len(device_migration_results)}")
+            print(f"    Static IPs Preserved: {device_success}")
+            print(f"    Failed: {device_failed}")
     
     print(f"\n  REPORTS:")
     print(f"    Template audit: {output_file}")
@@ -23296,14 +23455,26 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
         print(f"    Device migration: GatewayDevice_WAN2_Override_Migration.csv")
     print(f"=" * 70)
     
-    if success_count > 0:
-        print(f"\n  !? {success_count} templates now use {{{{wan2_interface}}}} variable")
-        if devices_needing_migration:
-            device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
-            print(f"  !? {device_success} devices had static IP overrides preserved")
-            print(f"  !? Port configs migrated from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
-        print(f"  !? Ensure all affected sites have 'wan2_interface' variable set (Menu #103)")
-        print(f"  !? Sites without the variable may experience gateway connectivity issues")
+    if dry_run:
+        dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
+        if dry_run_count > 0:
+            print(f"\n  >> DRY-RUN: {dry_run_count} templates WOULD use {{{{wan2_interface}}}} variable")
+            if devices_needing_migration:
+                dry_run_device_count = sum(1 for r in device_migration_results if r["status"] == "DRY-RUN")
+                print(f"  >> DRY-RUN: {dry_run_device_count} devices WOULD have static IP overrides preserved")
+                print(f"  >> DRY-RUN: Port configs WOULD migrate from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
+            print(f"\n  >> To apply these changes, run without --dry-run flag")
+            print(f"  >> Ensure all affected sites have 'wan2_interface' variable set (Menu #103)")
+    else:
+        success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+        if success_count > 0:
+            print(f"\n  !? {success_count} templates now use {{{{wan2_interface}}}} variable")
+            if devices_needing_migration:
+                device_success = sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
+                print(f"  !? {device_success} devices had static IP overrides preserved")
+                print(f"  !? Port configs migrated from 'ge-0/0/1' to '{{{{wan2_interface}}}}'")
+            print(f"  !? Ensure all affected sites have 'wan2_interface' variable set (Menu #103)")
+            print(f"  !? Sites without the variable may experience gateway connectivity issues")
     
     if failure_count > 0:
         print(f"\n  !? {failure_count} templates failed to update - check audit report")
@@ -23315,9 +23486,9 @@ def update_gateway_templates_wan2_variable(fast: bool = False):
             print(f"  !? These devices may lose static IP configurations")
             print(f"  !? Check GatewayDevice_WAN2_Override_Migration.csv for details")
     
-    logging.warning(f"Menu #104 DESTRUCTIVE operation complete: {success_count} templates updated, {failure_count} failed")
+    logging.warning(f"Menu #104 DESTRUCTIVE operation complete ({operation_mode.upper()} mode): {success_count} templates updated, {failure_count} failed")
     if devices_needing_migration:
-        logging.warning(f"Device override migration: {device_success} successful, {device_failed} failed")
+        logging.warning(f"Device override migration ({operation_mode.upper()} mode): {device_success} successful, {device_failed} failed")
 
 def convert_virtual_chassis_to_virtual_mac():
     """
@@ -34380,6 +34551,477 @@ def apply_gateway_template_configuration():
     logging.warning(f"Menu #106 DESTRUCTIVE operation complete: {success_count} templates updated, {failure_count} failed")
 
 
+def clone_gateway_templates_by_state_and_country():
+    """
+    Menu #111: Clone Gateway Templates by State and Country (DESTRUCTIVE)
+    
+    Clones a selected gateway template for each state (or country if no state)
+    present in the organization's sites, then assigns sites to matching templates.
+    
+    Workflow:
+    1. Load site list with state and country information
+    2. User selects source gateway template to clone
+    3. For each unique state found in sites:
+       - Create template named "{SourceTemplate}_{State}" (e.g., "Branch_CA")
+       - If template exists, skip creation
+    4. For sites without state but with country:
+       - Create template named "{SourceTemplate}_{Country}" (e.g., "Branch_USA")
+       - If template exists, skip creation
+    5. Assign each site to its corresponding template:
+       - Sites with state -> {SourceTemplate}_{State}
+       - Sites without state -> {SourceTemplate}_{Country}
+       - Skip if site already assigned to correct template
+    6. Generate audit report
+    
+    SECURITY: DESTRUCTIVE operation requiring explicit confirmation.
+    This creates new gateway templates and modifies site configurations.
+    """
+    print("\n  DESTRUCTIVE: Clone Gateway Templates by State and Country")
+    print("=" * 70)
+    print("  !? WARNING: This operation creates new gateway templates")
+    print("  !? WARNING: This operation modifies site template assignments")
+    print("  !? Ensure source template is properly configured before cloning")
+    print("=" * 70)
+    
+    logging.warning("Menu #111 DESTRUCTIVE: Clone Gateway Templates by State/Country operation started")
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Load site data with state and country information
+    print("\n  Step 1: Loading site data...")
+    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    
+    sites_path = get_csv_file_path("SiteList.csv")
+    with open(sites_path, encoding="utf-8") as f:
+        all_sites = list(csv.DictReader(f))
+    
+    if not all_sites:
+        print(" No sites found in organization.")
+        logging.error("No sites available for template cloning")
+        return
+    
+    # Filter sites with valid state or country
+    sites_with_location = []
+    for site in all_sites:
+        address = site.get("address", "").strip()
+        country = site.get("country_code", "").strip()
+        site_name = site.get("name", "").strip()
+        site_id = site.get("id", "").strip()
+        
+        # Parse state/province from address field (format varies by country)
+        # US example: "27925 New Lancaster Rd, Louisburg, KS 66053, USA"
+        # CA example: "456 Oak Ave, Toronto, ON M5H 2N2, Canada"
+        # MX example: "Cancun Quintana Roo 77500" (no commas, full state name)
+        # CR example: "La Fortuna Alajuela 21007" (full province name)
+        # Small countries: "Kingston Jamaica" (no state, just use country)
+        state = ""
+        if address and country:
+            import re
+            
+            # Skip state extraction for small island nations without meaningful subdivisions
+            # These will group by country only
+            small_countries = {'BS', 'BZ', 'CU', 'HT', 'JM', 'DO'}  # Bahamas, Belize, Cuba, Haiti, Jamaica, Dominican Republic
+            
+            if country in small_countries:
+                # No state extraction - will create country-level templates only
+                state = ""
+            elif "," in address:
+                # Handle US/CA comma-separated format
+                parts = [p.strip() for p in address.split(",")]
+                if len(parts) >= 3:
+                    # Check the component that should contain "STATE ZIP" or "PROVINCE POSTAL"
+                    for part in parts:
+                        # Match US pattern: 2-letter state code followed by space and 5 digits (e.g., "KS 66053")
+                        state_match_us = re.search(r'\b([A-Z]{2})\s+\d{5}', part)
+                        if state_match_us:
+                            state = state_match_us.group(1)
+                            break
+                        # Match CA pattern: 2-letter province code followed by space and postal code (e.g., "ON M5H 2N2")
+                        # Look for 2-letter code at START of part, not embedded in postal code
+                        state_match_ca = re.search(r'^([A-Z]{2})\s+[A-Z]\d[A-Z]', part)
+                        if state_match_ca:
+                            state = state_match_ca.group(1)
+                            break
+                        # Also check for standalone 2-letter codes
+                        state_alone = re.search(r'^([A-Z]{2})$', part)
+                        if state_alone:
+                            state = state_alone.group(1)
+                            break
+            else:
+                # Handle space-separated formats (no commas)
+                # CA without commas: "Vancouver BC V6G 1Z4" or "Banff AB T1L 1K2"
+                # MX: "Cancun Quintana Roo 77500"
+                # CR: "La Fortuna Alajuela 21007"
+                parts = address.split()
+                
+                if country == 'CA' and len(parts) >= 3:
+                    # Canadian addresses without commas: look for 2-letter province code followed by postal pattern
+                    # Postal code format: A1A 1A1 (letter-digit-letter space digit-letter-digit)
+                    for i, part in enumerate(parts):
+                        # Check if this looks like a 2-letter province code
+                        if len(part) == 2 and part.isupper():
+                            # Verify next part looks like start of Canadian postal code (A1A format)
+                            if i + 1 < len(parts) and re.match(r'^[A-Z]\d[A-Z]$', parts[i + 1]):
+                                state = part
+                                break
+                elif len(parts) >= 2:
+                    # Handle MX/Central America space-separated format: "City StateName PostalCode"
+                    # Extract last word before postal code (if present) as state/province
+                    # Note: Multi-word states like "Quintana Roo" will only capture last word ("Roo")
+                    # but this provides better accuracy for multi-word cities
+                    
+                    # Special case: Check for multi-word state/territory names
+                    # Puerto Rico (US territory): "City Puerto Rico 00901"
+                    # Bay Islands (Honduras): "City Bay Islands postal"
+                    address_lower = address.lower()
+                    if 'puerto rico' in address_lower:
+                        state = 'Puerto Rico'
+                    elif 'bay islands' in address_lower:
+                        state = 'Bay Islands'
+                    else:
+                        # Look for pattern: word(s) followed by postal code (starts with digit)
+                        postal_index = -1
+                        for i, part in enumerate(parts):
+                            if re.match(r'^\d', part):  # Starts with digit (likely postal code)
+                                postal_index = i
+                                break
+                        
+                        # State/province is word immediately before postal code
+                        if postal_index > 1:
+                            state = parts[postal_index - 1]
+                        elif len(parts) >= 2 and postal_index == -1:
+                            # No postal code found - check for special patterns
+                            # Panama addresses often end with city name repeated: "Panama City Panama"
+                            if country == 'PA' and len(parts) >= 3 and parts[-1] == 'Panama':
+                                # Skip - this is city name, not province
+                                state = ""
+                            elif len(parts) == 2 and country not in {'MX', 'CR', 'PA', 'HN', 'GT'}:
+                                # Likely "City Country" format for small nations
+                                state = ""
+                            else:
+                                # Take last word as state/province
+                                state = parts[-1]
+        
+        if state or country:
+            sites_with_location.append({
+                "id": site_id,
+                "name": site_name,
+                "state": state,
+                "country": country,
+                "current_template_id": site.get("gatewaytemplate_id", "").strip()
+            })
+    
+    if not sites_with_location:
+        print(" No sites found with state or country information.")
+        logging.error("No sites have state or country data")
+        return
+    
+    print(f"  Found {len(sites_with_location)} sites with location data")
+    
+    # Collect unique states and countries
+    unique_states = set()
+    unique_countries = set()
+    
+    for site in sites_with_location:
+        if site["state"]:
+            unique_states.add(site["state"])
+        elif site["country"]:
+            unique_countries.add(site["country"])
+    
+    print(f"  Unique states found: {len(unique_states)}")
+    print(f"  Unique countries (for sites without state): {len(unique_countries)}")
+    
+    # Step 2: Load and display available gateway templates
+    print("\n  Step 2: Loading gateway templates...")
+    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    
+    templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    with open(templates_path, encoding="utf-8") as f:
+        template_rows = list(csv.DictReader(f))
+    
+    if not template_rows:
+        print(" No gateway templates found.")
+        logging.error("No gateway templates available for cloning")
+        return
+    
+    print(f"\n  Available Gateway Templates ({len(template_rows)}):")
+    for idx, template in enumerate(template_rows, start=1):
+        template_name = template.get("name", "Unnamed Template")
+        template_id = template.get("id", "")
+        print(f"   [{idx}] {template_name}")
+    
+    # Step 3: Template selection
+    print("\n  Select source template to clone:")
+    selection_input = input("  Template number (or 'cancel'): ").strip().lower()
+    
+    if selection_input == "cancel":
+        print(" Operation cancelled.")
+        logging.info("Menu #111 cancelled by user at template selection")
+        return
+    
+    try:
+        selected_idx = int(selection_input) - 1
+        if selected_idx < 0 or selected_idx >= len(template_rows):
+            print(" Invalid selection.")
+            return
+        source_template = template_rows[selected_idx]
+        source_template_id = source_template.get("id", "")
+        source_template_name = source_template.get("name", "")
+    except ValueError:
+        print(" Invalid input.")
+        return
+    
+    print(f"\n  Selected source template: {source_template_name}")
+    
+    # Step 4: Fetch source template configuration
+    print("\n  Step 3: Fetching source template configuration...")
+    try:
+        template_resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+            apisession,
+            org_id,
+            source_template_id
+        )
+        source_config = template_resp.data if hasattr(template_resp, 'data') else {}
+        
+        if not isinstance(source_config, dict):
+            print(" Error: Invalid template configuration retrieved.")
+            logging.error(f"Invalid config for template {source_template_name}")
+            return
+    except Exception as e:
+        print(f" Error fetching source template: {e}")
+        logging.error(f"Failed to fetch template {source_template_name}: {e}")
+        return
+    
+    # Step 5: Calculate templates to create
+    templates_to_create = []
+    
+    # Templates for states
+    for state in sorted(unique_states):
+        new_template_name = f"{source_template_name}_{state}"
+        templates_to_create.append({
+            "name": new_template_name,
+            "location_type": "state",
+            "location_value": state
+        })
+    
+    # Templates for countries (sites without state)
+    for country in sorted(unique_countries):
+        new_template_name = f"{source_template_name}_{country}"
+        templates_to_create.append({
+            "name": new_template_name,
+            "location_type": "country",
+            "location_value": country
+        })
+    
+    print(f"\n  Step 4: Preview - {len(templates_to_create)} templates will be created:")
+    for template_info in templates_to_create:
+        print(f"   - {template_info['name']} (for {template_info['location_type']}: {template_info['location_value']})")
+    
+    # Count site assignments
+    site_assignments = []
+    for site in sites_with_location:
+        if site["state"]:
+            target_template_name = f"{source_template_name}_{site['state']}"
+        elif site["country"]:
+            target_template_name = f"{source_template_name}_{site['country']}"
+        else:
+            continue
+        
+        site_assignments.append({
+            "site_id": site["id"],
+            "site_name": site["name"],
+            "target_template_name": target_template_name,
+            "current_template_id": site["current_template_id"]
+        })
+    
+    print(f"\n  {len(site_assignments)} sites will be assigned to templates")
+    
+    # Confirmation
+    print(f"\n  {'=' * 70}")
+    print(f"  !? CRITICAL: This will create {len(templates_to_create)} new templates")
+    print(f"  !? and modify {len(site_assignments)} site template assignments")
+    print(f"  !? Type 'CLONE' (all caps) to proceed or anything else to cancel")
+    print(f"  {'=' * 70}")
+    
+    confirmation = input("\n  Confirmation: ").strip()
+    if confirmation != "CLONE":
+        print(" Operation cancelled.")
+        logging.info("Menu #111 cancelled by user at final confirmation")
+        return
+    
+    # Step 6: Create templates (check if exists first)
+    print("\n  Step 5: Creating templates...")
+    template_creation_results = []
+    created_template_map = {}  # name -> id mapping
+    
+    # First, get existing templates to check for duplicates
+    try:
+        existing_templates_resp = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
+            apisession,
+            org_id,
+            limit=1000
+        )
+        existing_templates = mistapi.get_all(response=existing_templates_resp, mist_session=apisession)
+        existing_template_names = {t.get("name"): t.get("id") for t in existing_templates if t.get("name")}
+    except Exception as e:
+        print(f" Error fetching existing templates: {e}")
+        logging.error(f"Failed to fetch existing templates: {e}")
+        return
+    
+    for template_info in tqdm(templates_to_create, desc="Creating templates", unit="template"):
+        new_template_name = template_info["name"]
+        
+        result = {
+            "template_name": new_template_name,
+            "location_type": template_info["location_type"],
+            "location_value": template_info["location_value"],
+            "status": "",
+            "template_id": "",
+            "error": ""
+        }
+        
+        # Check if template already exists
+        if new_template_name in existing_template_names:
+            result["status"] = "SKIPPED"
+            result["template_id"] = existing_template_names[new_template_name]
+            result["error"] = "Template already exists"
+            created_template_map[new_template_name] = existing_template_names[new_template_name]
+            logging.info(f"Template {new_template_name} already exists, skipping")
+        else:
+            try:
+                # Create new template config (copy from source, update name)
+                new_config = dict(source_config)
+                new_config["name"] = new_template_name
+                
+                # Remove fields that shouldn't be copied
+                for field in ["id", "org_id", "created_time", "modified_time"]:
+                    new_config.pop(field, None)
+                
+                # Create template
+                create_resp = mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate(
+                    apisession,
+                    org_id,
+                    body=new_config
+                )
+                
+                if create_resp.status_code == 200:
+                    new_template_id = create_resp.data.get("id") if hasattr(create_resp, 'data') else ""
+                    result["status"] = "CREATED"
+                    result["template_id"] = new_template_id
+                    created_template_map[new_template_name] = new_template_id
+                    logging.info(f"Created template {new_template_name} (ID: {new_template_id})")
+                else:
+                    result["status"] = "FAILED"
+                    result["error"] = f"API returned status {create_resp.status_code}"
+                    logging.error(f"Failed to create template {new_template_name}: status {create_resp.status_code}")
+            except Exception as e:
+                result["status"] = "ERROR"
+                result["error"] = str(e)
+                logging.error(f"Error creating template {new_template_name}: {e}")
+        
+        template_creation_results.append(result)
+    
+    # Step 7: Assign sites to templates
+    print("\n  Step 6: Assigning sites to templates...")
+    site_assignment_results = []
+    
+    for assignment in tqdm(site_assignments, desc="Assigning sites", unit="site"):
+        site_id = assignment["site_id"]
+        site_name = assignment["site_name"]
+        target_template_name = assignment["target_template_name"]
+        current_template_id = assignment["current_template_id"]
+        
+        result = {
+            "site_name": site_name,
+            "site_id": site_id,
+            "target_template_name": target_template_name,
+            "status": "",
+            "error": ""
+        }
+        
+        # Get target template ID
+        target_template_id = created_template_map.get(target_template_name)
+        
+        if not target_template_id:
+            result["status"] = "SKIPPED"
+            result["error"] = "Target template not found or failed to create"
+            logging.warning(f"Cannot assign site {site_name}: template {target_template_name} not available")
+        elif current_template_id == target_template_id:
+            result["status"] = "SKIPPED"
+            result["error"] = "Site already assigned to this template"
+            logging.info(f"Site {site_name} already assigned to {target_template_name}")
+        else:
+            try:
+                # Update site to use new template
+                site_update = {
+                    "gatewaytemplate_id": target_template_id
+                }
+                
+                update_resp = mistapi.api.v1.sites.sites.updateSiteInfo(
+                    apisession,
+                    site_id,
+                    body=site_update
+                )
+                
+                if update_resp.status_code == 200:
+                    result["status"] = "ASSIGNED"
+                    logging.info(f"Assigned site {site_name} to template {target_template_name}")
+                else:
+                    result["status"] = "FAILED"
+                    result["error"] = f"API returned status {update_resp.status_code}"
+                    logging.error(f"Failed to assign site {site_name}: status {update_resp.status_code}")
+            except Exception as e:
+                result["status"] = "ERROR"
+                result["error"] = str(e)
+                logging.error(f"Error assigning site {site_name}: {e}")
+        
+        site_assignment_results.append(result)
+    
+    # Step 8: Generate audit reports
+    print("\n  Step 7: Generating audit reports...")
+    
+    template_output_file = "GatewayTemplate_Clone_By_State_Country_Audit.csv"
+    DataExporter.save_data_to_output(template_creation_results, template_output_file)
+    
+    site_output_file = "Site_Template_Assignment_By_State_Country_Audit.csv"
+    DataExporter.save_data_to_output(site_assignment_results, site_output_file)
+    
+    # Summary
+    templates_created = sum(1 for r in template_creation_results if r["status"] == "CREATED")
+    templates_skipped = sum(1 for r in template_creation_results if r["status"] == "SKIPPED")
+    templates_failed = sum(1 for r in template_creation_results if r["status"] in ["FAILED", "ERROR"])
+    
+    sites_assigned = sum(1 for r in site_assignment_results if r["status"] == "ASSIGNED")
+    sites_skipped = sum(1 for r in site_assignment_results if r["status"] == "SKIPPED")
+    sites_failed = sum(1 for r in site_assignment_results if r["status"] in ["FAILED", "ERROR"])
+    
+    print(f"\n  Gateway Template Cloning by State/Country Complete!")
+    print(f"=" * 70)
+    print(f"  TEMPLATE CREATION:")
+    print(f"    Created: {templates_created}")
+    print(f"    Skipped (already exist): {templates_skipped}")
+    print(f"    Failed: {templates_failed}")
+    print(f"\n  SITE ASSIGNMENTS:")
+    print(f"    Assigned: {sites_assigned}")
+    print(f"    Skipped (already assigned): {sites_skipped}")
+    print(f"    Failed: {sites_failed}")
+    print(f"\n  AUDIT REPORTS:")
+    print(f"    Template creation: {template_output_file}")
+    print(f"    Site assignments: {site_output_file}")
+    print(f"=" * 70)
+    
+    if templates_created > 0 or sites_assigned > 0:
+        print(f"\n  !? {templates_created} new templates created from {source_template_name}")
+        print(f"  !? {sites_assigned} sites assigned to state/country-specific templates")
+        print(f"  !? Verify configurations in Mist portal before proceeding")
+    
+    if templates_failed > 0 or sites_failed > 0:
+        print(f"\n  !? WARNING: {templates_failed} template creations and {sites_failed} site assignments failed")
+        print(f"  !? Check audit reports for details")
+    
+    logging.warning(f"Menu #111 DESTRUCTIVE operation complete: {templates_created} templates created, {sites_assigned} sites assigned")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -34470,7 +35112,7 @@ menu_actions = {
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
     "103": (set_wan2_interface_site_variable, "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
-    "104": (lambda fast=False: update_gateway_templates_wan2_variable(fast=fast), " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation)"),
+    "104": (lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run), " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"),
     "105": (extract_gateway_template_configuration, "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"),
     "106": (apply_gateway_template_configuration, " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"),
     
@@ -34574,6 +35216,7 @@ menu_actions = {
     "108": (create_country_rf_templates_and_assign, " DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)"),
     "109": (create_ap_model_device_profiles, " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)"),
     "110": (assign_aps_to_matching_device_profiles, " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"),
+    "111": (clone_gateway_templates_by_state_and_country, " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"),
 }
 
 def _launch_tui_from_menu():
@@ -34739,7 +35382,20 @@ def run_systematic_test():
         "92": "DESTRUCTIVE: Virtual chassis conversion - WIP",
         "93": "DESTRUCTIVE: Virtual chassis conversion - bulk operation",
         "99": "DESTRUCTIVE: Switch firmware upgrade operation",
-        "100": "DESTRUCTIVE: SSR firmware upgrade operation"
+        "100": "DESTRUCTIVE: SSR firmware upgrade operation",
+        
+        # Gateway template configuration operations
+        "103": "Requires interactive site selection for WAN2 variable configuration",
+        "104": "DESTRUCTIVE: Updates gateway templates with WAN2 variable - requires uppercase confirmation",
+        "105": "Requires interactive template selection for configuration extraction",
+        "106": "DESTRUCTIVE: Applies gateway template configuration - requires uppercase confirmation",
+        
+        # Test data generation operations - all DESTRUCTIVE
+        "107": "DESTRUCTIVE: Creates 137 test sites from CSV - requires uppercase confirmation",
+        "108": "DESTRUCTIVE: Creates country-specific RF templates - requires uppercase confirmation",
+        "109": "DESTRUCTIVE: Creates device profiles for AP models - requires uppercase confirmation",
+        "110": "DESTRUCTIVE: Assigns APs to device profiles - requires uppercase confirmation",
+        "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation"
     }
     
     # Get all available menu options
@@ -34877,6 +35533,192 @@ def run_systematic_test():
     else:
         print(f"    {error_count} operations failed - check logs for details")
         logging.warning(f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested")
+        return False
+
+
+def run_interactive_test():
+    """
+    Run systematic test of read-only interactive menu options.
+    
+    This function tests menu options that are:
+    - Read-only (GET operations only)
+    - Require interactive site/device/client selection
+    - Safe for automated testing (no destructive operations)
+    
+    This complements run_systematic_test() by covering interactive operations
+    that require user input for selection purposes.
+    
+    Returns:
+        bool: True if all tests passed, False if any failed
+    """
+    start_time = time.time()
+    print(" Starting interactive test of MistHelper menu options...")
+    print("  Note: This tests read-only operations requiring site/device/client selection")
+    print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 80)
+    
+    # Define interactive read-only options that should be tested
+    # These require user input but are safe (no destructive operations)
+    interactive_read_only_options = {
+        "29": "Export port statistics for a selected site",
+        "30": "Export client statistics for a selected site",
+        "31": "Export device list for a selected site",
+        "32": "Export device statistics for a selected site",
+        "33": "Export virtual chassis information for a selected switch device",
+        "34": "Export currently connected WiFi clients for a selected site",
+        "49": "Export WLAN configuration for a selected site",
+        "50": "Export beacon information for a selected site",
+        "51": "Export map information for a selected site",
+        "52": "Export zone information for a selected site",
+        "53": "Export SLE metrics insights for a selected site",
+        "68": "Export general insight metrics for a selected site",
+        "69": "Export client-specific insight metrics for a selected site",
+        "70": "Select a site (used by other functions)",
+        "71": "View device inventory for a selected site",
+        "72": "View statistics for a selected device at a site",
+        "73": "View synthetic test stats for a selected gateway device",
+        "74": "View configuration details for a selected device",
+        "81": "Export device-specific insight metrics for a selected site",
+        "84": "Export Site Anomaly Events for a selected site",
+        "85": "Export Site Device Anomaly Events for selected site and device",
+        "86": "Export Site Client Anomaly Events for selected site and client",
+    }
+    
+    # Define operations that are interactive but should be skipped
+    # (destructive, websocket, continuous, or WIP)
+    skip_interactive_options = {
+        "5": "WebSocket operation - not suitable for automated testing",
+        "6": "WebSocket operation - not suitable for automated testing",
+        "7": "WebSocket operation - not suitable for automated testing",
+        "8": "WebSocket operation - not suitable for automated testing",
+        "9": "Packet capture - requires complex interactive configuration",
+        "10": "Packet capture - requires complex interactive configuration",
+        "60": "Firmware upgrade status - complex interactive scope selection",
+        "62": "Marvis troubleshooting - requires interactive option selection",
+        "75": "Continuous loop operation - not suitable for automated testing",
+        "76": "Continuous data collection loop - not suitable for automated testing",
+        "79": "Interactive CLI shell session - not suitable for automated testing",
+        "80": "WebSocket operation - not suitable for automated testing",
+        "87": "WebSocket operation - not suitable for automated testing",
+        "88": "WebSocket operation - not suitable for automated testing",
+        "89": "WebSocket operation - not suitable for automated testing",
+        "97": "SSH Command Runner - requires interactive host and command input",
+        "98": "SSH Runner - requires interactive template and command input",
+        "101": "TUI mode - keyboard navigation required, not suitable for automated testing",
+        "102": "WLAN RADIUS timer management - requires interactive site selection and configuration",
+        "103": "WAN2 variable configuration - requires interactive site selection",
+        "104": "DESTRUCTIVE: Updates gateway templates",
+        "105": "Requires interactive template selection",
+        "106": "DESTRUCTIVE: Applies gateway template configuration",
+        "107": "DESTRUCTIVE: Creates test sites",
+        "108": "DESTRUCTIVE: Creates RF templates",
+        "109": "DESTRUCTIVE: Creates device profiles",
+        "110": "DESTRUCTIVE: Assigns APs to device profiles",
+        "111": "DESTRUCTIVE: Clones gateway templates by state/country",
+        "90": "DESTRUCTIVE: AP firmware upgrade",
+        "91": "DESTRUCTIVE: Device reboot",
+        "92": "DESTRUCTIVE: Virtual chassis conversion",
+        "93": "DESTRUCTIVE: Virtual chassis conversion bulk",
+        "99": "DESTRUCTIVE: Switch firmware upgrade",
+        "100": "DESTRUCTIVE: SSR firmware upgrade",
+    }
+    
+    print(f"! Found {len(interactive_read_only_options)} interactive read-only options to test")
+    print(f"! {len(skip_interactive_options)} interactive options will be skipped (destructive/websocket/continuous)")
+    print()
+    
+    # Show which interactive options will be tested
+    print(" Testing interactive read-only operations:")
+    for opt in sorted(interactive_read_only_options.keys(), key=lambda x: int(x)):
+        description = interactive_read_only_options[opt]
+        print(f"   {opt:2}: {description}")
+    print()
+    
+    # Show which interactive options will be skipped
+    print(" Skipping unsafe/unsuitable interactive operations:")
+    for opt in sorted(skip_interactive_options.keys(), key=lambda x: int(x)):
+        reason = skip_interactive_options[opt]
+        print(f"   {opt:2}: {reason}")
+    print()
+    
+    # Test interactive options
+    success_count = 0
+    error_count = 0
+    
+    global org_id
+    if not org_id:
+        org_id = get_cached_or_prompted_org_id()
+    
+    # Get first available site_id for testing
+    test_site_id = None
+    try:
+        print("   Fetching test site for interactive operations...")
+        sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
+        if sites_response.data and len(sites_response.data) > 0:
+            test_site_id = sites_response.data[0]['id']
+            test_site_name = sites_response.data[0].get('name', 'Unknown')
+            print(f"   Using test site: {test_site_name} ({test_site_id})")
+            logging.info(f"INTERACTIVE_TEST: Using test site_id={test_site_id} name={test_site_name}")
+        else:
+            print("[ERROR] No sites found in organization - cannot run interactive tests")
+            logging.error("INTERACTIVE_TEST: No sites available for testing")
+            return False
+    except Exception as error:
+        print(f"[ERROR] Failed to fetch test site: {error}")
+        logging.error(f"INTERACTIVE_TEST: Failed to fetch test site: {error}")
+        return False
+    
+    print()
+    
+    for i, option in enumerate(sorted(interactive_read_only_options.keys(), key=lambda x: int(x)), 1):
+        func, description = menu_actions[option]
+        print(f"   [{i:2}/{len(interactive_read_only_options)}] Testing option {option:2}: {description[:60]}...")
+        
+        logging.info(f"INTERACTIVE_TEST: Starting test of menu option {option} description='{description}'")
+        
+        try:
+            # Most interactive functions accept site_id parameter
+            # We'll use introspection to determine if the function accepts parameters
+            sig = inspect.signature(func)
+            invoke_kwargs = {}
+            
+            # Check what parameters the function accepts
+            if 'site_id' in sig.parameters:
+                invoke_kwargs['site_id'] = test_site_id
+            
+            # Invoke the function with appropriate parameters
+            func(**invoke_kwargs)
+            
+            print(f"   [SUCCESS] Option {option} completed successfully")
+            success_count += 1
+            logging.info(f"INTERACTIVE_TEST: Successfully completed menu option {option}")
+        except Exception as error:
+            print(f"   [FAILED]  Option {option} failed: {str(error)[:100]}...")
+            error_count += 1
+            logging.error(f"INTERACTIVE_TEST: Failed menu option {option}: {error}")
+        
+        # Small delay between tests to be respectful to the API
+        time.sleep(1)
+    
+    # Summary
+    total_time = time.time() - start_time
+    print()
+    print("=" * 80)
+    print(" Interactive Test Summary:")
+    print(f"   Successful operations: {success_count}")
+    print(f"   Failed operations: {error_count}")
+    print(f"   Skipped operations: {len(skip_interactive_options)}")
+    print(f"   Total interactive read-only coverage: {success_count}/{len(interactive_read_only_options)} ({success_count/len(interactive_read_only_options)*100:.1f}%)")
+    print(f"   Total execution time: {total_time:.2f} seconds")
+    print(f"   Detailed logs in: script.log")
+    
+    if error_count == 0:
+        print("   All tested interactive operations completed successfully!")
+        logging.info(f"INTERACTIVE_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s")
+        return True
+    else:
+        print(f"   {error_count} operations failed - check logs for details")
+        logging.warning(f"INTERACTIVE_TEST: {error_count} operations failed out of {len(interactive_read_only_options)} tested")
         return False
 
 
@@ -37308,6 +38150,8 @@ def main():
     parser.add_argument("--output-format", choices=["csv", "sqlite"], default="csv", 
                        help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys")
     parser.add_argument("--test", action="store_true", help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)")
+    parser.add_argument("--testinteractive", action="store_true", help="Run systematic test of read-only menu options requiring interactive site/device/client selection (excludes destructive operations)")
+    parser.add_argument("--dry-run", action="store_true", help="Enable dry-run mode for destructive operations (show what would be changed without making actual changes)")
     parser.add_argument("--address-check", action="store_true", help="Enable external address validation using Nominatim API for address comparison operations")
     parser.add_argument("--skip-ssl-verify", action="store_true", help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)")
     parser.add_argument("--no-env", action="store_true", help="Disable .env file loading for SSH operations (require explicit command line parameters)")
@@ -37428,6 +38272,18 @@ def main():
         logging.info(f"SYSTEMATIC_TEST: Test mode completed with success={success}")
         sys.exit(0 if success else 1)
     
+    # Handle interactive testing mode
+    if args.testinteractive:
+        logging.info("INTERACTIVE_TEST: Starting interactive test mode")
+        print(">> Interactive test mode activated")
+        if args.skip_deps:
+            print(">> Dependency checks skipped due to --skip-deps flag")
+        else:
+            print(">> Running interactive test with full dependency verification")
+        success = run_interactive_test()
+        logging.info(f"INTERACTIVE_TEST: Test mode completed with success={success}")
+        sys.exit(0 if success else 1)
+    
     # Handle TUI mode
     if args.tui:
         logging.info("TUI_MODE: Starting Terminal User Interface mode")
@@ -37527,6 +38383,7 @@ def main():
                 "debug": args.debug,
                 "delay": args.delay,
                 "fast": args.fast,
+                "dry_run": args.dry_run,
                 "address_check": args.address_check,
                 "skip_ssl_verify": args.skip_ssl_verify
             }

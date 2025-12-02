@@ -479,6 +479,62 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.02.16.43",
+      "date": "2025-12-02",
+      "changes": {
+        "feature_additions": [
+          "Menu 104: Added bidirectional operation mode - now supports both APPLY and REVERT directions",
+          "Menu 104: Users can now REVERT variable migration ({{wan2_interface}} back to ge-0/0/1)",
+          "Menu 104: Added operation direction prompt after template selection (Apply variable or Revert to hardcoded)",
+          "Menu 104: Both modes automatically migrate device-level port overrides to preserve static IPs",
+          "Menu 104: Dynamic search/replace logic adapts to selected direction",
+          "Menu 111: Created clone_gateway_templates_by_state_and_country() for geographic template cloning",
+          "New menu option enables bulk gateway template creation organized by state and country codes",
+          "Templates automatically named with Branch_{STATE/COUNTRY} pattern (e.g., Branch_CA, Branch_TX, Branch_US)",
+          "Supports batch assignment of sites to matching templates based on geographic location"
+        ],
+        "bug_fixes": [
+          "Menu 111: Fixed API endpoint - now uses updateSiteInfo instead of non-existent updateSite",
+          "Menu 111: Fixed state extraction - now parses state codes from address field using regex",
+          "Address parsing handles US/CA comma-separated format (2-letter codes with ZIP/postal)",
+          "Address parsing handles MX/Central America space-separated format (state names before postal)",
+          "Fixed Canadian addresses without commas: Now correctly extracts province codes (ON, BC, QC) before postal patterns",
+          "Fixed Canadian postal code prefixes (G1R, L2G, V6G, T1L, T0E, R0B) being misidentified as provinces",
+          "Fixed small island nations (Bahamas, Belize, Cuba, Haiti, Jamaica, Dominican Republic) now use country-only grouping",
+          "Added special handling for multi-word territories: Puerto Rico, Bay Islands",
+          "Fixed Panama city names (Panama City Panama) being incorrectly parsed as state",
+          "Canadian province extraction now matches 2-letter code at start of address component, not embedded in postal",
+          "Supports extraction from multiple address formats: US (KS 66053), CA (ON M5H 2N2), MX (Yucatan 97751)",
+          "Handles address formats with embedded state codes between city names and ZIP codes",
+          "Fallback logic handles missing or malformed address data gracefully"
+        ],
+        "testing_validation": [
+          "Added --testinteractive flag for testing read-only menu options requiring user input",
+          "Created run_interactive_test() function testing 22 interactive menu operations",
+          "Updated --test unsafe_options skip list with menu options 103-111",
+          "Added --dry-run flag support for previewing destructive operations without execution"
+        ],
+        "api_changes": [
+          "Menu 53: Fixed export_site_specific_data to conditionally pass 'limit' parameter only when supported",
+          "Added signature introspection to detect API function parameters before calling",
+          "Prevents 'unexpected keyword argument limit' errors for APIs without pagination support",
+          "Menu 104: Integrated --dry-run flag into update_gateway_templates_wan2_variable()"
+        ],
+        "performance": [
+          "Fixed tqdm progress bar TypeError by using concurrent.futures.as_completed correctly",
+          "Changed progress tracking to avoid dict+float type conflicts in parallel execution",
+          "Menu 111 uses CSV caching to minimize API calls during state/country analysis"
+        ],
+        "documentation": [
+          "Added detailed docstrings for clone_gateway_templates_by_state_and_country() explaining address parsing logic",
+          "Documented support for US, CA, MX, CR, PA, HN, GT, and other Central American address formats",
+          "Updated menu option tables with entry 111 for gateway template cloning by geography",
+          "Documented --testinteractive and --dry-run CLI flag usage in help text",
+          "Noted limitations: Multi-word state names (e.g., 'Quintana Roo') may capture last word only"
+        ]
+      }
+    },
+    {
       "version": "25.12.02.11.10",
       "date": "2025-12-02",
       "changes": {
