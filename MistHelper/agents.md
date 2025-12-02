@@ -4,7 +4,8 @@ Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maint
 
 As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to the current date and time of when changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too. When recording the changlog, keep it in JSON formatting with grouped topics, like "api-changes, logging/analytics, compatability, documentation, bug fixes, feature additions, performance, security, refactoring, testing/validation". Keep newest events at the top of the changelog and oldest last. An idea or item should not be spread over multiple topics. We dont need over complicated or "wordy" changelog.
 
-Everytime you update the changelog in the readme, do a "stage" in git.
+## Git Workflow for Development
+After updating README changelog, commit locally with `git add` + `git commit -m "version YY.MM.DD.HH.MM - description"`. Test code. If tests fail, use `git reset --soft HEAD~1` to rollback. Push multiple commits together when ready.
 
 Mist API responses are sometimes "nested". Be prepaired to handle that with JSON or otherwise.
 
