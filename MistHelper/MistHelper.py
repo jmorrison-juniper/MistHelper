@@ -1786,6 +1786,27 @@ def initialize_mist_session():
     else:
         logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")
 
+    # Helper function to test if a token is currently rate-limited
+    def is_token_rate_limited(token: str, test_host: str) -> bool:
+        """Test if a token is currently rate-limited by calling /api/v1/self"""
+        try:
+            import requests
+            url = f"https://{test_host}/api/v1/self"
+            headers = {"Authorization": f"Token {token}"}
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 429:
+                logging.debug(f"Token {token[:4]}...{token[-4:]} is rate-limited (HTTP 429)")
+                return True
+            elif response.status_code == 200:
+                logging.debug(f"Token {token[:4]}...{token[-4:]} is available (HTTP 200)")
+                return False
+            else:
+                logging.warning(f"Token {token[:4]}...{token[-4:]} returned unexpected status {response.status_code}")
+                return True  # Treat as unavailable
+        except Exception as test_err:
+            logging.warning(f"Failed to test token {token[:4]}...{token[-4:]}: {test_err}")
+            return True  # Treat as unavailable on error
+
     # Dynamically interrogate APISession signature to avoid wrong parameter names
     apisession_cls = getattr(mistapi, 'APISession', None) if mistapi else None
     tried_variants = []
@@ -1801,24 +1822,29 @@ def initialize_mist_session():
     # Candidate constructors to attempt (ordered)
     attempts = []
     if apisession_cls:
-        # 1. env_file only if supported
-        if 'env_file' in sig_params:
-            attempts.append({'env_file': '.env'})
-        # 2. Direct tokens (iterate) with potential parameter names
+        # 1. Direct tokens with potential parameter names - try this FIRST
+        # IMPORTANT: mistapi expects a comma-separated string of ALL tokens, not individual tokens
+        # This allows mistapi to rotate through tokens when hitting rate limits (HTTP 429)
         token_param_names = [n for n in ['apitoken', 'api_token', 'token'] if n in sig_params]
         if tokens and token_param_names:
-            for idx, tk in enumerate(tokens, start=1):
-                for pname in token_param_names:
-                    base_kwargs = {pname: tk}
-                    if 'host' in sig_params:
-                        base_kwargs['host'] = host
-                    attempts.append(base_kwargs)
+            # Join all tokens into a comma-separated string as mistapi expects
+            all_tokens_str = ','.join(tokens)
+            for pname in token_param_names:
+                base_kwargs = {pname: all_tokens_str}
+                if 'host' in sig_params:
+                    base_kwargs['host'] = host
+                attempts.append(base_kwargs)
+        # 2. env_file only if supported AND we don't already have tokens from environment
+        #    (env_file will read the same tokens again, causing duplicate validation failures)
+        if 'env_file' in sig_params and not tokens:
+            attempts.append({'env_file': '.env'})
         # 3. Host only (unauthenticated) if allowed (rare but safe to record)
         if 'host' in sig_params and not tokens:
             attempts.append({'host': host})
 
     # Execute attempts
     successful_method = None
+    rate_limit_detected = False
     for i, kwargs in enumerate(attempts, start=1):
         try:
             tried_variants.append(kwargs)
@@ -1827,8 +1853,73 @@ def initialize_mist_session():
             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
             break
         except Exception as e:
+            error_msg = str(e)
             logging.warning(f"APISession attempt {i}/{len(attempts)} failed kwargs={kwargs}: {e}")
+            
+            # Detect rate limiting during token validation
+            if "'NoneType' object is not iterable" in error_msg:
+                rate_limit_detected = True
+                logging.warning("Detected possible rate limiting during token validation - tokens may be throttled")
+            
+            # Always log traceback for API session failures to aid debugging
+            try:
+                import traceback
+                tb_details = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+                for line in tb_details.rstrip().splitlines():
+                    logging.info(f"  TRACE: {line}")
+            except Exception as trace_err:
+                logging.warning(f"Failed to log traceback: {trace_err}")
             apisession = None
+    
+    # If rate-limited with multiple tokens, try each token individually until one works
+    if not apisession and rate_limit_detected and tokens and len(tokens) > 1:
+        logging.warning(f"Multi-token initialization failed due to rate limiting - testing {len(tokens)} tokens individually")
+        
+        # Pre-filter tokens to find those not currently rate-limited
+        available_tokens = []
+        for token_index, individual_token in enumerate(tokens, start=1):
+            if not is_token_rate_limited(individual_token, host):
+                available_tokens.append(individual_token)
+                logging.info(f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is available")
+            else:
+                logging.warning(f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is rate-limited - skipping")
+        
+        if not available_tokens:
+            logging.error(f"All {len(tokens)} tokens are currently rate-limited - cannot initialize API session")
+        else:
+            logging.info(f"Found {len(available_tokens)} available token(s) out of {len(tokens)} total")
+            
+            # Use all available tokens (comma-separated) for rotation capability
+            available_tokens_str = ','.join(available_tokens)
+            
+            # CRITICAL: Temporarily clear MIST_APITOKEN from environment to prevent mistapi 
+            # from reading all tokens (including rate-limited ones) during _load_env() call
+            original_mist_token = os.environ.get('MIST_APITOKEN')
+            try:
+                if 'MIST_APITOKEN' in os.environ:
+                    del os.environ['MIST_APITOKEN']
+                    logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
+                
+                try:
+                    filtered_kwargs = {}
+                    if 'apitoken' in sig_params:
+                        filtered_kwargs['apitoken'] = available_tokens_str
+                    if 'host' in sig_params:
+                        filtered_kwargs['host'] = host
+                    
+                    logging.info(f"Initializing with {len(available_tokens)} available token(s)")
+                    apisession = apisession_cls(**filtered_kwargs)
+                    successful_method = filtered_kwargs
+                    logging.info(f"SUCCESS: API session initialized with {len(available_tokens)} available token(s)")
+                    tried_variants.append(filtered_kwargs)
+                except Exception as filtered_err:
+                    logging.error(f"Failed to initialize with filtered tokens: {filtered_err}")
+                    apisession = None
+            finally:
+                # Restore original MIST_APITOKEN to environment
+                if original_mist_token:
+                    os.environ['MIST_APITOKEN'] = original_mist_token
+                    logging.debug("Restored MIST_APITOKEN to environment")
 
     # Fallback to mistapi.Session if APISession failed
     if not apisession and mistapi and hasattr(mistapi, 'Session'):
@@ -7142,7 +7233,18 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     """
     Fetches data using the provided API call, processes it (flattening, sorting, escaping),
     writes it to a CSV file, and displays it in a PrettyTable. Adds detailed logging.
-    Handles API rate limiting (HTTP 429) by saving partial results and exiting gracefully.
+    
+    Enhanced Error Handling:
+        - Handles API rate limiting (HTTP 429) by saving partial results
+        - Detects malformed API responses (missing 'results' key) and attempts recovery
+        - Logs detailed response structure for debugging unexpected formats
+        - Always saves partial data before exiting on error (prevents data loss)
+        - Provides user-friendly messages about partial data saves
+    
+    Safety Features:
+        - Emergency data saves on any exception
+        - Detailed logging of response structure for troubleshooting
+        - Graceful degradation when API returns unexpected formats
     """
 
     logging.debug(f"ENTRY: fetch_and_display_api_data(title={title}, api_call={api_call.__name__}, filename={filename}, sort_key={sort_key}, display_fields={display_fields}, kwargs={kwargs})")
@@ -7162,23 +7264,73 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         logging.debug(f"Applying rate limit delay: {delay:.2f}s")
         time.sleep(delay)
         
+        # Log response structure for debugging unexpected formats
+        logging.debug(f"API response type: {type(response)}")
+        if hasattr(response, 'data'):
+            logging.debug(f"Response.data type: {type(response.data)}")
+            if isinstance(response.data, dict):
+                logging.debug(f"Response.data keys: {list(response.data.keys())}")
+            elif isinstance(response.data, list):
+                logging.debug(f"Response.data is list with {len(response.data)} items")
+        
         try:
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
             logging.debug(f"API call successful, retrieved {len(rawdata) if rawdata else 0} raw records")
+        except KeyError as e:
+            # Handle missing 'results' key or other structure issues
+            logging.error(f"API response structure error - missing key: {e}")
+            logging.error(f"Response details: type={type(response)}, hasattr(data)={hasattr(response, 'data')}")
+            if hasattr(response, 'data'):
+                logging.error(f"Response.data type={type(response.data)}")
+                if isinstance(response.data, dict):
+                    logging.error(f"Available keys: {list(response.data.keys())}")
+                    # Try to extract data from common alternate structures
+                    if 'data' in response.data:
+                        rawdata = response.data.get('data', [])
+                        logging.info(f"Recovered {len(rawdata)} records from response.data['data']")
+                    elif isinstance(response.data, list):
+                        rawdata = response.data
+                        logging.info(f"Recovered {len(rawdata)} records from response.data (list)")
+                elif isinstance(response.data, list):
+                    rawdata = response.data
+                    logging.info(f"Recovered {len(rawdata)} records from response.data (direct list)")
+            
+            # Save whatever we recovered
+            if rawdata:
+                print(f"! API returned unexpected structure. Recovered {len(rawdata)} records.")
+                DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
+                logging.info(f"Recovered data saved to {filename} ({len(rawdata)} rows)")
+            else:
+                print(f"! API response missing expected 'results' key. No data could be recovered.")
+                logging.error(f"Unable to recover any data from malformed response for {title}")
+                logging.debug(f"EXIT: fetch_and_display_api_data - structure error, no recovery")
+                return
+                
         except Exception as e:
-            # Remove references to device_id and site_id, which are not defined in this scope
+            # Handle other exceptions during data retrieval
             logging.error(f"Exception occurred during API data retrieval: {e}")
+            logging.error(f"Exception type: {type(e).__name__}")
             print(f"! Exception occurred during API call: {e}")
-            # Handle HTTP 429 (rate limit exceeded)
+            
+            # Check for HTTP 429 (rate limit exceeded)
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
                 logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
                 if rawdata:
                     DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
                     logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
+                    print(f"* Partial data saved: {len(rawdata)} records written to {filename}")
                 logging.debug(f"EXIT: fetch_and_display_api_data - rate limited")
                 return
             else:
+                # For any other exception, save partial data before re-raising
+                if rawdata:
+                    try:
+                        DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
+                        logging.info(f"Emergency save: {len(rawdata)} partial records saved to {filename} before error exit")
+                        print(f"* Emergency save: {len(rawdata)} partial records written to {filename}")
+                    except Exception as save_error:
+                        logging.error(f"Failed to save partial data during error handling: {save_error}")
                 logging.debug(f"EXIT: fetch_and_display_api_data - API error")
                 raise
 
@@ -7216,10 +7368,23 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
 
     except Exception as e:
         logging.error(f"! Error during data fetch for {title}: {e}")
+        logging.error(f"Exception type: {type(e).__name__}, Traceback info available in logs")
+        
         # Always save whatever data was collected so far
         if rawdata:
-            DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
-            logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
+            try:
+                DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
+                logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
+                print(f"\n!! PARTIAL DATA SAVED !!")
+                print(f"   * Despite the error, {len(rawdata)} records were successfully saved to {filename}")
+                print(f"   * Error: {str(e)}")
+                print(f"   * You can retry the operation later to get remaining data")
+            except Exception as save_error:
+                logging.error(f"Failed to save partial data in outer exception handler: {save_error}")
+                print(f"! Critical: Could not save partial data. Error: {save_error}")
+        else:
+            print(f"! No data was collected before the error occurred")
+            
         logging.debug(f"EXIT: fetch_and_display_api_data - error")
         raise
 
@@ -12506,7 +12671,13 @@ def export_device_port_stats_to_csv(fast: bool = False):
 
     Fast Mode Behavior:
         - Skips API call if recent CSV exists (freshness based on `CSV_FRESHNESS_MINUTES`).
-        - Otherwise identical behavior.
+        - Parallelizes data retrieval across sites for faster collection.
+        - Uses connection pool management to limit concurrent API calls.
+    
+    Performance Optimization:
+        - Non-fast mode: Single org-level API call with serial pagination (slow but simple)
+        - Fast mode: Parallel site-level API calls (faster, scales with site count)
+    
     SECURITY: Read-only aggregation; caching is safe.
     """
     output_file = "OrgDevicePortStats.csv"
@@ -12520,17 +12691,181 @@ def export_device_port_stats_to_csv(fast: bool = False):
                 return
         except Exception as e:  # pragma: no cover
             logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
+    
     logging.info("Starting export of organization device port statistics...")
     hours = get_dynamic_lookback_hours(24, 1)
     log_dynamic_lookback("org device port statistics export", hours)
-    fetch_and_display_api_data(
-        title="Org Device Port Stats:",
-        api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
-        filename=output_file,
-        sort_key="mac",
-        duration=f"{hours}h",
-        limit=1000
-    )
+    
+    if fast:
+        # Fast mode: Parallelize by site for better performance
+        logging.info("* Fast mode: Parallelizing port stats retrieval across sites")
+        
+        # Get org_id for API calls
+        org_id = get_cached_or_prompted_org_id()
+        
+        # Get all sites (use cached CSV if available)
+        try:
+            check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                sites = [(row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")]
+            logging.info(f"* Loaded {len(sites)} sites from cached data")
+            logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
+        except Exception as e:
+            logging.warning(f"* Could not use cached sites, fetching from API: {e}")
+            site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+            site_data = mistapi.get_all(response=site_response, mist_session=apisession)
+            sites = [(site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")]
+            logging.info(f"* Fetched {len(sites)} sites from API")
+            logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
+        
+        # Worker function to fetch port stats for a single site
+        def fetch_site_port_stats(site_info, connection_semaphore):
+            """Fetch port statistics for a single site with retry logic."""
+            site_id, site_name = site_info
+            
+            for attempt in range(FAST_MODE_MAX_RETRIES + 1):
+                try:
+                    # Use semaphore to limit concurrent connections
+                    with connection_semaphore:
+                        response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+                            apisession, 
+                            site_id, 
+                            duration=f"{hours}h",
+                            limit=1000
+                        )
+                        port_stats = mistapi.get_all(response=response, mist_session=apisession)
+                    
+                    # SAFETY: Validate that port_stats is a list, not a dict or other type
+                    if not isinstance(port_stats, list):
+                        logging.error(f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}")
+                        return []
+                    
+                    # Add site information to each record
+                    for stat in port_stats:
+                        stat['site_id'] = site_id
+                        stat['site_name'] = site_name
+                    
+                    if attempt > 0:
+                        logging.info(f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)")
+                    else:
+                        logging.debug(f"! Collected {len(port_stats)} port stats from site {site_name}")
+                    return port_stats
+                    
+                except Exception as e:
+                    if attempt < FAST_MODE_MAX_RETRIES:
+                        backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)
+                        logging.warning(f"! Attempt {attempt + 1} failed for site {site_name}: {e}")
+                        logging.info(f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})")
+                        time.sleep(backoff_delay)
+                    else:
+                        logging.error(f"! Final attempt failed for site {site_name}: {e}")
+                        return []
+            return []
+        
+        # Retry function for failed sites
+        def retry_failed_sites(failed_sites, connection_semaphore):
+            retry_results = []
+            still_failed = []
+            retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
+            
+            if retry_threads <= 0:
+                logging.warning(" FAST MODE: No available threads for retry; skipping retries")
+                return [], failed_sites
+                
+            with ThreadPoolExecutor(max_workers=retry_threads) as executor:
+                retry_futures = {
+                    executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info
+                    for site_info in failed_sites
+                }
+                # Wrap the futures dict keys for tqdm progress tracking
+                # CRITICAL FIX: Use fully qualified concurrent.futures.as_completed to bypass any monkey-patching
+                # Direct import to avoid tqdm or other wrappers interfering with parameters
+                import concurrent.futures
+                retry_futures_list = list(retry_futures.keys())
+                with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:
+                    for future in concurrent.futures.as_completed(retry_futures_list):
+                        site_info = retry_futures[future]
+                        try:
+                            result = future.result()
+                            if result:
+                                retry_results.extend(result)
+                                logging.info(f" FAST RETRY OK: {site_info[1]}")
+                            else:
+                                still_failed.append(site_info)
+                                logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")
+                        except Exception as e:
+                            still_failed.append(site_info)
+                            logging.error(f" FAST RETRY EXC: {site_info[1]} -> {e}")
+                        finally:
+                            pbar.update(1)
+            return retry_results, still_failed
+        
+        # Execute parallel site fetches
+        start_time = time.time()
+        logging.debug(f"Start time type: {type(start_time)}, value: {start_time}")
+        
+        # SAFETY: Validate start_time is actually a float
+        if not isinstance(start_time, (int, float)):
+            logging.error(f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}")
+            logging.error(f"! time module type: {type(time)}, time.time type: {type(time.time)}")
+            raise TypeError(f"start_time must be a number, got {type(start_time)}")
+        
+        successful_results, failed_sites = execute_with_connection_pool_management(
+            work_items=sites,
+            worker_function=fetch_site_port_stats,
+            batch_description="sites",
+            retry_function=retry_failed_sites
+        )
+        
+        logging.debug(f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}")
+        logging.debug(f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}")
+        
+        # Flatten results (each successful result is a list of port stats)
+        all_port_stats = []
+        for idx, result_list in enumerate(successful_results):
+            logging.debug(f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}")
+            if isinstance(result_list, list):
+                all_port_stats.extend(result_list)
+            else:
+                logging.warning(f"Unexpected result type at index {idx}: {type(result_list)}, value: {result_list}")
+        
+        end_time = time.time()
+        logging.debug(f"End time type: {type(end_time)}, value: {end_time}")
+        duration = end_time - start_time
+        logging.debug(f"Duration calculation successful: {duration}")
+        
+        logging.info(f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s")
+        print(f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s")
+        
+        # Save results
+        if all_port_stats:
+            # Sort by MAC address if available
+            try:
+                all_port_stats = sorted(all_port_stats, key=lambda x: x.get('mac', ''))
+            except Exception as e:
+                logging.debug(f"Could not sort by MAC: {e}")
+            
+            # Process and save
+            flattened = flatten_nested_fields_in_list(all_port_stats)
+            sanitized = escape_multiline_strings_for_csv(flattened)
+            DataExporter.save_data_to_output(sanitized, output_file, api_function_name='searchSiteSwOrGwPorts')
+            print(f"! {len(all_port_stats)} port stat records exported to {output_file}")
+            logging.info(f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)")
+        else:
+            logging.warning(" No port statistics collected. CSV not created.")
+            print("! No port statistics collected. CSV not created.")
+    else:
+        # Non-fast mode: Original org-level search (serial pagination)
+        fetch_and_display_api_data(
+            title="Org Device Port Stats:",
+            api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
+            filename=output_file,
+            sort_key="mac",
+            duration=f"{hours}h",
+            limit=1000
+        )
 
 def export_vpn_peer_stats_to_csv(fast: bool = False):
     """Export VPN peer path statistics to `OrgVPNPeerStats.csv`.
@@ -14563,6 +14898,1122 @@ def export_org_mx_edges_to_csv():
         data_type="mx edges",
         sort_key="name"
     )
+
+def create_test_sites_from_csv():
+    """
+    Create 137 test sites from NorthAmericanTestSites.csv in the data directory.
+    
+    DESTRUCTIVE: Creates new sites in the organization.
+    Sites are based on real North American landmarks and locations across 13 countries.
+    
+    Geographic distribution:
+    - United States: 85 sites (monuments, parks, museums, landmarks)
+    - Canada: 11 sites (national parks, cities, attractions)
+    - Mexico: 10 sites (archaeological sites, colonial cities, resorts)
+    - Costa Rica: 4 sites (volcanoes, national parks, cloud forests)
+    - Guatemala: 4 sites (Mayan ruins, colonial cities, lakes)
+    - Panama: 4 sites (canal, islands, highlands)
+    - Bahamas: 3 sites (Nassau, resorts, marine attractions)
+    - Belize: 3 sites (barrier reef, islands, diving sites)
+    - Cuba: 3 sites (Havana, beaches, colonial towns)
+    - Honduras: 3 sites (Bay Islands, Mayan ruins, national parks)
+    - Jamaica: 3 sites (Kingston, resorts, waterfalls)
+    - Dominican Republic: 3 sites (colonial zone, resorts, beaches)
+    - Haiti: 2 sites (capital, fortress UNESCO site)
+    
+    CSV columns:
+    - name: Site name (required, no spaces)
+    - address: Full street address
+    - country_code: Two-letter ISO country code
+    - lat: Latitude coordinate
+    - lng: Longitude coordinate
+    - timezone: IANA timezone string
+    - notes: Description of the location
+    
+    SECURITY: Requires explicit 'CREATE' confirmation before execution.
+    """
+    logging.debug("ENTRY: create_test_sites_from_csv()")
+    print("\n========================================")
+    print(" DESTRUCTIVE OPERATION WARNING")
+    print("========================================")
+    print(" This will CREATE 137 new test sites in your organization")
+    print(" Sites span 13 North American countries:")
+    print(" US, Canada, Mexico, Guatemala, Costa Rica, Panama,")
+    print(" Honduras, Belize, Bahamas, Cuba, Jamaica,")
+    print(" Dominican Republic, and Haiti")
+    print(" Each site includes address, coordinates, and timezone")
+    print("========================================\n")
+    
+    # Safety confirmation
+    confirmation = safe_input(
+        "Type 'CREATE' (uppercase) to proceed with site creation: ",
+        context="site creation confirmation"
+    )
+    
+    if confirmation != "CREATE":
+        print(" Site creation cancelled - confirmation phrase not matched")
+        logging.info("Site creation cancelled by user - did not provide 'CREATE' confirmation")
+        logging.debug("EXIT: create_test_sites_from_csv - cancelled")
+        return
+    
+    logging.info("Starting creation of test sites from CSV...")
+    
+    # Get organization ID
+    org_id = get_cached_or_prompted_org_id()
+    if not org_id:
+        logging.error("No organization ID provided - cannot create sites")
+        print(" ERROR: No organization ID provided")
+        logging.debug("EXIT: create_test_sites_from_csv - no org_id")
+        return
+    
+    # Load CSV file
+    csv_file_path = get_csv_file_path("NorthAmericanTestSites.csv")
+    
+    if not os.path.exists(csv_file_path):
+        logging.error(f"CSV file not found: {csv_file_path}")
+        print(f" ERROR: CSV file not found: {csv_file_path}")
+        logging.debug("EXIT: create_test_sites_from_csv - file not found")
+        return
+    
+    try:
+        with open(csv_file_path, mode="r", encoding="utf-8") as csv_file:
+            sites_data = list(csv.DictReader(csv_file))
+        
+        logging.info(f"Loaded {len(sites_data)} sites from CSV file")
+        print(f"\n Loaded {len(sites_data)} sites from CSV file")
+        
+    except Exception as read_error:
+        logging.error(f"Failed to read CSV file: {read_error}")
+        print(f" ERROR: Failed to read CSV file: {read_error}")
+        logging.debug("EXIT: create_test_sites_from_csv - read error")
+        return
+    
+    # Create sites using the Mist API
+    created_sites = []
+    failed_sites = []
+    
+    print(f"\n Creating sites in organization {org_id}...")
+    print(" This may take a few minutes...\n")
+    
+    for index, site_data in enumerate(sites_data, start=1):
+        site_name = site_data.get("name", "").strip()
+        
+        if not site_name:
+            logging.warning(f"Skipping row {index} - no site name provided")
+            failed_sites.append({"row": index, "name": "MISSING", "error": "No site name"})
+            continue
+        
+        # Build site creation payload
+        site_payload = {
+            "name": site_name
+        }
+        
+        # Add optional fields if present
+        if site_data.get("address"):
+            site_payload["address"] = site_data["address"].strip()
+        
+        if site_data.get("country_code"):
+            site_payload["country_code"] = site_data["country_code"].strip()
+        
+        # Add lat/lng if both are present
+        lat_str = site_data.get("lat", "").strip()
+        lng_str = site_data.get("lng", "").strip()
+        if lat_str and lng_str:
+            try:
+                site_payload["latlng"] = {
+                    "lat": float(lat_str),
+                    "lng": float(lng_str)
+                }
+            except ValueError as coord_error:
+                logging.warning(f"Invalid coordinates for {site_name}: {coord_error}")
+        
+        if site_data.get("timezone"):
+            site_payload["timezone"] = site_data["timezone"].strip()
+        
+        if site_data.get("notes"):
+            site_payload["notes"] = site_data["notes"].strip()
+        
+        # Create the site via API
+        try:
+            logging.debug(f"Creating site {index}/{len(sites_data)}: {site_name}")
+            response = mistapi.api.v1.orgs.sites.createOrgSite(
+                apisession,
+                org_id,
+                body=site_payload
+            )
+            
+            # Check response
+            if hasattr(response, 'data') and response.data:
+                created_site_id = response.data.get('id', 'unknown')
+                created_sites.append({
+                    "name": site_name,
+                    "id": created_site_id,
+                    "row": index
+                })
+                print(f" [{index}/{len(sites_data)}] Created: {site_name} (ID: {created_site_id})")
+                logging.info(f"Successfully created site: {site_name} (ID: {created_site_id})")
+            else:
+                failed_sites.append({
+                    "row": index,
+                    "name": site_name,
+                    "error": "No data in response"
+                })
+                logging.warning(f"Site creation returned no data: {site_name}")
+                print(f" [{index}/{len(sites_data)}] FAILED: {site_name} - No data returned")
+                
+        except Exception as create_error:
+            error_message = str(create_error)
+            failed_sites.append({
+                "row": index,
+                "name": site_name,
+                "error": error_message
+            })
+            logging.error(f"Failed to create site {site_name}: {create_error}")
+            print(f" [{index}/{len(sites_data)}] FAILED: {site_name} - {error_message}")
+        
+        # Rate limiting - small delay between creates
+        time.sleep(0.5)
+    
+    # Summary report
+    print("\n========================================")
+    print(" SITE CREATION SUMMARY")
+    print("========================================")
+    print(f" Total sites in CSV: {len(sites_data)}")
+    print(f" Successfully created: {len(created_sites)}")
+    print(f" Failed: {len(failed_sites)}")
+    print("========================================\n")
+    
+    logging.info(f"Site creation complete: {len(created_sites)} created, {len(failed_sites)} failed")
+    
+    # Export results to CSV
+    if created_sites:
+        output_filename = "CreatedTestSites.csv"
+        DataExporter.save_data_to_output(created_sites, output_filename)
+        print(f" Created sites exported to {output_filename}")
+        logging.info(f"Created sites list exported to {output_filename}")
+    
+    if failed_sites:
+        failure_filename = "FailedTestSites.csv"
+        DataExporter.save_data_to_output(failed_sites, failure_filename)
+        print(f" Failed sites exported to {failure_filename}")
+        logging.warning(f"Failed sites list exported to {failure_filename}")
+    
+    logging.debug("EXIT: create_test_sites_from_csv - complete")
+
+def create_country_rf_templates_and_assign():
+    """
+    Menu 108: Create Country-Specific RF Templates and Assign to Sites (DESTRUCTIVE)
+    
+    This function automates RF template deployment by country:
+    1. Scans all organization sites to identify unique country codes
+    2. Creates one RF template per country with default/auto settings
+    3. Assigns each site to its corresponding country RF template
+    
+    RF Template Configuration:
+    - name: "RF-{country_code}" (e.g., "RF-US", "RF-CA", "RF-MX")
+    - country_code: Matches site country code
+    - band_24: Auto channels, 20MHz bandwidth, auto power
+    - band_5: Auto channels, 40MHz bandwidth, auto power
+    - band_6: Auto channels, 80MHz bandwidth, auto power (future-ready for WiFi 6E)
+    
+    Safety: Requires uppercase 'CREATE' confirmation before execution.
+    
+    Note: Sites without country_code will be skipped with warning.
+    """
+    logging.debug("ENTRY: create_country_rf_templates_and_assign")
+    
+    print("\n" + "=" * 70)
+    print(" Menu 108: Create Country-Specific RF Templates and Assign")
+    print("=" * 70)
+    
+    # Initialize API session if needed
+    if not apisession:
+        logging.error("API session not initialized")
+        print(" ERROR: Mist API session not initialized")
+        return
+    
+    org_id = get_cached_or_prompted_org_id()
+    if not org_id:
+        logging.warning("No org_id provided - operation cancelled")
+        print(" No organization ID provided. Exiting.")
+        return
+    
+    # Step 1: Fetch all sites to identify unique countries
+    print("\n  Step 1: Scanning organization sites for unique country codes...")
+    logging.info(f"Fetching all sites for org {org_id} to identify countries")
+    
+    try:
+        sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
+            apisession,
+            org_id,
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        sites = mistapi.get_all(response=sites_response, mist_session=apisession)
+        
+        if not sites:
+            print(" No sites found in organization.")
+            logging.warning("No sites found in organization")
+            return
+        
+        print(f" Found {len(sites)} sites in organization")
+        logging.info(f"Found {len(sites)} total sites")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch sites: {error}")
+        print(f" ERROR: Failed to fetch sites - {error}")
+        return
+    
+    # Step 2: Extract unique country codes
+    country_codes = set()
+    sites_by_country = {}
+    sites_without_country = []
+    
+    for site in sites:
+        country_code = site.get("country_code", "").strip().upper()
+        site_id = site.get("id")
+        site_name = site.get("name", "Unknown")
+        
+        if country_code:
+            country_codes.add(country_code)
+            if country_code not in sites_by_country:
+                sites_by_country[country_code] = []
+            sites_by_country[country_code].append({
+                "id": site_id,
+                "name": site_name
+            })
+        else:
+            sites_without_country.append({
+                "id": site_id,
+                "name": site_name
+            })
+    
+    if not country_codes:
+        print(" WARNING: No sites have country codes assigned.")
+        print(" Please assign country codes to sites before running this operation.")
+        logging.warning("No sites with country codes found")
+        return
+    
+    print(f"\n  Found {len(country_codes)} unique countries:")
+    for country in sorted(country_codes):
+        site_count = len(sites_by_country[country])
+        print(f"   - {country}: {site_count} sites")
+        logging.info(f"Country {country} has {site_count} sites")
+    
+    if sites_without_country:
+        print(f"\n  WARNING: {len(sites_without_country)} sites have no country code and will be skipped:")
+        for site_info in sites_without_country[:5]:  # Show first 5
+            print(f"   - {site_info['name']}")
+        if len(sites_without_country) > 5:
+            print(f"   ... and {len(sites_without_country) - 5} more")
+        logging.warning(f"{len(sites_without_country)} sites without country codes will be skipped")
+    
+    # Step 3: Check for existing RF templates with same naming pattern
+    print("\n  Step 2: Checking for existing RF templates...")
+    logging.info("Checking for existing RF templates")
+    
+    try:
+        templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(
+            apisession,
+            org_id,
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        existing_templates = mistapi.get_all(response=templates_response, mist_session=apisession) or []
+        
+        existing_template_names = {template.get("name"): template.get("id") for template in existing_templates}
+        logging.info(f"Found {len(existing_templates)} existing RF templates")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch existing RF templates: {error}")
+        print(f" ERROR: Failed to fetch existing RF templates - {error}")
+        return
+    
+    # Identify which templates need to be created vs updated
+    templates_to_create = []
+    templates_to_update = []
+    
+    for country in sorted(country_codes):
+        template_name = f"RF-{country}"
+        if template_name in existing_template_names:
+            templates_to_update.append({
+                "country": country,
+                "name": template_name,
+                "id": existing_template_names[template_name]
+            })
+        else:
+            templates_to_create.append({
+                "country": country,
+                "name": template_name
+            })
+    
+    # Prompt user about handling existing templates
+    update_mode = "skip"  # Default: skip existing templates
+    
+    if templates_to_update:
+        print(f"\n  Found {len(templates_to_update)} existing RF templates:")
+        for template_info in templates_to_update[:5]:
+            print(f"   - {template_info['name']} (ID: {template_info['id']})")
+        if len(templates_to_update) > 5:
+            print(f"   ... and {len(templates_to_update) - 5} more")
+        
+        print("\n  How should existing templates be handled?")
+        print("   1. SKIP - Keep existing templates as-is (recommended)")
+        print("   2. UPDATE - Update existing templates with new settings (DESTRUCTIVE)")
+        
+        while True:
+            choice = safe_input("\n  Enter choice (1 or 2): ", context="template_update_mode").strip()
+            if choice == "1":
+                update_mode = "skip"
+                print("  Using existing templates without changes.")
+                break
+            elif choice == "2":
+                update_mode = "update"
+                print("  Will update existing templates with new settings.")
+                break
+            else:
+                print("  Invalid choice. Please enter 1 or 2.")
+    
+    if templates_to_create:
+        print(f"\n  Will create {len(templates_to_create)} new RF templates:")
+        for template_info in templates_to_create[:5]:
+            print(f"   - {template_info['name']}")
+        if len(templates_to_create) > 5:
+            print(f"   ... and {len(templates_to_create) - 5} more")
+    
+    if not templates_to_create and update_mode == "skip":
+        print("\n  All country RF templates already exist and will be used as-is.")
+    
+    # Step 4: Safety confirmation
+    print("\n  " + "!" * 66)
+    print("  WARNING: DESTRUCTIVE OPERATION")
+    print("  " + "!" * 66)
+    print("  This will:")
+    if templates_to_create:
+        print(f"  - CREATE {len(templates_to_create)} new RF templates")
+    if update_mode == "update" and templates_to_update:
+        print(f"  - UPDATE {len(templates_to_update)} existing RF templates")
+    print(f"  - ASSIGN {sum(len(sites_by_country[c]) for c in country_codes)} sites to country templates")
+    print("  - OVERRIDE any existing RF template assignments")
+    print("  " + "!" * 66)
+    
+    confirmation = safe_input("\n  Type 'CREATE' to proceed: ", context="create_country_rf_templates")
+    
+    if confirmation != "CREATE":
+        print(" Operation cancelled.")
+        logging.info("Operation cancelled by user at confirmation prompt")
+        return
+    
+    # Step 5: Update existing RF templates if requested
+    updated_templates = {}
+    
+    if update_mode == "update" and templates_to_update:
+        print(f"\n  Step 3: Updating {len(templates_to_update)} existing RF templates...")
+        
+        for template_info in templates_to_update:
+            country = template_info["country"]
+            template_name = template_info["name"]
+            template_id = template_info["id"]
+            
+            # Default RF template configuration (auto/default settings)
+            rf_template_payload = {
+                "name": template_name,
+                "country_code": country,
+                "band_24": {
+                    "disabled": False,
+                    "allow_rrm_disable": "auto",
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 20,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_5": {
+                    "disabled": False,
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 40,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_6": {
+                    "disabled": False,
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 80,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_24_usage": "auto"
+            }
+            
+            try:
+                logging.debug(f"Updating RF template: {template_name} (ID: {template_id}) for country {country}")
+                response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate(
+                    apisession,
+                    org_id,
+                    template_id,
+                    body=rf_template_payload
+                )
+                
+                if response.status_code == 200:
+                    updated_templates[country] = {
+                        "id": template_id,
+                        "name": template_name
+                    }
+                    print(f"  Updated: {template_name} (ID: {template_id})")
+                    logging.info(f"Successfully updated RF template {template_name} with ID {template_id}")
+                else:
+                    logging.error(f"Failed to update RF template {template_name}: HTTP {response.status_code}")
+                    print(f"  FAILED: {template_name} (HTTP {response.status_code})")
+                
+                # Rate limiting delay
+                time.sleep(0.5)
+                
+            except Exception as error:
+                logging.error(f"Exception updating RF template {template_name}: {error}")
+                print(f"  ERROR: {template_name} - {error}")
+    
+    # Step 6: Create new RF templates
+    created_templates = {}
+    
+    if templates_to_create:
+        step_number = 4 if update_mode == "update" and templates_to_update else 3
+        print(f"\n  Step {step_number}: Creating {len(templates_to_create)} new RF templates...")
+        
+        for template_info in templates_to_create:
+            country = template_info["country"]
+            template_name = template_info["name"]
+            
+            # Default RF template configuration (auto/default settings)
+            rf_template_payload = {
+                "name": template_name,
+                "country_code": country,
+                "band_24": {
+                    "disabled": False,
+                    "allow_rrm_disable": "auto",
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 20,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_5": {
+                    "disabled": False,
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 40,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_6": {
+                    "disabled": False,
+                    "channels": None,  # Auto channel selection
+                    "bandwidth": 80,
+                    "power_min": None,
+                    "power_max": None,
+                    "power": None,  # Auto power
+                    "preamble": "short"
+                },
+                "band_24_usage": "auto"
+            }
+            
+            try:
+                logging.debug(f"Creating RF template: {template_name} for country {country}")
+                response = mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate(
+                    apisession,
+                    org_id,
+                    rf_template_payload
+                )
+                
+                if response.status_code == 200:
+                    created_template_id = response.data.get("id")
+                    created_templates[country] = {
+                        "id": created_template_id,
+                        "name": template_name
+                    }
+                    print(f" Created: {template_name} (ID: {created_template_id})")
+                    logging.info(f"Successfully created RF template {template_name} with ID {created_template_id}")
+                else:
+                    logging.error(f"Failed to create RF template {template_name}: HTTP {response.status_code}")
+                    print(f" FAILED: {template_name} (HTTP {response.status_code})")
+                
+                # Rate limiting delay
+                time.sleep(0.5)
+                
+            except Exception as error:
+                logging.error(f"Exception creating RF template {template_name}: {error}")
+                print(f"  ERROR: {template_name} - {error}")
+    
+    # Merge all templates (existing/updated + newly created)
+    country_template_mapping = {}
+    
+    # Add updated templates
+    if update_mode == "update":
+        country_template_mapping.update(updated_templates)
+    
+    # Add skipped (unchanged) templates
+    if update_mode == "skip":
+        for template_info in templates_to_update:
+            country_template_mapping[template_info["country"]] = {
+                "id": template_info["id"],
+                "name": template_info["name"]
+            }
+    
+    # Add newly created templates
+    country_template_mapping.update(created_templates)
+    
+    print(f"\n  RF Template Summary:")
+    print(f"   Total countries: {len(country_codes)}")
+    print(f"   Templates created: {len(created_templates)}")
+    if update_mode == "update":
+        print(f"   Templates updated: {len(updated_templates)}")
+    else:
+        print(f"   Templates existing (unchanged): {len(templates_to_update)}")
+    print(f"   Templates ready for assignment: {len(country_template_mapping)}")
+    
+    # Step 7: Assign sites to their country RF templates
+    step_number = 5 if update_mode == "update" and templates_to_update else 4
+    if templates_to_create:
+        step_number += 1
+    print(f"\n  Step {step_number}: Assigning sites to country RF templates...")
+    
+    success_assignments = []
+    failed_assignments = []
+    
+    for country in sorted(country_codes):
+        if country not in country_template_mapping:
+            logging.warning(f"No template available for country {country} - skipping sites")
+            continue
+        
+        template_id = country_template_mapping[country]["id"]
+        template_name = country_template_mapping[country]["name"]
+        sites_to_assign = sites_by_country[country]
+        
+        print(f"\n  Assigning {len(sites_to_assign)} sites to {template_name}...")
+        
+        for site_info in sites_to_assign:
+            site_id = site_info["id"]
+            site_name = site_info["name"]
+            
+            try:
+                # Update site with rftemplate_id
+                site_update_payload = {
+                    "rftemplate_id": template_id
+                }
+                
+                logging.debug(f"Assigning site {site_name} (ID: {site_id}) to RF template {template_name} (ID: {template_id})")
+                
+                response = mistapi.api.v1.sites.sites.updateSiteInfo(
+                    apisession,
+                    site_id,
+                    body=site_update_payload
+                )
+                
+                if response.status_code == 200:
+                    success_assignments.append({
+                        "site_name": site_name,
+                        "site_id": site_id,
+                        "country": country,
+                        "template_name": template_name,
+                        "template_id": template_id
+                    })
+                    logging.info(f"Successfully assigned site {site_name} to RF template {template_name}")
+                else:
+                    failed_assignments.append({
+                        "site_name": site_name,
+                        "site_id": site_id,
+                        "country": country,
+                        "template_name": template_name,
+                        "error": f"HTTP {response.status_code}"
+                    })
+                    logging.error(f"Failed to assign site {site_name}: HTTP {response.status_code}")
+                
+                # Rate limiting delay
+                time.sleep(0.3)
+                
+            except Exception as error:
+                failed_assignments.append({
+                    "site_name": site_name,
+                    "site_id": site_id,
+                    "country": country,
+                    "template_name": template_name,
+                    "error": str(error)
+                })
+                logging.error(f"Exception assigning site {site_name}: {error}")
+    
+    # Step 7: Summary and output
+    print("\n" + "=" * 70)
+    print(" OPERATION COMPLETE")
+    print("=" * 70)
+    print(f"  RF Templates Created: {len(created_templates)}")
+    if update_mode == "update":
+        print(f"  RF Templates Updated: {len(updated_templates)}")
+    print(f"  Sites Successfully Assigned: {len(success_assignments)}")
+    print(f"  Sites Failed: {len(failed_assignments)}")
+    print(f"  Sites Skipped (no country): {len(sites_without_country)}")
+    
+    # Export results to CSV
+    if success_assignments:
+        success_filename = "SuccessfulRFTemplateAssignments.csv"
+        DataExporter.save_data_to_output(success_assignments, success_filename)
+        print(f"\n Successful assignments exported to {success_filename}")
+        logging.info(f"Successful assignments exported to {success_filename}")
+    
+    if failed_assignments:
+        failure_filename = "FailedRFTemplateAssignments.csv"
+        DataExporter.save_data_to_output(failed_assignments, failure_filename)
+        print(f" Failed assignments exported to {failure_filename}")
+        logging.warning(f"Failed assignments exported to {failure_filename}")
+    
+    logging.debug("EXIT: create_country_rf_templates_and_assign - complete")
+
+def create_ap_model_device_profiles():
+    """
+    Scan organization for all AP device models and create a Device Profile for each unique model.
+    
+    Handles sub-model revisions (AP41US, AP41WW, etc.) as separate profiles.
+    All settings are set to inherit/auto for maximum flexibility.
+    
+    DESTRUCTIVE: Creates new device profiles in the organization.
+    """
+    logging.debug("ENTER: create_ap_model_device_profiles")
+    print("\n" + "=" * 70)
+    print(" CREATE AP MODEL DEVICE PROFILES")
+    print("=" * 70)
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Scan all devices for unique AP models
+    print("\n  Step 1: Scanning organization for AP device models...")
+    logging.info("Scanning organization inventory to identify unique AP models")
+    
+    try:
+        inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+            apisession,
+            org_id,
+            type="ap",
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        all_devices = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
+        logging.info(f"Retrieved {len(all_devices)} AP devices from organization inventory")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch organization inventory: {error}")
+        print(f" ERROR: Failed to fetch inventory - {error}")
+        return
+    
+    if not all_devices:
+        print(" No AP devices found in organization.")
+        logging.info("No AP devices found - exiting")
+        return
+    
+    # Extract unique models (including sub-model variants like AP41US, AP41WW)
+    ap_models = set()
+    models_without_info = []
+    
+    for device in all_devices:
+        model = device.get("model")
+        if model:
+            ap_models.add(model)
+        else:
+            device_name = device.get("name", device.get("mac", "unknown"))
+            models_without_info.append(device_name)
+    
+    if models_without_info:
+        print(f"\n  Warning: {len(models_without_info)} devices have no model information:")
+        for device_name in models_without_info[:5]:
+            print(f"   - {device_name}")
+        if len(models_without_info) > 5:
+            print(f"   ... and {len(models_without_info) - 5} more")
+        logging.warning(f"{len(models_without_info)} devices without model information")
+    
+    print(f"\n  Found {len(ap_models)} unique AP models:")
+    for model in sorted(ap_models):
+        print(f"   - {model}")
+    
+    # Step 2: Check for existing device profiles
+    print("\n  Step 2: Checking for existing Device Profiles...")
+    logging.info("Checking for existing AP device profiles")
+    
+    try:
+        profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+            apisession,
+            org_id,
+            type="ap",
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        existing_profiles = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
+        
+        existing_profile_names = {profile.get("name"): profile.get("id") for profile in existing_profiles}
+        logging.info(f"Found {len(existing_profiles)} existing AP device profiles")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch existing device profiles: {error}")
+        print(f" ERROR: Failed to fetch existing device profiles - {error}")
+        return
+    
+    # Identify which profiles need to be created
+    profiles_to_create = []
+    profiles_to_skip = []
+    
+    for model in sorted(ap_models):
+        profile_name = f"AP-{model}"
+        if profile_name in existing_profile_names:
+            profiles_to_skip.append({
+                "model": model,
+                "name": profile_name,
+                "id": existing_profile_names[profile_name]
+            })
+        else:
+            profiles_to_create.append({
+                "model": model,
+                "name": profile_name
+            })
+    
+    if profiles_to_skip:
+        print(f"\n  Found {len(profiles_to_skip)} existing Device Profiles (will skip):")
+        for profile_info in profiles_to_skip[:10]:
+            print(f"   - {profile_info['name']} (ID: {profile_info['id']})")
+        if len(profiles_to_skip) > 10:
+            print(f"   ... and {len(profiles_to_skip) - 10} more")
+    
+    if profiles_to_create:
+        print(f"\n  Will create {len(profiles_to_create)} new Device Profiles:")
+        for profile_info in profiles_to_create[:10]:
+            print(f"   - {profile_info['name']}")
+        if len(profiles_to_create) > 10:
+            print(f"   ... and {len(profiles_to_create) - 10} more")
+    else:
+        print("\n  All AP model Device Profiles already exist.")
+        logging.info("All AP model device profiles already exist - nothing to create")
+        return
+    
+    # Step 3: Safety confirmation
+    print("\n  " + "!" * 66)
+    print("  WARNING: DESTRUCTIVE OPERATION")
+    print("  " + "!" * 66)
+    print(f"  This will CREATE {len(profiles_to_create)} new Device Profiles")
+    print("  All settings will be set to inherit/auto")
+    print("  " + "!" * 66)
+    
+    confirmation = safe_input("\n  Type 'CREATE' to proceed: ", context="create_ap_model_profiles")
+    
+    if confirmation != "CREATE":
+        print(" Operation cancelled.")
+        logging.info("Operation cancelled by user at confirmation prompt")
+        return
+    
+    # Step 4: Create new Device Profiles
+    created_profiles = []
+    failed_profiles = []
+    
+    print(f"\n  Step 3: Creating {len(profiles_to_create)} new Device Profiles...")
+    
+    for profile_info in profiles_to_create:
+        model = profile_info["model"]
+        profile_name = profile_info["name"]
+        
+        # Minimal device profile payload - all settings inherit/auto
+        device_profile_payload = {
+            "name": profile_name,
+            "type": "ap"
+            # All other settings omitted to inherit from site/template/org defaults
+        }
+        
+        try:
+            logging.debug(f"Creating Device Profile: {profile_name} for model {model}")
+            response = mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile(
+                apisession,
+                org_id,
+                body=device_profile_payload
+            )
+            
+            if response.status_code == 200:
+                created_profile_id = response.data.get("id")
+                created_profiles.append({
+                    "model": model,
+                    "name": profile_name,
+                    "id": created_profile_id
+                })
+                print(f"  Created: {profile_name} (ID: {created_profile_id})")
+                logging.info(f"Successfully created Device Profile {profile_name} with ID {created_profile_id}")
+            else:
+                failed_profiles.append({
+                    "model": model,
+                    "name": profile_name,
+                    "error": f"HTTP {response.status_code}"
+                })
+                logging.error(f"Failed to create Device Profile {profile_name}: HTTP {response.status_code}")
+                print(f"  FAILED: {profile_name} (HTTP {response.status_code})")
+            
+            # Rate limiting delay
+            time.sleep(0.5)
+            
+        except Exception as error:
+            failed_profiles.append({
+                "model": model,
+                "name": profile_name,
+                "error": str(error)
+            })
+            logging.error(f"Exception creating Device Profile {profile_name}: {error}")
+            print(f"  ERROR: {profile_name} - {error}")
+    
+    # Step 5: Summary and output
+    print("\n" + "=" * 70)
+    print(" OPERATION COMPLETE")
+    print("=" * 70)
+    print(f"  Device Profiles Created: {len(created_profiles)}")
+    print(f"  Device Profiles Failed: {len(failed_profiles)}")
+    print(f"  Device Profiles Skipped (existing): {len(profiles_to_skip)}")
+    
+    # Export results to CSV
+    if created_profiles:
+        success_filename = "CreatedAPModelDeviceProfiles.csv"
+        DataExporter.save_data_to_output(created_profiles, success_filename)
+        print(f"\n Created profiles exported to {success_filename}")
+        logging.info(f"Created profiles exported to {success_filename}")
+    
+    if failed_profiles:
+        failure_filename = "FailedAPModelDeviceProfiles.csv"
+        DataExporter.save_data_to_output(failed_profiles, failure_filename)
+        print(f" Failed profiles exported to {failure_filename}")
+        logging.warning(f"Failed profiles exported to {failure_filename}")
+    
+    logging.debug("EXIT: create_ap_model_device_profiles - complete")
+
+def assign_aps_to_matching_device_profiles():
+    """
+    Assign AP devices to Device Profiles that match their model type.
+    
+    Scans organization AP inventory and assigns each AP to its corresponding
+    Device Profile (AP-{model}) if that profile exists. Skips APs where no
+    matching profile exists.
+    
+    DESTRUCTIVE: Modifies device assignments in the organization.
+    """
+    logging.debug("ENTER: assign_aps_to_matching_device_profiles")
+    print("\n" + "=" * 70)
+    print(" ASSIGN APS TO MATCHING DEVICE PROFILES")
+    print("=" * 70)
+    
+    org_id = get_cached_or_prompted_org_id()
+    
+    # Step 1: Get all AP inventory
+    print("\n  Step 1: Fetching AP inventory from organization...")
+    logging.info("Fetching AP inventory from organization")
+    
+    try:
+        inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+            apisession,
+            org_id,
+            type="ap",
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        all_aps = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
+        logging.info(f"Retrieved {len(all_aps)} APs from organization inventory")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch organization AP inventory: {error}")
+        print(f" ERROR: Failed to fetch AP inventory - {error}")
+        return
+    
+    if not all_aps:
+        print(" No APs found in organization inventory.")
+        logging.info("No APs found - exiting")
+        return
+    
+    print(f"  Found {len(all_aps)} APs in organization")
+    
+    # Step 2: Get all existing Device Profiles
+    print("\n  Step 2: Fetching existing Device Profiles...")
+    logging.info("Fetching existing AP Device Profiles")
+    
+    try:
+        profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+            apisession,
+            org_id,
+            type="ap",
+            limit=DEFAULT_API_PAGE_LIMIT
+        )
+        existing_profiles = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
+        
+        # Create mapping: profile name -> profile ID
+        profile_map = {}
+        for profile in existing_profiles:
+            profile_name = profile.get("name")
+            profile_id = profile.get("id")
+            if profile_name and profile_id:
+                profile_map[profile_name] = profile_id
+        
+        logging.info(f"Found {len(profile_map)} AP Device Profiles")
+        
+    except Exception as error:
+        logging.error(f"Failed to fetch Device Profiles: {error}")
+        print(f" ERROR: Failed to fetch Device Profiles - {error}")
+        return
+    
+    if not profile_map:
+        print(" No Device Profiles found in organization.")
+        logging.info("No Device Profiles found - exiting")
+        return
+    
+    print(f"  Found {len(profile_map)} Device Profiles")
+    
+    # Step 3: Analyze AP to profile matching
+    aps_with_profile = []
+    aps_without_profile = []
+    aps_without_model = []
+    
+    for ap in all_aps:
+        ap_mac = ap.get("mac", "unknown")
+        ap_name = ap.get("name", ap_mac)
+        ap_model = ap.get("model")
+        
+        if not ap_model:
+            aps_without_model.append({
+                "mac": ap_mac,
+                "name": ap_name
+            })
+            continue
+        
+        expected_profile_name = f"AP-{ap_model}"
+        
+        if expected_profile_name in profile_map:
+            aps_with_profile.append({
+                "mac": ap_mac,
+                "name": ap_name,
+                "model": ap_model,
+                "profile_name": expected_profile_name,
+                "profile_id": profile_map[expected_profile_name]
+            })
+        else:
+            aps_without_profile.append({
+                "mac": ap_mac,
+                "name": ap_name,
+                "model": ap_model,
+                "expected_profile": expected_profile_name
+            })
+    
+    print(f"\n  Analysis:")
+    print(f"   APs with matching profiles: {len(aps_with_profile)}")
+    print(f"   APs without matching profiles: {len(aps_without_profile)}")
+    print(f"   APs without model info: {len(aps_without_model)}")
+    
+    if aps_without_profile:
+        print(f"\n  APs without matching profiles (first 10):")
+        for ap_info in aps_without_profile[:10]:
+            print(f"   - {ap_info['name']} ({ap_info['model']}) - needs {ap_info['expected_profile']}")
+        if len(aps_without_profile) > 10:
+            print(f"   ... and {len(aps_without_profile) - 10} more")
+    
+    if not aps_with_profile:
+        print("\n  No APs have matching Device Profiles to assign.")
+        logging.info("No APs have matching profiles - exiting")
+        return
+    
+    # Step 4: Safety confirmation
+    print("\n  " + "!" * 66)
+    print("  WARNING: DESTRUCTIVE OPERATION")
+    print("  " + "!" * 66)
+    print(f"  This will ASSIGN {len(aps_with_profile)} APs to their matching Device Profiles")
+    print(f"  APs without matching profiles will be SKIPPED: {len(aps_without_profile)}")
+    print("  " + "!" * 66)
+    
+    confirmation = safe_input("\n  Type 'ASSIGN' to proceed: ", context="assign_aps_to_profiles")
+    
+    if confirmation != "ASSIGN":
+        print(" Operation cancelled.")
+        logging.info("Operation cancelled by user at confirmation prompt")
+        return
+    
+    # Step 5: Assign APs to Device Profiles
+    print(f"\n  Step 3: Assigning {len(aps_with_profile)} APs to Device Profiles...")
+    
+    successful_assignments = []
+    failed_assignments = []
+    
+    for ap_info in aps_with_profile:
+        ap_mac = ap_info["mac"]
+        ap_name = ap_info["name"]
+        profile_id = ap_info["profile_id"]
+        profile_name = ap_info["profile_name"]
+        
+        try:
+            # Assign device to profile using the assign endpoint
+            logging.debug(f"Assigning AP {ap_name} (MAC: {ap_mac}) to Device Profile {profile_name} (ID: {profile_id})")
+            
+            response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile(
+                apisession,
+                org_id,
+                profile_id,
+                body={"macs": [ap_mac]}
+            )
+            
+            if response.status_code == 200:
+                successful_assignments.append({
+                    "mac": ap_mac,
+                    "name": ap_name,
+                    "model": ap_info["model"],
+                    "profile_name": profile_name,
+                    "profile_id": profile_id
+                })
+                logging.info(f"Successfully assigned AP {ap_name} to Device Profile {profile_name}")
+            else:
+                failed_assignments.append({
+                    "mac": ap_mac,
+                    "name": ap_name,
+                    "model": ap_info["model"],
+                    "profile_name": profile_name,
+                    "error": f"HTTP {response.status_code}"
+                })
+                logging.error(f"Failed to assign AP {ap_name}: HTTP {response.status_code}")
+            
+            # Rate limiting delay
+            time.sleep(0.3)
+            
+        except Exception as error:
+            failed_assignments.append({
+                "mac": ap_mac,
+                "name": ap_name,
+                "model": ap_info["model"],
+                "profile_name": profile_name,
+                "error": str(error)
+            })
+            logging.error(f"Exception assigning AP {ap_name}: {error}")
+    
+    # Step 6: Summary and output
+    print("\n" + "=" * 70)
+    print(" OPERATION COMPLETE")
+    print("=" * 70)
+    print(f"  APs Successfully Assigned: {len(successful_assignments)}")
+    print(f"  APs Failed: {len(failed_assignments)}")
+    print(f"  APs Skipped (no matching profile): {len(aps_without_profile)}")
+    print(f"  APs Skipped (no model info): {len(aps_without_model)}")
+    
+    # Export results to CSV
+    if successful_assignments:
+        success_filename = "SuccessfulAPProfileAssignments.csv"
+        DataExporter.save_data_to_output(successful_assignments, success_filename)
+        print(f"\n Successful assignments exported to {success_filename}")
+        logging.info(f"Successful assignments exported to {success_filename}")
+    
+    if failed_assignments:
+        failure_filename = "FailedAPProfileAssignments.csv"
+        DataExporter.save_data_to_output(failed_assignments, failure_filename)
+        print(f" Failed assignments exported to {failure_filename}")
+        logging.warning(f"Failed assignments exported to {failure_filename}")
+    
+    if aps_without_profile:
+        skipped_filename = "SkippedAPsNoMatchingProfile.csv"
+        DataExporter.save_data_to_output(aps_without_profile, skipped_filename)
+        print(f" Skipped APs (no profile) exported to {skipped_filename}")
+        logging.info(f"Skipped APs exported to {skipped_filename}")
+    
+    logging.debug("EXIT: assign_aps_to_matching_device_profiles - complete")
 
 def export_org_network_templates_to_csv():
     """Export network template information for the organization to OrgNetworkTemplates.csv."""
@@ -17325,6 +18776,7 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
         logging.warning(f"Failed to compute dynamic alpha: {e}. Using fallback value.")
         return 0.3
 
+def show_route_via_websocket():
     """
     Launches a shell session, runs 'show route 0.0.0.0 | display json | no-more',
     and saves the output to ws.log.
@@ -18105,6 +19557,11 @@ def get_rate_limited_delay(smoothed_delay=None):
         logging.debug(f"About to call compute_dynamic_alpha with cleaned_error_history={cleaned_error_history} (length: {len(cleaned_error_history)})")
         alpha = compute_dynamic_alpha(cleaned_error_history)
         logging.debug(f"compute_dynamic_alpha returned: {alpha} (type: {type(alpha)})")
+        
+        # Defensive type checking - ensure alpha is a valid float
+        if not isinstance(alpha, (int, float)) or math.isnan(alpha) or math.isinf(alpha):
+            logging.warning(f"Invalid alpha value: {alpha} (type: {type(alpha)}). Using fallback 0.3")
+            alpha = 0.3
 
         smoothed_delay = sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
         delay_in_seconds = max(smoothed_delay, 0.01)
@@ -33109,6 +34566,14 @@ menu_actions = {
     # TERMINAL USER INTERFACE MODE
     # ==============================
     "101": (lambda: _launch_tui_from_menu(), "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration"),
+    
+    # ==============================
+    # TEST DATA GENERATION
+    # ==============================
+    "107": (create_test_sites_from_csv, " DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries (Requires uppercase 'CREATE' confirmation)"),
+    "108": (create_country_rf_templates_and_assign, " DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)"),
+    "109": (create_ap_model_device_profiles, " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)"),
+    "110": (assign_aps_to_matching_device_profiles, " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"),
 }
 
 def _launch_tui_from_menu():
@@ -36219,6 +37684,13 @@ if __name__ == "__main__":
         sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
         logging.error(f"Unhandled exception in main application: {e}")
+        try:
+            import traceback
+            traceback_details = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+            for line in traceback_details.rstrip().splitlines():
+                logging.error(line)
+        except Exception as trace_err:
+            logging.error(f"Failed to log exception traceback: {trace_err}")
         logging.debug("EXIT: __main__ - unhandled exception")
         sys.exit(1)
     finally:

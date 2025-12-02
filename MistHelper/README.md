@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 107 actionable menu entries (1–10, 11–89, 90–106) with some gaps for future expansion.
+**Operation Count:** The code currently defines 111 actionable menu entries (1–10, 11–89, 90–106, 107–110) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -251,6 +251,10 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 103–104 | Gateway Template WAN2 | Set site variables & migrate templates to use {{wan2_interface}} variable |
 | 105 | Template Config Extract | Extract DIA_Pico (traffic steering) & Picocell (application policy) to JSON |
 | 106 | Template Config Apply | **DESTRUCTIVE**: Replicate extracted configs to other templates with confirmation |
+| 107 | Create Test Sites | **DESTRUCTIVE**: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries |
+| 108 | Country RF Templates | **DESTRUCTIVE**: Create country-specific RF templates and assign sites to matching templates (auto/default settings) |
+| 109 | AP Model Device Profiles | **DESTRUCTIVE**: Scan org for AP models and create Device Profile per model with inherit/auto settings |
+| 110 | Assign APs to Profiles | **DESTRUCTIVE**: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -474,6 +478,326 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.12.02.11.10",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "CRITICAL: Fixed multi-token API initialization - now passes all tokens as comma-separated string to mistapi",
+          "Previously passed individual tokens separately, preventing mistapi from rotating through tokens on rate limits",
+          "mistapi library's token rotation (HTTP 429 handling) now works correctly with multiple tokens",
+          "Removed unnecessary iteration that created separate initialization attempts per token"
+        ],
+        "performance": [
+          "Multiple API tokens now properly utilized for rate limit avoidance",
+          "When one token hits 429 rate limit, mistapi automatically rotates to next token",
+          "Reduces initialization attempts from N*M to M (where N=token count, M=param names)"
+        ],
+        "documentation": [
+          "Added code comments explaining mistapi's expectation of comma-separated token string",
+          "Documented that mistapi handles token rotation internally when configured correctly"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.05",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Fixed 'dict + float' TypeError in retry_failed_sites function when using tqdm with as_completed",
+          "Resolved parameter conflict where tqdm's 'total' argument was being passed to concurrent.futures.as_completed as 'timeout'",
+          "Refactored retry progress tracking to use tqdm context manager with manual update calls",
+          "Changed from wrapping as_completed() directly to iterating over future list with separate tqdm progress bar"
+        ],
+        "performance": [
+          "Retry progress bar now updates correctly without causing type errors in concurrent execution",
+          "Progress tracking maintains same user experience while avoiding parameter collision"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.15",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Identified root cause of API session initialization failures: mistapi library v0.57.3 bug in token validation",
+          "Added comprehensive traceback logging for all API session initialization attempts",
+          "Reordered API session initialization to try direct token methods before env_file method",
+          "Enhanced error messages with full stack traces to aid in diagnosing mistapi library issues"
+        ],
+        "debugging": [
+          "Full exception tracebacks now logged at INFO level for API session failures (no longer requires debug mode)",
+          "Traceback shows mistapi library attempting to iterate over None in privileges validation",
+          "Issue occurs in mistapi.__api_session.py line 515: for priv in data_json.get('privileges')",
+          "Error indicates API tokens may be expired, invalid, or returning unexpected response format"
+        ],
+        "documentation": [
+          "Identified that error occurs when mistapi library validates tokens against Mist API",
+          "Token validation failure suggests tokens need to be refreshed or regenerated",
+          "mistapi library bug: does not handle missing 'privileges' key in API response gracefully"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.00",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Enhanced exception logging in main application error handler to capture full traceback",
+          "Added comprehensive type validation for start_time variable to detect dict/float type mismatch early",
+          "Added defensive type checking for API response data in fetch_site_port_stats worker function",
+          "Improved error diagnostics by logging time module state when type errors occur"
+        ],
+        "debugging": [
+          "Main exception handler now logs complete stack traces for unhandled exceptions",
+          "Added early type validation to catch 'dict + float' errors at source rather than during calculation",
+          "Worker function validates mistapi.get_all returns list type before processing",
+          "Enhanced logging shows time module and time.time function types when errors detected"
+        ]
+      }
+    },
+    {
+      "version": "25.12.01.17.40",
+      "date": "2025-12-01",
+      "changes": {
+        "enhancements": [
+          "Menu 14 (fast mode): Added extensive debug logging to track data type issues in parallel processing",
+          "Added type validation logging for start_time, end_time, and duration calculations",
+          "Added logging for successful_results and failed_sites return types from execute_with_connection_pool_management",
+          "Added per-result type checking in flattening loop with warnings for unexpected types",
+          "Added site tuple structure validation logging to diagnose dict vs tuple issues"
+        ],
+        "debugging": [
+          "Comprehensive logging added to isolate 'dict + float' arithmetic error source",
+          "All time calculations now log intermediate values and types",
+          "Result list processing logs each item's type before extend operation",
+          "Sites list construction logs sample entries with type information"
+        ]
+      }
+    },
+    {
+      "version": "25.12.01.17.35",
+      "date": "2025-12-01",
+      "changes": {
+        "bug_fixes": [
+          "Fixed 'unsupported operand type(s) for +: dict and float' error in rate limiting calculation",
+          "Removed orphaned docstring inside compute_dynamic_alpha function that was preventing proper return value",
+          "Added defensive type checking for alpha value to ensure it's always a valid float before arithmetic operations",
+          "Alpha value now validated and falls back to 0.3 if invalid (NaN, Inf, or wrong type)"
+        ]
+      }
+    },
+    {
+      "version": "25.12.01.17.30",
+      "date": "2025-12-01",
+      "changes": {
+        "bug_fixes": [
+          "Menu 14 (fast mode): Removed invalid 'type' parameter from searchSiteSwOrGwPorts API call",
+          "Fixed 'got an unexpected keyword argument type' error in parallel port stats retrieval",
+          "API endpoint searches both switches and gateways by default without type filter"
+        ]
+      }
+    },
+    {
+      "version": "25.12.01.17.20",
+      "date": "2025-12-01",
+      "changes": {
+        "bug_fixes": [
+          "Menu 14: Fixed crash when API returns unexpected response structure (missing 'results' key)",
+          "Added KeyError recovery logic to handle malformed API responses gracefully",
+          "Emergency data save now preserves all collected records before error exit"
+        ],
+        "performance": [
+          "Menu 14 (fast mode): Added site-level parallelization for port statistics retrieval",
+          "Fast mode now fetches port stats across multiple sites concurrently instead of serial org-level search",
+          "Uses connection pool management with configurable concurrency (FAST_MODE_MAX_CONCURRENT_CONNECTIONS)",
+          "Parallel fetching can reduce execution time from hours to minutes depending on site count"
+        ],
+        "enhancements": [
+          "Enhanced error handling in fetch_and_display_api_data with three-layer defense against data loss",
+          "Added response structure validation and logging for debugging unexpected API formats",
+          "Automatic recovery attempts from alternate response structures (response.data['data'], direct lists)",
+          "User-friendly messages explain partial data saves and recovery attempts",
+          "Detailed debug logs capture response types and available keys for troubleshooting"
+        ],
+        "api_changes": [
+          "Fast mode uses searchSiteSwOrGwPorts per-site instead of searchOrgSwOrGwPorts org-wide",
+          "Leverages cached site list from SiteList.csv to minimize API overhead",
+          "Each site fetch includes retry logic with exponential backoff",
+          "Results aggregated and deduplicated across all sites"
+        ],
+        "documentation": [
+          "Updated export_device_port_stats_to_csv docstring with performance optimization notes",
+          "Added fetch_and_display_api_data docstring explaining enhanced error handling layers",
+          "Documented safety features: emergency saves, structure validation, graceful degradation"
+        ]
+      }
+    },
+    {
+      "version": "25.11.25.13.49",
+      "date": "2025-11-25",
+      "changes": {
+        "bug_fixes": [
+          "Menu 110: Fixed API call from assignOrgDeviceProfiles (plural) to assignOrgDeviceProfile (singular)",
+          "Corrected mistapi endpoint path to match Mist API specification"
+        ],
+        "api_changes": [
+          "Updated Device Profile assignment to use correct endpoint: mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile"
+        ]
+      }
+    },
+    {
+      "version": "25.11.25.13.40",
+      "date": "2025-11-25",
+      "changes": {
+        "feature_additions": [
+          "Menu 110: Assign APs to Device Profiles - Automatically assigns APs to matching Device Profiles based on model type",
+          "Scans organization AP inventory and matches each AP to Device Profile with naming AP-{model}",
+          "Skips APs without matching Device Profiles (no error if profile doesn't exist)",
+          "Analyzes and reports APs with profiles, without profiles, and without model information",
+          "Bulk assignment using Device Profile assign endpoint for efficiency"
+        ],
+        "api_changes": [
+          "Uses mistapi.api.v1.orgs.inventory.getOrgInventory with type=ap to scan AP inventory",
+          "Uses mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles with type=ap to get existing profiles",
+          "Uses mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfiles to assign APs to profiles",
+          "Assignment payload includes macs array for device assignment"
+        ],
+        "documentation": [
+          "Menu 110 marked as DESTRUCTIVE operation requiring 'ASSIGN' confirmation",
+          "Pre-assignment analysis shows counts of APs with/without matching profiles",
+          "Operation count updated from 110 to 111 total menu operations",
+          "Lists APs that will be skipped due to missing matching Device Profiles"
+        ],
+        "security": [
+          "Requires explicit uppercase 'ASSIGN' confirmation before device assignment",
+          "Safe input handling with EOF protection for container environments",
+          "Rate limiting with 0.3s delay between AP assignments"
+        ],
+        "enhancements": [
+          "Pre-flight analysis shows assignment plan before execution",
+          "Exports successful assignments to SuccessfulAPProfileAssignments.csv with AP/profile details",
+          "Exports failed assignments to FailedAPProfileAssignments.csv for troubleshooting",
+          "Exports skipped APs to SkippedAPsNoMatchingProfile.csv for profile creation planning",
+          "Comprehensive summary report showing successful, failed, and skipped counts",
+          "Detailed logging for each AP assignment with full error context",
+          "Gracefully skips APs without model information instead of failing"
+        ]
+      }
+    },
+    {
+      "version": "25.11.25.13.23",
+      "date": "2025-11-25",
+      "changes": {
+        "feature_additions": [
+          "Menu 109: Create AP Model Device Profiles - Scans organization for all WiFi AP device models and creates one Device Profile per model",
+          "Handles sub-model revisions (e.g., AP41US, AP41WW) as separate profiles for regional variants",
+          "Creates minimal Device Profiles with inherit/auto settings for maximum flexibility",
+          "Profile naming convention: AP-{model} (e.g., AP-AP41US, AP-AP41WW, AP-AP43)",
+          "Detects and skips existing Device Profiles to avoid duplicates"
+        ],
+        "api_changes": [
+          "Uses mistapi.api.v1.orgs.devices.listOrgDevices with type=ap filter to scan AP inventory",
+          "Uses mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles with type=ap to check existing profiles",
+          "Uses mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile for profile creation",
+          "Device Profile payload includes only name and type=ap - all other settings inherit from templates/site/org"
+        ],
+        "documentation": [
+          "Menu 109 marked as DESTRUCTIVE operation requiring 'CREATE' confirmation",
+          "Device Profiles created with minimal payload to ensure all settings inherit/auto by default",
+          "Operation count updated from 109 to 110 total menu operations",
+          "Devices without model information are logged and reported but do not block execution"
+        ],
+        "security": [
+          "Requires explicit uppercase 'CREATE' confirmation before profile creation",
+          "Safe input handling with EOF protection for container environments",
+          "Rate limiting with 0.5s delay between Device Profile creations"
+        ],
+        "enhancements": [
+          "Progress display shows unique AP models discovered across organization",
+          "Exports successful creations to CreatedAPModelDeviceProfiles.csv with model/profile/ID details",
+          "Exports failures to FailedAPModelDeviceProfiles.csv for troubleshooting",
+          "Comprehensive summary report showing profiles created, failed, and skipped (existing)",
+          "Detailed logging for each profile creation with full error context",
+          "Warns about devices with missing model information for inventory visibility"
+        ]
+      }
+    },
+    {
+      "version": "25.11.25.12.28",
+      "date": "2025-11-25",
+      "changes": {
+        "feature_additions": [
+          "Menu 108: Create country-specific RF templates and auto-assign sites to matching templates",
+          "Scans all organization sites to identify unique country codes",
+          "Creates one RF template per country with naming convention RF-{country_code} (e.g., RF-US, RF-CA, RF-MX)",
+          "Auto-assigns each site to its corresponding country RF template via rftemplate_id field",
+          "Detects and reuses existing country RF templates to avoid duplicates"
+        ],
+        "api_changes": [
+          "Uses mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate for template creation",
+          "Uses mistapi.api.v1.sites.sites.updateSite to assign rftemplate_id to sites",
+          "Uses mistapi.api.v1.orgs.sites.listOrgSites to scan site inventory",
+          "Uses mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates to check for existing templates"
+        ],
+        "documentation": [
+          "Menu 108 marked as DESTRUCTIVE operation requiring 'CREATE' confirmation",
+          "RF template configuration uses default/auto settings: band_24 (20MHz auto), band_5 (40MHz auto), band_6 (80MHz auto)",
+          "Operation count updated from 108 to 109 total menu operations",
+          "Sites without country codes are skipped with warning message and logged"
+        ],
+        "security": [
+          "Requires explicit uppercase 'CREATE' confirmation before template creation and site assignment",
+          "Safe input handling with EOF protection for container environments",
+          "Rate limiting with 0.5s delay between template creations and 0.3s between site assignments"
+        ],
+        "enhancements": [
+          "Progress display shows country distribution and site counts per country",
+          "Exports successful assignments to SuccessfulRFTemplateAssignments.csv with site/template details",
+          "Exports failures to FailedRFTemplateAssignments.csv for troubleshooting",
+          "Comprehensive summary report showing templates created, sites assigned, failures, and skipped sites",
+          "Detailed logging for each template creation and site assignment with full error context",
+          "Template reuse logic - skips creation if RF-{country} template already exists"
+        ]
+      }
+    },
+    {
+      "version": "25.11.25.14.30",
+      "date": "2025-11-25",
+      "changes": {
+        "feature_additions": [
+          "Menu 107: Create 137 test sites from CSV - Generates test sites based on real North American landmarks across 13 countries",
+          "NorthAmericanTestSites.csv created with 137 popular, well-known, and historical locations",
+          "Geographic distribution: US (85), Canada (11), Mexico (10), Costa Rica (4), Guatemala (4), Panama (4), Bahamas (3), Belize (3), Cuba (3), Honduras (3), Jamaica (3), Dominican Republic (3), Haiti (2)",
+          "Sites include complete metadata: address, coordinates (lat/lng), timezone, country code, and descriptive notes",
+          "Site names use no spaces for clean URL/API compatibility (e.g., ChichenItza, CostaRicaArenalVolcano)",
+          "Sites span diverse categories: ancient ruins, national parks, UNESCO sites, colonial cities, beaches, volcanoes, coral reefs"
+        ],
+        "api_changes": [
+          "Uses mistapi.api.v1.orgs.sites.createOrgSite for site creation",
+          "Implements proper site payload structure per Mist API OpenAPI specification",
+          "Supports optional fields: address, country_code, latlng, timezone, notes",
+          "Country codes include: US, CA, MX, GT, CR, PA, HN, BZ, BS, CU, JM, DO, HT (13 total North American nations)"
+        ],
+        "documentation": [
+          "Menu 107 marked as DESTRUCTIVE operation requiring 'CREATE' confirmation",
+          "CSV structure documented: name (required), address, country_code, lat, lng, timezone, notes",
+          "Operation count updated from 107 to 108 total menu operations"
+        ],
+        "security": [
+          "Requires explicit uppercase 'CREATE' confirmation before execution",
+          "Safe input handling with EOF protection for container environments",
+          "Rate limiting with 0.5s delay between site creations to avoid API throttling"
+        ],
+        "enhancements": [
+          "Progress display shows site creation status with index counter",
+          "Exports successful creations to CreatedTestSites.csv with site IDs",
+          "Exports failures to FailedTestSites.csv for troubleshooting",
+          "Comprehensive summary report showing total/success/failure counts",
+          "Detailed logging for each site creation attempt with full error context"
+        ]
+      }
+    },
     {
       "version": "25.11.25.09.30",
       "date": "2025-11-25",
@@ -1645,6 +1969,61 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
         ],
         "fixes": [
           "Test harness - Added options 9-10 to systematic test skip list (interactive operations)"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.50",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Environment variable isolation - Clear MIST_APITOKEN from environment during individual token attempts to prevent mistapi from auto-loading all tokens",
+          "Token pre-validation - Test tokens for rate limiting before passing to mistapi to avoid validation failures",
+          "as_completed parameter fix - Use explicit fs= keyword argument to prevent positional parameter confusion with tqdm"
+        ],
+        "enhancements": [
+          "Rate limit detection - Pre-check tokens against /api/v1/self endpoint to identify rate-limited tokens before initialization",
+          "Token filtering - Automatically skip rate-limited tokens and only pass working tokens to mistapi",
+          "Detailed logging - Added per-token validation logging showing HTTP status codes and rate limit details"
+        ],
+        "compatibility": [
+          "mistapi auto-load workaround - Prevents mistapi's automatic MIST_APITOKEN environment loading from interfering with single-token initialization",
+          "Rate limit resilience - Detects 429 responses during pre-validation and skips those tokens"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.35",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Individual token retry - Enhanced rate limit handling to try each API token individually when multi-token initialization fails",
+          "Token iteration strategy - Changed from single token fallback to sequential token testing until finding a working token",
+          "Rate limit resilience - Continues attempting remaining tokens even when some are rate-limited or invalid"
+        ],
+        "enhancements": [
+          "Detailed token logging - Added per-token attempt logging showing token index and masked token values (first 4 and last 4 characters)",
+          "Clear success reporting - Logs which specific token succeeded when multiple tokens are configured",
+          "Comprehensive failure tracking - Reports when all tokens have been exhausted with clear summary"
+        ],
+        "compatibility": [
+          "mistapi NoneType workaround - Works around mistapi library bug that crashes on rate-limited token validation responses",
+          "Multi-token reliability - Ensures at least one non-throttled token can initialize even when others are rate-limited"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.11.20",
+      "date": "2025-12-02",
+      "changes": {
+        "bug_fixes": [
+          "Rate limit fallback - Added graceful degradation when multi-token initialization hits rate limits during token validation",
+          "Single token fallback - Automatically falls back to first token when mistapi library encounters NoneType iteration errors (indicates rate-limited /api/v1/self responses)",
+          "Token validation resilience - Detects and logs rate limiting during token validation with informative warning messages"
+        ],
+        "compatibility": [
+          "mistapi rate limit handling - Workaround for mistapi library's inability to handle 429 responses during token privilege validation",
+          "API throttling resilience - Allows MistHelper to initialize even when API is temporarily throttling token validation requests"
         ]
       }
     },
