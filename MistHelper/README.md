@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 111 actionable menu entries (1–10, 11–89, 90–106, 107–110) with some gaps for future expansion.
+**Operation Count:** The code currently defines 112 actionable menu entries (1–10, 11–89, 90–106, 107–111, 112) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -478,6 +478,64 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.12.02.20.30",
+      "date": "2025-12-02",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager Menu 12: Full map cloning with automatic image download and re-upload",
+          "Clone includes all map properties: dimensions, PPM, orientation, walls, wayfinding paths, site survey paths",
+          "Automatic image handling: downloads source map image to temp file, uploads to cloned map, cleans up temp file",
+          "Complete wall_path cloning: preserves RF modeling data (critical for propagation calculations)",
+          "Wayfinding data cloning: copies wayfinding_path nodes/edges and wayfinding configuration",
+          "Geographic data cloning: latlng, latlng_br, origin_x, origin_y for Google Maps integration",
+          "Configuration cloning: occupancy_limit, locked status, view settings, sitesurvey_path arrays",
+          "Comprehensive clone summary: displays all cloned elements with confirmation of image upload status"
+        ],
+        "enhancements": [
+          "Clone operation uses temporary files for image download/upload to avoid filesystem pollution",
+          "Automatic cleanup of temporary files in all code paths (success, failure, exception)",
+          "Enhanced error handling with separate warnings for download vs upload failures",
+          "User-friendly progress messages at each stage: select, download, create, upload, complete",
+          "Clone confirmation shows full plan before execution including image copy status",
+          "Educational note: zones are site-level objects (not map objects) requiring separate cloning"
+        ],
+        "documentation": [
+          "Added comprehensive docstring explaining full clone capability including image/walls/paths/zones",
+          "Clone summary clearly shows which elements were successfully copied"
+        ]
+      }
+    },
+    {
+      "version": "25.12.02.18.00",
+      "date": "2025-12-02",
+      "changes": {
+        "feature_additions": [
+          "Menu #112: Maps Manager - Comprehensive class for site floorplan and map operations with interactive sub-menu system",
+          "Maps Manager Sub-menu - 19 organized operations: Data/Export (4), Management (5), Device Placement (4), Bulk Operations (3), Analytics (3)",
+          "Map listing and export - List maps for sites, export all site maps to CSV/SQLite with flattened metadata and image URLs",
+          "Map image download - Download full-resolution map images to organized directories (data/map_images/{site_name}/)",
+          "Map details viewer - Display comprehensive map metadata: name, ID, type, dimensions, PPM, orientation, URLs, timestamps",
+          "Map creation - Interactive map creation with type selection (image/google), dimension input, validation",
+          "Bulk operations - Export all org maps across sites, download all images (implemented), backup maps (placeholder)",
+          "Analytics reports - Maps without images report (implemented), coverage analysis (placeholder), device density (placeholder)",
+          "MapsManager class - Follows established patterns: WebSocketManager, PacketCaptureManager, FirmwareManager architecture"
+        ],
+        "enhancements": [
+          "Database schema - Added natural primary key strategies for listSiteMaps and getSiteMap with proper indexes",
+          "Interactive sub-menu - Single entry point (Menu 112) with 0 to return to main menu, organized by operation category",
+          "Safety features - Input validation, EOF/interrupt handling, confirmation prompts for destructive operations (placeholders)",
+          "Image handling - JWT token URL support, automatic format detection (png/jpg), organized directory structure by site",
+          "Progress indicators - tqdm progress bars for bulk site/map operations with descriptive labels",
+          "Error handling - Graceful per-site error logging without halting bulk operations, comprehensive exception tracking"
+        ],
+        "documentation": [
+          "Updated operation count from 111 to 112 total menu entries",
+          "Added Maps Manager category section to menu_actions documentation",
+          "Documented map database strategies in ENDPOINT_PRIMARY_KEY_STRATEGIES configuration"
+        ]
+      }
+    },
     {
       "version": "25.12.02.17.15",
       "date": "2025-12-02",

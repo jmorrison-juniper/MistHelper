@@ -2141,6 +2141,22 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         'description': 'Peer path statistics with composite key'
     },
     
+    # Map-related endpoints
+    'listSiteMaps': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['site_id', 'name', 'type', 'created_time', 'modified_time'],
+        'unique_constraints': [],
+        'description': 'Site maps with stable UUID identifiers'
+    },
+    'getSiteMap': {
+        'type': 'natural_pk',
+        'primary_key': ['id'],
+        'indexes': ['site_id', 'name', 'type'],
+        'unique_constraints': [],
+        'description': 'Individual site map with stable UUID identifier'
+    },
+    
     # Type 4: Client search APIs (special handling for large datasets)
     'searchOrgWirelessClients': {
         'type': 'composite_pk',
@@ -24394,6 +24410,1573 @@ def reboot_devices_by_gateway_template_list():
         print(f"! Failed to write results to CSV: {e}")
 
 
+class MapsManager:
+    """
+    Comprehensive Maps Management System for Mist Sites
+    
+    Provides interactive management of site floor plans and maps including:
+    - Map inventory and export operations
+    - Image download and upload capabilities
+    - Map creation and configuration
+    - Device placement and auto-placement operations
+    - Analytics and reporting
+    """
+    
+    def __init__(self, api_session, organization_id):
+        """Initialize MapsManager with API session and org context"""
+        self.apisession = api_session
+        self.org_id = organization_id
+        self.current_site_id = None
+        self.current_site_name = None
+        logging.info(f"MapsManager initialized for organization: {self.org_id}")
+    
+    def select_site(self):
+        """Prompt user to select a site and cache the selection"""
+        site_id = prompt_site_selection()
+        if site_id:
+            # Get site name for display
+            sites = fetch_all_sites_with_limit(self.org_id)
+            site_name = next((s.get('name', 'Unknown') for s in sites if s['id'] == site_id), 'Unknown')
+            self.current_site_id = site_id
+            self.current_site_name = site_name
+            print(f"\n   Site selected: {site_name}")
+            logging.info(f"MapsManager site selection: {site_name} ({site_id})")
+            return True
+        else:
+            print("\n! No site selected")
+            return False
+    
+    def get_current_site(self):
+        """Get current site selection, prompting if not set"""
+        if not self.current_site_id:
+            print("\n! No site currently selected. Please select a site first.")
+            if not self.select_site():
+                return None, None
+        return self.current_site_id, self.current_site_name
+    
+    def _select_map_from_site(self, site_id, site_name):
+        """Helper method to select a map from a site - returns map_id or None"""
+        try:
+            # Fetch maps for the site
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=site_id
+            )
+            
+            if maps_response.status_code != 200:
+                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
+                return None
+            
+            maps = maps_response.data
+            if not maps:
+                print(f"\n! No maps found for site: {site_name}")
+                return None
+            
+            # Display map selection
+            print(f"\nMaps for site: {site_name}")
+            print(f"{'-' * 80}")
+            for idx, map_item in enumerate(maps, 1):
+                map_name = map_item.get('name', 'Unnamed')
+                map_type = map_item.get('type', 'N/A')
+                has_image = "with image" if 'url' in map_item else "no image"
+                print(f"  {idx}. {map_name} ({map_type}) - {has_image}")
+            print(f"{'-' * 80}")
+            
+            selection = input("\nSelect map number (or 0 to cancel): ").strip()
+            try:
+                map_idx = int(selection) - 1
+                if map_idx < 0:
+                    return None
+                if map_idx >= len(maps):
+                    print("\n! Invalid selection")
+                    return None
+                
+                selected_map = maps[map_idx]
+                return selected_map.get('id')
+                
+            except ValueError:
+                print("\n! Invalid input - please enter a number")
+                return None
+                
+        except EOFError:
+            logging.info("EOF detected during map selection")
+            return None
+        except Exception as e:
+            logging.error(f"Error selecting map: {e}", exc_info=True)
+            print(f"\n! Error selecting map: {e}")
+            return None
+    
+    def run_interactive_menu(self):
+        """Main interactive menu loop for Maps Manager"""
+        # Initial site selection
+        print("\n" + "=" * 80)
+        print("MAPS MANAGER - Initial Site Selection")
+        print("=" * 80)
+        print("\nPlease select a site to work with:")
+        if not self.select_site():
+            print("\n! Site selection required. Returning to main menu.")
+            return
+        
+        while True:
+            print("\n" + "=" * 80)
+            print("MAPS MANAGER - Site Floorplan & Map Operations")
+            if self.current_site_name:
+                print(f"Current Site: {self.current_site_name}")
+            print("=" * 80)
+            print("\nSite Selection:")
+            print("  S. Select different site")
+            print("\nMap Inventory & Export:")
+            print("  1. List maps for current site")
+            print("  2. Export maps for current site to CSV/SQLite")
+            print("  3. View detailed map information")
+            print("\nMap Creation & Modification:")
+            print("  4. Create new site map")
+            print("  5. Update map properties")
+            print("  6. Delete site map")
+            print("  7. Upload/replace map image")
+            print("  12. Clone/duplicate map")
+            print("\nDevice Placement:")
+            print("  8. View devices on map")
+            print("  9. Auto-place APs on map")
+            print("  10. Auto-orient APs on map")
+            print("  11. Set AP/device location manually")
+            print("\nBulk Operations (All Sites):")
+            print("  20. List all site maps across organization")
+            print("  21. Export all site maps to CSV/SQLite")
+            print("  22. Export maps with image metadata")
+            print("  23. Download all org map images")
+            print("  24. Backup all maps (metadata + images)")
+            print("  25. Maps without images report")
+            print("\nAnalytics & Reporting:")
+            print("  30. Map coverage analytics")
+            print("  31. Device density by map")
+            print("  32. Map usage statistics")
+            print("\n  0. Return to main menu")
+            print("=" * 80)
+            
+            try:
+                choice = input("\nEnter your selection number now: ").strip().upper()
+            except EOFError:
+                logging.info("EOF detected in MapsManager menu - session disconnected")
+                return
+            
+            if choice == "0":
+                logging.info("Exiting Maps Manager")
+                return
+            elif choice == "S":
+                self.select_site()
+            elif choice == "1":
+                self.list_site_maps()
+            elif choice == "2":
+                self.export_site_maps()
+            elif choice == "3":
+                self.view_map_details()
+            elif choice == "4":
+                self.create_site_map()
+            elif choice == "5":
+                self.update_map_properties()
+            elif choice == "6":
+                self.delete_site_map()
+            elif choice == "7":
+                self.upload_map_image()
+            elif choice == "8":
+                self.view_devices_on_map()
+            elif choice == "9":
+                self.auto_place_aps()
+            elif choice == "10":
+                self.auto_orient_aps()
+            elif choice == "11":
+                self.set_device_location()
+            elif choice == "12":
+                self.clone_map()
+            elif choice == "20":
+                self.list_all_org_maps()
+            elif choice == "21":
+                self.export_all_site_maps()
+            elif choice == "22":
+                self.export_maps_with_images()
+            elif choice == "23":
+                self.bulk_download_org_images()
+            elif choice == "24":
+                self.backup_all_maps()
+            elif choice == "25":
+                self.maps_without_images_report()
+            elif choice == "30":
+                self.map_coverage_analytics()
+            elif choice == "31":
+                self.device_density_analytics()
+            elif choice == "32":
+                self.map_usage_statistics()
+            else:
+                print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
+                logging.warning(f"Invalid Maps Manager menu selection: {choice}")
+    
+    def list_site_maps(self):
+        """Display list of maps for currently selected site"""
+        print("\n" + "-" * 80)
+        print("LIST SITE MAPS - Current Site")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            print(f"\nFetching maps for site: {site_name}")
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=site_id
+            )
+            
+            if maps_response.status_code != 200:
+                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
+                return
+            
+            maps = maps_response.data
+            if not maps:
+                print(f"\n! No maps found for site: {site_name}")
+                return
+            
+            # Display summary
+            print(f"\n{'-' * 80}")
+            print(f"Total Maps Found: {len(maps)}")
+            print(f"{'-' * 80}")
+            print(f"{'Map Name':<35} {'Type':<15} {'Dimensions':<20} {'Image':<8}")
+            print(f"{'-' * 80}")
+            
+            for map_item in maps:
+                map_name = map_item.get('name', 'Unnamed')[:34]
+                map_type = map_item.get('type', 'N/A')[:14]
+                width = map_item.get('width', 0)
+                height = map_item.get('height', 0)
+                dimensions = f"{width}x{height}" if width and height else "N/A"
+                has_image = "Yes" if 'url' in map_item else "No"
+                print(f"{map_name:<35} {map_type:<15} {dimensions:<20} {has_image:<8}")
+            
+            print(f"{'-' * 80}")
+            logging.info(f"Listed {len(maps)} maps for site {site_name}")
+            
+        except Exception as e:
+            logging.error(f"Error listing site maps: {e}", exc_info=True)
+            print(f"\n! Error listing maps: {e}")
+    
+    def list_all_org_maps(self):
+        """Display summary list of all maps across organization sites"""
+        print("\n" + "-" * 80)
+        print("LIST ALL ORGANIZATION MAPS - All Sites")
+        print("-" * 80)
+        
+        try:
+            # Fetch all sites
+            sites = fetch_all_sites_with_limit(self.org_id)
+            if not sites:
+                print("\n! No sites found in organization")
+                return
+            
+            print(f"\nFetching maps from {len(sites)} sites...")
+            all_maps = []
+            
+            for site in tqdm(sites, desc="Scanning sites", unit="site"):
+                try:
+                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                        self.apisession,
+                        site_id=site['id']
+                    )
+                    
+                    if maps_response.status_code == 200:
+                        maps = maps_response.data
+                        for map_item in maps:
+                            all_maps.append({
+                                'site_id': site['id'],
+                                'site_name': site.get('name', 'Unknown'),
+                                'map_id': map_item.get('id', 'N/A'),
+                                'map_name': map_item.get('name', 'Unnamed'),
+                                'type': map_item.get('type', 'N/A'),
+                                'width': map_item.get('width', 0),
+                                'height': map_item.get('height', 0),
+                                'has_image': 'url' in map_item
+                            })
+                except Exception as e:
+                    logging.debug(f"Error fetching maps for site {site['id']}: {e}")
+                    continue
+            
+            if not all_maps:
+                print("\n! No maps found across all sites")
+                return
+            
+            # Display summary
+            print(f"\n{'-' * 80}")
+            print(f"Total Maps Found: {len(all_maps)}")
+            print(f"{'-' * 80}")
+            print(f"{'Site Name':<30} {'Map Name':<25} {'Type':<15} {'Image':<8}")
+            print(f"{'-' * 80}")
+            
+            for map_item in all_maps:
+                site_name = map_item['site_name'][:29]
+                map_name = map_item['map_name'][:24]
+                map_type = map_item['type'][:14]
+                has_image = "Yes" if map_item['has_image'] else "No"
+                print(f"{site_name:<30} {map_name:<25} {map_type:<15} {has_image:<8}")
+            
+            print(f"{'-' * 80}")
+            logging.info(f"Listed {len(all_maps)} maps from {len(sites)} sites")
+            
+        except Exception as e:
+            logging.error(f"Error listing site maps: {e}", exc_info=True)
+            print(f"\n! Error listing maps: {e}")
+    
+    def export_site_maps(self):
+        """Export maps for currently selected site to CSV/SQLite"""
+        print("\n" + "-" * 80)
+        print("EXPORT SITE MAPS - Current Site")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            print(f"\nExporting maps for site: {site_name}")
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=site_id
+            )
+            
+            if maps_response.status_code != 200:
+                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
+                return
+            
+            maps = maps_response.data
+            if not maps:
+                print(f"\n! No maps found for site: {site_name}")
+                return
+            
+            # Flatten and prepare data
+            maps_data = []
+            for map_item in maps:
+                flattened = flatten_dict(map_item)
+                flattened['site_id'] = site_id
+                flattened['site_name'] = site_name
+                flattened['org_id'] = self.org_id
+                maps_data.append(flattened)
+            
+            # Write to dual output format
+            safe_site_name = sanitize_filename(site_name)
+            filename = f"SiteMaps_{safe_site_name}"
+            write_data_with_format_selection(
+                maps_data,
+                filename,
+                api_function_name='listSiteMaps'
+            )
+            
+            print(f"\n{'-' * 80}")
+            print(f"Export completed: {len(maps_data)} maps exported")
+            print(f"{'-' * 80}")
+            logging.info(f"Exported {len(maps_data)} maps from site {site_name}")
+            
+        except Exception as e:
+            logging.error(f"Error exporting site maps: {e}", exc_info=True)
+            print(f"\n! Error during export: {e}")
+    
+    def export_all_site_maps(self):
+        """Export all site maps across organization to CSV/SQLite with full metadata"""
+        print("\n" + "-" * 80)
+        print("EXPORT ALL ORGANIZATION MAPS - All Sites")
+        print("-" * 80)
+        
+        try:
+            sites = fetch_all_sites_with_limit(self.org_id)
+            if not sites:
+                print("\n! No sites found in organization")
+                return
+            
+            print(f"\nExporting maps from {len(sites)} sites...")
+            all_maps_data = []
+            
+            for site in tqdm(sites, desc="Exporting maps", unit="site"):
+                try:
+                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                        self.apisession,
+                        site_id=site['id']
+                    )
+                    
+                    if maps_response.status_code == 200:
+                        maps = maps_response.data
+                        for map_item in maps:
+                            # Flatten nested structures
+                            flattened = flatten_dict(map_item)
+                            flattened['site_id'] = site['id']
+                            flattened['site_name'] = site.get('name', 'Unknown')
+                            flattened['org_id'] = self.org_id
+                            all_maps_data.append(flattened)
+                except Exception as e:
+                    logging.debug(f"Error exporting maps for site {site['id']}: {e}")
+                    continue
+            
+            if not all_maps_data:
+                print("\n! No maps found to export")
+                return
+            
+            # Write to dual output format
+            filename = "SiteMaps_Export"
+            write_data_with_format_selection(
+                all_maps_data,
+                filename,
+                api_function_name='listSiteMaps'
+            )
+            
+            print(f"\n{'-' * 80}")
+            print(f"Export completed: {len(all_maps_data)} maps exported")
+            print(f"{'-' * 80}")
+            logging.info(f"Exported {len(all_maps_data)} maps from {len(sites)} sites")
+            
+        except Exception as e:
+            logging.error(f"Error exporting site maps: {e}", exc_info=True)
+            print(f"\n! Error during export: {e}")
+    
+    def export_maps_with_images(self):
+        """Export maps metadata focusing on image information"""
+        print("\n" + "-" * 80)
+        print("EXPORT MAPS WITH IMAGE METADATA")
+        print("-" * 80)
+        
+        try:
+            sites = fetch_all_sites_with_limit(self.org_id)
+            if not sites:
+                print("\n! No sites found in organization")
+                return
+            
+            print(f"\nScanning {len(sites)} sites for maps with images...")
+            maps_with_images = []
+            
+            for site in tqdm(sites, desc="Scanning for images", unit="site"):
+                try:
+                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                        self.apisession,
+                        site_id=site['id']
+                    )
+                    
+                    if maps_response.status_code == 200:
+                        maps = maps_response.data
+                        for map_item in maps:
+                            if 'url' in map_item or 'thumbnail_url' in map_item:
+                                flattened = flatten_dict(map_item)
+                                flattened['site_id'] = site['id']
+                                flattened['site_name'] = site.get('name', 'Unknown')
+                                flattened['org_id'] = self.org_id
+                                maps_with_images.append(flattened)
+                except Exception as e:
+                    logging.debug(f"Error scanning site {site['id']}: {e}")
+                    continue
+            
+            if not maps_with_images:
+                print("\n! No maps with images found")
+                return
+            
+            filename = "SiteMaps_WithImages"
+            write_data_with_format_selection(
+                maps_with_images,
+                filename,
+                api_function_name='listSiteMaps'
+            )
+            
+            print(f"\n{'-' * 80}")
+            print(f"Export completed: {len(maps_with_images)} maps with images")
+            print(f"{'-' * 80}")
+            logging.info(f"Exported {len(maps_with_images)} maps with images")
+            
+        except Exception as e:
+            logging.error(f"Error exporting maps with images: {e}", exc_info=True)
+            print(f"\n! Error during export: {e}")
+    
+    def download_site_map_images(self):
+        """Download map images to local disk"""
+        print("\n" + "-" * 80)
+        print("DOWNLOAD SITE MAP IMAGES")
+        print("-" * 80)
+        
+        try:
+            # Prompt for site selection
+            site_id = prompt_site_selection()
+            if not site_id:
+                print("\n! No site selected")
+                return
+            
+            # Get site name for display
+            sites = fetch_all_sites_with_limit(self.org_id)
+            site_name = next((s.get('name', 'Unknown') for s in sites if s['id'] == site_id), 'Unknown')
+            
+            print(f"\nFetching maps for site: {site_name}")
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=site_id
+            )
+            
+            if maps_response.status_code != 200:
+                print(f"\n! Failed to fetch maps: {maps_response.status_code}")
+                return
+            
+            maps = maps_response.data
+            maps_with_images = [m for m in maps if 'url' in m]
+            
+            if not maps_with_images:
+                print(f"\n! No maps with images found for site: {site_name}")
+                return
+            
+            print(f"\nFound {len(maps_with_images)} maps with images")
+            
+            # Create download directory
+            import os
+            download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))
+            os.makedirs(download_dir, exist_ok=True)
+            
+            print(f"Downloading to: {download_dir}")
+            
+            import requests
+            downloaded = 0
+            
+            for map_item in tqdm(maps_with_images, desc="Downloading", unit="image"):
+                try:
+                    map_name = map_item.get('name', 'unnamed')
+                    map_id = map_item.get('id', 'unknown')
+                    image_url = map_item.get('url')
+                    
+                    if not image_url:
+                        continue
+                    
+                    # Determine file extension from URL or default to .png
+                    file_ext = '.png'
+                    if '.' in image_url:
+                        url_ext = image_url.rsplit('.', 1)[-1].split('?')[0]
+                        if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+                            file_ext = f'.{url_ext.lower()}'
+                    
+                    filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
+                    filepath = os.path.join(download_dir, filename)
+                    
+                    response = requests.get(image_url, timeout=30)
+                    if response.status_code == 200:
+                        with open(filepath, 'wb') as f:
+                            f.write(response.content)
+                        downloaded += 1
+                    else:
+                        logging.warning(f"Failed to download {map_name}: HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    logging.error(f"Error downloading map image {map_item.get('id')}: {e}")
+                    continue
+            
+            print(f"\n{'-' * 80}")
+            print(f"Downloaded {downloaded} of {len(maps_with_images)} images")
+            print(f"Location: {download_dir}")
+            print(f"{'-' * 80}")
+            logging.info(f"Downloaded {downloaded} map images to {download_dir}")
+            
+        except Exception as e:
+            logging.error(f"Error downloading map images: {e}", exc_info=True)
+            print(f"\n! Error downloading images: {e}")
+    
+    def view_map_details(self):
+        """View detailed information for a specific map"""
+        print("\n" + "-" * 80)
+        print("VIEW MAP DETAILS")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            
+            # Fetch maps for the site
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=site_id
+            )
+            
+            if maps_response.status_code != 200:
+                print(f"\n! Failed to fetch maps: {maps_response.status_code}")
+                return
+            
+            maps = maps_response.data
+            if not maps:
+                print(f"\n! No maps found for site: {site_name}")
+                return
+            
+            # Display map selection
+            print(f"\nMaps for site: {site_name}")
+            print(f"{'-' * 80}")
+            for idx, map_item in enumerate(maps, 1):
+                map_name = map_item.get('name', 'Unnamed')
+                map_type = map_item.get('type', 'N/A')
+                print(f"  {idx}. {map_name} ({map_type})")
+            print(f"{'-' * 80}")
+            
+            try:
+                selection = input("\nSelect map number (or 0 to cancel): ").strip()
+                map_idx = int(selection) - 1
+                
+                if map_idx < 0 or map_idx >= len(maps):
+                    print("\n! Invalid selection")
+                    return
+                
+                selected_map = maps[map_idx]
+                map_id = selected_map.get('id')
+                
+                # Fetch detailed map info
+                detail_response = mistapi.api.v1.sites.maps.getSiteMap(
+                    self.apisession,
+                    site_id=site_id,
+                    map_id=map_id
+                )
+                
+                if detail_response.status_code != 200:
+                    print(f"\n! Failed to fetch map details: {detail_response.status_code}")
+                    return
+                
+                map_details = detail_response.data
+                
+                # Display details
+                print(f"\n{'-' * 80}")
+                print(f"MAP DETAILS: {map_details.get('name', 'Unnamed')}")
+                print(f"{'-' * 80}")
+                print(f"Map ID: {map_details.get('id', 'N/A')}")
+                print(f"Type: {map_details.get('type', 'N/A')}")
+                print(f"Width: {map_details.get('width', 0)} pixels")
+                print(f"Height: {map_details.get('height', 0)} pixels")
+                print(f"PPM (Pixels per meter): {map_details.get('ppm', 'N/A')}")
+                print(f"Orientation: {map_details.get('orientation', 0)} degrees")
+                print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")
+                
+                if 'url' in map_details:
+                    print(f"Image URL: {map_details['url'][:80]}...")
+                
+                if 'latlng' in map_details:
+                    latlng = map_details['latlng']
+                    print(f"Coordinates: {latlng.get('lat')}, {latlng.get('lng')}")
+                
+                if 'wayfinding' in map_details:
+                    print(f"Wayfinding Enabled: Yes")
+                
+                print(f"{'-' * 80}")
+                logging.info(f"Viewed details for map {map_id}")
+                
+            except ValueError:
+                print("\n! Invalid input - please enter a number")
+            except EOFError:
+                logging.info("EOF detected during map selection")
+                return
+                
+        except Exception as e:
+            logging.error(f"Error viewing map details: {e}", exc_info=True)
+            print(f"\n! Error viewing map details: {e}")
+    
+    def create_site_map(self):
+        """Create a new site map with basic configuration"""
+        print("\n" + "-" * 80)
+        print("CREATE NEW SITE MAP")
+        print("-" * 80)
+        print("\n! Note: This creates a map placeholder. Upload image separately (Menu 7)")
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            print(f"\nCreating map for site: {site_name}")
+            print(f"{'-' * 80}")
+            
+            # Gather map configuration
+            try:
+                map_name = input("Enter map name: ").strip()
+                if not map_name:
+                    print("\n! Map name is required")
+                    return
+                
+                print("\nMap type options:")
+                print("  1. image (standard floor plan)")
+                print("  2. google (Google Maps integration)")
+                print("  3. baidu (Baidu Maps integration)")
+                map_type_choice = input("Select type (1-3, default=1): ").strip() or "1"
+                
+                type_map = {"1": "image", "2": "google", "3": "baidu"}
+                map_type = type_map.get(map_type_choice, "image")
+                
+                # Optional: dimensions (only for image type)
+                width = None
+                height = None
+                ppm = None
+                
+                if map_type == "image":
+                    width_input = input("Enter width in pixels (default=1024): ").strip()
+                    height_input = input("Enter height in pixels (default=768): ").strip()
+                    ppm_input = input("Enter pixels per meter (default=10): ").strip()
+                    
+                    width = int(width_input) if width_input else 1024
+                    height = int(height_input) if height_input else 768
+                    ppm = float(ppm_input) if ppm_input else 10.0
+                
+                # Build map payload
+                map_payload = {
+                    "name": map_name,
+                    "type": map_type
+                }
+                
+                if width:
+                    map_payload["width"] = width
+                if height:
+                    map_payload["height"] = height
+                if ppm:
+                    map_payload["ppm"] = ppm
+                
+                # Create the map
+                print(f"\nCreating map '{map_name}'...")
+                create_response = mistapi.api.v1.sites.maps.createSiteMap(
+                    self.apisession,
+                    site_id=site_id,
+                    body=map_payload
+                )
+                
+                if create_response.status_code in [200, 201]:
+                    created_map = create_response.data
+                    print(f"\n{'-' * 80}")
+                    print(f"Map created successfully!")
+                    print(f"Map ID: {created_map.get('id')}")
+                    print(f"Name: {created_map.get('name')}")
+                    print(f"Type: {created_map.get('type')}")
+                    print(f"{'-' * 80}")
+                    logging.info(f"Created map {created_map.get('id')} for site {site_id}")
+                else:
+                    print(f"\n! Failed to create map: HTTP {create_response.status_code}")
+                    logging.error(f"Map creation failed: {create_response.status_code} - {create_response.data}")
+                    
+            except ValueError as ve:
+                print(f"\n! Invalid input: {ve}")
+            except EOFError:
+                logging.info("EOF detected during map creation")
+                return
+                
+        except Exception as e:
+            logging.error(f"Error creating site map: {e}", exc_info=True)
+            print(f"\n! Error creating map: {e}")
+    
+    def clone_map(self):
+        """Clone/duplicate an existing map at the current site including image, walls, paths, and zones"""
+        print("\n" + "-" * 80)
+        print("CLONE/DUPLICATE MAP")
+        print("-" * 80)
+        print("! This will clone ALL map data: image, walls, paths, zones, wayfinding, etc.")
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            import os
+            import requests
+            import tempfile
+            
+            # Get source map selection
+            print("\nSelect the map to clone:")
+            source_map_id = self._select_map_from_site(site_id, site_name)
+            if not source_map_id:
+                return
+            
+            # Fetch complete source map details
+            print("\nFetching source map details...")
+            source_response = mistapi.api.v1.sites.maps.getSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=source_map_id
+            )
+            
+            if source_response.status_code != 200:
+                print(f"\n! Failed to fetch source map: HTTP {source_response.status_code}")
+                return
+            
+            source_map = source_response.data
+            
+            # Display source map info with all cloneable attributes
+            print(f"\n{'-' * 80}")
+            print(f"Source Map: {source_map.get('name', 'Unnamed')}")
+            print(f"Type: {source_map.get('type', 'N/A')}")
+            print(f"Dimensions: {source_map.get('width', 'N/A')}x{source_map.get('height', 'N/A')}")
+            print(f"PPM: {source_map.get('ppm', 'N/A')}")
+            print(f"Has Image: {'Yes' if 'url' in source_map else 'No'}")
+            print(f"Has Walls: {'Yes' if 'wall_path' in source_map else 'No'}")
+            print(f"Has Wayfinding: {'Yes' if 'wayfinding_path' in source_map else 'No'}")
+            print(f"{'-' * 80}")
+            
+            # Prompt for new map name
+            default_name = f"{source_map.get('name', 'Map')} (Copy)"
+            new_name = input(f"\nEnter name for cloned map [{default_name}]: ").strip()
+            if not new_name:
+                new_name = default_name
+            
+            # Build complete clone payload - copy ALL relevant properties
+            clone_payload = {
+                "name": new_name,
+                "type": source_map.get('type', 'image')
+            }
+            
+            # Copy dimensional properties
+            if 'width' in source_map:
+                clone_payload['width'] = source_map['width']
+            if 'height' in source_map:
+                clone_payload['height'] = source_map['height']
+            if 'height_m' in source_map:
+                clone_payload['height_m'] = source_map['height_m']
+            if 'ppm' in source_map:
+                clone_payload['ppm'] = source_map['ppm']
+            if 'orientation' in source_map:
+                clone_payload['orientation'] = source_map['orientation']
+            
+            # Copy location data
+            if 'latlng' in source_map:
+                clone_payload['latlng'] = source_map['latlng']
+            if 'latlng_br' in source_map:
+                clone_payload['latlng_br'] = source_map['latlng_br']
+            if 'origin_x' in source_map:
+                clone_payload['origin_x'] = source_map['origin_x']
+            if 'origin_y' in source_map:
+                clone_payload['origin_y'] = source_map['origin_y']
+            
+            # Copy wayfinding configuration
+            if 'wayfinding' in source_map:
+                clone_payload['wayfinding'] = source_map['wayfinding']
+            if 'wayfinding_path' in source_map:
+                clone_payload['wayfinding_path'] = source_map['wayfinding_path']
+            
+            # Copy wall paths (critical for RF modeling)
+            if 'wall_path' in source_map:
+                clone_payload['wall_path'] = source_map['wall_path']
+            
+            # Copy site survey paths
+            if 'sitesurvey_path' in source_map:
+                clone_payload['sitesurvey_path'] = source_map['sitesurvey_path']
+            
+            # Copy other map-specific settings
+            if 'occupancy_limit' in source_map:
+                clone_payload['occupancy_limit'] = source_map['occupancy_limit']
+            if 'locked' in source_map:
+                clone_payload['locked'] = source_map['locked']
+            if 'view' in source_map:
+                clone_payload['view'] = source_map['view']
+            
+            # Display clone plan
+            print(f"\n{'-' * 80}")
+            print("Clone Plan:")
+            print(f"  New name: {new_name}")
+            print(f"  Will copy: dimensions, orientation, location data, wayfinding, walls")
+            print(f"  Image: {'Yes - will download and re-upload' if 'url' in source_map else 'No image to copy'}")
+            print(f"{'-' * 80}")
+            
+            confirm = input("\nProceed with full clone? (yes/no): ").strip().lower()
+            if confirm not in ['yes', 'y']:
+                print("\n! Clone cancelled")
+                return
+            
+            # Download image to temporary file if present
+            image_temp_path = None
+            if 'url' in source_map:
+                try:
+                    print("\nDownloading map image...")
+                    image_url = source_map['url']
+                    
+                    # Determine file extension
+                    file_ext = '.png'
+                    if '.' in image_url:
+                        url_ext = image_url.rsplit('.', 1)[-1].split('?')[0]
+                        if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+                            file_ext = f'.{url_ext.lower()}'
+                    
+                    # Create temporary file
+                    temp_fd, image_temp_path = tempfile.mkstemp(suffix=file_ext)
+                    os.close(temp_fd)
+                    
+                    # Download image
+                    response = requests.get(image_url, timeout=60)
+                    if response.status_code == 200:
+                        with open(image_temp_path, 'wb') as f:
+                            f.write(response.content)
+                        print(f"Downloaded image ({len(response.content) / 1024:.1f} KB)")
+                    else:
+                        print(f"! Warning: Failed to download image (HTTP {response.status_code})")
+                        if image_temp_path and os.path.exists(image_temp_path):
+                            os.remove(image_temp_path)
+                        image_temp_path = None
+                        
+                except Exception as e:
+                    logging.error(f"Error downloading map image: {e}")
+                    print(f"! Warning: Could not download image: {e}")
+                    if image_temp_path and os.path.exists(image_temp_path):
+                        os.remove(image_temp_path)
+                    image_temp_path = None
+            
+            # Create the cloned map
+            print("\nCreating cloned map...")
+            clone_response = mistapi.api.v1.sites.maps.createSiteMap(
+                self.apisession,
+                site_id=site_id,
+                body=clone_payload
+            )
+            
+            if clone_response.status_code not in [200, 201]:
+                print(f"\n! Failed to clone map: HTTP {clone_response.status_code}")
+                logging.error(f"Map clone failed: {clone_response.status_code} - {clone_response.data}")
+                # Clean up temp file
+                if image_temp_path and os.path.exists(image_temp_path):
+                    os.remove(image_temp_path)
+                return
+            
+            cloned_map = clone_response.data
+            cloned_map_id = cloned_map.get('id')
+            
+            print(f"\n{'-' * 80}")
+            print("Map structure cloned successfully!")
+            print(f"Cloned Map ID: {cloned_map_id}")
+            print(f"Name: {cloned_map.get('name')}")
+            print(f"{'-' * 80}")
+            
+            # Upload image to cloned map if we have one
+            if image_temp_path and os.path.exists(image_temp_path):
+                try:
+                    print("\nUploading image to cloned map...")
+                    upload_response = mistapi.api.v1.sites.maps.addSiteMapImage(
+                        self.apisession,
+                        site_id=site_id,
+                        map_id=cloned_map_id,
+                        file_path=image_temp_path
+                    )
+                    
+                    if upload_response.status_code in [200, 201]:
+                        print("Image uploaded successfully!")
+                        logging.info(f"Image uploaded to cloned map {cloned_map_id}")
+                    else:
+                        print(f"! Warning: Failed to upload image: HTTP {upload_response.status_code}")
+                        logging.error(f"Image upload to cloned map failed: {upload_response.status_code}")
+                        
+                except Exception as e:
+                    logging.error(f"Error uploading image to cloned map: {e}")
+                    print(f"! Warning: Could not upload image to cloned map: {e}")
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(image_temp_path):
+                        os.remove(image_temp_path)
+            
+            # Display final summary
+            print(f"\n{'-' * 80}")
+            print("CLONE COMPLETE")
+            print(f"{'-' * 80}")
+            print(f"Original Map: {source_map.get('name')}")
+            print(f"Cloned Map: {new_name}")
+            print(f"Cloned Map ID: {cloned_map_id}")
+            print("\nCloned elements:")
+            print(f"  -> Dimensions: {clone_payload.get('width', 'N/A')}x{clone_payload.get('height', 'N/A')}")
+            print(f"  -> PPM: {clone_payload.get('ppm', 'N/A')}")
+            print(f"  -> Walls: {'Yes' if 'wall_path' in clone_payload else 'No'}")
+            print(f"  -> Wayfinding: {'Yes' if 'wayfinding_path' in clone_payload else 'No'}")
+            print(f"  -> Image: {'Yes' if image_temp_path else 'No'}")
+            print(f"{'-' * 80}")
+            print("\n! Note: Zones are site-level objects, not map objects.")
+            print("! If you need to clone zones, use the Zones API separately.")
+            
+            logging.info(f"Successfully cloned map {source_map_id} to {cloned_map_id} at site {site_id}")
+                
+        except EOFError:
+            logging.info("EOF detected during map clone")
+            return
+        except Exception as e:
+            logging.error(f"Error cloning map: {e}", exc_info=True)
+            print(f"\n! Error cloning map: {e}")
+    
+    def maps_without_images_report(self):
+        """Generate report of maps that don't have uploaded images"""
+        print("\n" + "-" * 80)
+        print("MAPS WITHOUT IMAGES REPORT")
+        print("-" * 80)
+        
+        try:
+            sites = fetch_all_sites_with_limit(self.org_id)
+            if not sites:
+                print("\n! No sites found in organization")
+                return
+            
+            print(f"\nScanning {len(sites)} sites for maps without images...")
+            maps_without_images = []
+            total_maps_scanned = 0
+            
+            for site in tqdm(sites, desc="Scanning sites", unit="site"):
+                try:
+                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                        self.apisession,
+                        site_id=site['id']
+                    )
+                    
+                    if maps_response.status_code == 200:
+                        maps = maps_response.data
+                        total_maps_scanned += len(maps)
+                        for map_item in maps:
+                            if 'url' not in map_item:
+                                maps_without_images.append({
+                                    'site_id': site['id'],
+                                    'site_name': site.get('name', 'Unknown'),
+                                    'map_id': map_item.get('id'),
+                                    'map_name': map_item.get('name', 'Unnamed'),
+                                    'type': map_item.get('type', 'N/A'),
+                                    'width': map_item.get('width', 0),
+                                    'height': map_item.get('height', 0),
+                                    'org_id': self.org_id
+                                })
+                except Exception as e:
+                    logging.debug(f"Error scanning site {site['id']}: {e}")
+                    continue
+            
+            print(f"\nTotal maps scanned: {total_maps_scanned}")
+            
+            if not maps_without_images:
+                print("\n" + "-" * 80)
+                print(f"All {total_maps_scanned} maps have images uploaded!")
+                print("-" * 80)
+                return
+            
+            # Display report
+            print(f"\n{'-' * 80}")
+            print(f"MAPS WITHOUT IMAGES: {len(maps_without_images)} found")
+            print(f"{'-' * 80}")
+            print(f"{'Site Name':<30} {'Map Name':<30} {'Type':<15}")
+            print(f"{'-' * 80}")
+            
+            for map_item in maps_without_images:
+                site_name = map_item['site_name'][:29]
+                map_name = map_item['map_name'][:29]
+                map_type = map_item['type'][:14]
+                print(f"{site_name:<30} {map_name:<30} {map_type:<15}")
+            
+            print(f"{'-' * 80}")
+            
+            # Export to CSV/SQLite
+            filename = "MapsWithoutImages_Report"
+            write_data_with_format_selection(
+                maps_without_images,
+                filename,
+                api_function_name='listSiteMaps'
+            )
+            
+            logging.info(f"Generated report: {len(maps_without_images)} maps without images")
+            
+        except Exception as e:
+            logging.error(f"Error generating maps report: {e}", exc_info=True)
+            print(f"\n! Error generating report: {e}")
+    
+    # Placeholder methods for future implementation
+    def update_map_properties(self):
+        """Update existing map properties (name, dimensions, orientation, etc.)"""
+        print("\n" + "-" * 80)
+        print("UPDATE MAP PROPERTIES")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            # Get map selection
+            map_id = self._select_map_from_site(site_id, site_name)
+            if not map_id:
+                return
+            
+            # Fetch current map details
+            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            if map_response.status_code != 200:
+                print(f"\n! Failed to fetch map details: HTTP {map_response.status_code}")
+                return
+            
+            current_map = map_response.data
+            
+            # Display current properties
+            print(f"\nCurrent Map Properties:")
+            print(f"{'-' * 80}")
+            print(f"Name: {current_map.get('name', 'N/A')}")
+            print(f"Type: {current_map.get('type', 'N/A')}")
+            print(f"Width: {current_map.get('width', 'N/A')} pixels")
+            print(f"Height: {current_map.get('height', 'N/A')} pixels")
+            print(f"PPM (Pixels per meter): {current_map.get('ppm', 'N/A')}")
+            print(f"Orientation: {current_map.get('orientation', 0)} degrees")
+            print(f"{'-' * 80}")
+            
+            # Build update payload
+            update_payload = {}
+            
+            print("\nEnter new values (press Enter to keep current value):")
+            
+            # Map name
+            new_name = input(f"Map name [{current_map.get('name', '')}]: ").strip()
+            if new_name:
+                update_payload['name'] = new_name
+            
+            # Width
+            new_width = input(f"Width in pixels [{current_map.get('width', '')}]: ").strip()
+            if new_width:
+                try:
+                    update_payload['width'] = int(new_width)
+                except ValueError:
+                    print("! Invalid width, skipping")
+            
+            # Height
+            new_height = input(f"Height in pixels [{current_map.get('height', '')}]: ").strip()
+            if new_height:
+                try:
+                    update_payload['height'] = int(new_height)
+                except ValueError:
+                    print("! Invalid height, skipping")
+            
+            # PPM
+            new_ppm = input(f"Pixels per meter [{current_map.get('ppm', '')}]: ").strip()
+            if new_ppm:
+                try:
+                    update_payload['ppm'] = float(new_ppm)
+                except ValueError:
+                    print("! Invalid PPM, skipping")
+            
+            # Orientation
+            new_orientation = input(f"Orientation in degrees [{current_map.get('orientation', 0)}]: ").strip()
+            if new_orientation:
+                try:
+                    update_payload['orientation'] = int(new_orientation)
+                except ValueError:
+                    print("! Invalid orientation, skipping")
+            
+            if not update_payload:
+                print("\n! No changes specified")
+                return
+            
+            # Confirm update
+            print(f"\n{'-' * 80}")
+            print("Changes to apply:")
+            for key, value in update_payload.items():
+                print(f"  {key}: {value}")
+            print(f"{'-' * 80}")
+            
+            confirm = input("\nApply these changes? (yes/no): ").strip().lower()
+            if confirm not in ['yes', 'y']:
+                print("\n! Update cancelled")
+                return
+            
+            # Apply update
+            print("\nApplying changes...")
+            update_response = mistapi.api.v1.sites.maps.updateSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id,
+                body=update_payload
+            )
+            
+            if update_response.status_code in [200, 201]:
+                print(f"\n{'-' * 80}")
+                print("Map updated successfully!")
+                print(f"{'-' * 80}")
+                logging.info(f"Updated map {map_id} for site {site_id}")
+            else:
+                print(f"\n! Failed to update map: HTTP {update_response.status_code}")
+                logging.error(f"Map update failed: {update_response.status_code} - {update_response.data}")
+                
+        except EOFError:
+            logging.info("EOF detected during map update")
+            return
+        except Exception as e:
+            logging.error(f"Error updating map properties: {e}", exc_info=True)
+            print(f"\n! Error updating map: {e}")
+    
+    def delete_site_map(self):
+        """Delete a site map with confirmation"""
+        print("\n" + "-" * 80)
+        print("DELETE SITE MAP")
+        print("-" * 80)
+        print("\n! WARNING: This action cannot be undone!")
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            # Get map selection
+            map_id = self._select_map_from_site(site_id, site_name)
+            if not map_id:
+                return
+            
+            # Fetch current map details for display
+            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            if map_response.status_code != 200:
+                print(f"\n! Failed to fetch map details: HTTP {map_response.status_code}")
+                return
+            
+            current_map = map_response.data
+            
+            # Display map details before deletion
+            print(f"\n{'-' * 80}")
+            print("Map to be deleted:")
+            print(f"  Name: {current_map.get('name', 'N/A')}")
+            print(f"  Type: {current_map.get('type', 'N/A')}")
+            print(f"  ID: {map_id}")
+            print(f"{'-' * 80}")
+            
+            # Safety confirmation
+            print("\nType 'DELETE' in uppercase to confirm deletion:")
+            confirmation = input("Confirmation: ").strip()
+            
+            if confirmation != "DELETE":
+                print("\n! Deletion cancelled")
+                logging.info(f"Map deletion cancelled by user for map {map_id}")
+                return
+            
+            # Perform deletion
+            print("\nDeleting map...")
+            delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            if delete_response.status_code in [200, 204]:
+                print(f"\n{'-' * 80}")
+                print("Map deleted successfully!")
+                print(f"{'-' * 80}")
+                logging.info(f"Deleted map {map_id} from site {site_id}")
+            else:
+                print(f"\n! Failed to delete map: HTTP {delete_response.status_code}")
+                logging.error(f"Map deletion failed: {delete_response.status_code} - {delete_response.data}")
+                
+        except EOFError:
+            logging.info("EOF detected during map deletion")
+            return
+        except Exception as e:
+            logging.error(f"Error deleting site map: {e}", exc_info=True)
+            print(f"\n! Error deleting map: {e}")
+    
+    def upload_map_image(self):
+        """Upload or replace map image file (multipart upload)"""
+        print("\n" + "-" * 80)
+        print("UPLOAD/REPLACE MAP IMAGE")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            # Get map selection
+            map_id = self._select_map_from_site(site_id, site_name)
+            if not map_id:
+                return
+            
+            # Prompt for image file path
+            import os
+            print("\nEnter the path to the image file:")
+            print("Supported formats: PNG, JPG, JPEG, GIF, SVG")
+            file_path = input("File path: ").strip()
+            
+            # Remove quotes if user pasted path with quotes
+            file_path = file_path.strip('"').strip("'")
+            
+            if not file_path:
+                print("\n! No file path provided")
+                return
+            
+            if not os.path.exists(file_path):
+                print(f"\n! File not found: {file_path}")
+                return
+            
+            if not os.path.isfile(file_path):
+                print(f"\n! Path is not a file: {file_path}")
+                return
+            
+            # Validate file extension
+            valid_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg']
+            file_ext = os.path.splitext(file_path)[1].lower()
+            if file_ext not in valid_extensions:
+                print(f"\n! Invalid file type: {file_ext}")
+                print(f"Supported types: {', '.join(valid_extensions)}")
+                return
+            
+            # Check file size (warn if > 10MB)
+            file_size = os.path.getsize(file_path)
+            file_size_mb = file_size / (1024 * 1024)
+            if file_size_mb > 10:
+                print(f"\n! Warning: File size is {file_size_mb:.2f}MB")
+                confirm = input("Continue with upload? (yes/no): ").strip().lower()
+                if confirm not in ['yes', 'y']:
+                    print("\n! Upload cancelled")
+                    return
+            
+            print(f"\nFile: {os.path.basename(file_path)}")
+            print(f"Size: {file_size_mb:.2f}MB")
+            
+            # Confirm upload
+            confirm = input("\nUpload this image to the selected map? (yes/no): ").strip().lower()
+            if confirm not in ['yes', 'y']:
+                print("\n! Upload cancelled")
+                return
+            
+            # Perform upload using mistapi
+            print("\nUploading image...")
+            
+            # Use mistapi's addSiteMapImage method
+            with open(file_path, 'rb') as image_file:
+                upload_response = mistapi.api.v1.sites.maps.addSiteMapImage(
+                    self.apisession,
+                    site_id=site_id,
+                    map_id=map_id,
+                    file_path=file_path
+                )
+            
+            if upload_response.status_code in [200, 201]:
+                print(f"\n{'-' * 80}")
+                print("Image uploaded successfully!")
+                print(f"{'-' * 80}")
+                logging.info(f"Uploaded image to map {map_id} for site {site_id}")
+            else:
+                print(f"\n! Failed to upload image: HTTP {upload_response.status_code}")
+                logging.error(f"Image upload failed: {upload_response.status_code} - {upload_response.data}")
+                
+        except EOFError:
+            logging.info("EOF detected during image upload")
+            return
+        except Exception as e:
+            logging.error(f"Error uploading map image: {e}", exc_info=True)
+            print(f"\n! Error uploading image: {e}")
+    
+    def view_devices_on_map(self):
+        """Display all devices placed on a specific map"""
+        print("\n" + "-" * 80)
+        print("VIEW DEVICES ON MAP")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            return
+        
+        try:
+            # Get map selection
+            map_id = self._select_map_from_site(site_id, site_name)
+            if not map_id:
+                return
+            
+            # Fetch devices for the site
+            print(f"\nFetching devices for site: {site_name}")
+            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+                self.apisession,
+                site_id=site_id,
+                type="all"
+            )
+            
+            if devices_response.status_code != 200:
+                print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
+                return
+            
+            all_devices = devices_response.data
+            
+            # Filter devices that are on this specific map
+            devices_on_map = []
+            for device in all_devices:
+                if device.get('map_id') == map_id:
+                    devices_on_map.append(device)
+            
+            if not devices_on_map:
+                print(f"\n! No devices placed on this map")
+                return
+            
+            # Display devices
+            print(f"\n{'-' * 80}")
+            print(f"Devices on Map: {len(devices_on_map)} found")
+            print(f"{'-' * 80}")
+            print(f"{'Device Name':<30} {'Type':<10} {'Model':<20} {'X,Y Coordinates':<20}")
+            print(f"{'-' * 80}")
+            
+            for device in devices_on_map:
+                device_name = device.get('name', 'Unnamed')[:29]
+                device_type = device.get('type', 'N/A')[:9]
+                device_model = device.get('model', 'N/A')[:19]
+                x_coord = device.get('x', 'N/A')
+                y_coord = device.get('y', 'N/A')
+                coordinates = f"{x_coord},{y_coord}"
+                print(f"{device_name:<30} {device_type:<10} {device_model:<20} {coordinates:<20}")
+            
+            print(f"{'-' * 80}")
+            
+            # Optional: Export to CSV
+            export_choice = input("\nExport to CSV? (yes/no): ").strip().lower()
+            if export_choice in ['yes', 'y']:
+                devices_data = []
+                for device in devices_on_map:
+                    flattened = flatten_dict(device)
+                    flattened['site_id'] = site_id
+                    flattened['site_name'] = site_name
+                    devices_data.append(flattened)
+                
+                filename = f"MapDevices_{sanitize_filename(site_name)}"
+                write_data_with_format_selection(
+                    devices_data,
+                    filename,
+                    api_function_name='listSiteDevices'
+                )
+                print(f"\n   Exported {len(devices_data)} devices")
+            
+            logging.info(f"Viewed {len(devices_on_map)} devices on map {map_id}")
+            
+        except EOFError:
+            logging.info("EOF detected during view devices")
+            return
+        except Exception as e:
+            logging.error(f"Error viewing devices on map: {e}", exc_info=True)
+            print(f"\n! Error viewing devices: {e}")
+    
+    def auto_place_aps(self):
+        """Automatically place APs on map using Mist auto-placement"""
+        print("\n! Feature coming soon: Auto-place APs")
+        logging.info("auto_place_aps called (placeholder)")
+    
+    def auto_orient_aps(self):
+        """Automatically orient APs on map"""
+        print("\n! Feature coming soon: Auto-orient APs")
+        logging.info("auto_orient_aps called (placeholder)")
+    
+    def set_device_location(self):
+        """Manually set AP/device coordinates on map"""
+        print("\n! Feature coming soon: Set device location")
+        logging.info("set_device_location called (placeholder)")
+    
+    def bulk_download_org_images(self):
+        """Download all map images across entire organization"""
+        print("\n" + "-" * 80)
+        print("BULK DOWNLOAD ORG MAP IMAGES")
+        print("-" * 80)
+        
+        try:
+            sites = fetch_all_sites_with_limit(self.org_id)
+            if not sites:
+                print("\n! No sites found in organization")
+                return
+            
+            print(f"\nScanning {len(sites)} sites for maps with images...")
+            
+            import os
+            import requests
+            
+            # Create base download directory
+            base_dir = os.path.join("data", "map_images_org_backup")
+            os.makedirs(base_dir, exist_ok=True)
+            
+            total_maps = 0
+            total_downloaded = 0
+            
+            for site in tqdm(sites, desc="Processing sites", unit="site"):
+                try:
+                    site_id = site['id']
+                    site_name = site.get('name', 'Unknown')
+                    
+                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                        self.apisession,
+                        site_id=site_id
+                    )
+                    
+                    if maps_response.status_code != 200:
+                        continue
+                    
+                    maps = maps_response.data
+                    maps_with_images = [m for m in maps if 'url' in m]
+                    
+                    if not maps_with_images:
+                        continue
+                    
+                    # Create site-specific directory
+                    site_dir = os.path.join(base_dir, sanitize_filename(site_name))
+                    os.makedirs(site_dir, exist_ok=True)
+                    
+                    for map_item in maps_with_images:
+                        total_maps += 1
+                        try:
+                            map_name = map_item.get('name', 'unnamed')
+                            map_id = map_item.get('id', 'unknown')
+                            image_url = map_item.get('url')
+                            
+                            if not image_url:
+                                continue
+                            
+                            # Determine file extension
+                            file_ext = '.png'
+                            if '.' in image_url:
+                                url_ext = image_url.rsplit('.', 1)[-1].split('?')[0]
+                                if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+                                    file_ext = f'.{url_ext.lower()}'
+                            
+                            filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
+                            filepath = os.path.join(site_dir, filename)
+                            
+                            # Skip if already downloaded
+                            if os.path.exists(filepath):
+                                total_downloaded += 1
+                                continue
+                            
+                            response = requests.get(image_url, timeout=30)
+                            if response.status_code == 200:
+                                with open(filepath, 'wb') as f:
+                                    f.write(response.content)
+                                total_downloaded += 1
+                            else:
+                                logging.warning(f"Failed to download {site_name}/{map_name}: HTTP {response.status_code}")
+                                
+                        except Exception as e:
+                            logging.error(f"Error downloading map image {map_item.get('id')}: {e}")
+                            continue
+                            
+                except Exception as e:
+                    logging.debug(f"Error processing site {site['id']}: {e}")
+                    continue
+            
+            print(f"\n{'-' * 80}")
+            print(f"Download completed!")
+            print(f"Total maps found: {total_maps}")
+            print(f"Successfully downloaded: {total_downloaded}")
+            print(f"Location: {base_dir}")
+            print(f"{'-' * 80}")
+            logging.info(f"Bulk downloaded {total_downloaded} of {total_maps} map images to {base_dir}")
+            
+        except Exception as e:
+            logging.error(f"Error bulk downloading map images: {e}", exc_info=True)
+            print(f"\n! Error during bulk download: {e}")
+    
+    def backup_all_maps(self):
+        """Complete backup of all maps (metadata + images)"""
+        print("\n! Feature coming soon: Backup all maps")
+        logging.info("backup_all_maps called (placeholder)")
+    
+    def map_coverage_analytics(self):
+        """Analyze RF coverage patterns by map"""
+        print("\n! Feature coming soon: Map coverage analytics")
+        logging.info("map_coverage_analytics called (placeholder)")
+    
+    def device_density_analytics(self):
+        """Analyze device density and distribution by map"""
+        print("\n! Feature coming soon: Device density analytics")
+        logging.info("device_density_analytics called (placeholder)")
+    
+    def map_usage_statistics(self):
+        """Generate usage statistics for maps"""
+        print("\n! Feature coming soon: Map usage statistics")
+        logging.info("map_usage_statistics called (placeholder)")
+
+
 class FirmwareManager:
     """
     Advanced Firmware Management System for Mist Access Points
@@ -35225,6 +36808,11 @@ menu_actions = {
     "109": (create_ap_model_device_profiles, " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)"),
     "110": (assign_aps_to_matching_device_profiles, " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"),
     "111": (clone_gateway_templates_by_state_and_country, " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"),
+    
+    # ==============================
+    # MAPS MANAGER
+    # ==============================
+    "112": (lambda: MapsManager(apisession, get_cached_or_prompted_org_id()).run_interactive_menu(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
 }
 
 def _launch_tui_from_menu():
