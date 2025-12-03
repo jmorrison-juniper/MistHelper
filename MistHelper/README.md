@@ -479,6 +479,43 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.17.15",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Organized layer controls: Infrastructure, Beacons & Positioning, Clients, Devices, and Filters sections matching Mist portal",
+          "WiFi vs Wired client separation: different markers (circle/square) and colors (green/cyan) for automatic client type detection",
+          "Client-AP association lines: dotted green lines showing WiFi client connections to access points",
+          "Mesh link visualization: dashed magenta lines displaying mesh topology between access points",
+          "vBeacon coverage circles: power-based coverage area visualization with shaded regions",
+          "Proximity zones toggle: placeholder for future proximity zone layer support",
+          "Excluded clients toggle: placeholder for filtering excluded client devices",
+          "Mesh associations toggle: dedicated control for showing/hiding AP mesh links",
+          "Hide inactive items filter: placeholder for filtering inactive devices from display",
+          "vBeacon coverage control: separate toggle for showing/hiding beacon coverage circles"
+        ],
+        "enhancements": [
+          "Multi-checklist architecture: 5 separate checklists for granular layer management",
+          "Client type detection: automatic WiFi/Wired classification based on SSID field presence",
+          "Coverage radius calculation: dynamic radius based on vBeacon power level (-12 to +4 dBm range)",
+          "Client-AP linking: automatic AP lookup by MAC address for association line drawing",
+          "Mesh topology detection: automatic mesh uplink discovery from device mesh_uplink field",
+          "Layer toggle callback: enhanced to handle multiple checklist inputs with combined layer array",
+          "Map statistics: added vBeacon and BLE beacon counts to Map Info panel",
+          "Add vBeacon/Beacon buttons: header toolbar buttons with green/cyan color coding"
+        ],
+        "api_changes": [
+          "Added math.cos, math.sin, math.pi imports for parametric circle calculations",
+          "Client markers: WiFi uses go.Scatter with circle symbol, Wired uses square symbol",
+          "Beacon coverage: uses Plotly fill='toself' with transparent green overlay"
+        ],
+        "documentation": [
+          "Layer controls now match Mist portal Location Settings panel organization",
+          "Client separation provides visual distinction between WiFi and Wired network access"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.47",
       "date": "2025-12-03",
       "changes": {

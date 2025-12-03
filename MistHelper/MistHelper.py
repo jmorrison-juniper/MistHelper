@@ -22,6 +22,7 @@ import csv
 import subprocess
 import traceback
 import platform
+from math import cos, sin, pi
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from threading import Lock
@@ -26782,6 +26783,31 @@ class MapsManager:
                         yanchor='bottom'
                     )
                 
+                # Add mesh links for APs if mesh topology exists
+                if device_type == 'ap':
+                    mesh_links_added = 0
+                    for i, device in enumerate(type_devices):
+                        # Check if this AP has mesh info
+                        mesh_uplink = device.get('mesh_uplink')
+                        if mesh_uplink:
+                            # Find the uplink AP
+                            for uplink_device in type_devices:
+                                if uplink_device.get('mac') == mesh_uplink:
+                                    # Draw mesh link
+                                    fig.add_trace(go.Scatter(
+                                        x=[device['x'], uplink_device['x']],
+                                        y=[device['y'], uplink_device['y']],
+                                        mode='lines',
+                                        line=dict(color='rgba(255,0,255,0.4)', width=2, dash='dash'),
+                                        name='Mesh Link',
+                                        showlegend=(mesh_links_added == 0),  # Only show in legend once
+                                        hoverinfo='skip'
+                                    ))
+                                    mesh_links_added += 1
+                                    break
+                    if mesh_links_added > 0:
+                        logging.info(f"Added {mesh_links_added} mesh links between APs")
+                
                 # Add Mist-style orientation indicators: crosshair + directional dot
                 for i, (x, y, angle, device) in enumerate(zip(x_coords, y_coords, orientations, type_devices)):
                     # Crosshair at device location (always visible)
@@ -26826,6 +26852,172 @@ class MapsManager:
                             hovertext=f"Orientation: {angle}°",
                             hoverinfo='text'
                         ))
+        
+        # Add beacons (vBeacons and BLE beacons) if present in map data
+        if 'vbeacons' in map_data and map_data['vbeacons']:
+            vbeacons = map_data['vbeacons']
+            logging.info(f"Processing {len(vbeacons)} virtual beacons")
+            
+            beacon_x = []
+            beacon_y = []
+            beacon_hover = []
+            beacon_names = []
+            
+            for beacon in vbeacons:
+                x = beacon.get('x')
+                y = beacon.get('y')
+                if x is not None and y is not None:
+                    beacon_x.append(x)
+                    beacon_y.append(y)
+                    
+                    name = beacon.get('name', 'Unnamed Beacon')
+                    beacon_names.append(name)
+                    
+                    hover = f"<b>Virtual Beacon: {name}</b><br>"
+                    hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"
+                    hover += f"Major: {beacon.get('major', 'N/A')}<br>"
+                    hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"
+                    hover += f"Power: {beacon.get('power', 'N/A')}<br>"
+                    hover += f"Position: ({x}, {y})"
+                    beacon_hover.append(hover)
+            
+            if beacon_x:
+                # Add virtual beacon markers
+                fig.add_trace(go.Scatter(
+                    x=beacon_x,
+                    y=beacon_y,
+                    mode='markers',
+                    name='Virtual Beacons',
+                    marker=dict(
+                        symbol='circle',
+                        size=14,
+                        color='#00ff00',  # Green for virtual beacons
+                        line=dict(color='white', width=2),
+                        opacity=0.9
+                    ),
+                    hovertext=beacon_hover,
+                    hoverinfo='text',
+                    visible=True,
+                    showlegend=True
+                ))
+                
+                # Add beacon name labels
+                for i, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names)):
+                    fig.add_annotation(
+                        x=x,
+                        y=y - 12,
+                        text=f"<b>{name}</b>",
+                        showarrow=False,
+                        font=dict(size=9, color='white', family='Arial'),
+                        bgcolor='rgba(0,200,0,0.9)',
+                        bordercolor='white',
+                        borderwidth=1,
+                        borderpad=2,
+                        xanchor='center',
+                        yanchor='bottom'
+                    )
+                
+                # Add coverage circles for vBeacons based on power
+                for beacon in vbeacons:
+                    x = beacon.get('x')
+                    y = beacon.get('y')
+                    power = beacon.get('power', 0)  # Power in dBm
+                    
+                    if x is not None and y is not None:
+                        # Estimate coverage radius based on power (rough approximation)
+                        # Higher power = larger radius
+                        # Typical range: -12 to +4 dBm
+                        base_radius = 50  # Base radius in pixels
+                        power_factor = (power + 12) / 16  # Normalize -12 to +4 range
+                        radius = base_radius + (power_factor * 100)
+                        
+                        # Create circle using parametric plot
+                        theta = [i * 2 * pi / 50 for i in range(51)]
+                        circle_x = [x + radius * cos(t) for t in theta]
+                        circle_y = [y + radius * sin(t) for t in theta]
+                        
+                        fig.add_trace(go.Scatter(
+                            x=circle_x,
+                            y=circle_y,
+                            mode='lines',
+                            line=dict(color='rgba(0,255,0,0.3)', width=1, dash='dash'),
+                            fill='toself',
+                            fillcolor='rgba(0,255,0,0.05)',
+                            name='vBeacon Coverage',
+                            showlegend=False,
+                            hoverinfo='skip'
+                        ))
+                
+                logging.info(f"Added {len(beacon_x)} virtual beacons to map")
+        else:
+            logging.info("No virtual beacons found on this map")
+        
+        # Add BLE beacons if present
+        if 'beacons' in map_data and map_data['beacons']:
+            ble_beacons = map_data['beacons']
+            logging.info(f"Processing {len(ble_beacons)} BLE beacons")
+            
+            ble_x = []
+            ble_y = []
+            ble_hover = []
+            ble_names = []
+            
+            for beacon in ble_beacons:
+                x = beacon.get('x')
+                y = beacon.get('y')
+                if x is not None and y is not None:
+                    ble_x.append(x)
+                    ble_y.append(y)
+                    
+                    name = beacon.get('name', beacon.get('mac', 'Unnamed'))
+                    ble_names.append(name)
+                    
+                    hover = f"<b>BLE Beacon: {name}</b><br>"
+                    hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"
+                    hover += f"Type: {beacon.get('type', 'N/A')}<br>"
+                    hover += f"Power: {beacon.get('power', 'N/A')}<br>"
+                    hover += f"Position: ({x}, {y})"
+                    ble_hover.append(hover)
+            
+            if ble_x:
+                # Add BLE beacon markers
+                fig.add_trace(go.Scatter(
+                    x=ble_x,
+                    y=ble_y,
+                    mode='markers',
+                    name='BLE Beacons',
+                    marker=dict(
+                        symbol='circle',
+                        size=14,
+                        color='#00bfff',  # Cyan for BLE beacons
+                        line=dict(color='white', width=2),
+                        opacity=0.9
+                    ),
+                    hovertext=ble_hover,
+                    hoverinfo='text',
+                    visible=True,
+                    showlegend=True
+                ))
+                
+                # Add BLE beacon name labels
+                for i, (x, y, name) in enumerate(zip(ble_x, ble_y, ble_names)):
+                    fig.add_annotation(
+                        x=x,
+                        y=y - 12,
+                        text=f"<b>{name}</b>",
+                        showarrow=False,
+                        font=dict(size=9, color='white', family='Arial'),
+                        bgcolor='rgba(0,191,255,0.9)',
+                        bordercolor='white',
+                        borderwidth=1,
+                        borderpad=2,
+                        xanchor='center',
+                        yanchor='bottom'
+                    )
+                
+                logging.info(f"Added {len(ble_x)} BLE beacons to map")
+        else:
+            logging.info("No BLE beacons found on this map")
         
         # Update layout with dark theme and responsive sizing
         fig.update_layout(
@@ -26928,6 +27120,12 @@ class MapsManager:
                     html.Button('🤖 Auto-Zone', id='auto-zone-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#667eea', 
                                       'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
+                    html.Button('📍 Add vBeacon', id='add-vbeacon-btn', n_clicks=0,
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Button('📡 Add Beacon', id='add-beacon-btn', n_clicks=0,
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#00bfff', 'border': '1px solid #00bfff', 'borderRadius': '4px', 'cursor': 'pointer'}),
                     html.Button('🖼️ Change Image', id='change-image-btn', n_clicks=0, 
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
@@ -26982,20 +27180,67 @@ class MapsManager:
                 # Sidebar
                 html.Div([
                     html.H3("🎨 Layer Controls"),
+                    html.H4("Infrastructure", style={'fontSize': '13px', 'color': '#667eea', 'marginTop': '10px', 'marginBottom': '5px'}),
                     dcc.Checklist(
                         id='layer-toggle',
                         options=[
                             {'label': ' 🧱 Walls', 'value': 'walls'},
                             {'label': ' 🗺️  Wayfinding', 'value': 'wayfinding'},
-                            {'label': ' 🏢 Zones', 'value': 'zones'},
+                            {'label': ' 🏢 Location Zones', 'value': 'zones'},
+                            {'label': ' 🎯 Proximity Zones', 'value': 'proximity_zones'},
                             {'label': ' 🔍 Validation Paths', 'value': 'validation'},
-                            {'label': ' 👥 Clients', 'value': 'clients'},
+                        ],
+                        value=['walls', 'wayfinding', 'zones', 'validation'],
+                        labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                        style={'marginBottom': '10px'}
+                    ),
+                    html.H4("Beacons & Positioning", style={'fontSize': '13px', 'color': '#667eea', 'marginBottom': '5px'}),
+                    dcc.Checklist(
+                        id='beacon-toggle',
+                        options=[
+                            {'label': ' 📍 Virtual Beacons', 'value': 'vbeacons'},
+                            {'label': ' 📶 vBeacon Coverage', 'value': 'vbeacon_coverage'},
+                            {'label': ' 📡 3rd Party Beacons', 'value': 'ble_beacons'},
+                        ],
+                        value=['vbeacons', 'ble_beacons'],
+                        labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                        style={'marginBottom': '10px'}
+                    ),
+                    html.H4("Clients", style={'fontSize': '13px', 'color': '#667eea', 'marginBottom': '5px'}),
+                    dcc.Checklist(
+                        id='client-toggle',
+                        options=[
+                            {'label': ' 📶 WiFi Clients', 'value': 'wifi_clients'},
+                            {'label': ' 🔌 Wired Clients', 'value': 'wired_clients'},
+                            {'label': ' 🚫 Excluded Clients', 'value': 'excluded_clients'},
+                            {'label': ' 📡 Show Associated AP', 'value': 'show_client_ap'},
+                        ],
+                        value=['wifi_clients', 'wired_clients', 'show_client_ap'],
+                        labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                        style={'marginBottom': '10px'}
+                    ),
+                    html.H4("Devices", style={'fontSize': '13px', 'color': '#667eea', 'marginBottom': '5px'}),
+                    dcc.Checklist(
+                        id='device-toggle',
+                        options=[
                             {'label': ' 📡 Access Points', 'value': 'aps'},
                             {'label': ' 🔌 Switches', 'value': 'switches'},
-                            {'label': ' 🌐 Gateways', 'value': 'gateways'}
+                            {'label': ' 🌐 Gateways', 'value': 'gateways'},
+                            {'label': ' 🔗 Mesh Associations', 'value': 'mesh_links'},
                         ],
-                        value=['walls', 'wayfinding', 'zones', 'validation', 'clients', 'aps', 'switches', 'gateways'],
-                        labelStyle={'display': 'block', 'margin': '12px 0', 'fontSize': '14px'}
+                        value=['aps', 'switches', 'gateways'],
+                        labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                        style={'marginBottom': '10px'}
+                    ),
+                    html.H4("Filters", style={'fontSize': '13px', 'color': '#667eea', 'marginBottom': '5px'}),
+                    dcc.Checklist(
+                        id='filter-toggle',
+                        options=[
+                            {'label': ' 👻 Hide Inactive Items', 'value': 'hide_inactive'},
+                        ],
+                        value=[],
+                        labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                        style={'marginBottom': '10px'}
                     ),
                     html.Hr(),
                     html.H3("🎨 Drawing Tools"),
@@ -27119,6 +27364,8 @@ class MapsManager:
                         html.P([html.Span("Devices: ", className='info-badge'), f"{len(devices)}"]),
                         html.P([html.Span("Clients: ", className='info-badge'), f"{len(clients)}"]),
                         html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"]),
+                        html.P([html.Span("vBeacons: ", className='info-badge'), f"{len(map_data.get('vbeacons', []))}"]),
+                        html.P([html.Span("BLE Beacons: ", className='info-badge'), f"{len(map_data.get('beacons', []))}"]),
                         html.P([html.Span("Validation Paths: ", className='info-badge'), 
                                f"{len(map_data.get('sitesurvey_path', []))}"])
                     ]),
@@ -27134,28 +27381,60 @@ class MapsManager:
         # Callback for layer toggle
         @app.callback(
             Output('map-display', 'figure'),
-            Input('layer-toggle', 'value'),
+            [Input('layer-toggle', 'value'),
+             Input('beacon-toggle', 'value'),
+             Input('client-toggle', 'value'),
+             Input('device-toggle', 'value'),
+             Input('filter-toggle', 'value')],
             State('map-display', 'figure')
         )
-        def toggle_layers(selected_layers, current_fig):
+        def toggle_layers(infra_layers, beacon_layers, client_layers, device_layers, filter_layers, current_fig):
+            # Combine all layer selections
+            all_layers = (infra_layers or []) + (beacon_layers or []) + (client_layers or []) + (device_layers or []) + (filter_layers or [])
+            
             for trace in current_fig['data']:
                 trace_name = trace.get('name', '').lower()
+                
+                # Infrastructure
                 if 'wall' in trace_name:
-                    trace['visible'] = 'walls' in selected_layers
+                    trace['visible'] = 'walls' in all_layers
                 elif 'wayfinding' in trace_name:
-                    trace['visible'] = 'wayfinding' in selected_layers
+                    trace['visible'] = 'wayfinding' in all_layers
                 elif 'zone' in trace_name:
-                    trace['visible'] = 'zones' in selected_layers
+                    trace['visible'] = 'zones' in all_layers
                 elif 'validation' in trace_name:
-                    trace['visible'] = 'validation' in selected_layers
-                elif 'client' in trace_name:
-                    trace['visible'] = 'clients' in selected_layers
+                    trace['visible'] = 'validation' in all_layers
+                    
+                # Beacons
+                elif 'vbeacon' in trace_name or 'virtual beacon' in trace_name:
+                    trace['visible'] = 'vbeacons' in all_layers
+                elif 'ble beacon' in trace_name or trace_name.startswith('beacon '):
+                    trace['visible'] = 'ble_beacons' in all_layers
+                    
+                # Clients (with WiFi/Wired filtering)
+                elif 'wifi client' in trace_name:
+                    trace['visible'] = 'wifi_clients' in all_layers
+                elif 'wired client' in trace_name:
+                    trace['visible'] = 'wired_clients' in all_layers
+                elif 'client-ap link' in trace_name:
+                    trace['visible'] = 'show_client_ap' in all_layers
+                    
+                # Mesh links
+                elif 'mesh link' in trace_name:
+                    trace['visible'] = 'mesh_links' in all_layers
+                    
+                # Beacon coverage
+                elif 'vbeacon coverage' in trace_name:
+                    trace['visible'] = 'vbeacon_coverage' in all_layers
+                    
+                # Devices
                 elif 'ap' in trace_name or 'access point' in trace_name:
-                    trace['visible'] = 'aps' in selected_layers
+                    trace['visible'] = 'aps' in all_layers
                 elif 'switch' in trace_name:
-                    trace['visible'] = 'switches' in selected_layers
+                    trace['visible'] = 'switches' in all_layers
                 elif 'gateway' in trace_name:
-                    trace['visible'] = 'gateways' in selected_layers
+                    trace['visible'] = 'gateways' in all_layers
+            
             return current_fig
         
         # Callback for click events - enhanced device details display
