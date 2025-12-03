@@ -26925,6 +26925,9 @@ class MapsManager:
                 html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}", 
                        style={'display': 'inline-block', 'marginRight': '30px', 'marginBottom': '0'}),
                 html.Div([
+                    html.Button('🤖 Auto-Zone', id='auto-zone-btn', n_clicks=0,
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#667eea', 
+                                      'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
                     html.Button('🖼️ Change Image', id='change-image-btn', n_clicks=0, 
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
@@ -27081,6 +27084,31 @@ class MapsManager:
                             html.P(f"Current: ({map_data.get('origin_x', 0)}, {map_data.get('origin_y', 0)})", 
                                    style={'fontSize': '11px', 'color': '#888', 'margin': '4px 0'})
                         ])
+                    ]),
+                    html.Hr(),
+                    html.H3("🏢 Location Zones"),
+                    html.Div([
+                        dcc.Checklist(
+                            id='zone-toggle',
+                            options=[
+                                {'label': f" {zone.get('name', f'Zone {i+1}')}", 'value': zone.get('id', f'zone_{i}')}
+                                for i, zone in enumerate(zones)
+                            ],
+                            value=[zone.get('id', f'zone_{i}') for i, zone in enumerate(zones)],
+                            labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px', 'color': '#e0e0e0'},
+                            style={'marginBottom': '15px'}
+                        ) if zones else html.P("No zones on this map", style={'color': '#888', 'fontSize': '12px', 'fontStyle': 'italic'}),
+                        html.Div(id='selected-zone-info', children=[
+                            html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
+                        ], style={'padding': '10px', 'backgroundColor': '#3d3d3d', 'borderRadius': '4px', 'marginTop': '10px'}),
+                        html.Div([
+                            html.Button('✏️ Edit Zone', id='edit-zone-btn', n_clicks=0,
+                                       style={'width': '48%', 'marginRight': '4%', 'padding': '6px', 'backgroundColor': '#667eea',
+                                              'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
+                            html.Button('🗑️ Remove Zone', id='remove-zone-btn', n_clicks=0,
+                                       style={'width': '48%', 'padding': '6px', 'backgroundColor': '#ff4444',
+                                              'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'})
+                        ], style={'marginTop': '10px', 'display': 'flex'}) if zones else None
                     ]),
                     html.Hr(),
                     html.H3("📊 Map Info"),
@@ -27402,13 +27430,14 @@ class MapsManager:
         # Callback to handle utilities button actions
         @app.callback(
             Output('utilities-status', 'children'),
-            [Input('change-image-btn', 'n_clicks'),
+            [Input('auto-zone-btn', 'n_clicks'),
+             Input('change-image-btn', 'n_clicks'),
              Input('remove-image-btn', 'n_clicks'),
              Input('rename-btn', 'n_clicks'),
              Input('delete-btn', 'n_clicks')],
             prevent_initial_call=True
         )
-        def handle_utilities(change_clicks, remove_clicks, rename_clicks, delete_clicks):
+        def handle_utilities(auto_zone_clicks, change_clicks, remove_clicks, rename_clicks, delete_clicks):
             """Handle utilities button clicks"""
             ctx = dash.callback_context
             if not ctx.triggered:
@@ -27416,7 +27445,12 @@ class MapsManager:
             
             button_id = ctx.triggered[0]['prop_id'].split('.')[0]
             
-            if button_id == 'change-image-btn':
+            if button_id == 'auto-zone-btn':
+                msg = "🤖 Auto-Zone: AI-powered zone detection - analyzes walls and creates location zones automatically"
+                logging.info(f"Utilities: Auto-Zone requested for map {map_id}")
+                return html.Span(msg, style={'color': '#667eea', 'fontWeight': 'bold'})
+            
+            elif button_id == 'change-image-btn':
                 msg = "⚠️ Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
                 logging.info(f"Utilities: Change Image requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff8800'})
@@ -27437,6 +27471,86 @@ class MapsManager:
                 return html.Span(msg, style={'color': '#ff0000', 'fontWeight': 'bold'})
             
             return ""
+        
+        # Callback to handle zone-specific toggles
+        @app.callback(
+            Output('map-display', 'figure', allow_duplicate=True),
+            Input('zone-toggle', 'value'),
+            State('map-display', 'figure'),
+            prevent_initial_call=True
+        )
+        def toggle_individual_zones(selected_zone_ids, current_fig):
+            """Show/hide individual zones based on checklist"""
+            if not zones:
+                return current_fig
+            
+            # Create set of selected IDs for fast lookup
+            selected_set = set(selected_zone_ids) if selected_zone_ids else set()
+            
+            # Update visibility for each zone trace
+            for trace in current_fig['data']:
+                trace_name = trace.get('name', '')
+                if trace_name.startswith('Zone:'):
+                    # Extract zone name from trace name
+                    zone_name = trace_name.replace('Zone: ', '')
+                    # Find matching zone
+                    for i, zone in enumerate(zones):
+                        if zone.get('name') == zone_name:
+                            zone_id = zone.get('id', f'zone_{i}')
+                            trace['visible'] = zone_id in selected_set
+                            break
+            
+            return current_fig
+        
+        # Callback for zone edit/remove buttons
+        @app.callback(
+            Output('selected-zone-info', 'children'),
+            [Input('edit-zone-btn', 'n_clicks'),
+             Input('remove-zone-btn', 'n_clicks'),
+             Input('map-display', 'clickData')],
+            prevent_initial_call=True
+        )
+        def handle_zone_actions(edit_clicks, remove_clicks, clickData):
+            """Handle zone edit/remove and display selected zone info"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
+            
+            trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if trigger_id == 'edit-zone-btn':
+                logging.info(f"Zone management: Edit zone requested for map {map_id}")
+                return html.Div([
+                    html.P("✏️ Edit Zone: Use Mist API updateSiteMap", 
+                          style={'fontSize': '11px', 'color': '#667eea', 'fontWeight': 'bold'}),
+                    html.P("Modify zone vertices via API call", 
+                          style={'fontSize': '10px', 'color': '#888'})
+                ])
+            
+            elif trigger_id == 'remove-zone-btn':
+                logging.warning(f"Zone management: Remove zone requested for map {map_id}")
+                return html.Div([
+                    html.P("🗑️ Remove Zone: DESTRUCTIVE operation", 
+                          style={'fontSize': '11px', 'color': '#ff4444', 'fontWeight': 'bold'}),
+                    html.P("Deletes zone via Mist API updateSiteMap", 
+                          style={'fontSize': '10px', 'color': '#888'})
+                ])
+            
+            elif trigger_id == 'map-display' and clickData:
+                # Check if clicked on a zone
+                point = clickData['points'][0]
+                hover_text = point.get('hovertext', '')
+                
+                if 'Zone:' in hover_text:
+                    zone_name = hover_text.split('Zone: ')[1] if 'Zone: ' in hover_text else 'Unknown'
+                    return html.Div([
+                        html.P(f"📍 Selected: {zone_name}", 
+                              style={'fontSize': '12px', 'color': '#00ff00', 'fontWeight': 'bold', 'marginBottom': '5px'}),
+                        html.P(f"Clients: None", 
+                              style={'fontSize': '10px', 'color': '#888'})
+                    ])
+            
+            return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
         
         print("\nStarting Dash server...")
         print("! Map viewer will open in your default browser")

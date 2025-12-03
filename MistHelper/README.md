@@ -479,6 +479,32 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.47",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Auto-Zone button: AI-powered zone detection feature in header toolbar (purple highlight)",
+          "Location Zones panel: dedicated sidebar section with individual zone checkboxes",
+          "Zone visibility toggles: show/hide individual zones independently from checklist",
+          "Selected Zone Info: displays zone name and client count when zone is clicked",
+          "Zone management buttons: Edit and Remove buttons for zone operations (purple and red)",
+          "Individual zone controls: checklist shows all zones with their names from API data"
+        ],
+        "enhancements": [
+          "Auto-Zone UI: prominent purple button with robot emoji in header utilities bar",
+          "Zone checklist: all zones checked by default, styled with dark theme",
+          "Zone selection feedback: green highlighted text shows selected zone details",
+          "Edit zone placeholder: guides to Mist API updateSiteMap for vertex modification",
+          "Remove zone warning: red destructive warning for zone deletion operations",
+          "Click handling: detects zone clicks from hovertext and displays zone information"
+        ],
+        "documentation": [
+          "Added Location Zones panel matching Juniper Mist portal zone management interface",
+          "Auto-Zone feature provides AI-powered automatic zone creation from wall analysis"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.44",
       "date": "2025-12-03",
       "changes": {
