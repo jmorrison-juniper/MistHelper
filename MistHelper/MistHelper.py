@@ -26995,13 +26995,33 @@ class MapsManager:
                         labelStyle={'display': 'block', 'margin': '12px 0', 'fontSize': '14px'}
                     ),
                     html.Hr(),
-                    html.H3("📏 Tools"),
-                    html.P("Use the drawing tools in the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
-                    html.P("• Draw Line - Measure distances", style={'fontSize': '12px', 'marginLeft': '10px'}),
-                    html.P("• Draw Path - Create custom paths", style={'fontSize': '12px', 'marginLeft': '10px'}),
-                    html.P("• Draw Circle - Mark areas", style={'fontSize': '12px', 'marginLeft': '10px'}),
-                    html.P("• Draw Rectangle - Highlight zones", style={'fontSize': '12px', 'marginLeft': '10px'}),
-                    html.P("• Erase - Remove all drawings", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.H3("🎨 Drawing Tools"),
+                    html.P("Quick actions for map elements:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '10px'}),
+                    html.Div([
+                        html.Button('📍 Insert Path', id='insert-path-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff00ff', 'border': '1px solid #ff00ff', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                        html.Button('🟦 Insert Rectangle', id='insert-rect-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#00bfff', 'border': '1px solid #00bfff', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                        html.Button('🧱 Insert Wall', id='insert-wall-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff8800', 'border': '1px solid #ff8800', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                        html.Button('❌ Delete all Paths', id='delete-paths-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                        html.Button('❌ Delete all Walls', id='delete-walls-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                        html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px'})
+                    ]),
+                    html.Hr(),
+                    html.H3("📏 Measurement Tools"),
+                    html.P("Use the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
+                    html.P("• Draw Line - Measure distances", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("• Draw Path - Create routes", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("• Draw Circle - Mark areas", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("• Erase - Remove drawings", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
                     html.Hr(),
                     html.H3("📐 Set Scale"),
                     html.P("1. Draw a line of known length", style={'fontSize': '11px', 'color': '#888'}),
@@ -27333,6 +27353,51 @@ class MapsManager:
             
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
+        
+        # Callback to handle drawing tool button actions
+        @app.callback(
+            Output('drawing-tool-status', 'children'),
+            [Input('insert-path-btn', 'n_clicks'),
+             Input('insert-rect-btn', 'n_clicks'),
+             Input('insert-wall-btn', 'n_clicks'),
+             Input('delete-paths-btn', 'n_clicks'),
+             Input('delete-walls-btn', 'n_clicks')],
+            prevent_initial_call=True
+        )
+        def handle_drawing_tools(path_clicks, rect_clicks, wall_clicks, del_path_clicks, del_wall_clicks):
+            """Handle drawing tool button clicks"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return ""
+            
+            button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if button_id == 'insert-path-btn':
+                msg = "💡 Use 'Draw Path' tool in toolbar above map to create validation paths"
+                logging.info(f"Drawing tool: Insert path requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff00ff'})
+            
+            elif button_id == 'insert-rect-btn':
+                msg = "💡 Use 'Draw Rectangle' tool in toolbar above map to create zones"
+                logging.info(f"Drawing tool: Insert rectangle requested for map {map_id}")
+                return html.Span(msg, style={'color': '#00bfff'})
+            
+            elif button_id == 'insert-wall-btn':
+                msg = "💡 Use 'Draw Path' tool in toolbar to create wall segments"
+                logging.info(f"Drawing tool: Insert wall requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff8800'})
+            
+            elif button_id == 'delete-paths-btn':
+                msg = "⚠️ Delete all paths: Use Mist API updateSiteMap - removes sitesurvey_path array"
+                logging.warning(f"Drawing tool: Delete all paths requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff4444', 'fontWeight': 'bold'})
+            
+            elif button_id == 'delete-walls-btn':
+                msg = "⚠️ Delete all walls: Use Mist API updateSiteMap - removes wall_path data"
+                logging.warning(f"Drawing tool: Delete all walls requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff4444', 'fontWeight': 'bold'})
+            
+            return ""
         
         # Callback to handle utilities button actions
         @app.callback(

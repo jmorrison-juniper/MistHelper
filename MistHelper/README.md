@@ -479,6 +479,31 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.44",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Drawing Tools panel: matches Mist portal sidebar with 5 quick-action buttons",
+          "Insert Path button: guides users to Draw Path tool for creating validation paths (magenta)",
+          "Insert Rectangle button: guides users to Draw Rectangle tool for creating zones (cyan)",
+          "Insert Wall button: guides users to Draw Path tool for creating wall segments (orange)",
+          "Delete all Paths button: placeholder for removing sitesurvey_path via API (red warning)",
+          "Delete all Walls button: placeholder for removing wall_path data via API (red warning)"
+        ],
+        "enhancements": [
+          "Drawing Tools UI: color-coded buttons matching element types (magenta/cyan/orange/red)",
+          "Tool guidance: status messages direct users to appropriate toolbar drawing tools",
+          "Destructive warnings: delete buttons highlighted in red with bold warnings",
+          "Sidebar reorganization: Drawing Tools section above Measurement Tools for better workflow",
+          "Compact layout: measurement tools condensed with smaller font for space efficiency"
+        ],
+        "documentation": [
+          "Added Drawing Tools panel matching Juniper Mist portal map editor interface",
+          "Quick-action buttons provide shortcuts and guidance for common map editing tasks"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.41",
       "date": "2025-12-03",
       "changes": {
