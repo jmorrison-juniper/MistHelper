@@ -479,6 +479,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.38",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Utilities dropdown menu: matches Mist portal top-right dropdown with 4 map management operations",
+          "Change Image: placeholder for updateSiteMapImage API call (requires file upload implementation)",
+          "Remove Image: placeholder for deleteSiteMapImage API call with DESTRUCTIVE warning",
+          "Rename Floorplan: placeholder for updateSiteMap API call (requires text input dialog)",
+          "Delete Floorplan: placeholder for deleteSiteMap API call with critical DESTRUCTIVE warning"
+        ],
+        "enhancements": [
+          "Utilities UI: dropdown positioned in header top-right matching Mist portal layout",
+          "Action feedback: status messages display warnings for destructive operations",
+          "Color coding: orange for caution (change/rename), red for destructive (remove/delete)",
+          "Logging integration: all utility actions logged with map_id for audit trail",
+          "Header redesign: title and utilities dropdown in flex layout with purple border separator"
+        ],
+        "documentation": [
+          "Added Utilities dropdown matching Juniper Mist portal map management interface",
+          "Placeholder implementations note required API integrations for full functionality"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.35",
       "date": "2025-12-03",
       "changes": {

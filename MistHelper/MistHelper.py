@@ -26871,7 +26871,32 @@ class MapsManager:
         
         # Create responsive Dash layout with dark theme
         app.layout = html.Div([
-            html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}"),
+            # Header with title and utilities dropdown
+            html.Div([
+                html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}", 
+                       style={'display': 'inline-block', 'marginRight': '20px'}),
+                html.Div([
+                    dcc.Dropdown(
+                        id='utilities-dropdown',
+                        options=[
+                            {'label': '🖼️  Change Image', 'value': 'change_image'},
+                            {'label': '🗑️  Remove Image', 'value': 'remove_image'},
+                            {'label': '✏️  Rename Floorplan', 'value': 'rename'},
+                            {'label': '❌ Delete Floorplan', 'value': 'delete'}
+                        ],
+                        placeholder='Utilities ▼',
+                        style={
+                            'width': '200px',
+                            'display': 'inline-block',
+                            'backgroundColor': '#3d3d3d',
+                            'color': '#e0e0e0',
+                            'border': '1px solid #667eea'
+                        }
+                    ),
+                    html.Div(id='utilities-status', style={'display': 'inline-block', 'marginLeft': '15px', 'color': '#a0a0ff'})
+                ], style={'display': 'inline-block', 'float': 'right', 'marginTop': '20px'})
+            ], style={'padding': '10px 20px', 'borderBottom': '2px solid #667eea'}),
+            
             html.Div([
                 # Map container - responsive
                 html.Div([
@@ -27259,6 +27284,39 @@ class MapsManager:
             
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
+        
+        # Callback to handle utilities dropdown actions
+        @app.callback(
+            Output('utilities-status', 'children'),
+            Input('utilities-dropdown', 'value'),
+            prevent_initial_call=True
+        )
+        def handle_utilities(action):
+            """Handle utilities dropdown selections"""
+            if not action:
+                return ""
+            
+            if action == 'change_image':
+                msg = "⚠️ Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
+                logging.info(f"Utilities: Change Image requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff8800'})
+            
+            elif action == 'remove_image':
+                msg = "⚠️ Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
+                logging.warning(f"Utilities: Remove Image requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff4444'})
+            
+            elif action == 'rename':
+                msg = "⚠️ Rename: Use Mist API updateSiteMap with new name - requires text input"
+                logging.info(f"Utilities: Rename requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff8800'})
+            
+            elif action == 'delete':
+                msg = "❌ Delete Floorplan: Use Mist API deleteSiteMap - DESTRUCTIVE! Requires confirmation"
+                logging.warning(f"Utilities: Delete requested for map {map_id}")
+                return html.Span(msg, style={'color': '#ff0000', 'fontWeight': 'bold'})
+            
+            return ""
         
         print("\nStarting Dash server...")
         print("! Map viewer will open in your default browser")
