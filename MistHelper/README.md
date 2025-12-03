@@ -479,6 +479,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.41",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Validation Paths display: renders sitesurvey_path data from map with magenta dotted lines",
+          "Path visualization: connected line segments with diamond markers (10px, white border)",
+          "Path labels: name annotation at start point with magenta background",
+          "Layer toggle: added 'Validation Paths' checkbox to show/hide paths independently",
+          "Map info stats: displays count of validation paths in sidebar statistics panel"
+        ],
+        "enhancements": [
+          "Validation path styling: magenta color (#ff00ff) with dotted line style for clear differentiation",
+          "Hover information: shows path name and point count on mouseover",
+          "Path naming: displays custom path names or defaults to 'Path 1', 'Path 2', etc.",
+          "Coordinate processing: extracts x,y from path coordinate arrays with validation",
+          "Logging integration: debug messages for path rendering with point counts"
+        ],
+        "documentation": [
+          "Added validation paths feature matching Juniper Mist portal site survey path capability",
+          "Validation paths used for Wi-Fi coverage testing and performance analysis along routes"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.39",
       "date": "2025-12-03",
       "changes": {

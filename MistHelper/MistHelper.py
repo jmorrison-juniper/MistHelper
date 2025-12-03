@@ -26592,6 +26592,55 @@ class MapsManager:
         else:
             logging.info("No zones found on this map")
         
+        # Add validation paths (site survey paths) if present
+        if 'sitesurvey_path' in map_data and map_data['sitesurvey_path']:
+            sitesurvey_paths = map_data['sitesurvey_path']
+            logging.info(f"Processing {len(sitesurvey_paths)} validation paths")
+            
+            for path_idx, path in enumerate(sitesurvey_paths):
+                path_name = path.get('name', f'Path {path_idx + 1}')
+                path_coords = path.get('coordinate', [])
+                
+                if path_coords and len(path_coords) >= 2:
+                    # Extract coordinates
+                    path_x = [coord.get('x', 0) for coord in path_coords]
+                    path_y = [coord.get('y', 0) for coord in path_coords]
+                    
+                    # Draw validation path as connected line with markers
+                    fig.add_trace(go.Scatter(
+                        x=path_x,
+                        y=path_y,
+                        mode='lines+markers',
+                        name=f'Validation: {path_name}',
+                        line=dict(color='#ff00ff', width=3, dash='dot'),
+                        marker=dict(size=10, color='#ff00ff', symbol='diamond', line=dict(color='white', width=2)),
+                        visible=True,
+                        showlegend=True,
+                        hovertext=f"Validation Path: {path_name}<br>{len(path_coords)} points",
+                        hoverinfo='text'
+                    ))
+                    
+                    # Add path name label at start point
+                    fig.add_annotation(
+                        x=path_x[0],
+                        y=path_y[0] - 20,
+                        text=f"<b>{path_name}</b>",
+                        showarrow=False,
+                        font=dict(size=11, color='white', family='Arial Black'),
+                        bgcolor='rgba(255,0,255,0.9)',
+                        bordercolor='white',
+                        borderwidth=2,
+                        borderpad=3,
+                        xanchor='center',
+                        yanchor='bottom'
+                    )
+                    
+                    logging.debug(f"Added validation path '{path_name}' with {len(path_coords)} points")
+                else:
+                    logging.warning(f"Validation path '{path_name}' has insufficient coordinates: {len(path_coords)}")
+        else:
+            logging.info("No validation paths found on this map")
+        
         # Add connected clients if present
         if clients and len(clients) > 0:
             logging.info(f"Processing {len(clients)} connected clients on this map")
@@ -26936,12 +26985,13 @@ class MapsManager:
                             {'label': ' 🧱 Walls', 'value': 'walls'},
                             {'label': ' 🗺️  Wayfinding', 'value': 'wayfinding'},
                             {'label': ' 🏢 Zones', 'value': 'zones'},
+                            {'label': ' 🔍 Validation Paths', 'value': 'validation'},
                             {'label': ' 👥 Clients', 'value': 'clients'},
                             {'label': ' 📡 Access Points', 'value': 'aps'},
                             {'label': ' 🔌 Switches', 'value': 'switches'},
                             {'label': ' 🌐 Gateways', 'value': 'gateways'}
                         ],
-                        value=['walls', 'wayfinding', 'zones', 'clients', 'aps', 'switches', 'gateways'],
+                        value=['walls', 'wayfinding', 'zones', 'validation', 'clients', 'aps', 'switches', 'gateways'],
                         labelStyle={'display': 'block', 'margin': '12px 0', 'fontSize': '14px'}
                     ),
                     html.Hr(),
@@ -27020,7 +27070,9 @@ class MapsManager:
                         html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)}°"]),
                         html.P([html.Span("Devices: ", className='info-badge'), f"{len(devices)}"]),
                         html.P([html.Span("Clients: ", className='info-badge'), f"{len(clients)}"]),
-                        html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"])
+                        html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"]),
+                        html.P([html.Span("Validation Paths: ", className='info-badge'), 
+                               f"{len(map_data.get('sitesurvey_path', []))}"])
                     ]),
                     html.Hr(),
                     html.Div(id='click-data', children=[
@@ -27046,6 +27098,8 @@ class MapsManager:
                     trace['visible'] = 'wayfinding' in selected_layers
                 elif 'zone' in trace_name:
                     trace['visible'] = 'zones' in selected_layers
+                elif 'validation' in trace_name:
+                    trace['visible'] = 'validation' in selected_layers
                 elif 'client' in trace_name:
                     trace['visible'] = 'clients' in selected_layers
                 elif 'ap' in trace_name or 'access point' in trace_name:
