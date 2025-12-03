@@ -139,6 +139,10 @@ def _parse_requirements_file(filepath='requirements.txt'):
                 if line.startswith('# pytest') or line.startswith('# coverage'):
                     continue
                 
+                # Strip inline comments (e.g., "package>=1.0  # comment" -> "package>=1.0")
+                if '#' in line:
+                    line = line.split('#')[0].strip()
+                
                 # Extract package name from spec (e.g., "requests>=2.28.0" -> "requests")
                 package_spec = line
                 package_name = re.split(r'[><=!]', package_spec)[0].strip()
@@ -602,12 +606,15 @@ class GlobalImportManager:
         
         # Optional packages (enhanced functionality)
         optional_packages_raw = {
-            'sshkeyboard': 'sshkeyboard>=2.3.0',  # Interactive operations
-            'pyte': 'pyte>=0.8.0',                # Terminal emulation
-            'usaddress-scourgify': 'usaddress-scourgify>=0.6.0',  # Address parsing
-            'rapidfuzz': 'rapidfuzz>=3.8.0',     # Fuzzy string matching
-            'urllib3': 'urllib3>=1.26.0',        # Enhanced HTTP
-            # Note: pynput and pexpect removed for simplicity and container compatibility
+            'sshkeyboard': 'sshkeyboard>=2.3.0',
+            'pyte': 'pyte>=0.8.0',
+            'usaddress-scourgify': 'usaddress-scourgify>=0.6.0',
+            'rapidfuzz': 'rapidfuzz>=3.8.0',
+            'urllib3': 'urllib3>=1.26.0',
+            'plotly': 'plotly>=5.14.0',
+            'dash': 'dash>=2.9.0',
+            'kaleido': 'kaleido>=0.2.1',
+            'matplotlib': 'matplotlib>=3.5.0',
         }
         # Filter out None values (platform-incompatible packages)
         self.optional_packages = {k: v for k, v in optional_packages_raw.items() if v is not None}
@@ -24551,6 +24558,8 @@ class MapsManager:
             print("  30. Map coverage analytics")
             print("  31. Device density by map")
             print("  32. Map usage statistics")
+            print("\nVisualization & Editing:")
+            print("  40. Interactive map viewer (view/edit devices, walls, zones)")
             print("\n  0. Return to main menu")
             print("=" * 80)
             
@@ -24607,6 +24616,8 @@ class MapsManager:
                 self.device_density_analytics()
             elif choice == "32":
                 self.map_usage_statistics()
+            elif choice == "40":
+                self.interactive_map_viewer()
             else:
                 print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
                 logging.warning(f"Invalid Maps Manager menu selection: {choice}")
@@ -24754,14 +24765,14 @@ class MapsManager:
             # Flatten and prepare data
             maps_data = []
             for map_item in maps:
-                flattened = flatten_dict(map_item)
+                flattened = flatten_dict_recursively(map_item)
                 flattened['site_id'] = site_id
                 flattened['site_name'] = site_name
                 flattened['org_id'] = self.org_id
                 maps_data.append(flattened)
             
             # Write to dual output format
-            safe_site_name = sanitize_filename(site_name)
+            safe_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
             filename = f"SiteMaps_{safe_site_name}"
             write_data_with_format_selection(
                 maps_data,
@@ -24804,7 +24815,7 @@ class MapsManager:
                         maps = maps_response.data
                         for map_item in maps:
                             # Flatten nested structures
-                            flattened = flatten_dict(map_item)
+                            flattened = flatten_dict_recursively(map_item)
                             flattened['site_id'] = site['id']
                             flattened['site_name'] = site.get('name', 'Unknown')
                             flattened['org_id'] = self.org_id
@@ -24860,7 +24871,7 @@ class MapsManager:
                         maps = maps_response.data
                         for map_item in maps:
                             if 'url' in map_item or 'thumbnail_url' in map_item:
-                                flattened = flatten_dict(map_item)
+                                flattened = flatten_dict_recursively(map_item)
                                 flattened['site_id'] = site['id']
                                 flattened['site_name'] = site.get('name', 'Unknown')
                                 flattened['org_id'] = self.org_id
@@ -24927,7 +24938,7 @@ class MapsManager:
             
             # Create download directory
             import os
-            download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))
+            download_dir = os.path.join("data", "map_images", EnhancedSSHRunner.sanitize_filename(site_name))
             os.makedirs(download_dir, exist_ok=True)
             
             print(f"Downloading to: {download_dir}")
@@ -24951,7 +24962,7 @@ class MapsManager:
                         if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
                             file_ext = f'.{url_ext.lower()}'
                     
-                    filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
+                    filename = f"{EnhancedSSHRunner.sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
                     filepath = os.path.join(download_dir, filename)
                     
                     response = requests.get(image_url, timeout=30)
@@ -25162,6 +25173,7 @@ class MapsManager:
     
     def clone_map(self):
         """Clone/duplicate an existing map at the current site including image, walls, paths, and zones"""
+        logging.info("clone_map operation initiated")
         print("\n" + "-" * 80)
         print("CLONE/DUPLICATE MAP")
         print("-" * 80)
@@ -25169,7 +25181,10 @@ class MapsManager:
         
         site_id, site_name = self.get_current_site()
         if not site_id:
+            logging.warning("clone_map aborted: No site selected")
             return
+        
+        logging.debug(f"clone_map - Site: {site_name} (ID: {site_id})")
         
         try:
             import os
@@ -25180,17 +25195,23 @@ class MapsManager:
             print("\nSelect the map to clone:")
             source_map_id = self._select_map_from_site(site_id, site_name)
             if not source_map_id:
+                logging.info("clone_map aborted: No source map selected")
                 return
+            
+            logging.info(f"Cloning map - source_map_id: {source_map_id}")
             
             # Fetch complete source map details
             print("\nFetching source map details...")
+            logging.debug(f"Calling getSiteMap API - site_id: {site_id}, map_id: {source_map_id}")
             source_response = mistapi.api.v1.sites.maps.getSiteMap(
                 self.apisession,
                 site_id=site_id,
                 map_id=source_map_id
             )
             
+            logging.debug(f"getSiteMap response: HTTP {source_response.status_code}")
             if source_response.status_code != 200:
+                logging.error(f"Failed to fetch source map - HTTP {source_response.status_code}")
                 print(f"\n! Failed to fetch source map: HTTP {source_response.status_code}")
                 return
             
@@ -25213,11 +25234,14 @@ class MapsManager:
             if not new_name:
                 new_name = default_name
             
+            logging.info(f"Creating clone with new name: {new_name}")
+            
             # Build complete clone payload - copy ALL relevant properties
             clone_payload = {
                 "name": new_name,
                 "type": source_map.get('type', 'image')
             }
+            logging.debug(f"Base clone payload: {clone_payload}")
             
             # Copy dimensional properties
             if 'width' in source_map:
@@ -25342,7 +25366,7 @@ class MapsManager:
             if image_temp_path and os.path.exists(image_temp_path):
                 try:
                     print("\nUploading image to cloned map...")
-                    upload_response = mistapi.api.v1.sites.maps.addSiteMapImage(
+                    upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
                         self.apisession,
                         site_id=site_id,
                         map_id=cloned_map_id,
@@ -25666,13 +25690,17 @@ class MapsManager:
     
     def upload_map_image(self):
         """Upload or replace map image file (multipart upload)"""
+        logging.info("upload_map_image operation initiated")
         print("\n" + "-" * 80)
         print("UPLOAD/REPLACE MAP IMAGE")
         print("-" * 80)
         
         site_id, site_name = self.get_current_site()
         if not site_id:
+            logging.warning("upload_map_image aborted: No site selected")
             return
+        
+        logging.debug(f"upload_map_image - Site: {site_name} (ID: {site_id})")
         
         try:
             # Get map selection
@@ -25731,9 +25759,9 @@ class MapsManager:
             # Perform upload using mistapi
             print("\nUploading image...")
             
-            # Use mistapi's addSiteMapImage method
+            # Use mistapi's addSiteMapImageFile method
             with open(file_path, 'rb') as image_file:
-                upload_response = mistapi.api.v1.sites.maps.addSiteMapImage(
+                upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
                     self.apisession,
                     site_id=site_id,
                     map_id=map_id,
@@ -25819,12 +25847,12 @@ class MapsManager:
             if export_choice in ['yes', 'y']:
                 devices_data = []
                 for device in devices_on_map:
-                    flattened = flatten_dict(device)
+                    flattened = flatten_dict_recursively(device)
                     flattened['site_id'] = site_id
                     flattened['site_name'] = site_name
                     devices_data.append(flattened)
                 
-                filename = f"MapDevices_{sanitize_filename(site_name)}"
+                filename = f"MapDevices_{EnhancedSSHRunner.sanitize_filename(site_name)}"
                 write_data_with_format_selection(
                     devices_data,
                     filename,
@@ -25900,7 +25928,7 @@ class MapsManager:
                         continue
                     
                     # Create site-specific directory
-                    site_dir = os.path.join(base_dir, sanitize_filename(site_name))
+                    site_dir = os.path.join(base_dir, EnhancedSSHRunner.sanitize_filename(site_name))
                     os.makedirs(site_dir, exist_ok=True)
                     
                     for map_item in maps_with_images:
@@ -25920,7 +25948,7 @@ class MapsManager:
                                 if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
                                     file_ext = f'.{url_ext.lower()}'
                             
-                            filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
+                            filename = f"{EnhancedSSHRunner.sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
                             filepath = os.path.join(site_dir, filename)
                             
                             # Skip if already downloaded
@@ -25975,6 +26003,1144 @@ class MapsManager:
         """Generate usage statistics for maps"""
         print("\n! Feature coming soon: Map usage statistics")
         logging.info("map_usage_statistics called (placeholder)")
+    
+    def interactive_map_viewer(self):
+        """
+        Interactive map viewer with Plotly/Dash for viewing and editing:
+        - Floor plan image display
+        - Toggleable overlays: walls, zones, wayfinding paths
+        - Device visualization: APs, switches, gateways with orientation indicators
+        - Click-to-edit device locations
+        - Save changes back to Mist Cloud
+        """
+        logging.info("Interactive map viewer initiated")
+        print("\n" + "-" * 80)
+        print("INTERACTIVE MAP VIEWER")
+        print("-" * 80)
+        
+        site_id, site_name = self.get_current_site()
+        if not site_id:
+            logging.warning("Interactive map viewer aborted: No site selected")
+            return
+        
+        logging.debug(f"Interactive map viewer - Site: {site_name} (ID: {site_id})")
+        
+        try:
+            # Explicitly check and install required visualization packages
+            print("\nChecking visualization dependencies...")
+            logging.info("Starting visualization dependency check")
+            required_packages = {'plotly': 'plotly>=5.14.0', 'dash': 'dash>=2.9.0'}
+            optional_viz_packages = {'kaleido': 'kaleido>=0.2.1', 'matplotlib': 'matplotlib>=3.5.0'}
+            
+            # Trigger installation check through global import_manager instance
+            # Access the global import_manager variable created at module initialization
+            global import_manager
+            for package_name, package_spec in required_packages.items():
+                logging.debug(f"Checking required package: {package_name} ({package_spec})")
+                import_manager.import_module_safely(
+                    package_name, 
+                    package_spec=package_spec,
+                    required=False,  # Don't fail if can't install
+                    skip_deps=False,  # Allow installation
+                    skip_upgrade=True  # Don't check for upgrades
+                )
+                logging.debug(f"Package {package_name} check completed")
+            
+            # Optional packages (best-effort)
+            for package_name, package_spec in optional_viz_packages.items():
+                try:
+                    logging.debug(f"Checking optional package: {package_name} ({package_spec})")
+                    import_manager.import_module_safely(
+                        package_name,
+                        package_spec=package_spec,
+                        required=False,
+                        skip_deps=False,
+                        skip_upgrade=True
+                    )
+                    logging.debug(f"Optional package {package_name} installed/verified")
+                except Exception as e:
+                    logging.debug(f"Optional package {package_name} unavailable: {e}")
+                    pass  # Optional - continue without
+            
+            # Now attempt imports
+            try:
+                logging.debug("Attempting to import plotly modules")
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+                import plotly.express as px
+                logging.info("Successfully imported plotly modules")
+            except ImportError as e:
+                logging.error(f"Failed to import plotly: {e}", exc_info=True)
+                print(f"\n! Missing required package: {e}")
+                print("! Install with: pip install plotly dash")
+                confirm = input("\nWould you like to continue without interactive features? (yes/no): ").strip().lower()
+                if confirm not in ['yes', 'y']:
+                    logging.info("User declined matplotlib fallback")
+                    return
+                # Fallback to basic matplotlib if available
+                try:
+                    logging.debug("Attempting matplotlib fallback import")
+                    import matplotlib.pyplot as plt
+                    import matplotlib.patches as patches
+                    from matplotlib.patches import FancyArrow
+                    print("\n! Using matplotlib fallback (view-only mode)")
+                    logging.info("Successfully imported matplotlib for fallback mode")
+                    use_plotly = False
+                except ImportError as matplotlib_error:
+                    logging.error(f"Failed to import matplotlib fallback: {matplotlib_error}", exc_info=True)
+                    print("\n! No visualization libraries available")
+                    print("! Install plotly: pip install plotly dash")
+                    print("! Or matplotlib: pip install matplotlib")
+                    return
+            else:
+                use_plotly = True
+                logging.debug("Using Plotly/Dash mode for interactive viewer")
+            
+            # Select map to view
+            logging.debug(f"Prompting user to select map from site {site_name}")
+            map_id = self._select_map_from_site(site_id, site_name)
+            if not map_id:
+                logging.info("Map viewer aborted: No map selected")
+                return
+            
+            logging.debug(f"Selected map_id: {map_id}")
+            
+            # Fetch map details
+            print("\nLoading map data...")
+            logging.info(f"Fetching map details - site_id: {site_id}, map_id: {map_id}")
+            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            logging.debug(f"getSiteMap API response: HTTP {map_response.status_code}")
+            if map_response.status_code != 200:
+                logging.error(f"Failed to fetch map details - HTTP {map_response.status_code}, Response: {map_response.data if hasattr(map_response, 'data') else 'No data'}")
+                print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")
+                return
+            
+            map_data = map_response.data
+            map_name = map_data.get('name', 'Unnamed')
+            map_width = map_data.get('width', 1000)
+            map_height = map_data.get('height', 1000)
+            
+            logging.info(f"Map loaded: {map_name} (ID: {map_id})")
+            logging.debug(f"Map dimensions: {map_width}x{map_height}px, PPM: {map_data.get('ppm', 'N/A')}, Orientation: {map_data.get('orientation', 0)}")
+            logging.debug(f"Map has image: {'url' in map_data}, Has walls: {'wall_path' in map_data}, Has wayfinding: {'wayfinding_path' in map_data}")
+            
+            print(f"\nMap: {map_name}")
+            print(f"Dimensions: {map_width}x{map_height} pixels")
+            
+            # Fetch devices on this map
+            print("Loading devices...")
+            logging.info(f"Fetching devices for site {site_id} (type=all)")
+            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+                self.apisession,
+                site_id=site_id,
+                type="all"
+            )
+            
+            logging.debug(f"listSiteDevices API response: HTTP {devices_response.status_code}")
+            if devices_response.status_code != 200:
+                logging.error(f"Failed to fetch devices - HTTP {devices_response.status_code}")
+                print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
+                devices_on_map = []
+            else:
+                all_devices = devices_response.data
+                logging.debug(f"Total devices at site: {len(all_devices)}")
+                devices_on_map = [d for d in all_devices if d.get('map_id') == map_id]
+                logging.info(f"Devices on selected map: {len(devices_on_map)}")
+                
+                # Log device type breakdown
+                device_type_counts = {}
+                for device in devices_on_map:
+                    device_type = device.get('type', 'unknown')
+                    device_type_counts[device_type] = device_type_counts.get(device_type, 0) + 1
+                logging.debug(f"Device breakdown on map: {device_type_counts}")
+            
+            print(f"Devices on map: {len(devices_on_map)}")
+            
+            # Fetch zones for this site
+            logging.info(f"Fetching zones for site {site_id}")
+            try:
+                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                    self.apisession,
+                    site_id=site_id
+                )
+                
+                if zones_response.status_code == 200:
+                    all_zones = zones_response.data
+                    # Filter zones that are on this specific map
+                    zones_on_map = [z for z in all_zones if z.get('map_id') == map_id]
+                    logging.info(f"Total zones at site: {len(all_zones)}, Zones on this map: {len(zones_on_map)}")
+                    logging.debug(f"Zones on map: {zones_on_map}")
+                else:
+                    logging.warning(f"Failed to fetch zones - HTTP {zones_response.status_code}")
+                    zones_on_map = []
+            except Exception as zone_error:
+                logging.error(f"Error fetching zones: {zone_error}", exc_info=True)
+                zones_on_map = []
+            
+            print(f"Zones on map: {len(zones_on_map)}")
+            
+            # Fetch connected clients for the site to display on map
+            clients_on_map = []
+            try:
+                logging.info(f"Fetching connected wireless client stats for site {site_id}")
+                # Use stats API which includes location data (x, y, map_id)
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+                    self.apisession,
+                    site_id=site_id,
+                    limit=1000
+                )
+                
+                if clients_response.status_code == 200:
+                    # Use get_all to handle pagination
+                    all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
+                    logging.info(f"Total wireless clients retrieved: {len(all_clients)}")
+                    
+                    # Log all unique map_ids to see what we have
+                    client_map_ids = set(c.get('map_id') for c in all_clients if c.get('map_id'))
+                    logging.info(f"Client map_ids found: {client_map_ids}")
+                    logging.info(f"Looking for map_id: {map_id}")
+                    
+                    # Filter clients that have map location data matching this map
+                    clients_on_map = [c for c in all_clients if c.get('map_id') == map_id and c.get('x') is not None and c.get('y') is not None]
+                    logging.info(f"Clients on this map (after filtering): {len(clients_on_map)}")
+                    
+                    if clients_on_map:
+                        logging.info(f"Sample client data: {clients_on_map[0]}")
+                    elif all_clients:
+                        logging.warning(f"No clients matched map_id {map_id}. Sample of all clients: {all_clients[0] if all_clients else 'none'}")
+                else:
+                    logging.warning(f"Failed to fetch client stats - HTTP {clients_response.status_code}")
+            except Exception as client_error:
+                logging.error(f"Error fetching client stats: {client_error}", exc_info=True)
+            
+            print(f"Connected clients on map: {len(clients_on_map)}")
+            
+            if use_plotly:
+                logging.info(f"Launching Plotly/Dash viewer for map {map_name}")
+                self._launch_plotly_viewer(map_data, devices_on_map, zones_on_map, clients_on_map, site_id, map_id)
+            else:
+                logging.info(f"Launching matplotlib fallback viewer for map {map_name}")
+                self._launch_matplotlib_viewer(map_data, devices_on_map)
+                
+        except EOFError:
+            logging.info("EOF detected during interactive map viewer")
+            return
+        except Exception as e:
+            logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
+            print(f"\n! Error launching map viewer: {e}")
+    
+    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, map_id):
+        """Launch interactive Plotly/Dash map viewer with edit capabilities and client display"""
+        logging.info(f"_launch_plotly_viewer called - map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, clients: {len(clients)}")
+        import plotly.graph_objects as go
+        from math import cos, sin, radians
+        import webbrowser
+        import os
+        
+        try:
+            logging.debug("Importing Dash modules for interactive viewer")
+            from dash import Dash, html, dcc, Input, Output, State, callback_context
+            import dash
+            logging.info(f"Dash version: {dash.__version__}")
+        except ImportError as e:
+            logging.error(f"Failed to import Dash, falling back to static view: {e}", exc_info=True)
+            print("\n! Dash not available - using static Plotly view only")
+            print("! Install with: pip install dash")
+            self._create_static_plotly_map(map_data, devices)
+            return
+        
+        print("\n" + "-" * 80)
+        print("LAUNCHING INTERACTIVE MAP VIEWER")
+        print("-" * 80)
+        print("! Opening web browser with interactive map...")
+        print("! Features:")
+        print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
+        print("!   - Ruler tool - Draw lines to measure distances")
+        print("!   - Connected client visualization (green dots)")
+        print("!   - Click devices/clients to see details")
+        print("!   - Drag devices to new positions (future: save to cloud)")
+        print("!   - Pan and zoom")
+        print("! Press Ctrl+C in terminal to stop server")
+        print("-" * 80)
+        
+        # Create Dash app with dark theme
+        logging.debug("Creating Dash application instance")
+        app = Dash(__name__)
+        
+        # Inject custom CSS for dark mode and responsive design
+        app.index_string = '''
+        <!DOCTYPE html>
+        <html>
+            <head>
+                {%metas%}
+                <title>{%title%}</title>
+                {%favicon%}
+                {%css%}
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        background-color: #1a1a1a;
+                        color: #e0e0e0;
+                    }
+                    #react-entry-point {
+                        height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .main-container {
+                        flex: 1;
+                        display: flex;
+                        overflow: hidden;
+                    }
+                    .map-container {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        padding: 15px;
+                        overflow: hidden;
+                    }
+                    .sidebar {
+                        width: 280px;
+                        background-color: #2d2d2d;
+                        padding: 20px;
+                        overflow-y: auto;
+                        border-left: 1px solid #444;
+                        box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+                    }
+                    h1 {
+                        margin: 0;
+                        padding: 20px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        font-size: 24px;
+                        font-weight: 600;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    }
+                    h3 {
+                        color: #a0a0ff;
+                        font-size: 16px;
+                        margin-top: 0;
+                        margin-bottom: 15px;
+                        border-bottom: 2px solid #444;
+                        padding-bottom: 8px;
+                    }
+                    .sidebar p {
+                        margin: 8px 0;
+                        color: #b0b0b0;
+                        font-size: 14px;
+                    }
+                    .sidebar hr {
+                        border: none;
+                        border-top: 1px solid #444;
+                        margin: 20px 0;
+                    }
+                    /* Custom checkbox styling */
+                    .sidebar label {
+                        color: #d0d0d0 !important;
+                        cursor: pointer;
+                        transition: color 0.2s;
+                    }
+                    .sidebar label:hover {
+                        color: #ffffff !important;
+                    }
+                    /* Graph container */
+                    #map-display {
+                        height: 100% !important;
+                        width: 100% !important;
+                    }
+                    .js-plotly-plot {
+                        height: 100% !important;
+                    }
+                    /* Info badges */
+                    .info-badge {
+                        display: inline-block;
+                        padding: 4px 12px;
+                        background-color: #3d3d3d;
+                        border-radius: 12px;
+                        margin: 4px 0;
+                        font-size: 13px;
+                        color: #a0a0ff;
+                    }
+                    .device-detail {
+                        background-color: #3d3d3d;
+                        padding: 12px;
+                        border-radius: 8px;
+                        margin: 8px 0;
+                        border-left: 3px solid #667eea;
+                    }
+                    .device-detail strong {
+                        color: #a0a0ff;
+                    }
+                    /* NOTE: CSS text-shadow doesn't work on Plotly SVG text elements.
+                       Text labels use annotations with bgcolor/bordercolor instead. */
+                </style>
+            </head>
+            <body>
+                {%app_entry%}
+                <footer>
+                    {%config%}
+                    {%scripts%}
+                    {%renderer%}
+                </footer>
+            </body>
+        </html>
+        '''
+        
+        # Build figure
+        logging.debug("Building Plotly figure")
+        fig = go.Figure()
+        
+        # Set map dimensions and get PPM for unit conversions
+        map_width = map_data.get('width', 1000)
+        map_height = map_data.get('height', 1000)
+        ppm = map_data.get('ppm', 10)  # pixels per meter, default to 10 if not set
+        logging.debug(f"Map canvas dimensions: {map_width}x{map_height}, PPM: {ppm}")
+        
+        # Add map image if available
+        # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
+        # by inverting the Y-axis in the layout
+        if 'url' in map_data:
+            logging.debug(f"Adding map background image: {map_data.get('url')[:100]}...")
+            fig.add_layout_image(
+                source=map_data['url'],
+                x=0, y=0,
+                sizex=map_width, sizey=map_height,
+                xref="x", yref="y",
+                sizing="stretch",
+                layer="below"
+            )
+        else:
+            logging.warning("Map has no background image URL")
+        
+        # Add walls if present
+        if 'wall_path' in map_data and map_data['wall_path']:
+            wall_path = map_data['wall_path']
+            logging.debug(f"Wall path data structure: {wall_path}")
+            
+            if 'nodes' in wall_path:
+                logging.info(f"Processing {len(wall_path['nodes'])} wall path nodes")
+                
+                # Wall paths are SEGMENTS, not a continuous line
+                # Each node has 'edges' that define which other nodes it connects to
+                # We need to draw individual line segments based on edges
+                
+                # First, build a lookup of nodes by name
+                node_lookup = {}
+                for node in wall_path['nodes']:
+                    node_name = node.get('name', '')
+                    pos = node.get('position', {})
+                    if node_name and pos:
+                        node_lookup[node_name] = pos
+                        logging.debug(f"Wall node '{node_name}': x={pos.get('x')}, y={pos.get('y')}, edges={node.get('edges', {})}")
+                
+                # Now draw segments based on edges
+                for node in wall_path['nodes']:
+                    node_name = node.get('name', '')
+                    node_pos = node.get('position', {})
+                    edges = node.get('edges', {})
+                    
+                    if not node_pos or not edges:
+                        continue
+                    
+                    # Draw a line from this node to each connected node
+                    for edge_name in edges.keys():
+                        if edge_name in node_lookup:
+                            target_pos = node_lookup[edge_name]
+                            
+                            # Draw segment
+                            fig.add_trace(go.Scatter(
+                                x=[node_pos.get('x', 0), target_pos.get('x', 0)],
+                                y=[node_pos.get('y', 0), target_pos.get('y', 0)],
+                                mode='lines',
+                                name='Walls',
+                                line=dict(color='#ff3333', width=4),
+                                visible=True,
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                
+                # Add one invisible trace just for the legend
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode='lines',
+                    name='Walls',
+                    line=dict(color='#ff3333', width=4),
+                    visible=True,
+                    showlegend=True
+                ))
+        
+        # Add wayfinding paths if present
+        if 'wayfinding_path' in map_data and map_data['wayfinding_path']:
+            wf_path = map_data['wayfinding_path']
+            logging.debug(f"Wayfinding path data structure: {wf_path}")
+            
+            if 'nodes' in wf_path:
+                logging.info(f"Processing {len(wf_path['nodes'])} wayfinding path nodes")
+                
+                # Wayfinding paths also use edge-based segments like walls
+                # Build node lookup
+                node_lookup = {}
+                for node in wf_path['nodes']:
+                    node_name = node.get('name', '')
+                    pos = node.get('position', {})
+                    if node_name and pos:
+                        node_lookup[node_name] = pos
+                        logging.debug(f"Wayfinding node '{node_name}': x={pos.get('x')}, y={pos.get('y')}, edges={node.get('edges', {})}")
+                
+                # Draw segments based on edges
+                for node in wf_path['nodes']:
+                    node_name = node.get('name', '')
+                    node_pos = node.get('position', {})
+                    edges = node.get('edges', {})
+                    
+                    if not node_pos or not edges:
+                        continue
+                    
+                    # Draw a line from this node to each connected node
+                    for edge_name in edges.keys():
+                        if edge_name in node_lookup:
+                            target_pos = node_lookup[edge_name]
+                            
+                            # Draw segment
+                            fig.add_trace(go.Scatter(
+                                x=[node_pos.get('x', 0), target_pos.get('x', 0)],
+                                y=[node_pos.get('y', 0), target_pos.get('y', 0)],
+                                mode='lines+markers',
+                                name='Wayfinding',
+                                line=dict(color='#4488ff', width=3, dash='dash'),
+                                marker=dict(size=8, color='#4488ff'),
+                                visible=True,
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                
+                # Add one invisible trace just for the legend
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode='lines+markers',
+                    name='Wayfinding',
+                    line=dict(color='#4488ff', width=3, dash='dash'),
+                    marker=dict(size=8, color='#4488ff'),
+                    visible=True,
+                    showlegend=True
+                ))
+        
+        # Add zones if present
+        if zones and len(zones) > 0:
+            logging.info(f"Processing {len(zones)} zones on this map")
+            zone_colors = ['rgba(255,165,0,0.2)', 'rgba(0,255,255,0.2)', 'rgba(255,0,255,0.2)', 
+                          'rgba(255,255,0,0.2)', 'rgba(0,255,0,0.2)', 'rgba(128,0,255,0.2)']
+            
+            for idx, zone in enumerate(zones):
+                zone_name = zone.get('name', f'Zone {idx+1}')
+                vertices = zone.get('vertices', [])
+                
+                logging.debug(f"Zone '{zone_name}': {len(vertices)} vertices - {vertices}")
+                
+                if vertices and len(vertices) >= 3:
+                    # Extract x,y coordinates from vertices
+                    zone_x = [v.get('x', 0) for v in vertices]
+                    zone_y = [v.get('y', 0) for v in vertices]
+                    # Close the polygon
+                    zone_x.append(zone_x[0])
+                    zone_y.append(zone_y[0])
+                    
+                    color = zone_colors[idx % len(zone_colors)]
+                    border_color = color.replace('0.2', '0.8')  # More opaque border
+                    
+                    logging.debug(f"Drawing zone '{zone_name}' with {len(zone_x)} points")
+                    
+                    fig.add_trace(go.Scatter(
+                        x=zone_x, y=zone_y,
+                        mode='lines',
+                        name=f'Zone: {zone_name}',
+                        line=dict(color=border_color, width=2, dash='dot'),
+                        fill='toself',
+                        fillcolor=color,
+                        opacity=1.0,  # Don't apply additional opacity - it's in the color
+                        visible=True,
+                        showlegend=True,
+                        hovertext=f"Zone: {zone_name}",
+                        hoverinfo='text'
+                    ))
+                    
+                    # Add zone name label at upper-left corner
+                    min_x = min(zone_x)
+                    min_y = min(zone_y)
+                    fig.add_annotation(
+                        x=min_x + 10,  # Small offset from corner
+                        y=min_y + 10,
+                        text=f"<b>{zone_name}</b>",
+                        showarrow=False,
+                        font=dict(size=14, color='white', family='Arial Black'),
+                        bgcolor=border_color.replace('0.8', '0.9'),
+                        bordercolor='white',
+                        borderwidth=2,
+                        borderpad=4,
+                        xanchor='left',
+                        yanchor='top'
+                    )
+                else:
+                    logging.warning(f"Zone '{zone_name}' has insufficient vertices: {len(vertices)}")
+        else:
+            logging.info("No zones found on this map")
+        
+        # Add connected clients if present
+        if clients and len(clients) > 0:
+            logging.info(f"Processing {len(clients)} connected clients on this map")
+            logging.debug(f"Client sample data: {clients[0] if clients else 'None'}")
+            client_x = []
+            client_y = []
+            client_hover = []
+            client_names = []
+            
+            for client in clients:
+                x = client.get('x')
+                y = client.get('y')
+                client_mac = client.get('mac', 'unknown')
+                client_map_id = client.get('map_id', 'none')
+                logging.debug(f"Client {client_mac}: x={x}, y={y}, map_id={client_map_id} (looking for map_id={map_id})")
+                if x is not None and y is not None:
+                    client_x.append(x)
+                    client_y.append(y)
+                    
+                    # Use hostname or MAC for label
+                    hostname = client.get('hostname', '')
+                    label = hostname if hostname else client_mac[-8:]
+                    client_names.append(label)
+                    
+                    # Build hover text with client details
+                    hover = f"<b>Client</b><br>"
+                    hover += f"MAC: {client.get('mac', 'N/A')}<br>"
+                    hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"
+                    hover += f"SSID: {client.get('ssid', 'N/A')}<br>"
+                    hover += f"AP: {client.get('ap_name', 'N/A')}<br>"
+                    hover += f"Band: {client.get('band', 'N/A')}<br>"
+                    hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"
+                    hover += f"Position: ({x}, {y})"
+                    client_hover.append(hover)
+            
+            if client_x:
+                # Add client markers
+                fig.add_trace(go.Scatter(
+                    x=client_x, y=client_y,
+                    mode='markers',
+                    name='Clients',
+                    marker=dict(
+                        symbol='circle',
+                        size=12,
+                        color='#00ff00',  # Bright green
+                        line=dict(color='white', width=2),
+                        opacity=0.9
+                    ),
+                    hovertext=client_hover,
+                    hoverinfo='text',
+                    visible=True,
+                    showlegend=True
+                ))
+                
+                # Add client name labels with shadow effect using annotations
+                for i, (x, y, name) in enumerate(zip(client_x, client_y, client_names)):
+                    fig.add_annotation(
+                        x=x,
+                        y=y - 10,  # Position above marker
+                        text=f"<b>{name}</b>",
+                        showarrow=False,
+                        font=dict(size=9, color='white', family='Arial'),
+                        bgcolor='rgba(0,128,0,0.9)',
+                        bordercolor='white',
+                        borderwidth=1,
+                        borderpad=2,
+                        xanchor='center',
+                        yanchor='bottom'
+                    )
+                logging.info(f"Added {len(client_x)} clients to map visualization (out of {len(clients)} total clients)")
+            else:
+                logging.warning(f"Found {len(clients)} clients but none have x,y coordinates")
+        else:
+            logging.info("No connected clients found on this map")
+        
+        # Add devices by type with LARGER, more visible markers
+        device_types = {'ap': [], 'switch': [], 'gateway': []}
+        for device in devices:
+            device_type = device.get('type', 'unknown')
+            if device_type in device_types and 'x' in device and 'y' in device:
+                device_types[device_type].append(device)
+        
+        # Enhanced colors and symbols for device types - much more visible
+        type_config = {
+            'ap': {'color': '#00ff00', 'symbol': 'triangle-up', 'name': 'Access Points', 'size': 20},
+            'switch': {'color': '#ff8800', 'symbol': 'square', 'name': 'Switches', 'size': 18},
+            'gateway': {'color': '#ff00ff', 'symbol': 'diamond', 'name': 'Gateways', 'size': 20}
+        }
+        
+        for device_type, config in type_config.items():
+            type_devices = device_types[device_type]
+            if type_devices:
+                x_coords = [d['x'] for d in type_devices]
+                y_coords = [d['y'] for d in type_devices]  # Keep Mist Y-coordinates as-is
+                names = [d.get('name', d.get('mac', 'Unknown')) for d in type_devices]
+                orientations = [d.get('orientation', 0) for d in type_devices]
+                
+                hover_text = []
+                for d in type_devices:
+                    text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
+                    text += f"Type: {d.get('type', 'N/A')}<br>"
+                    text += f"Model: {d.get('model', 'N/A')}<br>"
+                    text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                    text += f"Position: ({d.get('x', 'N/A')}, {d.get('y', 'N/A')})<br>"
+                    text += f"Orientation: {d.get('orientation', 0)}°"
+                    hover_text.append(text)
+                
+                # Add device markers
+                fig.add_trace(go.Scatter(
+                    x=x_coords, y=y_coords,
+                    mode='markers',
+                    name=config['name'],
+                    marker=dict(
+                        symbol=config['symbol'],
+                        size=config['size'],
+                        color=config['color'],
+                        line=dict(color='white', width=2),
+                        opacity=0.9
+                    ),
+                    hovertext=hover_text,
+                    hoverinfo='text',
+                    visible=True,
+                    showlegend=True
+                ))
+                
+                # Add device name labels with shadow effect using annotations
+                for i, (x, y, name) in enumerate(zip(x_coords, y_coords, names)):
+                    fig.add_annotation(
+                        x=x,
+                        y=y - 15,  # Position above marker
+                        text=f"<b>{name}</b>",
+                        showarrow=False,
+                        font=dict(size=11, color='white', family='Arial Black'),
+                        bgcolor='rgba(0,0,0,0.85)',
+                        bordercolor=config['color'],
+                        borderwidth=2,
+                        borderpad=3,
+                        xanchor='center',
+                        yanchor='bottom'
+                    )
+                
+                # Add highly visible orientation indicators for devices
+                for i, (x, y, angle, device) in enumerate(zip(x_coords, y_coords, orientations, type_devices)):
+                    if angle != 0:
+                        # Create a directional wedge/cone shape
+                        arrow_length = 50
+                        arrow_width = 15
+                        
+                        # Calculate arrow tip
+                        tip_x = x + arrow_length * cos(radians(angle))
+                        tip_y = y + arrow_length * sin(radians(angle))
+                        
+                        # Calculate arrow base corners (perpendicular to direction)
+                        perp_angle_1 = angle + 90
+                        perp_angle_2 = angle - 90
+                        base_x1 = x + arrow_width * cos(radians(perp_angle_1))
+                        base_y1 = y + arrow_width * sin(radians(perp_angle_1))
+                        base_x2 = x + arrow_width * cos(radians(perp_angle_2))
+                        base_y2 = y + arrow_width * sin(radians(perp_angle_2))
+                        
+                        # Draw filled triangle for direction indicator
+                        fig.add_trace(go.Scatter(
+                            x=[base_x1, tip_x, base_x2, base_x1],
+                            y=[base_y1, tip_y, base_y2, base_y1],
+                            mode='lines',
+                            fill='toself',
+                            fillcolor=config['color'],
+                            line=dict(color='white', width=2),
+                            opacity=0.8,
+                            showlegend=False,
+                            hoverinfo='skip'
+                        ))
+        
+        # Update layout with dark theme and responsive sizing
+        fig.update_layout(
+            title={
+                'text': f"Map: {map_data.get('name', 'Unnamed')}",
+                'font': {'size': 20, 'color': '#e0e0e0'}
+            },
+            xaxis=dict(
+                range=[-50, map_width + 50],  # Add margins to show full map
+                visible=True, 
+                title="X (pixels)",
+                gridcolor='#444',
+                zerolinecolor='#666',
+                color='#b0b0b0',
+                constrain='domain'  # Keep zoom within bounds
+            ),
+            yaxis=dict(
+                range=[map_height + 50, -50],  # Inverted range with margins: Mist uses top-left origin
+                visible=True, 
+                title="Y (pixels)", 
+                scaleanchor="x", 
+                scaleratio=1,
+                gridcolor='#444',
+                zerolinecolor='#666',
+                color='#b0b0b0',
+                constrain='domain'  # Keep zoom within bounds
+            ),
+            autosize=True,
+            hovermode='closest',
+            showlegend=True,
+            uirevision='constant',  # Prevent auto-ranging to data - maintain user's view
+            legend=dict(
+                x=0.02, 
+                y=0.98, 
+                bgcolor='rgba(45,45,45,0.9)',
+                bordercolor='#667eea',
+                borderwidth=2,
+                font=dict(color='#e0e0e0', size=12)
+            ),
+            plot_bgcolor='#1a1a1a',
+            paper_bgcolor='#1a1a1a',
+            margin=dict(l=50, r=50, t=80, b=50),
+            dragmode='zoom',  # Default to zoom, users can select drawing tools
+            newshape=dict(
+                line=dict(color='cyan', width=3),
+                fillcolor='rgba(0,255,255,0.2)',
+                opacity=0.8
+            ),
+            # Store PPM for unit conversions in annotations
+            meta={'ppm': ppm}
+        )
+        
+        # Create responsive Dash layout with dark theme
+        app.layout = html.Div([
+            html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}"),
+            html.Div([
+                # Map container - responsive
+                html.Div([
+                    dcc.Graph(
+                        id='map-display', 
+                        figure=fig, 
+                        config={
+                            'displayModeBar': True,
+                            'displaylogo': False,
+                            'modeBarButtonsToAdd': [
+                                'drawline',
+                                'drawopenpath',
+                                'drawclosedpath',
+                                'drawcircle',
+                                'drawrect',
+                                'eraseshape'
+                            ],
+                            'scrollZoom': True,
+                            'editable': True,
+                            'edits': {
+                                'shapePosition': True,
+                                'annotationPosition': True
+                            },
+                            'toImageButtonOptions': {
+                                'format': 'png',
+                                'filename': f"map_{map_data.get('name', 'export')}",
+                                'height': 1080,
+                                'width': 1920,
+                                'scale': 2
+                            }
+                        },
+                        style={'height': '100%', 'width': '100%'}
+                    )
+                ], className='map-container'),
+                
+                # Sidebar
+                html.Div([
+                    html.H3("🎨 Layer Controls"),
+                    dcc.Checklist(
+                        id='layer-toggle',
+                        options=[
+                            {'label': ' 🧱 Walls', 'value': 'walls'},
+                            {'label': ' 🗺️  Wayfinding', 'value': 'wayfinding'},
+                            {'label': ' 🏢 Zones', 'value': 'zones'},
+                            {'label': ' 👥 Clients', 'value': 'clients'},
+                            {'label': ' 📡 Access Points', 'value': 'aps'},
+                            {'label': ' 🔌 Switches', 'value': 'switches'},
+                            {'label': ' 🌐 Gateways', 'value': 'gateways'}
+                        ],
+                        value=['walls', 'wayfinding', 'zones', 'clients', 'aps', 'switches', 'gateways'],
+                        labelStyle={'display': 'block', 'margin': '12px 0', 'fontSize': '14px'}
+                    ),
+                    html.Hr(),
+                    html.H3("📏 Tools"),
+                    html.P("Use the drawing tools in the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
+                    html.P("• Draw Line - Measure distances", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.P("• Draw Path - Create custom paths", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.P("• Draw Circle - Mark areas", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.P("• Draw Rectangle - Highlight zones", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.P("• Erase - Remove all drawings", style={'fontSize': '12px', 'marginLeft': '10px'}),
+                    html.Hr(),
+                    html.H3("📊 Map Info"),
+                    html.Div(id='map-info', children=[
+                        html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} × {map_height} px"]),
+                        html.P([html.Span("PPM: ", className='info-badge'), f"{map_data.get('ppm', 'N/A')}"]),
+                        html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)}°"]),
+                        html.P([html.Span("Devices: ", className='info-badge'), f"{len(devices)}"]),
+                        html.P([html.Span("Clients: ", className='info-badge'), f"{len(clients)}"]),
+                        html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"])
+                    ]),
+                    html.Hr(),
+                    html.Div(id='click-data', children=[
+                        html.H3("🖱️ Device Info"),
+                        html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
+                    ])
+                ], className='sidebar')
+            ], className='main-container')
+        ], style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'})
+        
+        # Callback for layer toggle
+        @app.callback(
+            Output('map-display', 'figure'),
+            Input('layer-toggle', 'value'),
+            State('map-display', 'figure')
+        )
+        def toggle_layers(selected_layers, current_fig):
+            for trace in current_fig['data']:
+                trace_name = trace.get('name', '').lower()
+                if 'wall' in trace_name:
+                    trace['visible'] = 'walls' in selected_layers
+                elif 'wayfinding' in trace_name:
+                    trace['visible'] = 'wayfinding' in selected_layers
+                elif 'zone' in trace_name:
+                    trace['visible'] = 'zones' in selected_layers
+                elif 'client' in trace_name:
+                    trace['visible'] = 'clients' in selected_layers
+                elif 'ap' in trace_name or 'access point' in trace_name:
+                    trace['visible'] = 'aps' in selected_layers
+                elif 'switch' in trace_name:
+                    trace['visible'] = 'switches' in selected_layers
+                elif 'gateway' in trace_name:
+                    trace['visible'] = 'gateways' in selected_layers
+            return current_fig
+        
+        # Callback for click events - enhanced device details display
+        @app.callback(
+            Output('click-data', 'children'),
+            Input('map-display', 'clickData')
+        )
+        def display_click_data(clickData):
+            if clickData is None:
+                return [
+                    html.H3("🖱️ Device Info"),
+                    html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
+                ]
+            
+            point = clickData['points'][0]
+            hover_text = point.get('hovertext', '')
+            
+            # Parse hover text to extract device info
+            details = []
+            if hover_text:
+                lines = hover_text.split('<br>')
+                for line in lines:
+                    if line.strip():
+                        details.append(html.P(line.replace('<b>', '').replace('</b>', ''), 
+                                            className='device-detail' if 'Type:' in line else None))
+            
+            return [
+                html.H3("🖱️ Device Details"),
+                html.Div(details if details else [html.P("No device data available")])
+            ]
+        
+        # Callback to add multi-unit labels to drawn shapes
+        @app.callback(
+            Output('map-display', 'figure', allow_duplicate=True),
+            Input('map-display', 'relayoutData'),
+            State('map-display', 'figure'),
+            prevent_initial_call=True
+        )
+        def update_shape_labels(relayoutData, current_fig):
+            """Add multi-unit measurement labels to drawn shapes"""
+            if not relayoutData:
+                return current_fig
+            
+            # Check if a new shape was added
+            shapes = current_fig.get('layout', {}).get('shapes', [])
+            if shapes and len(shapes) > 0:
+                # Get the last shape (newly drawn)
+                for idx, shape in enumerate(shapes):
+                    if shape.get('type') == 'line':
+                        # Calculate length in pixels
+                        x0, y0 = shape.get('x0', 0), shape.get('y0', 0)
+                        x1, y1 = shape.get('x1', 0), shape.get('y1', 0)
+                        length_px = ((x1 - x0)**2 + (y1 - y0)**2)**0.5
+                        
+                        # Convert to meters and feet
+                        length_m = length_px / ppm if ppm > 0 else 0
+                        length_ft = length_m * 3.28084
+                        
+                        # Create annotation with multi-unit label
+                        annotation = dict(
+                            x=(x0 + x1) / 2,
+                            y=(y0 + y1) / 2,
+                            text=f"<b>{length_px:.1f} px</b><br>{length_ft:.2f} ft<br>{length_m:.2f} m",
+                            showarrow=False,
+                            font=dict(size=12, color='cyan', family='Arial Black'),
+                            bgcolor='rgba(0,0,0,0.7)',
+                            bordercolor='cyan',
+                            borderwidth=2,
+                            borderpad=4
+                        )
+                        
+                        # Add to annotations
+                        if 'annotations' not in current_fig['layout']:
+                            current_fig['layout']['annotations'] = []
+                        current_fig['layout']['annotations'].append(annotation)
+            
+            return current_fig
+        
+        print("\nStarting Dash server...")
+        print("! Map viewer will open in your default browser")
+        print("! Press Ctrl+C to stop the server\n")
+        
+        logging.info("Starting Dash server on http://127.0.0.1:8050")
+        
+        # Open browser automatically
+        import webbrowser
+        import threading
+        import time
+        
+        def open_browser():
+            """Wait for server to start, then open browser"""
+            time.sleep(1.5)  # Wait for Dash server to initialize
+            webbrowser.open('http://127.0.0.1:8050')
+            logging.debug("Browser opened to http://127.0.0.1:8050")
+        
+        # Start browser opening in background thread
+        threading.Thread(target=open_browser, daemon=True).start()
+        
+        try:
+            app.run(debug=False, port=8050, host='127.0.0.1')
+        except KeyboardInterrupt:
+            print("\n\nMap viewer stopped by user")
+            logging.info("Interactive map viewer stopped by user (Ctrl+C)")
+        except Exception as e:
+            logging.error(f"Error running Dash server: {e}", exc_info=True)
+            print(f"\n! Error running map viewer: {e}")
+    
+    def _create_static_plotly_map(self, map_data, devices):
+        """Create static Plotly HTML map when Dash is not available"""
+        import plotly.graph_objects as go
+        from math import cos, sin, radians
+        import webbrowser
+        import os
+        import tempfile
+        
+        print("\n! Creating static HTML map...")
+        
+        # Similar to _launch_plotly_viewer but save to HTML file
+        fig = go.Figure()
+        
+        map_width = map_data.get('width', 1000)
+        map_height = map_data.get('height', 1000)
+        
+        if 'url' in map_data:
+            fig.add_layout_image(
+                source=map_data['url'],
+                x=0, y=map_height,
+                sizex=map_width, sizey=map_height,
+                xref="x", yref="y",
+                sizing="stretch",
+                layer="below"
+            )
+        
+        # Add devices (simplified version)
+        if devices:
+            x_coords = [d.get('x', 0) for d in devices if 'x' in d]
+            y_coords = [map_height - d.get('y', 0) for d in devices if 'y' in d]
+            names = [d.get('name', d.get('mac', 'Unknown')) for d in devices if 'x' in d]
+            
+            fig.add_trace(go.Scatter(
+                x=x_coords, y=y_coords,
+                mode='markers+text',
+                name='Devices',
+                marker=dict(size=10, color='green'),
+                text=names,
+                textposition='top center'
+            ))
+        
+        fig.update_layout(
+            title=f"Map: {map_data.get('name', 'Unnamed')}",
+            xaxis=dict(range=[0, map_width]),
+            yaxis=dict(range=[0, map_height], scaleanchor="x", scaleratio=1),
+            height=800
+        )
+        
+        # Save to temp HTML file
+        temp_html = os.path.join(tempfile.gettempdir(), f"mist_map_{map_data.get('id', 'unknown')[:8]}.html")
+        logging.debug(f"Saving static map to: {temp_html}")
+        fig.write_html(temp_html)
+        
+        print(f"\n! Map saved to: {temp_html}")
+        print("! Opening in browser...")
+        logging.info(f"Static HTML map created: {temp_html}")
+        webbrowser.open(f"file://{temp_html}")
+        logging.debug("Browser launched with static map")
+    
+    def _launch_matplotlib_viewer(self, map_data, devices):
+        """Fallback matplotlib viewer (view-only)"""
+        logging.info(f"_launch_matplotlib_viewer called - basic fallback mode")
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        from matplotlib.patches import FancyArrow
+        from math import cos, sin, radians
+        
+        print("\n! Using matplotlib viewer (view-only, no interactivity)")
+        logging.debug("Creating matplotlib figure for basic visualization")
+        
+        fig, ax = plt.subplots(figsize=(12, 10))
+        
+        map_width = map_data.get('width', 1000)
+        map_height = map_data.get('height', 1000)
+        
+        ax.set_xlim(0, map_width)
+        ax.set_ylim(0, map_height)
+        ax.set_aspect('equal')
+        ax.set_title(f"Map: {map_data.get('name', 'Unnamed')}")
+        ax.set_xlabel("X (pixels)")
+        ax.set_ylabel("Y (pixels)")
+        
+        # Plot devices
+        for device in devices:
+            if 'x' not in device or 'y' not in device:
+                continue
+            
+            x, y = device['x'], device['y']
+            device_type = device.get('type', 'unknown')
+            name = device.get('name', device.get('mac', 'Unknown'))
+            orientation = device.get('orientation', 0)
+            
+            # Color by type
+            color = {'ap': 'green', 'switch': 'orange', 'gateway': 'purple'}.get(device_type, 'gray')
+            
+            # Plot device
+            ax.plot(x, y, marker='o', markersize=10, color=color, label=device_type if device_type not in ax.get_legend_handles_labels()[1] else "")
+            ax.text(x, y + 20, name, fontsize=8, ha='center')
+            
+            # Add orientation arrow
+            if orientation != 0:
+                arrow_length = 30
+                dx = arrow_length * cos(radians(orientation))
+                dy = arrow_length * sin(radians(orientation))
+                ax.arrow(x, y, dx, dy, head_width=10, head_length=10, fc=color, ec=color, alpha=0.7)
+        
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        print("\n! Displaying map... Close window to return to menu")
+        logging.info("Displaying matplotlib figure (blocking until window closed)")
+        plt.show()
+        logging.info("Matplotlib map viewer closed by user")
 
 
 class FirmwareManager:

@@ -479,6 +479,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.22",
+      "date": "2025-12-03",
+      "changes": {
+        "bug_fixes": [
+          "Fixed map viewer text labels: replaced CSS text-shadow (doesn't work on SVG) with Plotly annotations",
+          "Device names now have black semi-transparent background boxes with colored borders for readability",
+          "Client names now have green semi-transparent background boxes for readability",
+          "Zone labels now appear in upper-left corner of each zone with colored background matching zone border"
+        ],
+        "enhancements": [
+          "Map viewer text rendering: switched from mode='markers+text' to mode='markers' + separate annotations",
+          "Annotation-based labels: support bgcolor, bordercolor, borderwidth, and borderpad for professional appearance",
+          "Device labels: positioned 15px above markers with device-type-specific colored borders (green/orange/magenta)",
+          "Client labels: positioned 10px above markers with smaller font and green styling",
+          "Zone labels: automatically positioned at min(x), min(y) coordinates (upper-left bounding box corner)",
+          "Improved label positioning: all labels use xanchor/yanchor for precise placement without overlap"
+        ],
+        "documentation": [
+          "Added technical note in CSS explaining why text-shadow doesn't work on Plotly SVG elements",
+          "Removed obsolete text-shadow CSS rules that had no effect on map labels"
+        ]
+      }
+    },
+    {
       "version": "25.12.02.20.30",
       "date": "2025-12-02",
       "changes": {
