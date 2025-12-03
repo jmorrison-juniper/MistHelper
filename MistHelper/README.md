@@ -479,6 +479,22 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.30",
+      "date": "2025-12-03",
+      "changes": {
+        "enhancements": [
+          "Map viewer rotation indicators: replaced triangular wedges with Mist-style crosshair + directional dot",
+          "Crosshair: 25px horizontal and vertical lines at device center (always visible)",
+          "Directional dot: 10px marker positioned 35px from center at orientation angle (only if angle != 0)",
+          "Crosshair color matches device type (green for APs, orange for switches, magenta for gateways)",
+          "Dot shows orientation angle on hover for quick reference"
+        ],
+        "documentation": [
+          "Updated rotation indicator design to match Juniper Mist portal UI/UX patterns"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.22",
       "date": "2025-12-03",
       "changes": {

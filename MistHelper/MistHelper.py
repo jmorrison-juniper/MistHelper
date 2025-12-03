@@ -26733,36 +26733,49 @@ class MapsManager:
                         yanchor='bottom'
                     )
                 
-                # Add highly visible orientation indicators for devices
+                # Add Mist-style orientation indicators: crosshair + directional dot
                 for i, (x, y, angle, device) in enumerate(zip(x_coords, y_coords, orientations, type_devices)):
+                    # Crosshair at device location (always visible)
+                    crosshair_size = 25
+                    
+                    # Horizontal line
+                    fig.add_trace(go.Scatter(
+                        x=[x - crosshair_size, x + crosshair_size],
+                        y=[y, y],
+                        mode='lines',
+                        line=dict(color=config['color'], width=2),
+                        showlegend=False,
+                        hoverinfo='skip'
+                    ))
+                    
+                    # Vertical line
+                    fig.add_trace(go.Scatter(
+                        x=[x, x],
+                        y=[y - crosshair_size, y + crosshair_size],
+                        mode='lines',
+                        line=dict(color=config['color'], width=2),
+                        showlegend=False,
+                        hoverinfo='skip'
+                    ))
+                    
+                    # Directional dot showing orientation (only if angle is set)
                     if angle != 0:
-                        # Create a directional wedge/cone shape
-                        arrow_length = 50
-                        arrow_width = 15
+                        dot_distance = 35  # Distance from center to dot
+                        dot_x = x + dot_distance * cos(radians(angle))
+                        dot_y = y + dot_distance * sin(radians(angle))
                         
-                        # Calculate arrow tip
-                        tip_x = x + arrow_length * cos(radians(angle))
-                        tip_y = y + arrow_length * sin(radians(angle))
-                        
-                        # Calculate arrow base corners (perpendicular to direction)
-                        perp_angle_1 = angle + 90
-                        perp_angle_2 = angle - 90
-                        base_x1 = x + arrow_width * cos(radians(perp_angle_1))
-                        base_y1 = y + arrow_width * sin(radians(perp_angle_1))
-                        base_x2 = x + arrow_width * cos(radians(perp_angle_2))
-                        base_y2 = y + arrow_width * sin(radians(perp_angle_2))
-                        
-                        # Draw filled triangle for direction indicator
                         fig.add_trace(go.Scatter(
-                            x=[base_x1, tip_x, base_x2, base_x1],
-                            y=[base_y1, tip_y, base_y2, base_y1],
-                            mode='lines',
-                            fill='toself',
-                            fillcolor=config['color'],
-                            line=dict(color='white', width=2),
-                            opacity=0.8,
+                            x=[dot_x],
+                            y=[dot_y],
+                            mode='markers',
+                            marker=dict(
+                                size=10,
+                                color=config['color'],
+                                line=dict(color='white', width=2)
+                            ),
                             showlegend=False,
-                            hoverinfo='skip'
+                            hovertext=f"Orientation: {angle}°",
+                            hoverinfo='text'
                         ))
         
         # Update layout with dark theme and responsive sizing
