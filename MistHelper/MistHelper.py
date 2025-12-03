@@ -26826,8 +26826,48 @@ class MapsManager:
                 opacity=0.8
             ),
             # Store PPM for unit conversions in annotations
-            meta={'ppm': ppm}
+            meta={'ppm': ppm, 'origin_x': map_data.get('origin_x', 0), 'origin_y': map_data.get('origin_y', 0)}
         )
+        
+        # Add origin crosshair marker (blue crosshair at origin point)
+        origin_x = map_data.get('origin_x', 0)
+        origin_y = map_data.get('origin_y', 0)
+        crosshair_size = 40
+        
+        # Horizontal line of origin crosshair
+        fig.add_trace(go.Scatter(
+            x=[origin_x - crosshair_size, origin_x + crosshair_size],
+            y=[origin_y, origin_y],
+            mode='lines',
+            line=dict(color='#00bfff', width=3),  # Deep sky blue
+            name='Origin',
+            showlegend=True,
+            hovertext=f"Origin: ({origin_x}, {origin_y})",
+            hoverinfo='text'
+        ))
+        
+        # Vertical line of origin crosshair
+        fig.add_trace(go.Scatter(
+            x=[origin_x, origin_x],
+            y=[origin_y - crosshair_size, origin_y + crosshair_size],
+            mode='lines',
+            line=dict(color='#00bfff', width=3),  # Deep sky blue
+            showlegend=False,
+            hovertext=f"Origin: ({origin_x}, {origin_y})",
+            hoverinfo='text'
+        ))
+        
+        # Center dot of origin crosshair
+        fig.add_trace(go.Scatter(
+            x=[origin_x],
+            y=[origin_y],
+            mode='markers',
+            marker=dict(size=12, color='#00bfff', line=dict(color='white', width=2)),
+            name='Origin Point',
+            showlegend=False,
+            hovertext=f"Origin: ({origin_x}, {origin_y})",
+            hoverinfo='text'
+        ))
         
         # Create responsive Dash layout with dark theme
         app.layout = html.Div([
@@ -26926,6 +26966,31 @@ class MapsManager:
                             }
                         ),
                         html.Div(id='scale-status', style={'marginTop': '8px', 'fontSize': '11px', 'color': '#a0a0ff'})
+                    ]),
+                    html.Hr(),
+                    html.H3("📍 Set Origin"),
+                    html.P("Click map to set coordinate origin", style={'fontSize': '11px', 'color': '#888'}),
+                    html.Div([
+                        html.Button(
+                            'Enable Origin Setting Mode',
+                            id='origin-mode-button',
+                            n_clicks=0,
+                            style={
+                                'width': '100%',
+                                'padding': '8px',
+                                'marginBottom': '8px',
+                                'backgroundColor': '#3d3d3d',
+                                'color': 'white',
+                                'border': '1px solid #667eea',
+                                'borderRadius': '4px',
+                                'cursor': 'pointer',
+                                'fontWeight': 'bold'
+                            }
+                        ),
+                        html.Div(id='origin-status', children=[
+                            html.P(f"Current: ({map_data.get('origin_x', 0)}, {map_data.get('origin_y', 0)})", 
+                                   style={'fontSize': '11px', 'color': '#888', 'margin': '4px 0'})
+                        ])
                     ]),
                     html.Hr(),
                     html.H3("📊 Map Info"),
@@ -27112,6 +27177,88 @@ class MapsManager:
             logging.info(f"Map scale updated: PPM {ppm} → {new_ppm:.2f} (user calibration: {actual_length_m}m)")
             
             return status_msg, current_fig
+        
+        # Callback to handle origin setting mode
+        @app.callback(
+            Output('origin-mode-button', 'style'),
+            Input('origin-mode-button', 'n_clicks'),
+            State('origin-mode-button', 'style'),
+            prevent_initial_call=True
+        )
+        def toggle_origin_mode(n_clicks, current_style):
+            """Toggle origin setting mode on/off with visual feedback"""
+            if n_clicks % 2 == 1:  # Odd clicks = mode active
+                current_style['backgroundColor'] = '#667eea'
+                current_style['border'] = '2px solid #00bfff'
+                return current_style
+            else:  # Even clicks = mode inactive
+                current_style['backgroundColor'] = '#3d3d3d'
+                current_style['border'] = '1px solid #667eea'
+                return current_style
+        
+        # Callback to set origin from map click
+        @app.callback(
+            [Output('origin-status', 'children'),
+             Output('map-display', 'figure', allow_duplicate=True)],
+            Input('map-display', 'clickData'),
+            [State('origin-mode-button', 'n_clicks'),
+             State('map-display', 'figure')],
+            prevent_initial_call=True
+        )
+        def set_origin_from_click(clickData, mode_clicks, current_fig):
+            """Set origin point when map is clicked in origin-setting mode"""
+            # Check if origin mode is active (odd number of clicks)
+            if not mode_clicks or mode_clicks % 2 == 0:
+                # Mode not active - return current status
+                current_origin_x = current_fig.get('layout', {}).get('meta', {}).get('origin_x', 0)
+                current_origin_y = current_fig.get('layout', {}).get('meta', {}).get('origin_y', 0)
+                return [html.P(f"Current: ({current_origin_x}, {current_origin_y})", 
+                              style={'fontSize': '11px', 'color': '#888', 'margin': '4px 0'})], current_fig
+            
+            if not clickData:
+                return [html.P("Click map to set origin", 
+                              style={'fontSize': '11px', 'color': '#ff8800', 'margin': '4px 0'})], current_fig
+            
+            # Get clicked coordinates
+            point = clickData['points'][0]
+            new_origin_x = point['x']
+            new_origin_y = point['y']
+            
+            # Update origin in figure metadata
+            if 'meta' not in current_fig['layout']:
+                current_fig['layout']['meta'] = {}
+            current_fig['layout']['meta']['origin_x'] = new_origin_x
+            current_fig['layout']['meta']['origin_y'] = new_origin_y
+            
+            # Find and update origin crosshair traces
+            crosshair_size = 40
+            for trace in current_fig['data']:
+                if trace.get('name') == 'Origin':
+                    # Update horizontal line
+                    trace['x'] = [new_origin_x - crosshair_size, new_origin_x + crosshair_size]
+                    trace['y'] = [new_origin_y, new_origin_y]
+                    trace['hovertext'] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
+                elif trace.get('name') == 'Origin Point':
+                    # Update center dot
+                    trace['x'] = [new_origin_x]
+                    trace['y'] = [new_origin_y]
+                    trace['hovertext'] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
+                elif 'hovertext' in trace and 'Origin:' in str(trace.get('hovertext', '')):
+                    # Update vertical line (no name but has Origin hovertext)
+                    if trace.get('mode') == 'lines' and trace.get('showlegend') == False:
+                        trace['x'] = [new_origin_x, new_origin_x]
+                        trace['y'] = [new_origin_y - crosshair_size, new_origin_y + crosshair_size]
+                        trace['hovertext'] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
+            
+            status = [
+                html.P(f"✅ Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})", 
+                      style={'fontSize': '11px', 'color': '#00ff00', 'margin': '4px 0'}),
+                html.P("Click button again to exit mode", 
+                      style={'fontSize': '10px', 'color': '#888', 'margin': '4px 0'})
+            ]
+            
+            logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
+            return status, current_fig
         
         print("\nStarting Dash server...")
         print("! Map viewer will open in your default browser")

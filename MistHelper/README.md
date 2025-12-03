@@ -479,6 +479,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.35",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Set Origin feature: click map to define coordinate system origin point with blue crosshair marker",
+          "Origin setting mode: toggle button activates click-to-set mode with visual feedback (purple highlight)",
+          "Blue crosshair marker: 40px crosshair with center dot at origin point (matches Mist portal UI)",
+          "Origin persistence: stores origin_x and origin_y in figure metadata for coordinate transformations",
+          "Dynamic origin updates: crosshair marker moves when origin is repositioned via click"
+        ],
+        "enhancements": [
+          "Set Origin UI: toggle button with mode indicator in sidebar Tools section",
+          "Visual feedback: button highlights in purple when origin-setting mode is active",
+          "Status display: shows current origin coordinates and confirmation when set",
+          "Origin initialization: loads existing origin_x/origin_y from map data if present",
+          "Interactive workflow: click button to activate, click map to set, click button again to exit mode"
+        ],
+        "documentation": [
+          "Added Set Origin feature matching Juniper Mist portal coordinate system alignment capability"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.32",
       "date": "2025-12-03",
       "changes": {
