@@ -479,6 +479,23 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.39",
+      "date": "2025-12-03",
+      "changes": {
+        "enhancements": [
+          "Utilities UI redesign: replaced dropdown with horizontal button bar for cleaner interface",
+          "Direct action buttons: Change Image, Remove Image, Rename, Delete as individual buttons in header",
+          "Visual hierarchy: Delete button highlighted in red (#ff4444) for critical action awareness",
+          "Improved spacing: buttons in header bar with inline status messages",
+          "Darker header: #2a2a2a background for better contrast with map area"
+        ],
+        "refactoring": [
+          "Callback optimization: replaced dropdown Input with multiple button Inputs using callback_context",
+          "Button state tracking: uses dash.callback_context to identify which button was clicked"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.38",
       "date": "2025-12-03",
       "changes": {

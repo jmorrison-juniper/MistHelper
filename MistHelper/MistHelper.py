@@ -26871,31 +26871,26 @@ class MapsManager:
         
         # Create responsive Dash layout with dark theme
         app.layout = html.Div([
-            # Header with title and utilities dropdown
+            # Header with title and utilities buttons
             html.Div([
                 html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}", 
-                       style={'display': 'inline-block', 'marginRight': '20px'}),
+                       style={'display': 'inline-block', 'marginRight': '30px', 'marginBottom': '0'}),
                 html.Div([
-                    dcc.Dropdown(
-                        id='utilities-dropdown',
-                        options=[
-                            {'label': '🖼️  Change Image', 'value': 'change_image'},
-                            {'label': '🗑️  Remove Image', 'value': 'remove_image'},
-                            {'label': '✏️  Rename Floorplan', 'value': 'rename'},
-                            {'label': '❌ Delete Floorplan', 'value': 'delete'}
-                        ],
-                        placeholder='Utilities ▼',
-                        style={
-                            'width': '200px',
-                            'display': 'inline-block',
-                            'backgroundColor': '#3d3d3d',
-                            'color': '#e0e0e0',
-                            'border': '1px solid #667eea'
-                        }
-                    ),
-                    html.Div(id='utilities-status', style={'display': 'inline-block', 'marginLeft': '15px', 'color': '#a0a0ff'})
-                ], style={'display': 'inline-block', 'float': 'right', 'marginTop': '20px'})
-            ], style={'padding': '10px 20px', 'borderBottom': '2px solid #667eea'}),
+                    html.Button('🖼️ Change Image', id='change-image-btn', n_clicks=0, 
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Button('🗑️ Remove Image', id='remove-image-btn', n_clicks=0,
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Button('✏️ Rename', id='rename-btn', n_clicks=0,
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Button('❌ Delete', id='delete-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Div(id='utilities-status', style={'display': 'inline-block', 'marginLeft': '20px', 'color': '#a0a0ff', 'fontSize': '13px'})
+                ], style={'display': 'inline-block', 'float': 'right'})
+            ], style={'padding': '15px 20px', 'borderBottom': '2px solid #667eea', 'backgroundColor': '#2a2a2a'}),
             
             html.Div([
                 # Map container - responsive
@@ -27285,33 +27280,39 @@ class MapsManager:
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
         
-        # Callback to handle utilities dropdown actions
+        # Callback to handle utilities button actions
         @app.callback(
             Output('utilities-status', 'children'),
-            Input('utilities-dropdown', 'value'),
+            [Input('change-image-btn', 'n_clicks'),
+             Input('remove-image-btn', 'n_clicks'),
+             Input('rename-btn', 'n_clicks'),
+             Input('delete-btn', 'n_clicks')],
             prevent_initial_call=True
         )
-        def handle_utilities(action):
-            """Handle utilities dropdown selections"""
-            if not action:
+        def handle_utilities(change_clicks, remove_clicks, rename_clicks, delete_clicks):
+            """Handle utilities button clicks"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
                 return ""
             
-            if action == 'change_image':
+            button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if button_id == 'change-image-btn':
                 msg = "⚠️ Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
                 logging.info(f"Utilities: Change Image requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff8800'})
             
-            elif action == 'remove_image':
+            elif button_id == 'remove-image-btn':
                 msg = "⚠️ Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
                 logging.warning(f"Utilities: Remove Image requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff4444'})
             
-            elif action == 'rename':
+            elif button_id == 'rename-btn':
                 msg = "⚠️ Rename: Use Mist API updateSiteMap with new name - requires text input"
                 logging.info(f"Utilities: Rename requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff8800'})
             
-            elif action == 'delete':
+            elif button_id == 'delete-btn':
                 msg = "❌ Delete Floorplan: Use Mist API deleteSiteMap - DESTRUCTIVE! Requires confirmation"
                 logging.warning(f"Utilities: Delete requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff0000', 'fontWeight': 'bold'})
