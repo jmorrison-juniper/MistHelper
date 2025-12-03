@@ -26586,7 +26586,8 @@ class MapsManager:
                         borderwidth=2,
                         borderpad=4,
                         xanchor='left',
-                        yanchor='top'
+                        yanchor='top',
+                        name='Zone Label'  # For toggle control
                     )
                 else:
                     logging.warning(f"Zone '{zone_name}' has insufficient vertices: {len(vertices)}")
@@ -26709,7 +26710,8 @@ class MapsManager:
                         borderwidth=1,
                         borderpad=2,
                         xanchor='center',
-                        yanchor='bottom'
+                        yanchor='bottom',
+                        name='Clients Label'  # For toggle control
                     )
                 logging.info(f"Added {len(client_x)} clients to map visualization (out of {len(clients)} total clients)")
             else:
@@ -26780,7 +26782,8 @@ class MapsManager:
                         borderwidth=2,
                         borderpad=3,
                         xanchor='center',
-                        yanchor='bottom'
+                        yanchor='bottom',
+                        name=f"{config['name']} Label"  # For toggle control
                     )
                 
                 # Add mesh links for APs if mesh topology exists
@@ -26810,15 +26813,16 @@ class MapsManager:
                 
                 # Add Mist-style orientation indicators: crosshair + directional dot
                 for i, (x, y, angle, device) in enumerate(zip(x_coords, y_coords, orientations, type_devices)):
-                    # Crosshair at device location (always visible)
-                    crosshair_size = 25
+                    # Crosshair at device location (always visible) - LARGER SIZE
+                    crosshair_size = 40  # Increased from 25 to 40
                     
                     # Horizontal line
                     fig.add_trace(go.Scatter(
                         x=[x - crosshair_size, x + crosshair_size],
                         y=[y, y],
                         mode='lines',
-                        line=dict(color=config['color'], width=2),
+                        line=dict(color=config['color'], width=3),  # Increased width
+                        name=f"{config['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
                     ))
@@ -26828,14 +26832,15 @@ class MapsManager:
                         x=[x, x],
                         y=[y - crosshair_size, y + crosshair_size],
                         mode='lines',
-                        line=dict(color=config['color'], width=2),
+                        line=dict(color=config['color'], width=3),  # Increased width
+                        name=f"{config['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
                     ))
                     
-                    # Directional dot showing orientation (only if angle is set)
+                    # Directional dot showing orientation (only if angle is set) - LARGER SIZE
                     if angle != 0:
-                        dot_distance = 35  # Distance from center to dot
+                        dot_distance = 50  # Increased from 35 to 50
                         dot_x = x + dot_distance * cos(radians(angle))
                         dot_y = y + dot_distance * sin(radians(angle))
                         
@@ -26844,10 +26849,11 @@ class MapsManager:
                             y=[dot_y],
                             mode='markers',
                             marker=dict(
-                                size=10,
+                                size=16,  # Increased from 10 to 16
                                 color=config['color'],
                                 line=dict(color='white', width=2)
                             ),
+                            name=f"{config['name']} Orientation",  # Name for toggle control
                             showlegend=False,
                             hovertext=f"Orientation: {angle}°",
                             hoverinfo='text'
@@ -26914,7 +26920,8 @@ class MapsManager:
                         borderwidth=1,
                         borderpad=2,
                         xanchor='center',
-                        yanchor='bottom'
+                        yanchor='bottom',
+                        name='Virtual Beacons Label'  # For toggle control
                     )
                 
                 # Add coverage circles for vBeacons based on power
@@ -27012,7 +27019,8 @@ class MapsManager:
                         borderwidth=1,
                         borderpad=2,
                         xanchor='center',
-                        yanchor='bottom'
+                        yanchor='bottom',
+                        name='BLE Beacons Label'  # For toggle control
                     )
                 
                 logging.info(f"Added {len(ble_x)} BLE beacons to map")
@@ -27392,6 +27400,7 @@ class MapsManager:
             # Combine all layer selections
             all_layers = (infra_layers or []) + (beacon_layers or []) + (client_layers or []) + (device_layers or []) + (filter_layers or [])
             
+            # Toggle traces (markers, lines, shapes)
             for trace in current_fig['data']:
                 trace_name = trace.get('name', '').lower()
                 
@@ -27416,6 +27425,8 @@ class MapsManager:
                     trace['visible'] = 'wifi_clients' in all_layers
                 elif 'wired client' in trace_name:
                     trace['visible'] = 'wired_clients' in all_layers
+                elif 'client' in trace_name:  # Generic clients (fallback)
+                    trace['visible'] = ('wifi_clients' in all_layers or 'wired_clients' in all_layers)
                 elif 'client-ap link' in trace_name:
                     trace['visible'] = 'show_client_ap' in all_layers
                     
@@ -27427,13 +27438,43 @@ class MapsManager:
                 elif 'vbeacon coverage' in trace_name:
                     trace['visible'] = 'vbeacon_coverage' in all_layers
                     
-                # Devices
+                # Devices and their orientation indicators
                 elif 'ap' in trace_name or 'access point' in trace_name:
                     trace['visible'] = 'aps' in all_layers
                 elif 'switch' in trace_name:
                     trace['visible'] = 'switches' in all_layers
                 elif 'gateway' in trace_name:
                     trace['visible'] = 'gateways' in all_layers
+            
+            # Toggle annotations (text labels)
+            for annotation in current_fig.get('layout', {}).get('annotations', []):
+                annotation_name = annotation.get('name', '').lower()
+                
+                # Zone labels
+                if 'zone label' in annotation_name:
+                    annotation['visible'] = 'zones' in all_layers
+                    
+                # Device labels
+                elif 'access points label' in annotation_name:
+                    annotation['visible'] = 'aps' in all_layers
+                elif 'switches label' in annotation_name:
+                    annotation['visible'] = 'switches' in all_layers
+                elif 'gateways label' in annotation_name:
+                    annotation['visible'] = 'gateways' in all_layers
+                    
+                # Client labels
+                elif 'wifi clients label' in annotation_name:
+                    annotation['visible'] = 'wifi_clients' in all_layers
+                elif 'wired clients label' in annotation_name:
+                    annotation['visible'] = 'wired_clients' in all_layers
+                elif 'clients label' in annotation_name:  # Generic clients (fallback)
+                    annotation['visible'] = ('wifi_clients' in all_layers or 'wired_clients' in all_layers)
+                    
+                # Beacon labels
+                elif 'virtual beacons label' in annotation_name:
+                    annotation['visible'] = 'vbeacons' in all_layers
+                elif 'ble beacons label' in annotation_name:
+                    annotation['visible'] = 'ble_beacons' in all_layers
             
             return current_fig
         

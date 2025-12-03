@@ -479,6 +479,25 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.17.30",
+      "date": "2025-12-03",
+      "changes": {
+        "enhancements": [
+          "Larger crosshair indicators: increased from 25px to 40px for better visibility of device orientation markers",
+          "Larger orientation dots: increased from 10px to 16px with thicker lines (3px width) for improved visual clarity",
+          "Increased dot distance: orientation direction indicator moved from 35px to 50px from device center",
+          "Annotation toggle control: all text labels (zones, devices, clients, beacons) now hide/show with their parent layers",
+          "Unified visibility management: annotations and traces both controlled by layer toggle callbacks"
+        ],
+        "bug_fixes": [
+          "Fixed layer toggle not hiding device/client/zone/beacon text labels when layers disabled",
+          "Added name metadata to all annotations for proper visibility control",
+          "Client labels now properly hide when client layers are toggled off",
+          "Device orientation indicators (crosshairs and dots) now hide with their parent device layer"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.17.15",
       "date": "2025-12-03",
       "changes": {
