@@ -479,6 +479,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.03.16.32",
+      "date": "2025-12-03",
+      "changes": {
+        "feature_additions": [
+          "Set Scale tool: calibrate map PPM by drawing a line and entering its known length in meters",
+          "Interactive scale calibration: matches Mist portal 'Set Scale' feature for accurate measurements",
+          "Real-time measurement updates: all existing ruler measurements automatically recalculate when scale changes",
+          "PPM persistence: calibrated scale stored in figure metadata and used for all future measurements",
+          "User feedback: status messages show old PPM → new PPM conversion with pixel-to-meter ratio"
+        ],
+        "enhancements": [
+          "Set Scale UI: input field for length in meters + button in sidebar Tools section",
+          "Workflow guidance: numbered steps (1. Draw line, 2. Enter length) for clear user instructions",
+          "Dynamic PPM: measurement callback reads current PPM from figure metadata instead of static value",
+          "Scale validation: prevents setting scale with invalid/missing length or without drawn line",
+          "Professional styling: scale input and button match dark theme with purple accent (#667eea)"
+        ],
+        "documentation": [
+          "Added Set Scale feature matching Juniper Mist portal UI/UX for floor plan calibration"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.16.30",
       "date": "2025-12-03",
       "changes": {

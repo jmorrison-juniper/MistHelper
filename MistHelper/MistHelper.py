@@ -26893,6 +26893,41 @@ class MapsManager:
                     html.P("• Draw Rectangle - Highlight zones", style={'fontSize': '12px', 'marginLeft': '10px'}),
                     html.P("• Erase - Remove all drawings", style={'fontSize': '12px', 'marginLeft': '10px'}),
                     html.Hr(),
+                    html.H3("📐 Set Scale"),
+                    html.P("1. Draw a line of known length", style={'fontSize': '11px', 'color': '#888'}),
+                    html.P("2. Enter actual length below", style={'fontSize': '11px', 'color': '#888'}),
+                    html.Div([
+                        dcc.Input(
+                            id='scale-length-input',
+                            type='number',
+                            placeholder='Length in meters',
+                            style={
+                                'width': '100%',
+                                'padding': '8px',
+                                'marginBottom': '8px',
+                                'backgroundColor': '#3d3d3d',
+                                'color': '#e0e0e0',
+                                'border': '1px solid #667eea',
+                                'borderRadius': '4px'
+                            }
+                        ),
+                        html.Button(
+                            'Set Scale from Last Line',
+                            id='set-scale-button',
+                            style={
+                                'width': '100%',
+                                'padding': '8px',
+                                'backgroundColor': '#667eea',
+                                'color': 'white',
+                                'border': 'none',
+                                'borderRadius': '4px',
+                                'cursor': 'pointer',
+                                'fontWeight': 'bold'
+                            }
+                        ),
+                        html.Div(id='scale-status', style={'marginTop': '8px', 'fontSize': '11px', 'color': '#a0a0ff'})
+                    ]),
+                    html.Hr(),
                     html.H3("📊 Map Info"),
                     html.Div(id='map-info', children=[
                         html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} × {map_height} px"]),
@@ -26977,6 +27012,9 @@ class MapsManager:
             if not relayoutData:
                 return current_fig
             
+            # Get current PPM from figure metadata (may have been updated by user)
+            current_ppm = current_fig.get('layout', {}).get('meta', {}).get('ppm', ppm)
+            
             # Check if a new shape was added
             shapes = current_fig.get('layout', {}).get('shapes', [])
             if shapes and len(shapes) > 0:
@@ -26988,8 +27026,8 @@ class MapsManager:
                         x1, y1 = shape.get('x1', 0), shape.get('y1', 0)
                         length_px = ((x1 - x0)**2 + (y1 - y0)**2)**0.5
                         
-                        # Convert to meters and feet
-                        length_m = length_px / ppm if ppm > 0 else 0
+                        # Convert to meters and feet using current PPM
+                        length_m = length_px / current_ppm if current_ppm > 0 else 0
                         length_ft = length_m * 3.28084
                         
                         # Create annotation with multi-unit label
@@ -27011,6 +27049,69 @@ class MapsManager:
                         current_fig['layout']['annotations'].append(annotation)
             
             return current_fig
+        
+        # Callback to set scale from user input
+        @app.callback(
+            [Output('scale-status', 'children'),
+             Output('map-display', 'figure', allow_duplicate=True)],
+            Input('set-scale-button', 'n_clicks'),
+            [State('scale-length-input', 'value'),
+             State('map-display', 'figure')],
+            prevent_initial_call=True
+        )
+        def set_scale(n_clicks, actual_length_m, current_fig):
+            """Calculate and update PPM based on drawn line and known length"""
+            if not n_clicks or not actual_length_m or actual_length_m <= 0:
+                return "⚠️ Please enter a valid length in meters", current_fig
+            
+            # Find the last line shape
+            shapes = current_fig.get('layout', {}).get('shapes', [])
+            last_line = None
+            for shape in reversed(shapes):
+                if shape.get('type') == 'line':
+                    last_line = shape
+                    break
+            
+            if not last_line:
+                return "⚠️ Please draw a line first using the ruler tool", current_fig
+            
+            # Calculate line length in pixels
+            x0, y0 = last_line.get('x0', 0), last_line.get('y0', 0)
+            x1, y1 = last_line.get('x1', 0), last_line.get('y1', 0)
+            length_px = ((x1 - x0)**2 + (y1 - y0)**2)**0.5
+            
+            # Calculate new PPM
+            new_ppm = length_px / actual_length_m
+            
+            # Update PPM in figure metadata
+            if 'meta' not in current_fig['layout']:
+                current_fig['layout']['meta'] = {}
+            current_fig['layout']['meta']['ppm'] = new_ppm
+            
+            # Update all existing measurement annotations with new PPM
+            if 'annotations' in current_fig['layout']:
+                for ann_idx, annotation in enumerate(current_fig['layout']['annotations']):
+                    # Check if this is a measurement annotation (has px/ft/m format)
+                    if 'px' in annotation.get('text', ''):
+                        # Find corresponding shape
+                        for shape_idx, shape in enumerate(shapes):
+                            if shape.get('type') == 'line':
+                                sx0, sy0 = shape.get('x0', 0), shape.get('y0', 0)
+                                sx1, sy1 = shape.get('x1', 0), shape.get('y1', 0)
+                                shape_px = ((sx1 - sx0)**2 + (sy1 - sy0)**2)**0.5
+                                shape_m = shape_px / new_ppm
+                                shape_ft = shape_m * 3.28084
+                                
+                                # Update annotation text
+                                current_fig['layout']['annotations'][ann_idx]['text'] = (
+                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                )
+                                break
+            
+            status_msg = f"✅ Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
+            logging.info(f"Map scale updated: PPM {ppm} → {new_ppm:.2f} (user calibration: {actual_length_m}m)")
+            
+            return status_msg, current_fig
         
         print("\nStarting Dash server...")
         print("! Map viewer will open in your default browser")
