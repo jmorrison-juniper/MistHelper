@@ -27165,17 +27165,17 @@ class MapsManager:
                 heatmap_y.append(pixel_y)
                 heatmap_text.append(f"Max RSSI: {int(max_rssi)} dBm<br>Avg RSSI: {int(avg_rssi)} dBm")
                 
-                # Color by signal strength
+                # Color by signal strength (flipped: red=weak/far, blue=strong/close)
                 if max_rssi >= -50:
-                    color = 'rgba(0, 128, 255, 0.6)'
+                    color = 'rgba(0, 0, 255, 0.6)'        # Strong signal: Blue
                 elif max_rssi >= -60:
-                    color = 'rgba(0, 255, 128, 0.6)'
+                    color = 'rgba(0, 255, 255, 0.6)'      # Good signal: Cyan
                 elif max_rssi >= -70:
-                    color = 'rgba(255, 255, 0, 0.6)'
+                    color = 'rgba(0, 255, 0, 0.6)'        # Fair signal: Green
                 elif max_rssi >= -80:
-                    color = 'rgba(255, 165, 0, 0.6)'
+                    color = 'rgba(255, 255, 0, 0.6)'      # Weak signal: Yellow
                 else:
-                    color = 'rgba(255, 0, 0, 0.6)'
+                    color = 'rgba(255, 0, 0, 0.6)'        # Very weak: Red
                 
                 heatmap_colors.append(color)
             
