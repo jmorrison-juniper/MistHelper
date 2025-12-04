@@ -26812,6 +26812,12 @@ class MapsManager:
                 names = [d.get('name', d.get('mac', 'Unknown')) for d in type_devices]
                 orientations = [d.get('orientation', 0) for d in type_devices]
                 
+                # Debug log device orientations
+                for d in type_devices:
+                    device_name = d.get('name', 'Unnamed')
+                    device_orientation = d.get('orientation', 0)
+                    logging.debug(f"Device '{device_name}': orientation={device_orientation}")
+                
                 # Determine status and color for each device
                 colors = []
                 statuses = []
@@ -26933,26 +26939,32 @@ class MapsManager:
                         hoverinfo='skip'
                     ))
                     
-                    # Directional dot showing orientation (only if angle is set) - LARGER SIZE
-                    if angle != 0:
-                        dot_distance = 50  # Increased from 35 to 50
-                        dot_x = x + dot_distance * cos(radians(angle))
-                        dot_y = y + dot_distance * sin(radians(angle))
-                        
-                        fig.add_trace(go.Scatter(
-                            x=[dot_x],
-                            y=[dot_y],
-                            mode='markers',
-                            marker=dict(
-                                size=16,  # Increased from 10 to 16
-                                color=device_color,  # Status-based color
-                                line=dict(color='white', width=2)
-                            ),
-                            name=f"{config['name']} Orientation",  # Name for toggle control
-                            showlegend=False,
-                            hovertext=f"Orientation: {angle}°",
-                            hoverinfo='text'
-                        ))
+                    # Directional dot showing orientation (always visible for clarity)
+                    dot_distance = 50  # Increased from 35 to 50
+                    
+                    # Convert Mist orientation to standard cartesian coordinates:
+                    # - Mist: 0° = up (north), 90° = right (east), 180° = down, 270° = left
+                    # - Math: 0° = right (east), 90° = up (north), counter-clockwise
+                    # - Y-axis: Mist uses top-left origin with Y increasing downward
+                    # Conversion: math_angle = 90° - mist_angle, then flip Y component
+                    math_angle = 90 - angle
+                    dot_x = x + dot_distance * cos(radians(math_angle))
+                    dot_y = y - dot_distance * sin(radians(math_angle))  # Subtract because Y increases downward
+                    
+                    fig.add_trace(go.Scatter(
+                        x=[dot_x],
+                        y=[dot_y],
+                        mode='markers',
+                        marker=dict(
+                            size=16,  # Increased from 10 to 16
+                            color=device_color,  # Status-based color
+                            line=dict(color='white', width=2)
+                        ),
+                        name=f"{config['name']} Orientation",  # Name for toggle control
+                        showlegend=False,
+                        hovertext=f"Orientation: {angle}°",
+                        hoverinfo='text'
+                    ))
         
         # Add beacons (vBeacons and BLE beacons) if present in map data
         if 'vbeacons' in map_data and map_data['vbeacons']:
@@ -27144,63 +27156,91 @@ class MapsManager:
                 logging.error(f"Coverage data missing expected fields: {e}")
                 x_idx, y_idx, max_rssi_idx, avg_rssi_idx = 0, 1, 4, 5
             
-            heatmap_x = []
-            heatmap_y = []
-            heatmap_text = []
-            heatmap_colors = []
-            
+            # Build grid data structure for heatmap
+            grid_data = {}
             for result in results:
                 if len(result) <= max(x_idx, y_idx, max_rssi_idx, avg_rssi_idx):
                     continue
                 
-                # Extract coordinates (METERS) and convert to PIXELS
                 x_meters = result[x_idx]
                 y_meters = result[y_idx]
                 pixel_x = x_meters * ppm
                 pixel_y = y_meters * ppm
-                
                 max_rssi = result[max_rssi_idx]
-                avg_rssi = result[avg_rssi_idx]
                 
-                heatmap_x.append(pixel_x)
-                heatmap_y.append(pixel_y)
-                heatmap_text.append(f"Max RSSI: {int(max_rssi)} dBm<br>Avg RSSI: {int(avg_rssi)} dBm")
-                
-                # Color by signal strength (RSSI: 0 = strongest/red, -120 = weakest/blue)
-                if max_rssi >= -50:
-                    color = 'rgba(255, 0, 0, 0.6)'        # Strongest: Red (close to 0)
-                elif max_rssi >= -60:
-                    color = 'rgba(255, 165, 0, 0.6)'      # Strong: Orange
-                elif max_rssi >= -70:
-                    color = 'rgba(255, 255, 0, 0.6)'      # Medium: Yellow
-                elif max_rssi >= -80:
-                    color = 'rgba(0, 255, 0, 0.6)'        # Weak: Green
+                grid_data[(pixel_x, pixel_y)] = max_rssi
+            
+            if grid_data:
+                # Auto-scale color range based on actual data
+                all_rssi_values = [v for v in grid_data.values() if v is not None]
+                if all_rssi_values:
+                    min_rssi = min(all_rssi_values)  # Most negative (weakest)
+                    max_rssi = max(all_rssi_values)  # Closest to zero (strongest)
+                    logging.info(f"RF Coverage RSSI range: {min_rssi} dBm (weakest) to {max_rssi} dBm (strongest)")
                 else:
-                    color = 'rgba(0, 0, 255, 0.6)'        # Weakest: Blue (close to -120)
+                    min_rssi = -100
+                    max_rssi = -40
                 
-                heatmap_colors.append(color)
-            
-            grid_size_pixels = gridsize_meters * ppm
-            
-            fig.add_trace(go.Scatter(
-                x=heatmap_x,
-                y=heatmap_y,
-                mode='markers',
-                name='RF Coverage',
-                marker=dict(
-                    size=grid_size_pixels,
-                    color=heatmap_colors,
-                    symbol='square',
+                # Convert to regular grid for Heatmap trace
+                unique_x = sorted(set(x for x, y in grid_data.keys()))
+                unique_y = sorted(set(y for x, y in grid_data.keys()))
+                
+                # Create Z matrix for heatmap - use None for missing data points
+                # This prevents artificial values from being interpolated
+                z_matrix = []
+                for y_val in unique_y:
+                    row = []
+                    for x_val in unique_x:
+                        rssi = grid_data.get((x_val, y_val), None)  # None for missing - no fake data
+                        row.append(rssi)
+                    z_matrix.append(row)
+                
+                # Custom colorscale: red (strongest/closest to 0) -> blue (weakest/most negative)
+                colorscale = [
+                    [0.0, 'rgb(0, 0, 255)'],      # Blue (weakest/most negative)
+                    [0.33, 'rgb(0, 255, 0)'],     # Green
+                    [0.50, 'rgb(255, 255, 0)'],   # Yellow
+                    [0.67, 'rgb(255, 165, 0)'],   # Orange
+                    [1.0, 'rgb(255, 0, 0)']       # Red (strongest/closest to 0)
+                ]
+                
+                fig.add_trace(go.Heatmap(
+                    x=unique_x,
+                    y=unique_y,
+                    z=z_matrix,
+                    colorscale=colorscale,
+                    zmin=min_rssi,  # Auto-scale to actual data range
+                    zmax=max_rssi,
                     opacity=0.5,
-                    line=dict(width=0.5, color='rgba(255,255,255,0.2)')
-                ),
-                hovertext=heatmap_text,
-                hoverinfo='text',
-                visible=False,
-                showlegend=True
-            ))
-            
-            logging.info(f"Added RF Coverage heatmap: {len(heatmap_x)} cells ({gridsize_meters}m grid)")
+                    name='RF Coverage',
+                    hovertemplate='X: %{x}<br>Y: %{y}<br>RSSI: %{z} dBm<extra></extra>',
+                    visible=False,
+                    showscale=True,  # Show color scale legend
+                    colorbar=dict(
+                        title=dict(
+                            text="RSSI (dBm)",
+                            side="right",
+                            font=dict(size=12, color='white')
+                        ),
+                        thickness=20,
+                        len=0.5,
+                        y=0.95,
+                        yanchor='top',
+                        x=1.02,
+                        tickfont=dict(size=10, color='white'),
+                        tickmode='linear',
+                        tick0=min_rssi,
+                        dtick=(max_rssi - min_rssi) / 5,  # Show 6 tick marks
+                        outlinewidth=1,
+                        outlinecolor='white'
+                    ),
+                    connectgaps=True,  # Interpolate across gaps for smooth coverage
+                    zsmooth='best'  # Smooth interpolation between data points
+                ))
+                
+                logging.info(f"Added RF Coverage heatmap: {len(grid_data)} cells ({gridsize_meters}m grid) with auto-scaled colors ({min_rssi} to {max_rssi} dBm)")
+            else:
+                logging.warning("No valid coverage grid data to visualize")
         elif coverage_data:
             logging.warning(f"Coverage data received but no results")
         else:

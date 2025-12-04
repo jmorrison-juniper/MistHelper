@@ -479,6 +479,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.04.14.15",
+      "date": "2025-12-04",
+      "changes": {
+        "feature_additions": [
+          "RF Coverage heatmap: switched to Plotly Heatmap trace with smooth interpolation for better visual quality",
+          "Auto-scaled RSSI color range: dynamically adjusts red/blue gradient to actual min/max values in coverage data for maximum contrast",
+          "Color scale legend: added colorbar showing RSSI range in dBm with tick marks on right side of map",
+          "Orientation indicators: directional dots now always visible for all devices including 0-degree orientation for clarity"
+        ],
+        "enhancements": [
+          "Heatmap interpolation: zsmooth='best' provides smooth color transitions between grid points",
+          "Gap interpolation: connectgaps=True fills in missing grid cells for complete coverage visualization",
+          "Debug logging: added per-device orientation logging to script.log for troubleshooting",
+          "Coordinate system fix: corrected AP orientation angle conversion (Mist 0°=north to math coordinates with Y-axis flip)"
+        ],
+        "bug_fixes": [
+          "AP orientation dots: fixed angle calculation to properly convert Mist orientation (0°=up) to standard cartesian coordinates",
+          "Y-axis correction: subtracted Y component in dot placement because Mist uses top-left origin with Y increasing downward",
+          "Zero-degree visibility: removed conditional that hid orientation dots when angle=0"
+        ]
+      }
+    },
+    {
       "version": "25.12.04.13.15",
       "date": "2025-12-04",
       "changes": {
