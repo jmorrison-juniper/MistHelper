@@ -26228,9 +26228,10 @@ class MapsManager:
                 coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
                 coverage_params = {
                     'resolution': 'fine',
-                    'duration': '24h',
+                    'duration': '1d',
                     'map_id': map_id,
-                    'type': 'client'
+                    'type': 'client',
+                    'from_apollo': 'true'  # Undocumented: forces Apollo backend instead of PostgreSQL
                 }
                 
                 coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
@@ -27165,17 +27166,18 @@ class MapsManager:
                 heatmap_y.append(pixel_y)
                 heatmap_text.append(f"Max RSSI: {int(max_rssi)} dBm<br>Avg RSSI: {int(avg_rssi)} dBm")
                 
-                # Color by signal strength (flipped: red=weak/far, blue=strong/close)
+                # Color by signal strength (RSSI: 0 = perfect/strong, -120 = terrible/weak)
+                # Matching Mist portal: green=strong (close to 0), yellow=medium, red=weak (close to -120)
                 if max_rssi >= -50:
-                    color = 'rgba(0, 0, 255, 0.6)'        # Strong signal: Blue
+                    color = 'rgba(0, 255, 0, 0.6)'        # Excellent signal: Green (-50 to 0 dBm)
                 elif max_rssi >= -60:
-                    color = 'rgba(0, 255, 255, 0.6)'      # Good signal: Cyan
+                    color = 'rgba(173, 255, 47, 0.6)'     # Good signal: Yellow-Green (-60 to -50 dBm)
                 elif max_rssi >= -70:
-                    color = 'rgba(0, 255, 0, 0.6)'        # Fair signal: Green
+                    color = 'rgba(255, 255, 0, 0.6)'      # Fair signal: Yellow (-70 to -60 dBm)
                 elif max_rssi >= -80:
-                    color = 'rgba(255, 255, 0, 0.6)'      # Weak signal: Yellow
+                    color = 'rgba(255, 165, 0, 0.6)'      # Poor signal: Orange (-80 to -70 dBm)
                 else:
-                    color = 'rgba(255, 0, 0, 0.6)'        # Very weak: Red
+                    color = 'rgba(255, 0, 0, 0.6)'        # Weak signal: Red (below -80 dBm)
                 
                 heatmap_colors.append(color)
             

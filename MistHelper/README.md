@@ -484,7 +484,7 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
       "changes": {
         "feature_additions": [
           "RF Coverage heatmap overlay: real-time RSSI grid visualization from Mist API location/coverage endpoint",
-          "Signal strength color coding: blue (strong >-50dBm), cyan (good >-60dBm), green (fair >-70dBm), yellow (weak >-80dBm), red (very weak <-80dBm)",
+          "Signal strength color coding (RSSI scale: 0=perfect, -120=terrible): green (excellent >-50dBm), yellow-green (good >-60dBm), yellow (fair >-70dBm), orange (poor >-80dBm), red (weak <-80dBm)",
           "Map origin marker: coordinate reference point toggle for debugging and validation",
           "RF Diagnostics Heatmap layer control: toggleable coverage overlay in Infrastructure section",
           "Map Origin layer control: show/hide coordinate system origin point"
