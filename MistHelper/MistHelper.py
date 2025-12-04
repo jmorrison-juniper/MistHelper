@@ -27166,18 +27166,17 @@ class MapsManager:
                 heatmap_y.append(pixel_y)
                 heatmap_text.append(f"Max RSSI: {int(max_rssi)} dBm<br>Avg RSSI: {int(avg_rssi)} dBm")
                 
-                # Color by signal strength (RSSI: 0 = perfect/strong, -120 = terrible/weak)
-                # Matching Mist portal: green=strong (close to 0), yellow=medium, red=weak (close to -120)
+                # Color by signal strength (RSSI: 0 = strongest/red, -120 = weakest/blue)
                 if max_rssi >= -50:
-                    color = 'rgba(0, 255, 0, 0.6)'        # Excellent signal: Green (-50 to 0 dBm)
+                    color = 'rgba(255, 0, 0, 0.6)'        # Strongest: Red (close to 0)
                 elif max_rssi >= -60:
-                    color = 'rgba(173, 255, 47, 0.6)'     # Good signal: Yellow-Green (-60 to -50 dBm)
+                    color = 'rgba(255, 165, 0, 0.6)'      # Strong: Orange
                 elif max_rssi >= -70:
-                    color = 'rgba(255, 255, 0, 0.6)'      # Fair signal: Yellow (-70 to -60 dBm)
+                    color = 'rgba(255, 255, 0, 0.6)'      # Medium: Yellow
                 elif max_rssi >= -80:
-                    color = 'rgba(255, 165, 0, 0.6)'      # Poor signal: Orange (-80 to -70 dBm)
+                    color = 'rgba(0, 255, 0, 0.6)'        # Weak: Green
                 else:
-                    color = 'rgba(255, 0, 0, 0.6)'        # Weak signal: Red (below -80 dBm)
+                    color = 'rgba(0, 0, 255, 0.6)'        # Weakest: Blue (close to -120)
                 
                 heatmap_colors.append(color)
             
