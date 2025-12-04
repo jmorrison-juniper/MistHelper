@@ -26133,16 +26133,16 @@ class MapsManager:
             print(f"\nMap: {map_name}")
             print(f"Dimensions: {map_width}x{map_height} pixels")
             
-            # Fetch devices on this map
+            # Fetch devices on this map (use stats API for status information)
             print("Loading devices...")
-            logging.info(f"Fetching devices for site {site_id} (type=all)")
-            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+            logging.info(f"Fetching device stats for site {site_id} (type=all)")
+            devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
                 self.apisession,
                 site_id=site_id,
-                type="all"
+                limit=1000
             )
             
-            logging.debug(f"listSiteDevices API response: HTTP {devices_response.status_code}")
+            logging.debug(f"listSiteDevicesStats API response: HTTP {devices_response.status_code}")
             if devices_response.status_code != 200:
                 logging.error(f"Failed to fetch devices - HTTP {devices_response.status_code}")
                 print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
@@ -26726,11 +26726,39 @@ class MapsManager:
             if device_type in device_types and 'x' in device and 'y' in device:
                 device_types[device_type].append(device)
         
-        # Enhanced colors and symbols for device types - much more visible
+        # Enhanced colors and symbols for device types - with status-based coloring
+        # Status colors: connected (green), disconnected (red), upgrading (orange/amber)
         type_config = {
-            'ap': {'color': '#00ff00', 'symbol': 'triangle-up', 'name': 'Access Points', 'size': 20},
-            'switch': {'color': '#ff8800', 'symbol': 'square', 'name': 'Switches', 'size': 18},
-            'gateway': {'color': '#ff00ff', 'symbol': 'diamond', 'name': 'Gateways', 'size': 20}
+            'ap': {
+                'symbol': 'triangle-up',
+                'name': 'Access Points',
+                'size': 20,
+                'colors': {
+                    'connected': '#00ff00',      # Bright green
+                    'disconnected': '#ff0000',   # Bright red
+                    'upgrading': '#ff8800'       # Orange/amber
+                }
+            },
+            'switch': {
+                'symbol': 'square',
+                'name': 'Switches',
+                'size': 18,
+                'colors': {
+                    'connected': '#00ccff',      # Cyan
+                    'disconnected': '#ff0000',   # Bright red
+                    'upgrading': '#ff8800'       # Orange/amber
+                }
+            },
+            'gateway': {
+                'symbol': 'diamond',
+                'name': 'Gateways',
+                'size': 20,
+                'colors': {
+                    'connected': '#ff00ff',      # Magenta
+                    'disconnected': '#ff0000',   # Bright red
+                    'upgrading': '#ff8800'       # Orange/amber
+                }
+            }
         }
         
         for device_type, config in type_config.items():
@@ -26741,17 +26769,40 @@ class MapsManager:
                 names = [d.get('name', d.get('mac', 'Unknown')) for d in type_devices]
                 orientations = [d.get('orientation', 0) for d in type_devices]
                 
-                hover_text = []
+                # Determine status and color for each device
+                colors = []
+                statuses = []
                 for d in type_devices:
+                    # Check device status
+                    # Status can be: 'connected', 'disconnected', or check for upgrade in progress
+                    status = d.get('status', 'disconnected')
+                    
+                    # Check if upgrading (upgrade_status field or checking for active upgrade)
+                    if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                        device_status = 'upgrading'
+                    elif status == 'connected':
+                        device_status = 'connected'
+                    else:
+                        device_status = 'disconnected'
+                    
+                    statuses.append(device_status)
+                    colors.append(config['colors'][device_status])
+                
+                hover_text = []
+                for d, device_status in zip(type_devices, statuses):
                     text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
                     text += f"Type: {d.get('type', 'N/A')}<br>"
                     text += f"Model: {d.get('model', 'N/A')}<br>"
                     text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                    text += f"Status: <b>{device_status.upper()}</b><br>"
+                    if device_status == 'upgrading':
+                        progress = d.get('fwupdate', {}).get('progress', 'N/A')
+                        text += f"Upgrade Progress: {progress}%<br>" if progress != 'N/A' else ""
                     text += f"Position: ({d.get('x', 'N/A')}, {d.get('y', 'N/A')})<br>"
                     text += f"Orientation: {d.get('orientation', 0)}°"
                     hover_text.append(text)
                 
-                # Add device markers
+                # Add device markers with status-based colors
                 fig.add_trace(go.Scatter(
                     x=x_coords, y=y_coords,
                     mode='markers',
@@ -26759,7 +26810,7 @@ class MapsManager:
                     marker=dict(
                         symbol=config['symbol'],
                         size=config['size'],
-                        color=config['color'],
+                        color=colors,  # Status-based color array
                         line=dict(color='white', width=2),
                         opacity=0.9
                     ),
@@ -26770,7 +26821,7 @@ class MapsManager:
                 ))
                 
                 # Add device name labels with shadow effect using annotations
-                for i, (x, y, name) in enumerate(zip(x_coords, y_coords, names)):
+                for i, (x, y, name, device_color) in enumerate(zip(x_coords, y_coords, names, colors)):
                     fig.add_annotation(
                         x=x,
                         y=y - 15,  # Position above marker
@@ -26778,7 +26829,7 @@ class MapsManager:
                         showarrow=False,
                         font=dict(size=11, color='white', family='Arial Black'),
                         bgcolor='rgba(0,0,0,0.85)',
-                        bordercolor=config['color'],
+                        bordercolor=device_color,  # Match device status color
                         borderwidth=2,
                         borderpad=3,
                         xanchor='center',
@@ -26812,8 +26863,9 @@ class MapsManager:
                         logging.info(f"Added {mesh_links_added} mesh links between APs")
                 
                 # Add Mist-style orientation indicators: crosshair + directional dot
-                for i, (x, y, angle, device) in enumerate(zip(x_coords, y_coords, orientations, type_devices)):
-                    # Crosshair at device location (always visible) - LARGER SIZE
+                # Use status-based colors for crosshair and orientation dot
+                for i, (x, y, angle, device, device_color, device_status) in enumerate(zip(x_coords, y_coords, orientations, type_devices, colors, statuses)):
+                    # Crosshair at device location (always visible) - LARGER SIZE with status color
                     crosshair_size = 40  # Increased from 25 to 40
                     
                     # Horizontal line
@@ -26821,7 +26873,7 @@ class MapsManager:
                         x=[x - crosshair_size, x + crosshair_size],
                         y=[y, y],
                         mode='lines',
-                        line=dict(color=config['color'], width=3),  # Increased width
+                        line=dict(color=device_color, width=3),  # Status-based color
                         name=f"{config['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
@@ -26832,7 +26884,7 @@ class MapsManager:
                         x=[x, x],
                         y=[y - crosshair_size, y + crosshair_size],
                         mode='lines',
-                        line=dict(color=config['color'], width=3),  # Increased width
+                        line=dict(color=device_color, width=3),  # Status-based color
                         name=f"{config['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
@@ -26850,7 +26902,7 @@ class MapsManager:
                             mode='markers',
                             marker=dict(
                                 size=16,  # Increased from 10 to 16
-                                color=config['color'],
+                                color=device_color,  # Status-based color
                                 line=dict(color='white', width=2)
                             ),
                             name=f"{config['name']} Orientation",  # Name for toggle control

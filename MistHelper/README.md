@@ -479,6 +479,27 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.04.13.07",
+      "date": "2025-12-04",
+      "changes": {
+        "feature_additions": [
+          "Device status color coding: devices now display with status-based colors (green=connected, red=disconnected, orange=upgrading)",
+          "Real-time upgrade status: devices actively upgrading show orange markers with progress percentage in hover tooltip",
+          "Status information in tooltips: hover text includes device status (CONNECTED/DISCONNECTED/UPGRADING) and upgrade progress if applicable"
+        ],
+        "api_changes": [
+          "Interactive Maps now uses listSiteDevicesStats API instead of listSiteDevices for real-time status information",
+          "Status field and fwupdate.progress field now available for all device markers, labels, and orientation indicators"
+        ],
+        "enhancements": [
+          "Device marker colors: dynamic color array based on individual device status instead of static type-based colors",
+          "Crosshair orientation indicators: now use status-based colors matching device state",
+          "Device labels: border colors match device status for consistent visual feedback",
+          "Type-specific status colors: APs (green/red/orange), Switches (cyan/red/orange), Gateways (magenta/red/orange)"
+        ]
+      }
+    },
+    {
       "version": "25.12.03.17.30",
       "date": "2025-12-03",
       "changes": {
