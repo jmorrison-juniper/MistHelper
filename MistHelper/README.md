@@ -479,6 +479,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.04.13.15",
+      "date": "2025-12-04",
+      "changes": {
+        "feature_additions": [
+          "RF Coverage heatmap overlay: real-time RSSI grid visualization from Mist API location/coverage endpoint",
+          "Signal strength color coding: blue (excellent >-50dBm), green (good >-60dBm), yellow (fair >-70dBm), orange (poor >-80dBm), red (weak)",
+          "Map origin marker: coordinate reference point toggle for debugging and validation",
+          "RF Diagnostics Heatmap layer control: toggleable coverage overlay in Infrastructure section",
+          "Map Origin layer control: show/hide coordinate system origin point"
+        ],
+        "api_changes": [
+          "Added /api/v1/sites/{site_id}/location/coverage API integration with resolution=fine, duration=24h, type=client parameters",
+          "Coordinate conversion: API returns METERS, converted to PIXELS using map PPM (pixels per meter)",
+          "Coverage data structure: result_def array defines field indices for x, y, max_rssi, avg_rssi values"
+        ],
+        "enhancements": [
+          "RSSI tooltip: hover over grid cells shows Max RSSI and Avg RSSI in dBm",
+          "Grid size calculation: coverage gridsize (meters) converted to pixels for proper visualization scale",
+          "Error handling: graceful degradation when coverage API unavailable (backend database issues, no data)",
+          "Backend error detection: psycopg2/database errors logged as warnings, not errors (expected transient issues)"
+        ]
+      }
+    },
+    {
       "version": "25.12.04.13.07",
       "date": "2025-12-04",
       "changes": {

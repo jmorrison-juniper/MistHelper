@@ -26221,9 +26221,50 @@ class MapsManager:
             
             print(f"Connected clients on map: {len(clients_on_map)}")
             
+            # Fetch RF coverage data from Mist API
+            coverage_data = None
+            try:
+                logging.info(f"Fetching RF coverage data for map {map_id}")
+                coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
+                coverage_params = {
+                    'resolution': 'fine',
+                    'duration': '24h',
+                    'map_id': map_id,
+                    'type': 'client'
+                }
+                
+                coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
+                
+                if coverage_response.status_code == 200:
+                    coverage_data = coverage_response.data
+                    
+                    # Check for error response structure
+                    if isinstance(coverage_data, dict) and 'exception' in coverage_data:
+                        exception_str = str(coverage_data.get('exception', ''))
+                        
+                        if 'psycopg2' in exception_str or 'database' in exception_str.lower():
+                            logging.warning(f"RF Coverage temporarily unavailable: Mist backend database connectivity issue")
+                            logging.debug(f"Coverage API backend error: {exception_str}")
+                        else:
+                            logging.error(f"Coverage API returned error response (first 500 chars): {exception_str[:500]}")
+                            logging.debug(f"Coverage API full error response: {exception_str}")
+                            logging.debug(f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}")
+                        
+                        coverage_data = None
+                        print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
+                    else:
+                        result_count = len(coverage_data.get('results', [])) if coverage_data else 0
+                        logging.info(f"RF coverage data retrieved: {result_count} grid points")
+                else:
+                    logging.warning(f"Failed to fetch RF coverage data - HTTP {coverage_response.status_code}")
+                    coverage_data = None
+            except Exception as coverage_error:
+                logging.error(f"Error fetching RF coverage data: {coverage_error}", exc_info=True)
+                coverage_data = None
+            
             if use_plotly:
                 logging.info(f"Launching Plotly/Dash viewer for map {map_name}")
-                self._launch_plotly_viewer(map_data, devices_on_map, zones_on_map, clients_on_map, site_id, map_id)
+                self._launch_plotly_viewer(map_data, devices_on_map, zones_on_map, clients_on_map, site_id, map_id, coverage_data)
             else:
                 logging.info(f"Launching matplotlib fallback viewer for map {map_name}")
                 self._launch_matplotlib_viewer(map_data, devices_on_map)
@@ -26235,9 +26276,10 @@ class MapsManager:
             logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
             print(f"\n! Error launching map viewer: {e}")
     
-    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, map_id):
-        """Launch interactive Plotly/Dash map viewer with edit capabilities and client display"""
-        logging.info(f"_launch_plotly_viewer called - map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, clients: {len(clients)}")
+    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, map_id, coverage_data=None):
+        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap"""
+        coverage_count = len(coverage_data.get('results', [])) if coverage_data else 0
+        logging.info(f"_launch_plotly_viewer called - map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, clients: {len(clients)}, coverage: {coverage_count}")
         import plotly.graph_objects as go
         from math import cos, sin, radians
         import webbrowser
@@ -27079,6 +27121,113 @@ class MapsManager:
         else:
             logging.info("No BLE beacons found on this map")
         
+        # Add RF Coverage Heatmap from Mist API data
+        if coverage_data and 'results' in coverage_data and len(coverage_data.get('results', [])) > 0:
+            logging.info(f"Processing RF coverage data - {len(coverage_data.get('results', []))} grid points")
+            
+            # API returns coordinates in METERS - must convert to pixels using PPM
+            result_def = coverage_data.get('result_def', [])
+            results = coverage_data.get('results', [])
+            gridsize_meters = coverage_data.get('gridsize', 1)
+            
+            logging.debug(f"Coverage result_def: {result_def}")
+            logging.debug(f"Coverage gridsize: {gridsize_meters} meters, PPM: {ppm}")
+            
+            # Find indices for data fields
+            try:
+                x_idx = result_def.index('x')
+                y_idx = result_def.index('y')
+                max_rssi_idx = result_def.index('max_rssi')
+                avg_rssi_idx = result_def.index('avg_rssi')
+            except ValueError as e:
+                logging.error(f"Coverage data missing expected fields: {e}")
+                x_idx, y_idx, max_rssi_idx, avg_rssi_idx = 0, 1, 4, 5
+            
+            heatmap_x = []
+            heatmap_y = []
+            heatmap_text = []
+            heatmap_colors = []
+            
+            for result in results:
+                if len(result) <= max(x_idx, y_idx, max_rssi_idx, avg_rssi_idx):
+                    continue
+                
+                # Extract coordinates (METERS) and convert to PIXELS
+                x_meters = result[x_idx]
+                y_meters = result[y_idx]
+                pixel_x = x_meters * ppm
+                pixel_y = y_meters * ppm
+                
+                max_rssi = result[max_rssi_idx]
+                avg_rssi = result[avg_rssi_idx]
+                
+                heatmap_x.append(pixel_x)
+                heatmap_y.append(pixel_y)
+                heatmap_text.append(f"Max RSSI: {int(max_rssi)} dBm<br>Avg RSSI: {int(avg_rssi)} dBm")
+                
+                # Color by signal strength
+                if max_rssi >= -50:
+                    color = 'rgba(0, 128, 255, 0.6)'
+                elif max_rssi >= -60:
+                    color = 'rgba(0, 255, 128, 0.6)'
+                elif max_rssi >= -70:
+                    color = 'rgba(255, 255, 0, 0.6)'
+                elif max_rssi >= -80:
+                    color = 'rgba(255, 165, 0, 0.6)'
+                else:
+                    color = 'rgba(255, 0, 0, 0.6)'
+                
+                heatmap_colors.append(color)
+            
+            grid_size_pixels = gridsize_meters * ppm
+            
+            fig.add_trace(go.Scatter(
+                x=heatmap_x,
+                y=heatmap_y,
+                mode='markers',
+                name='RF Coverage',
+                marker=dict(
+                    size=grid_size_pixels,
+                    color=heatmap_colors,
+                    symbol='square',
+                    opacity=0.5,
+                    line=dict(width=0.5, color='rgba(255,255,255,0.2)')
+                ),
+                hovertext=heatmap_text,
+                hoverinfo='text',
+                visible=False,
+                showlegend=True
+            ))
+            
+            logging.info(f"Added RF Coverage heatmap: {len(heatmap_x)} cells ({gridsize_meters}m grid)")
+        elif coverage_data:
+            logging.warning(f"Coverage data received but no results")
+        else:
+            logging.info("No RF coverage data available")
+        
+        # Add map origin marker (coordinate reference point)
+        origin = map_data.get('origin', {}) or {}
+        origin_x = origin.get('x', 0)
+        origin_y = origin.get('y', 0)
+        
+        fig.add_trace(go.Scatter(
+            x=[origin_x],
+            y=[origin_y],
+            mode='markers+text',
+            name='Map Origin',
+            marker=dict(
+                symbol='x',
+                size=20,
+                color='yellow',
+                line=dict(width=3, color='black')
+            ),
+            text=['Origin (0,0)'],
+            textposition='top center',
+            textfont=dict(size=12, color='yellow'),
+            visible=False,
+            showlegend=True
+        ))
+        
         # Update layout with dark theme and responsive sizing
         fig.update_layout(
             title={
@@ -27249,6 +27398,8 @@ class MapsManager:
                             {'label': ' 🏢 Location Zones', 'value': 'zones'},
                             {'label': ' 🎯 Proximity Zones', 'value': 'proximity_zones'},
                             {'label': ' 🔍 Validation Paths', 'value': 'validation'},
+                            {'label': ' 📶 RF Diagnostics Heatmap', 'value': 'rf_heatmap'},
+                            {'label': ' 🎯 Map Origin', 'value': 'origin'},
                         ],
                         value=['walls', 'wayfinding', 'zones', 'validation'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -27465,6 +27616,10 @@ class MapsManager:
                     trace['visible'] = 'zones' in all_layers
                 elif 'validation' in trace_name:
                     trace['visible'] = 'validation' in all_layers
+                elif 'rf coverage' in trace_name:
+                    trace['visible'] = 'rf_heatmap' in all_layers
+                elif 'map origin' in trace_name:
+                    trace['visible'] = 'origin' in all_layers
                     
                 # Beacons
                 elif 'vbeacon' in trace_name or 'virtual beacon' in trace_name:
