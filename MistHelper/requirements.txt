@@ -28,6 +28,11 @@ pyte>=0.8.0
 usaddress-scourgify>=0.6.0
 rapidfuzz>=3.8.0
 
+# Interactive visualization (map viewer)
+plotly>=5.14.0
+dash>=2.9.0
+matplotlib>=3.5.0
+
 # Enhanced HTTP and input handling
 urllib3>=1.26.0
 # Optional dependencies (platform-specific) - REMOVED
