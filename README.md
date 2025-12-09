@@ -450,7 +450,7 @@ Coding Style Essentials:
 4. Update this README if public behavior or filenames change  
 5. Run `--test` (when feasible) before submitting PR  
 
-License: MIT (see `pyproject.toml`).
+License: AGPL-3.0-only (see `pyproject.toml`).
 
 ---
 ## 18. Roadmap (Short Horizon)
@@ -478,6 +478,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.12.09.14.44",
+      "date": "2025-12-09",
+      "changes": {
+        "compatibility": [
+          "Replaced the MIT license file with the official AGPL-3.0 text and updated project metadata (pyproject classifiers, Dockerfile/Containerfile OCI labels, Starlink dashboard header) to keep every artifact aligned."
+        ],
+        "documentation": [
+          "README and READY_FOR_MIGRATION license references now call out AGPL-3.0-only so downstream consumers see the correct terms immediately."
+        ]
+      }
+    },
     {
       "version": "25.12.04.14.15",
       "date": "2025-12-04",
