@@ -1,0 +1,13 @@
+# Starlink Dashboard Dependencies
+# Install with: pip install -r starlink_requirements.txt
+
+# GUI Framework
+PyQt6>=6.6.0
+
+# gRPC for Starlink Device API (REQUIRED for actual data)
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+protobuf>=4.25.0
+
+# Note: You must also generate Python files from Starlink proto definitions
+# See STARLINK_SETUP_GUIDE.md for detailed instructions

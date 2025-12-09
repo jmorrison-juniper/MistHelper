@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  misthelper:
+    build: 
+      context: .
+      dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
+    container_name: misthelper-app
+    volumes:
+      # Mount local data directory to persist SQLite database
+      - ./data:/app/data
+      # Mount .env file for API credentials (optional - container works without it)
+      - ./.env:/app/.env:ro
+    environment:
+      # Container-specific environment variables
+      - OUTPUT_FORMAT=sqlite
+      - DATABASE_PATH=/app/data/mist_data.db
+      - PYTHONUNBUFFERED=1
+      # SSL settings for UV downloads (if needed)
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+    # Interactive mode for CLI usage
+    stdin_open: true
+    tty: true
+    
+    # Common use cases - uncomment as needed:
+    # Default: Site list export
+    # command: ["python", "MistHelper.py", "--menu", "11", "--output-format", "sqlite"]
+    
+    # Device inventory
+    # command: ["python", "MistHelper.py", "--menu", "12", "--output-format", "sqlite"]
+    
+    # Interactive mode (shows menu)
+    # command: ["python", "MistHelper.py"]
+    
+    # Systematic testing
+    # command: ["python", "MistHelper.py", "--test"]
+
+  # Optional: Use Docker format for Docker users
+  # misthelper-docker:
+  #   build: 
+  #     context: .
+  #     dockerfile: Dockerfile  # Docker-compatible version with HEALTHCHECK
+  #   # ... same config as above
+
+networks:
+  misthelper-network:
+    driver: bridge
+
+# Optional: Named volumes instead of bind mounts
+volumes:
+  misthelper-data:
+    driver: local

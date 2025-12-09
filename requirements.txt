@@ -1,0 +1,43 @@
+# MistHelper Dependencies
+# Core API and networking
+mistapi>=0.3.0
+requests>=2.28.0
+websocket-client>=1.4.0
+
+# SSH and remote access (required)
+paramiko>=2.9.0
+
+# CLI and user interface
+prettytable>=3.5.0
+tqdm>=4.64.0
+sshkeyboard>=2.3.0
+rich>=13.0.0
+
+# Data processing
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# Terminal emulation for SSH operations
+pyte>=0.8.0
+
+# Development and testing dependencies (optional)
+# pytest>=7.0.0
+# coverage>=7.0.0
+
+# Address parsing and fuzzy matching
+usaddress-scourgify>=0.6.0
+rapidfuzz>=3.8.0
+
+# Interactive visualization (map viewer)
+plotly>=5.14.0
+dash>=2.9.0
+matplotlib>=3.5.0
+
+# Enhanced HTTP and input handling
+urllib3>=1.26.0
+# Optional dependencies (platform-specific) - REMOVED
+# Note: pynput and pexpect have been completely removed to eliminate
+# container build issues and reduce dependency complexity.
+# SSH functionality uses paramiko only.
+
+# Note: SQLite support is built into Python (no additional dependency needed)

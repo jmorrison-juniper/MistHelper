@@ -1,0 +1,110 @@
+# Environment files (keep sample files)
+.env
+.env.local
+.env.production
+.env.staging
+!documentation/sample.env
+
+# Data directory and outputs
+data/
+Data/
+DATA/
+CombinedInventory_ByWeek/
+*.csv
+!documentation/*.csv
+!documentation/**/*.CSV
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db3
+
+# Logs
+*.log
+script.log
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Git
+.git/
+.gitignore
+
+# Documentation build artifacts
+docs/_build/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Customer data patterns (security)
+*customer*
+*Customer*
+*CUSTOMER*
+*tmo*
+*TMO*
+*t-mobile*
+*T-Mobile*
+
+# Credentials and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# Tuning and metrics (generated at runtime)
+delay_metrics.json
+tuning_data.json
+
+# SSH logs
+per-host-logs/
+
+# Package manager artifacts
+*.lock
+uv.lock
