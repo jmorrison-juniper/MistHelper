@@ -7,24 +7,24 @@ All critical files have been created and updated. The MistHelper directory is no
 ## Files Created/Updated
 
 ### New Files Created
-- ✅ `LICENSE` - MIT License (matches pyproject.toml)
+- ✅ `LICENSE` - AGPL-3.0-only (matches pyproject.toml)
 - ✅ `.dockerignore` - Container build exclusions
 - ✅ `.gitattributes` - Line ending normalization (SKIPPED - create manually if needed)
 - ✅ `MIGRATION.md` - Detailed migration guide
 - ✅ `init-standalone-repo.ps1` - Quick migration script
 
 ### Updated Files
-- ✅ `Containerfile` - Updated to MIT license, version 2.1.0, standalone repo URL
+- ✅ `Containerfile` - Updated to AGPL-3.0-only, version 2.1.0, standalone repo URL
 - ✅ `Dockerfile` - Updated metadata to match Containerfile
 - ✅ `pyproject.toml` - Updated version to 2.1.0, author to Joseph Morrison
 
 ## Pre-Migration Checklist
 
-- [x] LICENSE file created (MIT)
+- [x] LICENSE file created (AGPL-3.0-only)
 - [x] .dockerignore created
 - [x] Repository URLs updated in all files
 - [x] Version numbers aligned (2.1.0)
-- [x] License declarations consistent (MIT)
+- [x] License declarations consistent (AGPL-3.0-only)
 - [x] Author information updated
 - [x] Migration documentation created
 - [x] Quick setup script created
@@ -102,7 +102,7 @@ All references now point to: `https://github.com/jmorrison-juniper/MistHelper`
 All version references now use: `2.1.0`
 
 ### License Consistency
-All license declarations now use: `MIT`
+All license declarations now use: `AGPL-3.0-only`
 
 ### Authorship
 All author fields now reference: `Joseph Morrison <jmorrison@juniper.net>`
@@ -122,7 +122,7 @@ MistHelper/
 ├── Dockerfile            # Docker build file (updated)
 ├── documentation/        # Sample files and API docs
 ├── init-standalone-repo.ps1  # Migration helper script
-├── LICENSE               # MIT License (NEW)
+├── LICENSE               # AGPL-3.0-only (NEW)
 ├── MIGRATION.md          # Migration guide (NEW)
 ├── MistHelper.py         # Main application (2.1M lines)
 ├── pyproject.toml        # Python project config (updated)

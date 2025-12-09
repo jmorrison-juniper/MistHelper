@@ -7,7 +7,7 @@ LABEL maintainer="Joseph Morrison <jmorrison@juniper.net>"
 LABEL description="Smart MistHelper container with automatic UV/pip fallback (Docker format)"
 LABEL version="2.1.0"
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 
 # Install system dependencies (curl for UV, but don't fail if unavailable)
 RUN apt-get update && \

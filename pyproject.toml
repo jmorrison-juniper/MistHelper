@@ -3,7 +3,7 @@ name = "misthelper"
 version = "2.1.0"
 description = "Network operations tool for Juniper Mist cloud infrastructure management and monitoring"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-only"}
 authors = [
     {name = "Joseph Morrison", email = "jmorrison@juniper.net"}
 ]
@@ -15,7 +15,7 @@ classifiers = [
     "Topic :: System :: Networking",
     "Topic :: System :: Systems Administration",
     "Topic :: System :: Monitoring",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9", 
