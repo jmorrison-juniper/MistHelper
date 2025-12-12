@@ -27825,34 +27825,242 @@ class MapsManager:
                 interval=1000,  # 1 second
                 n_intervals=0,
                 disabled=False  # Enabled by default with auto-refresh
-            )
+            ),
+            # Location component for URL-based map switching
+            dcc.Location(id='url-location', refresh=True),
+            # Hidden div for map switch trigger
+            html.Div(id='map-switch-trigger', style={'display': 'none'})
         ], style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'})
         
-        # Callback for map selector dropdown - triggers page reload with new map
-        @app.callback(
-            Output('map-config-store', 'data', allow_duplicate=True),
+        # Clientside callback for map switching - triggers page reload with new map_id in URL
+        app.clientside_callback(
+            """
+            function(selected_map_id, config) {
+                var current_map_id = config ? config.map_id : null;
+                if (!selected_map_id || selected_map_id === current_map_id) {
+                    return window.dash_clientside.no_update;
+                }
+                // Redirect to URL with map_id parameter - this will trigger full page reload
+                console.log('Map switch: redirecting to map_id=' + selected_map_id);
+                window.location.href = '/?map_id=' + selected_map_id;
+                return '';
+            }
+            """,
+            Output('map-switch-trigger', 'children'),
             [Input('map-selector-dropdown', 'value')],
             [State('map-config-store', 'data')],
             prevent_initial_call=True
         )
-        def handle_map_change(selected_map_id, current_config):
-            """Handle map selection change - requires page reload to switch maps"""
-            if not selected_map_id or selected_map_id == current_config.get('map_id'):
-                return no_update
+        
+        # Callback to handle URL-based map loading on page load
+        @app.callback(
+            [Output('map-display', 'figure', allow_duplicate=True),
+             Output('map-config-store', 'data', allow_duplicate=True),
+             Output('map-selector-dropdown', 'value', allow_duplicate=True)],
+            [Input('url-location', 'search')],
+            [State('map-config-store', 'data'),
+             State('map-display', 'figure'),
+             State('available-maps-store', 'data')],
+            prevent_initial_call='initial_duplicate'
+        )
+        def handle_url_map_switch(url_search, config, current_fig, available_maps):
+            """Handle map switching when URL contains map_id parameter"""
+            import urllib.parse
             
-            # Log the map change request
-            logging.info(f"Map selector: User requested switch to map {selected_map_id}")
+            if not url_search:
+                return no_update, no_update, no_update
             
-            # Since we can't fully reload the map data in a callback (requires API calls and figure rebuild),
-            # we update the config store. A full map switch would need a page reload.
-            # For now, show a message that they need to restart the viewer
-            # In a future enhancement, we could use dcc.Location to redirect
+            # Parse URL query parameters
+            params = urllib.parse.parse_qs(url_search.lstrip('?'))
+            url_map_id = params.get('map_id', [None])[0]
             
-            # Update the config with new map_id
-            updated_config = current_config.copy()
-            updated_config['map_id'] = selected_map_id
+            if not url_map_id:
+                return no_update, no_update, no_update
             
-            return updated_config
+            current_map_id = config.get('map_id')
+            
+            # If URL map_id matches current map, no action needed
+            if url_map_id == current_map_id:
+                return no_update, no_update, no_update
+            
+            # Verify the requested map exists in available maps
+            valid_map_ids = [m.get('id') for m in available_maps]
+            if url_map_id not in valid_map_ids:
+                logging.warning(f"URL map switch: Invalid map_id {url_map_id}")
+                return no_update, no_update, no_update
+            
+            logging.info(f"URL map switch: Loading map {url_map_id}")
+            
+            try:
+                site_id_local = config.get('site_id')
+                
+                # Fetch the new map data
+                map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                    api_session_ref, site_id_local, url_map_id
+                )
+                
+                if map_response.status_code != 200:
+                    logging.error(f"URL map switch: Failed to fetch map - HTTP {map_response.status_code}")
+                    return no_update, no_update, no_update
+                
+                new_map_data = map_response.data
+                new_map_name = new_map_data.get('name', 'Unnamed')
+                new_map_width = new_map_data.get('width', 1000)
+                new_map_height = new_map_data.get('height', 1000)
+                new_ppm = new_map_data.get('ppm', 10)
+                
+                logging.info(f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height})")
+                
+                # Fetch devices for new map
+                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                    api_session_ref, site_id=site_id_local, limit=1000
+                )
+                new_devices = []
+                if devices_response.status_code == 200:
+                    all_devices = mistapi.get_all(response=devices_response, mist_session=api_session_ref)
+                    new_devices = [d for d in all_devices if d.get('map_id') == url_map_id]
+                
+                # Fetch zones for new map
+                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                    api_session_ref, site_id=site_id_local
+                )
+                new_zones = []
+                if zones_response.status_code == 200:
+                    all_zones = mistapi.get_all(response=zones_response, mist_session=api_session_ref)
+                    new_zones = [z for z in all_zones if z.get('map_id') == url_map_id]
+                
+                # Fetch clients for new map
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+                    api_session_ref, site_id=site_id_local, limit=1000
+                )
+                new_clients = []
+                if clients_response.status_code == 200:
+                    all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
+                    new_clients = [c for c in all_clients if c.get('map_id') == url_map_id and c.get('x') is not None]
+                
+                logging.info(f"URL map switch: Found {len(new_devices)} devices, {len(new_zones)} zones, {len(new_clients)} clients")
+                
+                # Build new figure with plotly
+                import plotly.graph_objects as go
+                new_fig = go.Figure()
+                
+                # Add map image
+                if 'url' in new_map_data:
+                    new_fig.add_layout_image(
+                        source=new_map_data['url'],
+                        x=0, y=0,
+                        sizex=new_map_width, sizey=new_map_height,
+                        xref="x", yref="y",
+                        sizing="stretch",
+                        layer="below"
+                    )
+                
+                # Add walls
+                wall_path = new_map_data.get('wall_path', {})
+                if 'nodes' in wall_path:
+                    node_lookup = {}
+                    for node in wall_path['nodes']:
+                        node_name = node.get('name', '')
+                        pos = node.get('position', {})
+                        if node_name and pos:
+                            node_lookup[node_name] = pos
+                    
+                    for node in wall_path['nodes']:
+                        node_pos = node.get('position', {})
+                        edges = node.get('edges', {})
+                        for edge_name in edges.keys():
+                            if edge_name in node_lookup:
+                                target_pos = node_lookup[edge_name]
+                                new_fig.add_trace(go.Scatter(
+                                    x=[node_pos.get('x', 0), target_pos.get('x', 0)],
+                                    y=[node_pos.get('y', 0), target_pos.get('y', 0)],
+                                    mode='lines',
+                                    name='Walls',
+                                    line=dict(color='#ff3333', width=4),
+                                    showlegend=False,
+                                    hoverinfo='skip'
+                                ))
+                
+                # Add zones as rectangles
+                for zone in new_zones:
+                    vertices = zone.get('vertices', [])
+                    if len(vertices) >= 3:
+                        zone_x = [v.get('x', 0) for v in vertices] + [vertices[0].get('x', 0)]
+                        zone_y = [v.get('y', 0) for v in vertices] + [vertices[0].get('y', 0)]
+                        new_fig.add_trace(go.Scatter(
+                            x=zone_x, y=zone_y,
+                            mode='lines',
+                            fill='toself',
+                            fillcolor='rgba(0, 191, 255, 0.2)',
+                            line=dict(color='#00bfff', width=2),
+                            name=zone.get('name', 'Zone'),
+                            showlegend=False
+                        ))
+                
+                # Add devices (APs)
+                ap_x, ap_y, ap_hover = [], [], []
+                for device in new_devices:
+                    if device.get('x') is not None and device.get('y') is not None:
+                        ap_x.append(device['x'])
+                        ap_y.append(device['y'])
+                        ap_hover.append(f"<b>{device.get('name', 'Unknown')}</b><br>MAC: {device.get('mac', 'N/A')}")
+                
+                if ap_x:
+                    new_fig.add_trace(go.Scatter(
+                        x=ap_x, y=ap_y,
+                        mode='markers',
+                        marker=dict(symbol='square', size=12, color='#ffa500'),
+                        name='Access Points',
+                        hovertext=ap_hover,
+                        hoverinfo='text'
+                    ))
+                
+                # Add clients
+                client_x, client_y, client_hover = [], [], []
+                for client in new_clients:
+                    client_x.append(client.get('x'))
+                    client_y.append(client.get('y'))
+                    client_hover.append(f"<b>{client.get('hostname', client.get('mac', 'Unknown'))}</b>")
+                
+                if client_x:
+                    new_fig.add_trace(go.Scatter(
+                        x=client_x, y=client_y,
+                        mode='markers',
+                        marker=dict(symbol='circle', size=10, color='#00ff00'),
+                        name='Clients',
+                        hovertext=client_hover,
+                        hoverinfo='text'
+                    ))
+                
+                # Update layout
+                new_fig.update_layout(
+                    title=dict(text=f"Map: {new_map_name}", font=dict(color='white')),
+                    xaxis=dict(range=[0, new_map_width], showgrid=False, zeroline=False, 
+                              scaleanchor='y', scaleratio=1, constrain='domain'),
+                    yaxis=dict(range=[new_map_height, 0], showgrid=False, zeroline=False,
+                              constrain='domain'),
+                    plot_bgcolor='#1a1a1a',
+                    paper_bgcolor='#1a1a1a',
+                    font=dict(color='#e0e0e0'),
+                    showlegend=True,
+                    legend=dict(bgcolor='rgba(0,0,0,0.7)', font=dict(color='white')),
+                    margin=dict(l=50, r=50, t=50, b=50)
+                )
+                
+                # Update config
+                new_config = config.copy()
+                new_config['map_id'] = url_map_id
+                new_config['ppm'] = new_ppm
+                new_config['map_width'] = new_map_width
+                new_config['map_height'] = new_map_height
+                
+                logging.info(f"URL map switch: Successfully switched to map '{new_map_name}'")
+                
+                return new_fig, new_config, url_map_id
+                
+            except Exception as e:
+                logging.error(f"URL map switch: Error loading map - {e}", exc_info=True)
+                return no_update, no_update, no_update
         
         # Callback for layer toggle
         @app.callback(
