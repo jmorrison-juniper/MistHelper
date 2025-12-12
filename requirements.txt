@@ -3,8 +3,9 @@
 mistapi>=0.3.0
 requests>=2.28.0
 websocket-client>=1.4.0
+urllib3>=1.26.0
 
-# SSH and remote access (required)
+# SSH and remote access
 paramiko>=2.9.0
 
 # CLI and user interface
@@ -12,17 +13,15 @@ prettytable>=3.5.0
 tqdm>=4.64.0
 sshkeyboard>=2.3.0
 rich>=13.0.0
+tabulate>=0.9.0
 
-# Data processing
+# Data processing and configuration
 numpy>=1.24.0
 python-dotenv>=1.0.0
+PyYAML>=6.0.0
 
 # Terminal emulation for SSH operations
 pyte>=0.8.0
-
-# Development and testing dependencies (optional)
-# pytest>=7.0.0
-# coverage>=7.0.0
 
 # Address parsing and fuzzy matching
 usaddress-scourgify>=0.6.0
@@ -33,5 +32,11 @@ plotly>=5.14.0
 dash>=2.9.0
 matplotlib>=3.5.0
 
-# Enhanced HTTP and input handling
-urllib3>=1.26.0
+# Note: The following are transitive dependencies installed automatically:
+# bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
+# cycler, decorator, deprecation, Flask, fonttools, future, geocoder, hvac,
+# idna, importlib-metadata, invoke, itsdangerous, jinja2, kiwisolver,
+# markdown-it-py, markupsafe, mdurl, narwhals, nest-asyncio, packaging,
+# pillow, probableparsing, pycparser, pygments, pynacl, pyparsing,
+# python-crfsuite, python-dateutil, ratelim, retrying, six, typing_extensions,
+# usaddress, wcwidth, Werkzeug, yaml-config, zipp
