@@ -28026,6 +28026,34 @@ class MapsManager:
                                     hoverinfo='skip'
                                 ))
                 
+                # Add wayfinding paths
+                wf_path = new_map_data.get('wayfinding_path', {})
+                if 'nodes' in wf_path:
+                    wf_node_lookup = {}
+                    for node in wf_path['nodes']:
+                        node_name = node.get('name', '')
+                        pos = node.get('position', {})
+                        if node_name and pos:
+                            wf_node_lookup[node_name] = pos
+                    
+                    for node in wf_path['nodes']:
+                        node_pos = node.get('position', {})
+                        edges = node.get('edges', {})
+                        for edge_name in edges.keys():
+                            if edge_name in wf_node_lookup:
+                                target_pos = wf_node_lookup[edge_name]
+                                new_fig.add_trace(go.Scatter(
+                                    x=[node_pos.get('x', 0), target_pos.get('x', 0)],
+                                    y=[node_pos.get('y', 0), target_pos.get('y', 0)],
+                                    mode='lines+markers',
+                                    name='Wayfinding',
+                                    line=dict(color='#4488ff', width=3, dash='dash'),
+                                    marker=dict(size=8, color='#4488ff'),
+                                    visible=True,
+                                    showlegend=False,
+                                    hoverinfo='skip'
+                                ))
+                
                 # Add zones as rectangles
                 for zone in new_zones:
                     vertices = zone.get('vertices', [])
@@ -28148,6 +28176,76 @@ class MapsManager:
                                 yanchor='bottom',
                                 name=f"{config['name']} Label"
                             )
+                
+                # Add virtual beacons (vBeacons)
+                vbeacons = new_map_data.get('vbeacons', [])
+                if vbeacons:
+                    beacon_x, beacon_y, beacon_hover = [], [], []
+                    for beacon in vbeacons:
+                        x = beacon.get('x')
+                        y = beacon.get('y')
+                        if x is not None and y is not None:
+                            beacon_x.append(x)
+                            beacon_y.append(y)
+                            hover = f"<b>vBeacon</b><br>"
+                            hover += f"Name: {beacon.get('name', 'N/A')}<br>"
+                            hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"
+                            hover += f"Major: {beacon.get('major', 'N/A')}<br>"
+                            hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"
+                            hover += f"Power: {beacon.get('power', 'N/A')} dBm"
+                            beacon_hover.append(hover)
+                    
+                    if beacon_x:
+                        new_fig.add_trace(go.Scatter(
+                            x=beacon_x, y=beacon_y,
+                            mode='markers',
+                            name='Virtual Beacons',
+                            marker=dict(
+                                symbol='diamond',
+                                size=14,
+                                color='#00ffff',
+                                line=dict(color='white', width=2),
+                                opacity=0.9
+                            ),
+                            hovertext=beacon_hover,
+                            hoverinfo='text',
+                            visible=True,
+                            showlegend=True
+                        ))
+                
+                # Add BLE beacons
+                ble_beacons = new_map_data.get('beacons', [])
+                if ble_beacons:
+                    ble_x, ble_y, ble_hover = [], [], []
+                    for beacon in ble_beacons:
+                        x = beacon.get('x')
+                        y = beacon.get('y')
+                        if x is not None and y is not None:
+                            ble_x.append(x)
+                            ble_y.append(y)
+                            hover = f"<b>BLE Beacon</b><br>"
+                            hover += f"Name: {beacon.get('name', 'N/A')}<br>"
+                            hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"
+                            hover += f"Type: {beacon.get('type', 'N/A')}"
+                            ble_hover.append(hover)
+                    
+                    if ble_x:
+                        new_fig.add_trace(go.Scatter(
+                            x=ble_x, y=ble_y,
+                            mode='markers',
+                            name='BLE Beacons',
+                            marker=dict(
+                                symbol='hexagon',
+                                size=12,
+                                color='#ff69b4',
+                                line=dict(color='white', width=2),
+                                opacity=0.9
+                            ),
+                            hovertext=ble_hover,
+                            hoverinfo='text',
+                            visible=True,
+                            showlegend=True
+                        ))
                 
                 # Add clients
                 client_x, client_y, client_hover, client_names = [], [], [], []
