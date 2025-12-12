@@ -479,6 +479,31 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.21.55",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Drawing Tools now functional: Save shapes to Mist API",
+          "Drawing mode selector: Choose between Zone, Wall, Path, or Measurement mode",
+          "Save Last Shape button: Saves drawn shape to Mist based on selected mode",
+          "Zone creation: Draw rectangle, enter name, save as location zone via createSiteZone API",
+          "Wall segment creation: Draw line, save as wall_path via updateSiteMap API",
+          "Validation path creation: Draw line, save as sitesurvey_path via updateSiteMap API",
+          "Delete All Paths: Clears sitesurvey_path array via updateSiteMap API",
+          "Delete All Walls: Clears wall_path nodes via updateSiteMap API"
+        ],
+        "enhancements": [
+          "Zone name input field appears when Zone mode is selected",
+          "Clear All Drawings button with guidance to use eraser tool",
+          "Success/error feedback messages for all save operations"
+        ],
+        "refactoring": [
+          "Removed old placeholder drawing tool buttons (Insert Path/Rectangle/Wall)",
+          "Drawing tools now use dropdown mode selector instead of separate buttons"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.21.50",
       "date": "2025-12-12",
       "changes": {

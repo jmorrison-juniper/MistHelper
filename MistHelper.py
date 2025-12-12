@@ -27557,24 +27557,61 @@ class MapsManager:
                     ),
                     html.Hr(),
                     html.H3("🎨 Drawing Tools"),
-                    html.P("Quick actions for map elements:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '10px'}),
+                    html.P("Draw shapes, then save to Mist:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '10px'}),
+                    # Drawing mode selector
                     html.Div([
-                        html.Button('📍 Insert Path', id='insert-path-btn', n_clicks=0,
+                        html.Label("Drawing Mode:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '4px'}),
+                        dcc.Dropdown(
+                            id='drawing-mode-dropdown',
+                            options=[
+                                {'label': '📍 Validation Path (magenta)', 'value': 'path'},
+                                {'label': '🟦 Zone Rectangle (cyan)', 'value': 'zone'},
+                                {'label': '🧱 Wall Segment (orange)', 'value': 'wall'},
+                                {'label': '📏 Measurement Only', 'value': 'measure'},
+                            ],
+                            value='measure',
+                            clearable=False,
+                            style={'marginBottom': '10px', 'backgroundColor': '#3d3d3d'}
+                        ),
+                    ], style={'marginBottom': '10px'}),
+                    # Zone name input (shown when zone mode selected)
+                    html.Div([
+                        dcc.Input(
+                            id='zone-name-input',
+                            type='text',
+                            placeholder='Zone name (required)',
+                            style={
+                                'width': '100%',
+                                'padding': '8px',
+                                'marginBottom': '8px',
+                                'backgroundColor': '#3d3d3d',
+                                'color': '#e0e0e0',
+                                'border': '1px solid #00bfff',
+                                'borderRadius': '4px'
+                            }
+                        ),
+                    ], id='zone-name-container', style={'display': 'none'}),
+                    # Action buttons
+                    html.Div([
+                        html.Button('💾 Save Last Shape to Mist', id='save-shape-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '10px', 'backgroundColor': '#28a745',
+                                          'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': 'bold'}),
+                        html.Button('🗑️ Clear All Drawings', id='clear-drawings-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff00ff', 'border': '1px solid #ff00ff', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
-                        html.Button('🟦 Insert Rectangle', id='insert-rect-btn', n_clicks=0,
+                                          'color': '#ffc107', 'border': '1px solid #ffc107', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
+                    ]),
+                    html.Hr(style={'margin': '10px 0'}),
+                    # Delete from Mist section
+                    html.P("Delete from Mist API:", style={'fontSize': '12px', 'color': '#ff6666', 'marginBottom': '8px'}),
+                    html.Div([
+                        html.Button('❌ Delete All Paths', id='delete-paths-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#00bfff', 'border': '1px solid #00bfff', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
-                        html.Button('🧱 Insert Wall', id='insert-wall-btn', n_clicks=0,
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
+                        html.Button('❌ Delete All Walls', id='delete-walls-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff8800', 'border': '1px solid #ff8800', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
-                        html.Button('❌ Delete all Paths', id='delete-paths-btn', n_clicks=0,
-                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
-                        html.Button('❌ Delete all Walls', id='delete-walls-btn', n_clicks=0,
-                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
-                        html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px'})
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
+                    ]),
+                    html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'})
                     ]),
                     html.Hr(),
                     html.H3("📏 Measurement Tools"),
@@ -28044,48 +28081,239 @@ class MapsManager:
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
         
-        # Callback to handle drawing tool button actions
+        # Callback to show/hide zone name input based on drawing mode
         @app.callback(
-            Output('drawing-tool-status', 'children'),
-            [Input('insert-path-btn', 'n_clicks'),
-             Input('insert-rect-btn', 'n_clicks'),
-             Input('insert-wall-btn', 'n_clicks'),
-             Input('delete-paths-btn', 'n_clicks'),
-             Input('delete-walls-btn', 'n_clicks')],
+            Output('zone-name-container', 'style'),
+            Input('drawing-mode-dropdown', 'value'),
             prevent_initial_call=True
         )
-        def handle_drawing_tools(path_clicks, rect_clicks, wall_clicks, del_path_clicks, del_wall_clicks):
-            """Handle drawing tool button clicks"""
+        def toggle_zone_name_input(mode):
+            """Show zone name input only when zone mode is selected"""
+            if mode == 'zone':
+                return {'display': 'block', 'marginBottom': '10px'}
+            return {'display': 'none'}
+        
+        # Callback to handle shape saving to Mist API
+        @app.callback(
+            Output('drawing-tool-status', 'children'),
+            [Input('save-shape-btn', 'n_clicks'),
+             Input('clear-drawings-btn', 'n_clicks'),
+             Input('delete-paths-btn', 'n_clicks'),
+             Input('delete-walls-btn', 'n_clicks')],
+            [State('drawing-mode-dropdown', 'value'),
+             State('zone-name-input', 'value'),
+             State('map-display', 'figure'),
+             State('map-config-store', 'data')],
+            prevent_initial_call=True
+        )
+        def handle_drawing_tools(save_clicks, clear_clicks, del_path_clicks, del_wall_clicks, 
+                                  drawing_mode, zone_name, current_fig, config):
+            """Handle drawing tool actions - save shapes to Mist or delete from Mist"""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return ""
             
             button_id = ctx.triggered[0]['prop_id'].split('.')[0]
             
-            if button_id == 'insert-path-btn':
-                msg = "💡 Use 'Draw Path' tool in toolbar above map to create validation paths"
-                logging.info(f"Drawing tool: Insert path requested for map {map_id}")
-                return html.Span(msg, style={'color': '#ff00ff'})
+            # Get config values
+            config_site_id = config.get('site_id') if config else site_id
+            config_map_id = config.get('map_id') if config else map_id
+            config_ppm = config.get('ppm', ppm) if config else ppm
             
-            elif button_id == 'insert-rect-btn':
-                msg = "💡 Use 'Draw Rectangle' tool in toolbar above map to create zones"
-                logging.info(f"Drawing tool: Insert rectangle requested for map {map_id}")
-                return html.Span(msg, style={'color': '#00bfff'})
+            if button_id == 'clear-drawings-btn':
+                # This just clears local drawings, not Mist data
+                msg = "🗑️ Use the eraser tool in the toolbar to clear drawings from the map"
+                logging.info(f"Drawing tool: Clear local drawings requested")
+                return html.Span(msg, style={'color': '#ffc107'})
             
-            elif button_id == 'insert-wall-btn':
-                msg = "💡 Use 'Draw Path' tool in toolbar to create wall segments"
-                logging.info(f"Drawing tool: Insert wall requested for map {map_id}")
-                return html.Span(msg, style={'color': '#ff8800'})
+            elif button_id == 'save-shape-btn':
+                # Get shapes from figure
+                shapes = current_fig.get('layout', {}).get('shapes', [])
+                if not shapes:
+                    return html.Span("⚠️ No shapes drawn. Use toolbar to draw first.", style={'color': '#ff6666'})
+                
+                # Get the last shape
+                last_shape = shapes[-1]
+                shape_type = last_shape.get('type', 'unknown')
+                
+                try:
+                    if drawing_mode == 'zone':
+                        # Save as zone via zones API
+                        if not zone_name:
+                            return html.Span("⚠️ Please enter a zone name first", style={'color': '#ff6666'})
+                        
+                        if shape_type == 'rect':
+                            # Convert rectangle to vertices (4 corners)
+                            x0 = last_shape.get('x0', 0) / config_ppm  # Convert pixels to meters
+                            y0 = last_shape.get('y0', 0) / config_ppm
+                            x1 = last_shape.get('x1', 0) / config_ppm
+                            y1 = last_shape.get('y1', 0) / config_ppm
+                            
+                            vertices = [
+                                {'x': x0, 'y': y0},
+                                {'x': x1, 'y': y0},
+                                {'x': x1, 'y': y1},
+                                {'x': x0, 'y': y1}
+                            ]
+                            
+                            zone_data = {
+                                'name': zone_name,
+                                'map_id': config_map_id,
+                                'vertices': vertices
+                            }
+                            
+                            # Call Mist API to create zone
+                            response = mistapi.api.v1.sites.zones.createSiteZone(
+                                api_session_ref, config_site_id, zone_data
+                            )
+                            
+                            if hasattr(response, 'status_code') and response.status_code in [200, 201]:
+                                logging.info(f"Drawing tool: Zone '{zone_name}' created successfully")
+                                return html.Span(f"✅ Zone '{zone_name}' saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                            else:
+                                error_msg = getattr(response, 'text', str(response))
+                                logging.error(f"Drawing tool: Failed to create zone - {error_msg}")
+                                return html.Span(f"❌ Failed to save zone: {error_msg[:50]}", style={'color': '#ff4444'})
+                        else:
+                            return html.Span("⚠️ Zones require rectangle shapes. Use Draw Rectangle tool.", style={'color': '#ff6666'})
+                    
+                    elif drawing_mode == 'wall':
+                        # Save wall path via updateSiteMap
+                        if shape_type == 'line':
+                            x0 = last_shape.get('x0', 0) / config_ppm
+                            y0 = last_shape.get('y0', 0) / config_ppm
+                            x1 = last_shape.get('x1', 0) / config_ppm
+                            y1 = last_shape.get('y1', 0) / config_ppm
+                            
+                            # Get existing map data first
+                            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                                api_session_ref, config_site_id, config_map_id
+                            )
+                            existing_wall_path = {}
+                            if hasattr(map_response, 'data'):
+                                existing_wall_path = map_response.data.get('wall_path', {})
+                            
+                            # Add new wall segment to existing nodes
+                            existing_nodes = existing_wall_path.get('nodes', [])
+                            node_count = len(existing_nodes)
+                            new_nodes = [
+                                {'name': f'W{node_count}', 'position': {'x': x0, 'y': y0}, 'edges': {f'W{node_count+1}': 'wall'}},
+                                {'name': f'W{node_count+1}', 'position': {'x': x1, 'y': y1}, 'edges': {}}
+                            ]
+                            existing_nodes.extend(new_nodes)
+                            
+                            wall_path_data = {
+                                'coordinate': existing_wall_path.get('coordinate', 'actual'),
+                                'nodes': existing_nodes
+                            }
+                            
+                            update_data = {'wall_path': wall_path_data}
+                            
+                            response = mistapi.api.v1.sites.maps.updateSiteMap(
+                                api_session_ref, config_site_id, config_map_id, update_data
+                            )
+                            
+                            if hasattr(response, 'status_code') and response.status_code == 200:
+                                logging.info(f"Drawing tool: Wall segment added successfully")
+                                return html.Span("✅ Wall segment saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                            else:
+                                error_msg = getattr(response, 'text', str(response))
+                                logging.error(f"Drawing tool: Failed to save wall - {error_msg}")
+                                return html.Span(f"❌ Failed to save wall: {error_msg[:50]}", style={'color': '#ff4444'})
+                        else:
+                            return html.Span("⚠️ Walls require line shapes. Use Draw Line tool.", style={'color': '#ff6666'})
+                    
+                    elif drawing_mode == 'path':
+                        # Save sitesurvey path via updateSiteMap
+                        if shape_type == 'path':
+                            # Path shapes have 'path' attribute with SVG path data
+                            # This is complex - for now show guidance
+                            return html.Span("⚠️ Path saving requires SVG parsing. Use Mist Portal for complex paths.", style={'color': '#ff8800'})
+                        elif shape_type == 'line':
+                            x0 = last_shape.get('x0', 0) / config_ppm
+                            y0 = last_shape.get('y0', 0) / config_ppm
+                            x1 = last_shape.get('x1', 0) / config_ppm
+                            y1 = last_shape.get('y1', 0) / config_ppm
+                            
+                            # Get existing map data
+                            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                                api_session_ref, config_site_id, config_map_id
+                            )
+                            existing_paths = []
+                            if hasattr(map_response, 'data'):
+                                existing_paths = map_response.data.get('sitesurvey_path', [])
+                            
+                            # Create new path
+                            import uuid
+                            new_path = {
+                                'id': str(uuid.uuid4()),
+                                'name': f'Path_{len(existing_paths)+1}',
+                                'coordinate': 'actual',
+                                'nodes': [
+                                    {'name': 'P0', 'position': {'x': x0, 'y': y0}, 'edges': {'P1': 'path'}},
+                                    {'name': 'P1', 'position': {'x': x1, 'y': y1}, 'edges': {}}
+                                ]
+                            }
+                            existing_paths.append(new_path)
+                            
+                            update_data = {'sitesurvey_path': existing_paths}
+                            
+                            response = mistapi.api.v1.sites.maps.updateSiteMap(
+                                api_session_ref, config_site_id, config_map_id, update_data
+                            )
+                            
+                            if hasattr(response, 'status_code') and response.status_code == 200:
+                                logging.info(f"Drawing tool: Validation path added successfully")
+                                return html.Span("✅ Validation path saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                            else:
+                                error_msg = getattr(response, 'text', str(response))
+                                logging.error(f"Drawing tool: Failed to save path - {error_msg}")
+                                return html.Span(f"❌ Failed to save path: {error_msg[:50]}", style={'color': '#ff4444'})
+                        else:
+                            return html.Span("⚠️ Paths require line shapes. Use Draw Line tool.", style={'color': '#ff6666'})
+                    
+                    else:  # measure mode
+                        return html.Span("📏 Measurement mode - shapes not saved to Mist", style={'color': '#888'})
+                
+                except Exception as save_error:
+                    logging.error(f"Drawing tool: Error saving shape - {save_error}", exc_info=True)
+                    return html.Span(f"❌ Error: {str(save_error)[:50]}", style={'color': '#ff4444'})
             
             elif button_id == 'delete-paths-btn':
-                msg = "⚠️ Delete all paths: Use Mist API updateSiteMap - removes sitesurvey_path array"
-                logging.warning(f"Drawing tool: Delete all paths requested for map {map_id}")
-                return html.Span(msg, style={'color': '#ff4444', 'fontWeight': 'bold'})
+                try:
+                    # Clear all sitesurvey_path via updateSiteMap
+                    update_data = {'sitesurvey_path': []}
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(
+                        api_session_ref, config_site_id, config_map_id, update_data
+                    )
+                    
+                    if hasattr(response, 'status_code') and response.status_code == 200:
+                        logging.info(f"Drawing tool: All validation paths deleted from map {config_map_id}")
+                        return html.Span("✅ All validation paths deleted from Mist", style={'color': '#28a745'})
+                    else:
+                        error_msg = getattr(response, 'text', str(response))
+                        return html.Span(f"❌ Failed: {error_msg[:50]}", style={'color': '#ff4444'})
+                except Exception as del_error:
+                    logging.error(f"Drawing tool: Error deleting paths - {del_error}")
+                    return html.Span(f"❌ Error: {str(del_error)[:50]}", style={'color': '#ff4444'})
             
             elif button_id == 'delete-walls-btn':
-                msg = "⚠️ Delete all walls: Use Mist API updateSiteMap - removes wall_path data"
-                logging.warning(f"Drawing tool: Delete all walls requested for map {map_id}")
-                return html.Span(msg, style={'color': '#ff4444', 'fontWeight': 'bold'})
+                try:
+                    # Clear wall_path via updateSiteMap
+                    update_data = {'wall_path': {'coordinate': 'actual', 'nodes': []}}
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(
+                        api_session_ref, config_site_id, config_map_id, update_data
+                    )
+                    
+                    if hasattr(response, 'status_code') and response.status_code == 200:
+                        logging.info(f"Drawing tool: All walls deleted from map {config_map_id}")
+                        return html.Span("✅ All walls deleted from Mist", style={'color': '#28a745'})
+                    else:
+                        error_msg = getattr(response, 'text', str(response))
+                        return html.Span(f"❌ Failed: {error_msg[:50]}", style={'color': '#ff4444'})
+                except Exception as del_error:
+                    logging.error(f"Drawing tool: Error deleting walls - {del_error}")
+                    return html.Span(f"❌ Error: {str(del_error)[:50]}", style={'color': '#ff4444'})
             
             return ""
         
