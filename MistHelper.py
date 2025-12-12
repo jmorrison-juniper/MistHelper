@@ -26884,7 +26884,7 @@ class MapsManager:
             }
         }
         
-        for device_type, config in type_config.items():
+        for device_type, type_cfg in type_config.items():
             type_devices = device_types[device_type]
             if type_devices:
                 x_coords = [d['x'] for d in type_devices]
@@ -26915,7 +26915,7 @@ class MapsManager:
                         device_status = 'disconnected'
                     
                     statuses.append(device_status)
-                    colors.append(config['colors'][device_status])
+                    colors.append(type_cfg['colors'][device_status])
                 
                 hover_text = []
                 for d, device_status in zip(type_devices, statuses):
@@ -26935,10 +26935,10 @@ class MapsManager:
                 fig.add_trace(go.Scatter(
                     x=x_coords, y=y_coords,
                     mode='markers',
-                    name=config['name'],
+                    name=type_cfg['name'],
                     marker=dict(
-                        symbol=config['symbol'],
-                        size=config['size'],
+                        symbol=type_cfg['symbol'],
+                        size=type_cfg['size'],
                         color=colors,  # Status-based color array
                         line=dict(color='white', width=2),
                         opacity=0.9
@@ -26963,7 +26963,7 @@ class MapsManager:
                         borderpad=3,
                         xanchor='center',
                         yanchor='bottom',
-                        name=f"{config['name']} Label"  # For toggle control
+                        name=f"{type_cfg['name']} Label"  # For toggle control
                     )
                 
                 # Add mesh links for APs if mesh topology exists
@@ -27003,7 +27003,7 @@ class MapsManager:
                         y=[y, y],
                         mode='lines',
                         line=dict(color=device_color, width=3),  # Status-based color
-                        name=f"{config['name']} Orientation",  # Name for toggle control
+                        name=f"{type_cfg['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
                     ))
@@ -27014,7 +27014,7 @@ class MapsManager:
                         y=[y - crosshair_size, y + crosshair_size],
                         mode='lines',
                         line=dict(color=device_color, width=3),  # Status-based color
-                        name=f"{config['name']} Orientation",  # Name for toggle control
+                        name=f"{type_cfg['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hoverinfo='skip'
                     ))
@@ -27040,7 +27040,7 @@ class MapsManager:
                             color=device_color,  # Status-based color
                             line=dict(color='white', width=2)
                         ),
-                        name=f"{config['name']} Orientation",  # Name for toggle control
+                        name=f"{type_cfg['name']} Orientation",  # Name for toggle control
                         showlegend=False,
                         hovertext=f"Orientation: {angle}°",
                         hoverinfo='text'
@@ -28162,7 +28162,7 @@ class MapsManager:
                             device_types[device_type].append(device)
                 
                 # Add traces for each device type
-                for device_type, config in device_type_config.items():
+                for device_type, type_cfg in device_type_config.items():
                     type_devices = device_types[device_type]
                     if type_devices:
                         x_coords = [d['x'] for d in type_devices]
@@ -28180,7 +28180,7 @@ class MapsManager:
                                 device_status = 'connected'
                             else:
                                 device_status = 'disconnected'
-                            colors.append(config['colors'][device_status])
+                            colors.append(type_cfg['colors'][device_status])
                             
                             # Build hover text
                             text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
@@ -28194,10 +28194,10 @@ class MapsManager:
                         new_fig.add_trace(go.Scatter(
                             x=x_coords, y=y_coords,
                             mode='markers',
-                            name=config['name'],
+                            name=type_cfg['name'],
                             marker=dict(
-                                symbol=config['symbol'],
-                                size=config['size'],
+                                symbol=type_cfg['symbol'],
+                                size=type_cfg['size'],
                                 color=colors,
                                 line=dict(color='white', width=2),
                                 opacity=0.9
@@ -28222,7 +28222,7 @@ class MapsManager:
                                 borderpad=3,
                                 xanchor='center',
                                 yanchor='bottom',
-                                name=f"{config['name']} Label"
+                                name=f"{type_cfg['name']} Label"
                             )
                         
                         # Add device orientation crosshairs
@@ -28237,7 +28237,7 @@ class MapsManager:
                                 y=[y, y],
                                 mode='lines',
                                 line=dict(color=device_color, width=3),
-                                name=f"{config['name']} Orientation",
+                                name=f"{type_cfg['name']} Orientation",
                                 showlegend=False,
                                 hoverinfo='skip'
                             ))
@@ -28248,7 +28248,7 @@ class MapsManager:
                                 y=[y - crosshair_size, y + crosshair_size],
                                 mode='lines',
                                 line=dict(color=device_color, width=3),
-                                name=f"{config['name']} Orientation",
+                                name=f"{type_cfg['name']} Orientation",
                                 showlegend=False,
                                 hoverinfo='skip'
                             ))
@@ -28265,7 +28265,7 @@ class MapsManager:
                                 mode='markers',
                                 marker=dict(size=12, color=device_color, symbol='circle',
                                            line=dict(color='black', width=2)),
-                                name=f"{config['name']} Orientation",
+                                name=f"{type_cfg['name']} Orientation",
                                 showlegend=False,
                                 hoverinfo='skip'
                             ))

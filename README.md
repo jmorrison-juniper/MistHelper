@@ -479,6 +479,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.17.10",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed critical variable shadowing bug: 'config' loop variable in device type iteration was overwriting callback 'config' parameter",
+          "Map switch callback now correctly preserves site_id in config store",
+          "Live refresh callbacks no longer receive corrupted config with device styling data instead of site/map config"
+        ],
+        "refactoring": [
+          "Renamed device type loop variable from 'config' to 'type_cfg' to prevent variable shadowing"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.17.03",
       "date": "2025-12-12",
       "changes": {
