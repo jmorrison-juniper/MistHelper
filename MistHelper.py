@@ -28423,73 +28423,85 @@ class MapsManager:
                     showlegend=True
                 ))
                 
-                # Fetch and add RF coverage heatmap
+                # Fetch and add RF coverage heatmap using raw API endpoint
                 try:
-                    coverage_response = mistapi.api.v1.sites.maps.getSiteMachineLearningCurrentSiteRfCoverage(
-                        api_session_ref,
-                        site_id=config.get('site_id'),
-                        map_id=url_map_id,
-                        gridsize=10
-                    )
-                    if coverage_response.status_code == 200:
-                        coverage_data = coverage_response.data
-                        results = coverage_data.get('results', [])
-                        if results:
-                            # Build grid data
-                            grid_data = {}
-                            for item in results:
-                                x_m = item.get('x')
-                                y_m = item.get('y')
-                                rssi_array = item.get('rssi')
-                                if x_m is None or y_m is None or not rssi_array:
-                                    continue
-                                pixel_x = x_m * new_ppm
-                                pixel_y = y_m * new_ppm
-                                max_rssi = max(rssi_array) if rssi_array else None
-                                if max_rssi is not None:
-                                    grid_data[(pixel_x, pixel_y)] = max_rssi
+                    site_id_for_coverage = config.get('site_id')
+                    if site_id_for_coverage:
+                        coverage_url = f"/api/v1/sites/{site_id_for_coverage}/location/coverage"
+                        coverage_params = {
+                            'resolution': 'fine',
+                            'duration': '1d',
+                            'map_id': url_map_id,
+                            'type': 'client',
+                            'from_apollo': 'true'
+                        }
+                        coverage_response = api_session_ref.mist_get(coverage_url, query=coverage_params)
+                        
+                        if coverage_response.status_code == 200:
+                            coverage_data = coverage_response.data
+                            # Check for error response structure
+                            if isinstance(coverage_data, dict) and 'exception' in coverage_data:
+                                logging.warning(f"URL map switch: RF Coverage backend error")
+                                coverage_data = None
                             
-                            if grid_data:
-                                all_rssi = list(grid_data.values())
-                                min_rssi = min(all_rssi)
-                                max_rssi_val = max(all_rssi)
-                                
-                                unique_x = sorted(set(x for x, y in grid_data.keys()))
-                                unique_y = sorted(set(y for x, y in grid_data.keys()))
-                                
-                                z_matrix = []
-                                for y_val in unique_y:
-                                    row = [grid_data.get((x_val, y_val), None) for x_val in unique_x]
-                                    z_matrix.append(row)
-                                
-                                colorscale = [
-                                    [0.0, 'rgb(0, 0, 255)'],
-                                    [0.33, 'rgb(0, 255, 0)'],
-                                    [0.50, 'rgb(255, 255, 0)'],
-                                    [0.67, 'rgb(255, 165, 0)'],
-                                    [1.0, 'rgb(255, 0, 0)']
-                                ]
-                                
-                                new_fig.add_trace(go.Heatmap(
-                                    x=unique_x,
-                                    y=unique_y,
-                                    z=z_matrix,
-                                    colorscale=colorscale,
-                                    zmin=min_rssi,
-                                    zmax=max_rssi_val,
-                                    opacity=0.5,
-                                    name='RF Coverage',
-                                    visible=False,  # Hidden by default
-                                    showscale=True,
-                                    colorbar=dict(
-                                        title=dict(text="RSSI (dBm)", side="right", font=dict(size=12, color='white')),
-                                        thickness=20, len=0.5, y=0.95, yanchor='top',
-                                        tickfont=dict(size=10, color='white')
-                                    ),
-                                    connectgaps=True,
-                                    zsmooth='best'
-                                ))
-                                logging.info(f"URL map switch: Added RF coverage heatmap with {len(grid_data)} cells")
+                            if coverage_data:
+                                results = coverage_data.get('results', [])
+                                if results:
+                                    # Build grid data
+                                    grid_data = {}
+                                    for item in results:
+                                        x_m = item.get('x')
+                                        y_m = item.get('y')
+                                        rssi_array = item.get('rssi')
+                                        if x_m is None or y_m is None or not rssi_array:
+                                            continue
+                                        pixel_x = x_m * new_ppm
+                                        pixel_y = y_m * new_ppm
+                                        max_rssi = max(rssi_array) if rssi_array else None
+                                        if max_rssi is not None:
+                                            grid_data[(pixel_x, pixel_y)] = max_rssi
+                                    
+                                    if grid_data:
+                                        all_rssi = list(grid_data.values())
+                                        min_rssi = min(all_rssi)
+                                        max_rssi_val = max(all_rssi)
+                                        
+                                        unique_x = sorted(set(x for x, y in grid_data.keys()))
+                                        unique_y = sorted(set(y for x, y in grid_data.keys()))
+                                        
+                                        z_matrix = []
+                                        for y_val in unique_y:
+                                            row = [grid_data.get((x_val, y_val), None) for x_val in unique_x]
+                                            z_matrix.append(row)
+                                        
+                                        colorscale = [
+                                            [0.0, 'rgb(0, 0, 255)'],
+                                            [0.33, 'rgb(0, 255, 0)'],
+                                            [0.50, 'rgb(255, 255, 0)'],
+                                            [0.67, 'rgb(255, 165, 0)'],
+                                            [1.0, 'rgb(255, 0, 0)']
+                                        ]
+                                        
+                                        new_fig.add_trace(go.Heatmap(
+                                            x=unique_x,
+                                            y=unique_y,
+                                            z=z_matrix,
+                                            colorscale=colorscale,
+                                            zmin=min_rssi,
+                                            zmax=max_rssi_val,
+                                            opacity=0.5,
+                                            name='RF Coverage',
+                                            visible=False,  # Hidden by default
+                                            showscale=True,
+                                            colorbar=dict(
+                                                title=dict(text="RSSI (dBm)", side="right", font=dict(size=12, color='white')),
+                                                thickness=20, len=0.5, y=0.95, yanchor='top',
+                                                tickfont=dict(size=10, color='white')
+                                            ),
+                                            connectgaps=True,
+                                            zsmooth='best'
+                                        ))
+                                        logging.info(f"URL map switch: Added RF coverage heatmap with {len(grid_data)} cells")
                 except Exception as rf_error:
                     logging.warning(f"URL map switch: Could not load RF coverage - {rf_error}")
                 
@@ -28508,12 +28520,13 @@ class MapsManager:
                     margin=dict(l=50, r=50, t=50, b=50)
                 )
                 
-                # Update config
+                # Update config - preserve site_id from original config
                 new_config = config.copy()
                 new_config['map_id'] = url_map_id
                 new_config['ppm'] = new_ppm
                 new_config['map_width'] = new_map_width
                 new_config['map_height'] = new_map_height
+                # site_id stays the same since we're switching maps within the same site
                 
                 logging.info(f"URL map switch: Successfully switched to map '{new_map_name}'")
                 
