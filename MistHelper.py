@@ -28054,20 +28054,68 @@ class MapsManager:
                                     hoverinfo='skip'
                                 ))
                 
-                # Add zones as rectangles
-                for zone in new_zones:
+                # Add zones with varied colors (matching original)
+                zone_colors = [
+                    ('rgba(255,165,0,0.3)', '#ffa500'),   # Orange
+                    ('rgba(0,255,255,0.3)', '#00ffff'),   # Cyan
+                    ('rgba(255,0,255,0.3)', '#ff00ff'),   # Magenta
+                    ('rgba(255,255,0,0.3)', '#ffff00'),   # Yellow
+                    ('rgba(0,255,0,0.3)', '#00ff00'),     # Green
+                    ('rgba(128,0,255,0.3)', '#8000ff'),   # Purple
+                    ('rgba(255,0,0,0.3)', '#ff0000'),     # Red
+                    ('rgba(0,128,255,0.3)', '#0080ff'),   # Blue
+                ]
+                for idx, zone in enumerate(new_zones):
                     vertices = zone.get('vertices', [])
                     if len(vertices) >= 3:
                         zone_x = [v.get('x', 0) for v in vertices] + [vertices[0].get('x', 0)]
                         zone_y = [v.get('y', 0) for v in vertices] + [vertices[0].get('y', 0)]
+                        fill_color, border_color = zone_colors[idx % len(zone_colors)]
+                        zone_name = zone.get('name', f'Zone {idx+1}')
                         new_fig.add_trace(go.Scatter(
                             x=zone_x, y=zone_y,
                             mode='lines',
                             fill='toself',
-                            fillcolor='rgba(0, 191, 255, 0.2)',
-                            line=dict(color='#00bfff', width=2),
-                            name=zone.get('name', 'Zone'),
-                            showlegend=False
+                            fillcolor=fill_color,
+                            line=dict(color=border_color, width=2),
+                            name=f"Zone: {zone_name}",
+                            showlegend=True,
+                            visible=True
+                        ))
+                        # Add zone label annotation
+                        center_x = sum(v.get('x', 0) for v in vertices) / len(vertices)
+                        center_y = sum(v.get('y', 0) for v in vertices) / len(vertices)
+                        new_fig.add_annotation(
+                            x=center_x,
+                            y=center_y,
+                            text=f"<b>{zone_name}</b>",
+                            showarrow=False,
+                            font=dict(size=10, color='white', family='Arial Black'),
+                            bgcolor=border_color.replace(')', ',0.8)').replace('rgb', 'rgba') if 'rgb' in border_color else border_color,
+                            bordercolor='white',
+                            borderwidth=1,
+                            borderpad=3,
+                            xanchor='center',
+                            yanchor='middle',
+                            name=f"Zone: {zone_name} Label"
+                        )
+                
+                # Add validation paths if present
+                val_paths = new_map_data.get('validation_paths', [])
+                for val_path in val_paths:
+                    path_name = val_path.get('name', 'Validation Path')
+                    path_coords = val_path.get('nodes', [])
+                    if len(path_coords) >= 2:
+                        path_x = [p.get('x', 0) for p in path_coords]
+                        path_y = [p.get('y', 0) for p in path_coords]
+                        new_fig.add_trace(go.Scatter(
+                            x=path_x, y=path_y,
+                            mode='lines+markers',
+                            name=f"Validation: {path_name}",
+                            line=dict(color='#00ff88', width=3, dash='dot'),
+                            marker=dict(size=10, color='#00ff88', symbol='circle'),
+                            visible=True,
+                            showlegend=True
                         ))
                 
                 # Add devices (APs, Switches, Gateways) with status-based colors
@@ -28176,6 +28224,51 @@ class MapsManager:
                                 yanchor='bottom',
                                 name=f"{config['name']} Label"
                             )
+                        
+                        # Add device orientation crosshairs
+                        import math
+                        for i, (x, y, device, device_color) in enumerate(zip(x_coords, y_coords, type_devices, colors)):
+                            orientation = device.get('orientation', 0)
+                            crosshair_size = 40
+                            
+                            # Horizontal line
+                            new_fig.add_trace(go.Scatter(
+                                x=[x - crosshair_size, x + crosshair_size],
+                                y=[y, y],
+                                mode='lines',
+                                line=dict(color=device_color, width=3),
+                                name=f"{config['name']} Orientation",
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                            
+                            # Vertical line
+                            new_fig.add_trace(go.Scatter(
+                                x=[x, x],
+                                y=[y - crosshair_size, y + crosshair_size],
+                                mode='lines',
+                                line=dict(color=device_color, width=3),
+                                name=f"{config['name']} Orientation",
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                            
+                            # Directional dot showing orientation
+                            dot_distance = 50
+                            math_angle = 90 - orientation
+                            rad = math.radians(math_angle)
+                            dot_x = x + dot_distance * math.cos(rad)
+                            dot_y = y - dot_distance * math.sin(rad)
+                            
+                            new_fig.add_trace(go.Scatter(
+                                x=[dot_x], y=[dot_y],
+                                mode='markers',
+                                marker=dict(size=12, color=device_color, symbol='circle',
+                                           line=dict(color='black', width=2)),
+                                name=f"{config['name']} Orientation",
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
                 
                 # Add virtual beacons (vBeacons)
                 vbeacons = new_map_data.get('vbeacons', [])
@@ -28308,6 +28401,97 @@ class MapsManager:
                             yanchor='bottom',
                             name='Clients Label'  # For toggle control
                         )
+                
+                # Add map origin marker
+                origin = new_map_data.get('origin', {}) or {}
+                origin_x = origin.get('x', 0)
+                origin_y = origin.get('y', 0)
+                new_fig.add_trace(go.Scatter(
+                    x=[origin_x], y=[origin_y],
+                    mode='markers+text',
+                    name='Map Origin',
+                    marker=dict(
+                        symbol='x',
+                        size=20,
+                        color='yellow',
+                        line=dict(width=3, color='black')
+                    ),
+                    text=['Origin'],
+                    textposition='top center',
+                    textfont=dict(color='yellow', size=10),
+                    visible=False,  # Hidden by default, toggle to show
+                    showlegend=True
+                ))
+                
+                # Fetch and add RF coverage heatmap
+                try:
+                    coverage_response = mistapi.api.v1.sites.maps.getSiteMachineLearningCurrentSiteRfCoverage(
+                        api_session_ref,
+                        site_id=config.get('site_id'),
+                        map_id=url_map_id,
+                        gridsize=10
+                    )
+                    if coverage_response.status_code == 200:
+                        coverage_data = coverage_response.data
+                        results = coverage_data.get('results', [])
+                        if results:
+                            # Build grid data
+                            grid_data = {}
+                            for item in results:
+                                x_m = item.get('x')
+                                y_m = item.get('y')
+                                rssi_array = item.get('rssi')
+                                if x_m is None or y_m is None or not rssi_array:
+                                    continue
+                                pixel_x = x_m * new_ppm
+                                pixel_y = y_m * new_ppm
+                                max_rssi = max(rssi_array) if rssi_array else None
+                                if max_rssi is not None:
+                                    grid_data[(pixel_x, pixel_y)] = max_rssi
+                            
+                            if grid_data:
+                                all_rssi = list(grid_data.values())
+                                min_rssi = min(all_rssi)
+                                max_rssi_val = max(all_rssi)
+                                
+                                unique_x = sorted(set(x for x, y in grid_data.keys()))
+                                unique_y = sorted(set(y for x, y in grid_data.keys()))
+                                
+                                z_matrix = []
+                                for y_val in unique_y:
+                                    row = [grid_data.get((x_val, y_val), None) for x_val in unique_x]
+                                    z_matrix.append(row)
+                                
+                                colorscale = [
+                                    [0.0, 'rgb(0, 0, 255)'],
+                                    [0.33, 'rgb(0, 255, 0)'],
+                                    [0.50, 'rgb(255, 255, 0)'],
+                                    [0.67, 'rgb(255, 165, 0)'],
+                                    [1.0, 'rgb(255, 0, 0)']
+                                ]
+                                
+                                new_fig.add_trace(go.Heatmap(
+                                    x=unique_x,
+                                    y=unique_y,
+                                    z=z_matrix,
+                                    colorscale=colorscale,
+                                    zmin=min_rssi,
+                                    zmax=max_rssi_val,
+                                    opacity=0.5,
+                                    name='RF Coverage',
+                                    visible=False,  # Hidden by default
+                                    showscale=True,
+                                    colorbar=dict(
+                                        title=dict(text="RSSI (dBm)", side="right", font=dict(size=12, color='white')),
+                                        thickness=20, len=0.5, y=0.95, yanchor='top',
+                                        tickfont=dict(size=10, color='white')
+                                    ),
+                                    connectgaps=True,
+                                    zsmooth='best'
+                                ))
+                                logging.info(f"URL map switch: Added RF coverage heatmap with {len(grid_data)} cells")
+                except Exception as rf_error:
+                    logging.warning(f"URL map switch: Could not load RF coverage - {rf_error}")
                 
                 # Update layout
                 new_fig.update_layout(
