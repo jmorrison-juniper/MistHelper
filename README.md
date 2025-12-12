@@ -479,6 +479,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.21.35",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Changed browser tab title from 'Dash' to 'MistHelper Map Viewer'"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.21.30",
       "date": "2025-12-12",
       "changes": {
