@@ -479,6 +479,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.21.30",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Suppressed 'Updating...' flash in browser tab during auto-refresh callbacks"
+        ],
+        "enhancements": [
+          "Set update_title=None on Dash app to prevent tab title flicker from 1-second countdown interval"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.21.20",
       "date": "2025-12-12",
       "changes": {

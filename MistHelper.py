@@ -26325,8 +26325,9 @@ class MapsManager:
         print("-" * 80)
         
         # Create Dash app with dark theme
+        # update_title=None prevents "Updating..." flash in browser tab during callbacks
         logging.debug("Creating Dash application instance")
-        app = Dash(__name__)
+        app = Dash(__name__, update_title=None)
         
         # Inject custom CSS for dark mode and responsive design
         app.index_string = '''
