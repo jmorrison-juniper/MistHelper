@@ -28435,17 +28435,19 @@ class MapsManager:
                             'type': 'client',
                             'from_apollo': 'true'
                         }
+                        logging.info(f"URL map switch: Fetching RF coverage for map {url_map_id}")
                         coverage_response = api_session_ref.mist_get(coverage_url, query=coverage_params)
                         
                         if coverage_response.status_code == 200:
                             coverage_data = coverage_response.data
                             # Check for error response structure
                             if isinstance(coverage_data, dict) and 'exception' in coverage_data:
-                                logging.warning(f"URL map switch: RF Coverage backend error")
+                                logging.warning(f"URL map switch: RF Coverage backend error - {str(coverage_data.get('exception', ''))[:200]}")
                                 coverage_data = None
                             
                             if coverage_data:
                                 results = coverage_data.get('results', [])
+                                logging.info(f"URL map switch: RF coverage API returned {len(results)} grid points")
                                 if results:
                                     # Build grid data
                                     grid_data = {}
@@ -28501,9 +28503,17 @@ class MapsManager:
                                             connectgaps=True,
                                             zsmooth='best'
                                         ))
-                                        logging.info(f"URL map switch: Added RF coverage heatmap with {len(grid_data)} cells")
+                                        logging.info(f"URL map switch: Added RF coverage heatmap with {len(grid_data)} cells, RSSI range {min_rssi} to {max_rssi_val} dBm")
+                                    else:
+                                        logging.warning(f"URL map switch: RF coverage - no valid grid data after processing {len(results)} points")
+                                else:
+                                    logging.info(f"URL map switch: No RF coverage data available for this map (empty results)")
+                        else:
+                            logging.warning(f"URL map switch: RF coverage API returned HTTP {coverage_response.status_code}")
+                    else:
+                        logging.warning(f"URL map switch: Cannot fetch RF coverage - site_id is None")
                 except Exception as rf_error:
-                    logging.warning(f"URL map switch: Could not load RF coverage - {rf_error}")
+                    logging.warning(f"URL map switch: Could not load RF coverage - {rf_error}", exc_info=True)
                 
                 # Update layout
                 new_fig.update_layout(
