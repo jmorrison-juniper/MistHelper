@@ -28228,11 +28228,15 @@ class MapsManager:
                     
                     elif drawing_mode == 'wall':
                         # Save wall path via updateSiteMap
+                        # NOTE: wall_path uses PIXEL coordinates matching the map image, NOT meters
                         if shape_type == 'line':
-                            x0 = last_shape.get('x0', 0) / config_ppm
-                            y0 = last_shape.get('y0', 0) / config_ppm
-                            x1 = last_shape.get('x1', 0) / config_ppm
-                            y1 = last_shape.get('y1', 0) / config_ppm
+                            # Coordinates from Plotly are already in pixels - do NOT divide by PPM
+                            x0 = last_shape.get('x0', 0)
+                            y0 = last_shape.get('y0', 0)
+                            x1 = last_shape.get('x1', 0)
+                            y1 = last_shape.get('y1', 0)
+                            
+                            logging.info(f"Drawing tool: Saving wall segment from ({x0:.1f}, {y0:.1f}) to ({x1:.1f}, {y1:.1f}) pixels")
                             
                             # Get existing map data first
                             map_response = mistapi.api.v1.sites.maps.getSiteMap(
