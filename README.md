@@ -479,6 +479,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.17.03",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Added site_id/map_id validation in live refresh callbacks to prevent API calls with None values",
+          "Added config debug logging to diagnose map switch config persistence issues"
+        ],
+        "logging": [
+          "Live refresh now logs full config when site_id is missing for debugging",
+          "Map switch logs returned config values for verification"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.21.55",
       "date": "2025-12-12",
       "changes": {

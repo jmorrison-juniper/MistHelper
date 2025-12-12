@@ -28529,6 +28529,7 @@ class MapsManager:
                 # site_id stays the same since we're switching maps within the same site
                 
                 logging.info(f"URL map switch: Successfully switched to map '{new_map_name}'")
+                logging.debug(f"URL map switch: Returning new_config with site_id={new_config.get('site_id')}, map_id={new_config.get('map_id')}")
                 
                 return new_fig, new_config
                 
@@ -29318,11 +29319,20 @@ class MapsManager:
             updated_refresh_times['client_last_refresh'] = current_time
             
             try:
-                site_id_local = config.get('site_id')
-                map_id_local = config.get('map_id')
-                ppm_local = config.get('ppm', 10)
+                site_id_local = config.get('site_id') if config else None
+                map_id_local = config.get('map_id') if config else None
+                ppm_local = config.get('ppm', 10) if config else 10
                 
-                logging.info(f"Live data refresh: Fetching client positions for map {map_id_local}")
+                # Validate site_id before making API call
+                if not site_id_local:
+                    logging.warning(f"Live data refresh: site_id is None, skipping refresh. Config: {config}")
+                    return no_update, updated_refresh_times
+                
+                if not map_id_local:
+                    logging.warning(f"Live data refresh: map_id is None, skipping refresh")
+                    return no_update, updated_refresh_times
+                
+                logging.info(f"Live data refresh: Fetching client positions for map {map_id_local} (site: {site_id_local})")
                 
                 # Fetch fresh client data from API
                 clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
@@ -29519,11 +29529,20 @@ class MapsManager:
             updated_refresh_times['coverage_last_refresh'] = current_time
             
             try:
-                site_id_local = config.get('site_id')
-                map_id_local = config.get('map_id')
-                ppm_local = config.get('ppm', 10)
+                site_id_local = config.get('site_id') if config else None
+                map_id_local = config.get('map_id') if config else None
+                ppm_local = config.get('ppm', 10) if config else 10
                 
-                logging.info(f"Live data refresh: Fetching RF coverage data for map {map_id_local}")
+                # Validate site_id before making API call
+                if not site_id_local:
+                    logging.warning(f"Live data refresh: RF coverage - site_id is None, skipping. Config: {config}")
+                    return no_update, updated_refresh_times
+                
+                if not map_id_local:
+                    logging.warning(f"Live data refresh: RF coverage - map_id is None, skipping")
+                    return no_update, updated_refresh_times
+                
+                logging.info(f"Live data refresh: Fetching RF coverage data for map {map_id_local} (site: {site_id_local})")
                 
                 # Fetch fresh coverage data from API
                 coverage_url = f"/api/v1/sites/{site_id_local}/location/coverage"
