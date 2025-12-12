@@ -479,6 +479,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.21.20",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed live refresh trace name mismatch: callback searched for 'wifi client' but trace was named 'Clients'",
+          "Client position refresh now correctly updates the map visualization"
+        ],
+        "enhancements": [
+          "Upgraded refresh trace logging from debug to info level for visibility"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.17.15",
       "date": "2025-12-12",
       "changes": {

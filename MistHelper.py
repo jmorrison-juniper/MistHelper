@@ -28366,22 +28366,24 @@ class MapsManager:
                         wifi_client_hover.append(hover_text)
                 
                 # Update traces in figure
+                # Note: The trace is named 'Clients' (singular), so we match on 'clients' lowercase
                 for trace in current_fig['data']:
                     trace_name = trace.get('name', '').lower()
                     
-                    if 'wifi client' in trace_name and 'link' not in trace_name:
+                    # Match 'Clients' trace (WiFi clients) - excludes 'wired client' and link traces
+                    if trace_name == 'clients' or ('wifi client' in trace_name and 'link' not in trace_name):
                         trace['x'] = wifi_client_x
                         trace['y'] = wifi_client_y
                         trace['hovertext'] = wifi_client_hover
                         trace['visible'] = 'wifi_clients' in (client_layers or [])
-                        logging.debug(f"Live data refresh: Updated {len(wifi_client_x)} WiFi clients")
+                        logging.info(f"Live data refresh: Updated WiFi clients trace with {len(wifi_client_x)} clients")
                     
                     elif 'wired client' in trace_name and 'link' not in trace_name:
                         trace['x'] = wired_client_x
                         trace['y'] = wired_client_y
                         trace['hovertext'] = wired_client_hover
                         trace['visible'] = 'wired_clients' in (client_layers or [])
-                        logging.debug(f"Live data refresh: Updated {len(wired_client_x)} Wired clients")
+                        logging.info(f"Live data refresh: Updated Wired clients trace with {len(wired_client_x)} clients")
                 
                 # Update the map-info section with new client count
                 timestamp = datetime.datetime.now().strftime('%H:%M:%S')
