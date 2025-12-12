@@ -27946,7 +27946,7 @@ class MapsManager:
                 
                 if map_response.status_code != 200:
                     logging.error(f"URL map switch: Failed to fetch map - HTTP {map_response.status_code}")
-                    return no_update, no_update, no_update
+                    return no_update, no_update
                 
                 new_map_data = map_response.data
                 new_map_name = new_map_data.get('name', 'Unnamed')
