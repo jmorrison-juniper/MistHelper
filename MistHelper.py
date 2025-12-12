@@ -27410,6 +27410,23 @@ class MapsManager:
                 html.H1(f"MistHelper Map Viewer - {map_data.get('name', 'Map')}", 
                        style={'display': 'inline-block', 'marginRight': '30px', 'marginBottom': '0'}),
                 html.Div([
+                    # Live Data Refresh Controls - moved to header
+                    html.Div([
+                        dcc.Checklist(
+                            id='auto-refresh-toggle',
+                            options=[{'label': ' Auto-Refresh', 'value': 'enabled'}],
+                            value=[],
+                            labelStyle={'display': 'inline-block', 'fontSize': '12px', 'color': '#e0e0e0'},
+                            style={'display': 'inline-block', 'marginRight': '10px'}
+                        ),
+                        html.Button('🔄 Refresh', id='manual-refresh-btn', n_clicks=0,
+                                   style={'marginRight': '15px', 'padding': '6px 12px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 
+                                          'cursor': 'pointer', 'fontSize': '12px', 'verticalAlign': 'middle'}),
+                        html.Span(id='countdown-display', children='Clients: --s | RF: --s',
+                                 style={'fontSize': '11px', 'color': '#667eea', 'marginRight': '15px', 'verticalAlign': 'middle'}),
+                    ], style={'display': 'inline-block', 'marginRight': '20px', 'padding': '5px 10px', 
+                              'backgroundColor': '#1a1a1a', 'borderRadius': '4px', 'border': '1px solid #444'}),
                     html.Button('🤖 Auto-Zone', id='auto-zone-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#667eea', 
                                       'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
@@ -27668,28 +27685,6 @@ class MapsManager:
                     html.Div(id='click-data', children=[
                         html.H3("🖱️ Device Info"),
                         html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
-                    ]),
-                    html.Hr(),
-                    html.H3("🔄 Live Data Refresh"),
-                    html.P("Auto-refresh client positions and RF data", style={'fontSize': '11px', 'color': '#888', 'marginBottom': '8px'}),
-                    html.Div([
-                        dcc.Checklist(
-                            id='auto-refresh-toggle',
-                            options=[
-                                {'label': ' Enable Auto-Refresh', 'value': 'enabled'},
-                            ],
-                            value=[],
-                            labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
-                            style={'marginBottom': '8px'}
-                        ),
-                        html.P("Clients: 30 sec | RF Heatmap: 5 min", style={'fontSize': '10px', 'color': '#667eea', 'marginBottom': '8px'}),
-                        html.Button('🔄 Refresh Now', id='manual-refresh-btn', n_clicks=0,
-                                   style={'width': '100%', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 
-                                          'cursor': 'pointer', 'fontSize': '13px', 'marginBottom': '8px'}),
-                        html.Div(id='refresh-status', children=[
-                            html.P("Auto-refresh: Off", style={'fontSize': '11px', 'color': '#888'})
-                        ])
                     ])
                 ], className='sidebar')
             ], className='main-container'),
@@ -27700,6 +27695,11 @@ class MapsManager:
                 'ppm': ppm,
                 'map_width': map_width,
                 'map_height': map_height
+            }),
+            # Store for tracking last refresh times
+            dcc.Store(id='refresh-times-store', data={
+                'client_last_refresh': 0,
+                'coverage_last_refresh': 0
             }),
             # Interval components for live refresh (disabled by default)
             dcc.Interval(
@@ -27713,6 +27713,13 @@ class MapsManager:
                 interval=5 * 60 * 1000,  # 5 minutes in milliseconds
                 n_intervals=0,
                 disabled=True  # Disabled until user enables auto-refresh
+            ),
+            # Fast interval for countdown display (1 second)
+            dcc.Interval(
+                id='countdown-tick-interval',
+                interval=1000,  # 1 second
+                n_intervals=0,
+                disabled=True  # Disabled until auto-refresh is enabled
             )
         ], style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'})
         
@@ -28210,54 +28217,97 @@ class MapsManager:
         @app.callback(
             [Output('client-refresh-interval', 'disabled'),
              Output('coverage-refresh-interval', 'disabled'),
-             Output('refresh-status', 'children')],
+             Output('countdown-tick-interval', 'disabled'),
+             Output('refresh-times-store', 'data'),
+             Output('countdown-display', 'children')],
             [Input('auto-refresh-toggle', 'value')],
             prevent_initial_call=True
         )
         def toggle_auto_refresh(toggle_value):
             """Enable or disable auto-refresh intervals based on checkbox"""
+            import time
             is_enabled = 'enabled' in (toggle_value or [])
+            current_time = time.time()
             
             if is_enabled:
                 logging.info("Live data refresh: Auto-refresh ENABLED by user")
-                status_msg = html.Div([
-                    html.P("Auto-refresh: ON", style={'fontSize': '11px', 'color': '#00ff00', 'fontWeight': 'bold'}),
-                    html.P("Clients: every 30s", style={'fontSize': '10px', 'color': '#888'}),
-                    html.P("RF Heatmap: every 5min", style={'fontSize': '10px', 'color': '#888'})
-                ])
+                # Initialize refresh times to now so countdown starts fresh
+                refresh_data = {
+                    'client_last_refresh': current_time,
+                    'coverage_last_refresh': current_time
+                }
+                countdown_text = "Clients: 30s | RF: 5:00"
             else:
                 logging.info("Live data refresh: Auto-refresh DISABLED by user")
-                status_msg = html.P("Auto-refresh: Off", style={'fontSize': '11px', 'color': '#888'})
+                refresh_data = {'client_last_refresh': 0, 'coverage_last_refresh': 0}
+                countdown_text = "Auto-refresh: Off"
             
             # Return disabled=False when enabled, disabled=True when disabled
-            return (not is_enabled, not is_enabled, status_msg)
+            return (not is_enabled, not is_enabled, not is_enabled, refresh_data, countdown_text)
+        
+        # Callback to update countdown display every second
+        @app.callback(
+            Output('countdown-display', 'children', allow_duplicate=True),
+            [Input('countdown-tick-interval', 'n_intervals')],
+            [State('refresh-times-store', 'data'),
+             State('auto-refresh-toggle', 'value')],
+            prevent_initial_call=True
+        )
+        def update_countdown_display(n_intervals, refresh_times, toggle_value):
+            """Update the countdown display every second"""
+            import time
+            
+            if not refresh_times or 'enabled' not in (toggle_value or []):
+                return "Auto-refresh: Off"
+            
+            current_time = time.time()
+            
+            # Calculate time until next client refresh (30 seconds)
+            client_elapsed = current_time - refresh_times.get('client_last_refresh', current_time)
+            client_remaining = max(0, 30 - int(client_elapsed) % 30)
+            
+            # Calculate time until next coverage refresh (5 minutes = 300 seconds)
+            coverage_elapsed = current_time - refresh_times.get('coverage_last_refresh', current_time)
+            coverage_remaining = max(0, 300 - int(coverage_elapsed) % 300)
+            coverage_mins = coverage_remaining // 60
+            coverage_secs = coverage_remaining % 60
+            
+            return f"Clients: {client_remaining}s | RF: {coverage_mins}:{coverage_secs:02d}"
         
         # Store reference to API session for refresh callbacks
         api_session_ref = self.apisession
         
         # Callback for client position refresh (every 30 seconds when enabled)
         @app.callback(
-            Output('map-display', 'figure', allow_duplicate=True),
+            [Output('map-display', 'figure', allow_duplicate=True),
+             Output('refresh-times-store', 'data', allow_duplicate=True)],
             [Input('client-refresh-interval', 'n_intervals'),
              Input('manual-refresh-btn', 'n_clicks')],
             [State('map-config-store', 'data'),
              State('map-display', 'figure'),
-             State('client-toggle', 'value')],
+             State('client-toggle', 'value'),
+             State('refresh-times-store', 'data')],
             prevent_initial_call=True
         )
-        def refresh_client_positions(n_intervals, manual_clicks, config, current_fig, client_layers):
+        def refresh_client_positions(n_intervals, manual_clicks, config, current_fig, client_layers, refresh_times):
             """Refresh client positions from Mist API"""
             import datetime
+            import time
             
             ctx = dash.callback_context
             if not ctx.triggered:
-                return no_update
+                return no_update, no_update
             
             trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
             
             # Skip if manual refresh button was clicked but clients not shown
             if trigger_id == 'manual-refresh-btn':
                 logging.info("Live data refresh: Manual refresh requested")
+            
+            # Update refresh time
+            current_time = time.time()
+            updated_refresh_times = refresh_times.copy() if refresh_times else {}
+            updated_refresh_times['client_last_refresh'] = current_time
             
             try:
                 site_id_local = config.get('site_id')
@@ -28275,7 +28325,7 @@ class MapsManager:
                 
                 if clients_response.status_code != 200:
                     logging.warning(f"Live data refresh: Failed to fetch clients - HTTP {clients_response.status_code}")
-                    return no_update
+                    return no_update, updated_refresh_times
                 
                 # Get all clients and filter for this map
                 all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
@@ -28337,27 +28387,35 @@ class MapsManager:
                 timestamp = datetime.datetime.now().strftime('%H:%M:%S')
                 logging.info(f"Live data refresh: Client positions updated at {timestamp} - WiFi: {len(wifi_client_x)}, Wired: {len(wired_client_x)}")
                 
-                return current_fig
+                return current_fig, updated_refresh_times
                 
             except Exception as refresh_error:
                 logging.error(f"Live data refresh: Error refreshing clients: {refresh_error}", exc_info=True)
-                return no_update
+                return no_update, updated_refresh_times
         
         # Callback for RF coverage refresh (every 5 minutes when enabled)
         @app.callback(
-            Output('map-display', 'figure', allow_duplicate=True),
+            [Output('map-display', 'figure', allow_duplicate=True),
+             Output('refresh-times-store', 'data', allow_duplicate=True)],
             [Input('coverage-refresh-interval', 'n_intervals')],
             [State('map-config-store', 'data'),
              State('map-display', 'figure'),
-             State('layer-toggle', 'value')],
+             State('layer-toggle', 'value'),
+             State('refresh-times-store', 'data')],
             prevent_initial_call=True
         )
-        def refresh_rf_coverage(n_intervals, config, current_fig, layer_values):
+        def refresh_rf_coverage(n_intervals, config, current_fig, layer_values, refresh_times):
             """Refresh RF coverage heatmap from Mist API"""
             import datetime
+            import time
             
             if n_intervals == 0:
-                return no_update
+                return no_update, no_update
+            
+            # Update refresh time
+            current_time = time.time()
+            updated_refresh_times = refresh_times.copy() if refresh_times else {}
+            updated_refresh_times['coverage_last_refresh'] = current_time
             
             try:
                 site_id_local = config.get('site_id')
@@ -28380,19 +28438,19 @@ class MapsManager:
                 
                 if coverage_response.status_code != 200:
                     logging.warning(f"Live data refresh: Failed to fetch RF coverage - HTTP {coverage_response.status_code}")
-                    return no_update
+                    return no_update, updated_refresh_times
                 
                 coverage_data = coverage_response.data
                 
                 # Check for error response
                 if isinstance(coverage_data, dict) and 'exception' in coverage_data:
                     logging.warning(f"Live data refresh: Coverage API returned error")
-                    return no_update
+                    return no_update, updated_refresh_times
                 
                 results = coverage_data.get('results', [])
                 if not results:
                     logging.info("Live data refresh: No coverage data available")
-                    return no_update
+                    return no_update, updated_refresh_times
                 
                 logging.info(f"Live data refresh: Processing {len(results)} coverage grid points")
                 
@@ -28430,11 +28488,11 @@ class MapsManager:
                 timestamp = datetime.datetime.now().strftime('%H:%M:%S')
                 logging.info(f"Live data refresh: RF coverage updated at {timestamp} - {len(results)} points")
                 
-                return current_fig
+                return current_fig, updated_refresh_times
                 
             except Exception as refresh_error:
                 logging.error(f"Live data refresh: Error refreshing RF coverage: {refresh_error}", exc_info=True)
-                return no_update
+                return no_update, updated_refresh_times
         
         # Determine host binding - use 0.0.0.0 in containers for external access
         dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'

@@ -479,6 +479,23 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.17.15",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Moved live refresh controls from sidebar to header bar for better visibility",
+          "Added countdown timers showing seconds until next client refresh and minutes:seconds until RF heatmap refresh",
+          "Countdown updates every second when auto-refresh is enabled",
+          "Compact refresh control panel with dark background in header"
+        ],
+        "refactoring": [
+          "Added refresh-times-store to track last refresh timestamps for countdown calculation",
+          "Added 1-second countdown-tick-interval for real-time countdown display",
+          "Updated refresh callbacks to return both figure and refresh times"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.16.45",
       "date": "2025-12-12",
       "changes": {
