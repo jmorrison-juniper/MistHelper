@@ -28042,40 +28042,174 @@ class MapsManager:
                             showlegend=False
                         ))
                 
-                # Add devices (APs)
-                ap_x, ap_y, ap_hover = [], [], []
-                for device in new_devices:
-                    if device.get('x') is not None and device.get('y') is not None:
-                        ap_x.append(device['x'])
-                        ap_y.append(device['y'])
-                        ap_hover.append(f"<b>{device.get('name', 'Unknown')}</b><br>MAC: {device.get('mac', 'N/A')}")
+                # Add devices (APs, Switches, Gateways) with status-based colors
+                # Device type configurations matching original styling
+                device_type_config = {
+                    'ap': {
+                        'symbol': 'triangle-up',
+                        'name': 'Access Points',
+                        'size': 20,
+                        'colors': {
+                            'connected': '#00ff00',      # Bright green
+                            'disconnected': '#ff0000',   # Bright red
+                            'upgrading': '#ff8800'       # Orange/amber
+                        }
+                    },
+                    'switch': {
+                        'symbol': 'square',
+                        'name': 'Switches',
+                        'size': 18,
+                        'colors': {
+                            'connected': '#00ccff',      # Cyan
+                            'disconnected': '#ff0000',   # Bright red
+                            'upgrading': '#ff8800'       # Orange/amber
+                        }
+                    },
+                    'gateway': {
+                        'symbol': 'diamond',
+                        'name': 'Gateways',
+                        'size': 20,
+                        'colors': {
+                            'connected': '#ff00ff',      # Magenta
+                            'disconnected': '#ff0000',   # Bright red
+                            'upgrading': '#ff8800'       # Orange/amber
+                        }
+                    }
+                }
                 
-                if ap_x:
-                    new_fig.add_trace(go.Scatter(
-                        x=ap_x, y=ap_y,
-                        mode='markers',
-                        marker=dict(symbol='square', size=12, color='#ffa500'),
-                        name='Access Points',
-                        hovertext=ap_hover,
-                        hoverinfo='text'
-                    ))
+                # Group devices by type
+                device_types = {'ap': [], 'switch': [], 'gateway': []}
+                for device in new_devices:
+                    device_type = device.get('type', 'ap')
+                    if device.get('x') is not None and device.get('y') is not None:
+                        if device_type in device_types:
+                            device_types[device_type].append(device)
+                
+                # Add traces for each device type
+                for device_type, config in device_type_config.items():
+                    type_devices = device_types[device_type]
+                    if type_devices:
+                        x_coords = [d['x'] for d in type_devices]
+                        y_coords = [d['y'] for d in type_devices]
+                        names = [d.get('name', d.get('mac', 'Unknown')) for d in type_devices]
+                        
+                        # Determine status and color for each device
+                        colors = []
+                        hover_texts = []
+                        for d in type_devices:
+                            status = d.get('status', 'disconnected')
+                            if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                                device_status = 'upgrading'
+                            elif status == 'connected':
+                                device_status = 'connected'
+                            else:
+                                device_status = 'disconnected'
+                            colors.append(config['colors'][device_status])
+                            
+                            # Build hover text
+                            text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
+                            text += f"Type: {d.get('type', 'N/A')}<br>"
+                            text += f"Model: {d.get('model', 'N/A')}<br>"
+                            text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                            text += f"Status: <b>{device_status.upper()}</b>"
+                            hover_texts.append(text)
+                        
+                        # Add device markers
+                        new_fig.add_trace(go.Scatter(
+                            x=x_coords, y=y_coords,
+                            mode='markers',
+                            name=config['name'],
+                            marker=dict(
+                                symbol=config['symbol'],
+                                size=config['size'],
+                                color=colors,
+                                line=dict(color='white', width=2),
+                                opacity=0.9
+                            ),
+                            hovertext=hover_texts,
+                            hoverinfo='text',
+                            visible=True,
+                            showlegend=True
+                        ))
+                        
+                        # Add device name labels
+                        for i, (x, y, name, device_color) in enumerate(zip(x_coords, y_coords, names, colors)):
+                            new_fig.add_annotation(
+                                x=x,
+                                y=y - 15,
+                                text=f"<b>{name}</b>",
+                                showarrow=False,
+                                font=dict(size=11, color='white', family='Arial Black'),
+                                bgcolor='rgba(0,0,0,0.85)',
+                                bordercolor=device_color,
+                                borderwidth=2,
+                                borderpad=3,
+                                xanchor='center',
+                                yanchor='bottom',
+                                name=f"{config['name']} Label"
+                            )
                 
                 # Add clients
-                client_x, client_y, client_hover = [], [], []
+                client_x, client_y, client_hover, client_names = [], [], [], []
                 for client in new_clients:
-                    client_x.append(client.get('x'))
-                    client_y.append(client.get('y'))
-                    client_hover.append(f"<b>{client.get('hostname', client.get('mac', 'Unknown'))}</b>")
+                    x = client.get('x')
+                    y = client.get('y')
+                    if x is not None and y is not None:
+                        client_x.append(x)
+                        client_y.append(y)
+                        
+                        # Use hostname or MAC for label
+                        client_mac = client.get('mac', 'unknown')
+                        hostname = client.get('hostname', '')
+                        label = hostname if hostname else client_mac[-8:]
+                        client_names.append(label)
+                        
+                        # Build hover text with client details
+                        hover = f"<b>Client</b><br>"
+                        hover += f"MAC: {client.get('mac', 'N/A')}<br>"
+                        hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"
+                        hover += f"SSID: {client.get('ssid', 'N/A')}<br>"
+                        hover += f"AP: {client.get('ap_name', 'N/A')}<br>"
+                        hover += f"Band: {client.get('band', 'N/A')}<br>"
+                        hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"
+                        hover += f"Position: ({x}, {y})"
+                        client_hover.append(hover)
                 
                 if client_x:
+                    # Add client markers with proper styling
                     new_fig.add_trace(go.Scatter(
                         x=client_x, y=client_y,
                         mode='markers',
-                        marker=dict(symbol='circle', size=10, color='#00ff00'),
                         name='Clients',
+                        marker=dict(
+                            symbol='circle',
+                            size=12,
+                            color='#00ff00',  # Bright green
+                            line=dict(color='white', width=2),
+                            opacity=0.9
+                        ),
                         hovertext=client_hover,
-                        hoverinfo='text'
+                        hoverinfo='text',
+                        visible=True,
+                        showlegend=True
                     ))
+                    
+                    # Add client name labels with shadow effect using annotations
+                    for i, (x, y, name) in enumerate(zip(client_x, client_y, client_names)):
+                        new_fig.add_annotation(
+                            x=x,
+                            y=y - 10,  # Position above marker
+                            text=f"<b>{name}</b>",
+                            showarrow=False,
+                            font=dict(size=9, color='white', family='Arial'),
+                            bgcolor='rgba(0,128,0,0.9)',
+                            bordercolor='white',
+                            borderwidth=1,
+                            borderpad=2,
+                            xanchor='center',
+                            yanchor='bottom',
+                            name='Clients Label'  # For toggle control
+                        )
                 
                 # Update layout
                 new_fig.update_layout(
