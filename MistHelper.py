@@ -27611,8 +27611,7 @@ class MapsManager:
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
                                           'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
                     ]),
-                    html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'})
-                    ]),
+                    html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'}),
                     html.Hr(),
                     html.H3("📏 Measurement Tools"),
                     html.P("Use the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
