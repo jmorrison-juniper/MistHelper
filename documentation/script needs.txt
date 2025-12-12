@@ -1,0 +1,130 @@
+Ideally a script will run in two parts:
+1.	A script that loops forever retrieving universally useful data and storing it.
+
+2.	Specific user requested data that needs:
+a.	to be queried outside the standard loop.
+b.	anything requiring device/site specific GET/POST/WebSocket commands.
+
+3.	Forever looping script pieces:
+a.	Search Site list ( GET /api/v1/orgs/:org_id/sites )
+i.	Response is paginated, use the returned “next” URL for following pages until returned value is empty.
+ii.	Save JSON results to a unique variable or file.
+iii.	This give you a map to bind together the sites human-readable names, and Mist “site_id”’s that can be used later to perform site specific calls.
+b.	Search Organization Inventory ( GET /api/v1/orgs/:org_id/inventory/search )
+i.	Response is paginated, use the returned “next” URL for following pages until returned value is empty.
+ii.	Save JSON results to a unique variable or file.
+iii.	This gives you a map to bind together the “mac/vc_mac”, “site_id”, “type”, “name”, and “serial”. Useful for cross referencing human-readable names to device specific ID’s/mac’s.
+c.	Search Org Device Stats ( GET /api/v1/orgs/:org_id/stats/devices )
+i.	Make sure to specify the “type” as “all” if you want all the device stats in a single call (AP, gateway, and switch)
+ii.	Response is paginated, request for following pages until returned value is empty.
+iii.	Save JSON results to a unique variable or file.
+iv.	This give you the stats for all devices including their current “connectivity status”, “version”, “model”, and “type”.
+d.	Search Org Device Port Stats ( GET /api/v1/orgs/:org_id/stats/ports/search )
+i.	Response is paginated, use the returned “next” URL for following pages until returned value is empty.
+ii.	Save JSON results to a unique variable or file.
+iii.	This gives you the full port stats for all devices across the Org. Very useful and powerful. Correlation for each port gives you the parent devices “mac”, parent devices “type”, each port “port_id”, transmit/receive amounts/rates, up/down/disabled statuses, and port descriptions.
+e.	Search all “Peer Path” stats ( GET /api/v1/orgs/{org_id}/stats/vpn_peers/search )
+i.	Response is paginated, request for following pages until returned value is empty.
+ii.	Save JSON results to a unique variable or file.
+iii.	This gives you the full Peer Path Statistics for all devices across the Org. Response includes the “mac” of the source router, the “peer_mac” of the device on the other side, the “port_id” of the tunnel originator, and “active”/”up” status.
+This should satisfy all your stated goals in just 5 API “get” query types (multiple paginated API requests needed depending on number of sites, devices, and ports of course) except for manual user requested queries requiring a “post” or “websocket” call, such as a test ping.
+If you incorporate a ¾ of a second delay between API call, you can have these universal calls loop continuously updating your variables/files with the latest values.
+Whatever automation you want to build will use this data to form all other API calls (site ID’s, device ID’s, mac’s, etc etc.)
+For example, you could build a script that uses the values retrieved in the 5 API Org calls above plus a user input value to display all data about gateways and switches at a specific site, only requiring the human readable “site name” as input.
+The script would use the site name to lookup the site id, and then search through all the other device and port stats that had that site id, and display all that data in whatever format you wish.
+
+It could display all the Port IDs, grouped by their parent device (SW or GW) and corresponding up/down status and description.
+You could have the script do automatic bulk collection of data from all routers and switches at a specific site, post Cisco-to-Juniper migration for validation.
+You could call a crafted script to execute all the WebSocket, site specific data collection when called by an outside 3rd party alarming/monitoring platform and save to a formatted file for ingestion into that platform.
+Lots of possibilities.
+
+4.	Site/Device specific POST/WebSocket commands:
+a.	Ping from Device (SW/AP/Gateway) (POST /api/v1/sites/:site_id/devices/:device_id/ping )
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+ii.	Host is a required value. Egress interface is optional.
+b.	Service Ping from SSR (POST /api/v1/sites/:site_id/devices/:device_id/service_ping )
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+ii.	Tenant is a required value, service is optional, host is the target IP of the ping.
+c.	Show Site SSR Service Path (POST /api/v1/sites/{site_id}/devices/{device_id}/show_service_path)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+d.	Show Site Device Forwarding Table( POST /api/v1/sites/{site_id}/devices/{device_id}/show_forwarding_table )
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+ii.	Supports multiple filters including VRF and tenants and services.
+e.	Bounce Device Port (SW/Gateway) (POST /api/v1/sites/{site_id}/devices/{device_id}/bounce_port)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+f.	Show Site Device Mac Table (SW or GW) (POST /api/v1/sites/{site_id}/devices/{device_id}/show_mac_table)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+g.	Show Site Device Dhcp Leases (POST /api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+h.	Show Site SSR Routes (POST /api/v1/sites/{site_id}/devices/{device_id}/show_route)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+ii.	Can specify lots of additional filters including BGP advertised/received routes.
+i.	Show Site SSR Sessions (POST /api/v1/sites/{site_id}/devices/{device_id}/show_session)
+i.	POST API call, requires WebSocket to receive results. Session demuxing.
+5.	Search Search Site Sw or Gw Ports ( GET /api/v1/sites/:site_id/stats/ports/search )
+a.	Same as Org Port stats, however you can query them out of cycle if you need more immediate results for a site in question.
+6.	Get Site Device Virtual Chassis (GET /api/v1/sites/{site_id}/devices/{device_id}/vc)
+a.	Returns current configured VC links and their status, per-member, including useful chassis stats for cpu, fans, memory, poe, psu’s, temperatures, VC links configured, roles, status, neighbors, and more.
+
+Reference:
+Overview - Mist API Reference
+Create Gateway/Switch Shell Session:
+Create Site Device Shell Session - Mist API Reference
+ 
+Queries that need solved from the MOP:
+1.	Gateway SSR:
+a.	show mist | cat
+i.	Solved by Org-Wide Inventory and device stats
+b.	show network-interface | cat
+i.	Solved by Search Org-Wide Port Stats call
+1.	*** need to verify “bond” interfaces are in the call response
+c.	show peer detail | cat
+i.	Solved by Search Org Peer Path Stats
+d.	show service-path service-name XXX | cat
+i.	Solved by Show Site SSR Service Path
+1.	Will need individual calls for each service-paths in question per site device.
+e.	ping egress-interface bond-0-0_XYZ 10.xx.yy.6
+i.	Solved by Ping from Device
+f.	service-ping service-name ABC tenant XYZ source-ip 10.ip1.ip2.1 10.ip3.ip4.25
+i.	Solved by Service Ping from SSR
+g.	set provisional-status <name> down
+i.	Solved by Bounce Device Port
+h.	show mist
+i.	Solved by Search Org Device Stats
+i.	show network-interface | cat OR show device-interface summary
+i.	Solved by Search Org Device Port Stats
+j.	show rib | cat OR show rib vrf Lower | cat OR show rib vrf Upper | cat
+i.	Solved by Show Site SSR Routes
+k.	show fib OR show fib vrf Lower OR show fib vrf Upper
+i.	Solved by Show Site Device Forwarding Table
+l.	show bgp XYZ
+i.	Solved by Show Site SSR Routes
+m.	show sessions service-name
+i.	Solved by Show Site SSR Sessions
+2.	Switch:
+a.	show system connections | grep 2200 | grep ESTABLISHED
+i.	Solved by Search Org Device Stats
+b.	show version brief | grep Junos
+i.	Solved by Search Org Device Stats
+c.	show configuration | grep “switchname?”
+i.	Solved by Search Org Device Stats
+d.	show virtual-chassis
+i.	Solved by Get Site Device Virtual Chassis
+e.	show interfaces terse | grep ae0.0 OR ge-0/2/0.0 OR vme.0
+i.	Solved by Search Org Device Port Stats
+f.	show route 0.0.0.0
+i.	WIP, probably Generic Web-Shell session needed.
+g.	ping 10.xx.yy.zz count 5
+i.	Solved by Ping from Device (SW/AP/Gateway)
+h.	set interfaces <name> disable/enable.
+i.	Solved by Bounce Device Port
+i.	show poe interface
+i.	Solved by Search Org Device Port Stats
+j.	show vlans
+i.	WIP, maybe Show Site Device Mac Table
+k.	show dhcp-security binding
+i.	WIP, will probably need the Interactive Shell Session.
+l.	Speedtest results. From 24hr.
+i.	
+
+ 
