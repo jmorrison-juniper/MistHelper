@@ -27185,6 +27185,12 @@ class MapsManager:
                 unique_x = sorted(set(x for x, y in grid_data.keys()))
                 unique_y = sorted(set(y for x, y in grid_data.keys()))
                 
+                # Diagnostic logging for coordinate alignment debugging
+                logging.info(f"HEATMAP DEBUG - Map dimensions: {map_width}x{map_height} pixels, PPM: {ppm}")
+                logging.info(f"HEATMAP DEBUG - Coverage X range: {min(unique_x):.1f} to {max(unique_x):.1f} pixels (from {min(unique_x)/ppm:.1f}m to {max(unique_x)/ppm:.1f}m)")
+                logging.info(f"HEATMAP DEBUG - Coverage Y range: {min(unique_y):.1f} to {max(unique_y):.1f} pixels (from {min(unique_y)/ppm:.1f}m to {max(unique_y)/ppm:.1f}m)")
+                logging.info(f"HEATMAP DEBUG - Grid size: {len(unique_x)} x {len(unique_y)} = {len(grid_data)} data points")
+                
                 # Create Z matrix for heatmap - use None for missing data points
                 # This prevents artificial values from being interpolated
                 z_matrix = []
