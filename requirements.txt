@@ -35,9 +35,3 @@ matplotlib>=3.5.0
 
 # Enhanced HTTP and input handling
 urllib3>=1.26.0
-# Optional dependencies (platform-specific) - REMOVED
-# Note: pynput and pexpect have been completely removed to eliminate
-# container build issues and reduce dependency complexity.
-# SSH functionality uses paramiko only.
-
-# Note: SQLite support is built into Python (no additional dependency needed)

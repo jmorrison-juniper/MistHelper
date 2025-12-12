@@ -1,26 +1,21 @@
-# Environment files (keep sample files)
+# Environment files - never include credentials
 .env
 .env.local
 .env.production
 .env.staging
-!documentation/sample.env
 
-# Data directory and outputs
+# Data directory - generated at runtime
 data/
 Data/
 DATA/
 CombinedInventory_ByWeek/
 *.csv
-!documentation/*.csv
-!documentation/**/*.CSV
-
-# Database files
 *.db
 *.sqlite
 *.sqlite3
 *.db3
 
-# Logs
+# Logs - generated at runtime
 *.log
 script.log
 
@@ -63,7 +58,7 @@ env/
 *~
 .DS_Store
 
-# Testing
+# Testing and coverage
 .pytest_cache/
 .coverage
 htmlcov/
@@ -72,9 +67,17 @@ htmlcov/
 # Git
 .git/
 .gitignore
+.gitattributes
 
-# Documentation build artifacts
+# Documentation (not needed in container)
+documentation/
+docs/
 docs/_build/
+*.md
+__init__.py
+agents.md
+SSH_GUIDE.md
+run-misthelper.py
 
 # Temporary files
 tmp/
@@ -98,13 +101,32 @@ temp/
 credentials.json
 secrets.json
 
-# Tuning and metrics (generated at runtime)
+# Generated at runtime
 delay_metrics.json
 tuning_data.json
-
-# SSH logs
 per-host-logs/
 
 # Package manager artifacts
 *.lock
 uv.lock
+
+# Archive and backup files
+*.tar
+*.tar.gz
+*.zip
+*.bak
+*.backup
+
+# Other unnecessary files
+MIGRATION.md
+READY_FOR_MIGRATION.md
+ROLLBACK_FEATURES.md
+init-standalone-repo.ps1
+publish-containers.ps1
+compose.yml
+starlink_requirements.txt
+starlink_dashboard.py
+starlink_tui.py
+show_command_help.json
+junk/
+starlink-api-reference/
