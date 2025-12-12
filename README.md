@@ -479,6 +479,73 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.16.45",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Live data refresh: map viewer now supports automatic refresh of client positions (every 30 seconds) and RF heatmap (every 5 minutes)",
+          "Auto-refresh toggle: checkbox in sidebar to enable/disable live data updates",
+          "Manual refresh button: 'Refresh Now' button for on-demand data updates",
+          "Refresh status indicator: shows current auto-refresh state and timing intervals"
+        ],
+        "enhancements": [
+          "dcc.Store component: stores site_id, map_id, PPM, and map dimensions for refresh callbacks",
+          "dcc.Interval components: two separate intervals for clients (30s) and coverage (5min) with disabled-by-default state",
+          "Callback architecture: separate callbacks for toggle, client refresh, and coverage refresh with proper state management",
+          "API session reference: refresh callbacks use stored API session for authenticated requests"
+        ],
+        "logging": [
+          "Added 'Live data refresh:' prefix to all refresh-related log entries for easy filtering",
+          "Logs include timestamp, client counts (WiFi vs Wired), and coverage point counts"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.15.35",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Unscaled map detection: warns user when map has PPM=0 (not scaled in Mist Portal)",
+          "User guidance message: directs users to Location -> Floorplans -> select image -> SET SCALE in Mist Portal"
+        ],
+        "enhancements": [
+          "Explicit warning in console when map_ppm is 0 or missing"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.15.30",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "PPM auto-correction: calculates actual PPM from client x/x_m and y/y_m coordinate ratios",
+          "PPM mismatch detection: warns when calculated PPM differs from map stored PPM by more than 10%"
+        ],
+        "bug_fixes": [
+          "RF coverage heatmap now displays correctly on maps where Mist stored incorrect PPM",
+          "Fixed heatmap only covering upper-left corner of map due to coordinate scaling mismatch"
+        ],
+        "enhancements": [
+          "Uses first 10 clients with both pixel and meter coordinates to calculate average PPM",
+          "Logs PPM validation results (pass/mismatch) with exact values for debugging"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.14.30",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Added heatmap coordinate debug logging to script.log",
+          "Logs coverage X/Y ranges in both pixels and meters for PPM validation"
+        ],
+        "compatibility": [
+          "Fixed compose.yml port mappings (2200:2200, 8050:8050)",
+          "Fixed volume mount syntax from named volume to bind mount (./data:/app/data:rw)"
+        ]
+      }
+    },
+    {
       "version": "25.12.09.14.44",
       "date": "2025-12-09",
       "changes": {

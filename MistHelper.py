@@ -26298,8 +26298,9 @@ class MapsManager:
         
         try:
             logging.debug("Importing Dash modules for interactive viewer")
-            from dash import Dash, html, dcc, Input, Output, State, callback_context
+            from dash import Dash, html, dcc, Input, Output, State, callback_context, no_update
             import dash
+            import json as json_module
             logging.info(f"Dash version: {dash.__version__}")
         except ImportError as e:
             logging.error(f"Failed to import Dash, falling back to static view: {e}", exc_info=True)
@@ -26314,6 +26315,7 @@ class MapsManager:
         print("! Opening web browser with interactive map...")
         print("! Features:")
         print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
+        print("!   - Live data refresh (clients update every 30s, RF every 5min)")
         print("!   - Ruler tool - Draw lines to measure distances")
         print("!   - Connected client visualization (green dots)")
         print("!   - Click devices/clients to see details")
@@ -27666,9 +27668,52 @@ class MapsManager:
                     html.Div(id='click-data', children=[
                         html.H3("🖱️ Device Info"),
                         html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
+                    ]),
+                    html.Hr(),
+                    html.H3("🔄 Live Data Refresh"),
+                    html.P("Auto-refresh client positions and RF data", style={'fontSize': '11px', 'color': '#888', 'marginBottom': '8px'}),
+                    html.Div([
+                        dcc.Checklist(
+                            id='auto-refresh-toggle',
+                            options=[
+                                {'label': ' Enable Auto-Refresh', 'value': 'enabled'},
+                            ],
+                            value=[],
+                            labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
+                            style={'marginBottom': '8px'}
+                        ),
+                        html.P("Clients: 30 sec | RF Heatmap: 5 min", style={'fontSize': '10px', 'color': '#667eea', 'marginBottom': '8px'}),
+                        html.Button('🔄 Refresh Now', id='manual-refresh-btn', n_clicks=0,
+                                   style={'width': '100%', 'padding': '8px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 
+                                          'cursor': 'pointer', 'fontSize': '13px', 'marginBottom': '8px'}),
+                        html.Div(id='refresh-status', children=[
+                            html.P("Auto-refresh: Off", style={'fontSize': '11px', 'color': '#888'})
+                        ])
                     ])
                 ], className='sidebar')
-            ], className='main-container')
+            ], className='main-container'),
+            # Hidden stores for state management
+            dcc.Store(id='map-config-store', data={
+                'site_id': site_id,
+                'map_id': map_id,
+                'ppm': ppm,
+                'map_width': map_width,
+                'map_height': map_height
+            }),
+            # Interval components for live refresh (disabled by default)
+            dcc.Interval(
+                id='client-refresh-interval',
+                interval=30 * 1000,  # 30 seconds in milliseconds
+                n_intervals=0,
+                disabled=True  # Disabled until user enables auto-refresh
+            ),
+            dcc.Interval(
+                id='coverage-refresh-interval',
+                interval=5 * 60 * 1000,  # 5 minutes in milliseconds
+                n_intervals=0,
+                disabled=True  # Disabled until user enables auto-refresh
+            )
         ], style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'})
         
         # Callback for layer toggle
@@ -28160,6 +28205,236 @@ class MapsManager:
                     ])
             
             return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
+        
+        # Callback to toggle auto-refresh intervals on/off
+        @app.callback(
+            [Output('client-refresh-interval', 'disabled'),
+             Output('coverage-refresh-interval', 'disabled'),
+             Output('refresh-status', 'children')],
+            [Input('auto-refresh-toggle', 'value')],
+            prevent_initial_call=True
+        )
+        def toggle_auto_refresh(toggle_value):
+            """Enable or disable auto-refresh intervals based on checkbox"""
+            is_enabled = 'enabled' in (toggle_value or [])
+            
+            if is_enabled:
+                logging.info("Live data refresh: Auto-refresh ENABLED by user")
+                status_msg = html.Div([
+                    html.P("Auto-refresh: ON", style={'fontSize': '11px', 'color': '#00ff00', 'fontWeight': 'bold'}),
+                    html.P("Clients: every 30s", style={'fontSize': '10px', 'color': '#888'}),
+                    html.P("RF Heatmap: every 5min", style={'fontSize': '10px', 'color': '#888'})
+                ])
+            else:
+                logging.info("Live data refresh: Auto-refresh DISABLED by user")
+                status_msg = html.P("Auto-refresh: Off", style={'fontSize': '11px', 'color': '#888'})
+            
+            # Return disabled=False when enabled, disabled=True when disabled
+            return (not is_enabled, not is_enabled, status_msg)
+        
+        # Store reference to API session for refresh callbacks
+        api_session_ref = self.apisession
+        
+        # Callback for client position refresh (every 30 seconds when enabled)
+        @app.callback(
+            Output('map-display', 'figure', allow_duplicate=True),
+            [Input('client-refresh-interval', 'n_intervals'),
+             Input('manual-refresh-btn', 'n_clicks')],
+            [State('map-config-store', 'data'),
+             State('map-display', 'figure'),
+             State('client-toggle', 'value')],
+            prevent_initial_call=True
+        )
+        def refresh_client_positions(n_intervals, manual_clicks, config, current_fig, client_layers):
+            """Refresh client positions from Mist API"""
+            import datetime
+            
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return no_update
+            
+            trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            # Skip if manual refresh button was clicked but clients not shown
+            if trigger_id == 'manual-refresh-btn':
+                logging.info("Live data refresh: Manual refresh requested")
+            
+            try:
+                site_id_local = config.get('site_id')
+                map_id_local = config.get('map_id')
+                ppm_local = config.get('ppm', 10)
+                
+                logging.info(f"Live data refresh: Fetching client positions for map {map_id_local}")
+                
+                # Fetch fresh client data from API
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+                    api_session_ref,
+                    site_id=site_id_local,
+                    limit=1000
+                )
+                
+                if clients_response.status_code != 200:
+                    logging.warning(f"Live data refresh: Failed to fetch clients - HTTP {clients_response.status_code}")
+                    return no_update
+                
+                # Get all clients and filter for this map
+                all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
+                fresh_clients = [c for c in all_clients if c.get('map_id') == map_id_local and c.get('x') is not None and c.get('y') is not None]
+                
+                logging.info(f"Live data refresh: Found {len(fresh_clients)} clients on map (total: {len(all_clients)})")
+                
+                # Update client traces in the figure
+                wifi_client_x = []
+                wifi_client_y = []
+                wifi_client_hover = []
+                wired_client_x = []
+                wired_client_y = []
+                wired_client_hover = []
+                
+                for client in fresh_clients:
+                    # Convert meter coordinates to pixels
+                    client_x_px = client.get('x', 0) * ppm_local
+                    client_y_px = client.get('y', 0) * ppm_local
+                    
+                    # Build hover text
+                    client_name = client.get('hostname', client.get('mac', 'Unknown'))
+                    client_mac = client.get('mac', 'Unknown')
+                    client_ip = client.get('ip', 'N/A')
+                    rssi = client.get('rssi', 'N/A')
+                    ssid = client.get('ssid', 'N/A')
+                    
+                    hover_text = f"Client: {client_name}<br>MAC: {client_mac}<br>IP: {client_ip}<br>SSID: {ssid}<br>RSSI: {rssi}"
+                    
+                    # Separate WiFi vs Wired clients
+                    if client.get('wired', False):
+                        wired_client_x.append(client_x_px)
+                        wired_client_y.append(client_y_px)
+                        wired_client_hover.append(hover_text)
+                    else:
+                        wifi_client_x.append(client_x_px)
+                        wifi_client_y.append(client_y_px)
+                        wifi_client_hover.append(hover_text)
+                
+                # Update traces in figure
+                for trace in current_fig['data']:
+                    trace_name = trace.get('name', '').lower()
+                    
+                    if 'wifi client' in trace_name and 'link' not in trace_name:
+                        trace['x'] = wifi_client_x
+                        trace['y'] = wifi_client_y
+                        trace['hovertext'] = wifi_client_hover
+                        trace['visible'] = 'wifi_clients' in (client_layers or [])
+                        logging.debug(f"Live data refresh: Updated {len(wifi_client_x)} WiFi clients")
+                    
+                    elif 'wired client' in trace_name and 'link' not in trace_name:
+                        trace['x'] = wired_client_x
+                        trace['y'] = wired_client_y
+                        trace['hovertext'] = wired_client_hover
+                        trace['visible'] = 'wired_clients' in (client_layers or [])
+                        logging.debug(f"Live data refresh: Updated {len(wired_client_x)} Wired clients")
+                
+                # Update the map-info section with new client count
+                timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+                logging.info(f"Live data refresh: Client positions updated at {timestamp} - WiFi: {len(wifi_client_x)}, Wired: {len(wired_client_x)}")
+                
+                return current_fig
+                
+            except Exception as refresh_error:
+                logging.error(f"Live data refresh: Error refreshing clients: {refresh_error}", exc_info=True)
+                return no_update
+        
+        # Callback for RF coverage refresh (every 5 minutes when enabled)
+        @app.callback(
+            Output('map-display', 'figure', allow_duplicate=True),
+            [Input('coverage-refresh-interval', 'n_intervals')],
+            [State('map-config-store', 'data'),
+             State('map-display', 'figure'),
+             State('layer-toggle', 'value')],
+            prevent_initial_call=True
+        )
+        def refresh_rf_coverage(n_intervals, config, current_fig, layer_values):
+            """Refresh RF coverage heatmap from Mist API"""
+            import datetime
+            
+            if n_intervals == 0:
+                return no_update
+            
+            try:
+                site_id_local = config.get('site_id')
+                map_id_local = config.get('map_id')
+                ppm_local = config.get('ppm', 10)
+                
+                logging.info(f"Live data refresh: Fetching RF coverage data for map {map_id_local}")
+                
+                # Fetch fresh coverage data from API
+                coverage_url = f"/api/v1/sites/{site_id_local}/location/coverage"
+                coverage_params = {
+                    'resolution': 'fine',
+                    'duration': '1d',
+                    'map_id': map_id_local,
+                    'type': 'client',
+                    'from_apollo': 'true'
+                }
+                
+                coverage_response = api_session_ref.mist_get(coverage_url, query=coverage_params)
+                
+                if coverage_response.status_code != 200:
+                    logging.warning(f"Live data refresh: Failed to fetch RF coverage - HTTP {coverage_response.status_code}")
+                    return no_update
+                
+                coverage_data = coverage_response.data
+                
+                # Check for error response
+                if isinstance(coverage_data, dict) and 'exception' in coverage_data:
+                    logging.warning(f"Live data refresh: Coverage API returned error")
+                    return no_update
+                
+                results = coverage_data.get('results', [])
+                if not results:
+                    logging.info("Live data refresh: No coverage data available")
+                    return no_update
+                
+                logging.info(f"Live data refresh: Processing {len(results)} coverage grid points")
+                
+                # Build new heatmap data
+                coverage_x = []
+                coverage_y = []
+                coverage_rssi = []
+                
+                for point in results:
+                    x_meters = point.get('x', 0)
+                    y_meters = point.get('y', 0)
+                    rssi_val = point.get('rssi', -100)
+                    
+                    # Convert to pixels using PPM
+                    x_px = x_meters * ppm_local
+                    y_px = y_meters * ppm_local
+                    
+                    coverage_x.append(x_px)
+                    coverage_y.append(y_px)
+                    coverage_rssi.append(rssi_val)
+                
+                # Update the RF coverage trace
+                for trace in current_fig['data']:
+                    trace_name = trace.get('name', '').lower()
+                    
+                    if 'rf coverage' in trace_name:
+                        trace['x'] = coverage_x
+                        trace['y'] = coverage_y
+                        # Update marker color based on RSSI
+                        trace['marker']['color'] = coverage_rssi
+                        trace['visible'] = 'rf_heatmap' in (layer_values or [])
+                        logging.debug(f"Live data refresh: Updated RF coverage with {len(coverage_x)} points")
+                        break
+                
+                timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+                logging.info(f"Live data refresh: RF coverage updated at {timestamp} - {len(results)} points")
+                
+                return current_fig
+                
+            except Exception as refresh_error:
+                logging.error(f"Live data refresh: Error refreshing RF coverage: {refresh_error}", exc_info=True)
+                return no_update
         
         # Determine host binding - use 0.0.0.0 in containers for external access
         dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'
