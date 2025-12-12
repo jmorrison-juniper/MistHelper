@@ -12,6 +12,11 @@ set -e
 USERNAME="${MISTHELPER_SSH_USERNAME:-misthelper}"
 PASSWORD="${MISTHELPER_SSH_PASSWORD:-}"
 
+# Ensure ssh.log exists and is writable by misthelper user
+touch /app/data/ssh.log
+chown misthelper:misthelper /app/data/ssh.log
+chmod 664 /app/data/ssh.log
+
 # If a different username is requested, create it (idempotent).
 if ! id "$USERNAME" >/dev/null 2>&1; then
     echo "[SSH] Creating user $USERNAME" >> /app/data/ssh.log

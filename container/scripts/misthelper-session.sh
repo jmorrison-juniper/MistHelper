@@ -5,6 +5,15 @@
 
 set -e
 
+# Container environment variables (SSH sessions don't inherit Docker ENV)
+export PYTHONUNBUFFERED=1
+export OUTPUT_FORMAT=sqlite
+export DATABASE_PATH=/app/data/mist_data.db
+export DISABLE_UV_CHECK=true
+export DISABLE_AUTO_INSTALL=true
+export AUTO_UPGRADE_UV=false
+export AUTO_UPGRADE_DEPENDENCIES=false
+
 # Get unique session ID based on SSH connection
 SESSION_ID="${SSH_CONNECTION// /_}"
 SESSION_ID="${SESSION_ID//[:.]/_}"

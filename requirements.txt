@@ -8,6 +8,9 @@ urllib3>=1.26.0
 # SSH and remote access
 paramiko>=2.9.0
 
+# Secure credential storage (required by mistapi)
+keyring>=25.0.0
+
 # CLI and user interface
 prettytable>=3.5.0
 tqdm>=4.64.0
@@ -31,6 +34,7 @@ rapidfuzz>=3.8.0
 plotly>=5.14.0
 dash>=2.9.0
 matplotlib>=3.5.0
+kaleido>=0.2.1
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
