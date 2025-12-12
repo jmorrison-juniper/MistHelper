@@ -26125,13 +26125,23 @@ class MapsManager:
             map_name = map_data.get('name', 'Unnamed')
             map_width = map_data.get('width', 1000)
             map_height = map_data.get('height', 1000)
+            map_ppm = map_data.get('ppm', 0)
             
             logging.info(f"Map loaded: {map_name} (ID: {map_id})")
-            logging.debug(f"Map dimensions: {map_width}x{map_height}px, PPM: {map_data.get('ppm', 'N/A')}, Orientation: {map_data.get('orientation', 0)}")
+            logging.debug(f"Map dimensions: {map_width}x{map_height}px, PPM: {map_ppm}, Orientation: {map_data.get('orientation', 0)}")
             logging.debug(f"Map has image: {'url' in map_data}, Has walls: {'wall_path' in map_data}, Has wayfinding: {'wayfinding_path' in map_data}")
             
             print(f"\nMap: {map_name}")
             print(f"Dimensions: {map_width}x{map_height} pixels")
+            
+            # Check if map has been scaled - PPM of 0 or very low indicates unscaled map
+            if not map_ppm or map_ppm == 0:
+                logging.warning(f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal")
+                print("\n" + "!" * 60)
+                print("! WARNING: This map image has NOT been scaled!")
+                print("! RF coverage heatmap and location features will not work correctly.")
+                print("! Please scale this map in Mist Portal: Location > Set Scale")
+                print("!" * 60 + "\n")
             
             # Fetch devices on this map (use stats API for status information)
             print("Loading devices...")
