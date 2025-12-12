@@ -1,7 +1,7 @@
 # MistHelper Container Image
 # Compatible with both Docker and Podman (OCI-compliant)
 # Features: SSH access on port 2200, SQLite persistence, corporate SSL bypass
-# Usage: docker build -t misthelper . OR podman build -t misthelper .
+# Usage: podman build -t misthelper . OR docker build -t misthelper .
 FROM python:3.11-slim
 
 # Metadata following OCI standards
@@ -103,8 +103,8 @@ ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 for remote access
-EXPOSE 2200
+# Expose SSH port 2200 and Dash web viewer port 8050
+EXPOSE 2200 8050
 
 # Note: HEALTHCHECK removed for OCI/Podman compatibility
 # For health monitoring, use external tools or docker format

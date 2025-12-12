@@ -103,8 +103,8 @@ ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 for remote access
-EXPOSE 2200
+# Expose SSH port 2200 and Dash web viewer port 8050
+EXPOSE 2200 8050
 
 # Note: HEALTHCHECK removed for OCI/Podman compatibility
 # For health monitoring, use external tools or docker format

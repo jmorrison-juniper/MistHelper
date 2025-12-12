@@ -28120,28 +28120,37 @@ class MapsManager:
             
             return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
         
+        # Determine host binding - use 0.0.0.0 in containers for external access
+        dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'
+        dash_port = int(os.getenv('DASH_PORT', '8050'))
+        
         print("\nStarting Dash server...")
-        print("! Map viewer will open in your default browser")
+        if is_running_in_container():
+            print(f"! Map viewer available at http://<container-ip>:{dash_port}")
+            print("! Access from host: http://localhost:8050 (if port is mapped)")
+        else:
+            print("! Map viewer will open in your default browser")
         print("! Press Ctrl+C to stop the server\n")
         
-        logging.info("Starting Dash server on http://127.0.0.1:8050")
+        logging.info(f"Starting Dash server on http://{dash_host}:{dash_port}")
         
-        # Open browser automatically
-        import webbrowser
-        import threading
-        import time
-        
-        def open_browser():
-            """Wait for server to start, then open browser"""
-            time.sleep(1.5)  # Wait for Dash server to initialize
-            webbrowser.open('http://127.0.0.1:8050')
-            logging.debug("Browser opened to http://127.0.0.1:8050")
-        
-        # Start browser opening in background thread
-        threading.Thread(target=open_browser, daemon=True).start()
+        # Open browser automatically (skip in container - no display)
+        if not is_running_in_container():
+            import webbrowser
+            import threading
+            import time
+            
+            def open_browser():
+                """Wait for server to start, then open browser"""
+                time.sleep(1.5)  # Wait for Dash server to initialize
+                webbrowser.open(f'http://127.0.0.1:{dash_port}')
+                logging.debug(f"Browser opened to http://127.0.0.1:{dash_port}")
+            
+            # Start browser opening in background thread
+            threading.Thread(target=open_browser, daemon=True).start()
         
         try:
-            app.run(debug=False, port=8050, host='127.0.0.1')
+            app.run(debug=False, port=dash_port, host=dash_host)
         except KeyboardInterrupt:
             print("\n\nMap viewer stopped by user")
             logging.info("Interactive map viewer stopped by user (Ctrl+C)")
