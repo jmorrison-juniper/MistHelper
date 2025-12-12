@@ -74,23 +74,28 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs:
 **AI agents MUST execute this complete workflow after any code changes:**
 
 ```powershell
-# Step 1: Commit and Push
+# Step 1: Validate Syntax BEFORE Commit
+python -m py_compile MistHelper.py
+# If no output, syntax is valid. If errors, fix before committing.
+
+# Step 2: Commit and Push
 git add MistHelper.py README.md  # Include all modified files
 git commit -m "version YY.MM.DD.HH.MM - description"
 git push origin main
 
-# Step 2: Wait for Container Build (triggers automatically on push)
+# Step 3: Wait for Container Build (triggers automatically on push)
+# The workflow now includes a validation job that checks Python syntax BEFORE building.
 gh run list --workflow=container-build.yml --limit 1
 gh run watch <run-id>  # Wait for completion
 
-# Step 3: Pull New Image
+# Step 4: Pull New Image
 podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 
-# Step 4: Restart Container
+# Step 5: Restart Container
 podman stop misthelper ; podman rm misthelper
 podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
 
-# Step 5: Verify
+# Step 6: Verify
 podman ps  # Confirm container is running
 ```
 

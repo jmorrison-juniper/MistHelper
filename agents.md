@@ -10,15 +10,24 @@ After updating README changelog, commit locally with `git add` + `git commit -m 
 ## MANDATORY: Full Deployment Pipeline
 **AI agents MUST follow this complete workflow after any code changes:**
 
-### Step 1: Commit and Push
+### Step 1: Validate Syntax BEFORE Commit
+```powershell
+# ALWAYS run syntax check before committing
+python -m py_compile MistHelper.py
+
+# If no output, syntax is valid. If errors, fix before committing.
+```
+
+### Step 2: Commit and Push
 ```powershell
 git add MistHelper.py README.md  # Add all modified files
 git commit -m "version YY.MM.DD.HH.MM - description"
 git push origin main
 ```
 
-### Step 2: Wait for Container Build
+### Step 3: Wait for Container Build
 The push triggers GitHub Actions automatically (for changes to MistHelper.py, requirements.txt, Containerfile, Dockerfile, __init__.py).
+The workflow now includes a **validation job** that checks Python syntax BEFORE building the container.
 ```powershell
 # Check workflow status
 gh run list --workflow=container-build.yml --limit 1

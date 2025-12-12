@@ -21,7 +21,33 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # First job: Validate Python syntax before building
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Python syntax
+        run: |
+          echo "Checking Python syntax..."
+          python -m py_compile MistHelper.py
+          echo "✅ Syntax check passed"
+
+      - name: Run basic import test
+        run: |
+          echo "Testing basic imports..."
+          python -c "import ast; ast.parse(open('MistHelper.py').read())"
+          echo "✅ AST parse passed"
+
+  # Second job: Build and push container (only if validation passes)
   build-and-push:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
