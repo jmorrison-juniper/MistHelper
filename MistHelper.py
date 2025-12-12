@@ -24480,6 +24480,13 @@ class MapsManager:
                 print(f"\n! No maps found for site: {site_name}")
                 return None
             
+            # Auto-select if only one map available
+            if len(maps) == 1:
+                selected_map = maps[0]
+                map_name = selected_map.get('name', 'Unnamed')
+                print(f"\nAuto-selecting only available map: {map_name}")
+                return selected_map.get('id')
+            
             # Display map selection
             print(f"\nMaps for site: {site_name}")
             print(f"{'-' * 80}")
@@ -25015,69 +25022,76 @@ class MapsManager:
                 print(f"\n! No maps found for site: {site_name}")
                 return
             
-            # Display map selection
-            print(f"\nMaps for site: {site_name}")
-            print(f"{'-' * 80}")
-            for idx, map_item in enumerate(maps, 1):
-                map_name = map_item.get('name', 'Unnamed')
-                map_type = map_item.get('type', 'N/A')
-                print(f"  {idx}. {map_name} ({map_type})")
-            print(f"{'-' * 80}")
-            
-            try:
-                selection = input("\nSelect map number (or 0 to cancel): ").strip()
-                map_idx = int(selection) - 1
-                
-                if map_idx < 0 or map_idx >= len(maps):
-                    print("\n! Invalid selection")
-                    return
-                
-                selected_map = maps[map_idx]
+            # Auto-select if only one map available
+            if len(maps) == 1:
+                selected_map = maps[0]
+                map_name = selected_map.get('name', 'Unnamed')
                 map_id = selected_map.get('id')
+                print(f"\nAuto-selecting only available map: {map_name}")
+            else:
+                # Display map selection
+                print(f"\nMaps for site: {site_name}")
+                print(f"{'-' * 80}")
+                for idx, map_item in enumerate(maps, 1):
+                    map_name = map_item.get('name', 'Unnamed')
+                    map_type = map_item.get('type', 'N/A')
+                    print(f"  {idx}. {map_name} ({map_type})")
+                print(f"{'-' * 80}")
                 
-                # Fetch detailed map info
-                detail_response = mistapi.api.v1.sites.maps.getSiteMap(
-                    self.apisession,
-                    site_id=site_id,
-                    map_id=map_id
-                )
-                
-                if detail_response.status_code != 200:
-                    print(f"\n! Failed to fetch map details: {detail_response.status_code}")
+                try:
+                    selection = input("\nSelect map number (or 0 to cancel): ").strip()
+                    map_idx = int(selection) - 1
+                    
+                    if map_idx < 0 or map_idx >= len(maps):
+                        print("\n! Invalid selection")
+                        return
+                    
+                    selected_map = maps[map_idx]
+                    map_id = selected_map.get('id')
+                except ValueError:
+                    print("\n! Invalid input - please enter a number")
                     return
-                
-                map_details = detail_response.data
-                
-                # Display details
-                print(f"\n{'-' * 80}")
-                print(f"MAP DETAILS: {map_details.get('name', 'Unnamed')}")
-                print(f"{'-' * 80}")
-                print(f"Map ID: {map_details.get('id', 'N/A')}")
-                print(f"Type: {map_details.get('type', 'N/A')}")
-                print(f"Width: {map_details.get('width', 0)} pixels")
-                print(f"Height: {map_details.get('height', 0)} pixels")
-                print(f"PPM (Pixels per meter): {map_details.get('ppm', 'N/A')}")
-                print(f"Orientation: {map_details.get('orientation', 0)} degrees")
-                print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")
-                
-                if 'url' in map_details:
-                    print(f"Image URL: {map_details['url'][:80]}...")
-                
-                if 'latlng' in map_details:
-                    latlng = map_details['latlng']
-                    print(f"Coordinates: {latlng.get('lat')}, {latlng.get('lng')}")
-                
-                if 'wayfinding' in map_details:
-                    print(f"Wayfinding Enabled: Yes")
-                
-                print(f"{'-' * 80}")
-                logging.info(f"Viewed details for map {map_id}")
-                
-            except ValueError:
-                print("\n! Invalid input - please enter a number")
-            except EOFError:
-                logging.info("EOF detected during map selection")
+                except EOFError:
+                    logging.info("EOF detected during map selection")
+                    return
+            
+            # Fetch detailed map info
+            detail_response = mistapi.api.v1.sites.maps.getSiteMap(
+                self.apisession,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            if detail_response.status_code != 200:
+                print(f"\n! Failed to fetch map details: {detail_response.status_code}")
                 return
+            
+            map_details = detail_response.data
+            
+            # Display details
+            print(f"\n{'-' * 80}")
+            print(f"MAP DETAILS: {map_details.get('name', 'Unnamed')}")
+            print(f"{'-' * 80}")
+            print(f"Map ID: {map_details.get('id', 'N/A')}")
+            print(f"Type: {map_details.get('type', 'N/A')}")
+            print(f"Width: {map_details.get('width', 0)} pixels")
+            print(f"Height: {map_details.get('height', 0)} pixels")
+            print(f"PPM (Pixels per meter): {map_details.get('ppm', 'N/A')}")
+            print(f"Orientation: {map_details.get('orientation', 0)} degrees")
+            print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")
+            
+            if 'url' in map_details:
+                print(f"Image URL: {map_details['url'][:80]}...")
+            
+            if 'latlng' in map_details:
+                latlng = map_details['latlng']
+                print(f"Coordinates: {latlng.get('lat')}, {latlng.get('lng')}")
+            
+            if 'wayfinding' in map_details:
+                print(f"Wayfinding Enabled: Yes")
+            
+            print(f"{'-' * 80}")
+            logging.info(f"Viewed details for map {map_id}")
                 
         except Exception as e:
             logging.error(f"Error viewing map details: {e}", exc_info=True)
@@ -26435,6 +26449,31 @@ class MapsManager:
                     .device-detail strong {
                         color: #a0a0ff;
                     }
+                    /* Dark theme dropdown styling */
+                    .dark-dropdown .Select-control {
+                        background-color: #3d3d3d !important;
+                        border-color: #555 !important;
+                    }
+                    .dark-dropdown .Select-menu-outer {
+                        background-color: #3d3d3d !important;
+                        border-color: #555 !important;
+                    }
+                    .dark-dropdown .Select-option {
+                        background-color: #3d3d3d !important;
+                        color: #e0e0e0 !important;
+                    }
+                    .dark-dropdown .Select-option:hover,
+                    .dark-dropdown .Select-option.is-focused {
+                        background-color: #505050 !important;
+                        color: #ffffff !important;
+                    }
+                    .dark-dropdown .Select-value-label,
+                    .dark-dropdown .Select-placeholder {
+                        color: #e0e0e0 !important;
+                    }
+                    .dark-dropdown .Select-arrow {
+                        border-color: #888 transparent transparent !important;
+                    }
                     /* NOTE: CSS text-shadow doesn't work on Plotly SVG text elements.
                        Text labels use annotations with bgcolor/bordercolor instead. */
                 </style>
@@ -27557,21 +27596,32 @@ class MapsManager:
                     ),
                     html.Hr(),
                     html.H3("🎨 Drawing Tools"),
-                    html.P("Draw shapes, then save to Mist:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '10px'}),
+                    html.Details([
+                        html.Summary("How to use", style={'fontSize': '12px', 'color': '#00bfff', 'cursor': 'pointer', 'marginBottom': '8px'}),
+                        html.Div([
+                            html.P("1. Select a Drawing Mode below", style={'fontSize': '11px', 'color': '#aaa', 'margin': '4px 0 4px 10px'}),
+                            html.P("2. Use toolbar above map to draw shape", style={'fontSize': '11px', 'color': '#aaa', 'margin': '4px 0 4px 10px'}),
+                            html.P("3. Click 'Save Last Shape to Mist'", style={'fontSize': '11px', 'color': '#aaa', 'margin': '4px 0 4px 10px'}),
+                            html.P("Zones: Draw rectangle for coverage areas", style={'fontSize': '11px', 'color': '#00bfff', 'margin': '4px 0 4px 10px'}),
+                            html.P("Walls: Draw line for RF attenuation", style={'fontSize': '11px', 'color': '#ffa500', 'margin': '4px 0 4px 10px'}),
+                            html.P("Paths: Draw line for validation routes", style={'fontSize': '11px', 'color': '#ff00ff', 'margin': '4px 0 8px 10px'}),
+                        ], style={'backgroundColor': '#2a2a2a', 'padding': '8px', 'borderRadius': '4px', 'marginBottom': '10px'})
+                    ], open=False),
                     # Drawing mode selector
                     html.Div([
                         html.Label("Drawing Mode:", style={'fontSize': '12px', 'color': '#888', 'marginBottom': '4px'}),
                         dcc.Dropdown(
                             id='drawing-mode-dropdown',
                             options=[
-                                {'label': '📍 Validation Path (magenta)', 'value': 'path'},
-                                {'label': '🟦 Zone Rectangle (cyan)', 'value': 'zone'},
-                                {'label': '🧱 Wall Segment (orange)', 'value': 'wall'},
-                                {'label': '📏 Measurement Only', 'value': 'measure'},
+                                {'label': 'Validation Path (magenta)', 'value': 'path'},
+                                {'label': 'Zone Rectangle (cyan)', 'value': 'zone'},
+                                {'label': 'Wall Segment (orange)', 'value': 'wall'},
+                                {'label': 'Measurement Only', 'value': 'measure'},
                             ],
                             value='measure',
                             clearable=False,
-                            style={'marginBottom': '10px', 'backgroundColor': '#3d3d3d'}
+                            style={'marginBottom': '10px', 'color': '#e0e0e0'},
+                            className='dark-dropdown'
                         ),
                     ], style={'marginBottom': '10px'}),
                     # Zone name input (shown when zone mode selected)
