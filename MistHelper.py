@@ -27840,6 +27840,15 @@ class MapsManager:
                 if (!selected_map_id || selected_map_id === current_map_id) {
                     return window.dash_clientside.no_update;
                 }
+                
+                // Check if URL already has this map_id - if so, don't redirect (prevents loop)
+                var urlParams = new URLSearchParams(window.location.search);
+                var url_map_id = urlParams.get('map_id');
+                if (url_map_id === selected_map_id) {
+                    console.log('Map switch: URL already has map_id=' + selected_map_id + ', skipping redirect');
+                    return window.dash_clientside.no_update;
+                }
+                
                 // Redirect to URL with map_id parameter - this will trigger full page reload
                 console.log('Map switch: redirecting to map_id=' + selected_map_id);
                 window.location.href = '/?map_id=' + selected_map_id;
@@ -27852,44 +27861,80 @@ class MapsManager:
             prevent_initial_call=True
         )
         
-        # Callback to handle URL-based map loading on page load
+        # Callback to sync dropdown value with URL on page load (runs BEFORE clientside callback)
         @app.callback(
-            [Output('map-display', 'figure', allow_duplicate=True),
-             Output('map-config-store', 'data', allow_duplicate=True),
-             Output('map-selector-dropdown', 'value', allow_duplicate=True)],
+            Output('map-selector-dropdown', 'value'),
             [Input('url-location', 'search')],
-            [State('map-config-store', 'data'),
-             State('map-display', 'figure'),
-             State('available-maps-store', 'data')],
-            prevent_initial_call='initial_duplicate'
+            [State('available-maps-store', 'data'),
+             State('map-selector-dropdown', 'value')],
+            prevent_initial_call=False  # Must run on initial load
         )
-        def handle_url_map_switch(url_search, config, current_fig, available_maps):
-            """Handle map switching when URL contains map_id parameter"""
+        def sync_dropdown_with_url(url_search, available_maps, current_dropdown_value):
+            """Sync dropdown selection with URL parameter on page load"""
             import urllib.parse
             
             if not url_search:
-                return no_update, no_update, no_update
+                return no_update
             
             # Parse URL query parameters
             params = urllib.parse.parse_qs(url_search.lstrip('?'))
             url_map_id = params.get('map_id', [None])[0]
             
             if not url_map_id:
-                return no_update, no_update, no_update
+                return no_update
+            
+            # If dropdown already shows the correct map, no update needed
+            if url_map_id == current_dropdown_value:
+                return no_update
+            
+            # Verify the requested map exists in available maps
+            valid_map_ids = [m.get('id') for m in available_maps] if available_maps else []
+            if url_map_id not in valid_map_ids:
+                logging.warning(f"URL dropdown sync: Invalid map_id {url_map_id}")
+                return no_update
+            
+            logging.debug(f"URL dropdown sync: Setting dropdown to {url_map_id}")
+            return url_map_id
+        
+        # Callback to handle URL-based map loading on page load
+        @app.callback(
+            [Output('map-display', 'figure', allow_duplicate=True),
+             Output('map-config-store', 'data', allow_duplicate=True)],
+            [Input('url-location', 'search')],
+            [State('map-config-store', 'data'),
+             State('map-display', 'figure'),
+             State('available-maps-store', 'data'),
+             State('map-selector-dropdown', 'value')],
+            prevent_initial_call='initial_duplicate'
+        )
+        def handle_url_map_switch(url_search, config, current_fig, available_maps, dropdown_value):
+            """Handle map switching when URL contains map_id parameter"""
+            import urllib.parse
+            
+            if not url_search:
+                return no_update, no_update
+            
+            # Parse URL query parameters
+            params = urllib.parse.parse_qs(url_search.lstrip('?'))
+            url_map_id = params.get('map_id', [None])[0]
+            
+            if not url_map_id:
+                return no_update, no_update
             
             current_map_id = config.get('map_id')
             
-            # If URL map_id matches current map, no action needed
+            # If URL map_id matches current config map, no action needed
             if url_map_id == current_map_id:
-                return no_update, no_update, no_update
+                logging.debug(f"URL map switch: URL map_id {url_map_id} matches config, no switch needed")
+                return no_update, no_update
             
             # Verify the requested map exists in available maps
             valid_map_ids = [m.get('id') for m in available_maps]
             if url_map_id not in valid_map_ids:
                 logging.warning(f"URL map switch: Invalid map_id {url_map_id}")
-                return no_update, no_update, no_update
+                return no_update, no_update
             
-            logging.info(f"URL map switch: Loading map {url_map_id}")
+            logging.info(f"URL map switch: Loading map {url_map_id} (current: {current_map_id})")
             
             try:
                 site_id_local = config.get('site_id')
@@ -28056,11 +28101,11 @@ class MapsManager:
                 
                 logging.info(f"URL map switch: Successfully switched to map '{new_map_name}'")
                 
-                return new_fig, new_config, url_map_id
+                return new_fig, new_config
                 
             except Exception as e:
                 logging.error(f"URL map switch: Error loading map - {e}", exc_info=True)
-                return no_update, no_update, no_update
+                return no_update, no_update
         
         # Callback for layer toggle
         @app.callback(
