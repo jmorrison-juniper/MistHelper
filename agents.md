@@ -7,6 +7,47 @@ As we make updates and commits, update the ReadMe's changlelog with the current 
 ## Git Workflow for Development
 After updating README changelog, commit locally with `git add` + `git commit -m "version YY.MM.DD.HH.MM - description"`. Test code. If tests fail, use `git reset --soft HEAD~1` to rollback. Push multiple commits together when ready.
 
+## MANDATORY: Full Deployment Pipeline
+**AI agents MUST follow this complete workflow after any code changes:**
+
+### Step 1: Commit and Push
+```powershell
+git add MistHelper.py README.md  # Add all modified files
+git commit -m "version YY.MM.DD.HH.MM - description"
+git push origin main
+```
+
+### Step 2: Wait for Container Build
+The push triggers GitHub Actions automatically (for changes to MistHelper.py, requirements.txt, Containerfile, Dockerfile, __init__.py).
+```powershell
+# Check workflow status
+gh run list --workflow=container-build.yml --limit 1
+
+# Watch the build progress
+gh run watch <run-id>
+```
+
+### Step 3: Pull New Image
+```powershell
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+### Step 4: Restart Container
+```powershell
+# Stop and remove old container
+podman stop misthelper ; podman rm misthelper
+
+# Start new container with updated image
+podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+### Step 5: Verify
+```powershell
+podman ps  # Confirm container is running
+```
+
+**DO NOT skip steps.** The user expects the container to be updated and running after code changes.
+
 Mist API responses are sometimes "nested". Be prepaired to handle that with JSON or otherwise.
 
 Friendly note (new/junior engineers): This guide is meant to be calm and confidence‑building. Most operations are read-only unless clearly marked DESTRUCTIVE. If unsure, read the function header, log what you plan, then proceed in small steps.

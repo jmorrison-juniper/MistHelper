@@ -70,6 +70,32 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs:
 ### Git Workflow Rule
 **Every changelog update = immediate `git add`** (agents.md requirement)
 
+### MANDATORY: Full Deployment Pipeline
+**AI agents MUST execute this complete workflow after any code changes:**
+
+```powershell
+# Step 1: Commit and Push
+git add MistHelper.py README.md  # Include all modified files
+git commit -m "version YY.MM.DD.HH.MM - description"
+git push origin main
+
+# Step 2: Wait for Container Build (triggers automatically on push)
+gh run list --workflow=container-build.yml --limit 1
+gh run watch <run-id>  # Wait for completion
+
+# Step 3: Pull New Image
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+
+# Step 4: Restart Container
+podman stop misthelper ; podman rm misthelper
+podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
+
+# Step 5: Verify
+podman ps  # Confirm container is running
+```
+
+**DO NOT skip steps.** The user expects the container to be updated and running after code changes.
+
 ### Running Tests
 ```powershell
 # Local development (Windows 11 + venv required)
