@@ -479,6 +479,22 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.12.21.50",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed client refresh coordinates: API returns pixels directly, not meters - removed erroneous PPM multiplication",
+          "Client dots now stay visible after refresh instead of disappearing off-screen",
+          "Client label annotations now update positions during live refresh"
+        ],
+        "enhancements": [
+          "Added coordinate sample logging to verify refresh data",
+          "Added warning log if Clients trace not found during refresh",
+          "Removed visibility toggle override during refresh to preserve user settings"
+        ]
+      }
+    },
+    {
       "version": "25.12.12.21.35",
       "date": "2025-12-12",
       "changes": {

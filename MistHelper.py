@@ -28338,36 +28338,45 @@ class MapsManager:
                 wifi_client_x = []
                 wifi_client_y = []
                 wifi_client_hover = []
+                wifi_client_names = []
                 wired_client_x = []
                 wired_client_y = []
                 wired_client_hover = []
+                wired_client_names = []
                 
                 for client in fresh_clients:
-                    # Convert meter coordinates to pixels
-                    client_x_px = client.get('x', 0) * ppm_local
-                    client_y_px = client.get('y', 0) * ppm_local
+                    # API returns x,y already in pixels (not meters) - do NOT multiply by PPM
+                    client_x_px = client.get('x')
+                    client_y_px = client.get('y')
+                    
+                    if client_x_px is None or client_y_px is None:
+                        continue
                     
                     # Build hover text
-                    client_name = client.get('hostname', client.get('mac', 'Unknown'))
+                    hostname = client.get('hostname', '')
                     client_mac = client.get('mac', 'Unknown')
+                    client_name = hostname if hostname else client_mac[-8:]
                     client_ip = client.get('ip', 'N/A')
                     rssi = client.get('rssi', 'N/A')
                     ssid = client.get('ssid', 'N/A')
                     
-                    hover_text = f"Client: {client_name}<br>MAC: {client_mac}<br>IP: {client_ip}<br>SSID: {ssid}<br>RSSI: {rssi}"
+                    hover_text = f"<b>Client</b><br>MAC: {client_mac}<br>Hostname: {hostname or 'N/A'}<br>IP: {client_ip}<br>SSID: {ssid}<br>RSSI: {rssi} dBm<br>Position: ({client_x_px}, {client_y_px})"
                     
                     # Separate WiFi vs Wired clients
                     if client.get('wired', False):
                         wired_client_x.append(client_x_px)
                         wired_client_y.append(client_y_px)
                         wired_client_hover.append(hover_text)
+                        wired_client_names.append(client_name)
                     else:
                         wifi_client_x.append(client_x_px)
                         wifi_client_y.append(client_y_px)
                         wifi_client_hover.append(hover_text)
+                        wifi_client_names.append(client_name)
                 
                 # Update traces in figure
                 # Note: The trace is named 'Clients' (singular), so we match on 'clients' lowercase
+                trace_updated = False
                 for trace in current_fig['data']:
                     trace_name = trace.get('name', '').lower()
                     
@@ -28376,15 +28385,49 @@ class MapsManager:
                         trace['x'] = wifi_client_x
                         trace['y'] = wifi_client_y
                         trace['hovertext'] = wifi_client_hover
-                        trace['visible'] = 'wifi_clients' in (client_layers or [])
-                        logging.info(f"Live data refresh: Updated WiFi clients trace with {len(wifi_client_x)} clients")
+                        # Keep visible - don't change visibility based on toggle during refresh
+                        trace_updated = True
+                        logging.info(f"Live data refresh: Updated WiFi clients trace with {len(wifi_client_x)} clients, coords sample: {wifi_client_x[:3] if wifi_client_x else 'empty'}")
                     
                     elif 'wired client' in trace_name and 'link' not in trace_name:
                         trace['x'] = wired_client_x
                         trace['y'] = wired_client_y
                         trace['hovertext'] = wired_client_hover
-                        trace['visible'] = 'wired_clients' in (client_layers or [])
+                        # Keep visible - don't change visibility based on toggle during refresh
                         logging.info(f"Live data refresh: Updated Wired clients trace with {len(wired_client_x)} clients")
+                
+                if not trace_updated:
+                    logging.warning(f"Live data refresh: Could not find 'Clients' trace to update. Available traces: {[t.get('name', 'unnamed') for t in current_fig['data']]}")
+                
+                # Update client label annotations
+                # Client labels are annotations with 'Clients Label' in the name attribute
+                # We need to update their positions to match new client positions
+                if 'layout' in current_fig and 'annotations' in current_fig['layout']:
+                    # Remove old client label annotations
+                    new_annotations = [
+                        ann for ann in current_fig['layout']['annotations']
+                        if ann.get('name') != 'Clients Label'
+                    ]
+                    
+                    # Add new client label annotations for WiFi clients
+                    for i, (x, y, name) in enumerate(zip(wifi_client_x, wifi_client_y, wifi_client_names)):
+                        new_annotations.append({
+                            'x': x,
+                            'y': y - 10,  # Position below marker
+                            'text': f"<b>{name}</b>",
+                            'showarrow': False,
+                            'font': {'size': 9, 'color': 'white', 'family': 'Arial'},
+                            'bgcolor': 'rgba(0,128,0,0.9)',
+                            'bordercolor': 'white',
+                            'borderwidth': 1,
+                            'borderpad': 2,
+                            'xanchor': 'center',
+                            'yanchor': 'bottom',
+                            'name': 'Clients Label'
+                        })
+                    
+                    current_fig['layout']['annotations'] = new_annotations
+                    logging.info(f"Live data refresh: Updated {len(wifi_client_names)} client label annotations")
                 
                 # Update the map-info section with new client count
                 timestamp = datetime.datetime.now().strftime('%H:%M:%S')
