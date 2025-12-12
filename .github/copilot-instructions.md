@@ -123,6 +123,26 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8  # Environment tunable
 
 ## Container & SSH Architecture
 
+### Container Registry & CI/CD
+- **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
+- **Build Workflow**: `.github/workflows/container-build.yml`
+- **Version Format**: `YY.MM.DD.HH.MM` (UTC timestamp)
+- **Triggers**: Push to `main` (when key files change) or manual workflow dispatch
+
+#### Zscaler/Corporate Proxy Workaround
+Corporate environments using Zscaler SSL inspection block chunked blob uploads to `ghcr.io` (403 Forbidden with HTML comment signature `kHKLKT6ZtNFTsrn4L61Mr17SZnTqQnKT6PWW1LNd`). **Do not attempt local `podman push` behind Zscaler** - it will fail.
+
+**Solution**: Use GitHub Actions for all container builds and pushes:
+```powershell
+# Trigger manually
+gh workflow run container-build.yml
+
+# Or push changes to trigger automatically
+git push origin main
+```
+
+GitHub Actions runs on GitHub infrastructure (not behind corporate proxy), bypassing Zscaler entirely.
+
 ### Container Detection
 ```python
 is_running_in_container()  # Checks /.dockerenv, /run/.containerenv

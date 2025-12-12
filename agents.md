@@ -29,6 +29,48 @@ During development we will be using a windows 11 machine on VS-code and always t
 
 Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). 
 
+---
+## Container Registry & CI/CD
+
+### GitHub Container Registry
+- **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
+- **Build Workflow**: `.github/workflows/container-build.yml`
+- **Version Format**: `YY.MM.DD.HH.MM` (UTC timestamp, matching commit version format)
+
+### Building Containers Locally
+```powershell
+# Build with timestamp version
+$version = Get-Date -Format "yy.MM.dd.HH.mm"
+podman build -t ghcr.io/jmorrison-juniper/misthelper:$version -t ghcr.io/jmorrison-juniper/misthelper:latest -f Containerfile .
+```
+
+### Zscaler/Corporate Proxy Issue (CRITICAL)
+Corporate environments using Zscaler SSL inspection will **block container pushes** to ghcr.io. Symptoms:
+- 403 Forbidden during chunked blob upload
+- Error contains HTML comment: `kHKLKT6ZtNFTsrn4L61Mr17SZnTqQnKT6PWW1LNd` (Zscaler signature)
+- Occurs even with valid authentication and Zscaler CA certificates installed
+
+**Root Cause**: Zscaler DLP policies block large HTTP PUT/POST requests to container registries.
+
+**Solution**: Use GitHub Actions for all container pushes:
+```powershell
+# Manual trigger
+gh workflow run container-build.yml
+
+# Check status
+gh run list --workflow=container-build.yml --limit 1
+gh run watch <run-id>
+```
+
+GitHub Actions runs on GitHub infrastructure (not behind corporate proxy), bypassing Zscaler entirely. The workflow automatically:
+1. Builds the container using `Containerfile`
+2. Tags with timestamp version and `latest`
+3. Pushes to `ghcr.io/jmorrison-juniper/misthelper`
+
+### Workflow Triggers
+- **Automatic**: Push to `main` that changes `MistHelper.py`, `requirements.txt`, `Containerfile`, `Dockerfile`, or `__init__.py`
+- **Manual**: Actions tab -> "Build and Push Container" -> "Run workflow"
+
 Always activate a Python virtual environment before local runs.
 
 Always read the documentation folder contents when starting on changes.
