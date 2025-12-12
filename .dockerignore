@@ -73,8 +73,6 @@ htmlcov/
 documentation/
 docs/
 docs/_build/
-*.md
-__init__.py
 agents.md
 SSH_GUIDE.md
 run-misthelper.py
