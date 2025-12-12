@@ -26445,7 +26445,32 @@ class MapsManager:
         map_width = map_data.get('width', 1000)
         map_height = map_data.get('height', 1000)
         ppm = map_data.get('ppm', 10)  # pixels per meter, default to 10 if not set
-        logging.debug(f"Map canvas dimensions: {map_width}x{map_height}, PPM: {ppm}")
+        logging.debug(f"Map canvas dimensions: {map_width}x{map_height}, PPM from map: {ppm}")
+        
+        # Validate PPM using client data if available
+        # Clients have both pixel coords (x, y) and meter coords (x_m, y_m) - we can verify PPM
+        if clients and len(clients) > 0:
+            ppm_samples = []
+            for client in clients[:10]:  # Check first 10 clients
+                x_px = client.get('x')
+                x_m = client.get('x_m')
+                y_px = client.get('y')
+                y_m = client.get('y_m')
+                if x_px and x_m and x_m > 0:
+                    ppm_samples.append(x_px / x_m)
+                if y_px and y_m and y_m > 0:
+                    ppm_samples.append(y_px / y_m)
+            
+            if ppm_samples:
+                calculated_ppm = sum(ppm_samples) / len(ppm_samples)
+                ppm_ratio = calculated_ppm / ppm if ppm > 0 else 0
+                
+                if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference
+                    logging.warning(f"PPM MISMATCH DETECTED! Map PPM={ppm}, Calculated from clients={calculated_ppm:.1f} (ratio: {ppm_ratio:.2f}x)")
+                    logging.warning(f"Map may not be scaled correctly. Using calculated PPM for coverage heatmap.")
+                    ppm = calculated_ppm
+                else:
+                    logging.debug(f"PPM validation passed: map={ppm}, calculated={calculated_ppm:.1f}")
         
         # Add map image if available
         # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
