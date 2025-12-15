@@ -1,8 +1,17 @@
 # Agents Guide for MistHelper
 
+**Project Maintainer:** Joseph Morrison (jmorrison@juniper.net)
+
 Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maintainers) to safely extend, refactor, and diagnose the MistHelper codebase without breaking production conventions or security guarantees. 
 
 As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to the current date and time of when changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too. When recording the changlog, keep it in JSON formatting with grouped topics, like "api-changes, logging/analytics, compatability, documentation, bug fixes, feature additions, performance, security, refactoring, testing/validation". Keep newest events at the top of the changelog and oldest last. An idea or item should not be spread over multiple topics. We dont need over complicated or "wordy" changelog.
+
+## Git Configuration
+For this repository, use:
+```bash
+git config user.name "Joseph Morrison"
+git config user.email "jmorrison@juniper.net"
+```
 
 ## Git Workflow for Development
 After updating README changelog, commit locally with `git add` + `git commit -m "version YY.MM.DD.HH.MM - description"`. Test code. If tests fail, use `git reset --soft HEAD~1` to rollback. Push multiple commits together when ready.
@@ -126,6 +135,34 @@ Always activate a Python virtual environment before local runs.
 Always read the documentation folder contents when starting on changes.
 
 Always read the entire script contents from the root directory in full, without skipping, before making edits.
+
+---
+## Documentation Resources
+
+### Primary: Local Documentation Folder
+The `documentation/` folder contains authoritative references that should be consulted first:
+| File | Purpose |
+|------|---------|
+| `mist-api-openapi3json.json` | Complete Mist API OpenAPI 3.0 specification (JSON) |
+| `mist-api-openapi3yaml.yaml` | Complete Mist API OpenAPI 3.0 specification (YAML) |
+| `paramiko.md` | Paramiko SSH library reference for EnhancedSSHRunner |
+| `SSH_GUIDE.md` | SSH runner detailed usage documentation |
+| `show_command_help.json` | Junos show command reference |
+| `sample.env` | Environment configuration template |
+
+### Supplementary: Context7 MCP Server
+Context7 provides real-time library documentation. Key library IDs for MistHelper development:
+| Library | Context7 ID | Use Case |
+|---------|-------------|----------|
+| Paramiko | `/paramiko/paramiko` | SSH client implementation (EnhancedSSHRunner) |
+| Dash | `/websites/dash_plotly` | Maps Manager UI (Menu 112) |
+| Plotly | `/plotly/plotly.py` | Interactive charting and visualization |
+| Dash Bootstrap | `/facultyai/dash-bootstrap-components` | UI components styling |
+
+**Zscaler/Corporate Proxy Note**: Context7 requires SSL bypass in corporate environments. The MCP config at `~/Library/Application Support/Code/User/mcp.json` includes `NODE_TLS_REJECT_UNAUTHORIZED=0` for Zscaler compatibility.
+
+---
+## Coding Conventions
 
 Never use shorthand or abbreviations in function, loop, or variable naming. Example, never use "for i in images" or similar shorthand.
 
