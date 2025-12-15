@@ -202,16 +202,81 @@ def _early_dependency_check():
     
     logging.info(f"Attempting to auto-install {len(missing_packages)} missing dependencies...")
     
+    # Helper function to find UV executable in various locations
+    def find_uv_executable():
+        """Find UV executable, checking PATH and Python environment bin directories."""
+        import sysconfig
+        
+        # List of possible UV command variations to try
+        uv_commands = []
+        
+        # 1. Check if 'uv' is in PATH
+        uv_commands.append(['uv'])
+        
+        # 2. Check Python's Scripts/bin directory (where pip installs executables)
+        scripts_dir = sysconfig.get_path('scripts')
+        if scripts_dir:
+            uv_in_scripts = os.path.join(scripts_dir, 'uv')
+            if os.name == 'nt':  # Windows
+                uv_in_scripts += '.exe'
+            uv_commands.append([uv_in_scripts])
+        
+        # 3. Check relative to sys.executable (for venv scenarios)
+        python_bin_dir = os.path.dirname(sys.executable)
+        uv_beside_python = os.path.join(python_bin_dir, 'uv')
+        if os.name == 'nt':
+            uv_beside_python += '.exe'
+        uv_commands.append([uv_beside_python])
+        
+        # 4. Try python -m uv as fallback
+        uv_commands.append([sys.executable, '-m', 'uv'])
+        
+        # 5. macOS user base bin directory (common for system Python installs)
+        if sys.platform == 'darwin':
+            user_base = sysconfig.get_config_var('userbase')
+            if user_base:
+                user_bin_uv = os.path.join(user_base, 'bin', 'uv')
+                uv_commands.append([user_bin_uv])
+            # Also try common macOS user Python locations
+            import site
+            user_site = site.getusersitepackages()
+            if user_site:
+                # Convert site-packages path to bin path
+                # e.g., ~/Library/Python/3.9/lib/python/site-packages -> ~/Library/Python/3.9/bin
+                parts = user_site.split(os.sep)
+                for i, part in enumerate(parts):
+                    if part.startswith('Python') and i + 1 < len(parts):
+                        user_bin = os.path.join(os.sep.join(parts[:i+2]), 'bin', 'uv')
+                        uv_commands.append([user_bin])
+                        break
+        
+        # Try each command
+        for cmd in uv_commands:
+            try:
+                # For file paths, check existence first
+                if len(cmd) == 1 and os.path.sep in cmd[0]:
+                    if not os.path.isfile(cmd[0]):
+                        continue
+                
+                result = subprocess.run(cmd + ['--version'], 
+                                       capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    logging.debug(f"Found UV at: {cmd}")
+                    return cmd, result.stdout.strip()
+            except (FileNotFoundError, subprocess.SubprocessError, OSError):
+                continue
+        
+        return None, None
+    
     # Step 1: Check if UV is installed
     use_uv = False
-    try:
-        uv_result = subprocess.run(['uv', '--version'], 
-                                  capture_output=True, text=True, timeout=5)
-        use_uv = uv_result.returncode == 0
-        if use_uv:
-            logging.info(f"UV package manager detected: {uv_result.stdout.strip()}")
-    except (FileNotFoundError, subprocess.SubprocessError):
-        logging.info("UV package manager not found")
+    uv_cmd = None
+    uv_cmd, uv_version = find_uv_executable()
+    if uv_cmd:
+        use_uv = True
+        logging.info(f"UV package manager detected: {uv_version} (cmd: {' '.join(uv_cmd)})")
+    else:
+        logging.info("UV package manager not found in PATH or Python environment")
     
     # Step 2: If UV not installed, try to install it with pip
     if not use_uv:
@@ -223,15 +288,13 @@ def _early_dependency_check():
             )
             if install_result.returncode == 0:
                 logging.info("UV package manager installed successfully")
-                # Step 3: Verify UV is now available
-                try:
-                    verify_result = subprocess.run(['uv', '--version'],
-                                                  capture_output=True, text=True, timeout=5)
-                    use_uv = verify_result.returncode == 0
-                    if use_uv:
-                        logging.info(f"UV verified: {verify_result.stdout.strip()}")
-                except (FileNotFoundError, subprocess.SubprocessError):
-                    logging.warning("UV installation succeeded but uv command not found in PATH")
+                # Step 3: Re-check for UV in all locations
+                uv_cmd, uv_version = find_uv_executable()
+                if uv_cmd:
+                    use_uv = True
+                    logging.info(f"UV verified after install: {uv_version} (cmd: {' '.join(uv_cmd)})")
+                else:
+                    logging.warning("UV installation succeeded but uv command not found in any expected location")
                     use_uv = False
             else:
                 logging.warning(f"Failed to install UV with pip: {install_result.stderr.strip()}")
@@ -252,9 +315,13 @@ def _early_dependency_check():
         installed = False
         
         # Try UV first if available
-        if use_uv:
+        if use_uv and uv_cmd:
             try:
-                cmd = ['uv', 'pip', 'install', '--python', sys.executable, package_spec]
+                # Build UV command - if using 'python -m uv', structure differs
+                if uv_cmd[0] == sys.executable:
+                    cmd = uv_cmd + ['pip', 'install', '--python', sys.executable, package_spec]
+                else:
+                    cmd = uv_cmd + ['pip', 'install', '--python', sys.executable, package_spec]
                 logging.info(f"Installing {package_spec} with UV...")
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
                 

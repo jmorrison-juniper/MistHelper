@@ -10,13 +10,13 @@ MistHelper is a production-focused Python application that streamlines large‑s
 ---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–97) – not a fixed “96” set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
+1. Operation Count: The code currently defines 112 actionable menu entries (1–10, 11–89, 90–112) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
 5. WIP Operations: 63–65 are explicitly flagged in code as work‑in‑progress and may change schema/output without notice.
 
-This README reflects the current actual logic inside `MistHelper.py` (≈22k lines) as of 2025‑09‑23.
+This README reflects the current actual logic inside `MistHelper.py` (≈44k lines) as of 2025‑12‑15.
 
 ---
 ## 2. Core Capabilities
@@ -41,8 +41,7 @@ This README reflects the current actual logic inside `MistHelper.py` (≈22k lin
 | `CombinedInventory_ByWeek/` | Time‑series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
 | `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
-| `script.log` | Unified runtime log |
-| `run-misthelper.py` | Podman helper wrapper (auto builds & runs container) |
+| `data/script.log` | Unified runtime log |
 | `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified SSL‑bypass) |
 | `compose.yml` | Orchestrated service definition (uses `Containerfile` by default) |
 | `agents.md` | Internal “Agents Guide” (style, safety, refactor guidance) |
@@ -185,6 +184,9 @@ Primary flags (from argparse block near end of file):
 | `--address-check` | Enable external address validation using Nominatim API |
 | `--skip-ssl-verify` | Skip SSL certificate verification for external API calls |
 | `--no-env` | Disable .env file loading for SSH operations |
+| `--dry-run` | Preview destructive operations without making changes |
+| `--tui` | Launch Terminal User Interface mode for visual API navigation |
+| `--testinteractive` | Run systematic test of read-only interactive menu options |
 
 Examples (PowerShell friendly):
 ```powershell
@@ -230,7 +232,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
 | 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
 | 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
-| 40–44 | Clients & Security | Wired/wireless clients, rogue entities, security policies + events aggregation |
+| 40–44 | Clients & Security | Wired/wireless clients, security events, rogue client/AP detections |
 | 45–59 | Configuration & Admin | Licenses, PSKs, webhooks, WLANs (org/site), admins, MSP, SSO, usage, MX Edge |
 | 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI actions |
 | 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway config extraction (heavy) |
@@ -247,6 +249,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
 | 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
 | 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR firmware upgrade with mode selection |
+| 101 | TUI Mode | Launch Terminal User Interface for visual Mist API library navigation |
 | 102 | WLAN RADIUS Timers | Manage WLAN RADIUS authentication timers for site or template WLANs |
 | 103–104 | Gateway Template WAN2 | Set site variables & migrate templates to use {{wan2_interface}} variable |
 | 105 | Template Config Extract | Extract DIA_Pico (traffic steering) & Picocell (application policy) to JSON |
@@ -255,6 +258,8 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 108 | Country RF Templates | **DESTRUCTIVE**: Create country-specific RF templates and assign sites to matching templates (auto/default settings) |
 | 109 | AP Model Device Profiles | **DESTRUCTIVE**: Scan org for AP models and create Device Profile per model with inherit/auto settings |
 | 110 | Assign APs to Profiles | **DESTRUCTIVE**: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles |
+| 111 | Clone Templates by Geography | **DESTRUCTIVE**: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites |
+| 112 | Maps Manager | Interactive site floorplan and map operations (sub-menu with 19 operations) |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -335,9 +340,10 @@ docker compose build
 docker compose run --rm misthelper python MistHelper.py
 ```
 
-Podman helper (auto build + run):
+Podman example (direct):
 ```powershell
-python .\run-misthelper.py
+podman build -t misthelper -f Containerfile .
+podman run -it --rm -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper python MistHelper.py
 ```
 
 ### SSH Remote Access (NEW)
@@ -346,7 +352,8 @@ MistHelper now supports SSH server deployment for remote access with automatic s
 #### Quick Start - SSH Server
 ```powershell
 # Build and start SSH server container
-python .\run-misthelper.py --ssh
+podman build -t misthelper -f Containerfile .
+podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
@@ -436,7 +443,7 @@ Coding Style Essentials:
 | SQLite table missing | First run not completed or permission issue | Re-run with `--output-format sqlite` and check write perms on `data/` |
 | SSH runner fails | Missing `paramiko` or creds | Ensure `paramiko` installed; add SSH vars to `.env` |
 | WIP export fails | Endpoint schema drift | Treat 63–65 as non-stable; review code before relying |
-| **SSH connection refused** | **Container not running** | **Check `docker ps`, restart with `python run-misthelper.py --ssh`** |
+| **SSH connection refused** | **Container not running** | **Check `podman ps`, restart container with SSH enabled** |
 | **SSH wrong password** | **Using incorrect credentials** | **Default password is `misthelper123!`** |
 | **SSH session won't start** | **ForceCommand or session issues** | **Check container logs, verify SSH server is running** |
 | **SSH port conflict** | **Port 2200 already in use** | **Stop other services on port 2200 or modify container config** |
@@ -478,6 +485,26 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.12.15.14.45",
+      "date": "2025-12-15",
+      "changes": {
+        "bug_fixes": [
+          "UV package manager detection - Now searches Python environment bin directories, macOS user bin, and python -m uv fallback instead of only checking system PATH",
+          "UV now works correctly when installed via pip to system Python on macOS where executables go to ~/Library/Python/X.Y/bin/"
+        ],
+        "documentation": [
+          "README Section 1 - Updated operation count from 97 to 112 menu entries",
+          "README Section 1 - Updated line count from 22k to 44k lines",
+          "README Section 1 - Updated date to 2025-12-15",
+          "README Section 3 - Removed non-existent run-misthelper.py from directory table",
+          "README Section 6 - Added missing CLI flags: --dry-run, --tui, --testinteractive",
+          "README Section 8 - Fixed menu 40-44 description to mention rogue client/AP detections",
+          "README Section 8 - Added missing menu items 101 (TUI), 111 (Clone Templates), 112 (Maps Manager)",
+          "README Section 14 - Updated container commands to use direct podman commands instead of run-misthelper.py"
+        ]
+      }
+    },
     {
       "version": "25.12.12.17.10",
       "date": "2025-12-12",
