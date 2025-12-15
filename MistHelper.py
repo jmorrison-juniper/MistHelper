@@ -26,7 +26,18 @@ from math import cos, sin, pi
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from threading import Lock
-from typing import Tuple, Optional, List, Dict, Any, Union
+from typing import Tuple, Optional, List, Dict, Any, Union, TYPE_CHECKING
+from types import ModuleType
+
+# Type stubs for dynamically imported modules
+# These allow type checking while the actual imports happen at runtime via GlobalImportManager
+if TYPE_CHECKING:
+    import mistapi as mistapi_type
+    import requests as requests_type
+    import websocket as websocket_type
+    import paramiko as paramiko_type
+    import pyte as pyte_type
+    import urllib3 as urllib3_type
 
 # ============================================================================
 # EARLY LOGGING SETUP
@@ -39,6 +50,52 @@ from typing import Tuple, Optional, List, Dict, Any, Union
 _early_log_dir = "data"
 os.makedirs(_early_log_dir, exist_ok=True)
 _early_log_path = os.path.join(_early_log_dir, "script.log")
+
+# Check for data directory write permissions early (critical for container deployments)
+# The container runs as non-root 'misthelper' user, so mounted volumes must be writable
+def _check_data_directory_permissions():
+    """Check if data directory is writable and provide actionable guidance if not."""
+    test_file = os.path.join(_early_log_dir, ".write_test")
+    try:
+        # Try to create and remove a test file
+        with open(test_file, 'w') as f:
+            f.write("test")
+        os.remove(test_file)
+        return True
+    except PermissionError:
+        # Detect if running in container for more specific guidance
+        in_container = os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv')
+        
+        print("\n" + "=" * 70)
+        print("ERROR: Data directory is not writable!")
+        print("=" * 70)
+        print(f"\nPath: {os.path.abspath(_early_log_dir)}")
+        print("\nMistHelper cannot write logs or data to the data/ directory.")
+        
+        if in_container:
+            print("\n[CONTAINER DETECTED]")
+            print("The container runs as non-root user 'misthelper' for security.")
+            print("The mounted data/ directory must have write permissions.")
+            print("\nTo fix this, run the following on your HOST machine:")
+            print("\n    chmod -R 777 data/")
+            print("\nThen restart the container:")
+            print("    podman stop misthelper && podman rm misthelper")
+            print("    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\")
+            print("        -v \"${PWD}/data:/app/data:rw\" -v \"${PWD}/.env:/app/.env:ro\" \\")
+            print("        ghcr.io/jmorrison-juniper/misthelper:latest")
+        else:
+            print("\nTo fix this, ensure the data/ directory is writable:")
+            print("\n    chmod -R 755 data/")
+            print("    # Or if you own the directory:")
+            print("    chown -R $(whoami) data/")
+        
+        print("\n" + "=" * 70)
+        sys.exit(1)
+    except Exception as e:
+        # Non-permission error, let it proceed and fail naturally
+        return True
+
+_check_data_directory_permissions()
 
 # Get log levels from environment (same as GlobalImportManager._setup_logging)
 _early_console_level = int(os.environ.get('CONSOLE_LOG_LEVEL', logging.INFO))
@@ -364,7 +421,8 @@ _early_dependency_check()
 from pathlib import Path
 import json
 import sqlite3
-import datetime
+# Note: datetime class already imported at top of file (line 26)
+# Only import timezone, timedelta here to avoid shadowing datetime class
 from datetime import timezone, timedelta
 import threading
 import concurrent.futures
@@ -381,25 +439,26 @@ import inspect
 try:
     from prettytable import PrettyTable
 except ImportError:
-    PrettyTable = None
+    PrettyTable: Any = None  # Will be installed by GlobalImportManager
 
 try:
     import numpy as np
 except ImportError:
-    np = None
+    np: Any = None  # Optional - some analytics features may be limited
 
 try:
     import websocket
 except ImportError:
-    websocket = None
+    websocket: Any = None  # Optional - WebSocket features disabled if unavailable
 
 try:
     from difflib import SequenceMatcher
 except ImportError:
-    SequenceMatcher = None
+    SequenceMatcher: Optional[Any] = None
 
 # Import mistapi later through GlobalImportManager for better dependency management
-mistapi = None
+# Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
+mistapi: Any = None
 
 # tqdm will be properly imported by GlobalImportManager
 # This fallback will be overridden by the real tqdm import
@@ -410,40 +469,39 @@ def tqdm(iterable, *args, **kwargs):
 try:
     import requests
 except ImportError:
-    requests = None
+    requests: Any = None  # Will be installed by GlobalImportManager
 
 try:
     import urllib3
 except ImportError:
-    urllib3 = None
+    urllib3: Any = None  # Optional - SSL warning suppression disabled if unavailable
 
 try:
     import pyte
 except ImportError:
-    pyte = None
+    pyte: Any = None  # Optional - terminal emulation features disabled if unavailable
 
 try:
     import paramiko
     from paramiko import SSHClient, AutoAddPolicy
 except ImportError:
-    paramiko = None
-    SSHClient = None
-    AutoAddPolicy = None
+    paramiko: Optional[ModuleType] = None
+    SSHClient: Optional[Any] = None
+    AutoAddPolicy: Optional[Any] = None
 
 # Optional imports with fallbacks
 try:
     from scourgify import normalize_address_record
 except ImportError:
-    normalize_address_record = None
+    normalize_address_record: Optional[Any] = None
 
 try:
     from rapidfuzz import fuzz
 except ImportError:
-    fuzz = None
+    fuzz: Optional[Any] = None
 
 # Keyboard listener functionality has been removed for simplicity
-listen_keyboard = None
-stop_listening = None
+# These functions are no-op fallbacks
 
 def listen_keyboard(*args, **kwargs):
     """Keyboard listener has been removed - this is a no-op fallback."""
@@ -494,27 +552,29 @@ def fetch_all_inventory_with_limit(org_id):
     return mistapi.get_all(response=resp, mist_session=apisession)
 
 # Early dotenv import for configuration loading
+def _fallback_load_dotenv() -> None:
+    """Fallback .env loader when python-dotenv package is not installed."""
+    try:
+        with open(".env", "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+    except FileNotFoundError:
+        logging.debug("No .env file found")
+    except Exception as e:
+        logging.debug(f"Error loading .env file: {e}")
+
 try:
     from dotenv import load_dotenv
     DOTENV_AVAILABLE = True
     load_dotenv()
 except ImportError:
     DOTENV_AVAILABLE = False
-    # Manual .env loading fallback when python-dotenv is not available
-    def load_dotenv():
-        """Fallback .env loader when python-dotenv package is not installed."""
-        try:
-            with open(".env", "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
-                        os.environ[key.strip()] = value.strip()
-        except FileNotFoundError:
-            logging.debug("No .env file found")
-        except Exception as e:
-            logging.debug(f"Error loading .env file: {e}")
-    load_dotenv()
+    # Use fallback loader and create an alias for later calls
+    load_dotenv = _fallback_load_dotenv  # type: ignore[assignment]
+    _fallback_load_dotenv()
 
 class GlobalImportManager:
     """
@@ -554,9 +614,9 @@ class GlobalImportManager:
         self.imports = {}
         
         # UV availability cache to avoid repeated checks
-        self._uv_available = None
-        self._uv_checked = False
-        self._last_uv_update_check = None  # Track when we last checked for UV updates
+        self._uv_available: bool = False
+        self._uv_checked: bool = False
+        self._last_uv_update_check: Optional[float] = None  # Track when we last checked for UV updates
         
         # Import name mappings for cases where package name != import name
         self.import_name_mappings = {
@@ -1222,7 +1282,7 @@ class GlobalImportManager:
                         with log_lock:
                             logging.error(f"Package {package_info[0]} import generated an exception: {exc}")
             
-    def initialize_all_imports(self, skip_deps: bool = False) -> bool:
+    def initialize_all_imports(self, skip_deps: bool = False) -> Tuple[bool, Dict[str, Any]]:
         """
         Initialize all imports and dependencies upfront.
         
@@ -1444,9 +1504,6 @@ class GlobalImportManager:
                     except (ImportError, AttributeError):
                         logging.debug("Could not import fuzz from rapidfuzz, using fallback")
             # Note: pynput handling removed for simplicity
-                        
-        # Handle fallbacks for missing optional modules
-        self._setup_fallbacks()
                         
         logging.debug("Successfully made imported modules available globally")
         
@@ -1923,6 +1980,7 @@ def initialize_mist_session():
     for i, kwargs in enumerate(attempts, start=1):
         try:
             tried_variants.append(kwargs)
+            assert apisession_cls is not None, "apisession_cls should be set if attempts list is populated"
             apisession = apisession_cls(**kwargs)
             successful_method = kwargs
             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
@@ -1983,6 +2041,7 @@ def initialize_mist_session():
                         filtered_kwargs['host'] = host
                     
                     logging.info(f"Initializing with {len(available_tokens)} available token(s)")
+                    assert apisession_cls is not None, "apisession_cls should be set for retry logic"
                     apisession = apisession_cls(**filtered_kwargs)
                     successful_method = filtered_kwargs
                     logging.info(f"SUCCESS: API session initialized with {len(available_tokens)} available token(s)")
@@ -9751,7 +9810,7 @@ def arp_device_websocket():
                 # Parse and display gateway data in table format if it's JSON
                 if device_info and device_info.get('type') == 'gateway' and raw_output.strip().startswith('{'):
                     try:
-                        import json
+                        # json is already imported globally
                         gateway_data = json.loads(raw_output)
                         
                         if gateway_data.get('status') == 'SUCCESS' and 'rows' in gateway_data:
@@ -11291,7 +11350,7 @@ def parse_ssr_routing_json(json_data):
         list: List of parsed routing table entries as dictionaries
     """
     try:
-        import json
+        # json is already imported globally
         data = json.loads(json_data)
         
         if data.get("status") != "SUCCESS":
@@ -29377,7 +29436,6 @@ class MapsManager:
         )
         def refresh_client_positions(n_intervals, manual_clicks, config, current_fig, client_layers, refresh_times):
             """Refresh client positions from Mist API"""
-            import datetime
             import time
             
             ctx = dash.callback_context
@@ -29572,7 +29630,7 @@ class MapsManager:
                     logging.warning(f"Live data refresh: Error refreshing walls: {wall_refresh_error}")
                 
                 # Update the map-info section with new client count
-                timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+                timestamp = datetime.now().strftime('%H:%M:%S')
                 logging.info(f"Live data refresh: Client positions updated at {timestamp} - WiFi: {len(wifi_client_x)}, Wired: {len(wired_client_x)}")
                 
                 return current_fig, updated_refresh_times
@@ -29594,7 +29652,6 @@ class MapsManager:
         )
         def refresh_rf_coverage(n_intervals, config, current_fig, layer_values, refresh_times):
             """Refresh RF coverage heatmap from Mist API"""
-            import datetime
             import time
             
             if n_intervals == 0:
@@ -29682,7 +29739,7 @@ class MapsManager:
                         logging.debug(f"Live data refresh: Updated RF coverage with {len(coverage_x)} points")
                         break
                 
-                timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+                timestamp = datetime.now().strftime('%H:%M:%S')
                 logging.info(f"Live data refresh: RF coverage updated at {timestamp} - {len(results)} points")
                 
                 return current_fig, updated_refresh_times

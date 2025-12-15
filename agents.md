@@ -55,6 +55,10 @@ podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 # Stop and remove old container
 podman stop misthelper ; podman rm misthelper
 
+# IMPORTANT: Ensure data directory permissions before starting
+# Container runs as non-root 'misthelper' user - data dir must be writable
+chmod -R 777 data/
+
 # Start new container with updated image
 podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
 ```
@@ -63,6 +67,13 @@ podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/d
 ```powershell
 podman ps  # Confirm container is running
 ```
+
+### Data Directory Permissions (CRITICAL)
+The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
+```bash
+chmod -R 777 data/   # Required before first container run
+```
+**Symptom:** `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
 
 **DO NOT skip steps.** The user expects the container to be updated and running after code changes.
 

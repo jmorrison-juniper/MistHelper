@@ -101,6 +101,13 @@ podman ps  # Confirm container is running
 
 **DO NOT skip steps.** The user expects the container to be updated and running after code changes.
 
+### Data Directory Permissions (CRITICAL)
+The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
+```bash
+chmod -R 777 data/   # Required before first container run
+```
+**Symptom:** `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
+
 ### Running Tests
 ```powershell
 # Local development (Windows 11 + venv required)

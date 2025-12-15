@@ -353,12 +353,33 @@ MistHelper now supports SSH server deployment for remote access with automatic s
 ```powershell
 # Build and start SSH server container
 podman build -t misthelper -f Containerfile .
+
+# IMPORTANT: Ensure data directory has proper permissions for container user
+# The container runs as 'misthelper' user (non-root), so the mounted data 
+# directory must be writable by that user
+chmod -R 777 data/   # Or use appropriate ownership/permissions for your setup
+
 podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
 # Password: misthelper123!
 ```
+
+#### Data Directory Permissions
+The container runs MistHelper as a non-root user (`misthelper`) for security. When mounting the `data/` directory as a volume, ensure proper permissions:
+
+```bash
+# Option 1: Open permissions (simplest, suitable for development)
+chmod -R 777 data/
+
+# Option 2: Match container user UID/GID (more secure for production)
+# The misthelper user in the container typically has UID 999
+chown -R 999:999 data/
+chmod -R 755 data/
+```
+
+**Symptom of permission issues:** If you see `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` when connecting via SSH, the data directory permissions need to be fixed.
 
 #### SSH Server Features
 - **Automatic Session Management**: Each SSH connection creates an isolated MistHelper session
@@ -412,10 +433,12 @@ ssh -p 2200 misthelper@127.0.0.1
 #### SSH Troubleshooting
 | Issue | Solution |
 |-------|----------|
-| Connection refused | Ensure container is running: `docker ps` |
+| Connection refused | Ensure container is running: `podman ps` or `docker ps` |
 | Wrong password | Default is `misthelper123!` |
-| Permission denied | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
-| Session not starting | Check container logs: `docker logs <container>` |
+| Permission denied (SSH) | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
+| Permission denied (data dir) | Run `chmod -R 777 data/` on host before starting container |
+| `script.log` permission error | Data directory not writable - fix with `chmod -R 777 data/` |
+| Session not starting | Check container logs: `podman logs misthelper` |
 | Port conflict | Ensure port 2200 is available |
 
 Persisted artifacts appear under local `data/` bind mount.
@@ -485,6 +508,22 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.01.21.15.30",
+      "date": "2025-01-21",
+      "changes": {
+        "feature_additions": [
+          "Early data directory permission detection with container-aware error messages",
+          "Script now checks write permissions before attempting to create log files",
+          "Provides specific fix instructions based on local vs container environment"
+        ],
+        "documentation": [
+          "Added Data Directory Permissions section to README troubleshooting",
+          "Updated agents.md with CRITICAL permission requirements in deployment pipeline",
+          "Updated copilot-instructions.md with permission fix between image pull and container restart"
+        ]
+      }
+    },
     {
       "version": "25.12.15.14.45",
       "date": "2025-12-15",
