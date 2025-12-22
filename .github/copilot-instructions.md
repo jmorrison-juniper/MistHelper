@@ -94,7 +94,7 @@ podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 
 # Step 5: Restart Container
 podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
 
 # Step 6: Verify
 podman ps  # Confirm container is running
@@ -219,6 +219,16 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 **Never automate these without explicit user confirmation**
 
 ## Common Pitfalls
+
+### Dash 3.x API Changes (Maps Manager)
+```python
+# WRONG: Deprecated in Dash 3.x - throws ObsoleteAttributeException
+app.run_server(host=host, port=port, debug=True)
+
+# CORRECT: Dash 3.x uses app.run()
+app.run(host=host, port=port, debug=True, use_reloader=False, threaded=True)
+```
+**Note**: Always use `use_reloader=False` to prevent double-execution issues on Windows.
 
 ### Device Type Filtering
 ```python

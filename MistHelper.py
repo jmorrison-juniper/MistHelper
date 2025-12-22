@@ -25430,12 +25430,25 @@ class MapsManager:
             if 'view' in source_map:
                 clone_payload['view'] = source_map['view']
             
+            # Check for zones on source map to include in clone plan
+            source_zones_count = 0
+            try:
+                zones_check = mistapi.api.v1.sites.zones.listSiteZones(
+                    self.apisession,
+                    site_id=site_id
+                )
+                if zones_check.status_code == 200:
+                    source_zones_count = len([z for z in zones_check.data if z.get('map_id') == source_map_id])
+            except Exception:
+                pass
+            
             # Display clone plan
             print(f"\n{'-' * 80}")
             print("Clone Plan:")
             print(f"  New name: {new_name}")
             print(f"  Will copy: dimensions, orientation, location data, wayfinding, walls")
             print(f"  Image: {'Yes - will download and re-upload' if 'url' in source_map else 'No image to copy'}")
+            print(f"  Zones: {source_zones_count} zone(s) will be cloned" if source_zones_count > 0 else "  Zones: None found on source map")
             print(f"{'-' * 80}")
             
             confirm = input("\nProceed with full clone? (yes/no): ").strip().lower()
@@ -25531,6 +25544,67 @@ class MapsManager:
                     if os.path.exists(image_temp_path):
                         os.remove(image_temp_path)
             
+            # Clone zones that belong to the source map
+            zones_cloned = 0
+            zones_failed = 0
+            try:
+                print("\nCloning zones...")
+                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                    self.apisession,
+                    site_id=site_id
+                )
+                
+                if zones_response.status_code == 200:
+                    all_zones = zones_response.data
+                    # Filter zones that belong to the source map
+                    source_map_zones = [z for z in all_zones if z.get('map_id') == source_map_id]
+                    logging.info(f"Found {len(source_map_zones)} zones on source map to clone")
+                    
+                    if source_map_zones:
+                        for zone in source_map_zones:
+                            try:
+                                # Build zone payload for cloned map
+                                zone_payload = {
+                                    'name': zone.get('name', 'Unnamed Zone'),
+                                    'map_id': cloned_map_id,
+                                    'vertices': zone.get('vertices', [])
+                                }
+                                
+                                # Copy optional zone properties if present
+                                if 'type' in zone:
+                                    zone_payload['type'] = zone['type']
+                                if 'z' in zone:
+                                    zone_payload['z'] = zone['z']
+                                
+                                # Create zone on cloned map
+                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(
+                                    self.apisession,
+                                    site_id=site_id,
+                                    body=zone_payload
+                                )
+                                
+                                if zone_response.status_code in [200, 201]:
+                                    zones_cloned += 1
+                                    logging.debug(f"Cloned zone '{zone.get('name')}' to new map")
+                                else:
+                                    zones_failed += 1
+                                    logging.warning(f"Failed to clone zone '{zone.get('name')}': HTTP {zone_response.status_code}")
+                                    
+                            except Exception as zone_error:
+                                zones_failed += 1
+                                logging.error(f"Error cloning zone '{zone.get('name')}': {zone_error}")
+                        
+                        print(f"Zones cloned: {zones_cloned} (failed: {zones_failed})")
+                    else:
+                        print("No zones found on source map to clone")
+                else:
+                    logging.warning(f"Failed to fetch zones for cloning - HTTP {zones_response.status_code}")
+                    print("! Warning: Could not fetch zones for cloning")
+                    
+            except Exception as zones_error:
+                logging.error(f"Error during zone cloning: {zones_error}", exc_info=True)
+                print(f"! Warning: Zone cloning failed: {zones_error}")
+            
             # Display final summary
             print(f"\n{'-' * 80}")
             print("CLONE COMPLETE")
@@ -25544,11 +25618,10 @@ class MapsManager:
             print(f"  -> Walls: {'Yes' if 'wall_path' in clone_payload else 'No'}")
             print(f"  -> Wayfinding: {'Yes' if 'wayfinding_path' in clone_payload else 'No'}")
             print(f"  -> Image: {'Yes' if image_temp_path else 'No'}")
+            print(f"  -> Zones: {zones_cloned} cloned" + (f" ({zones_failed} failed)" if zones_failed > 0 else ""))
             print(f"{'-' * 80}")
-            print("\n! Note: Zones are site-level objects, not map objects.")
-            print("! If you need to clone zones, use the Zones API separately.")
             
-            logging.info(f"Successfully cloned map {source_map_id} to {cloned_map_id} at site {site_id}")
+            logging.info(f"Successfully cloned map {source_map_id} to {cloned_map_id} at site {site_id} (zones: {zones_cloned})")
                 
         except EOFError:
             logging.info("EOF detected during map clone")
@@ -27628,11 +27701,36 @@ class MapsManager:
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
                     html.Button('❌ Delete', id='delete-btn', n_clicks=0,
-                               style={'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                               style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Button('[+] Clone', id='clone-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
+                                      'color': '#00ff88', 'border': '1px solid #00ff88', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
                     html.Div(id='utilities-status', style={'display': 'inline-block', 'marginLeft': '20px', 'color': '#a0a0ff', 'fontSize': '13px'})
                 ], style={'display': 'inline-block', 'float': 'right'})
             ], style={'padding': '15px 20px', 'borderBottom': '2px solid #667eea', 'backgroundColor': '#2a2a2a'}),
+            
+            # Clone map input panel (hidden by default)
+            html.Div(id='clone-panel', children=[
+                html.Div([
+                    html.Span('[+] Clone Map: ', style={'color': '#00ff88', 'fontWeight': 'bold', 'marginRight': '10px'}),
+                    dcc.Input(
+                        id='clone-name-input',
+                        type='text',
+                        placeholder=f"{map_data.get('name', 'Map')} (Copy)",
+                        value=f"{map_data.get('name', 'Map')} (Copy)",
+                        style={'width': '300px', 'padding': '8px 12px', 'backgroundColor': '#2a2a2a', 'color': '#e0e0e0',
+                               'border': '1px solid #00ff88', 'borderRadius': '4px', 'marginRight': '10px'}
+                    ),
+                    html.Button('Execute Clone', id='execute-clone-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#00ff88', 'color': '#1a1a1a',
+                                      'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold', 'marginRight': '10px'}),
+                    html.Button('Cancel', id='cancel-clone-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 'color': '#ff4444',
+                                      'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Span(id='clone-status', style={'marginLeft': '15px', 'color': '#e0e0e0', 'fontSize': '13px'})
+                ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'})
+            ], style={'display': 'none', 'padding': '12px 20px', 'backgroundColor': '#1a1a1a', 'borderBottom': '1px solid #00ff88'}),
             
             html.Div([
                 # Map container - responsive
@@ -28573,21 +28671,31 @@ class MapsManager:
                             
                             if coverage_data:
                                 results = coverage_data.get('results', [])
+                                result_def = coverage_data.get('result_def', [])
                                 logging.info(f"URL map switch: RF coverage API returned {len(results)} grid points")
-                                if results:
-                                    # Build grid data
+                                if results and result_def:
+                                    # Find indices for data fields from result_def
+                                    try:
+                                        x_idx = result_def.index('x')
+                                        y_idx = result_def.index('y')
+                                        max_rssi_idx = result_def.index('max_rssi')
+                                    except ValueError as idx_error:
+                                        logging.warning(f"URL map switch: Coverage data missing expected fields in result_def: {idx_error}")
+                                        x_idx, y_idx, max_rssi_idx = 0, 1, 4  # Fallback indices
+                                    
+                                    # Build grid data - results is list of lists, not list of dicts
                                     grid_data = {}
                                     for item in results:
-                                        x_m = item.get('x')
-                                        y_m = item.get('y')
-                                        rssi_array = item.get('rssi')
-                                        if x_m is None or y_m is None or not rssi_array:
+                                        if not isinstance(item, (list, tuple)) or len(item) <= max(x_idx, y_idx, max_rssi_idx):
+                                            continue
+                                        x_m = item[x_idx]
+                                        y_m = item[y_idx]
+                                        max_rssi = item[max_rssi_idx]
+                                        if x_m is None or y_m is None or max_rssi is None:
                                             continue
                                         pixel_x = x_m * new_ppm
                                         pixel_y = y_m * new_ppm
-                                        max_rssi = max(rssi_array) if rssi_array else None
-                                        if max_rssi is not None:
-                                            grid_data[(pixel_x, pixel_y)] = max_rssi
+                                        grid_data[(pixel_x, pixel_y)] = max_rssi
                                     
                                     if grid_data:
                                         all_rssi = list(grid_data.values())
@@ -29272,11 +29380,38 @@ class MapsManager:
                 return html.Span(msg, style={'color': '#ff8800'})
             
             elif button_id == 'delete-btn':
-                msg = "❌ Delete Floorplan: Use Mist API deleteSiteMap - DESTRUCTIVE! Requires confirmation"
+                msg = "X Delete Floorplan: Use Mist API deleteSiteMap - DESTRUCTIVE! Requires confirmation"
                 logging.warning(f"Utilities: Delete requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff0000', 'fontWeight': 'bold'})
             
             return ""
+        
+        # Callback to show/hide clone panel
+        @app.callback(
+            Output('clone-panel', 'style'),
+            [Input('clone-btn', 'n_clicks'),
+             Input('cancel-clone-btn', 'n_clicks'),
+             Input('execute-clone-btn', 'n_clicks')],
+            [State('clone-panel', 'style')],
+            prevent_initial_call=True
+        )
+        def toggle_clone_panel(clone_clicks, cancel_clicks, execute_clicks, current_style):
+            """Show or hide the clone input panel"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return current_style
+            
+            button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if button_id == 'clone-btn':
+                # Show the panel
+                logging.info(f"Clone panel opened for map {map_id}")
+                return {'display': 'block', 'padding': '12px 20px', 'backgroundColor': '#1a1a1a', 'borderBottom': '1px solid #00ff88'}
+            elif button_id in ['cancel-clone-btn', 'execute-clone-btn']:
+                # Hide the panel
+                return {'display': 'none', 'padding': '12px 20px', 'backgroundColor': '#1a1a1a', 'borderBottom': '1px solid #00ff88'}
+            
+            return current_style
         
         # Callback to handle zone-specific toggles
         @app.callback(
@@ -29421,6 +29556,198 @@ class MapsManager:
         
         # Store reference to API session for refresh callbacks
         api_session_ref = self.apisession
+        
+        # Callback to execute clone operation
+        @app.callback(
+            Output('clone-status', 'children'),
+            [Input('execute-clone-btn', 'n_clicks')],
+            [State('clone-name-input', 'value'),
+             State('map-config-store', 'data')],
+            prevent_initial_call=True
+        )
+        def execute_clone_operation(n_clicks, new_name, config):
+            """Clone the current map with all properties, image, and zones"""
+            import os
+            import requests
+            import tempfile
+            
+            if not n_clicks:
+                return ""
+            
+            if not new_name or not new_name.strip():
+                return html.Span("! Please enter a name for the cloned map", style={'color': '#ff4444'})
+            
+            new_name = new_name.strip()
+            site_id_local = config.get('site_id')
+            source_map_id = config.get('map_id')
+            
+            if not site_id_local or not source_map_id:
+                return html.Span("! Missing site or map configuration", style={'color': '#ff4444'})
+            
+            logging.info(f"Clone operation started - source: {source_map_id}, new name: {new_name}")
+            
+            try:
+                # Step 1: Fetch source map details
+                source_response = mistapi.api.v1.sites.maps.getSiteMap(
+                    api_session_ref,
+                    site_id=site_id_local,
+                    map_id=source_map_id
+                )
+                
+                if source_response.status_code != 200:
+                    logging.error(f"Clone failed: Could not fetch source map - HTTP {source_response.status_code}")
+                    return html.Span(f"! Failed to fetch source map: HTTP {source_response.status_code}", style={'color': '#ff4444'})
+                
+                source_map = source_response.data
+                
+                # Step 2: Build clone payload with ALL properties
+                clone_payload = {
+                    "name": new_name,
+                    "type": source_map.get('type', 'image')
+                }
+                
+                # Copy dimensional properties (critical for scaling)
+                for prop in ['width', 'height', 'height_m', 'ppm', 'orientation']:
+                    if prop in source_map:
+                        clone_payload[prop] = source_map[prop]
+                
+                # Copy location data
+                for prop in ['latlng', 'latlng_br', 'origin_x', 'origin_y']:
+                    if prop in source_map:
+                        clone_payload[prop] = source_map[prop]
+                
+                # Copy wayfinding and wall paths
+                for prop in ['wayfinding', 'wayfinding_path', 'wall_path', 'sitesurvey_path']:
+                    if prop in source_map:
+                        clone_payload[prop] = source_map[prop]
+                
+                # Copy other settings
+                for prop in ['occupancy_limit', 'locked', 'view']:
+                    if prop in source_map:
+                        clone_payload[prop] = source_map[prop]
+                
+                logging.debug(f"Clone payload prepared with {len(clone_payload)} properties")
+                
+                # Step 3: Download image if present
+                image_temp_path = None
+                if 'url' in source_map:
+                    try:
+                        image_url = source_map['url']
+                        file_ext = '.png'
+                        if '.' in image_url:
+                            url_ext = image_url.rsplit('.', 1)[-1].split('?')[0]
+                            if url_ext.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+                                file_ext = f'.{url_ext.lower()}'
+                        
+                        temp_fd, image_temp_path = tempfile.mkstemp(suffix=file_ext)
+                        os.close(temp_fd)
+                        
+                        response = requests.get(image_url, timeout=60)
+                        if response.status_code == 200:
+                            with open(image_temp_path, 'wb') as f:
+                                f.write(response.content)
+                            logging.info(f"Downloaded source map image ({len(response.content) / 1024:.1f} KB)")
+                        else:
+                            logging.warning(f"Failed to download image: HTTP {response.status_code}")
+                            if image_temp_path and os.path.exists(image_temp_path):
+                                os.remove(image_temp_path)
+                            image_temp_path = None
+                    except Exception as img_err:
+                        logging.error(f"Error downloading image: {img_err}")
+                        if image_temp_path and os.path.exists(image_temp_path):
+                            os.remove(image_temp_path)
+                        image_temp_path = None
+                
+                # Step 4: Create the cloned map
+                clone_response = mistapi.api.v1.sites.maps.createSiteMap(
+                    api_session_ref,
+                    site_id=site_id_local,
+                    body=clone_payload
+                )
+                
+                if clone_response.status_code not in [200, 201]:
+                    logging.error(f"Clone failed: Could not create map - HTTP {clone_response.status_code}")
+                    if image_temp_path and os.path.exists(image_temp_path):
+                        os.remove(image_temp_path)
+                    return html.Span(f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={'color': '#ff4444'})
+                
+                cloned_map = clone_response.data
+                cloned_map_id = cloned_map.get('id')
+                logging.info(f"Cloned map created: {cloned_map_id}")
+                
+                # Step 5: Upload image to cloned map
+                image_uploaded = False
+                if image_temp_path and os.path.exists(image_temp_path):
+                    try:
+                        upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+                            api_session_ref,
+                            site_id=site_id_local,
+                            map_id=cloned_map_id,
+                            file_path=image_temp_path
+                        )
+                        if upload_response.status_code in [200, 201]:
+                            image_uploaded = True
+                            logging.info(f"Image uploaded to cloned map {cloned_map_id}")
+                        else:
+                            logging.warning(f"Image upload failed: HTTP {upload_response.status_code}")
+                    except Exception as upload_err:
+                        logging.error(f"Error uploading image: {upload_err}")
+                    finally:
+                        if os.path.exists(image_temp_path):
+                            os.remove(image_temp_path)
+                
+                # Step 6: Clone zones associated with source map
+                zones_cloned = 0
+                zones_failed = 0
+                try:
+                    zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                        api_session_ref,
+                        site_id=site_id_local
+                    )
+                    
+                    if zones_response.status_code == 200:
+                        source_zones = [z for z in zones_response.data if z.get('map_id') == source_map_id]
+                        
+                        for zone in source_zones:
+                            try:
+                                zone_payload = {
+                                    'name': zone.get('name', 'Unnamed Zone'),
+                                    'map_id': cloned_map_id,
+                                    'vertices': zone.get('vertices', [])
+                                }
+                                if 'type' in zone:
+                                    zone_payload['type'] = zone['type']
+                                if 'z' in zone:
+                                    zone_payload['z'] = zone['z']
+                                
+                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(
+                                    api_session_ref,
+                                    site_id=site_id_local,
+                                    body=zone_payload
+                                )
+                                
+                                if zone_response.status_code in [200, 201]:
+                                    zones_cloned += 1
+                                else:
+                                    zones_failed += 1
+                            except Exception:
+                                zones_failed += 1
+                except Exception as zone_err:
+                    logging.error(f"Zone cloning error: {zone_err}")
+                
+                # Build success message
+                result_parts = [f"Map '{new_name}' created successfully!"]
+                if image_uploaded:
+                    result_parts.append("Image: uploaded")
+                if zones_cloned > 0:
+                    result_parts.append(f"Zones: {zones_cloned} cloned")
+                
+                logging.info(f"Clone complete: {new_name} (ID: {cloned_map_id}), image={image_uploaded}, zones={zones_cloned}")
+                return html.Span(" | ".join(result_parts), style={'color': '#00ff88', 'fontWeight': 'bold'})
+                
+            except Exception as e:
+                logging.error(f"Clone operation failed: {e}", exc_info=True)
+                return html.Span(f"! Clone failed: {str(e)}", style={'color': '#ff4444'})
         
         # Callback for client position refresh (every 30 seconds when enabled)
         @app.callback(
@@ -29701,12 +30028,24 @@ class MapsManager:
                     logging.warning(f"Live data refresh: Coverage API returned error")
                     return no_update, updated_refresh_times
                 
+                # Coverage API returns result_def (field names) + results (list of lists)
+                result_def = coverage_data.get('result_def', [])
                 results = coverage_data.get('results', [])
-                if not results:
+                if not results or not result_def:
                     logging.info("Live data refresh: No coverage data available")
                     return no_update, updated_refresh_times
                 
                 logging.info(f"Live data refresh: Processing {len(results)} coverage grid points")
+                
+                # Get field indices from result_def
+                try:
+                    x_idx = result_def.index('x')
+                    y_idx = result_def.index('y')
+                    # Try max_rssi first, fall back to avg_rssi
+                    rssi_idx = result_def.index('max_rssi') if 'max_rssi' in result_def else result_def.index('avg_rssi') if 'avg_rssi' in result_def else -1
+                except ValueError as index_error:
+                    logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
+                    return no_update, updated_refresh_times
                 
                 # Build new heatmap data
                 coverage_x = []
@@ -29714,9 +30053,9 @@ class MapsManager:
                 coverage_rssi = []
                 
                 for point in results:
-                    x_meters = point.get('x', 0)
-                    y_meters = point.get('y', 0)
-                    rssi_val = point.get('rssi', -100)
+                    x_meters = point[x_idx] if x_idx < len(point) else 0
+                    y_meters = point[y_idx] if y_idx < len(point) else 0
+                    rssi_val = point[rssi_idx] if rssi_idx >= 0 and rssi_idx < len(point) else -100
                     
                     # Convert to pixels using PPM
                     x_px = x_meters * ppm_local
@@ -29750,12 +30089,13 @@ class MapsManager:
         
         # Determine host binding - use 0.0.0.0 in containers for external access
         dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'
-        dash_port = int(os.getenv('DASH_PORT', '8050'))
+        # Use port 8055 by default to avoid conflict with WSL port forwarding on 8050
+        dash_port = int(os.getenv('DASH_PORT', '8055'))
         
         print("\nStarting Dash server...")
         if is_running_in_container():
             print(f"! Map viewer available at http://<container-ip>:{dash_port}")
-            print("! Access from host: http://localhost:8050 (if port is mapped)")
+            print("! Access from host: http://localhost:8055 (if port is mapped)")
         else:
             print("! Map viewer will open in your default browser")
         print("! Press Ctrl+C to stop the server\n")
@@ -29778,7 +30118,17 @@ class MapsManager:
             threading.Thread(target=open_browser, daemon=True).start()
         
         try:
-            app.run(debug=False, port=dash_port, host=dash_host)
+            # Check if --debug flag was passed via CLI args
+            debug_mode = getattr(globals().get('args'), 'debug', False)
+            logging.info(f"Starting Dash server with debug_mode={debug_mode}")
+            # Dash 3.x uses app.run() instead of app.run_server()
+            app.run(
+                host=dash_host,
+                port=dash_port,
+                debug=debug_mode,
+                use_reloader=False,  # Disable reloader to prevent double-execution
+                threaded=True
+            )
         except KeyboardInterrupt:
             print("\n\nMap viewer stopped by user")
             logging.info("Interactive map viewer stopped by user (Ctrl+C)")

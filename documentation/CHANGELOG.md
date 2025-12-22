@@ -2,6 +2,26 @@
 
 ## Version History
 
+### version 24.12.22.16.30
+
+```json
+{
+  "feature-additions": [
+    "Clone button added to Interactive Map Viewer - clone current map with image, scaling, and zones",
+    "Zone cloning support in clone_map() function - zones are now copied with map clones"
+  ],
+  "bug-fixes": [
+    "Fixed Dash 3.x API deprecation - changed app.run_server() to app.run()",
+    "Fixed port conflict with WSL relay - changed default DASH_PORT from 8050 to 8055",
+    "Fixed RF coverage floor switching - API returns list of lists, not list of dicts"
+  ],
+  "documentation": [
+    "Added Dash 3.x API pitfall to copilot-instructions.md",
+    "Updated container port mapping from 8050 to 8055"
+  ]
+}
+```
+
 ### Current Version - Majo#### Breaking Changes
 
 #### Current Version (July 2025)
