@@ -509,6 +509,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.22.17.30",
+      "date": "2025-12-22",
+      "changes": {
+        "bug_fixes": [
+          "Maps Manager: Fixed mistapi addSiteMapImageFile parameter name (file not file_path) - image uploads now work for map cloning"
+        ]
+      }
+    },
+    {
       "version": "25.12.22.13.45",
       "date": "2025-12-22",
       "changes": {

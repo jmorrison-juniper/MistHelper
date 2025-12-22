@@ -25526,7 +25526,7 @@ class MapsManager:
                         self.apisession,
                         site_id=site_id,
                         map_id=cloned_map_id,
-                        file_path=image_temp_path
+                        file=image_temp_path
                     )
                     
                     if upload_response.status_code in [200, 201]:
@@ -25981,7 +25981,7 @@ class MapsManager:
                     self.apisession,
                     site_id=site_id,
                     map_id=map_id,
-                    file_path=file_path
+                    file=file_path
                 )
             
             if upload_response.status_code in [200, 201]:
@@ -29683,7 +29683,7 @@ class MapsManager:
                             api_session_ref,
                             site_id=site_id_local,
                             map_id=cloned_map_id,
-                            file_path=image_temp_path
+                            file=image_temp_path
                         )
                         if upload_response.status_code in [200, 201]:
                             image_uploaded = True
