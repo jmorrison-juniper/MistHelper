@@ -28078,9 +28078,9 @@ class MapsManager:
                 new_map_name = new_map_data.get('name', 'Unnamed')
                 new_map_width = new_map_data.get('width', 1000)
                 new_map_height = new_map_data.get('height', 1000)
-                new_ppm = new_map_data.get('ppm', 10)
+                new_ppm = new_map_data.get('ppm') or 10  # Use 10 if ppm is 0 or None
                 
-                logging.info(f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height})")
+                logging.info(f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height}, ppm={new_ppm})")
                 
                 # Fetch devices for new map
                 devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(

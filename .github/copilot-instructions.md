@@ -14,7 +14,8 @@ MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud
 - **No wrappers**: All functionality lives within appropriately named classes, never use standalone wrapper functions
 
 ### Critical Dependencies
-- **mistapi**: Primary Mist API SDK by Thomas Munzer (tmunzer/mistapi_python)
+- **Python**: 3.13 or newer required
+- **mistapi**: 0.59+ (Primary Mist API SDK by Thomas Munzer - tmunzer/mistapi_python)
 - **UV Package Manager**: Preferred over pip for speed (auto-fallback configured)
 - **Container Runtime**: Podman-first, Docker-compatible
 

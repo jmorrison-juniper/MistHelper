@@ -509,6 +509,23 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.22.13.45",
+      "date": "2025-12-22",
+      "changes": {
+        "compatibility": [
+          "Updated Containerfile to use Python 3.13-slim base image (was 3.11-slim)",
+          "Updated requirements.txt to require mistapi>=0.59.0 (was >=0.3.0)"
+        ],
+        "documentation": [
+          "Added Python 3.13 and mistapi 0.59+ requirements to copilot-instructions.md",
+          "Added Runtime Requirements section to agents.md specifying Python 3.13+ and mistapi 0.59+"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed ppm value handling when switching maps (handles 0/None values correctly)"
+        ]
+      }
+    },
+    {
       "version": "25.01.21.15.30",
       "date": "2025-01-21",
       "changes": {

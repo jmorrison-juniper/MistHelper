@@ -2,7 +2,7 @@
 # Compatible with both Docker and Podman (OCI-compliant)
 # Features: SSH access on port 2200, SQLite persistence, corporate SSL bypass
 # Usage: podman build -t misthelper . OR docker build -t misthelper .
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Metadata following OCI standards
 LABEL org.opencontainers.image.title="MistHelper"

@@ -97,7 +97,11 @@ When searching or listing devices , the Mist API defaults to just AP's unless we
 
 During development we will be using a windows 11 machine on VS-code and always testing in  a python virtual enviroment, make sure command syntax during testing is correct.
 
-Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). 
+Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine-neutral (Podman or Docker both work).
+
+## Runtime Requirements
+- **Python**: 3.13 or newer required
+- **mistapi**: 0.59+ (always use latest available version from tmunzer/mistapi_python) 
 
 ---
 ## Container Registry & CI/CD

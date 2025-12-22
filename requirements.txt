@@ -1,6 +1,8 @@
 # MistHelper Dependencies
+# Requires Python 3.13 or newer
+
 # Core API and networking
-mistapi>=0.3.0
+mistapi>=0.59.0
 requests>=2.28.0
 websocket-client>=1.4.0
 urllib3>=1.26.0
