@@ -40915,7 +40915,10 @@ def run_systematic_test():
         "108": "DESTRUCTIVE: Creates country-specific RF templates - requires uppercase confirmation",
         "109": "DESTRUCTIVE: Creates device profiles for AP models - requires uppercase confirmation",
         "110": "DESTRUCTIVE: Assigns APs to device profiles - requires uppercase confirmation",
-        "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation"
+        "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation",
+        
+        # Interactive visualization tools
+        "112": "Maps Manager - requires interactive Dash web server and browser"
     }
     
     # Get all available menu options

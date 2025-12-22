@@ -480,7 +480,7 @@ Coding Style Essentials:
 4. Update this README if public behavior or filenames change  
 5. Run `--test` (when feasible) before submitting PR  
 
-License: AGPL-3.0-only (see `pyproject.toml`).
+License: CC-BY-NC-SA-4.0 (Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International)
 
 ---
 ## 18. Roadmap (Short Horizon)

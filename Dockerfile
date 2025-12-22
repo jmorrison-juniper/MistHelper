@@ -2,7 +2,7 @@
 # Compatible with both Docker and Podman (OCI-compliant)
 # Features: SSH access on port 2200, SQLite persistence, corporate SSL bypass
 # Usage: podman build -t misthelper . OR docker build -t misthelper .
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Metadata following OCI standards
 LABEL org.opencontainers.image.title="MistHelper"
@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.description="Juniper Mist API data export tool wi
 LABEL org.opencontainers.image.version="2.1.0"
 LABEL org.opencontainers.image.vendor="Joseph Morrison"
 LABEL org.opencontainers.image.authors="Joseph Morrison <jmorrison@juniper.net>"
-LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
+LABEL org.opencontainers.image.licenses="CC-BY-NC-SA-4.0"
 LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-juniper/MistHelper"
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
