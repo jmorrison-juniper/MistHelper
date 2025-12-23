@@ -509,6 +509,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.22.20.30",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager Menu 13: Intelligent Map Replacement Wizard - replace floor plan images while preserving device placements",
+          "Wizard supports proportional scaling, physical position preservation, or manual PPM configuration",
+          "Automatic coordinate translation for devices, zones, walls, wayfinding paths, beacons, and virtual beacons",
+          "Pre-replacement backup with full map geometry and image file",
+          "Interactive preview showing before/after coordinates for all affected assets"
+        ]
+      }
+    },
+    {
       "version": "25.12.22.19.54",
       "date": "2025-12-22",
       "changes": {
