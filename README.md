@@ -509,6 +509,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.22.19.54",
+      "date": "2025-12-22",
+      "changes": {
+        "bug_fixes": [
+          "Maps Manager: Fixed delete panel showing 'Map: Unknown' - added map_name to config store"
+        ]
+      }
+    },
+    {
       "version": "25.12.22.19.30",
       "date": "2025-12-22",
       "changes": {
