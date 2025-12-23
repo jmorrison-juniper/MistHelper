@@ -24649,6 +24649,279 @@ class MapsManager:
             print(f"\n! Error selecting map: {e}")
             return (None, []) if return_all_maps else None
     
+    def _backup_map_geometry(self, api_session, site_id, map_id, map_name, backup_reason="manual"):
+        """
+        Backup map geometry data (walls, zones, wayfinding paths) to JSON file.
+        
+        Called automatically before destructive operations (delete) and during cloning
+        to preserve geometry data that would otherwise be lost.
+        
+        Args:
+            api_session: The authenticated Mist API session
+            site_id: Site ID containing the map
+            map_id: Map ID to backup
+            map_name: Human-readable map name for the backup filename
+            backup_reason: Reason for backup (delete, clone, manual) for logging
+            
+        Returns:
+            str: Path to backup file if successful, None if failed
+        """
+        import json
+        import os
+        from datetime import datetime
+        
+        try:
+            logging.info(f"Map geometry backup initiated - map: {map_name} ({map_id}), reason: {backup_reason}")
+            
+            # Fetch complete map data from API
+            map_response = mistapi.api.v1.sites.maps.getSiteMap(
+                api_session,
+                site_id=site_id,
+                map_id=map_id
+            )
+            
+            if map_response.status_code != 200:
+                logging.error(f"Map backup failed: Could not fetch map data - HTTP {map_response.status_code}")
+                return None
+            
+            map_data = map_response.data
+            
+            # Extract ALL map data needed for complete reconstruction
+            geometry_backup = {
+                "backup_info": {
+                    "timestamp": datetime.now().isoformat(),
+                    "reason": backup_reason,
+                    "map_id": map_id,
+                    "map_name": map_name,
+                    "site_id": site_id
+                },
+                "map_properties": {
+                    # Core identity
+                    "name": map_data.get("name"),
+                    "type": map_data.get("type"),
+                    # Dimensions (pixels)
+                    "width": map_data.get("width"),
+                    "height": map_data.get("height"),
+                    # Dimensions (meters) - critical for scaling
+                    "width_m": map_data.get("width_m"),
+                    "height_m": map_data.get("height_m"),
+                    # Pixels per meter - critical for coordinate translation
+                    "ppm": map_data.get("ppm"),
+                    # Orientation and origin - critical for geo-positioning
+                    "orientation": map_data.get("orientation"),
+                    "origin_x": map_data.get("origin_x"),
+                    "origin_y": map_data.get("origin_y"),
+                    # Geo-coordinates (all corners for proper alignment)
+                    "latlng": map_data.get("latlng"),
+                    "latlng_tl": map_data.get("latlng_tl"),
+                    "latlng_br": map_data.get("latlng_br"),
+                    # Map settings
+                    "locked": map_data.get("locked"),
+                    "view": map_data.get("view"),
+                    "occupancy_limit": map_data.get("occupancy_limit"),
+                    "flags": map_data.get("flags"),
+                    # Image URLs (for reference)
+                    "url": map_data.get("url"),
+                    "thumbnail_url": map_data.get("thumbnail_url")
+                },
+                "geometry": {
+                    "wall_path": map_data.get("wall_path"),
+                    "wayfinding_path": map_data.get("wayfinding_path"),
+                    "wayfinding": map_data.get("wayfinding"),
+                    "sitesurvey_path": map_data.get("sitesurvey_path")
+                }
+            }
+            
+            # Download and save the actual floor plan image
+            image_filename = None
+            if map_data.get("url"):
+                try:
+                    import requests
+                    image_url = map_data.get("url")
+                    
+                    # Determine file extension from URL
+                    file_ext = ".png"
+                    if "." in image_url:
+                        url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()
+                        if url_ext in ["png", "jpg", "jpeg", "gif", "svg", "webp"]:
+                            file_ext = f".{url_ext}"
+                    
+                    # Generate image filename matching the JSON backup
+                    safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
+                    safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    image_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}{file_ext}"
+                    
+                    # Ensure data directory exists
+                    data_dir = os.path.join(os.getcwd(), "data")
+                    if not os.path.exists(data_dir):
+                        os.makedirs(data_dir)
+                    
+                    image_path = os.path.join(data_dir, image_filename)
+                    
+                    # Download the image
+                    response = requests.get(image_url, timeout=60)
+                    if response.status_code == 200:
+                        with open(image_path, "wb") as img_file:
+                            img_file.write(response.content)
+                        image_size_kb = len(response.content) / 1024
+                        logging.info(f"Map image backed up: {image_filename} ({image_size_kb:.1f} KB)")
+                        geometry_backup["backup_info"]["image_file"] = image_filename
+                    else:
+                        logging.warning(f"Could not download map image: HTTP {response.status_code}")
+                        image_filename = None
+                except Exception as img_err:
+                    logging.warning(f"Image backup failed: {img_err}")
+                    image_filename = None
+            
+            # Count geometry elements for logging
+            wall_nodes = len(map_data.get("wall_path", {}).get("nodes", []))
+            wayfinding_nodes = len(map_data.get("wayfinding_path", {}).get("nodes", []))
+            
+            # Fetch device placements (APs, switches, gateways with x/y positions on this map)
+            device_placements = []
+            try:
+                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+                    api_session,
+                    site_id=site_id,
+                    type="all"
+                )
+                if devices_response.status_code == 200:
+                    all_devices = devices_response.data if isinstance(devices_response.data, list) else []
+                    # Filter to devices placed on this map (have map_id and x/y coordinates)
+                    for device in all_devices:
+                        if device.get("map_id") == map_id and ("x" in device or "y" in device):
+                            device_placements.append({
+                                "id": device.get("id"),
+                                "name": device.get("name"),
+                                "mac": device.get("mac"),
+                                "type": device.get("type"),
+                                "model": device.get("model"),
+                                "map_id": device.get("map_id"),
+                                "x": device.get("x"),
+                                "y": device.get("y"),
+                                "orientation": device.get("orientation"),
+                                "height": device.get("height")
+                            })
+                    geometry_backup["device_placements"] = device_placements
+                    logging.debug(f"Backup includes {len(device_placements)} device placements for map {map_id}")
+                else:
+                    geometry_backup["device_placements"] = []
+                    logging.warning(f"Could not fetch devices for backup: HTTP {devices_response.status_code}")
+            except Exception as device_err:
+                geometry_backup["device_placements"] = []
+                logging.warning(f"Device placement backup failed: {device_err}")
+            
+            # Fetch zones separately (they're not in the map response)
+            try:
+                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                    api_session,
+                    site_id=site_id
+                )
+                if zones_response.status_code == 200:
+                    # Filter zones belonging to this map
+                    all_zones = zones_response.data if isinstance(zones_response.data, list) else []
+                    map_zones = [z for z in all_zones if z.get("map_id") == map_id]
+                    geometry_backup["zones"] = map_zones
+                    logging.debug(f"Backup includes {len(map_zones)} zones for map {map_id}")
+                else:
+                    geometry_backup["zones"] = []
+                    logging.warning(f"Could not fetch zones for backup: HTTP {zones_response.status_code}")
+            except Exception as zone_err:
+                geometry_backup["zones"] = []
+                logging.warning(f"Zone backup failed: {zone_err}")
+            
+            # Fetch beacons placed on this map (BLE beacons with x/y positions)
+            try:
+                beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons(
+                    api_session,
+                    site_id=site_id
+                )
+                if beacons_response.status_code == 200:
+                    all_beacons = beacons_response.data if isinstance(beacons_response.data, list) else []
+                    map_beacons = [b for b in all_beacons if b.get("map_id") == map_id]
+                    geometry_backup["beacons"] = map_beacons
+                    logging.debug(f"Backup includes {len(map_beacons)} beacons for map {map_id}")
+                else:
+                    geometry_backup["beacons"] = []
+                    logging.debug(f"Could not fetch beacons for backup: HTTP {beacons_response.status_code}")
+            except Exception as beacon_err:
+                geometry_backup["beacons"] = []
+                logging.debug(f"Beacon backup skipped: {beacon_err}")
+            
+            # Fetch virtual beacons placed on this map
+            try:
+                vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(
+                    api_session,
+                    site_id=site_id
+                )
+                if vbeacons_response.status_code == 200:
+                    all_vbeacons = vbeacons_response.data if isinstance(vbeacons_response.data, list) else []
+                    map_vbeacons = [vb for vb in all_vbeacons if vb.get("map_id") == map_id]
+                    geometry_backup["vbeacons"] = map_vbeacons
+                    logging.debug(f"Backup includes {len(map_vbeacons)} virtual beacons for map {map_id}")
+                else:
+                    geometry_backup["vbeacons"] = []
+                    logging.debug(f"Could not fetch vbeacons for backup: HTTP {vbeacons_response.status_code}")
+            except Exception as vbeacon_err:
+                geometry_backup["vbeacons"] = []
+                logging.debug(f"VBeacon backup skipped: {vbeacon_err}")
+            
+            zone_count = len(geometry_backup.get("zones", []))
+            device_count = len(geometry_backup.get("device_placements", []))
+            beacon_count = len(geometry_backup.get("beacons", []))
+            vbeacon_count = len(geometry_backup.get("vbeacons", []))
+            
+            # Use same timestamp for JSON filename (image already saved with this timestamp)
+            if not image_filename:
+                # Generate timestamp if image wasn't saved
+                safe_map_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in map_name)
+                safe_map_name = safe_map_name.strip().replace(' ', '_')[:50]
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}.json"
+            
+            # Ensure data directory exists
+            data_dir = os.path.join(os.getcwd(), "data")
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            
+            backup_path = os.path.join(data_dir, backup_filename)
+            
+            # Write backup to JSON file
+            with open(backup_path, 'w', encoding='utf-8') as backup_file:
+                json.dump(geometry_backup, backup_file, indent=2, ensure_ascii=False)
+            
+            # Build summary line
+            summary_parts = []
+            if image_filename:
+                summary_parts.append("Image: Yes")
+            if wall_nodes > 0:
+                summary_parts.append(f"Walls: {wall_nodes}")
+            if wayfinding_nodes > 0:
+                summary_parts.append(f"Wayfinding: {wayfinding_nodes}")
+            if zone_count > 0:
+                summary_parts.append(f"Zones: {zone_count}")
+            if device_count > 0:
+                summary_parts.append(f"Devices: {device_count}")
+            if beacon_count > 0:
+                summary_parts.append(f"Beacons: {beacon_count}")
+            if vbeacon_count > 0:
+                summary_parts.append(f"VBeacons: {vbeacon_count}")
+            
+            summary = ", ".join(summary_parts) if summary_parts else "Empty map"
+            logging.info(f"Map backup saved: {backup_path} ({summary})")
+            print(f"\n   [*] Map backup saved: {backup_filename}")
+            if image_filename:
+                print(f"       Image: {image_filename}")
+            print(f"       {summary}")
+            
+            return backup_path
+            
+        except Exception as backup_error:
+            logging.error(f"Map geometry backup failed: {backup_error}", exc_info=True)
+            print(f"\n   [!] Warning: Could not backup map geometry: {backup_error}")
+            return None
+    
     def run_interactive_menu(self):
         """Main interactive menu loop for Maps Manager"""
         # Initial site selection
@@ -27732,6 +28005,21 @@ class MapsManager:
                 ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'})
             ], style={'display': 'none', 'padding': '12px 20px', 'backgroundColor': '#1a1a1a', 'borderBottom': '1px solid #00ff88'}),
             
+            # Delete map confirmation panel (hidden by default)
+            html.Div(id='delete-panel', children=[
+                html.Div([
+                    html.Span('X DESTRUCTIVE: Delete this floorplan? ', style={'color': '#ff4444', 'fontWeight': 'bold', 'marginRight': '10px'}),
+                    html.Span(id='delete-map-name-display', children=f'Map: {map_data.get("name", "Unknown")}', style={'color': '#ffaa00', 'marginRight': '20px'}),
+                    html.Button('YES - DELETE MAP', id='confirm-delete-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#ff4444', 'color': 'white',
+                                      'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold', 'marginRight': '10px'}),
+                    html.Button('Cancel', id='cancel-delete-btn', n_clicks=0,
+                               style={'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 'color': '#00ff88',
+                                      'border': '1px solid #00ff88', 'borderRadius': '4px', 'cursor': 'pointer'}),
+                    html.Span(id='delete-status', style={'marginLeft': '15px', 'color': '#e0e0e0', 'fontSize': '13px'})
+                ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'})
+            ], style={'display': 'none', 'padding': '12px 20px', 'backgroundColor': '#330000', 'borderBottom': '2px solid #ff4444'}),
+            
             html.Div([
                 # Map container - responsive
                 html.Div([
@@ -27894,12 +28182,18 @@ class MapsManager:
                     # Delete from Mist section
                     html.P("Delete from Mist API:", style={'fontSize': '12px', 'color': '#ff6666', 'marginBottom': '8px'}),
                     html.Div([
-                        html.Button('❌ Delete All Paths', id='delete-paths-btn', n_clicks=0,
-                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
-                        html.Button('❌ Delete All Walls', id='delete-walls-btn', n_clicks=0,
-                                   style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
-                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
+                        html.Button('Delete Validation Paths', id='delete-paths-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '6px', 'padding': '6px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '11px'}),
+                        html.Button('Delete Wayfinding Paths', id='delete-wayfinding-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '6px', 'padding': '6px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff8844', 'border': '1px solid #ff8844', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '11px'}),
+                        html.Button('Delete All Walls', id='delete-walls-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '6px', 'padding': '6px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '11px'}),
+                        html.Button('Delete All Zones', id='delete-zones-btn', n_clicks=0,
+                                   style={'width': '100%', 'marginBottom': '6px', 'padding': '6px', 'backgroundColor': '#3d3d3d',
+                                          'color': '#ff66ff', 'border': '1px solid #ff66ff', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '11px'}),
                     ]),
                     html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'}),
                     html.Hr(),
@@ -28025,11 +28319,15 @@ class MapsManager:
             }),
             # Store for available maps list (for dropdown)
             dcc.Store(id='available-maps-store', data=[{'id': m.get('id'), 'name': m.get('name', 'Unnamed')} for m in all_maps]),
+            # Store for tracking selected zone ID
+            dcc.Store(id='selected-zone-store', data={'zone_id': None, 'zone_name': None}),
             # Store for tracking last refresh times
             dcc.Store(id='refresh-times-store', data={
                 'client_last_refresh': 0,
                 'coverage_last_refresh': 0
             }),
+            # Store to trigger map list refresh (cache bust) after clone/delete operations
+            dcc.Store(id='cache-bust-store', data={'trigger': 0}),
             # Interval components for live refresh (enabled by default since auto-refresh is on)
             dcc.Interval(
                 id='client-refresh-interval',
@@ -28082,6 +28380,35 @@ class MapsManager:
             Output('map-switch-trigger', 'children'),
             [Input('map-selector-dropdown', 'value')],
             [State('map-config-store', 'data')],
+            prevent_initial_call=True
+        )
+        
+        # Clientside callback to reload page after clone/delete to get fresh map data
+        app.clientside_callback(
+            """
+            function(cache_bust_data) {
+                if (!cache_bust_data || !cache_bust_data.trigger) {
+                    return window.dash_clientside.no_update;
+                }
+                // Check if this trigger was already processed (stored in sessionStorage)
+                var lastTrigger = parseInt(sessionStorage.getItem('lastCacheBustTrigger') || '0');
+                var currentTrigger = cache_bust_data.trigger;
+                
+                // Only reload if trigger is NEW (greater than last processed)
+                if (currentTrigger > lastTrigger) {
+                    console.log('Cache bust: Reloading page to refresh map data (trigger=' + currentTrigger + ', last=' + lastTrigger + ')');
+                    // Store this trigger as processed before reloading
+                    sessionStorage.setItem('lastCacheBustTrigger', currentTrigger.toString());
+                    // Small delay to allow status message to display briefly
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1500);
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output('map-switch-trigger', 'children', allow_duplicate=True),
+            [Input('cache-bust-store', 'data')],
             prevent_initial_call=True
         )
         
@@ -28152,8 +28479,30 @@ class MapsManager:
                 logging.debug(f"URL map switch: URL map_id {url_map_id} matches config, no switch needed")
                 return no_update, no_update
             
-            # Verify the requested map exists in available maps
-            valid_map_ids = [m.get('id') for m in available_maps]
+            # ALWAYS fetch fresh map list from API to avoid stale cache issues after clone/delete
+            # This bypasses the available_maps store which may be outdated
+            site_id_local = config.get('site_id')
+            if not site_id_local:
+                logging.warning("URL map switch: site_id not available in config")
+                return no_update, no_update
+            
+            try:
+                # Fetch fresh map list from API
+                fresh_maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                    api_session_ref,
+                    site_id=site_id_local
+                )
+                if fresh_maps_response.status_code == 200:
+                    fresh_maps = fresh_maps_response.data if fresh_maps_response.data else []
+                    valid_map_ids = [m.get('id') for m in fresh_maps]
+                else:
+                    # Fallback to store if API call fails
+                    logging.warning(f"URL map switch: Could not fetch fresh maps, using store")
+                    valid_map_ids = [m.get('id') for m in available_maps]
+            except Exception as fetch_err:
+                logging.warning(f"URL map switch: Error fetching fresh maps: {fetch_err}")
+                valid_map_ids = [m.get('id') for m in available_maps]
+            
             if url_map_id not in valid_map_ids:
                 logging.warning(f"URL map switch: Invalid map_id {url_map_id}")
                 return no_update, no_update
@@ -28161,9 +28510,7 @@ class MapsManager:
             logging.info(f"URL map switch: Loading map {url_map_id} (current: {current_map_id})")
             
             try:
-                site_id_local = config.get('site_id')
-                
-                # Fetch the new map data
+                # Fetch the new map data (site_id_local already set above)
                 map_response = mistapi.api.v1.sites.maps.getSiteMap(
                     api_session_ref, site_id_local, url_map_id
                 )
@@ -29115,42 +29462,50 @@ class MapsManager:
         
         # Callback to handle shape saving to Mist API
         @app.callback(
-            Output('drawing-tool-status', 'children'),
+            [Output('drawing-tool-status', 'children'),
+             Output('cache-bust-store', 'data', allow_duplicate=True)],
             [Input('save-shape-btn', 'n_clicks'),
              Input('clear-drawings-btn', 'n_clicks'),
              Input('delete-paths-btn', 'n_clicks'),
-             Input('delete-walls-btn', 'n_clicks')],
+             Input('delete-wayfinding-btn', 'n_clicks'),
+             Input('delete-walls-btn', 'n_clicks'),
+             Input('delete-zones-btn', 'n_clicks')],
             [State('drawing-mode-dropdown', 'value'),
              State('zone-name-input', 'value'),
              State('map-display', 'figure'),
-             State('map-config-store', 'data')],
+             State('map-config-store', 'data'),
+             State('cache-bust-store', 'data')],
             prevent_initial_call=True
         )
-        def handle_drawing_tools(save_clicks, clear_clicks, del_path_clicks, del_wall_clicks, 
-                                  drawing_mode, zone_name, current_fig, config):
+        def handle_drawing_tools(save_clicks, clear_clicks, del_path_clicks, del_wayfinding_clicks, del_wall_clicks, del_zone_clicks,
+                                  drawing_mode, zone_name, current_fig, config, cache_bust_data):
             """Handle drawing tool actions - save shapes to Mist or delete from Mist"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return ""
+                return "", no_update
             
             button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            logging.info(f"Drawing tools callback triggered: button_id={button_id}, del_path_clicks={del_path_clicks}, del_wall_clicks={del_wall_clicks}")
             
             # Get config values
             config_site_id = config.get('site_id') if config else site_id
             config_map_id = config.get('map_id') if config else map_id
             config_ppm = config.get('ppm', ppm) if config else ppm
             
+            # Helper to increment cache-bust trigger for forcing map reload
+            current_trigger = cache_bust_data.get('trigger', 0) if cache_bust_data else 0
+            
             if button_id == 'clear-drawings-btn':
                 # This just clears local drawings, not Mist data
-                msg = "🗑️ Use the eraser tool in the toolbar to clear drawings from the map"
+                msg = "Use the eraser tool in the toolbar to clear drawings from the map"
                 logging.info(f"Drawing tool: Clear local drawings requested")
-                return html.Span(msg, style={'color': '#ffc107'})
+                return html.Span(msg, style={'color': '#ffc107'}), no_update
             
             elif button_id == 'save-shape-btn':
                 # Get shapes from figure
                 shapes = current_fig.get('layout', {}).get('shapes', [])
                 if not shapes:
-                    return html.Span("⚠️ No shapes drawn. Use toolbar to draw first.", style={'color': '#ff6666'})
+                    return html.Span("No shapes drawn. Use toolbar to draw first.", style={'color': '#ff6666'}), no_update
                 
                 # Get the last shape
                 last_shape = shapes[-1]
@@ -29160,7 +29515,7 @@ class MapsManager:
                     if drawing_mode == 'zone':
                         # Save as zone via zones API
                         if not zone_name:
-                            return html.Span("⚠️ Please enter a zone name first", style={'color': '#ff6666'})
+                            return html.Span("Please enter a zone name first", style={'color': '#ff6666'}), no_update
                         
                         if shape_type == 'rect':
                             # Convert rectangle to vertices (4 corners)
@@ -29189,13 +29544,13 @@ class MapsManager:
                             
                             if hasattr(response, 'status_code') and response.status_code in [200, 201]:
                                 logging.info(f"Drawing tool: Zone '{zone_name}' created successfully")
-                                return html.Span(f"✅ Zone '{zone_name}' saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                                return html.Span(f"Zone '{zone_name}' saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'}), {'trigger': current_trigger + 1}
                             else:
                                 error_msg = getattr(response, 'text', str(response))
                                 logging.error(f"Drawing tool: Failed to create zone - {error_msg}")
-                                return html.Span(f"❌ Failed to save zone: {error_msg[:50]}", style={'color': '#ff4444'})
+                                return html.Span(f"Failed to save zone: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
                         else:
-                            return html.Span("⚠️ Zones require rectangle shapes. Use Draw Rectangle tool.", style={'color': '#ff6666'})
+                            return html.Span("Zones require rectangle shapes. Use Draw Rectangle tool.", style={'color': '#ff6666'}), no_update
                     
                     elif drawing_mode == 'wall':
                         # Save wall path via updateSiteMap
@@ -29239,20 +29594,20 @@ class MapsManager:
                             
                             if hasattr(response, 'status_code') and response.status_code == 200:
                                 logging.info(f"Drawing tool: Wall segment added successfully")
-                                return html.Span("✅ Wall segment saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                                return html.Span("Wall segment saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'}), {'trigger': current_trigger + 1}
                             else:
                                 error_msg = getattr(response, 'text', str(response))
                                 logging.error(f"Drawing tool: Failed to save wall - {error_msg}")
-                                return html.Span(f"❌ Failed to save wall: {error_msg[:50]}", style={'color': '#ff4444'})
+                                return html.Span(f"Failed to save wall: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
                         else:
-                            return html.Span("⚠️ Walls require line shapes. Use Draw Line tool.", style={'color': '#ff6666'})
+                            return html.Span("Walls require line shapes. Use Draw Line tool.", style={'color': '#ff6666'}), no_update
                     
                     elif drawing_mode == 'path':
                         # Save sitesurvey path via updateSiteMap
                         if shape_type == 'path':
                             # Path shapes have 'path' attribute with SVG path data
                             # This is complex - for now show guidance
-                            return html.Span("⚠️ Path saving requires SVG parsing. Use Mist Portal for complex paths.", style={'color': '#ff8800'})
+                            return html.Span("Path saving requires SVG parsing. Use Mist Portal for complex paths.", style={'color': '#ff8800'}), no_update
                         elif shape_type == 'line':
                             x0 = last_shape.get('x0', 0) / config_ppm
                             y0 = last_shape.get('y0', 0) / config_ppm
@@ -29288,38 +29643,64 @@ class MapsManager:
                             
                             if hasattr(response, 'status_code') and response.status_code == 200:
                                 logging.info(f"Drawing tool: Validation path added successfully")
-                                return html.Span("✅ Validation path saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'})
+                                return html.Span("Validation path saved to Mist!", style={'color': '#28a745', 'fontWeight': 'bold'}), {'trigger': current_trigger + 1}
                             else:
                                 error_msg = getattr(response, 'text', str(response))
                                 logging.error(f"Drawing tool: Failed to save path - {error_msg}")
-                                return html.Span(f"❌ Failed to save path: {error_msg[:50]}", style={'color': '#ff4444'})
+                                return html.Span(f"Failed to save path: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
                         else:
-                            return html.Span("⚠️ Paths require line shapes. Use Draw Line tool.", style={'color': '#ff6666'})
+                            return html.Span("Paths require line shapes. Use Draw Line tool.", style={'color': '#ff6666'}), no_update
                     
                     else:  # measure mode
-                        return html.Span("📏 Measurement mode - shapes not saved to Mist", style={'color': '#888'})
+                        return html.Span("Measurement mode - shapes not saved to Mist", style={'color': '#888'}), no_update
                 
                 except Exception as save_error:
                     logging.error(f"Drawing tool: Error saving shape - {save_error}", exc_info=True)
-                    return html.Span(f"❌ Error: {str(save_error)[:50]}", style={'color': '#ff4444'})
+                    return html.Span(f"Error: {str(save_error)[:50]}", style={'color': '#ff4444'}), no_update
             
             elif button_id == 'delete-paths-btn':
+                logging.info(f"Drawing tool: Delete paths button clicked - site_id={config_site_id}, map_id={config_map_id}")
                 try:
                     # Clear all sitesurvey_path via updateSiteMap
                     update_data = {'sitesurvey_path': []}
+                    logging.info(f"Drawing tool: Calling updateSiteMap with {update_data}")
                     response = mistapi.api.v1.sites.maps.updateSiteMap(
                         api_session_ref, config_site_id, config_map_id, update_data
                     )
+                    logging.info(f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}")
                     
                     if hasattr(response, 'status_code') and response.status_code == 200:
                         logging.info(f"Drawing tool: All validation paths deleted from map {config_map_id}")
-                        return html.Span("✅ All validation paths deleted from Mist", style={'color': '#28a745'})
+                        return html.Span("All validation paths deleted - click Refresh to reload map", style={'color': '#28a745'}), {'trigger': current_trigger + 1}
                     else:
                         error_msg = getattr(response, 'text', str(response))
-                        return html.Span(f"❌ Failed: {error_msg[:50]}", style={'color': '#ff4444'})
+                        logging.error(f"Drawing tool: Delete paths failed - {error_msg}")
+                        return html.Span(f"Failed: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
                 except Exception as del_error:
-                    logging.error(f"Drawing tool: Error deleting paths - {del_error}")
-                    return html.Span(f"❌ Error: {str(del_error)[:50]}", style={'color': '#ff4444'})
+                    logging.error(f"Drawing tool: Error deleting paths - {del_error}", exc_info=True)
+                    return html.Span(f"Error: {str(del_error)[:50]}", style={'color': '#ff4444'}), no_update
+            
+            elif button_id == 'delete-wayfinding-btn':
+                logging.info(f"Drawing tool: Delete wayfinding button clicked - site_id={config_site_id}, map_id={config_map_id}")
+                try:
+                    # Clear all wayfinding_path via updateSiteMap
+                    update_data = {'wayfinding_path': {'coordinate': 'actual', 'nodes': []}}
+                    logging.info(f"Drawing tool: Calling updateSiteMap with {update_data}")
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(
+                        api_session_ref, config_site_id, config_map_id, update_data
+                    )
+                    logging.info(f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}")
+                    
+                    if hasattr(response, 'status_code') and response.status_code == 200:
+                        logging.info(f"Drawing tool: All wayfinding paths deleted from map {config_map_id}")
+                        return html.Span("All wayfinding paths deleted - click Refresh to reload map", style={'color': '#28a745'}), {'trigger': current_trigger + 1}
+                    else:
+                        error_msg = getattr(response, 'text', str(response))
+                        logging.error(f"Drawing tool: Delete wayfinding failed - {error_msg}")
+                        return html.Span(f"Failed: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
+                except Exception as del_error:
+                    logging.error(f"Drawing tool: Error deleting wayfinding - {del_error}", exc_info=True)
+                    return html.Span(f"Error: {str(del_error)[:50]}", style={'color': '#ff4444'}), no_update
             
             elif button_id == 'delete-walls-btn':
                 try:
@@ -29331,15 +29712,65 @@ class MapsManager:
                     
                     if hasattr(response, 'status_code') and response.status_code == 200:
                         logging.info(f"Drawing tool: All walls deleted from map {config_map_id}")
-                        return html.Span("✅ All walls deleted from Mist", style={'color': '#28a745'})
+                        return html.Span("All walls deleted - click Refresh to reload map", style={'color': '#28a745'}), {'trigger': current_trigger + 1}
                     else:
                         error_msg = getattr(response, 'text', str(response))
-                        return html.Span(f"❌ Failed: {error_msg[:50]}", style={'color': '#ff4444'})
+                        return html.Span(f"Failed: {error_msg[:50]}", style={'color': '#ff4444'}), no_update
                 except Exception as del_error:
                     logging.error(f"Drawing tool: Error deleting walls - {del_error}")
-                    return html.Span(f"❌ Error: {str(del_error)[:50]}", style={'color': '#ff4444'})
+                    return html.Span(f"Error: {str(del_error)[:50]}", style={'color': '#ff4444'}), no_update
             
-            return ""
+            elif button_id == 'delete-zones-btn':
+                logging.info(f"Drawing tool: Delete all zones button clicked - site_id={config_site_id}, map_id={config_map_id}")
+                try:
+                    # First, get all zones for the site
+                    zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                        api_session_ref, config_site_id
+                    )
+                    
+                    if not hasattr(zones_response, 'status_code') or zones_response.status_code != 200:
+                        return html.Span("Failed to fetch zones list", style={'color': '#ff4444'}), no_update
+                    
+                    all_zones = zones_response.data if hasattr(zones_response, 'data') else []
+                    
+                    # Filter to only zones on this map
+                    map_zones = [z for z in all_zones if z.get('map_id') == config_map_id]
+                    
+                    if not map_zones:
+                        return html.Span("No zones found on this map", style={'color': '#ffc107'}), no_update
+                    
+                    logging.warning(f"Drawing tool: Deleting {len(map_zones)} zones from map {config_map_id}")
+                    
+                    deleted_count = 0
+                    failed_count = 0
+                    
+                    for zone in map_zones:
+                        zone_id = zone.get('id')
+                        zone_name = zone.get('name', 'Unknown')
+                        try:
+                            del_response = mistapi.api.v1.sites.zones.deleteSiteZone(
+                                api_session_ref, config_site_id, zone_id
+                            )
+                            if hasattr(del_response, 'status_code') and del_response.status_code in [200, 204]:
+                                deleted_count += 1
+                                logging.info(f"Drawing tool: Deleted zone '{zone_name}'")
+                            else:
+                                failed_count += 1
+                                logging.error(f"Drawing tool: Failed to delete zone '{zone_name}'")
+                        except Exception as zone_err:
+                            failed_count += 1
+                            logging.error(f"Drawing tool: Error deleting zone '{zone_name}': {zone_err}")
+                    
+                    if failed_count == 0:
+                        return html.Span(f"Deleted {deleted_count} zones - click Refresh to reload map", style={'color': '#28a745'}), {'trigger': current_trigger + 1}
+                    else:
+                        return html.Span(f"Deleted {deleted_count}, failed {failed_count} zones", style={'color': '#ffc107'}), {'trigger': current_trigger + 1}
+                        
+                except Exception as del_error:
+                    logging.error(f"Drawing tool: Error deleting zones - {del_error}", exc_info=True)
+                    return html.Span(f"Error: {str(del_error)[:50]}", style={'color': '#ff4444'}), no_update
+            
+            return "", no_update
         
         # Callback to handle utilities button actions
         @app.callback(
@@ -29347,11 +29778,10 @@ class MapsManager:
             [Input('auto-zone-btn', 'n_clicks'),
              Input('change-image-btn', 'n_clicks'),
              Input('remove-image-btn', 'n_clicks'),
-             Input('rename-btn', 'n_clicks'),
-             Input('delete-btn', 'n_clicks')],
+             Input('rename-btn', 'n_clicks')],
             prevent_initial_call=True
         )
-        def handle_utilities(auto_zone_clicks, change_clicks, remove_clicks, rename_clicks, delete_clicks):
+        def handle_utilities(auto_zone_clicks, change_clicks, remove_clicks, rename_clicks):
             """Handle utilities button clicks"""
             ctx = dash.callback_context
             if not ctx.triggered:
@@ -29360,31 +29790,122 @@ class MapsManager:
             button_id = ctx.triggered[0]['prop_id'].split('.')[0]
             
             if button_id == 'auto-zone-btn':
-                msg = "🤖 Auto-Zone: AI-powered zone detection - analyzes walls and creates location zones automatically"
+                msg = "Robot Auto-Zone: AI-powered zone detection - analyzes walls and creates location zones automatically"
                 logging.info(f"Utilities: Auto-Zone requested for map {map_id}")
                 return html.Span(msg, style={'color': '#667eea', 'fontWeight': 'bold'})
             
             elif button_id == 'change-image-btn':
-                msg = "⚠️ Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
+                msg = "! Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
                 logging.info(f"Utilities: Change Image requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff8800'})
             
             elif button_id == 'remove-image-btn':
-                msg = "⚠️ Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
+                msg = "! Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
                 logging.warning(f"Utilities: Remove Image requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff4444'})
             
             elif button_id == 'rename-btn':
-                msg = "⚠️ Rename: Use Mist API updateSiteMap with new name - requires text input"
+                msg = "! Rename: Use Mist API updateSiteMap with new name - requires text input"
                 logging.info(f"Utilities: Rename requested for map {map_id}")
                 return html.Span(msg, style={'color': '#ff8800'})
             
-            elif button_id == 'delete-btn':
-                msg = "X Delete Floorplan: Use Mist API deleteSiteMap - DESTRUCTIVE! Requires confirmation"
-                logging.warning(f"Utilities: Delete requested for map {map_id}")
-                return html.Span(msg, style={'color': '#ff0000', 'fontWeight': 'bold'})
-            
             return ""
+        
+        # Callback to show/hide delete confirmation panel and update map name
+        @app.callback(
+            [Output('delete-panel', 'style'),
+             Output('delete-map-name-display', 'children')],
+            [Input('delete-btn', 'n_clicks'),
+             Input('cancel-delete-btn', 'n_clicks'),
+             Input('confirm-delete-btn', 'n_clicks')],
+            [State('delete-panel', 'style'),
+             State('map-config-store', 'data')],
+            prevent_initial_call=True
+        )
+        def toggle_delete_panel(delete_clicks, cancel_clicks, confirm_clicks, current_style, config):
+            """Show or hide the delete confirmation panel and update map name"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return current_style, no_update
+            
+            button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            # Get current map name from config store
+            current_map_name = config.get('map_name', 'Unknown') if config else 'Unknown'
+            
+            if button_id == 'delete-btn':
+                # Show the delete confirmation panel with CURRENT map name
+                logging.warning(f"Delete panel opened for map '{current_map_name}' (ID: {config.get('map_id') if config else 'unknown'})")
+                return (
+                    {'display': 'block', 'padding': '12px 20px', 'backgroundColor': '#330000', 'borderBottom': '2px solid #ff4444'},
+                    f'Map: {current_map_name}'
+                )
+            elif button_id in ['cancel-delete-btn', 'confirm-delete-btn']:
+                # Hide the panel
+                return (
+                    {'display': 'none', 'padding': '12px 20px', 'backgroundColor': '#330000', 'borderBottom': '2px solid #ff4444'},
+                    no_update
+                )
+            
+            return current_style, no_update
+        
+        # Callback to execute map deletion
+        @app.callback(
+            [Output('delete-status', 'children'),
+             Output('cache-bust-store', 'data', allow_duplicate=True)],
+            Input('confirm-delete-btn', 'n_clicks'),
+            [State('cache-bust-store', 'data'),
+             State('map-config-store', 'data')],
+            prevent_initial_call=True
+        )
+        def execute_delete_map(confirm_clicks, cache_bust_data, config):
+            """Actually delete the map via Mist API - creates backup first"""
+            current_trigger = cache_bust_data.get('trigger', 0) if cache_bust_data else 0
+            
+            if not confirm_clicks:
+                return "", no_update
+            
+            # CRITICAL: Use config store for current map, not closure variable
+            config_site_id = config.get('site_id') if config else site_id
+            config_map_id = config.get('map_id') if config else map_id
+            config_map_name = config.get('map_name', 'Unknown') if config else 'Unknown'
+            
+            try:
+                # SAFETY: Backup map geometry before deletion
+                logging.info(f"Creating safety backup before deleting map '{config_map_name}'")
+                backup_path = self._backup_map_geometry(
+                    api_session=api_session_ref,
+                    site_id=config_site_id,
+                    map_id=config_map_id,
+                    map_name=config_map_name,
+                    backup_reason="pre_delete"
+                )
+                if backup_path:
+                    logging.info(f"Pre-delete backup saved: {backup_path}")
+                else:
+                    logging.warning("Pre-delete backup failed - proceeding with deletion anyway")
+                
+                logging.warning(f"DESTRUCTIVE: Deleting map '{config_map_name}' (ID: {config_map_id}) from site {config_site_id}")
+                
+                # Call the Mist API to delete the map - use config values!
+                delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(
+                    api_session_ref,
+                    site_id=config_site_id,
+                    map_id=config_map_id
+                )
+                
+                if delete_response.status_code in [200, 204]:
+                    logging.info(f"Map '{config_map_name}' (ID: {config_map_id}) deleted successfully")
+                    # Increment cache bust trigger to refresh map dropdown
+                    new_cache_bust = {'trigger': current_trigger + 1}
+                    return html.Span(f"Map '{config_map_name}' deleted! Close this browser tab.", style={'color': '#00ff88', 'fontWeight': 'bold'}), new_cache_bust
+                else:
+                    logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")
+                    return html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={'color': '#ff4444'}), no_update
+                    
+            except Exception as delete_error:
+                logging.error(f"Error deleting map: {delete_error}", exc_info=True)
+                return html.Span(f"Error: {str(delete_error)[:50]}", style={'color': '#ff4444'}), no_update
         
         # Callback to show/hide clone panel
         @app.callback(
@@ -29443,39 +29964,86 @@ class MapsManager:
             
             return current_fig
         
-        # Callback for zone edit/remove buttons
+        # Callback for zone edit/remove buttons and zone selection
         @app.callback(
-            Output('selected-zone-info', 'children'),
+            [Output('selected-zone-info', 'children'),
+             Output('selected-zone-store', 'data')],
             [Input('edit-zone-btn', 'n_clicks'),
              Input('remove-zone-btn', 'n_clicks'),
              Input('map-display', 'clickData')],
+            [State('selected-zone-store', 'data')],
             prevent_initial_call=True
         )
-        def handle_zone_actions(edit_clicks, remove_clicks, clickData):
+        def handle_zone_actions(edit_clicks, remove_clicks, clickData, selected_zone_data):
             """Handle zone edit/remove and display selected zone info"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
+                return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'}), selected_zone_data or {'zone_id': None, 'zone_name': None}
             
             trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            current_zone = selected_zone_data or {'zone_id': None, 'zone_name': None}
             
             if trigger_id == 'edit-zone-btn':
-                logging.info(f"Zone management: Edit zone requested for map {map_id}")
-                return html.Div([
-                    html.P("✏️ Edit Zone: Use Mist API updateSiteMap", 
-                          style={'fontSize': '11px', 'color': '#667eea', 'fontWeight': 'bold'}),
-                    html.P("Modify zone vertices via API call", 
-                          style={'fontSize': '10px', 'color': '#888'})
-                ])
+                if current_zone.get('zone_id'):
+                    logging.info(f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}")
+                    return html.Div([
+                        html.P(f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}", 
+                              style={'fontSize': '11px', 'color': '#667eea', 'fontWeight': 'bold'}),
+                        html.P("Use Mist Dashboard to modify zone shape", 
+                              style={'fontSize': '10px', 'color': '#888'})
+                    ]), current_zone
+                else:
+                    return html.Div([
+                        html.P("! Select a zone first", 
+                              style={'fontSize': '11px', 'color': '#ffaa00', 'fontWeight': 'bold'}),
+                        html.P("Click on a zone in the map to select it", 
+                              style={'fontSize': '10px', 'color': '#888'})
+                    ]), current_zone
             
             elif trigger_id == 'remove-zone-btn':
-                logging.warning(f"Zone management: Remove zone requested for map {map_id}")
-                return html.Div([
-                    html.P("🗑️ Remove Zone: DESTRUCTIVE operation", 
-                          style={'fontSize': '11px', 'color': '#ff4444', 'fontWeight': 'bold'}),
-                    html.P("Deletes zone via Mist API updateSiteMap", 
-                          style={'fontSize': '10px', 'color': '#888'})
-                ])
+                if current_zone.get('zone_id'):
+                    zone_id = current_zone.get('zone_id')
+                    zone_name = current_zone.get('zone_name', 'Unknown')
+                    logging.warning(f"Zone management: Deleting zone {zone_name} (ID: {zone_id}) from site {site_id}")
+                    
+                    try:
+                        # Call Mist API to delete the zone
+                        delete_response = mistapi.api.v1.sites.zones.deleteSiteZone(
+                            api_session_ref,
+                            site_id=site_id,
+                            zone_id=zone_id
+                        )
+                        
+                        if delete_response.status_code in [200, 204]:
+                            logging.info(f"Zone {zone_name} deleted successfully")
+                            return html.Div([
+                                html.P(f"[OK] Zone deleted: {zone_name}", 
+                                      style={'fontSize': '11px', 'color': '#00ff88', 'fontWeight': 'bold'}),
+                                html.P("Refresh the page to update view", 
+                                      style={'fontSize': '10px', 'color': '#888'})
+                            ]), {'zone_id': None, 'zone_name': None}
+                        else:
+                            logging.error(f"Zone deletion failed: HTTP {delete_response.status_code}")
+                            return html.Div([
+                                html.P(f"X Delete failed: HTTP {delete_response.status_code}", 
+                                      style={'fontSize': '11px', 'color': '#ff4444', 'fontWeight': 'bold'}),
+                                html.P("Check permissions and try again", 
+                                      style={'fontSize': '10px', 'color': '#888'})
+                            ]), current_zone
+                            
+                    except Exception as del_error:
+                        logging.error(f"Error deleting zone: {del_error}", exc_info=True)
+                        return html.Div([
+                            html.P(f"X Error: {str(del_error)[:40]}", 
+                                  style={'fontSize': '11px', 'color': '#ff4444', 'fontWeight': 'bold'})
+                        ]), current_zone
+                else:
+                    return html.Div([
+                        html.P("! Select a zone first", 
+                              style={'fontSize': '11px', 'color': '#ffaa00', 'fontWeight': 'bold'}),
+                        html.P("Click on a zone in the map to select it", 
+                              style={'fontSize': '10px', 'color': '#888'})
+                    ]), current_zone
             
             elif trigger_id == 'map-display' and clickData:
                 # Check if clicked on a zone
@@ -29484,14 +30052,21 @@ class MapsManager:
                 
                 if 'Zone:' in hover_text:
                     zone_name = hover_text.split('Zone: ')[1] if 'Zone: ' in hover_text else 'Unknown'
+                    # Find the zone ID
+                    zone_id = None
+                    for zone in zones:
+                        if zone.get('name') == zone_name:
+                            zone_id = zone.get('id')
+                            break
+                    
                     return html.Div([
-                        html.P(f"📍 Selected: {zone_name}", 
+                        html.P(f">> Selected: {zone_name}", 
                               style={'fontSize': '12px', 'color': '#00ff00', 'fontWeight': 'bold', 'marginBottom': '5px'}),
-                        html.P(f"Clients: None", 
+                        html.P(f"ID: {zone_id[:8] if zone_id else 'Unknown'}...", 
                               style={'fontSize': '10px', 'color': '#888'})
-                    ])
+                    ]), {'zone_id': zone_id, 'zone_name': zone_name}
             
-            return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
+            return html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'}), current_zone
         
         # Callback to toggle auto-refresh intervals on/off
         @app.callback(
@@ -29559,34 +30134,51 @@ class MapsManager:
         
         # Callback to execute clone operation
         @app.callback(
-            Output('clone-status', 'children'),
+            [Output('clone-status', 'children'),
+             Output('cache-bust-store', 'data', allow_duplicate=True)],
             [Input('execute-clone-btn', 'n_clicks')],
             [State('clone-name-input', 'value'),
-             State('map-config-store', 'data')],
+             State('map-config-store', 'data'),
+             State('cache-bust-store', 'data')],
             prevent_initial_call=True
         )
-        def execute_clone_operation(n_clicks, new_name, config):
+        def execute_clone_operation(n_clicks, new_name, config, cache_bust_data):
             """Clone the current map with all properties, image, and zones"""
             import os
             import requests
             import tempfile
             
+            current_trigger = cache_bust_data.get('trigger', 0) if cache_bust_data else 0
+            
             if not n_clicks:
-                return ""
+                return "", no_update
             
             if not new_name or not new_name.strip():
-                return html.Span("! Please enter a name for the cloned map", style={'color': '#ff4444'})
+                return html.Span("! Please enter a name for the cloned map", style={'color': '#ff4444'}), no_update
             
             new_name = new_name.strip()
             site_id_local = config.get('site_id')
             source_map_id = config.get('map_id')
             
             if not site_id_local or not source_map_id:
-                return html.Span("! Missing site or map configuration", style={'color': '#ff4444'})
+                return html.Span("! Missing site or map configuration", style={'color': '#ff4444'}), no_update
             
             logging.info(f"Clone operation started - source: {source_map_id}, new name: {new_name}")
             
             try:
+                # SAFETY: Backup source map geometry before cloning
+                source_map_name = config.get('map_name', 'Unknown')
+                logging.info(f"Creating backup of source map '{source_map_name}' before cloning")
+                backup_path = self._backup_map_geometry(
+                    api_session=api_session_ref,
+                    site_id=site_id_local,
+                    map_id=source_map_id,
+                    map_name=source_map_name,
+                    backup_reason="pre_clone"
+                )
+                if backup_path:
+                    logging.info(f"Pre-clone backup saved: {backup_path}")
+                
                 # Step 1: Fetch source map details
                 source_response = mistapi.api.v1.sites.maps.getSiteMap(
                     api_session_ref,
@@ -29596,7 +30188,7 @@ class MapsManager:
                 
                 if source_response.status_code != 200:
                     logging.error(f"Clone failed: Could not fetch source map - HTTP {source_response.status_code}")
-                    return html.Span(f"! Failed to fetch source map: HTTP {source_response.status_code}", style={'color': '#ff4444'})
+                    return html.Span(f"! Failed to fetch source map: HTTP {source_response.status_code}", style={'color': '#ff4444'}), no_update
                 
                 source_map = source_response.data
                 
@@ -29669,7 +30261,7 @@ class MapsManager:
                     logging.error(f"Clone failed: Could not create map - HTTP {clone_response.status_code}")
                     if image_temp_path and os.path.exists(image_temp_path):
                         os.remove(image_temp_path)
-                    return html.Span(f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={'color': '#ff4444'})
+                    return html.Span(f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={'color': '#ff4444'}), no_update
                 
                 cloned_map = clone_response.data
                 cloned_map_id = cloned_map.get('id')
@@ -29743,11 +30335,61 @@ class MapsManager:
                     result_parts.append(f"Zones: {zones_cloned} cloned")
                 
                 logging.info(f"Clone complete: {new_name} (ID: {cloned_map_id}), image={image_uploaded}, zones={zones_cloned}")
-                return html.Span(" | ".join(result_parts), style={'color': '#00ff88', 'fontWeight': 'bold'})
+                # Increment cache bust trigger to refresh map dropdown
+                new_cache_bust = {'trigger': current_trigger + 1}
+                return html.Span(" | ".join(result_parts), style={'color': '#00ff88', 'fontWeight': 'bold'}), new_cache_bust
                 
             except Exception as e:
                 logging.error(f"Clone operation failed: {e}", exc_info=True)
-                return html.Span(f"! Clone failed: {str(e)}", style={'color': '#ff4444'})
+                return html.Span(f"! Clone failed: {str(e)}", style={'color': '#ff4444'}), no_update
+        
+        # Callback to refresh map dropdown after clone/delete operations or page load (cache bust)
+        @app.callback(
+            [Output('map-selector-dropdown', 'options'),
+             Output('available-maps-store', 'data')],
+            [Input('cache-bust-store', 'data'),
+             Input('manual-refresh-btn', 'n_clicks'),
+             Input('url-location', 'search')],
+            [State('map-config-store', 'data')],
+            prevent_initial_call=False  # Run on initial load to get fresh data
+        )
+        def refresh_map_dropdown(cache_bust_data, manual_clicks, url_search, config):
+            """Fetch fresh map list from API after clone/delete, manual refresh, or page load"""
+            site_id_local = config.get('site_id') if config else None
+            
+            if not site_id_local:
+                logging.warning("Cannot refresh map dropdown: site_id not available")
+                return no_update, no_update
+            
+            try:
+                # Determine trigger for logging
+                ctx = dash.callback_context
+                trigger_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else 'initial_load'
+                logging.info(f"Refreshing map dropdown list (trigger: {trigger_id})")
+                
+                # Fetch fresh map list from API
+                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                    api_session_ref,
+                    site_id=site_id_local
+                )
+                
+                if maps_response.status_code != 200:
+                    logging.warning(f"Failed to refresh map list: HTTP {maps_response.status_code}")
+                    return no_update, no_update
+                
+                fresh_maps = maps_response.data if maps_response.data else []
+                logging.info(f"Map dropdown refreshed: {len(fresh_maps)} maps found")
+                
+                # Build new dropdown options
+                new_options = [{'label': m.get('name', 'Unnamed'), 'value': m.get('id')} for m in fresh_maps]
+                # Build new available maps store data
+                new_store_data = [{'id': m.get('id'), 'name': m.get('name', 'Unnamed')} for m in fresh_maps]
+                
+                return new_options, new_store_data
+                
+            except Exception as refresh_error:
+                logging.error(f"Error refreshing map dropdown: {refresh_error}", exc_info=True)
+                return no_update, no_update
         
         # Callback for client position refresh (every 30 seconds when enabled)
         @app.callback(

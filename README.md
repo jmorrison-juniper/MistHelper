@@ -509,6 +509,36 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.12.22.19.30",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Automatic map backup before delete operations - saves JSON + image file",
+          "Maps Manager: Automatic map backup before clone operations - preserves source map data",
+          "Maps Manager: Complete backup includes walls, wayfinding, zones, device placements, beacons, vbeacons, and floor plan image"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed delete map targeting wrong map - now uses current map from config store instead of stale closure variable",
+          "Maps Manager: Fixed delete confirmation showing wrong map name - now dynamically updates from config store"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.18.00",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Cache bypass - Clone/Delete/Refresh now fetch fresh map data from API",
+          "Maps Manager: Page auto-reloads after successful clone/delete to show updated map list",
+          "Maps Manager: Map dropdown refreshes from API on page load and manual refresh"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed stale map dropdown after clone - new maps now appear immediately",
+          "Maps Manager: URL map switching now validates against fresh API data, not cached store"
+        ]
+      }
+    },
+    {
       "version": "25.12.22.17.30",
       "date": "2025-12-22",
       "changes": {
