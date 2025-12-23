@@ -28313,6 +28313,7 @@ class MapsManager:
             dcc.Store(id='map-config-store', data={
                 'site_id': site_id,
                 'map_id': map_id,
+                'map_name': map_data.get('name', 'Unknown'),
                 'ppm': ppm,
                 'map_width': map_width,
                 'map_height': map_height
@@ -29114,6 +29115,7 @@ class MapsManager:
                 # Update config - preserve site_id from original config
                 new_config = config.copy()
                 new_config['map_id'] = url_map_id
+                new_config['map_name'] = new_map_name
                 new_config['ppm'] = new_ppm
                 new_config['map_width'] = new_map_width
                 new_config['map_height'] = new_map_height
