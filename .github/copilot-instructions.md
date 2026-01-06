@@ -14,7 +14,8 @@ MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud
 - **No wrappers**: All functionality lives within appropriately named classes, never use standalone wrapper functions
 
 ### Critical Dependencies
-- **mistapi**: Primary Mist API SDK by Thomas Munzer (tmunzer/mistapi_python)
+- **Python**: 3.13 or newer required
+- **mistapi**: 0.59+ (Primary Mist API SDK by Thomas Munzer - tmunzer/mistapi_python)
 - **UV Package Manager**: Preferred over pip for speed (auto-fallback configured)
 - **Container Runtime**: Podman-first, Docker-compatible
 
@@ -70,6 +71,44 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs:
 ### Git Workflow Rule
 **Every changelog update = immediate `git add`** (agents.md requirement)
 
+### MANDATORY: Full Deployment Pipeline
+**AI agents MUST execute this complete workflow after any code changes:**
+
+```powershell
+# Step 1: Validate Syntax BEFORE Commit
+python -m py_compile MistHelper.py
+# If no output, syntax is valid. If errors, fix before committing.
+
+# Step 2: Commit and Push
+git add MistHelper.py README.md  # Include all modified files
+git commit -m "version YY.MM.DD.HH.MM - description"
+git push origin main
+
+# Step 3: Wait for Container Build (triggers automatically on push)
+# The workflow now includes a validation job that checks Python syntax BEFORE building.
+gh run list --workflow=container-build.yml --limit 1
+gh run watch <run-id>  # Wait for completion
+
+# Step 4: Pull New Image
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+
+# Step 5: Restart Container
+podman stop misthelper ; podman rm misthelper
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
+
+# Step 6: Verify
+podman ps  # Confirm container is running
+```
+
+**DO NOT skip steps.** The user expects the container to be updated and running after code changes.
+
+### Data Directory Permissions (CRITICAL)
+The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
+```bash
+chmod -R 777 data/   # Required before first container run
+```
+**Symptom:** `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
+
 ### Running Tests
 ```powershell
 # Local development (Windows 11 + venv required)
@@ -123,6 +162,26 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8  # Environment tunable
 
 ## Container & SSH Architecture
 
+### Container Registry & CI/CD
+- **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
+- **Build Workflow**: `.github/workflows/container-build.yml`
+- **Version Format**: `YY.MM.DD.HH.MM` (UTC timestamp)
+- **Triggers**: Push to `main` (when key files change) or manual workflow dispatch
+
+#### Zscaler/Corporate Proxy Workaround
+Corporate environments using Zscaler SSL inspection block chunked blob uploads to `ghcr.io` (403 Forbidden with HTML comment signature `kHKLKT6ZtNFTsrn4L61Mr17SZnTqQnKT6PWW1LNd`). **Do not attempt local `podman push` behind Zscaler** - it will fail.
+
+**Solution**: Use GitHub Actions for all container builds and pushes:
+```powershell
+# Trigger manually
+gh workflow run container-build.yml
+
+# Or push changes to trigger automatically
+git push origin main
+```
+
+GitHub Actions runs on GitHub infrastructure (not behind corporate proxy), bypassing Zscaler entirely.
+
 ### Container Detection
 ```python
 is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
@@ -160,6 +219,16 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 **Never automate these without explicit user confirmation**
 
 ## Common Pitfalls
+
+### Dash 3.x API Changes (Maps Manager)
+```python
+# WRONG: Deprecated in Dash 3.x - throws ObsoleteAttributeException
+app.run_server(host=host, port=port, debug=True)
+
+# CORRECT: Dash 3.x uses app.run()
+app.run(host=host, port=port, debug=True, use_reloader=False, threaded=True)
+```
+**Note**: Always use `use_reloader=False` to prevent double-execution issues on Windows.
 
 ### Device Type Filtering
 ```python

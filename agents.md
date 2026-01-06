@@ -1,11 +1,81 @@
 # Agents Guide for MistHelper
 
+**Project Maintainer:** Joseph Morrison (jmorrison@juniper.net)
+
 Purpose: Enable autonomous or semi-autonomous AI coding agents (and future maintainers) to safely extend, refactor, and diagnose the MistHelper codebase without breaking production conventions or security guarantees. 
 
 As we make updates and commits, update the ReadMe's changlelog with the current version in the following format correlating to the current date and time of when changes were made :" version YY.MM.DD.HH.MM " This can be useful for doing git commit logging/tracking too. When recording the changlog, keep it in JSON formatting with grouped topics, like "api-changes, logging/analytics, compatability, documentation, bug fixes, feature additions, performance, security, refactoring, testing/validation". Keep newest events at the top of the changelog and oldest last. An idea or item should not be spread over multiple topics. We dont need over complicated or "wordy" changelog.
 
+## Git Configuration
+For this repository, use:
+```bash
+git config user.name "Joseph Morrison"
+git config user.email "jmorrison@juniper.net"
+```
+
 ## Git Workflow for Development
 After updating README changelog, commit locally with `git add` + `git commit -m "version YY.MM.DD.HH.MM - description"`. Test code. If tests fail, use `git reset --soft HEAD~1` to rollback. Push multiple commits together when ready.
+
+## MANDATORY: Full Deployment Pipeline
+**AI agents MUST follow this complete workflow after any code changes:**
+
+### Step 1: Validate Syntax BEFORE Commit
+```powershell
+# ALWAYS run syntax check before committing
+python -m py_compile MistHelper.py
+
+# If no output, syntax is valid. If errors, fix before committing.
+```
+
+### Step 2: Commit and Push
+```powershell
+git add MistHelper.py README.md  # Add all modified files
+git commit -m "version YY.MM.DD.HH.MM - description"
+git push origin main
+```
+
+### Step 3: Wait for Container Build
+The push triggers GitHub Actions automatically (for changes to MistHelper.py, requirements.txt, Containerfile, Dockerfile, __init__.py).
+The workflow now includes a **validation job** that checks Python syntax BEFORE building the container.
+```powershell
+# Check workflow status
+gh run list --workflow=container-build.yml --limit 1
+
+# Watch the build progress
+gh run watch <run-id>
+```
+
+### Step 3: Pull New Image
+```powershell
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+### Step 4: Restart Container
+```powershell
+# Stop and remove old container
+podman stop misthelper ; podman rm misthelper
+
+# IMPORTANT: Ensure data directory permissions before starting
+# Container runs as non-root 'misthelper' user - data dir must be writable
+chmod -R 777 data/
+
+# Start new container with updated image
+podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+### Step 5: Verify
+```powershell
+podman ps  # Confirm container is running
+```
+
+### Data Directory Permissions (CRITICAL)
+The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
+```bash
+chmod -R 777 data/   # Required before first container run
+```
+**Symptom:** `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
+
+**DO NOT skip steps.** The user expects the container to be updated and running after code changes.
 
 Mist API responses are sometimes "nested". Be prepaired to handle that with JSON or otherwise.
 
@@ -27,13 +97,87 @@ When searching or listing devices , the Mist API defaults to just AP's unless we
 
 During development we will be using a windows 11 machine on VS-code and always testing in  a python virtual enviroment, make sure command syntax during testing is correct.
 
-Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine‑neutral (Podman or Docker both work). 
+Dependencies: Managed via runtime import logic and `requirements.txt` (prefers UV if available, else pip). Containers: Podman wording preferred but remain engine-neutral (Podman or Docker both work).
+
+## Runtime Requirements
+- **Python**: 3.13 or newer required
+- **mistapi**: 0.59+ (always use latest available version from tmunzer/mistapi_python) 
+
+---
+## Container Registry & CI/CD
+
+### GitHub Container Registry
+- **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
+- **Build Workflow**: `.github/workflows/container-build.yml`
+- **Version Format**: `YY.MM.DD.HH.MM` (UTC timestamp, matching commit version format)
+
+### Building Containers Locally
+```powershell
+# Build with timestamp version
+$version = Get-Date -Format "yy.MM.dd.HH.mm"
+podman build -t ghcr.io/jmorrison-juniper/misthelper:$version -t ghcr.io/jmorrison-juniper/misthelper:latest -f Containerfile .
+```
+
+### Zscaler/Corporate Proxy Issue (CRITICAL)
+Corporate environments using Zscaler SSL inspection will **block container pushes** to ghcr.io. Symptoms:
+- 403 Forbidden during chunked blob upload
+- Error contains HTML comment: `kHKLKT6ZtNFTsrn4L61Mr17SZnTqQnKT6PWW1LNd` (Zscaler signature)
+- Occurs even with valid authentication and Zscaler CA certificates installed
+
+**Root Cause**: Zscaler DLP policies block large HTTP PUT/POST requests to container registries.
+
+**Solution**: Use GitHub Actions for all container pushes:
+```powershell
+# Manual trigger
+gh workflow run container-build.yml
+
+# Check status
+gh run list --workflow=container-build.yml --limit 1
+gh run watch <run-id>
+```
+
+GitHub Actions runs on GitHub infrastructure (not behind corporate proxy), bypassing Zscaler entirely. The workflow automatically:
+1. Builds the container using `Containerfile`
+2. Tags with timestamp version and `latest`
+3. Pushes to `ghcr.io/jmorrison-juniper/misthelper`
+
+### Workflow Triggers
+- **Automatic**: Push to `main` that changes `MistHelper.py`, `requirements.txt`, `Containerfile`, `Dockerfile`, or `__init__.py`
+- **Manual**: Actions tab -> "Build and Push Container" -> "Run workflow"
 
 Always activate a Python virtual environment before local runs.
 
 Always read the documentation folder contents when starting on changes.
 
 Always read the entire script contents from the root directory in full, without skipping, before making edits.
+
+---
+## Documentation Resources
+
+### Primary: Local Documentation Folder
+The `documentation/` folder contains authoritative references that should be consulted first:
+| File | Purpose |
+|------|---------|
+| `mist-api-openapi3json.json` | Complete Mist API OpenAPI 3.0 specification (JSON) |
+| `mist-api-openapi3yaml.yaml` | Complete Mist API OpenAPI 3.0 specification (YAML) |
+| `paramiko.md` | Paramiko SSH library reference for EnhancedSSHRunner |
+| `SSH_GUIDE.md` | SSH runner detailed usage documentation |
+| `show_command_help.json` | Junos show command reference |
+| `sample.env` | Environment configuration template |
+
+### Supplementary: Context7 MCP Server
+Context7 provides real-time library documentation. Key library IDs for MistHelper development:
+| Library | Context7 ID | Use Case |
+|---------|-------------|----------|
+| Paramiko | `/paramiko/paramiko` | SSH client implementation (EnhancedSSHRunner) |
+| Dash | `/websites/dash_plotly` | Maps Manager UI (Menu 112) |
+| Plotly | `/plotly/plotly.py` | Interactive charting and visualization |
+| Dash Bootstrap | `/facultyai/dash-bootstrap-components` | UI components styling |
+
+**Zscaler/Corporate Proxy Note**: Context7 requires SSL bypass in corporate environments. The MCP config at `~/Library/Application Support/Code/User/mcp.json` includes `NODE_TLS_REJECT_UNAUTHORIZED=0` for Zscaler compatibility.
+
+---
+## Coding Conventions
 
 Never use shorthand or abbreviations in function, loop, or variable naming. Example, never use "for i in images" or similar shorthand.
 

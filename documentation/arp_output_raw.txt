@@ -1,0 +1,11 @@
+DEV	  Src MAC		Dest MAC		Source IP	Dest IP		Type	Vlan	Proto	D-Port	State  Idle sec  RL-Class  RL-Kbps  DSCP
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+aximac1   90-ec-77-47-6e-f2   	a8-3a-79-30-1f-3b	13.56.190.218  	10.88.143.22   	0x0800	0001	TCP	37542	  RUN       0       0	         0    - 
+vlan1     a8-3a-79-30-1f-3b   	90-ec-77-47-6e-f2	10.88.143.22   	13.56.190.218  	0x0800	0001	TCP	443	  RUN       0       0	         0    - 
+Total 2 / 2 Flow Entries.
+	MAC		DEV	  VLAN	W-EAP	PPSK Grp	Rx Packets		    Rx Bytes		Tx Packets		    Tx Bytes	S \ D Flows	Idle sec
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+90-ec-77-47-6e-f2     aximac1[0]  1	ALOW 	       0	       578	               37943		       328	              230883	1    \    1	       0
+a8-3a-79-30-1f-3b     vlan1       1	ALOW 	       0	       338	              246063		       274	               19703	1    \    1	       0
+Total 2 MAC Entries.
+Total Flows:2 Mac-Flow Hi-Water:9963, Limits: G:20000 W:100, O:0 SD:0

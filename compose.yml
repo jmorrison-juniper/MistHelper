@@ -6,9 +6,15 @@ services:
       context: .
       dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
     container_name: misthelper-app
+    ports:
+      # SSH access for interactive sessions
+      - "2200:2200"
+      # Dash web viewer for interactive map viewer (menu option 40)
+      - "8050:8050"
     volumes:
-      # Mount local data directory to persist SQLite database
-      - ./data:/app/data
+      # Mount local data directory to persist SQLite database and logs
+      # The container writes to /app/data, this maps it to ./data on host
+      - ./data:/app/data:rw
       # Mount .env file for API credentials (optional - container works without it)
       - ./.env:/app/.env:ro
     environment:

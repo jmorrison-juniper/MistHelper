@@ -10,13 +10,13 @@ MistHelper is a production-focused Python application that streamlines large‑s
 ---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 97 actionable menu entries (1–65, 70–78, 79–80, 90–97) – not a fixed “96” set. Some originally documented WebSocket shell outputs (81–83) are no longer present in `menu_actions`.
+1. Operation Count: The code currently defines 112 actionable menu entries (1–10, 11–89, 90–112) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
 5. WIP Operations: 63–65 are explicitly flagged in code as work‑in‑progress and may change schema/output without notice.
 
-This README reflects the current actual logic inside `MistHelper.py` (≈22k lines) as of 2025‑09‑23.
+This README reflects the current actual logic inside `MistHelper.py` (≈44k lines) as of 2025‑12‑15.
 
 ---
 ## 2. Core Capabilities
@@ -41,8 +41,7 @@ This README reflects the current actual logic inside `MistHelper.py` (≈22k lin
 | `CombinedInventory_ByWeek/` | Time‑series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
 | `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
-| `script.log` | Unified runtime log |
-| `run-misthelper.py` | Podman helper wrapper (auto builds & runs container) |
+| `data/script.log` | Unified runtime log |
 | `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified SSL‑bypass) |
 | `compose.yml` | Orchestrated service definition (uses `Containerfile` by default) |
 | `agents.md` | Internal “Agents Guide” (style, safety, refactor guidance) |
@@ -185,6 +184,9 @@ Primary flags (from argparse block near end of file):
 | `--address-check` | Enable external address validation using Nominatim API |
 | `--skip-ssl-verify` | Skip SSL certificate verification for external API calls |
 | `--no-env` | Disable .env file loading for SSH operations |
+| `--dry-run` | Preview destructive operations without making changes |
+| `--tui` | Launch Terminal User Interface mode for visual API navigation |
+| `--testinteractive` | Run systematic test of read-only interactive menu options |
 
 Examples (PowerShell friendly):
 ```powershell
@@ -230,7 +232,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
 | 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
 | 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
-| 40–44 | Clients & Security | Wired/wireless clients, rogue entities, security policies + events aggregation |
+| 40–44 | Clients & Security | Wired/wireless clients, security events, rogue client/AP detections |
 | 45–59 | Configuration & Admin | Licenses, PSKs, webhooks, WLANs (org/site), admins, MSP, SSO, usage, MX Edge |
 | 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI actions |
 | 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway config extraction (heavy) |
@@ -247,6 +249,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
 | 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
 | 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR firmware upgrade with mode selection |
+| 101 | TUI Mode | Launch Terminal User Interface for visual Mist API library navigation |
 | 102 | WLAN RADIUS Timers | Manage WLAN RADIUS authentication timers for site or template WLANs |
 | 103–104 | Gateway Template WAN2 | Set site variables & migrate templates to use {{wan2_interface}} variable |
 | 105 | Template Config Extract | Extract DIA_Pico (traffic steering) & Picocell (application policy) to JSON |
@@ -255,6 +258,8 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 108 | Country RF Templates | **DESTRUCTIVE**: Create country-specific RF templates and assign sites to matching templates (auto/default settings) |
 | 109 | AP Model Device Profiles | **DESTRUCTIVE**: Scan org for AP models and create Device Profile per model with inherit/auto settings |
 | 110 | Assign APs to Profiles | **DESTRUCTIVE**: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles |
+| 111 | Clone Templates by Geography | **DESTRUCTIVE**: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites |
+| 112 | Maps Manager | Interactive site floorplan and map operations (sub-menu with 19 operations) |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -335,9 +340,10 @@ docker compose build
 docker compose run --rm misthelper python MistHelper.py
 ```
 
-Podman helper (auto build + run):
+Podman example (direct):
 ```powershell
-python .\run-misthelper.py
+podman build -t misthelper -f Containerfile .
+podman run -it --rm -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper python MistHelper.py
 ```
 
 ### SSH Remote Access (NEW)
@@ -346,12 +352,34 @@ MistHelper now supports SSH server deployment for remote access with automatic s
 #### Quick Start - SSH Server
 ```powershell
 # Build and start SSH server container
-python .\run-misthelper.py --ssh
+podman build -t misthelper -f Containerfile .
+
+# IMPORTANT: Ensure data directory has proper permissions for container user
+# The container runs as 'misthelper' user (non-root), so the mounted data 
+# directory must be writable by that user
+chmod -R 777 data/   # Or use appropriate ownership/permissions for your setup
+
+podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
 # Password: misthelper123!
 ```
+
+#### Data Directory Permissions
+The container runs MistHelper as a non-root user (`misthelper`) for security. When mounting the `data/` directory as a volume, ensure proper permissions:
+
+```bash
+# Option 1: Open permissions (simplest, suitable for development)
+chmod -R 777 data/
+
+# Option 2: Match container user UID/GID (more secure for production)
+# The misthelper user in the container typically has UID 999
+chown -R 999:999 data/
+chmod -R 755 data/
+```
+
+**Symptom of permission issues:** If you see `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` when connecting via SSH, the data directory permissions need to be fixed.
 
 #### SSH Server Features
 - **Automatic Session Management**: Each SSH connection creates an isolated MistHelper session
@@ -405,10 +433,12 @@ ssh -p 2200 misthelper@127.0.0.1
 #### SSH Troubleshooting
 | Issue | Solution |
 |-------|----------|
-| Connection refused | Ensure container is running: `docker ps` |
+| Connection refused | Ensure container is running: `podman ps` or `docker ps` |
 | Wrong password | Default is `misthelper123!` |
-| Permission denied | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
-| Session not starting | Check container logs: `docker logs <container>` |
+| Permission denied (SSH) | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
+| Permission denied (data dir) | Run `chmod -R 777 data/` on host before starting container |
+| `script.log` permission error | Data directory not writable - fix with `chmod -R 777 data/` |
+| Session not starting | Check container logs: `podman logs misthelper` |
 | Port conflict | Ensure port 2200 is available |
 
 Persisted artifacts appear under local `data/` bind mount.
@@ -436,7 +466,7 @@ Coding Style Essentials:
 | SQLite table missing | First run not completed or permission issue | Re-run with `--output-format sqlite` and check write perms on `data/` |
 | SSH runner fails | Missing `paramiko` or creds | Ensure `paramiko` installed; add SSH vars to `.env` |
 | WIP export fails | Endpoint schema drift | Treat 63–65 as non-stable; review code before relying |
-| **SSH connection refused** | **Container not running** | **Check `docker ps`, restart with `python run-misthelper.py --ssh`** |
+| **SSH connection refused** | **Container not running** | **Check `podman ps`, restart container with SSH enabled** |
 | **SSH wrong password** | **Using incorrect credentials** | **Default password is `misthelper123!`** |
 | **SSH session won't start** | **ForceCommand or session issues** | **Check container logs, verify SSH server is running** |
 | **SSH port conflict** | **Port 2200 already in use** | **Stop other services on port 2200 or modify container config** |
@@ -450,7 +480,7 @@ Coding Style Essentials:
 4. Update this README if public behavior or filenames change  
 5. Run `--test` (when feasible) before submitting PR  
 
-License: AGPL-3.0-only (see `pyproject.toml`).
+License: CC-BY-NC-SA-4.0 (Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International)
 
 ---
 ## 18. Roadmap (Short Horizon)
@@ -478,6 +508,307 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "25.12.22.20.30",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager Menu 13: Intelligent Map Replacement Wizard - replace floor plan images while preserving device placements",
+          "Wizard supports proportional scaling, physical position preservation, or manual PPM configuration",
+          "Automatic coordinate translation for devices, zones, walls, wayfinding paths, beacons, and virtual beacons",
+          "Pre-replacement backup with full map geometry and image file",
+          "Interactive preview showing before/after coordinates for all affected assets"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.19.54",
+      "date": "2025-12-22",
+      "changes": {
+        "bug_fixes": [
+          "Maps Manager: Fixed delete panel showing 'Map: Unknown' - added map_name to config store"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.19.30",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Automatic map backup before delete operations - saves JSON + image file",
+          "Maps Manager: Automatic map backup before clone operations - preserves source map data",
+          "Maps Manager: Complete backup includes walls, wayfinding, zones, device placements, beacons, vbeacons, and floor plan image"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed delete map targeting wrong map - now uses current map from config store instead of stale closure variable",
+          "Maps Manager: Fixed delete confirmation showing wrong map name - now dynamically updates from config store"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.18.00",
+      "date": "2025-12-22",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Cache bypass - Clone/Delete/Refresh now fetch fresh map data from API",
+          "Maps Manager: Page auto-reloads after successful clone/delete to show updated map list",
+          "Maps Manager: Map dropdown refreshes from API on page load and manual refresh"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed stale map dropdown after clone - new maps now appear immediately",
+          "Maps Manager: URL map switching now validates against fresh API data, not cached store"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.17.30",
+      "date": "2025-12-22",
+      "changes": {
+        "bug_fixes": [
+          "Maps Manager: Fixed mistapi addSiteMapImageFile parameter name (file not file_path) - image uploads now work for map cloning"
+        ]
+      }
+    },
+    {
+      "version": "25.12.22.13.45",
+      "date": "2025-12-22",
+      "changes": {
+        "compatibility": [
+          "Updated Containerfile to use Python 3.13-slim base image (was 3.11-slim)",
+          "Updated requirements.txt to require mistapi>=0.59.0 (was >=0.3.0)"
+        ],
+        "documentation": [
+          "Added Python 3.13 and mistapi 0.59+ requirements to copilot-instructions.md",
+          "Added Runtime Requirements section to agents.md specifying Python 3.13+ and mistapi 0.59+"
+        ],
+        "bug_fixes": [
+          "Maps Manager: Fixed ppm value handling when switching maps (handles 0/None values correctly)"
+        ]
+      }
+    },
+    {
+      "version": "25.01.21.15.30",
+      "date": "2025-01-21",
+      "changes": {
+        "feature_additions": [
+          "Early data directory permission detection with container-aware error messages",
+          "Script now checks write permissions before attempting to create log files",
+          "Provides specific fix instructions based on local vs container environment"
+        ],
+        "documentation": [
+          "Added Data Directory Permissions section to README troubleshooting",
+          "Updated agents.md with CRITICAL permission requirements in deployment pipeline",
+          "Updated copilot-instructions.md with permission fix between image pull and container restart"
+        ]
+      }
+    },
+    {
+      "version": "25.12.15.14.45",
+      "date": "2025-12-15",
+      "changes": {
+        "bug_fixes": [
+          "UV package manager detection - Now searches Python environment bin directories, macOS user bin, and python -m uv fallback instead of only checking system PATH",
+          "UV now works correctly when installed via pip to system Python on macOS where executables go to ~/Library/Python/X.Y/bin/"
+        ],
+        "documentation": [
+          "README Section 1 - Updated operation count from 97 to 112 menu entries",
+          "README Section 1 - Updated line count from 22k to 44k lines",
+          "README Section 1 - Updated date to 2025-12-15",
+          "README Section 3 - Removed non-existent run-misthelper.py from directory table",
+          "README Section 6 - Added missing CLI flags: --dry-run, --tui, --testinteractive",
+          "README Section 8 - Fixed menu 40-44 description to mention rogue client/AP detections",
+          "README Section 8 - Added missing menu items 101 (TUI), 111 (Clone Templates), 112 (Maps Manager)",
+          "README Section 14 - Updated container commands to use direct podman commands instead of run-misthelper.py"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.17.10",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed critical variable shadowing bug: 'config' loop variable in device type iteration was overwriting callback 'config' parameter",
+          "Map switch callback now correctly preserves site_id in config store",
+          "Live refresh callbacks no longer receive corrupted config with device styling data instead of site/map config"
+        ],
+        "refactoring": [
+          "Renamed device type loop variable from 'config' to 'type_cfg' to prevent variable shadowing"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.17.03",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Added site_id/map_id validation in live refresh callbacks to prevent API calls with None values",
+          "Added config debug logging to diagnose map switch config persistence issues"
+        ],
+        "logging": [
+          "Live refresh now logs full config when site_id is missing for debugging",
+          "Map switch logs returned config values for verification"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.21.55",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Drawing Tools now functional: Save shapes to Mist API",
+          "Drawing mode selector: Choose between Zone, Wall, Path, or Measurement mode",
+          "Save Last Shape button: Saves drawn shape to Mist based on selected mode",
+          "Zone creation: Draw rectangle, enter name, save as location zone via createSiteZone API",
+          "Wall segment creation: Draw line, save as wall_path via updateSiteMap API",
+          "Validation path creation: Draw line, save as sitesurvey_path via updateSiteMap API",
+          "Delete All Paths: Clears sitesurvey_path array via updateSiteMap API",
+          "Delete All Walls: Clears wall_path nodes via updateSiteMap API"
+        ],
+        "enhancements": [
+          "Zone name input field appears when Zone mode is selected",
+          "Clear All Drawings button with guidance to use eraser tool",
+          "Success/error feedback messages for all save operations"
+        ],
+        "refactoring": [
+          "Removed old placeholder drawing tool buttons (Insert Path/Rectangle/Wall)",
+          "Drawing tools now use dropdown mode selector instead of separate buttons"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.21.50",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed client refresh coordinates: API returns pixels directly, not meters - removed erroneous PPM multiplication",
+          "Client dots now stay visible after refresh instead of disappearing off-screen",
+          "Client label annotations now update positions during live refresh"
+        ],
+        "enhancements": [
+          "Added coordinate sample logging to verify refresh data",
+          "Added warning log if Clients trace not found during refresh",
+          "Removed visibility toggle override during refresh to preserve user settings"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.21.35",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Changed browser tab title from 'Dash' to 'MistHelper Map Viewer'"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.21.30",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Suppressed 'Updating...' flash in browser tab during auto-refresh callbacks"
+        ],
+        "enhancements": [
+          "Set update_title=None on Dash app to prevent tab title flicker from 1-second countdown interval"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.21.20",
+      "date": "2025-12-12",
+      "changes": {
+        "bug_fixes": [
+          "Fixed live refresh trace name mismatch: callback searched for 'wifi client' but trace was named 'Clients'",
+          "Client position refresh now correctly updates the map visualization"
+        ],
+        "enhancements": [
+          "Upgraded refresh trace logging from debug to info level for visibility"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.17.15",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Moved live refresh controls from sidebar to header bar for better visibility",
+          "Added countdown timers showing seconds until next client refresh and minutes:seconds until RF heatmap refresh",
+          "Countdown updates every second when auto-refresh is enabled",
+          "Compact refresh control panel with dark background in header"
+        ],
+        "refactoring": [
+          "Added refresh-times-store to track last refresh timestamps for countdown calculation",
+          "Added 1-second countdown-tick-interval for real-time countdown display",
+          "Updated refresh callbacks to return both figure and refresh times"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.16.45",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Live data refresh: map viewer now supports automatic refresh of client positions (every 30 seconds) and RF heatmap (every 5 minutes)",
+          "Auto-refresh toggle: checkbox in sidebar to enable/disable live data updates",
+          "Manual refresh button: 'Refresh Now' button for on-demand data updates",
+          "Refresh status indicator: shows current auto-refresh state and timing intervals"
+        ],
+        "enhancements": [
+          "dcc.Store component: stores site_id, map_id, PPM, and map dimensions for refresh callbacks",
+          "dcc.Interval components: two separate intervals for clients (30s) and coverage (5min) with disabled-by-default state",
+          "Callback architecture: separate callbacks for toggle, client refresh, and coverage refresh with proper state management",
+          "API session reference: refresh callbacks use stored API session for authenticated requests"
+        ],
+        "logging": [
+          "Added 'Live data refresh:' prefix to all refresh-related log entries for easy filtering",
+          "Logs include timestamp, client counts (WiFi vs Wired), and coverage point counts"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.15.35",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "Unscaled map detection: warns user when map has PPM=0 (not scaled in Mist Portal)",
+          "User guidance message: directs users to Location -> Floorplans -> select image -> SET SCALE in Mist Portal"
+        ],
+        "enhancements": [
+          "Explicit warning in console when map_ppm is 0 or missing"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.15.30",
+      "date": "2025-12-12",
+      "changes": {
+        "feature_additions": [
+          "PPM auto-correction: calculates actual PPM from client x/x_m and y/y_m coordinate ratios",
+          "PPM mismatch detection: warns when calculated PPM differs from map stored PPM by more than 10%"
+        ],
+        "bug_fixes": [
+          "RF coverage heatmap now displays correctly on maps where Mist stored incorrect PPM",
+          "Fixed heatmap only covering upper-left corner of map due to coordinate scaling mismatch"
+        ],
+        "enhancements": [
+          "Uses first 10 clients with both pixel and meter coordinates to calculate average PPM",
+          "Logs PPM validation results (pass/mismatch) with exact values for debugging"
+        ]
+      }
+    },
+    {
+      "version": "25.12.12.14.30",
+      "date": "2025-12-12",
+      "changes": {
+        "enhancements": [
+          "Added heatmap coordinate debug logging to script.log",
+          "Logs coverage X/Y ranges in both pixels and meters for PPM validation"
+        ],
+        "compatibility": [
+          "Fixed compose.yml port mappings (2200:2200, 8050:8050)",
+          "Fixed volume mount syntax from named volume to bind mount (./data:/app/data:rw)"
+        ]
+      }
+    },
     {
       "version": "25.12.09.14.44",
       "date": "2025-12-09",

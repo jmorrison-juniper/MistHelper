@@ -1,0 +1,1630 @@
+
+<!-- saved from url=(0043)https://api.mist.com/api/v1/docs/Auth#login -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Auth | API | Mist</title>
+<style>
+/* modified from https://gist.github.com/andyferra/2554919 */
+body {
+  font-family: Helvetica, arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background-color: white;
+  padding: 30px; }
+
+body > *:first-child {
+  margin-top: 0 !important; }
+body > *:last-child {
+  margin-bottom: 0 !important; }
+
+a {
+  color: #4183C4; }
+a.absent {
+  color: #cc0000; }
+a.anchor {
+  display: block;
+  padding-left: 30px;
+  margin-left: -30px;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0; }
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  cursor: text;
+  position: relative; }
+
+h1:hover a.anchor, h2:hover a.anchor, h3:hover a.anchor, h4:hover a.anchor, h5:hover a.anchor, h6:hover a.anchor {
+  background: url("../../images/modules/styleguide/para.png") no-repeat 10px center;
+  text-decoration: none; }
+
+h1 tt, h1 code {
+  font-size: inherit; }
+
+h2 tt, h2 code {
+  font-size: inherit; }
+
+h3 tt, h3 code {
+  font-size: inherit; }
+
+h4 tt, h4 code {
+  font-size: inherit; }
+
+h5 tt, h5 code {
+  font-size: inherit; }
+
+h6 tt, h6 code {
+  font-size: inherit; }
+
+h1 {
+  font-size: 28px;
+  color: black; }
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #cccccc;
+  color: black; }
+
+h3 {
+  font-size: 18px; }
+
+h4 {
+  font-size: 16px; }
+
+h5 {
+  font-size: 14px; }
+
+h6 {
+  color: #777777;
+  font-size: 14px; }
+
+p, blockquote, ul, ol, dl, li, table, pre {
+  margin: 0; }
+
+hr {
+  background: transparent url("../../images/modules/pulls/dirty-shade.png") repeat-x 0 0;
+  border: 0 none;
+  color: #cccccc;
+  height: 4px;
+  padding: 0; }
+
+body > h2:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+body > h1:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+  body > h1:first-child + h2 {
+    margin-top: 0;
+    padding-top: 0; }
+body > h3:first-child, body > h4:first-child, body > h5:first-child, body > h6:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0; }
+
+h1 p, h2 p, h3 p, h4 p, h5 p, h6 p {
+  margin-top: 0; }
+
+li p.first {
+  display: inline-block; }
+
+ul, ol {
+  padding-left: 30px; }
+
+ul :first-child, ol :first-child {
+  margin-top: 0; }
+
+ul :last-child, ol :last-child {
+  margin-bottom: 0; }
+
+dl {
+  padding: 0; }
+  dl dt {
+    font-size: 14px;
+    font-weight: bold;
+    font-style: italic;
+    padding: 0;
+    margin: 15px 0 5px; }
+    dl dt:first-child {
+      padding: 0; }
+    dl dt > :first-child {
+      margin-top: 0; }
+    dl dt > :last-child {
+      margin-bottom: 0; }
+  dl dd {
+    margin: 0 0 15px;
+    padding: 0 15px; }
+    dl dd > :first-child {
+      margin-top: 0; }
+    dl dd > :last-child {
+      margin-bottom: 0; }
+
+blockquote {
+  border-left: 4px solid #dddddd;
+  padding: 0 15px;
+  color: #777777; }
+  blockquote > :first-child {
+    margin-top: 0; }
+  blockquote > :last-child {
+    margin-bottom: 0; }
+
+table {
+    border-collapse: collapse;
+  padding: 0; }
+  table tr {
+    border-top: 1px solid #cccccc;
+    background-color: white;
+    margin: 0;
+    padding: 0; }
+    table tr:nth-child(2n) {
+      background-color: #f8f8f8; }
+    table tr th {
+      font-weight: bold;
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr td {
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr th :first-child, table tr td :first-child {
+      margin-top: 0; }
+    table tr th :last-child, table tr td :last-child {
+      margin-bottom: 0; }
+
+img {
+  max-width: 100%; }
+
+span.frame {
+  display: block;
+  overflow: hidden; }
+  span.frame > span {
+    border: 1px solid #dddddd;
+    display: block;
+    float: left;
+    overflow: hidden;
+    margin: 13px 0 0;
+    padding: 7px;
+    width: auto; }
+  span.frame span img {
+    display: block;
+    float: left; }
+  span.frame span span {
+    clear: both;
+    color: #333333;
+    display: block;
+    padding: 5px 0 0; }
+span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-center > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: center; }
+  span.align-center span img {
+    margin: 0 auto;
+    text-align: center; }
+span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px 0 0;
+    text-align: right; }
+  span.align-right span img {
+    margin: 0;
+    text-align: right; }
+span.float-left {
+  display: block;
+  margin-right: 13px;
+  overflow: hidden;
+  float: left; }
+  span.float-left span {
+    margin: 13px 0 0; }
+span.float-right {
+  display: block;
+  margin-left: 13px;
+  overflow: hidden;
+  float: right; }
+  span.float-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: right; }
+
+code, tt {
+  margin: 0 2px;
+  padding: 0 5px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px; }
+
+pre code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent; }
+
+.highlight pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+  pre code, pre tt {
+    background-color: transparent;
+    border: none; }
+</style>
+</head>
+<body>
+
+<h2 id="authentication">Authentication</h2>
+<p>Authentication covers how to login (authenticate against the API endpoint) and get the privileges, against which
+organization(s) and site(s) the admin is granted to.</p>
+<h1 id="login">Login</h1>
+<h2 id="see-if-login-already">See If Login Already</h2>
+<p>Get ‘whoami’ and privileges (which org and which sites I have access to)</p>
+<pre><code>GET /api/v1/self
+</code></pre>
+<h3 id="response-if-a-valid-session-has-been-created">Response if a valid session has been created</h3>
+<pre><code>Status: 200 OK
+
+{
+    "email": "test@mistsys.com",
+    "first_name": "John",
+    "last_name": "Smith",
+    "phone": "14081112222",
+    "phone2": "",
+    "via_sso": false,
+    "tags": [ "has_8021x", "mist" ],
+    "password_modified_time": 1656353525,
+    "no_tracking": false
+}
+</code></pre>
+<h3 id="definitions">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td>email of logged-in user</td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td><code>string</code></td>
+<td>first name of logged-in user</td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td><code>string</code></td>
+<td>last name of logged-in user</td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td><code>string</code></td>
+<td>phone number (numbers only, including country code)</td>
+</tr>
+<tr>
+<td><code>phone2</code></td>
+<td><code>string</code></td>
+<td>secondary phone number (numbers only, including country code)</td>
+</tr>
+<tr>
+<td><code>via_sso</code></td>
+<td><code>boolean</code></td>
+<td>an admin alogin via_sso is more restircted. (password and email cannot be changed)</td>
+</tr>
+<tr>
+<td><code>compliance_status</code></td>
+<td><code>string</code></td>
+<td>optional, <code>restricted</code> / <code>blocked</code> (trade compliance status)</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td><code>list</code></td>
+<td>list of strings indicating capabilities. e.g. what to show/hide/disable/enable for this user</td>
+</tr>
+<tr>
+<td><code>password_modified_time</code></td>
+<td><code>long</code></td>
+<td>password last modified time, in epoch</td>
+</tr>
+<tr>
+<td><code>no_tracking</code></td>
+<td><code>boolean</code></td>
+<td>optional, whether to store privacy-consent information, default is null</td>
+</tr>
+</tbody>
+</table>
+<h2 id="login-lookup">Login Lookup</h2>
+<pre><code>POST /api/v1/login/lookup
+</code></pre>
+<h3 id="example">Example</h3>
+<pre><code>{
+    "email": "test@mistsys.com"
+}
+</code></pre>
+<h3 id="parameter">Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-if-user-does-not-exist">Response if user does not exist</h3>
+<pre><code>Status: 404 Not Found
+</code></pre>
+<h3 id="response-if-local-account-exists">Response if local account exists</h3>
+<pre><code>Status: 200 OK
+
+</code></pre>
+<h3 id="response-if-sso-user-exists">Response if SSO user exists</h3>
+<pre><code>Status: 200 OK
+
+{
+    "sso_url": "https://my.sso/idp_sso_url"
+}
+</code></pre>
+<h2 id="login_1">Login</h2>
+<pre><code>POST /api/v1/login
+</code></pre>
+<h3 id="example_1">Example</h3>
+<pre><code>{
+    "email": "test@mistsys.com",
+    "password": "foryoureyesonly"
+}
+</code></pre>
+<h3 id="parameter_1">Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-if-login-successfully-ie-emailpassword-matches">Response if login successfully (i.e. email/password matches)</h3>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h3 id="response-if-login-failed">Response if login failed</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "sso admin login needs to be initiated by IdP",
+    "forward_url": "https://my.sso/idp_sso_url"
+}
+</code></pre>
+<h2 id="logout">Logout</h2>
+<pre><code>POST /api/v1/logout
+</code></pre>
+<h3 id="response">Response</h3>
+<pre><code>Status: 200 OK
+
+{
+    // if configured in SSO as custom_logout_url
+    "forward_url": "https://my.sso/custom_logout_url"
+}
+</code></pre>
+<h1 id="privileges">Privileges</h1>
+<h2 id="self">Self</h2>
+<p>Get ‘whoami’ and privileges (which org and which sites I have access to)</p>
+<pre><code>GET /api/v1/self
+</code></pre>
+<h3 id="response-if-a-valid-session-has-been-created_1">Response if a valid session has been created</h3>
+<pre><code>Status: 200 OK
+
+{
+    "email": "test@mistsys.com",
+    "first_name": "John",
+    "last_name": "Smith",
+    "phone": "14081112222",
+    "via_sso": false,
+    "password_modified_time": 1656353525,
+    "privileges": [
+        {
+            "scope": "org",
+            "org_id": "9ff00eec-24f0-44d7-bda4-6238c81376ee",
+            "name": "TestCompany",
+            "role": "write",
+            "views": ["location"],
+            "msp_id": "9520c63a-f7b3-670c-0944-727774d5a722",
+            "msp_name": "MSP",
+            "msp_url": "https://..."
+            "msp_logo_url": "https://.../logo/9520c63a-f7b3-670c-0944-727774d5a722.jpeg",
+            "orggroup_ids": ["9ff00eec-24f0-44d7-bda4-6238c81376ee"],
+        },
+        {
+            "scope": "site",
+            "site_id": "d96e3952-53e8-4266-959a-45acd55f5114",
+            "name": "Mist Office",
+            "role": "admin",
+            "org_id": "9ff00eec-24f0-44d7-bda4-6238c81376ee",
+            "org_name": "TestCompany",
+            "sitegroup_ids": ["581328b6-e382-f54e-c9dc-999983183a34"],
+            "msp_id": "9520c63a-f7b3-670c-0944-727774d5a722"
+            "msp_url": "https://..."
+            "msp_logo_url": "https://.../logo/9520c63a-f7b3-670c-0944-727774d5a722.jpeg",
+        },
+        {
+            "scope": "msp",
+            "msp_id": "9520c63a-f7b3-670c-0944-727774d5a722",
+            "name": "MSP",
+            "msp_url": "https://..."
+            "msp_logo_url": "https://.../logo/9520c63a-f7b3-670c-0944-727774d5a722.jpeg",
+            "role": "admin"
+        }
+    ],
+    "tags": [ "has_8021x", "mist" ]
+}
+</code></pre>
+<h3 id="definitions_1">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td>email of logged-in user</td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td><code>string</code></td>
+<td>first name of logged-in user</td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td><code>string</code></td>
+<td>last name of logged-in user</td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td><code>string</code></td>
+<td>phone number (numbers only, including country code)</td>
+</tr>
+<tr>
+<td><code>via_sso</code></td>
+<td><code>boolean</code></td>
+<td>if admin login is via sso (via_sso is more restricted, password and email cannot be changed)</td>
+</tr>
+<tr>
+<td><code>password_modified_time</code></td>
+<td><code>long</code></td>
+<td>password last modified time, in epoch</td>
+</tr>
+<tr>
+<td><code>privileges</code></td>
+<td><code>list</code></td>
+<td>list of permission-against-scope</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>string</code></td>
+<td>org / site / msp</td>
+</tr>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>id of the org</td>
+</tr>
+<tr>
+<td><code>org_name</code></td>
+<td><code>string</code></td>
+<td>name of the org (for a site belonging to org)</td>
+</tr>
+<tr>
+<td><code>msp_id</code></td>
+<td><code>string</code></td>
+<td>id of the MSP (if the org belongs to an MSP)</td>
+</tr>
+<tr>
+<td><code>msp_name</code></td>
+<td><code>string</code></td>
+<td>name of the MSP (if the org belongs to an MSP)</td>
+</tr>
+<tr>
+<td><code>msp_url</code></td>
+<td><code>string</code></td>
+<td>custom url of the MSP (if the MSP belongs to an Advanced tier)</td>
+</tr>
+<tr>
+<td><code>msp_logo_url</code></td>
+<td><code>string</code></td>
+<td>logo of the MSP (if the MSP belongs to an Advanced tier)</td>
+</tr>
+<tr>
+<td><code>orggroup_ids</code></td>
+<td><code>list</code></td>
+<td>list of orggroup ids (if the org belongs to an MSP)</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>name of the org/site/MSP depending on object scope</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td><code>string</code></td>
+<td>access permissions: admin / write / read / helpdesk / installer</td>
+</tr>
+<tr>
+<td><code>views</code></td>
+<td><code>list</code></td>
+<td>list of UI views, see <a href="https://api.mist.com/api/v1/docs/Org#Custom-Roles">supported UI views</a></td>
+</tr>
+<tr>
+<td><code>site_id</code></td>
+<td><code>string</code></td>
+<td>id of the site</td>
+</tr>
+<tr>
+<td><code>sitegroup_ids</code></td>
+<td><code>list</code></td>
+<td>list of sitegroup ids</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td><code>list</code></td>
+<td>list of strings indicating capabilities. e.g. what to show/hide/disable/enable for this user</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-if-two-factor-authentication-is-pending">Response if two-factor authentication is pending</h3>
+<pre><code>Status: 200 OK
+
+{
+    "email": "test@mistsys.com",
+    "privileges": null,
+    "two_factor_required": true
+    "two_factor_passed": false
+}
+</code></pre>
+<h2 id="login-with-2fa">Login with 2FA</h2>
+<p>When 2FA is enabled, there are two ways to login.
+1. login with two_factor token (with Google Authenticator, etc)
+2. login with email/password, SMS the token, and use /login/two_factor with the token</p>
+<pre><code>POST /api/v1/login
+</code></pre>
+<h3 id="example_2">Example</h3>
+<pre><code>{
+    "email": "test@mistsys.com",
+    "password": "foryoureyesonly",
+    "two_factor": "123456"
+}
+</code></pre>
+<h3 id="parameter_2">Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>two_factor</code></td>
+<td><code>string</code></td>
+<td>if two-factor authentication is enabled, this can be used to skip a separate call to /login/two_factor</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-if-login-successfully-ie-emailpasswordtwo_factor-matches">Response if login successfully (i.e. email/password/two_factor matches)</h3>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h3 id="response-if-login-failed_1">Response if login failed</h3>
+<pre><code>Status: 400 Bad Request
+</code></pre>
+<h3 id="response-if-emailpassword-matches-but-two_factor-doesnt-match">Response if email/password matches but <code>two_factor</code> doesn’t match</h3>
+<p>The session is partially created, /self reflects the pending two_factor authentication. Use /login/two_factor to login fully</p>
+<pre><code>Status: 401 Unauthorized
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h3 id="response-if-emailpassword-matches-but-two_factor-is-not-provided">Response if email/password matches but <code>two_factor</code> is not provided</h3>
+<p>The session is partially created, /self reflects the pending two_factor authentication. Use /login/two_factor to login fully</p>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h2 id="perform-two-factor-authentication">Perform Two-Factor Authentication</h2>
+<pre><code>POST /api/v1/login/two_factor
+</code></pre>
+<h3 id="request">Request</h3>
+<pre><code>{
+    "two_factor": "123456"
+}
+</code></pre>
+<h3 id="response-if-provided-two_factor-code-is-correct">Response if provided two_factor code is correct</h3>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h3 id="response-if-provided-two_factor-code-is-incorrect">Response if provided two_factor code is incorrect</h3>
+<pre><code>Status: 401 Unauthorized
+</code></pre>
+<h3 id="response-if-the-user-hasnt-login-yet">Response if the user hasn’t login yet</h3>
+<pre><code>Status: 401 Unauthorized
+</code></pre>
+<h3 id="response-if-the-user-doesnt-have-2fa-enabled">Response if the user doesn’t have 2FA enabled</h3>
+<pre><code>Status 404 Not Found
+</code></pre>
+<h2 id="login-with-oauth2">Login with OAuth2</h2>
+<h3 id="overview">Overview</h3>
+<p>A Mist account can be <em>linked</em> to OAuth2 providers:</p>
+<ol>
+<li>First, login with your Mist account</li>
+<li><a href="https://api.mist.com/api/v1/docs/Auth#obtain-the-authorization-url">Obtain the Authorization URL for Linking</a></li>
+<li>Obtain the authorizaiton code by clicking / going through Authorization URL</li>
+<li>Link Mist Account against OAuth2 Provider by using the authorization code</li>
+</ol>
+<h2 id="obtain-authorization-url-for-linking">Obtain Authorization URL for Linking</h2>
+<pre><code>GET /api/v1/self/oauth/:provider
+GET /api/v1/self/oauth/:provider?forward=http://manage.mist.com/oauth/callback.html
+</code></pre>
+<h3 id="response_1">Response</h3>
+<pre><code>{
+    "linked": false,
+    "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?....."
+}
+</code></pre>
+<h2 id="obtain-authorization-code">Obtain Authorization Code</h2>
+<p>As OAuth2 flow goes through provider’s UI and back with the authorization code, there are two ways to get it
+1. in JSON response, more usable for developers. Simply don’t specify the <code>forward</code> parameter when obtaining the authorization URL
+2. as GET parameter, for UI where the user flow can be continued. Specify the landing page/url of your choice</p>
+<h3 id="response-as-json-payload">Response as JSON payload</h3>
+<pre><code>{
+    "code": "4/S9tegDeLkrYg0L9pWNXV4cgMVbbr3SR9t693A2kSHzw"
+}
+</code></pre>
+<h3 id="response-if-forward-is-provided">Response if forward is provided</h3>
+<pre><code>HTTP/1.1 302 Found
+Location: https://forwarded.host/path?code=:code
+</code></pre>
+<h2 id="link-mist-account-with-an-oauth2-provider">Link Mist account with an OAuth2 Provider</h2>
+<pre><code>POST /api/v1/self/oauth/:provider
+</code></pre>
+<h3 id="request_1">Request</h3>
+<pre><code>{
+    "code": "4/S9tegDeLkrYg0L9pWNXV4cgMVbbr3SR9t693A2kSHzw"
+}
+</code></pre>
+<h3 id="response-if-ok">Response if OK</h3>
+<pre><code>Status: 200 OK
+
+{
+    "action": "oauth account linked",
+    "id": "google-user-id"
+}
+</code></pre>
+<h3 id="response-if-authorization-error">Response if Authorization Error</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "error": "access_denied",
+    "error_description": "The resource owner or authorization server denied the request."
+}
+</code></pre>
+<h2 id="obtain-authorization-url-for-login">Obtain Authorization URL for Login</h2>
+<pre><code>GET /api/v1/login/oauth/:provider
+GET /api/v1/login/oauth/:provider?forward=http://manage.mist.com/oauth/callback.html
+</code></pre>
+<h3 id="response_2">Response</h3>
+<pre><code>{
+    "client_id": "173131512-mpbnju32.apps.googleusercontent.com",
+    "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?....."
+}
+</code></pre>
+<h2 id="login-via-oauth2">Login via OAuth2</h2>
+<pre><code>POST /api/v1/login/oauth/:provider
+</code></pre>
+<h3 id="request_2">Request</h3>
+<pre><code>{
+    "code": "4/S9tegDeLkrYg0L9pWNXV4cgMVbbr3SR9t693A2kSHzw"
+}
+</code></pre>
+<h2 id="unlink-oauth2-provider">Unlink OAuth2 Provider</h2>
+<pre><code>DELETE /api/v1/self/oauth/:provider
+</code></pre>
+<h2 id="see-linked-oauth2-provider">See Linked OAuth2 Provider</h2>
+<pre><code>GET /api/v1/self
+</code></pre>
+<h3 id="response_3">Response</h3>
+<pre><code>{
+    // ... whatever is in /api/v1/self
+
+    "oauth_google": true
+}
+</code></pre>
+<h2 id="basic-auth">Basic Auth</h2>
+<p>While our current UI uses Session / Cookie-based authentication, it’s also possible to do Basic Auth.</p>
+<h1 id="api-token">API Token</h1>
+<p>Like many other API providers, it’s also possible to generate API Tokens to be used (in HTTP Header) for authentication. An API token ties to a Admin with equal or less privileges.</p>
+<p>Notes:</p>
+<ol>
+<li>an API token generated for a specific admin has the same privilege as the user</li>
+<li>an API token will be automatically removed if not used for &gt; 90 days</li>
+</ol>
+<p>SSO admins cannot generate these API tokens. Refer Org level API tokens (/api/v1/docs/Org#api-token) which can have privileges of a specific Org/Site for more information.</p>
+<h2 id="create-api-token">Create API Token</h2>
+<p>Note that the key is only available during creation time.</p>
+<pre><code>POST /api/v1/self/apitokens
+</code></pre>
+<h3 id="response_4">Response</h3>
+<pre><code>{
+    "id": "7cc917df-630a-1508-1889-e18028052dde",
+    "key": "MEaT4pEYG9hgHSUzddRUlT0TDRp3quf"
+}
+</code></pre>
+<h2 id="use-api-token">Use API Token</h2>
+<p>To use API token, add a Authorization header when making an API request like the following:</p>
+<pre><code>Authorization: Token &lt;key&gt;
+
+GET /api/v1/self
+</code></pre>
+<h2 id="list-current-api-tokens">List Current API Tokens</h2>
+<pre><code>GET /api/v1/self/apitokens
+</code></pre>
+<h3 id="response_5">Response</h3>
+<pre><code>[
+    {
+        "id": "7cc917df-630a-1508-1889-e18028052dde",
+        "key": "MEaT...3quf"
+    }
+]
+</code></pre>
+<h2 id="delete-an-api-token">Delete an API Token</h2>
+<pre><code>DELETE /api/v1/self/apitokens/:apitoken_id
+</code></pre>
+<h2 id="change-admin-information-password-and-enabledisable-two-factor-auth">Change Admin information, password, and enable/disable two-factor auth</h2>
+<pre><code>PUT /api/v1/self
+</code></pre>
+<h3 id="request_3">Request</h3>
+<pre><code>{
+    "password": "foryoureyesonly",
+    "first_name": "John",
+    "last_name": "Smith",
+    "phone": "14081112222",
+    "phone2": "14083334444",
+    "persona": "security",
+    "enable_two_factor": true
+}
+</code></pre>
+<h3 id="meanings">Meanings</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>password</code></td>
+<td><code>string</code></td>
+<td>new password</td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td><code>string</code></td>
+<td>first name of logged-in user</td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td><code>string</code></td>
+<td>last name of logged-in user</td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td><code>string</code></td>
+<td>phone number (numbers only, including country code)</td>
+</tr>
+<tr>
+<td><code>phone2</code></td>
+<td><code>string</code></td>
+<td>secondary phone number</td>
+</tr>
+<tr>
+<td><code>enable_two_factor</code></td>
+<td><code>boolean</code></td>
+<td>to enable or disable two-factor authentication</td>
+</tr>
+<tr>
+<td><code>two_factor_verified</code></td>
+<td><code>boolean</code></td>
+<td>if enable_two_factor=true, whether it’s verified.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>enable_two_factor</code>. Note that when two-factor authentication is enabled (from disabled-state),
+  the <code>two_factor_seed</code> is re-generated and <code>two_factor_verified</code> is reset to false.
+  The OTP will need to be verified before it takes effect.</li>
+</ul>
+<h2 id="change-email">Change Email</h2>
+<p>We require the user to verify that they actually own the email address they intend to change it to.</p>
+<pre><code>POST /api/v1/self/update
+</code></pre>
+<h3 id="request_4">Request</h3>
+<pre><code>{
+    "email": "new@mistsys.com"
+}
+</code></pre>
+<h3 id="meanings_1">Meanings</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td>new email address</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-if-ok_1">Response if OK</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<p>After the API call, the user will receive an email to the new email address with a link like https://manage.mist.com/verify/update?expire=:exp_time&amp;email=:admin_email&amp;token=:token</p>
+<p>Upon clicking the link, the user is provided with a login page to authenticate using existing credentials.
+After successful login, the email address of the user gets updated</p>
+<p>Note: The request parameter <code>email</code> can be used by UI to validate that the current session (if any) belongs to the admin or provide a login page (by pre-populating the email on login screen). UI can also use the request parameter <code>expire</code> to validate token expiry.</p>
+<h3 id="response-if-invalid-email-address">Response if invalid email address</h3>
+<pre><code>Status: 400 Bad Request
+</code></pre>
+<h3 id="response-if-new-email-address-already-exists">Response if new email address already exists</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "email already existed"
+}
+</code></pre>
+<h2 id="verify-email-change">Verify Email change</h2>
+<pre><code>POST /api/v1/self/update/verify/:token
+</code></pre>
+<h3 id="response-if-ok_2">Response if OK</h3>
+<p>With correct verification, the email address of the user will be updated</p>
+<pre><code>Status: 200 OK
+</code></pre>
+<h3 id="response-if-invalid-or-expired-token">Response if invalid or expired token</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "invalid token"
+}
+</code></pre>
+<h3 id="response-if-request-comes-from-authenticated-users-other-than-admin">Response if request comes from authenticated users other than admin</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "invalid token"
+}
+</code></pre>
+<h3 id="response-if-new-email-address-already-exists_1">Response if new email address already exists</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "email already existed"
+}
+</code></pre>
+<h2 id="generate-qr-code-for-verification">Generate QR code for verification</h2>
+<pre><code>GET /api/v1/self/two_factor/token?by=qrcode
+</code></pre>
+<h3 id="request-parameters">Request Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>by</code></td>
+<td><code>string</code></td>
+<td>qrcode</td>
+</tr>
+</tbody>
+</table>
+<h2 id="generate-secret-key-for-verification">Generate Secret Key for verification</h2>
+<pre><code>GET /api/v1/self/two_factor/token
+</code></pre>
+<h3 id="response_6">Response</h3>
+<pre><code>{
+    "two_factor_secret": "NRMTSTRWNBVECY3GJVYEY3DDJFRGSNCZGJUDO4RVN5FDM3DUMJSA"
+}
+</code></pre>
+<h2 id="verify-two-factor-otp">Verify Two-factor (OTP)</h2>
+<p>To verify two-factor authentication by using a code generated by app (e.g. Google Authenticator, Authy).
+Upon successful verification, the <code>two_factor_passed</code> will be set to true if it hasn’t already been.</p>
+<pre><code>POST /api/v1/self/two_factor/verify
+</code></pre>
+<h3 id="request_5">Request</h3>
+<pre><code>{
+    "two_factor": "123456"
+}
+</code></pre>
+<h3 id="response-when-2fa-verification-is-successful">Response when 2FA verification is successful</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<h1 id="register">Register</h1>
+<h2 id="register-a-new-admin-and-hisher-org">Register a new admin and his/her org</h2>
+<pre><code>POST /api/v1/register
+</code></pre>
+<h3 id="request_6">Request</h3>
+<pre><code>{
+    "email": "test@mistsys.com",
+    "password": "foryoureyesonly",
+    "first_name": "John",
+    "last_name": "Smith",
+    "org_name": "Smith LLC",
+    "street_address": "1601 S De Anza Blvd Ste 248",
+    "city": "Cupertino",
+    "state": "California",
+    "country": "United States",
+    "zipcode": "95014",
+    "recaptcha": "see https://www.google.com/recaptcha/",
+    "recaptcha_flavor": "hcaptcha",
+    "referer_invite_token": "Dm2gtT8dwMeM4Bc2E8FLIaA96VHOjPat",
+    "return_to": "http://mist.zendesk.com/hc/quickstart.pdf",
+    "account_only": false,
+    "allow_mist": false,
+    "invite_code": "MISTROCKS",
+    "no_tracking": false
+}
+</code></pre>
+<h3 id="parameter_3">Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong> max length is 64</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong></td>
+</tr>
+<tr>
+<td><code>org_name</code></td>
+<td><code>string</code></td>
+<td><strong>Required</strong>, company name of registering user</td>
+</tr>
+<tr>
+<td><code>street_address</code></td>
+<td><code>string</code></td>
+<td><strong>Required</strong>, street address of registering user</td>
+</tr>
+<tr>
+<td><code>street_address_2</code></td>
+<td><code>string</code></td>
+<td>street address 2 of registering user, optional</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td><code>string</code></td>
+<td><strong>Required</strong>, city of registering user</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td><code>string</code></td>
+<td>state name or ISO code of registering user, optional (depends on country/region)</td>
+</tr>
+<tr>
+<td><code>country</code></td>
+<td><code>string</code></td>
+<td><strong>Required</strong>, country/region name or ISO code of registering user</td>
+</tr>
+<tr>
+<td><code>zipcode</code></td>
+<td><code>string</code></td>
+<td><strong>Required</strong>, zipcode of registering user</td>
+</tr>
+<tr>
+<td><code>recaptcha</code></td>
+<td><code>string</code></td>
+<td>reCAPTCHA</td>
+</tr>
+<tr>
+<td><code>recaptcha_flavor</code></td>
+<td><code>string</code></td>
+<td>hcaptcha / google (default). optional, the flavor of captcha</td>
+</tr>
+<tr>
+<td><code>referer_invite_token</code></td>
+<td><code>string</code></td>
+<td>optional, the invite token to apply after account creation</td>
+</tr>
+<tr>
+<td><code>return_to</code></td>
+<td><code>string</code></td>
+<td>optional, the url the user should be redirected back to</td>
+</tr>
+<tr>
+<td><code>account_only</code></td>
+<td><code>boolean</code></td>
+<td>skip creating initial setup if true, default is false</td>
+</tr>
+<tr>
+<td><code>allow_mist</code></td>
+<td><code>boolean</code></td>
+<td>whether to allow Mist to look at this org, default is False</td>
+</tr>
+<tr>
+<td><code>invite_code</code></td>
+<td><code>string</code></td>
+<td>required initially</td>
+</tr>
+<tr>
+<td><code>no_tracking</code></td>
+<td><code>boolean</code></td>
+<td>optional, whether to store privacy-consent information, default is null</td>
+</tr>
+</tbody>
+</table>
+<h3 id="recaptcha">reCAPTCHA</h3>
+<p>Google reCAPTCHA is the choice to prevent bot registration</p>
+<pre><code>It needs this script
+&lt;script src='https://www.google.com/recaptcha/api.js'&gt;&lt;/script&gt;
+and this &lt;div&gt; in the desired place
+&lt;div class="g-recaptcha" data-sitekey="6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"&gt;&lt;/div&gt;
+
+use GET /api/v1/register/recaptcha to
+{
+    "flavor": "google",
+    "required": true,
+    "sitekey": "6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"
+}
+</code></pre>
+<h3 id="hcaptcha">hCaptcha</h3>
+<p>Alternative to reCAPTCHA is hCaptcha to prevent bot registration</p>
+<pre><code>It needs this script
+&lt;script src="https://js.hcaptcha.com/1/api.js" async defer&gt;&lt;/script&gt;
+and this &lt;div&gt; in the desired place
+&lt;div class="h-recaptcha" data-sitekey="6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"&gt;&lt;/div&gt;
+
+use GET /api/v1/register/recaptcha?recaptcha_flavor=hcaptcha to read the current setting for hcaptcha
+with reply : 
+{
+    "flavor": "hcaptcha",
+    "required": true,
+    "sitekey": "6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"
+}
+</code></pre>
+<h3 id="response-if-registration-is-successful">Response if registration is successful</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<p>An email will also be sent to the user with a link to https://manage.mist.com/verify/register?token=:token</p>
+<h2 id="verify-registration">Verify registration</h2>
+<pre><code>POST /api/v1/register/verify/:token
+</code></pre>
+<h3 id="response-if-successful">Response if successful</h3>
+<p>With correct verification, the admin account will be created and the authenticated</p>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+
+{
+    // optionally, the URL stored in the registration flow is remembered
+    "return_to": "http://mist.zendesk.com/hc/quickstart.pdf"
+}
+</code></pre>
+<h3 id="response-if-successful-but-failed-to-apply-the-invitation-automatically">Response if successful but failed to apply the invitation automatically</h3>
+<p>With correct verification, the admin account will be created and the authenticated</p>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+
+{
+    "invite_not_applied": true,
+
+    // same information
+    "detail":"password policy not met",
+    "min_length": 8
+}
+</code></pre>
+<h3 id="response-if-secret-is-invalid">Response if secret is invalid</h3>
+<pre><code>Status: 404 Not Found
+
+{
+    "detail": "Not found."
+}
+</code></pre>
+<h3 id="response-if-verification-expired">Response if verification expired</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "expired"
+}
+</code></pre>
+<h3 id="response-if-already-registered">Response if already registered</h3>
+<pre><code>Status: 400 Bad Request
+
+{
+    "detail": "already registered"
+}
+</code></pre>
+<h2 id="recover-password">Recover Password</h2>
+<pre><code>POST /api/v1/recover
+</code></pre>
+<h3 id="request_7">Request</h3>
+<pre><code>{
+    "email": "test@mistsys.com",
+    "recaptcha": "see https://www.google.com/recaptcha/",
+    "recaptcha_flavor": "hcaptcha"  
+}
+</code></pre>
+<h3 id="parameter_4">Parameter</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td><strong>Required.</strong> max length is 64</td>
+</tr>
+<tr>
+<td><code>recaptcha</code></td>
+<td><code>string</code></td>
+<td>reCAPTCHA</td>
+</tr>
+<tr>
+<td><code>recaptcha_flavor</code></td>
+<td><code>string</code></td>
+<td>hcaptcha / google (default). optional, the flavor of captcha</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_7">Response</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<p>An email will also be sent to the user with a link to https://manage.mist.com/verify/recover?token=:token</p>
+<h2 id="verify-recover-password">Verify Recover Password</h2>
+<pre><code>POST /api/v1/recover/verify/:token
+</code></pre>
+<h3 id="response_8">Response</h3>
+<p>With correct verification, the user will be authenticated. UI can then prompt for new password</p>
+<pre><code>Status: 200 OK
+Set-Cookie: csrftoken=vwvBuq9qkqaKh7lu8tNc0gkvBfEaLAmx; expires=Tue, 15-Mar-2016 19:47:20 GMT; Max-Age=31449600; Path=/
+</code></pre>
+<h1 id="leave">Leave</h1>
+<p>To delete ones account and every associated with it. The effects:</p>
+<ol>
+<li>the account would be deleted</li>
+<li>any orphaned Org (that only has this account as admin) will be deleted</li>
+<li>along with all data with Org (sites, wlans, devices) will be gone.</li>
+</ol>
+<h2 id="delete-account">Delete Account</h2>
+<pre><code>DELETE /api/v1/self
+</code></pre>
+<h3 id="response_9">Response</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<h3 id="response-if-any-of-the-org-to-be-deleted-still-has-inventory">Response if any of the org to be deleted still has inventory</h3>
+<pre><code>Status: 400 Bad Request
+
+{ 
+    "detail": "inventory not empty"
+    "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71"
+}
+</code></pre>
+<h1 id="audit-logs">Audit Logs</h1>
+<p>Audit logs records all administrative activities done by current admin across all orgs</p>
+<h2 id="get-a-list-of-change-logs-across-all-orgs-for-current-admin">Get a list of change logs across all Orgs for current admin</h2>
+<pre><code>GET /api/v1/self/logs?start=1431384000&amp;end=1431298000
+</code></pre>
+<h3 id="response_10">Response</h3>
+<pre><code>{
+    "start": 1428939600,
+    "end":   1428954000,
+    "limit": 100,
+    "page": 1,
+
+    "total": 135,
+    "results": [
+        {
+            "timestamp": 1431382121,
+            "site_id": "4ac1dcf4-9d8b-7211-65c4-057819f0862b",
+            "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71",
+            "admin_id": "72bfa2bd-e58a-4670-9d20-a1468f7a6f58",
+            "admin_name": "test@mistsys.com",
+            "message": "Update WLAN \"Corporate\"",
+            "id": "c6f9347b-b0a4-4a23-b927-fa9249f2ffb2",
+            "before": {
+                "auth": {
+                    "type": "psk"
+                }
+            },
+            "after": {
+                "auth": {
+                    "type": "open"
+                }
+            }
+        }
+    ]
+}
+</code></pre>
+<h3 id="response-definitions">Response Definitions</h3>
+<p>see <a href="https://api.mist.com/api/v1/docs/Overview#pagination">Pagination</a></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timestamp</code></td>
+<td><code>long</code></td>
+<td>start time, in epoch</td>
+</tr>
+<tr>
+<td><code>site_id</code></td>
+<td><code>string</code></td>
+<td>site id</td>
+</tr>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>org id</td>
+</tr>
+<tr>
+<td><code>msp_id</code></td>
+<td><code>string</code></td>
+<td>msp id</td>
+</tr>
+<tr>
+<td><code>admin_id</code></td>
+<td><code>string</code></td>
+<td>admin id</td>
+</tr>
+<tr>
+<td><code>admin_name</code></td>
+<td><code>string</code></td>
+<td>name of the admin that performs the action</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>string</code></td>
+<td>log message</td>
+</tr>
+<tr>
+<td><code>before</code></td>
+<td><code>object</code></td>
+<td>field values prior to the change</td>
+</tr>
+<tr>
+<td><code>after</code></td>
+<td><code>object</code></td>
+<td>field values after the change</td>
+</tr>
+</tbody>
+</table>
+<h2 id="get-a-list-of-failed-login-attempts-across-all-orgs-for-the-current-admin">Get a list of failed login attempts across all Orgs for the current admin</h2>
+<pre><code>GET /api/v1/self/login_failures
+</code></pre>
+<h3 id="response_11">Response</h3>
+<pre><code class="language-json">{
+    "num_attempts": 40,
+    "email": "admin@test.com",
+    "last_failure_at": 1509161968,
+    "src_ips": [
+        "192.168.1.39",
+        "192.168.1.38",
+        "192.168.1.37",
+        ...
+    ],
+    "user_agents": [
+        "Test UA 39",
+        "Test UA 38",
+        "Test UA 37",
+        ...
+    ]
+}
+</code></pre>
+<h3 id="response-definitions_1">Response Definitions</h3>
+<p>see <a href="https://api.mist.com/api/v1/docs/Overview#pagination">Pagination</a></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>last_failure_at</code></td>
+<td><code>long</code></td>
+<td>Epoch timestamp (in seconds) of the most recent failed login attempt.</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td>admin email</td>
+</tr>
+<tr>
+<td><code>num_attempts</code></td>
+<td><code>integer</code></td>
+<td>Number of failed attempts</td>
+</tr>
+<tr>
+<td><code>src_ip</code></td>
+<td><code>list</code></td>
+<td>List of up to 32 unique source IP addresses, ordered with the most recent first.</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td><code>list</code></td>
+<td>List of up to 32 unique User-Agent strings, ordered with the most recent first.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="get-api-usage">Get API Usage</h2>
+<pre><code>GET /api/v1/self/usage
+</code></pre>
+<h3 id="response_12">Response</h3>
+<pre><code>{
+    "requests": 15,  # num of request made in the current hour
+    "request_limit": 5000,  # max number of request permitted
+}
+</code></pre>
+<h1 id="integration">Integration</h1>
+<h2 id="get-zendesk-access-url">Get Zendesk Access URL</h2>
+<p>Basically,
+1. user tries to access https://mist.zendesk.com/videos/quickstart.html
+2. zendesk detects that the user is not authenticated, redirect the user to a URL we specified with return_to=<original url="">
+3. after we authenticate the user, redirect the user back to https://mist.zendesk.com/access/jwt?jwt=<payload>&amp;return_to=<original_url></original_url></payload></original></p>
+<p>for 3, the URL can be generated by calling this API</p>
+<pre><code>GET /api/v1/self/sso/zendesk?return_to=&lt;original url&gt;
+</code></pre>
+<h3 id="request-parameters_1">Request Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>return_to</code></td>
+<td><code>string</code></td>
+<td>the URL the user intended to go</td>
+</tr>
+<tr>
+<td>### Response</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<pre><code>{
+    "url": "https://mist.zendesk.com/access/jwt?jwt=eyJhbGciO...&amp;return=&lt;original_url&gt;"
+}
+</code></pre>
+<h2 id="get-uservoice-access-url">Get UserVoice Access URL</h2>
+<p>Uservoice works similar to Zendesk. UI needs to
+1. handle <code>/uservoice/sso_login?return_to=%s</code>, allow the user to login, then call this API and forward the user to it
+2. for a login user, call this API to get a link to launch UserVoice</p>
+<pre><code>GET /api/v1/self/sso/uservoice?return_to=&lt;original url&gt;
+</code></pre>
+<h3 id="request-parameters_2">Request Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>return_to</code></td>
+<td><code>string</code></td>
+<td>the URL the user intended to go</td>
+</tr>
+<tr>
+<td>### Response</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<pre><code>{
+    "url": "http://ideas.mist.com/forums/912934-feature-requests?sso=eyJhbGciO..."
+}
+</code></pre>
+<h2 id="get-talentlms-access-url">Get TalentLMS Access URL</h2>
+<p>TalentLMS works similar to Zendesk. UI needs to
+1. handle <code>/talentlms/sso_login?return_to=%s</code>, allow the user to login, then call this API and forward the user to it
+2. for a login user, call this API to get a link to launch TalentLMS</p>
+<pre><code>GET /api/v1/self/sso/talentlms?return_to=&lt;original url&gt;
+</code></pre>
+<h3 id="request-parameters_3">Request Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>return_to</code></td>
+<td><code>string</code></td>
+<td>the URL the user intended to go</td>
+</tr>
+<tr>
+<td>### Response</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<pre><code>{
+    "url": "https://mist.talentlms.com/index/autologin/key:atwnztuy4ui2nmcs1531039"
+}
+</code></pre>
+<h1 id="misc">Misc</h1>
+<h2 id="get-registration-information">Get Registration Information</h2>
+<pre><code>GET /api/v1/register/recaptcha
+</code></pre>
+<h3 id="response_13">Response</h3>
+<pre><code>{
+    "flavor": "google",  // google | hcaptcha
+    "required": true,
+    "sitekey": "6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"
+}
+</code></pre>
+<h2 id="get-alternative-registration-information">Get Alternative Registration Information</h2>
+<pre><code>GET /api/v1/register/recaptcha?recaptcha_flavor=hcaptcha
+</code></pre>
+<h3 id="response_14">Response</h3>
+<pre><code>{
+    "flavor": "hcaptcha",
+    "required": true,
+    "sitekey": "6LdAewsTAAAAAE25XKQhPEQ2FiMTft-WrZXQ5NUd"
+}
+</code></pre>
+<h2 id="claim-cmx-orgs">Claim CMX Orgs</h2>
+<p>For CMX customers, this API allow them to access the CMX Tenant via their Mist account.</p>
+<pre><code>POST /api/v1/self/claim_cmx
+</code></pre>
+<h3 id="request_8">Request</h3>
+<pre><code>{
+    "username": "cmxuser1@abc.com",
+    "password": "password"
+}
+</code></pre>
+<h3 id="request-parameters_4">Request Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>username</code></td>
+<td><code>string</code></td>
+<td>CMX username</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td><code>string</code></td>
+<td>CMX password</td>
+</tr>
+</tbody>
+</table>
+
+
+
+</body></html>
