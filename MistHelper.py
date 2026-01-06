@@ -31338,35 +31338,53 @@ class MapsManager:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
                     return no_update, updated_refresh_times
                 
-                # Build new heatmap data
-                coverage_x = []
-                coverage_y = []
-                coverage_rssi = []
+                # Build grid data for Heatmap (requires 2D z-matrix, not flat array)
+                grid_data = {}  # (x_meters, y_meters) -> rssi
                 
                 for point in results:
                     x_meters = point[x_idx] if x_idx < len(point) else 0
                     y_meters = point[y_idx] if y_idx < len(point) else 0
                     rssi_val = point[rssi_idx] if rssi_idx >= 0 and rssi_idx < len(point) else -100
-                    
-                    # Convert to pixels using PPM
-                    x_px = x_meters * ppm_local
-                    y_px = y_meters * ppm_local
-                    
-                    coverage_x.append(x_px)
-                    coverage_y.append(y_px)
-                    coverage_rssi.append(rssi_val)
+                    grid_data[(x_meters, y_meters)] = rssi_val
                 
-                # Update the RF coverage trace
+                if not grid_data:
+                    logging.info("Live data refresh: No coverage grid data to visualize")
+                    return no_update, updated_refresh_times
+                
+                # Get unique sorted x and y values (in meters, then convert to pixels)
+                unique_x_m = sorted(set(k[0] for k in grid_data.keys()))
+                unique_y_m = sorted(set(k[1] for k in grid_data.keys()))
+                
+                # Convert to pixel coordinates for Heatmap
+                unique_x = [x_m * ppm_local for x_m in unique_x_m]
+                unique_y = [y_m * ppm_local for y_m in unique_y_m]
+                
+                # Build z-matrix for Heatmap (rows=y, cols=x)
+                z_matrix = []
+                for y_m in unique_y_m:
+                    row = []
+                    for x_m in unique_x_m:
+                        rssi = grid_data.get((x_m, y_m), None)
+                        row.append(rssi)
+                    z_matrix.append(row)
+                
+                # Get min/max for color scale
+                all_rssi = [v for v in grid_data.values() if v is not None]
+                min_rssi = min(all_rssi) if all_rssi else -100
+                max_rssi = max(all_rssi) if all_rssi else -30
+                
+                # Update the RF coverage trace (Heatmap uses x, y, z - not marker)
                 for trace in current_fig['data']:
                     trace_name = trace.get('name', '').lower()
                     
                     if 'rf coverage' in trace_name:
-                        trace['x'] = coverage_x
-                        trace['y'] = coverage_y
-                        # Update marker color based on RSSI
-                        trace['marker']['color'] = coverage_rssi
+                        trace['x'] = unique_x
+                        trace['y'] = unique_y
+                        trace['z'] = z_matrix
+                        trace['zmin'] = min_rssi
+                        trace['zmax'] = max_rssi
                         trace['visible'] = 'rf_heatmap' in (layer_values or [])
-                        logging.debug(f"Live data refresh: Updated RF coverage with {len(coverage_x)} points")
+                        logging.debug(f"Live data refresh: Updated RF coverage heatmap with {len(grid_data)} cells")
                         break
                 
                 timestamp = datetime.now().strftime('%H:%M:%S')
