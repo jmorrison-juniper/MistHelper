@@ -28141,7 +28141,8 @@ class MapsManager:
         threading.Thread(target=open_browser, daemon=True).start()
         
         try:
-            app.run(debug=False, port=8050, host='127.0.0.1')
+            # Use 0.0.0.0 to allow access from outside containers
+            app.run(debug=False, port=8050, host='0.0.0.0')
         except KeyboardInterrupt:
             print("\n\nMap viewer stopped by user")
             logging.info("Interactive map viewer stopped by user (Ctrl+C)")
