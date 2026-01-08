@@ -24564,20 +24564,71 @@ class MapsManager:
         self.current_site_name = None
         logging.info(f"MapsManager initialized for organization: {self.org_id}")
     
+    def _fetch_sites(self):
+        """Fetch all sites using instance API session (not global)"""
+        try:
+            resp = mistapi.api.v1.orgs.sites.listOrgSites(
+                self.apisession, 
+                self.org_id, 
+                limit=DEFAULT_API_PAGE_LIMIT
+            )
+            return mistapi.get_all(response=resp, mist_session=self.apisession)
+        except Exception as e:
+            logging.error(f"MapsManager._fetch_sites error: {e}")
+            return []
+    
     def select_site(self):
         """Prompt user to select a site and cache the selection"""
-        site_id = prompt_site_selection()
-        if site_id:
-            # Get site name for display
-            sites = fetch_all_sites_with_limit(self.org_id)
-            site_name = next((s.get('name', 'Unknown') for s in sites if s['id'] == site_id), 'Unknown')
+        # Use instance method to fetch sites (works in standalone mode)
+        sites = self._fetch_sites()
+        if not sites:
+            print("\n! No sites found in organization")
+            return False
+        
+        # Sort sites by name for easier selection
+        sites_sorted = sorted(sites, key=lambda x: x.get('name', '').lower())
+        
+        print("\nAvailable Sites:")
+        print("-" * 60)
+        for idx, site in enumerate(sites_sorted):
+            print(f"  [{idx}] {site.get('name', 'Unnamed')}")
+        print("-" * 60)
+        
+        try:
+            selection = input("Enter site index or name: ").strip()
+            
+            # Try as index first
+            try:
+                site_idx = int(selection)
+                if 0 <= site_idx < len(sites_sorted):
+                    selected_site = sites_sorted[site_idx]
+                    site_id = selected_site.get('id')
+                    site_name = selected_site.get('name', 'Unknown')
+                else:
+                    print("\n! Invalid index")
+                    return False
+            except ValueError:
+                # Try as name match
+                matches = [s for s in sites_sorted if selection.lower() in s.get('name', '').lower()]
+                if len(matches) == 1:
+                    selected_site = matches[0]
+                    site_id = selected_site.get('id')
+                    site_name = selected_site.get('name', 'Unknown')
+                elif len(matches) > 1:
+                    print(f"\n! Multiple matches found ({len(matches)}). Please be more specific.")
+                    return False
+                else:
+                    print("\n! No matching site found")
+                    return False
+            
             self.current_site_id = site_id
             self.current_site_name = site_name
             print(f"\n   Site selected: {site_name}")
             logging.info(f"MapsManager site selection: {site_name} ({site_id})")
             return True
-        else:
-            print("\n! No site selected")
+            
+        except EOFError:
+            logging.info("EOF detected during site selection")
             return False
     
     def get_current_site(self):
