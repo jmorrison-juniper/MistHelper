@@ -99,6 +99,8 @@ ENV DISABLE_UV_CHECK=true
 ENV DISABLE_AUTO_INSTALL=true
 ENV AUTO_UPGRADE_UV=false
 ENV AUTO_UPGRADE_DEPENDENCIES=false
+# Dash web viewer port (must match EXPOSE)
+ENV DASH_PORT=8050
 
 # Volume for data persistence
 VOLUME ["/app/data"]

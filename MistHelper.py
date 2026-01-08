@@ -31398,13 +31398,13 @@ class MapsManager:
         
         # Determine host binding - use 0.0.0.0 in containers for external access
         dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'
-        # Use port 8055 by default to avoid conflict with WSL port forwarding on 8050
-        dash_port = int(os.getenv('DASH_PORT', '8055'))
+        # Use port 8050 by default (matches container EXPOSE and compose.yml)
+        dash_port = int(os.getenv('DASH_PORT', '8050'))
         
         print("\nStarting Dash server...")
         if is_running_in_container():
             print(f"! Map viewer available at http://<container-ip>:{dash_port}")
-            print("! Access from host: http://localhost:8055 (if port is mapped)")
+            print(f"! Access from host: http://localhost:{dash_port} (if port is mapped)")
         else:
             print("! Map viewer will open in your default browser")
         print("! Press Ctrl+C to stop the server\n")

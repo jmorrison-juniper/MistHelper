@@ -509,6 +509,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.08.15.32",
+      "date": "2026-01-08",
+      "changes": {
+        "bug_fixes": [
+          "Container: Fixed Dash Maps Manager port mismatch - changed default from 8055 to 8050 to match EXPOSE and compose.yml"
+        ],
+        "compatibility": [
+          "Container: Added DASH_PORT=8050 environment variable to Containerfile and compose.yml"
+        ]
+      }
+    },
+    {
       "version": "25.12.22.20.30",
       "date": "2025-12-22",
       "changes": {
