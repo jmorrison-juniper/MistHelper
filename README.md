@@ -550,6 +550,36 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.09.18.45",
+      "date": "2026-01-09",
+      "changes": {
+        "refactoring": [
+          "Maps Manager: Extracted complete MapsManager class (~7,500 lines) to standalone maps_manager.py",
+          "maps_manager.py: Now self-contained with all dependencies - no longer imports from MistHelper.py",
+          "Menu 112: Updated to import MapsManager from external module with graceful error handling"
+        ],
+        "feature_additions": [
+          "maps_manager.py: Standalone CLI with --menu and --org flags for independent execution"
+        ]
+      }
+    },
+    {
+      "version": "26.01.09.17.30",
+      "date": "2026-01-09",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Added site selection dropdown to interactive map viewer header",
+          "Maps Manager: Real-time site switching without restarting viewer - automatically fetches maps for new site",
+          "maps_manager.py: Added --list-sites option to display all available sites with IDs",
+          "Maps Manager: Site dropdown is searchable for easy filtering in large organizations"
+        ],
+        "refactoring": [
+          "Maps Manager: Extended _launch_plotly_viewer signature to include site info and sites list",
+          "Maps Manager: Added site-related URL parameter handling for bookmarkable site/map combinations"
+        ]
+      }
+    },
+    {
       "version": "25.01.09.19.00",
       "date": "2025-01-09",
       "changes": {

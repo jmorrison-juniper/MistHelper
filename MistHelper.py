@@ -27459,9 +27459,14 @@ class MapsManager:
                 logging.error(f"Error fetching RF coverage data: {coverage_error}", exc_info=True)
                 coverage_data = None
             
+            # Fetch all sites for site selector dropdown in the viewer
+            print("Loading organization sites...")
+            all_sites = self._fetch_sites()
+            logging.info(f"Fetched {len(all_sites)} sites for site selector dropdown")
+            
             if use_plotly:
                 logging.info(f"Launching Plotly/Dash viewer for map {map_name}")
-                self._launch_plotly_viewer(map_data, devices_on_map, zones_on_map, clients_on_map, site_id, map_id, coverage_data, all_maps)
+                self._launch_plotly_viewer(map_data, devices_on_map, zones_on_map, clients_on_map, site_id, site_name, map_id, coverage_data, all_maps, all_sites)
             else:
                 logging.info(f"Launching matplotlib fallback viewer for map {map_name}")
                 self._launch_matplotlib_viewer(map_data, devices_on_map)
@@ -27473,11 +27478,12 @@ class MapsManager:
             logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
             print(f"\n! Error launching map viewer: {e}")
     
-    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, map_id, coverage_data=None, all_maps=None):
+    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, site_name, map_id, coverage_data=None, all_maps=None, all_sites=None):
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap"""
         coverage_count = len(coverage_data.get('results', [])) if coverage_data else 0
         all_maps = all_maps or []
-        logging.info(f"_launch_plotly_viewer called - map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, clients: {len(clients)}, coverage: {coverage_count}, available_maps: {len(all_maps)}")
+        all_sites = all_sites or []
+        logging.info(f"_launch_plotly_viewer called - site: {site_name} ({site_id}), map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, clients: {len(clients)}, coverage: {coverage_count}, available_maps: {len(all_maps)}, available_sites: {len(all_sites)}")
         import plotly.graph_objects as go
         from math import cos, sin, radians
         import webbrowser
@@ -28619,10 +28625,28 @@ class MapsManager:
         # Build map dropdown options for switching between maps
         map_dropdown_options = [{'label': m.get('name', 'Unnamed'), 'value': m.get('id')} for m in all_maps]
         
+        # Build site dropdown options for switching between sites (sorted by name)
+        sites_sorted = sorted(all_sites, key=lambda x: x.get('name', '').lower())
+        site_dropdown_options = [{'label': s.get('name', 'Unnamed Site'), 'value': s.get('id')} for s in sites_sorted]
+        
         # Create responsive Dash layout with dark theme
         app.layout = html.Div([
             # Header with title and utilities buttons
             html.Div([
+                # Site selector dropdown
+                html.Div([
+                    html.Span("Site: ", style={'fontSize': '14px', 'color': '#888', 'marginRight': '5px'}),
+                    dcc.Dropdown(
+                        id='site-selector-dropdown',
+                        options=site_dropdown_options,
+                        value=site_id,
+                        clearable=False,
+                        searchable=True,
+                        style={'width': '250px', 'display': 'inline-block', 'verticalAlign': 'middle'},
+                        className='dark-dropdown'
+                    ),
+                ], style={'display': 'inline-block', 'marginRight': '20px', 'verticalAlign': 'middle'}),
+                # Map selector dropdown
                 html.Div([
                     html.Span("Map: ", style={'fontSize': '14px', 'color': '#888', 'marginRight': '5px'}),
                     dcc.Dropdown(
@@ -29010,6 +29034,7 @@ class MapsManager:
             # Hidden stores for state management
             dcc.Store(id='map-config-store', data={
                 'site_id': site_id,
+                'site_name': site_name,
                 'map_id': map_id,
                 'map_name': map_data.get('name', 'Unknown'),
                 'ppm': ppm,
@@ -29018,6 +29043,8 @@ class MapsManager:
             }),
             # Store for available maps list (for dropdown)
             dcc.Store(id='available-maps-store', data=[{'id': m.get('id'), 'name': m.get('name', 'Unnamed')} for m in all_maps]),
+            # Store for available sites list (for dropdown)
+            dcc.Store(id='available-sites-store', data=[{'id': s.get('id'), 'name': s.get('name', 'Unnamed Site')} for s in all_sites]),
             # Store for tracking selected zone ID
             dcc.Store(id='selected-zone-store', data={'zone_id': None, 'zone_name': None}),
             # Store for tracking last refresh times
@@ -29070,9 +29097,14 @@ class MapsManager:
                     return window.dash_clientside.no_update;
                 }
                 
-                // Redirect to URL with map_id parameter - this will trigger full page reload
+                // Redirect to URL with map_id parameter (preserve site_id if present)
+                var site_id = urlParams.get('site_id') || (config ? config.site_id : null);
+                var new_url = '/?map_id=' + selected_map_id;
+                if (site_id) {
+                    new_url += '&site_id=' + site_id;
+                }
                 console.log('Map switch: redirecting to map_id=' + selected_map_id);
-                window.location.href = '/?map_id=' + selected_map_id;
+                window.location.href = new_url;
                 return '';
             }
             """,
@@ -29110,6 +29142,272 @@ class MapsManager:
             [Input('cache-bust-store', 'data')],
             prevent_initial_call=True
         )
+        
+        # Store reference to API session and org_id for site switching callbacks
+        api_session_for_site_switch = self.apisession
+        org_id_for_site_switch = self.org_id
+        
+        # Server-side callback to handle site switching from dropdown selection
+        # This fetches new site data without requiring a page reload
+        @app.callback(
+            [Output('map-selector-dropdown', 'options'),
+             Output('map-selector-dropdown', 'value', allow_duplicate=True),
+             Output('available-maps-store', 'data', allow_duplicate=True),
+             Output('map-config-store', 'data', allow_duplicate=True),
+             Output('map-display', 'figure', allow_duplicate=True)],
+            [Input('site-selector-dropdown', 'value')],
+            [State('map-config-store', 'data'),
+             State('available-sites-store', 'data'),
+             State('map-display', 'figure')],
+            prevent_initial_call=True
+        )
+        def handle_site_switch_from_dropdown(selected_site_id, config, available_sites, current_fig):
+            """Handle site switching when user selects a new site from dropdown - no page reload needed"""
+            # EXTENSIVE DEBUGGING
+            print(f"\n{'='*60}")
+            print(f"[DEBUG] handle_site_switch_from_dropdown TRIGGERED")
+            print(f"[DEBUG] selected_site_id: {selected_site_id}")
+            print(f"[DEBUG] config: {config}")
+            print(f"[DEBUG] available_sites count: {len(available_sites) if available_sites else 0}")
+            print(f"{'='*60}\n")
+            logging.info(f"[SITE-SWITCH] Callback triggered with site_id={selected_site_id}")
+            
+            if not selected_site_id:
+                print("[DEBUG] No selected_site_id, returning no_update")
+                logging.warning("[SITE-SWITCH] No selected_site_id provided")
+                return no_update, no_update, no_update, no_update, no_update
+            
+            current_site_id = config.get('site_id') if config else None
+            print(f"[DEBUG] current_site_id from config: {current_site_id}")
+            
+            # If same site selected, no update needed
+            if selected_site_id == current_site_id:
+                print(f"[DEBUG] Same site selected ({selected_site_id}), returning no_update")
+                logging.debug(f"[SITE-SWITCH] Same site selected ({selected_site_id}), no update needed")
+                return no_update, no_update, no_update, no_update, no_update
+            
+            # Get site name from available sites
+            site_name = next((s.get('name', 'Unknown') for s in available_sites if s.get('id') == selected_site_id), 'Unknown')
+            print(f"[DEBUG] Switching to site: {site_name} ({selected_site_id})")
+            logging.info(f"[SITE-SWITCH] Switching to site {site_name} ({selected_site_id})")
+            
+            try:
+                # Fetch maps for the new site
+                print(f"[DEBUG] Fetching maps for site {selected_site_id}...")
+                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                    api_session_for_site_switch,
+                    site_id=selected_site_id
+                )
+                print(f"[DEBUG] Maps API response status: {maps_response.status_code}")
+                
+                if maps_response.status_code != 200:
+                    print(f"[DEBUG] ERROR: Failed to fetch maps - HTTP {maps_response.status_code}")
+                    logging.error(f"[SITE-SWITCH] Failed to fetch maps for site {selected_site_id} - HTTP {maps_response.status_code}")
+                    return no_update, no_update, no_update, no_update, no_update
+                
+                new_maps = maps_response.data if maps_response.data else []
+                print(f"[DEBUG] Found {len(new_maps)} maps for site {site_name}")
+                logging.info(f"[SITE-SWITCH] Found {len(new_maps)} maps for site {site_name}")
+                
+                if not new_maps:
+                    print(f"[DEBUG] No maps found, returning empty figure")
+                    logging.warning(f"[SITE-SWITCH] No maps found for site {selected_site_id}")
+                    # Return empty dropdown options and clear the figure
+                    empty_fig = go.Figure()
+                    empty_fig.update_layout(
+                        title=f"No maps found for site: {site_name}",
+                        paper_bgcolor='#1e1e1e',
+                        plot_bgcolor='#1e1e1e',
+                        font=dict(color='#e0e0e0')
+                    )
+                    updated_config = config.copy() if config else {}
+                    updated_config['site_id'] = selected_site_id
+                    updated_config['site_name'] = site_name
+                    updated_config['map_id'] = None
+                    updated_config['map_name'] = None
+                    print(f"[DEBUG] Returning: empty options, None value, empty store, updated config, empty figure")
+                    return [], None, [], updated_config, empty_fig
+                
+                # Build new dropdown options
+                new_map_options = [{'label': m.get('name', 'Unnamed'), 'value': m.get('id')} for m in new_maps]
+                new_maps_store = [{'id': m.get('id'), 'name': m.get('name', 'Unnamed')} for m in new_maps]
+                print(f"[DEBUG] Built {len(new_map_options)} dropdown options")
+                
+                # Select first map
+                first_map = new_maps[0]
+                selected_map_id = first_map.get('id')
+                map_name = first_map.get('name', 'Unnamed')
+                print(f"[DEBUG] Selected first map: {map_name} ({selected_map_id})")
+                
+                # Update config with new site info
+                updated_config = config.copy() if config else {}
+                updated_config['site_id'] = selected_site_id
+                updated_config['site_name'] = site_name
+                updated_config['map_id'] = selected_map_id
+                updated_config['map_name'] = map_name
+                
+                # Fetch and build the new map figure
+                # Get map details including image URL
+                map_data = first_map
+                ppm = map_data.get('ppm', 1.0)
+                map_width = map_data.get('width', 1000)
+                map_height = map_data.get('height', 1000)
+                updated_config['ppm'] = ppm
+                updated_config['map_width'] = map_width
+                updated_config['map_height'] = map_height
+                
+                # Create new figure with the map image
+                new_fig = go.Figure()
+                
+                # Add map image as background
+                if 'url' in map_data:
+                    new_fig.add_layout_image(
+                        source=map_data['url'],
+                        xref='x',
+                        yref='y',
+                        x=0,
+                        y=map_height,
+                        sizex=map_width,
+                        sizey=map_height,
+                        sizing='stretch',
+                        opacity=1.0,
+                        layer='below'
+                    )
+                
+                # Fetch devices for this map
+                try:
+                    devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                        api_session_for_site_switch,
+                        site_id=selected_site_id,
+                        limit=1000
+                    )
+                    if devices_response.status_code == 200:
+                        all_devices = devices_response.data or []
+                        devices = [d for d in all_devices if d.get('map_id') == selected_map_id]
+                    else:
+                        devices = []
+                except Exception:
+                    devices = []
+                
+                # Add device markers to figure
+                for device in devices:
+                    device_x = device.get('x', 0)
+                    device_y = device.get('y', 0)
+                    device_name = device.get('name', 'Unknown')
+                    device_type = device.get('type', 'ap')
+                    device_status = device.get('status', 'unknown')
+                    
+                    # Color based on status
+                    if device_status == 'connected':
+                        marker_color = '#00ff00'
+                    elif device_status == 'disconnected':
+                        marker_color = '#ff0000'
+                    else:
+                        marker_color = '#ffaa00'
+                    
+                    # Symbol based on type
+                    if device_type == 'switch':
+                        marker_symbol = 'square'
+                    elif device_type == 'gateway':
+                        marker_symbol = 'diamond'
+                    else:
+                        marker_symbol = 'circle'
+                    
+                    new_fig.add_trace(go.Scatter(
+                        x=[device_x],
+                        y=[device_y],
+                        mode='markers+text',
+                        marker=dict(
+                            size=12,
+                            color=marker_color,
+                            symbol=marker_symbol,
+                            line=dict(color='white', width=1)
+                        ),
+                        text=[device_name],
+                        textposition='top center',
+                        textfont=dict(size=10, color='#e0e0e0'),
+                        name=device_name,
+                        showlegend=False,
+                        hovertemplate=f"<b>{device_name}</b><br>Type: {device_type}<br>Status: {device_status}<extra></extra>"
+                    ))
+                
+                # Configure figure layout
+                new_fig.update_layout(
+                    title=dict(
+                        text=f"{site_name} - {map_name}",
+                        font=dict(color='#e0e0e0', size=16),
+                        x=0.5
+                    ),
+                    paper_bgcolor='#1e1e1e',
+                    plot_bgcolor='#1e1e1e',
+                    xaxis=dict(
+                        range=[0, map_width],
+                        showgrid=False,
+                        zeroline=False,
+                        showticklabels=False,
+                        scaleanchor='y',
+                        scaleratio=1
+                    ),
+                    yaxis=dict(
+                        range=[0, map_height],
+                        showgrid=False,
+                        zeroline=False,
+                        showticklabels=False
+                    ),
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    dragmode='pan'
+                )
+                
+                print(f"[DEBUG] SUCCESS! Returning new data:")
+                print(f"[DEBUG]   - map_options: {len(new_map_options)} options")
+                print(f"[DEBUG]   - selected_map_id: {selected_map_id}")
+                print(f"[DEBUG]   - maps_store: {len(new_maps_store)} maps")
+                print(f"[DEBUG]   - updated_config site: {updated_config.get('site_name')}")
+                print(f"[DEBUG]   - new_fig has {len(new_fig.data)} traces")
+                logging.info(f"[SITE-SWITCH] Successfully loaded map {map_name} with {len(devices)} devices")
+                return new_map_options, selected_map_id, new_maps_store, updated_config, new_fig
+                
+            except Exception as site_switch_error:
+                print(f"[DEBUG] EXCEPTION in site switch: {site_switch_error}")
+                import traceback
+                traceback.print_exc()
+                logging.error(f"[SITE-SWITCH] Error: {site_switch_error}", exc_info=True)
+                return no_update, no_update, no_update, no_update, no_update
+        
+        # Keep URL-based callback for handling direct URL access with site_id parameter
+        @app.callback(
+            [Output('site-selector-dropdown', 'value')],
+            [Input('url-location', 'search')],
+            [State('map-config-store', 'data'),
+             State('available-sites-store', 'data')],
+            prevent_initial_call='initial_duplicate'
+        )
+        def handle_site_from_url(url_search, config, available_sites):
+            """Handle site selection when URL contains site_id parameter (for bookmarks/links)"""
+            import urllib.parse
+            
+            if not url_search:
+                return [no_update]
+            
+            params = urllib.parse.parse_qs(url_search.lstrip('?'))
+            url_site_id = params.get('site_id', [None])[0]
+            
+            if not url_site_id:
+                return [no_update]
+            
+            current_site_id = config.get('site_id') if config else None
+            if url_site_id == current_site_id:
+                return [no_update]
+            
+            # Verify site exists
+            valid_site_ids = [s.get('id') for s in available_sites] if available_sites else []
+            if url_site_id not in valid_site_ids:
+                logging.warning(f"URL site switch: Invalid site_id {url_site_id}")
+                return [no_update]
+            
+            # Return the site_id to update dropdown, which will trigger handle_site_switch_from_dropdown
+            logging.info(f"URL site switch: Setting dropdown to site {url_site_id}")
+            return [url_site_id]
         
         # Callback to sync dropdown value with URL on page load (runs BEFORE clientside callback)
         @app.callback(
@@ -31609,6 +31907,156 @@ class MapsManager:
         logging.info("Displaying matplotlib figure (blocking until window closed)")
         plt.show()
         logging.info("Matplotlib map viewer closed by user")
+
+    def launch_viewer_standalone(self, requested_site_id: str = None, requested_map_id: str = None):
+        """
+        Launch the interactive map viewer directly without CLI site selection.
+        
+        This method is designed for standalone usage (e.g., maps_manager.py --viewer)
+        where the user wants to skip the CLI menu and select sites/maps directly
+        in the web browser interface via searchable dropdowns.
+        
+        Uses the full-featured viewer with all layers, controls, and sidebar.
+        Site/map selection is handled in-browser via URL parameters.
+        
+        Args:
+            requested_site_id: Optional site ID to load initially (from URL parameter)
+            requested_map_id: Optional map ID to load initially (from URL parameter)
+        """
+        logging.info("launch_viewer_standalone: Starting web-first viewer mode")
+        
+        # Fetch all sites upfront
+        print("\n" + "=" * 70)
+        print("  MAPS MANAGER - Standalone Web Viewer")
+        print("  Select a site and map from the browser interface")
+        print("=" * 70)
+        
+        print("\n  Loading sites...")
+        all_sites = self._fetch_sites()
+        if not all_sites:
+            print("\n  [!] No sites found in organization")
+            return
+        
+        sites_sorted = sorted(all_sites, key=lambda x: x.get('name', '').lower())
+        print(f"  Found {len(sites_sorted)} sites")
+        
+        # Use requested site_id if provided and valid, otherwise use first site
+        valid_site_ids = {s.get('id'): s for s in sites_sorted}
+        if requested_site_id and requested_site_id in valid_site_ids:
+            target_site = valid_site_ids[requested_site_id]
+            target_site_id = requested_site_id
+            target_site_name = target_site.get('name', 'Unknown')
+            logging.info(f"launch_viewer_standalone: Using requested site {target_site_name}")
+        else:
+            target_site = sites_sorted[0]
+            target_site_id = target_site.get('id')
+            target_site_name = target_site.get('name', 'Unknown')
+        
+        print(f"  Loading maps for site: {target_site_name}...")
+        
+        # Fetch maps for target site
+        try:
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                self.apisession,
+                site_id=target_site_id
+            )
+            if maps_response.status_code == 200 and maps_response.data:
+                all_maps = maps_response.data
+            else:
+                all_maps = []
+        except Exception as maps_error:
+            logging.error(f"Error fetching maps: {maps_error}")
+            all_maps = []
+        
+        if not all_maps:
+            print(f"\n  [!] No maps found for site {target_site_name}")
+            print("  Launching viewer anyway - select a different site in browser")
+            # Create empty map data for initial load
+            map_data = {
+                'id': None,
+                'name': 'No Map Selected',
+                'width': 1000,
+                'height': 800
+            }
+            devices = []
+            zones = []
+            clients = []
+            coverage_data = None
+            map_id = None
+        else:
+            # Use requested map_id if provided and valid, otherwise use first map
+            valid_map_ids = {m.get('id'): m for m in all_maps}
+            if requested_map_id and requested_map_id in valid_map_ids:
+                target_map = valid_map_ids[requested_map_id]
+                map_id = requested_map_id
+                logging.info(f"launch_viewer_standalone: Using requested map {target_map.get('name')}")
+            else:
+                target_map = all_maps[0]
+                map_id = target_map.get('id')
+            
+            map_data = target_map
+            print(f"  Loading map: {target_map.get('name', 'Unnamed')}...")
+            
+            # Fetch devices for this map
+            try:
+                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                    self.apisession,
+                    site_id=target_site_id,
+                    limit=1000
+                )
+                if devices_response.status_code == 200:
+                    all_devices = devices_response.data or []
+                    devices = [d for d in all_devices if d.get('map_id') == map_id]
+                else:
+                    devices = []
+            except Exception:
+                devices = []
+            
+            # Fetch zones for this site
+            try:
+                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                    self.apisession,
+                    site_id=target_site_id
+                )
+                if zones_response.status_code == 200:
+                    all_zones = zones_response.data or []
+                    zones = [z for z in all_zones if z.get('map_id') == map_id]
+                else:
+                    zones = []
+            except Exception:
+                zones = []
+            
+            # Fetch clients for this map
+            try:
+                clients_response = mistapi.api.v1.sites.stats.getSiteClientsStats(
+                    self.apisession,
+                    site_id=target_site_id
+                )
+                if clients_response.status_code == 200:
+                    all_clients = clients_response.data or []
+                    clients = [c for c in all_clients if c.get('map_id') == map_id]
+                else:
+                    clients = []
+            except Exception:
+                clients = []
+            
+            coverage_data = None  # Can be fetched later via RF diagnostics
+            
+            print(f"  Found {len(devices)} devices, {len(zones)} zones, {len(clients)} clients")
+        
+        # Launch the full-featured viewer with site switching enabled
+        self._launch_plotly_viewer(
+            map_data=map_data,
+            devices=devices,
+            zones=zones,
+            clients=clients,
+            site_id=target_site_id,
+            site_name=target_site_name,
+            map_id=map_id,
+            coverage_data=coverage_data,
+            all_maps=all_maps,
+            all_sites=sites_sorted
+        )
 
 
 class FirmwareManager:
@@ -42444,10 +42892,30 @@ menu_actions = {
     "111": (clone_gateway_templates_by_state_and_country, " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"),
     
     # ==============================
-    # MAPS MANAGER
+    # MAPS MANAGER (External Module)
     # ==============================
-    "112": (lambda: MapsManager(apisession, get_cached_or_prompted_org_id()).run_interactive_menu(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
+    "112": (lambda: _run_maps_manager_external(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
 }
+
+def _run_maps_manager_external():
+    """Launch MapsManager from external maps_manager.py module.
+    
+    This wrapper imports MapsManager from the standalone maps_manager.py file
+    which contains the full interactive map viewer implementation (~7,500 lines).
+    The external module supports standalone execution and MistHelper integration.
+    """
+    try:
+        from maps_manager import MapsManager as ExternalMapsManager
+        org_id = get_cached_or_prompted_org_id()
+        maps_mgr = ExternalMapsManager(apisession, org_id)
+        maps_mgr.run_interactive_menu()
+    except ImportError as e:
+        logging.error(f"Failed to import MapsManager from maps_manager.py: {e}")
+        print("\nERROR: Could not load Maps Manager module.")
+        print("Ensure maps_manager.py exists in the same directory as MistHelper.py")
+    except Exception as e:
+        logging.error(f"Error running Maps Manager: {e}", exc_info=True)
+        print(f"\nERROR: {e}")
 
 def _launch_tui_from_menu():
     """Launch Terminal User Interface mode from interactive menu.
