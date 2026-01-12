@@ -550,6 +550,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.12.16.41",
+      "date": "2026-01-12",
+      "changes": {
+        "feature_additions": [
+          "Maps Manager: Added RF coverage heatmap layers for WiFi, BLE, and App clients",
+          "Coverage layers: Toggleable via sidebar checkboxes with RSSI-based colorscales",
+          "Coverage data: Fetched from Mist location/coverage API with meters-to-pixels conversion",
+          "Visual styling: Zone colors now use golden angle (137.5 deg) for maximum adjacent color separation",
+          "Visual styling: Asset markers display name labels above icons with larger size",
+          "Visual styling: Walls changed to orange (#ff8c00), wayfinding paths to blue (#0066ff)"
+        ]
+      }
+    },
+    {
       "version": "26.01.09.18.45",
       "date": "2026-01-09",
       "changes": {
