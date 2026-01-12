@@ -1,15 +1,36 @@
 # MistHelper - AI Agent Instructions
 
 ## Project Overview
-MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 100+ menu-driven operations for data extraction, device management, and firmware upgrades with dual output (CSV/SQLite) and containerized SSH access.
+MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 100+ menu-driven operations for data extraction, device management, and firmware upgrades with dual output (CSV/redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
 ## Core Architecture
 
-### Monolithic Design Pattern
-- **Single File**: `MistHelper.py` contains all logic (~29K lines)
-- **Why**: Simplifies deployment and container builds for NOC environments
+Python project hierarchy levels from largest to smallest:
+1. Project Root - the top-level project folder
+2. Packages/Directories - folders that organize code (src/, tests/, docs/)
+3. Module Files - individual .py files
+4. Classes/Functions/Constants - top-level code constructs in modules
+5. Methods/Attributes/Expressions - class members and function bodies
+6. Statements/Operations - individual lines of code
+
+Enforce the 5 item rule: each level should have no more than 5 children. If exceeded, refactor:
+- Too many files in a directory: split into subdirectories or subpackages
+- Too many classes in a module: split into multiple module files
+- Too many methods in a class: extract methods to helper classes or separate functions
+- Too many statements in a function: extract into smaller helper functions
+
+Function/method definition limits:
+- Max 5 parameters per function. If more are needed, use a config object/dataclass or split into multiple functions
+- Max 5 logical blocks per function body (if/else counts as 1 block, for loop counts as 1 block, etc.). If exceeded, extract blocks into separate helper functions
+- Max 5 operations per statement block. Complex expressions should be broken into intermediate variables
+- Function length: aim for 10-20 lines max. If longer, extract logical sections into helper functions
+
+This rule keeps code organized, manageable, and easy to navigate. Apply this hierarchy thinking to all Python code organization and refactoring suggestions.
+
+
+###  Design Pattern
 - **Classes**: `GlobalImportManager`, `WebSocketManager`, `PacketCaptureManager`, `FirmwareManager`, `EnhancedSSHRunner`, `SFPTransceiverDataProcessor`
 - **No wrappers**: All functionality lives within appropriately named classes, never use standalone wrapper functions
 
@@ -21,7 +42,7 @@ MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud
 
 ### Data Flow
 ```
-Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV or SQLite)
+Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV or redis)
                                                  -> Rate Limiting -> Retry Logic
 ```
 
@@ -266,7 +287,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 | `agents.md` | Agent coding guide | ~350 |
 | `requirements.txt` | Python dependencies | ~30 |
 | `.env` (git-ignored) | Credentials & config | N/A |
-| `data/mist_data.db` | SQLite persistence | Generated |
+| `data/mist_data.db` | redis persistence | Generated |
 
 ## When in Doubt
 1. **Read agents.md first** (attached context) - comprehensive safety patterns
