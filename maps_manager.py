@@ -2909,41 +2909,32 @@ class MapsManager:
         logging.debug(f"Interactive map viewer - Site: {site_name} (ID: {site_id})")
         
         try:
-            # Explicitly check and install required visualization packages
+            # Check visualization dependencies directly (standalone mode)
             print("\nChecking visualization dependencies...")
             logging.info("Starting visualization dependency check")
-            required_packages = {'plotly': 'plotly>=5.14.0', 'dash': 'dash>=2.9.0'}
-            optional_viz_packages = {'kaleido': 'kaleido>=0.2.1', 'matplotlib': 'matplotlib>=3.5.0'}
             
-            # Trigger installation check through global import_manager instance
-            # Access the global import_manager variable created at module initialization
-            global import_manager
-            for package_name, package_spec in required_packages.items():
-                logging.debug(f"Checking required package: {package_name} ({package_spec})")
-                import_manager.import_module_safely(
-                    package_name, 
-                    package_spec=package_spec,
-                    required=False,  # Don't fail if can't install
-                    skip_deps=False,  # Allow installation
-                    skip_upgrade=True  # Don't check for upgrades
-                )
-                logging.debug(f"Package {package_name} check completed")
+            # Check if required packages are available (already installed in container)
+            plotly_available = False
+            dash_available = False
             
-            # Optional packages (best-effort)
-            for package_name, package_spec in optional_viz_packages.items():
-                try:
-                    logging.debug(f"Checking optional package: {package_name} ({package_spec})")
-                    import_manager.import_module_safely(
-                        package_name,
-                        package_spec=package_spec,
-                        required=False,
-                        skip_deps=False,
-                        skip_upgrade=True
-                    )
-                    logging.debug(f"Optional package {package_name} installed/verified")
-                except Exception as e:
-                    logging.debug(f"Optional package {package_name} unavailable: {e}")
-                    pass  # Optional - continue without
+            try:
+                import plotly
+                plotly_available = True
+                logging.debug("plotly package is available")
+            except ImportError:
+                logging.warning("plotly package not available")
+            
+            try:
+                import dash
+                dash_available = True
+                logging.debug("dash package is available")
+            except ImportError:
+                logging.warning("dash package not available")
+            
+            if not plotly_available or not dash_available:
+                print("\n! Missing required packages: plotly and/or dash")
+                print("! Install with: pip install plotly dash")
+                return
             
             # Now attempt imports
             try:

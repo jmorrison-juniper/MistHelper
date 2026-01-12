@@ -75,7 +75,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host files.pythonhosted.org
 
 # Copy application files
-COPY MistHelper.py __init__.py ./
+COPY MistHelper.py __init__.py maps_manager.py ./
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app
