@@ -776,7 +776,7 @@ class MapsManager:
             elif choice == "32":
                 self.map_usage_statistics()
             elif choice == "40":
-                self.interactive_map_viewer()
+                self.launch_viewer_standalone()
             else:
                 print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
                 logging.warning(f"Invalid Maps Manager menu selection: {choice}")
@@ -8318,33 +8318,64 @@ class MapsManager:
             }
             
             // Coverage heatmap traces (rendered below device markers for visibility)
-            // Helper function to create coverage heatmap trace
+            // Helper function to create proper heatmap trace with interpolation
             function createCoverageHeatmap(coverageData, layerName, colorscale) {
                 if (!coverageData || coverageData.length === 0) return null;
                 
-                // Group coverage data into a grid for heatmap visualization
-                const x_values = coverageData.map(p => p.x);
-                const y_values = coverageData.map(p => p.y);
-                const rssi_values = coverageData.map(p => p.rssi);
+                // Build a grid structure from the coverage data points
+                // Group by coordinates to create x, y, z arrays for heatmap
+                const gridData = {};
+                let minRssi = 0, maxRssi = -100;
                 
-                // Create scatter plot with color-coded markers for coverage visualization
-                // Using scatter instead of heatmap for better performance with sparse data
+                coverageData.forEach(p => {
+                    const key = p.x + ',' + p.y;
+                    gridData[key] = { x: p.x, y: p.y, rssi: p.rssi };
+                    if (p.rssi < minRssi) minRssi = p.rssi;
+                    if (p.rssi > maxRssi) maxRssi = p.rssi;
+                });
+                
+                // Get unique sorted x and y values
+                const uniqueX = [...new Set(coverageData.map(p => p.x))].sort((a,b) => a-b);
+                const uniqueY = [...new Set(coverageData.map(p => p.y))].sort((a,b) => a-b);
+                
+                // Build z matrix for heatmap
+                const zMatrix = [];
+                uniqueY.forEach(y => {
+                    const row = [];
+                    uniqueX.forEach(x => {
+                        const key = x + ',' + y;
+                        const point = gridData[key];
+                        row.push(point ? point.rssi : null);
+                    });
+                    zMatrix.push(row);
+                });
+                
+                // Create proper heatmap trace with interpolation
                 return {
-                    x: x_values,
-                    y: y_values,
-                    mode: 'markers',
-                    type: 'scatter',
+                    x: uniqueX,
+                    y: uniqueY,
+                    z: zMatrix,
+                    type: 'heatmap',
                     name: layerName,
-                    marker: {
-                        size: 8,
-                        color: rssi_values,
-                        colorscale: colorscale,
-                        cmin: -90,
-                        cmax: -30,
-                        opacity: 0.6,
-                        showscale: false
+                    colorscale: colorscale,
+                    zmin: minRssi,
+                    zmax: maxRssi,
+                    opacity: 0.5,
+                    showscale: true,
+                    colorbar: {
+                        title: { text: 'RSSI (dBm)', side: 'right', font: { size: 10, color: '#e0e0e0' } },
+                        thickness: 15,
+                        len: 0.4,
+                        y: 0.85,
+                        yanchor: 'top',
+                        x: 1.02,
+                        tickfont: { size: 9, color: '#e0e0e0' },
+                        outlinewidth: 1,
+                        outlinecolor: '#555'
                     },
-                    hovertemplate: '<b>' + layerName + '</b><br>RSSI: %{marker.color:.0f} dBm<br>X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>',
+                    connectgaps: true,
+                    zsmooth: 'best',
+                    hovertemplate: '<b>' + layerName + '</b><br>RSSI: %{z:.0f} dBm<br>X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>',
                     visible: true
                 };
             }
