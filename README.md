@@ -550,6 +550,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.15.16.30",
+      "date": "2026-01-15",
+      "changes": {
+        "bug_fixes": [
+          "Const Export (Menu 82): Fixed ap_channels endpoint 404 error - now detects optional country_code parameter",
+          "Const Export (Menu 82): Fixed states endpoint 400 error - filters invalid country codes like '__'"
+        ],
+        "refactoring": [
+          "Const discovery: Added detection for optional parameters that require special iteration handling",
+          "Country code filtering: Added validation to reject non-alpha and wrong-length codes"
+        ]
+      }
+    },
+    {
       "version": "26.01.12.16.41",
       "date": "2026-01-12",
       "changes": {
