@@ -3994,21 +3994,21 @@ class MapsManager:
                 orientations = [d.get('orientation', 0) for d in type_devices]
                 
                 # Debug log device orientations
-                for d in type_devices:
-                    device_name = d.get('name', 'Unnamed')
-                    device_orientation = d.get('orientation', 0)
+                for device in type_devices:
+                    device_name = device.get('name', 'Unnamed')
+                    device_orientation = device.get('orientation', 0)
                     logging.debug(f"Device '{device_name}': orientation={device_orientation}")
                 
                 # Determine status and color for each device
                 colors = []
                 statuses = []
-                for d in type_devices:
+                for device in type_devices:
                     # Check device status
                     # Status can be: 'connected', 'disconnected', or check for upgrade in progress
-                    status = d.get('status', 'disconnected')
+                    status = device.get('status', 'disconnected')
                     
                     # Check if upgrading (upgrade_status field or checking for active upgrade)
-                    if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                    if device.get('upgrade_status') or device.get('fwupdate', {}).get('progress') is not None:
                         device_status = 'upgrading'
                     elif status == 'connected':
                         device_status = 'connected'
@@ -4019,17 +4019,17 @@ class MapsManager:
                     colors.append(type_cfg['colors'][device_status])
                 
                 hover_text = []
-                for d, device_status in zip(type_devices, statuses):
-                    text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
-                    text += f"Type: {d.get('type', 'N/A')}<br>"
-                    text += f"Model: {d.get('model', 'N/A')}<br>"
-                    text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                for device, device_status in zip(type_devices, statuses):
+                    text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
+                    text += f"Type: {device.get('type', 'N/A')}<br>"
+                    text += f"Model: {device.get('model', 'N/A')}<br>"
+                    text += f"MAC: {device.get('mac', 'N/A')}<br>"
                     text += f"Status: <b>{device_status.upper()}</b><br>"
                     if device_status == 'upgrading':
-                        progress = d.get('fwupdate', {}).get('progress', 'N/A')
+                        progress = device.get('fwupdate', {}).get('progress', 'N/A')
                         text += f"Upgrade Progress: {progress}%<br>" if progress != 'N/A' else ""
-                    text += f"Position: ({d.get('x', 'N/A')}, {d.get('y', 'N/A')})<br>"
-                    text += f"Orientation: {d.get('orientation', 0)}°"
+                    text += f"Position: ({device.get('x', 'N/A')}, {device.get('y', 'N/A')})<br>"
+                    text += f"Orientation: {device.get('orientation', 0)}deg"
                     hover_text.append(text)
                 
                 # Add device markers with status-based colors
@@ -4124,10 +4124,10 @@ class MapsManager:
                     dot_distance = 50  # Increased from 35 to 50
                     
                     # Convert Mist orientation to standard cartesian coordinates:
-                    # - Mist: 0° = up (north), 90° = right (east), 180° = down, 270° = left
-                    # - Math: 0° = right (east), 90° = up (north), counter-clockwise
+                    # - Mist: 0 deg = up (north), 90 deg = right (east), 180 deg = down, 270 deg = left
+                    # - Math: 0 deg = right (east), 90 deg = up (north), counter-clockwise
                     # - Y-axis: Mist uses top-left origin with Y increasing downward
-                    # Conversion: math_angle = 90° - mist_angle, then flip Y component
+                    # Conversion: math_angle = 90 deg - mist_angle, then flip Y component
                     math_angle = 90 - angle
                     dot_x = x + dot_distance * cos(radians(math_angle))
                     dot_y = y - dot_distance * sin(radians(math_angle))  # Subtract because Y increases downward
@@ -4143,7 +4143,7 @@ class MapsManager:
                         ),
                         name=f"{type_cfg['name']} Orientation",  # Name for toggle control
                         showlegend=False,
-                        hovertext=f"Orientation: {angle}°",
+                        hovertext=f"Orientation: {angle} deg",
                         hoverinfo='text'
                     ))
         
@@ -4602,25 +4602,25 @@ class MapsManager:
                                  style={'fontSize': '11px', 'color': '#667eea', 'marginRight': '15px', 'verticalAlign': 'middle'}),
                     ], style={'display': 'inline-block', 'marginRight': '20px', 'padding': '5px 10px', 
                               'backgroundColor': '#1a1a1a', 'borderRadius': '4px', 'border': '1px solid #444'}),
-                    html.Button('🤖 Auto-Zone', id='auto-zone-btn', n_clicks=0,
+                    html.Button('[AUTO] Auto-Zone', id='auto-zone-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#667eea', 
                                       'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
-                    html.Button('📍 Add vBeacon', id='add-vbeacon-btn', n_clicks=0,
+                    html.Button('[PIN] Add vBeacon', id='add-vbeacon-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('📡 Add Beacon', id='add-beacon-btn', n_clicks=0,
+                    html.Button('[ANT] Add Beacon', id='add-beacon-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#00bfff', 'border': '1px solid #00bfff', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('🖼️ Change Image', id='change-image-btn', n_clicks=0, 
+                    html.Button('[IMG] Change Image', id='change-image-btn', n_clicks=0, 
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('🗑️ Remove Image', id='remove-image-btn', n_clicks=0,
+                    html.Button('[DEL] Remove Image', id='remove-image-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('✏️ Rename', id='rename-btn', n_clicks=0,
+                    html.Button('[EDIT] Rename', id='rename-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('❌ Delete', id='delete-btn', n_clicks=0,
+                    html.Button('[X] Delete', id='delete-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer'}),
                     html.Button('[+] Clone', id='clone-btn', n_clicks=0,
@@ -4704,18 +4704,18 @@ class MapsManager:
                 
                 # Sidebar
                 html.Div([
-                    html.H3("🎨 Layer Controls"),
+                    html.H3("Layer Controls"),
                     html.H4("Infrastructure", style={'fontSize': '13px', 'color': '#667eea', 'marginTop': '10px', 'marginBottom': '5px'}),
                     dcc.Checklist(
                         id='layer-toggle',
                         options=[
-                            {'label': ' 🧱 Walls', 'value': 'walls'},
-                            {'label': ' 🗺️  Wayfinding', 'value': 'wayfinding'},
-                            {'label': ' 🏢 Location Zones', 'value': 'zones'},
-                            {'label': ' 🎯 Proximity Zones', 'value': 'proximity_zones'},
-                            {'label': ' 🔍 Validation Paths', 'value': 'validation'},
-                            {'label': ' 📶 RF Diagnostics Heatmap', 'value': 'rf_heatmap'},
-                            {'label': ' 🎯 Map Origin', 'value': 'origin'},
+                            {'label': ' [W] Walls', 'value': 'walls'},
+                            {'label': ' [M] Wayfinding', 'value': 'wayfinding'},
+                            {'label': ' [Z] Location Zones', 'value': 'zones'},
+                            {'label': ' [P] Proximity Zones', 'value': 'proximity_zones'},
+                            {'label': ' [V] Validation Paths', 'value': 'validation'},
+                            {'label': ' [R] RF Diagnostics Heatmap', 'value': 'rf_heatmap'},
+                            {'label': ' [O] Map Origin', 'value': 'origin'},
                         ],
                         value=['walls', 'wayfinding', 'zones', 'validation'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -4725,9 +4725,9 @@ class MapsManager:
                     dcc.Checklist(
                         id='beacon-toggle',
                         options=[
-                            {'label': ' 📍 Virtual Beacons', 'value': 'vbeacons'},
-                            {'label': ' 📶 vBeacon Coverage', 'value': 'vbeacon_coverage'},
-                            {'label': ' 📡 3rd Party Beacons', 'value': 'ble_beacons'},
+                            {'label': ' [vB] Virtual Beacons', 'value': 'vbeacons'},
+                            {'label': ' [C] vBeacon Coverage', 'value': 'vbeacon_coverage'},
+                            {'label': ' [3P] 3rd Party Beacons', 'value': 'ble_beacons'},
                         ],
                         value=['vbeacons', 'ble_beacons'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -4737,10 +4737,10 @@ class MapsManager:
                     dcc.Checklist(
                         id='client-toggle',
                         options=[
-                            {'label': ' 📶 WiFi Clients', 'value': 'wifi_clients'},
-                            {'label': ' 🔌 Wired Clients', 'value': 'wired_clients'},
-                            {'label': ' 🚫 Excluded Clients', 'value': 'excluded_clients'},
-                            {'label': ' 📡 Show Associated AP', 'value': 'show_client_ap'},
+                            {'label': ' [Wi] WiFi Clients', 'value': 'wifi_clients'},
+                            {'label': ' [Wr] Wired Clients', 'value': 'wired_clients'},
+                            {'label': ' [Ex] Excluded Clients', 'value': 'excluded_clients'},
+                            {'label': ' [AP] Show Associated AP', 'value': 'show_client_ap'},
                         ],
                         value=['wifi_clients', 'wired_clients', 'show_client_ap'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -4750,10 +4750,10 @@ class MapsManager:
                     dcc.Checklist(
                         id='device-toggle',
                         options=[
-                            {'label': ' 📡 Access Points', 'value': 'aps'},
-                            {'label': ' 🔌 Switches', 'value': 'switches'},
-                            {'label': ' 🌐 Gateways', 'value': 'gateways'},
-                            {'label': ' 🔗 Mesh Associations', 'value': 'mesh_links'},
+                            {'label': ' [AP] Access Points', 'value': 'aps'},
+                            {'label': ' [SW] Switches', 'value': 'switches'},
+                            {'label': ' [GW] Gateways', 'value': 'gateways'},
+                            {'label': ' [MS] Mesh Associations', 'value': 'mesh_links'},
                         ],
                         value=['aps', 'switches', 'gateways'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -4763,14 +4763,14 @@ class MapsManager:
                     dcc.Checklist(
                         id='filter-toggle',
                         options=[
-                            {'label': ' 👻 Hide Inactive Items', 'value': 'hide_inactive'},
+                            {'label': ' [HI] Hide Inactive Items', 'value': 'hide_inactive'},
                         ],
                         value=[],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
                         style={'marginBottom': '10px'}
                     ),
                     html.Hr(),
-                    html.H3("🎨 Drawing Tools"),
+                    html.H3("Drawing Tools"),
                     html.Details([
                         html.Summary("How to use", style={'fontSize': '12px', 'color': '#00bfff', 'cursor': 'pointer', 'marginBottom': '8px'}),
                         html.Div([
@@ -4818,10 +4818,10 @@ class MapsManager:
                     ], id='zone-name-container', style={'display': 'none'}),
                     # Action buttons
                     html.Div([
-                        html.Button('💾 Save Last Shape to Mist', id='save-shape-btn', n_clicks=0,
+                        html.Button('[SAVE] Save Last Shape to Mist', id='save-shape-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '10px', 'backgroundColor': '#28a745',
                                           'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': 'bold'}),
-                        html.Button('🗑️ Clear All Drawings', id='clear-drawings-btn', n_clicks=0,
+                        html.Button('[CLR] Clear All Drawings', id='clear-drawings-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
                                           'color': '#ffc107', 'border': '1px solid #ffc107', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
                     ]),
@@ -4844,14 +4844,14 @@ class MapsManager:
                     ]),
                     html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'}),
                     html.Hr(),
-                    html.H3("📏 Measurement Tools"),
+                    html.H3("Measurement Tools"),
                     html.P("Use the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
-                    html.P("• Draw Line - Measure distances", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Draw Path - Create routes", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Draw Circle - Mark areas", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Erase - Remove drawings", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Line - Measure distances", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Path - Create routes", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Circle - Mark areas", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Erase - Remove drawings", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
                     html.Hr(),
-                    html.H3("📐 Set Scale"),
+                    html.H3("Set Scale"),
                     html.P("1. Draw a line of known length", style={'fontSize': '11px', 'color': '#888'}),
                     html.P("2. Enter actual length below", style={'fontSize': '11px', 'color': '#888'}),
                     html.Div([
@@ -4886,7 +4886,7 @@ class MapsManager:
                         html.Div(id='scale-status', style={'marginTop': '8px', 'fontSize': '11px', 'color': '#a0a0ff'})
                     ]),
                     html.Hr(),
-                    html.H3("📍 Set Origin"),
+                    html.H3("Set Origin"),
                     html.P("Click map to set coordinate origin", style={'fontSize': '11px', 'color': '#888'}),
                     html.Div([
                         html.Button(
@@ -4911,7 +4911,7 @@ class MapsManager:
                         ])
                     ]),
                     html.Hr(),
-                    html.H3("🏢 Location Zones"),
+                    html.H3("Location Zones"),
                     html.Div([
                         dcc.Checklist(
                             id='zone-toggle',
@@ -4927,20 +4927,20 @@ class MapsManager:
                             html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
                         ], style={'padding': '10px', 'backgroundColor': '#3d3d3d', 'borderRadius': '4px', 'marginTop': '10px'}),
                         html.Div([
-                            html.Button('✏️ Edit Zone', id='edit-zone-btn', n_clicks=0,
+                            html.Button('[EDIT] Edit Zone', id='edit-zone-btn', n_clicks=0,
                                        style={'width': '48%', 'marginRight': '4%', 'padding': '6px', 'backgroundColor': '#667eea',
                                               'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
-                            html.Button('🗑️ Remove Zone', id='remove-zone-btn', n_clicks=0,
+                            html.Button('[DEL] Remove Zone', id='remove-zone-btn', n_clicks=0,
                                        style={'width': '48%', 'padding': '6px', 'backgroundColor': '#ff4444',
                                               'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'})
                         ], style={'marginTop': '10px', 'display': 'flex'}) if zones else None
                     ]),
                     html.Hr(),
-                    html.H3("📊 Map Info"),
+                    html.H3("Map Info"),
                     html.Div(id='map-info', children=[
-                        html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} × {map_height} px"]),
+                        html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} x {map_height} px"]),
                         html.P([html.Span("PPM: ", className='info-badge'), f"{map_data.get('ppm', 'N/A')}"]),
-                        html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)}°"]),
+                        html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)} deg"]),
                         html.P([html.Span("Devices: ", className='info-badge'), f"{len(devices)}"]),
                         html.P([html.Span("Clients: ", className='info-badge'), f"{len(clients)}"]),
                         html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"]),
@@ -4951,7 +4951,7 @@ class MapsManager:
                     ]),
                     html.Hr(),
                     html.Div(id='click-data', children=[
-                        html.H3("🖱️ Device Info"),
+                        html.H3("Device Info"),
                         html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
                     ])
                 ], className='sidebar')
@@ -5665,9 +5665,9 @@ class MapsManager:
                         # Determine status and color for each device
                         colors = []
                         hover_texts = []
-                        for d in type_devices:
-                            status = d.get('status', 'disconnected')
-                            if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                        for device in type_devices:
+                            status = device.get('status', 'disconnected')
+                            if device.get('upgrade_status') or device.get('fwupdate', {}).get('progress') is not None:
                                 device_status = 'upgrading'
                             elif status == 'connected':
                                 device_status = 'connected'
@@ -5676,10 +5676,10 @@ class MapsManager:
                             colors.append(type_cfg['colors'][device_status])
                             
                             # Build hover text
-                            text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
-                            text += f"Type: {d.get('type', 'N/A')}<br>"
-                            text += f"Model: {d.get('model', 'N/A')}<br>"
-                            text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                            text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
+                            text += f"Type: {device.get('type', 'N/A')}<br>"
+                            text += f"Model: {device.get('model', 'N/A')}<br>"
+                            text += f"MAC: {device.get('mac', 'N/A')}<br>"
                             text += f"Status: <b>{device_status.upper()}</b>"
                             hover_texts.append(text)
                         
@@ -6155,7 +6155,7 @@ class MapsManager:
         def display_click_data(clickData):
             if clickData is None:
                 return [
-                    html.H3("🖱️ Device Info"),
+                    html.H3("Device Info"),
                     html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
                 ]
             
@@ -6172,7 +6172,7 @@ class MapsManager:
                                             className='device-detail' if 'Type:' in line else None))
             
             return [
-                html.H3("🖱️ Device Details"),
+                html.H3("Device Details"),
                 html.Div(details if details else [html.P("No device data available")])
             ]
         
@@ -6238,7 +6238,7 @@ class MapsManager:
         def set_scale(n_clicks, actual_length_m, current_fig):
             """Calculate and update PPM based on drawn line and known length"""
             if not n_clicks or not actual_length_m or actual_length_m <= 0:
-                return "⚠️ Please enter a valid length in meters", current_fig
+                return "[!] Please enter a valid length in meters", current_fig
             
             # Find the last line shape
             shapes = current_fig.get('layout', {}).get('shapes', [])
@@ -6249,7 +6249,7 @@ class MapsManager:
                     break
             
             if not last_line:
-                return "⚠️ Please draw a line first using the ruler tool", current_fig
+                return "[!] Please draw a line first using the ruler tool", current_fig
             
             # Calculate line length in pixels
             x0, y0 = last_line.get('x0', 0), last_line.get('y0', 0)
@@ -6284,8 +6284,8 @@ class MapsManager:
                                 )
                                 break
             
-            status_msg = f"✅ Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
-            logging.info(f"Map scale updated: PPM {ppm} → {new_ppm:.2f} (user calibration: {actual_length_m}m)")
+            status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
+            logging.info(f"Map scale updated: PPM {ppm} -> {new_ppm:.2f} (user calibration: {actual_length_m}m)")
             
             return status_msg, current_fig
         
@@ -6362,7 +6362,7 @@ class MapsManager:
                         trace['hovertext'] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
             
             status = [
-                html.P(f"✅ Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})", 
+                html.P(f"[OK] Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})", 
                       style={'fontSize': '11px', 'color': '#00ff00', 'margin': '4px 0'}),
                 html.P("Click button again to exit mode", 
                       style={'fontSize': '10px', 'color': '#888', 'margin': '4px 0'})
@@ -8789,9 +8789,9 @@ class MapsManager:
             try:
                 # Get site name
                 site_name = 'Unknown'
-                for s in all_sites:
-                    if s.get('id') == site_id:
-                        site_name = s.get('name', 'Unknown')
+                for site in all_sites:
+                    if site.get('id') == site_id:
+                        site_name = site.get('name', 'Unknown')
                         break
                 
                 # Fetch map details

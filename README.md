@@ -550,6 +550,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.15.23.56",
+      "date": "2026-01-15",
+      "changes": {
+        "refactoring": [
+          "ASCII Compliance: Replaced all Unicode emojis with ASCII equivalents in MistHelper.py and maps_manager.py",
+          "ASCII Compliance: Replaced box drawing characters with ASCII alternatives in TUI",
+          "ASCII Compliance: Replaced degree symbols with 'deg' text in comments and UI",
+          "Naming Conventions: Fixed single-letter loop variable abbreviations (d->device, ap->access_point, gw->gateway, s->site, r->result)"
+        ],
+        "documentation": [
+          "Compliance audit: Applied copilot-instructions.md naming and ASCII guidelines"
+        ]
+      }
+    },
+    {
       "version": "26.01.15.16.30",
       "date": "2026-01-15",
       "changes": {

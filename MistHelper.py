@@ -13410,10 +13410,10 @@ def export_org_security_events_to_csv():
                 # Get rogue APs
                 response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration="7d", limit=1000)
                 site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
-                for ap in site_rogue_aps:
-                    ap["site_id"] = site_id
-                    ap["site_name"] = site_name
-                    ap["rogue_type"] = "AP"
+                for rogue_access_point in site_rogue_aps:
+                    rogue_access_point["site_id"] = site_id
+                    rogue_access_point["site_name"] = site_name
+                    rogue_access_point["rogue_type"] = "AP"
                 all_rogue_aps.extend(site_rogue_aps)
                 
                 # Get rogue clients  
@@ -15005,9 +15005,9 @@ def export_org_rogue_aps_to_csv():
                 aps = mistapi.get_all(response=response, mist_session=apisession)
                 
                 # Add site context to each AP
-                for ap in aps:
-                    ap["site_id"] = site_id
-                    ap["site_name"] = site_name
+                for access_point in aps:
+                    access_point["site_id"] = site_id
+                    access_point["site_name"] = site_name
                     
                 all_rogue_aps.extend(aps)
                 logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")
@@ -16143,10 +16143,10 @@ def assign_aps_to_matching_device_profiles():
     aps_without_profile = []
     aps_without_model = []
     
-    for ap in all_aps:
-        ap_mac = ap.get("mac", "unknown")
-        ap_name = ap.get("name", ap_mac)
-        ap_model = ap.get("model")
+    for access_point in all_aps:
+        ap_mac = access_point.get("mac", "unknown")
+        ap_name = access_point.get("name", ap_mac)
+        ap_model = access_point.get("model")
         
         if not ap_model:
             aps_without_model.append({
@@ -17064,8 +17064,8 @@ def export_gateway_test_results_by_site_to_csv(fast: bool = False):
                 logging.warning(f"! No data attribute in response for site {site_id}")
                 return []
             results = response.data.get("results", []) if isinstance(response.data, dict) else []
-            for r in results:
-                r["site_id"] = site_id
+            for result in results:
+                result["site_id"] = site_id
             logging.info(f"[{site_id}] Retrieved {len(results)} test results.")
             return results
         except Exception as e:
@@ -17488,18 +17488,18 @@ def export_gateways_with_site_info_to_csv():
     # Display a summary table in logs
     table = PrettyTable()
     table.field_names = ["name", "mac", "model", "serial", "site_name", "street", "city", "state", "zip_code", "country"]
-    for gw in gateways:
+    for gateway in gateways:
         table.add_row([
-            gw.get("name", ""),
-            gw.get("mac", ""),
-            gw.get("model", ""),
-            gw.get("serial", ""),
-            gw.get("site_name", ""),
-            gw.get("street", ""),
-            gw.get("city", ""),
-            gw.get("state", ""),
-            gw.get("zip_code", ""),
-            gw.get("country", "")
+            gateway.get("name", ""),
+            gateway.get("mac", ""),
+            gateway.get("model", ""),
+            gateway.get("serial", ""),
+            gateway.get("site_name", ""),
+            gateway.get("street", ""),
+            gateway.get("city", ""),
+            gateway.get("state", ""),
+            gateway.get("zip_code", ""),
+            gateway.get("country", "")
         ])
     logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
@@ -28201,21 +28201,21 @@ class MapsManager:
                 orientations = [d.get('orientation', 0) for d in type_devices]
                 
                 # Debug log device orientations
-                for d in type_devices:
-                    device_name = d.get('name', 'Unnamed')
-                    device_orientation = d.get('orientation', 0)
+                for device in type_devices:
+                    device_name = device.get('name', 'Unnamed')
+                    device_orientation = device.get('orientation', 0)
                     logging.debug(f"Device '{device_name}': orientation={device_orientation}")
                 
                 # Determine status and color for each device
                 colors = []
                 statuses = []
-                for d in type_devices:
+                for device in type_devices:
                     # Check device status
                     # Status can be: 'connected', 'disconnected', or check for upgrade in progress
-                    status = d.get('status', 'disconnected')
+                    status = device.get('status', 'disconnected')
                     
                     # Check if upgrading (upgrade_status field or checking for active upgrade)
-                    if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                    if device.get('upgrade_status') or device.get('fwupdate', {}).get('progress') is not None:
                         device_status = 'upgrading'
                     elif status == 'connected':
                         device_status = 'connected'
@@ -28226,17 +28226,17 @@ class MapsManager:
                     colors.append(type_cfg['colors'][device_status])
                 
                 hover_text = []
-                for d, device_status in zip(type_devices, statuses):
-                    text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
-                    text += f"Type: {d.get('type', 'N/A')}<br>"
-                    text += f"Model: {d.get('model', 'N/A')}<br>"
-                    text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                for device, device_status in zip(type_devices, statuses):
+                    text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
+                    text += f"Type: {device.get('type', 'N/A')}<br>"
+                    text += f"Model: {device.get('model', 'N/A')}<br>"
+                    text += f"MAC: {device.get('mac', 'N/A')}<br>"
                     text += f"Status: <b>{device_status.upper()}</b><br>"
                     if device_status == 'upgrading':
-                        progress = d.get('fwupdate', {}).get('progress', 'N/A')
+                        progress = device.get('fwupdate', {}).get('progress', 'N/A')
                         text += f"Upgrade Progress: {progress}%<br>" if progress != 'N/A' else ""
-                    text += f"Position: ({d.get('x', 'N/A')}, {d.get('y', 'N/A')})<br>"
-                    text += f"Orientation: {d.get('orientation', 0)}°"
+                    text += f"Position: ({device.get('x', 'N/A')}, {device.get('y', 'N/A')})<br>"
+                    text += f"Orientation: {device.get('orientation', 0)}deg"
                     hover_text.append(text)
                 
                 # Add device markers with status-based colors
@@ -28331,10 +28331,10 @@ class MapsManager:
                     dot_distance = 50  # Increased from 35 to 50
                     
                     # Convert Mist orientation to standard cartesian coordinates:
-                    # - Mist: 0° = up (north), 90° = right (east), 180° = down, 270° = left
-                    # - Math: 0° = right (east), 90° = up (north), counter-clockwise
+                    # - Mist: 0 deg = up (north), 90 deg = right (east), 180 deg = down, 270 deg = left
+                    # - Math: 0 deg = right (east), 90 deg = up (north), counter-clockwise
                     # - Y-axis: Mist uses top-left origin with Y increasing downward
-                    # Conversion: math_angle = 90° - mist_angle, then flip Y component
+                    # Conversion: math_angle = 90 deg - mist_angle, then flip Y component
                     math_angle = 90 - angle
                     dot_x = x + dot_distance * cos(radians(math_angle))
                     dot_y = y - dot_distance * sin(radians(math_angle))  # Subtract because Y increases downward
@@ -28350,7 +28350,7 @@ class MapsManager:
                         ),
                         name=f"{type_cfg['name']} Orientation",  # Name for toggle control
                         showlegend=False,
-                        hovertext=f"Orientation: {angle}°",
+                        hovertext=f"Orientation: {angle} deg",
                         hoverinfo='text'
                     ))
         
@@ -28811,25 +28811,25 @@ class MapsManager:
                                  style={'fontSize': '11px', 'color': '#667eea', 'marginRight': '15px', 'verticalAlign': 'middle'}),
                     ], style={'display': 'inline-block', 'marginRight': '20px', 'padding': '5px 10px', 
                               'backgroundColor': '#1a1a1a', 'borderRadius': '4px', 'border': '1px solid #444'}),
-                    html.Button('🤖 Auto-Zone', id='auto-zone-btn', n_clicks=0,
+                    html.Button('[AUTO] Auto-Zone', id='auto-zone-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#667eea', 
                                       'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
-                    html.Button('📍 Add vBeacon', id='add-vbeacon-btn', n_clicks=0,
+                    html.Button('[PIN] Add vBeacon', id='add-vbeacon-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#00ff00', 'border': '1px solid #00ff00', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('📡 Add Beacon', id='add-beacon-btn', n_clicks=0,
+                    html.Button('[ANT] Add Beacon', id='add-beacon-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#00bfff', 'border': '1px solid #00bfff', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('🖼️ Change Image', id='change-image-btn', n_clicks=0, 
+                    html.Button('[IMG] Change Image', id='change-image-btn', n_clicks=0, 
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('🗑️ Remove Image', id='remove-image-btn', n_clicks=0,
+                    html.Button('[DEL] Remove Image', id='remove-image-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('✏️ Rename', id='rename-btn', n_clicks=0,
+                    html.Button('[EDIT] Rename', id='rename-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#e0e0e0', 'border': '1px solid #667eea', 'borderRadius': '4px', 'cursor': 'pointer'}),
-                    html.Button('❌ Delete', id='delete-btn', n_clicks=0,
+                    html.Button('[X] Delete', id='delete-btn', n_clicks=0,
                                style={'marginRight': '10px', 'padding': '8px 15px', 'backgroundColor': '#3d3d3d', 
                                       'color': '#ff4444', 'border': '1px solid #ff4444', 'borderRadius': '4px', 'cursor': 'pointer'}),
                     html.Button('[+] Clone', id='clone-btn', n_clicks=0,
@@ -28913,18 +28913,18 @@ class MapsManager:
                 
                 # Sidebar
                 html.Div([
-                    html.H3("🎨 Layer Controls"),
+                    html.H3("Layer Controls"),
                     html.H4("Infrastructure", style={'fontSize': '13px', 'color': '#667eea', 'marginTop': '10px', 'marginBottom': '5px'}),
                     dcc.Checklist(
                         id='layer-toggle',
                         options=[
-                            {'label': ' 🧱 Walls', 'value': 'walls'},
-                            {'label': ' 🗺️  Wayfinding', 'value': 'wayfinding'},
-                            {'label': ' 🏢 Location Zones', 'value': 'zones'},
-                            {'label': ' 🎯 Proximity Zones', 'value': 'proximity_zones'},
-                            {'label': ' 🔍 Validation Paths', 'value': 'validation'},
-                            {'label': ' 📶 RF Diagnostics Heatmap', 'value': 'rf_heatmap'},
-                            {'label': ' 🎯 Map Origin', 'value': 'origin'},
+                            {'label': ' [W] Walls', 'value': 'walls'},
+                            {'label': ' [M] Wayfinding', 'value': 'wayfinding'},
+                            {'label': ' [Z] Location Zones', 'value': 'zones'},
+                            {'label': ' [P] Proximity Zones', 'value': 'proximity_zones'},
+                            {'label': ' [V] Validation Paths', 'value': 'validation'},
+                            {'label': ' [R] RF Diagnostics Heatmap', 'value': 'rf_heatmap'},
+                            {'label': ' [O] Map Origin', 'value': 'origin'},
                         ],
                         value=['walls', 'wayfinding', 'zones', 'validation'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -28934,9 +28934,9 @@ class MapsManager:
                     dcc.Checklist(
                         id='beacon-toggle',
                         options=[
-                            {'label': ' 📍 Virtual Beacons', 'value': 'vbeacons'},
-                            {'label': ' 📶 vBeacon Coverage', 'value': 'vbeacon_coverage'},
-                            {'label': ' 📡 3rd Party Beacons', 'value': 'ble_beacons'},
+                            {'label': ' [vB] Virtual Beacons', 'value': 'vbeacons'},
+                            {'label': ' [C] vBeacon Coverage', 'value': 'vbeacon_coverage'},
+                            {'label': ' [3P] 3rd Party Beacons', 'value': 'ble_beacons'},
                         ],
                         value=['vbeacons', 'ble_beacons'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -28946,10 +28946,10 @@ class MapsManager:
                     dcc.Checklist(
                         id='client-toggle',
                         options=[
-                            {'label': ' 📶 WiFi Clients', 'value': 'wifi_clients'},
-                            {'label': ' 🔌 Wired Clients', 'value': 'wired_clients'},
-                            {'label': ' 🚫 Excluded Clients', 'value': 'excluded_clients'},
-                            {'label': ' 📡 Show Associated AP', 'value': 'show_client_ap'},
+                            {'label': ' [Wi] WiFi Clients', 'value': 'wifi_clients'},
+                            {'label': ' [Wr] Wired Clients', 'value': 'wired_clients'},
+                            {'label': ' [Ex] Excluded Clients', 'value': 'excluded_clients'},
+                            {'label': ' [AP] Show Associated AP', 'value': 'show_client_ap'},
                         ],
                         value=['wifi_clients', 'wired_clients', 'show_client_ap'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -28959,10 +28959,10 @@ class MapsManager:
                     dcc.Checklist(
                         id='device-toggle',
                         options=[
-                            {'label': ' 📡 Access Points', 'value': 'aps'},
-                            {'label': ' 🔌 Switches', 'value': 'switches'},
-                            {'label': ' 🌐 Gateways', 'value': 'gateways'},
-                            {'label': ' 🔗 Mesh Associations', 'value': 'mesh_links'},
+                            {'label': ' [AP] Access Points', 'value': 'aps'},
+                            {'label': ' [SW] Switches', 'value': 'switches'},
+                            {'label': ' [GW] Gateways', 'value': 'gateways'},
+                            {'label': ' [MS] Mesh Associations', 'value': 'mesh_links'},
                         ],
                         value=['aps', 'switches', 'gateways'],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
@@ -28972,14 +28972,14 @@ class MapsManager:
                     dcc.Checklist(
                         id='filter-toggle',
                         options=[
-                            {'label': ' 👻 Hide Inactive Items', 'value': 'hide_inactive'},
+                            {'label': ' [HI] Hide Inactive Items', 'value': 'hide_inactive'},
                         ],
                         value=[],
                         labelStyle={'display': 'block', 'margin': '8px 0', 'fontSize': '13px'},
                         style={'marginBottom': '10px'}
                     ),
                     html.Hr(),
-                    html.H3("🎨 Drawing Tools"),
+                    html.H3("Drawing Tools"),
                     html.Details([
                         html.Summary("How to use", style={'fontSize': '12px', 'color': '#00bfff', 'cursor': 'pointer', 'marginBottom': '8px'}),
                         html.Div([
@@ -29027,10 +29027,10 @@ class MapsManager:
                     ], id='zone-name-container', style={'display': 'none'}),
                     # Action buttons
                     html.Div([
-                        html.Button('💾 Save Last Shape to Mist', id='save-shape-btn', n_clicks=0,
+                        html.Button('[SAVE] Save Last Shape to Mist', id='save-shape-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '10px', 'backgroundColor': '#28a745',
                                           'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': 'bold'}),
-                        html.Button('🗑️ Clear All Drawings', id='clear-drawings-btn', n_clicks=0,
+                        html.Button('[CLR] Clear All Drawings', id='clear-drawings-btn', n_clicks=0,
                                    style={'width': '100%', 'marginBottom': '8px', 'padding': '8px', 'backgroundColor': '#3d3d3d',
                                           'color': '#ffc107', 'border': '1px solid #ffc107', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '13px'}),
                     ]),
@@ -29053,14 +29053,14 @@ class MapsManager:
                     ]),
                     html.Div(id='drawing-tool-status', style={'fontSize': '11px', 'color': '#a0a0ff', 'marginTop': '8px', 'minHeight': '40px'}),
                     html.Hr(),
-                    html.H3("📏 Measurement Tools"),
+                    html.H3("Measurement Tools"),
                     html.P("Use the toolbar above the map:", style={'fontSize': '12px', 'color': '#888'}),
-                    html.P("• Draw Line - Measure distances", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Draw Path - Create routes", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Draw Circle - Mark areas", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
-                    html.P("• Erase - Remove drawings", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Line - Measure distances", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Path - Create routes", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Draw Circle - Mark areas", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
+                    html.P("- Erase - Remove drawings", style={'fontSize': '11px', 'marginLeft': '10px', 'color': '#999'}),
                     html.Hr(),
-                    html.H3("📐 Set Scale"),
+                    html.H3("Set Scale"),
                     html.P("1. Draw a line of known length", style={'fontSize': '11px', 'color': '#888'}),
                     html.P("2. Enter actual length below", style={'fontSize': '11px', 'color': '#888'}),
                     html.Div([
@@ -29095,7 +29095,7 @@ class MapsManager:
                         html.Div(id='scale-status', style={'marginTop': '8px', 'fontSize': '11px', 'color': '#a0a0ff'})
                     ]),
                     html.Hr(),
-                    html.H3("📍 Set Origin"),
+                    html.H3("Set Origin"),
                     html.P("Click map to set coordinate origin", style={'fontSize': '11px', 'color': '#888'}),
                     html.Div([
                         html.Button(
@@ -29120,7 +29120,7 @@ class MapsManager:
                         ])
                     ]),
                     html.Hr(),
-                    html.H3("🏢 Location Zones"),
+                    html.H3("Location Zones"),
                     html.Div([
                         dcc.Checklist(
                             id='zone-toggle',
@@ -29136,20 +29136,20 @@ class MapsManager:
                             html.P("Click a zone for details", style={'fontSize': '11px', 'color': '#888', 'fontStyle': 'italic'})
                         ], style={'padding': '10px', 'backgroundColor': '#3d3d3d', 'borderRadius': '4px', 'marginTop': '10px'}),
                         html.Div([
-                            html.Button('✏️ Edit Zone', id='edit-zone-btn', n_clicks=0,
+                            html.Button('[EDIT] Edit Zone', id='edit-zone-btn', n_clicks=0,
                                        style={'width': '48%', 'marginRight': '4%', 'padding': '6px', 'backgroundColor': '#667eea',
                                               'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'}),
-                            html.Button('🗑️ Remove Zone', id='remove-zone-btn', n_clicks=0,
+                            html.Button('[DEL] Remove Zone', id='remove-zone-btn', n_clicks=0,
                                        style={'width': '48%', 'padding': '6px', 'backgroundColor': '#ff4444',
                                               'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer', 'fontSize': '12px'})
                         ], style={'marginTop': '10px', 'display': 'flex'}) if zones else None
                     ]),
                     html.Hr(),
-                    html.H3("📊 Map Info"),
+                    html.H3("Map Info"),
                     html.Div(id='map-info', children=[
-                        html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} × {map_height} px"]),
+                        html.P([html.Span("Dimensions: ", className='info-badge'), f"{map_width} x {map_height} px"]),
                         html.P([html.Span("PPM: ", className='info-badge'), f"{map_data.get('ppm', 'N/A')}"]),
-                        html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)}°"]),
+                        html.P([html.Span("Orientation: ", className='info-badge'), f"{map_data.get('orientation', 0)} deg"]),
                         html.P([html.Span("Devices: ", className='info-badge'), f"{len(devices)}"]),
                         html.P([html.Span("Clients: ", className='info-badge'), f"{len(clients)}"]),
                         html.P([html.Span("Zones: ", className='info-badge'), f"{len(zones)}"]),
@@ -29160,7 +29160,7 @@ class MapsManager:
                     ]),
                     html.Hr(),
                     html.Div(id='click-data', children=[
-                        html.H3("🖱️ Device Info"),
+                        html.H3("Device Info"),
                         html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
                     ])
                 ], className='sidebar')
@@ -29876,9 +29876,9 @@ class MapsManager:
                         # Determine status and color for each device
                         colors = []
                         hover_texts = []
-                        for d in type_devices:
-                            status = d.get('status', 'disconnected')
-                            if d.get('upgrade_status') or d.get('fwupdate', {}).get('progress') is not None:
+                        for device in type_devices:
+                            status = device.get('status', 'disconnected')
+                            if device.get('upgrade_status') or device.get('fwupdate', {}).get('progress') is not None:
                                 device_status = 'upgrading'
                             elif status == 'connected':
                                 device_status = 'connected'
@@ -29887,10 +29887,10 @@ class MapsManager:
                             colors.append(type_cfg['colors'][device_status])
                             
                             # Build hover text
-                            text = f"<b>{d.get('name', 'Unnamed')}</b><br>"
-                            text += f"Type: {d.get('type', 'N/A')}<br>"
-                            text += f"Model: {d.get('model', 'N/A')}<br>"
-                            text += f"MAC: {d.get('mac', 'N/A')}<br>"
+                            text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
+                            text += f"Type: {device.get('type', 'N/A')}<br>"
+                            text += f"Model: {device.get('model', 'N/A')}<br>"
+                            text += f"MAC: {device.get('mac', 'N/A')}<br>"
                             text += f"Status: <b>{device_status.upper()}</b>"
                             hover_texts.append(text)
                         
@@ -30366,7 +30366,7 @@ class MapsManager:
         def display_click_data(clickData):
             if clickData is None:
                 return [
-                    html.H3("🖱️ Device Info"),
+                    html.H3("Device Info"),
                     html.P("Click a device for details", style={'color': '#888', 'fontStyle': 'italic'})
                 ]
             
@@ -30383,7 +30383,7 @@ class MapsManager:
                                             className='device-detail' if 'Type:' in line else None))
             
             return [
-                html.H3("🖱️ Device Details"),
+                html.H3("Device Details"),
                 html.Div(details if details else [html.P("No device data available")])
             ]
         
@@ -30449,7 +30449,7 @@ class MapsManager:
         def set_scale(n_clicks, actual_length_m, current_fig):
             """Calculate and update PPM based on drawn line and known length"""
             if not n_clicks or not actual_length_m or actual_length_m <= 0:
-                return "⚠️ Please enter a valid length in meters", current_fig
+                return "[!] Please enter a valid length in meters", current_fig
             
             # Find the last line shape
             shapes = current_fig.get('layout', {}).get('shapes', [])
@@ -30460,7 +30460,7 @@ class MapsManager:
                     break
             
             if not last_line:
-                return "⚠️ Please draw a line first using the ruler tool", current_fig
+                return "[!] Please draw a line first using the ruler tool", current_fig
             
             # Calculate line length in pixels
             x0, y0 = last_line.get('x0', 0), last_line.get('y0', 0)
@@ -30495,8 +30495,8 @@ class MapsManager:
                                 )
                                 break
             
-            status_msg = f"✅ Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
-            logging.info(f"Map scale updated: PPM {ppm} → {new_ppm:.2f} (user calibration: {actual_length_m}m)")
+            status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
+            logging.info(f"Map scale updated: PPM {ppm} -> {new_ppm:.2f} (user calibration: {actual_length_m}m)")
             
             return status_msg, current_fig
         
@@ -30573,7 +30573,7 @@ class MapsManager:
                         trace['hovertext'] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
             
             status = [
-                html.P(f"✅ Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})", 
+                html.P(f"[OK] Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})", 
                       style={'fontSize': '11px', 'color': '#00ff00', 'margin': '4px 0'}),
                 html.P("Click button again to exit mode", 
                       style={'fontSize': '10px', 'color': '#888', 'margin': '4px 0'})
@@ -34939,9 +34939,9 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             
             if site_aps:
                 # Add site info to each AP for tracking
-                for ap in site_aps:
-                    ap['_site_id'] = site_id
-                    ap['_site_name'] = site_name
+                for access_point in site_aps:
+                    access_point['_site_id'] = site_id
+                    access_point['_site_name'] = site_name
                 
                 all_aps.extend(site_aps)
                 all_sites_aps[site_id] = {
@@ -34952,7 +34952,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
                 
                 print(f"      Found {len(site_aps)} APs at '{site_name}'")
                 logging.info(f"Found {len(site_aps)} APs at site {site_name} (ID: {site_id})")
-                logging.debug(f"AP models at {site_name}: {list(set(ap.get('model', 'Unknown') for ap in site_aps))}")
+                logging.debug(f"AP models at {site_name}: {list(set(device.get('model', 'Unknown') for device in site_aps))}")
             else:
                 print(f"      No APs found at site '{site_name}'")
                 logging.warning(f"No APs found at site {site_name} (ID: {site_id})")
@@ -35076,16 +35076,16 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         print(f"   No device statistics retrieved - falling back to individual calls")
     
     # Process each AP device
-    for ap in aps:
-        model = ap.get("model", "Unknown")
-        device_id = ap.get("id")
-        device_mac = ap.get("mac")
-        ap_site_id = ap.get("_site_id")  # Site info added during discovery
-        ap_site_name = ap.get("_site_name")
+    for access_point in aps:
+        model = access_point.get("model", "Unknown")
+        device_id = access_point.get("id")
+        device_mac = access_point.get("mac")
+        ap_site_id = access_point.get("_site_id")  # Site info added during discovery
+        ap_site_name = access_point.get("_site_name")
         
         if model not in aps_by_model:
             aps_by_model[model] = []
-        aps_by_model[model].append(ap)
+        aps_by_model[model].append(access_point)
         
         # Get current firmware version from device stats
         current_version = "Unknown"
@@ -35096,7 +35096,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             for lookup_key in [device_id, device_mac]:  # Try both ID and MAC as keys
                 if lookup_key and lookup_key in stats_lookup:
                     stats_data = stats_lookup[lookup_key]
-                    logging.debug(f"Found stats for device {ap.get('name', 'Unnamed')} using key {lookup_key}")
+                    logging.debug(f"Found stats for device {access_point.get('name', 'Unnamed')} using key {lookup_key}")
                     break
             
             # If bulk lookup failed, fall back to individual API call
@@ -40230,8 +40230,8 @@ class MistHelperTUI:
         # Create breadcrumb display with btop-style header
         breadcrumb_text = f"[bold bright_cyan]{self.breadcrumb}[/bold bright_cyan]"
         if self.current_path:
-            path_display = " → ".join(self.current_path)
-            breadcrumb_text += f" [dim bright_black]→ {path_display}[/dim bright_black]"
+            path_display = " -> ".join(self.current_path)
+            breadcrumb_text += f" [dim bright_black]-> {path_display}[/dim bright_black]"
         
         breadcrumb_panel = self.Panel(
             breadcrumb_text,
@@ -40304,21 +40304,21 @@ class MistHelperTUI:
             
             # btop-inspired colors: cyan for modules, green for functions
             if item_type == 'module':
-                icon = "▶"  # Right arrow for directories (like btop)
+                icon = ">"  # Right arrow for directories (like btop)
                 color = "bright_cyan"
             elif item_type == 'function':
-                icon = "●"  # Bullet for items
+                icon = "*"  # Bullet for items
                 color = "bright_green"
             elif item_type == 'error':
-                icon = "✗"
+                icon = "x"
                 color = "bright_red"
             else:
-                icon = "·"
+                icon = "-"
                 color = "dim"
             
             # Highlight selected item with orange/yellow (btop highlight style)
             if idx == self.current_selection:
-                prefix = "█"  # Solid block for selection
+                prefix = "#"  # Solid block for selection
                 color = "bright_yellow"
                 style = "bold"
                 
@@ -40437,7 +40437,7 @@ class MistHelperTUI:
         
         if self.execution_state == 'prompting':
             # Show parameter input prompt with clear header
-            output_content.append("[bold bright_cyan]═══ Function Execution - Parameter Input ═══[/bold bright_cyan]")
+            output_content.append("[bold bright_cyan]=== Function Execution - Parameter Input ===[/bold bright_cyan]")
             output_content.append("")
             if self.current_function:
                 output_content.append(f"[bright_green]Function:[/bright_green] {self.current_function.get('name', 'unknown')}")
@@ -40451,10 +40451,10 @@ class MistHelperTUI:
                 default_info = f" [dim](default: {param_info.get('default')})[/dim]" if param_info.get('has_default') else ""
                 
                 # Create a clear input prompt box
-                output_content.append(f"[bold bright_yellow]┌─ Input Needed: {param_name} {required_tag}[/bold bright_yellow]")
+                output_content.append(f"[bold bright_yellow]+-- Input Needed: {param_name} {required_tag}[/bold bright_yellow]")
                 if default_info:
-                    output_content.append(f"[bright_yellow]│[/bright_yellow] {default_info}")
-                output_content.append(f"[bright_yellow]└─>[/bright_yellow] [bold white on grey11]{self.input_buffer}█[/bold white on grey11]")
+                    output_content.append(f"[bright_yellow]|[/bright_yellow] {default_info}")
+                output_content.append(f"[bright_yellow]+-->[/bright_yellow] [bold white on grey11]{self.input_buffer}#[/bold white on grey11]")
             
             # Show previously collected parameters at bottom
             if self.current_param_index > 0:
@@ -40469,7 +40469,7 @@ class MistHelperTUI:
                         display_value = "***REDACTED***"
                     else:
                         display_value = str(param_value)[:40]  # Truncate long values
-                    output_content.append(f"  [dim]✓ {param_name}:[/dim] {display_value}")
+                    output_content.append(f"  [dim][OK] {param_name}:[/dim] {display_value}")
         
         elif self.execution_state == 'executing':
             output_content.append("[bold bright_cyan]Executing API Call...[/bold bright_cyan]")
@@ -40495,7 +40495,7 @@ class MistHelperTUI:
         if self.execution_state == 'viewing_results':
             help_text = (
                 "[bold bright_yellow]Results View:[/bold bright_yellow] "
-                "[bright_cyan]↑↓[/bright_cyan] Scroll (10)  "
+                "[bright_cyan]Up/Dn[/bright_cyan] Scroll (10)  "
                 "[bright_cyan]PgUp/PgDn[/bright_cyan] Scroll (20)  "
                 "[bright_green]H[/bright_green] Top  "
                 "[bright_green]E[/bright_green] End  "
@@ -40512,7 +40512,7 @@ class MistHelperTUI:
         else:
             help_text = (
                 "[bold bright_yellow]Navigation:[/bold bright_yellow] "
-                "[bright_cyan]↑↓[/bright_cyan] Move  "
+                "[bright_cyan]Up/Dn[/bright_cyan] Move  "
                 "[bright_green]Enter[/bright_green] Drill/Execute  "
                 "[bright_magenta]Esc[/bright_magenta] Back  "
                 "[bright_red]Q[/bright_red] Quit"
@@ -40547,7 +40547,7 @@ class MistHelperTUI:
                     self.Layout(results_grid, name="results", ratio=95, minimum_size=0),
                     self.Layout(
                         self.Panel(
-                            "[yellow]Controls: [bright_yellow]←→[/bright_yellow] Results | [bright_yellow]↑↓[/bright_yellow] Scroll (10) | [bright_yellow]PgUp/PgDn[/bright_yellow] Scroll (20) | [bright_yellow]H[/bright_yellow] Top | [bright_yellow]E[/bright_yellow] End | [bright_yellow]ESC[/bright_yellow] Close | [bright_yellow]Q[/bright_yellow] Quit[/yellow]",
+                            "[yellow]Controls: [bright_yellow]L/R[/bright_yellow] Results | [bright_yellow]Up/Dn[/bright_yellow] Scroll (10) | [bright_yellow]PgUp/PgDn[/bright_yellow] Scroll (20) | [bright_yellow]H[/bright_yellow] Top | [bright_yellow]E[/bright_yellow] End | [bright_yellow]ESC[/bright_yellow] Close | [bright_yellow]Q[/bright_yellow] Quit[/yellow]",
                             border_style="dim",
                             box=self.box.SIMPLE
                         ),
@@ -41129,9 +41129,9 @@ class MistHelperTUI:
                     return f"[bright_yellow][ {', '.join(str(v) if v is not None else '<empty>' for v in value)} ][/bright_yellow]"
                 else:
                     # Complex list (contains dicts/lists) - will be expanded by flatten_for_display
-                    return f"[yellow]▼ {len(value)} items (expanded below)[/yellow]"
+                    return f"[yellow]v {len(value)} items (expanded below)[/yellow]"
             elif isinstance(value, dict):
-                return f"[magenta]▼ {len(value)} keys (expanded below)[/magenta]"
+                return f"[magenta]v {len(value)} keys (expanded below)[/magenta]"
             else:
                 return f"[white]{str(value)}[/white]"
         
@@ -41144,11 +41144,11 @@ class MistHelperTUI:
                     if isinstance(value, dict) and value:
                         indent = "  " * depth
                         if depth == 0:
-                            key_style = f"[bold bright_cyan on grey15]{indent}▶ {key.upper()}[/bold bright_cyan on grey15]"
+                            key_style = f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
                         elif depth == 1:
-                            key_style = f"[bold bright_yellow]{indent}├─ {key}[/bold bright_yellow]"
+                            key_style = f"[bold bright_yellow]{indent}+- {key}[/bold bright_yellow]"
                         else:
-                            key_style = f"[bold white]{indent}└─ {key}[/bold white]"
+                            key_style = f"[bold white]{indent}+- {key}[/bold white]"
                         rows.append([key_style, f"[dim italic]{len(value)} fields[/dim italic]", "section_header"])
                         rows.extend(flatten_for_display(value, depth + 1))
                         if depth == 0:
@@ -41156,11 +41156,11 @@ class MistHelperTUI:
                     elif isinstance(value, list) and value and isinstance(value[0], dict):
                         indent = "  " * depth
                         if depth == 0:
-                            key_style = f"[bold bright_cyan on grey15]{indent}▶ {key.upper()}[/bold bright_cyan on grey15]"
+                            key_style = f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
                         elif depth == 1:
-                            key_style = f"[bold bright_yellow]{indent}├─ {key}[/bold bright_yellow]"
+                            key_style = f"[bold bright_yellow]{indent}+- {key}[/bold bright_yellow]"
                         else:
-                            key_style = f"[bold white]{indent}└─ {key}[/bold white]"
+                            key_style = f"[bold white]{indent}+- {key}[/bold white]"
                         rows.append([key_style, f"[dim italic]{len(value)} items[/dim italic]", "section_header"])
                         # Show ALL items, fully expanded
                         for idx, item in enumerate(value):
@@ -41216,7 +41216,7 @@ class MistHelperTUI:
         for field, value, row_type in all_rows[start_row:end_row]:
             if row_type == "separator":
                 # Visual separator between major sections
-                table.add_row("[dim]" + "─" * 40 + "[/dim]", "[dim]" + "─" * 60 + "[/dim]")
+                table.add_row("[dim]" + "-" * 40 + "[/dim]", "[dim]" + "-" * 60 + "[/dim]")
             else:
                 table.add_row(field, value)
         
@@ -41235,11 +41235,11 @@ class MistHelperTUI:
             can_scroll_down = end_row < total_rows
             scroll_indicator = ""
             if can_scroll_up and can_scroll_down:
-                scroll_indicator = " [bright_yellow]↕[/bright_yellow]"
+                scroll_indicator = " [bright_yellow]^v[/bright_yellow]"
             elif can_scroll_up:
-                scroll_indicator = " [bright_yellow]↑[/bright_yellow]"
+                scroll_indicator = " [bright_yellow]^[/bright_yellow]"
             elif can_scroll_down:
-                scroll_indicator = " [bright_yellow]↓[/bright_yellow]"
+                scroll_indicator = " [bright_yellow]v[/bright_yellow]"
             row_info = f" | Rows {start_row + 1}-{end_row} of {total_rows}{scroll_indicator}"
         else:
             row_info = f" | All {total_rows} rows visible"
