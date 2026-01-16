@@ -1767,53 +1767,73 @@ else:
     success, global_assignments = False, {}
 
 # ============================================================================
-# TEST MODE GLOBALS & DYNAMIC LOOKBACK HELPER
+# TEST MODE GLOBALS & TIME UTILITIES CLASS
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
 IS_TEST_MODE = '--test' in sys.argv or '--testinteractive' in sys.argv
 
-def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
-    """Return lookback hours adjusted for test mode.
 
-    In normal operation we retain the full 24 hour (or caller provided) window.
-    When the global --test flag is present, we shrink the lookback to 1 hour to:
-      - Minimize API payload sizes / speed up systematic tests
-      - Still exercise recent-data code paths
-    The value is intentionally conservative (1h) to avoid missing fresh events while
-    keeping runtime low. If a caller passes a different default_hours (e.g., 12),
-    that value will be honored outside test mode.
-
-    Parameters
-    ----------
-    default_hours : int
-        Standard lookback window (typically 24).
-    test_hours : int
-        Reduced lookback for test mode (default 1 hour).
-
-    Returns
-    -------
-    int
-        Hours to use for lookback calculations.
+class TimeUtils:
     """
-    try:
-        if IS_TEST_MODE:
-            # Boundaries & safety: never return less than 1 hour
-            if test_hours < 1:
-                return 1
-            return test_hours
-        if default_hours < 1:
-            return 1
-        return default_hours
-    except Exception as e:
-        logging.debug(f"get_dynamic_lookback_hours fallback due to error: {e}")
-        return test_hours if IS_TEST_MODE else default_hours
+    Centralized time-related utilities.
+    Handles dynamic lookback windows, timestamp conversions, etc.
+    """
+    
+    @staticmethod
+    def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
+        """Return lookback hours adjusted for test mode.
 
-def log_dynamic_lookback(context: str, hours: int):
-    """Helper to produce a consistent log line when dynamic lookback applies."""
-    if IS_TEST_MODE:
-        logging.info(f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)")
-    else:
-        logging.debug(f"Using standard lookback window of {hours}h for {context}")
+        In normal operation we retain the full 24 hour (or caller provided) window.
+        When the global --test flag is present, we shrink the lookback to 1 hour to:
+          - Minimize API payload sizes / speed up systematic tests
+          - Still exercise recent-data code paths
+        The value is intentionally conservative (1h) to avoid missing fresh events while
+        keeping runtime low. If a caller passes a different default_hours (e.g., 12),
+        that value will be honored outside test mode.
+
+        Parameters
+        ----------
+        default_hours : int
+            Standard lookback window (typically 24).
+        test_hours : int
+            Reduced lookback for test mode (default 1 hour).
+
+        Returns
+        -------
+        int
+            Hours to use for lookback calculations.
+        """
+        try:
+            if IS_TEST_MODE:
+                # Boundaries & safety: never return less than 1 hour
+                if test_hours < 1:
+                    return 1
+                return test_hours
+            if default_hours < 1:
+                return 1
+            return default_hours
+        except Exception as error:
+            logging.debug(f"get_dynamic_lookback_hours fallback due to error: {error}")
+            return test_hours if IS_TEST_MODE else default_hours
+    
+    @staticmethod
+    def log_dynamic_lookback(context: str, hours: int) -> None:
+        """Helper to produce a consistent log line when dynamic lookback applies."""
+        if IS_TEST_MODE:
+            logging.info(f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)")
+        else:
+            logging.debug(f"Using standard lookback window of {hours}h for {context}")
+
+
+# Backward compatibility wrappers - will be removed in future version
+def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
+    """Legacy function - use TimeUtils.get_dynamic_lookback_hours() instead."""
+    return TimeUtils.get_dynamic_lookback_hours(default_hours, test_hours)
+
+
+def log_dynamic_lookback(context: str, hours: int) -> None:
+    """Legacy function - use TimeUtils.log_dynamic_lookback() instead."""
+    TimeUtils.log_dynamic_lookback(context, hours)
 
 # ============================================================================
 # IMPORT STATUS AND HELPER FUNCTIONS
