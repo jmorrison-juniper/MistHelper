@@ -11523,8 +11523,160 @@ class SiteExportUtils:
     
     @staticmethod
     def wifi_clients(site_id=None):
-        """Export WiFi clients for a site to SiteWifiClients.csv."""
-        export_site_wifi_clients_to_csv(site_id)
+        """
+        Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
+        Fetches both wireless client data and wireless client session data, then merges them based on MAC address.
+        If site_id is not provided, prompts user to select from site list.
+        
+        The merged data includes:
+        - Current client information (if available)
+        - Session data for each client (prefixed with 'session_')
+        - Session count for clients with multiple sessions
+        - Sessions without corresponding current clients (marked as 'session_only')
+        """
+        print("Export Site WiFi Clients:")
+        logging.info("Starting export of site WiFi clients...")
+        
+        # Ensure required CSVs are fresh
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        
+        # Get site_id if not provided
+        if not site_id:
+            site_id = PromptUtils.select_site_id_from_csv("SiteList.csv")
+            if not site_id:
+                logging.error(" No site selected.")
+                print(" No site selected.")
+                return
+        
+        # Get site name for display
+        site_name = "Unknown Site"
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get("id") == site_id:
+                        site_name = row.get("name", "Unknown Site")
+                        break
+        except Exception as exception:
+            logging.warning(f"! Failed to load site name from SiteList.csv: {exception}")
+        
+        logging.info(f"Fetching WiFi clients for site: {site_name} (ID: {site_id})")
+        print(f"! Fetching WiFi clients for site: {site_name}")
+        
+        try:
+            # Call the Mist API to search for wireless clients at the site
+            logging.info("Fetching wireless clients data...")
+            client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
+            clients = mistapi.get_all(response=client_response, mist_session=apisession)
+            
+            # Call the Mist API to search for wireless client sessions at the site
+            logging.info("Fetching wireless client sessions data...")
+            session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(apisession, site_id, limit=1000)
+            sessions = mistapi.get_all(response=session_response, mist_session=apisession)
+            
+            if not clients and not sessions:
+                logging.warning(" No WiFi clients or sessions found at this site.")
+                print(" No WiFi clients or sessions found at this site.")
+                # Create empty CSV with headers
+                wifi_clients_path = get_csv_file_path("SiteWiFiClients.CSV")
+                with open(wifi_clients_path, "w", newline="", encoding="utf-8") as file_handle:
+                    writer = csv.writer(file_handle)
+                    writer.writerow(["site_id", "site_name", "message"])
+                    writer.writerow([site_id, site_name, "No WiFi clients or sessions found"])
+                return
+            
+            # Create a dictionary to store session data by MAC address for easy lookup
+            sessions_by_mac = {}
+            if sessions:
+                for session in sessions:
+                    mac = session.get("mac")
+                    if mac:
+                        # If multiple sessions exist for the same MAC, store them in a list
+                        if mac in sessions_by_mac:
+                            if not isinstance(sessions_by_mac[mac], list):
+                                sessions_by_mac[mac] = [sessions_by_mac[mac]]
+                            sessions_by_mac[mac].append(session)
+                        else:
+                            sessions_by_mac[mac] = session
+            
+            # Merge client data with session data based on MAC address
+            enriched_clients = []
+            processed_macs = set()
+            
+            # Process clients and merge with matching sessions
+            if clients:
+                for client in clients:
+                    client_mac = client.get("mac")
+                    # Add site information
+                    client["site_id"] = site_id
+                    client["site_name"] = site_name
+                    client["data_source"] = "client"
+                    
+                    # Merge with session data if available
+                    if client_mac and client_mac in sessions_by_mac:
+                        session_data = sessions_by_mac[client_mac]
+                        if isinstance(session_data, list):
+                            # Multiple sessions - merge with the most recent one
+                            latest_session = max(session_data, key=lambda x: x.get("start_time", 0))
+                            for key, value in latest_session.items():
+                                if key not in client:  # Don't overwrite client data
+                                    client[f"session_{key}"] = value
+                            client["session_count"] = len(session_data)
+                        else:
+                            # Single session
+                            for key, value in session_data.items():
+                                if key not in client:  # Don't overwrite client data
+                                    client[f"session_{key}"] = value
+                            client["session_count"] = 1
+                        processed_macs.add(client_mac)
+                    else:
+                        client["session_count"] = 0
+                    
+                    enriched_clients.append(client)
+            
+            # Add any sessions that don't have corresponding client data
+            if sessions:
+                for session in sessions:
+                    session_mac = session.get("mac")
+                    if session_mac and session_mac not in processed_macs:
+                        # This is a session without a corresponding current client
+                        session["site_id"] = site_id
+                        session["site_name"] = site_name
+                        session["data_source"] = "session_only"
+                        session["session_count"] = 1
+                        # Prefix session-specific fields to avoid conflicts
+                        session_data = {}
+                        for key, value in session.items():
+                            if key not in ["site_id", "site_name", "data_source", "session_count"]:
+                                session_data[f"session_{key}"] = value
+                            else:
+                                session_data[key] = value
+                        enriched_clients.append(session_data)
+            
+            if not enriched_clients:
+                logging.warning(" No data to export after processing.")
+                print(" No data to export after processing.")
+                return
+            
+            # Flatten and sanitize the data for CSV
+            flattened = DataProcessingUtils.flatten_nested_fields(enriched_clients)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
+            
+            # Write to CSV
+            DataExporter.save_data_to_output(sanitized, "SiteWiFiClients.CSV")
+            
+            client_count = len(clients) if clients else 0
+            session_count = len(sessions) if sessions else 0
+            total_records = len(enriched_clients)
+            
+            logging.info(f"! WiFi data exported to SiteWiFiClients.CSV ({client_count} clients, {session_count} sessions, {total_records} total records)")
+            print(f"! WiFi data exported to SiteWiFiClients.CSV")
+            print(f"   {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}")
+            
+        except Exception as exception:
+            logging.error(f"! Failed to fetch WiFi data for site {site_id}: {exception}")
+            print(f"! Failed to fetch WiFi data: {exception}")
     
     @staticmethod
     def settings():
@@ -11544,6 +11696,342 @@ class SiteExportUtils:
         else:
             logging.warning(" No site configs found.")
             print("! No site configurations found.")
+    
+    @staticmethod
+    def anomaly_events():
+        """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv.
+        
+        Dynamically discovers potential anomaly metrics from ConstInsightMetrics.csv and uses 
+        GET /api/v1/sites/:site_id/anomaly/:metric endpoint to retrieve anomaly events
+        for all site-scoped metrics related to anomaly detection (capacity, coverage, roaming, 
+        client connectivity, AP availability, etc.).
+        """
+        print("Export Site Anomaly Events:")
+        logging.info("Starting export of site anomaly events...")
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            print("! No site selected. Exiting.")
+            return
+        
+        # Get site name for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        # Clean site name for filename
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
+        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"
+        
+        # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
+        print("! Discovering potential anomaly metrics from Mist API definitions...")
+        potential_metrics = get_potential_anomaly_metrics()
+        
+        # Extract just the metric names for API calls
+        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]
+        
+        # Log discovered metrics
+        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")
+        for metric_info in potential_metrics:
+            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")
+        
+        if not site_anomaly_metrics:
+            print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
+            return
+        
+        all_anomaly_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")
+        
+        # Temporarily suppress mistapi error logging to keep console clean
+        mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
+        original_levels = {}
+        for logger_name in mistapi_loggers:
+            logger_instance = logging.getLogger(logger_name)
+            original_levels[logger_name] = logger_instance.level
+            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
+        
+        try:
+            for metric in site_anomaly_metrics:
+                try:
+                    # Call the site anomaly API endpoint
+                    response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(
+                        apisession, 
+                        site_id, 
+                        metric
+                    )
+                    anomaly_data = getattr(response, 'data', response) or {}
+                    
+                    if anomaly_data:
+                        # Add metric type identifier to each data point
+                        anomaly_data['metric_type'] = metric
+                        anomaly_data['site_id'] = site_id
+                        anomaly_data['site_name'] = site_name
+                        anomaly_data['data_type'] = 'site_anomaly_events'
+                        all_anomaly_data.append(anomaly_data)
+                        metrics_retrieved += 1
+                        print(f"!? Retrieved {metric} anomaly events")
+                        logging.debug(f"Successfully retrieved {metric} anomaly events for site {site_id}")
+                    else:
+                        print(f"! No {metric} anomaly events available")
+                        logging.info(f"No {metric} anomaly events available for site {site_id}")
+                except Exception as metric_error:
+                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")
+                    logging.warning(f"Error retrieving {metric} anomaly events for site {site_id}: {metric_error}")
+            
+            # Process and save all collected anomaly data
+            if all_anomaly_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} site anomaly event types for {site_name} to {filename}")
+            else:
+                print(f"! 0 anomaly events exported to {filename} (no data available)")
+                logging.warning(f"No anomaly events available for site {site_name}")
+                DataExporter.save_data_to_output([], filename)
+                
+        except Exception as exception:
+            print(f"! Error exporting site anomaly events: {exception}")
+            logging.error(f"Failed to export site anomaly events for {site_name}: {exception}")
+        finally:
+            # Restore original logging levels
+            for logger_name, original_level in original_levels.items():
+                logging.getLogger(logger_name).setLevel(original_level)
+    
+    @staticmethod
+    def device_anomaly_events():
+        """Export device-specific anomaly events for a selected device to SiteDeviceAnomalyEvents_[SiteName]_[DeviceName].csv.
+        
+        Uses GET /api/v1/sites/:site_id/anomaly/:metric/device/:device_id endpoint to retrieve device anomaly events.
+        """
+        print("Export Site Device Anomaly Events:")
+        logging.info("Starting export of site device anomaly events...")
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            print("! No site selected. Exiting.")
+            return
+        
+        # Get site name for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        # Get device selection
+        device_selection = PromptUtils.select_device(site_id)
+        if not device_selection:
+            print("! No device selected. Exiting.")
+            return
+        
+        device_mac = device_selection[0]
+        device_name = device_selection[1]
+        
+        # Clean names for filename
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
+        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)
+        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"
+        
+        # Define device-specific anomaly metrics
+        device_anomaly_metrics = [
+            "ap_availability",
+            "throughput",
+            "capacity"
+        ]
+        
+        all_device_anomaly_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(device_anomaly_metrics)} different device anomaly events for {device_name}...")
+        
+        # Temporarily suppress mistapi error logging to keep console clean
+        mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
+        original_levels = {}
+        for logger_name in mistapi_loggers:
+            logger_instance = logging.getLogger(logger_name)
+            original_levels[logger_name] = logger_instance.level
+            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
+        
+        try:
+            for metric in device_anomaly_metrics:
+                try:
+                    # Call the site device anomaly API endpoint
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
+                        apisession, 
+                        site_id, 
+                        metric, 
+                        device_mac
+                    )
+                    device_anomaly_data = getattr(response, 'data', response) or {}
+                    
+                    if device_anomaly_data:
+                        # Add metadata
+                        device_anomaly_data['metric_type'] = metric
+                        device_anomaly_data['site_id'] = site_id
+                        device_anomaly_data['site_name'] = site_name
+                        device_anomaly_data['device_mac'] = device_mac
+                        device_anomaly_data['device_name'] = device_name
+                        device_anomaly_data['data_type'] = 'device_anomaly_events'
+                        all_device_anomaly_data.append(device_anomaly_data)
+                        metrics_retrieved += 1
+                        print(f"!? Retrieved {metric} device anomaly data")
+                        logging.debug(f"Successfully retrieved {metric} device anomaly data for {device_mac}")
+                    else:
+                        print(f"! No {metric} device anomaly data available")
+                        logging.info(f"No {metric} device anomaly data available for {device_mac}")
+                except Exception as metric_error:
+                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")
+                    logging.warning(f"Error retrieving {metric} device anomaly data for {device_mac}: {metric_error}")
+            
+            # Process and save all collected device anomaly data
+            if all_device_anomaly_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} device anomaly event types for {device_name} to {filename}")
+            else:
+                print(f"! 0 device anomaly events exported to {filename} (no data available)")
+                logging.warning(f"No device anomaly events available for {device_name}")
+                DataExporter.save_data_to_output([], filename)
+                
+        except Exception as exception:
+            print(f"! Error exporting device anomaly events: {exception}")
+            logging.error(f"Failed to export device anomaly events for {device_name}: {exception}")
+        finally:
+            # Restore original logging levels
+            for logger_name, original_level in original_levels.items():
+                logging.getLogger(logger_name).setLevel(original_level)
+    
+    @staticmethod
+    def client_anomaly_events():
+        """Export client-specific anomaly events for a selected client to SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
+        
+        Uses GET /api/v1/sites/:site_id/anomaly/:metric/client/:client_mac endpoint to retrieve client anomaly events
+        including connection success rates, band-specific roaming performance, and throughput issues.
+        """
+        print("Export Site Client Anomaly Events:")
+        logging.info("Starting export of site client anomaly events...")
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            print("! No site selected. Exiting.")
+            return
+        
+        # Get site name for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        # Use the guided client selection function with the site_id
+        client_mac, client_type, selected_site_id = prompt_client_selection(site_id)
+        if not client_mac:
+            print("! No client selected. Exiting.")
+            return
+        
+        # Get hostname from the client MAC (we'll need to look it up)
+        client_hostname = "Unknown"
+        try:
+            # Search for the client to get hostname
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=100, duration="1d")
+            clients = getattr(response, 'data', response) or []
+            
+            for client in clients:
+                if client.get('mac') == client_mac:
+                    client_hostname = client.get('hostname', client.get('name', 'Unknown'))
+                    break
+                    
+        except Exception as exception:
+            logging.warning(f"Could not retrieve client hostname for {client_mac}: {exception}")
+            client_hostname = client_mac  # Fallback to MAC address 
+        
+        # Clean names for filename
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
+        filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
+        
+        # Define client-specific anomaly metrics (verified working metrics)
+        client_anomaly_metrics = [
+            "successful_connect",    # Note: uses underscore, not hyphen for client endpoint
+            "roaming",              # Client roaming issues  
+            "throughput"            # Client throughput anomalies
+        ]
+        
+        all_client_anomaly_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(client_anomaly_metrics)} different client anomaly events for {client_mac} ({client_hostname})...")
+        
+        # Temporarily suppress mistapi error logging to keep console clean
+        mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
+        original_levels = {}
+        for logger_name in mistapi_loggers:
+            logger_instance = logging.getLogger(logger_name)
+            original_levels[logger_name] = logger_instance.level
+            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
+        
+        try:
+            for metric in client_anomaly_metrics:
+                try:
+                    # Call the site client anomaly API endpoint
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
+                        apisession, 
+                        site_id, 
+                        client_mac, 
+                        metric
+                    )
+                    client_anomaly_data = getattr(response, 'data', response) or {}
+                    
+                    if client_anomaly_data:
+                        # Add metadata
+                        client_anomaly_data['metric_type'] = metric
+                        client_anomaly_data['site_id'] = site_id
+                        client_anomaly_data['site_name'] = site_name
+                        client_anomaly_data['client_mac'] = client_mac
+                        client_anomaly_data['client_hostname'] = client_hostname
+                        client_anomaly_data['data_type'] = 'client_anomaly_events'
+                        all_client_anomaly_data.append(client_anomaly_data)
+                        metrics_retrieved += 1
+                        print(f"!? Retrieved {metric} client anomaly data")
+                        logging.debug(f"Successfully retrieved {metric} client anomaly data for {client_mac}")
+                    else:
+                        print(f"! No {metric} client anomaly data available")
+                        logging.info(f"No {metric} client anomaly data available for {client_mac}")
+                except Exception as metric_error:
+                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")
+                    logging.warning(f"Error retrieving {metric} client anomaly data for {client_mac}: {metric_error}")
+            
+            # Process and save all collected client anomaly data
+            if all_client_anomaly_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} client anomaly event types for {client_mac} to {filename}")
+            else:
+                print(f"! 0 client anomaly events exported to {filename} (no data available)")
+                logging.warning(f"No client anomaly events available for {client_mac}")
+                DataExporter.save_data_to_output([], filename)
+                
+        except Exception as exception:
+            print(f"! Error exporting client anomaly events: {exception}")
+            logging.error(f"Failed to export client anomaly events for {client_mac}: {exception}")
+        finally:
+            # Restore original logging levels
+            for logger_name, original_level in original_levels.items():
+                logging.getLogger(logger_name).setLevel(original_level)
 
 
 # ============================================================================
@@ -17593,22 +18081,170 @@ class GatewayExportUtils:
     @staticmethod
     def device_stats(fast=False):
         """
-        Exports gateway device statistics.
+        Collects and exports detailed device statistics for all gateways in the organization.
+        Makes individual getSiteDeviceStats API calls for each gateway device.
+        Optimized to use cached inventory data and concurrent processing when fast=True.
         
         Args:
-            fast (bool): If True, enables concurrent processing
+            fast (bool): If True, enables concurrent processing and uses cached inventory data
+                        to minimize API calls.
         """
-        export_gateway_device_stats_to_csv(fast)
+        logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
+        if fast:
+            logging.info(" Fast mode enabled: Using cached data and concurrent processing")
+        
+        org_id = get_cached_or_prompted_org_id()
+        gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
+        all_stats = []
+
+        if not gateway_devices:
+            logging.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")
+            return
+
+        def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
+            """
+            Fetch device statistics for a single gateway device with retry logic and connection pool management.
+            
+            Args:
+                device_info: Tuple of (site_id, device_id, device_name, site_name)
+                max_retries: Maximum number of retry attempts (uses env var if None)
+                retry_delay: Base delay between retries (uses env var if None)
+                connection_semaphore: Semaphore to limit concurrent connections (optional)
+            """
+            # Use environment variables as defaults if not provided
+            if max_retries is None:
+                max_retries = FAST_MODE_MAX_RETRIES
+            if retry_delay is None:
+                retry_delay = FAST_MODE_RETRY_DELAY
+                
+            site_id, device_id, device_name, site_name = device_info
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    # Validate inputs before making API calls
+                    ValidationUtils.validate_site_id(site_id, "device_stats")
+                    ValidationUtils.validate_device_id(device_id, "device_stats")
+                    
+                    # Use semaphore to limit concurrent connections if provided
+                    if connection_semaphore:
+                        with connection_semaphore:
+                            stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
+                    else:
+                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
+                    
+                    # Add contextual information to the stats
+                    stats["site_id"] = site_id
+                    stats["site_name"] = site_name
+                    stats["device_id"] = device_id
+                    stats["device_name"] = device_name
+                    
+                    if attempt > 0:
+                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                    else:
+                        logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
+                    return stats
+                    
+                except Exception as exception:
+                    if attempt < max_retries:
+                        # Fast mode: reduced backoff delay for quicker retries
+                        backoff_delay = retry_delay * (2 ** attempt) if not fast else retry_delay
+                        logging.warning(f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}")
+                        logging.info(f"! Retrying in {backoff_delay} seconds...")
+                        time.sleep(backoff_delay)
+                    else:
+                        logging.error(f"! Failed to fetch device stats for {device_name} at site {site_name} after {max_retries + 1} attempts: {exception}")
+                        # Return a minimal record with error information
+                        return {
+                            "site_id": site_id,
+                            "site_name": site_name,
+                            "device_id": device_id,
+                            "device_name": device_name,
+                            "error": str(exception),
+                            "status": "failed"
+                        }
+
+        # Process devices with appropriate threading based on fast mode
+        if fast and len(gateway_devices) > 10:
+            # Use concurrent processing for large numbers of devices
+            logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
+            
+            # Limit concurrent connections to prevent overwhelming the API
+            max_workers = min(10, len(gateway_devices))  # Cap at 10 concurrent requests
+            connection_semaphore = threading.Semaphore(max_workers)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        fetch_device_stats_with_retry, 
+                        device_info, 
+                        connection_semaphore=connection_semaphore
+                    ): device_info for device_info in gateway_devices
+                }
+                
+                # Progress bar for concurrent processing
+                for future in tqdm(concurrent.futures.as_completed(futures), 
+                                 total=len(futures), 
+                                 desc="Gateway Device Stats", 
+                                 unit="device"):
+                    device_info = futures[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            all_stats.append(result)
+                    except Exception as exception:
+                        site_id, device_id, device_name, site_name = device_info
+                        logging.error(f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}")
+        else:
+            # Sequential processing for smaller datasets or normal mode
+            logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
+            for index, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
+                site_id, device_id, device_name, site_name = device_info
+                logging.debug(f"! Processing device {index}/{len(gateway_devices)}: {device_name} at {site_name}")
+                
+                result = fetch_device_stats_with_retry(device_info)
+                if result:
+                    all_stats.append(result)
+
+        # Save results to CSV
+        if all_stats:
+            # Sanitize and flatten nested data structures
+            sanitized = []
+            for stats in all_stats:
+                flat_record = DataProcessingUtils.flatten_dict(stats)
+                sanitized.append(flat_record)
+            
+            filename = "AllGatewayDeviceStats.csv"
+            DataExporter.save_data_to_output(sanitized, filename)
+            logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
+            logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
+            
+            # Log summary of successful vs failed requests
+            successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
+            failed_requests = len(all_stats) - successful_requests
+            if failed_requests > 0:
+                logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
+            else:
+                logging.info(f"! All {successful_requests} requests completed successfully")
+        else:
+            logging.warning(" No gateway device statistics found. CSV not created.")
     
     @staticmethod
     def device_stats_with_freshness(fast=False):
         """
         Exports gateway device statistics with freshness check.
+        Checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
+        This ensures we don't unnecessarily regenerate data that's already current.
         
         Args:
             fast (bool): If True, enables concurrent processing
         """
-        export_gateway_device_stats_to_csv_with_freshness_check(fast)
+        output_file = "AllGatewayDeviceStats.csv"
+        
+        # Check if file exists and is fresh
+        if check_and_generate_csv(output_file, lambda: GatewayExportUtils.device_stats(fast=fast)):
+            logging.info(f"! {output_file} already exists and is fresh - using cached data")
+        else:
+            logging.info(f"! {output_file} was generated or refreshed")
     
     @staticmethod
     def wan_port_conflicts():
@@ -17624,7 +18260,7 @@ class GatewayExportUtils:
         # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
         stats_file = "AllGatewayDeviceStats.csv"
         
-        check_and_generate_csv(stats_file, lambda: export_gateway_device_stats_to_csv(fast=True))
+        check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
         
         # Load the gateway device stats using CSV reader
         stats_path = get_csv_file_path(stats_file)
@@ -18383,168 +19019,6 @@ def get_site_ids_with_gateway_devices(apisession, org_id):
     logging.info(f"[INFO] Found {len(gateway_sites)} sites with at least one gateway.")
 
     return list(gateway_sites)
-
-def export_gateway_device_stats_to_csv_with_freshness_check(fast=False):
-    """
-    Wrapper function that checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
-    This ensures we don't unnecessarily regenerate data that's already current.
-    """
-    output_file = "AllGatewayDeviceStats.csv"
-    
-    # Check if file exists and is fresh
-    if check_and_generate_csv(output_file, lambda: export_gateway_device_stats_to_csv(fast=fast)):
-        logging.info(f"! {output_file} already exists and is fresh - using cached data")
-    else:
-        logging.info(f"! {output_file} was generated or refreshed")
-
-def export_gateway_device_stats_to_csv(fast=False):
-    """
-    Collects and exports detailed device statistics for all gateways in the organization.
-    Makes individual getSiteDeviceStats API calls for each gateway device.
-    Optimized to use cached inventory data and concurrent processing when fast=True.
-    
-    Args:
-        fast (bool): If True, enables concurrent processing and uses cached inventory data
-                    to minimize API calls.
-    """
-    logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
-    if fast:
-        logging.info(" Fast mode enabled: Using cached data and concurrent processing")
-    
-    org_id = get_cached_or_prompted_org_id()
-    gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
-    all_stats = []
-
-    if not gateway_devices:
-        logging.warning("[WARN] No gateway devices found. Exiting export_gateway_device_stats_to_csv.")
-        return
-
-    def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
-        """
-        Fetch device statistics for a single gateway device with retry logic and connection pool management.
-        
-        Args:
-            device_info: Tuple of (site_id, device_id, device_name, site_name)
-            max_retries: Maximum number of retry attempts (uses env var if None)
-            retry_delay: Base delay between retries (uses env var if None)
-            connection_semaphore: Semaphore to limit concurrent connections (optional)
-        """
-        # Use environment variables as defaults if not provided
-        if max_retries is None:
-            max_retries = FAST_MODE_MAX_RETRIES
-        if retry_delay is None:
-            retry_delay = FAST_MODE_RETRY_DELAY
-            
-        site_id, device_id, device_name, site_name = device_info
-        
-        for attempt in range(max_retries + 1):
-            try:
-                # Validate inputs before making API calls
-                ValidationUtils.validate_site_id(site_id, "export_gateway_device_stats_to_csv")
-                ValidationUtils.validate_device_id(device_id, "export_gateway_device_stats_to_csv")
-                
-                # Use semaphore to limit concurrent connections if provided
-                if connection_semaphore:
-                    with connection_semaphore:
-                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-                else:
-                    stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-                
-                # Add contextual information to the stats
-                stats["site_id"] = site_id
-                stats["site_name"] = site_name
-                stats["device_id"] = device_id
-                stats["device_name"] = device_name
-                
-                if attempt > 0:
-                    logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
-                else:
-                    logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
-                return stats
-                
-            except Exception as e:
-                if attempt < max_retries:
-                    # Fast mode: reduced backoff delay for quicker retries
-                    backoff_delay = retry_delay * (2 ** attempt) if not fast else retry_delay
-                    logging.warning(f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {e}")
-                    logging.info(f"! Retrying in {backoff_delay} seconds...")
-                    time.sleep(backoff_delay)
-                else:
-                    logging.error(f"! Failed to fetch device stats for {device_name} at site {site_name} after {max_retries + 1} attempts: {e}")
-                    # Return a minimal record with error information
-                    return {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "device_id": device_id,
-                        "device_name": device_name,
-                        "error": str(e),
-                        "status": "failed"
-                    }
-
-    # Process devices with appropriate threading based on fast mode
-    if fast and len(gateway_devices) > 10:
-        # Use concurrent processing for large numbers of devices
-        logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
-        
-        # Limit concurrent connections to prevent overwhelming the API
-        max_workers = min(10, len(gateway_devices))  # Cap at 10 concurrent requests
-        connection_semaphore = threading.Semaphore(max_workers)
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(
-                    fetch_device_stats_with_retry, 
-                    device_info, 
-                    connection_semaphore=connection_semaphore
-                ): device_info for device_info in gateway_devices
-            }
-            
-            # Progress bar for concurrent processing
-            for future in tqdm(concurrent.futures.as_completed(futures), 
-                             total=len(futures), 
-                             desc="Gateway Device Stats", 
-                             unit="device"):
-                device_info = futures[future]
-                try:
-                    result = future.result()
-                    if result:
-                        all_stats.append(result)
-                except Exception as e:
-                    site_id, device_id, device_name, site_name = device_info
-                    logging.error(f"! Concurrent processing failed for device {device_name} at site {site_name}: {e}")
-    else:
-        # Sequential processing for smaller datasets or normal mode
-        logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
-        for i, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
-            site_id, device_id, device_name, site_name = device_info
-            logging.debug(f"! Processing device {i}/{len(gateway_devices)}: {device_name} at {site_name}")
-            
-            result = fetch_device_stats_with_retry(device_info)
-            if result:
-                all_stats.append(result)
-
-    # Save results to CSV
-    if all_stats:
-        # Sanitize and flatten nested data structures
-        sanitized = []
-        for stats in all_stats:
-            flat_record = DataProcessingUtils.flatten_dict(stats)
-            sanitized.append(flat_record)
-        
-        filename = "AllGatewayDeviceStats.csv"
-        DataExporter.save_data_to_output(sanitized, filename)
-        logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
-        logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
-        
-        # Log summary of successful vs failed requests
-        successful_requests = len([s for s in all_stats if s.get("status") != "failed"])
-        failed_requests = len(all_stats) - successful_requests
-        if failed_requests > 0:
-            logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
-        else:
-            logging.info(f"! All {successful_requests} requests completed successfully")
-    else:
-        logging.warning(" No gateway device statistics found. CSV not created.")
 
 def generate_support_package():
     logging.info("Generating support package for each site...")
@@ -24480,162 +24954,6 @@ def check_virtual_chassis_conversion_status():
     print(f"   !? Use option 92 to convert individual switches")
     print(f"   !? Use option 93 for bulk conversion by site list")
     print(f"   !? Virtual chassis switches without '020003' vc_mac prefix can be converted")
-
-def export_site_wifi_clients_to_csv(site_id=None):
-    """
-    Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
-    Fetches both wireless client data and wireless client session data, then merges them based on MAC address.
-    If site_id is not provided, prompts user to select from site list.
-    
-    The merged data includes:
-    - Current client information (if available)
-    - Session data for each client (prefixed with 'session_')
-    - Session count for clients with multiple sessions
-    - Sessions without corresponding current clients (marked as 'session_only')
-    """
-    print("Export Site WiFi Clients:")
-    logging.info("Starting export of site WiFi clients...")
-    
-    # Ensure required CSVs are fresh
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-    
-    # Get site_id if not provided
-    if not site_id:
-        site_id = PromptUtils.select_site_id_from_csv("SiteList.csv")
-        if not site_id:
-            logging.error(" No site selected.")
-            print(" No site selected.")
-            return
-    
-    # Get site name for display
-    site_name = "Unknown Site"
-    try:
-        site_list_path = get_csv_file_path("SiteList.csv")
-        with open(site_list_path, mode="r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row.get("id") == site_id:
-                    site_name = row.get("name", "Unknown Site")
-                    break
-    except Exception as e:
-        logging.warning(f"! Failed to load site name from SiteList.csv: {e}")
-    
-    logging.info(f"Fetching WiFi clients for site: {site_name} (ID: {site_id})")
-    print(f"! Fetching WiFi clients for site: {site_name}")
-    
-    try:
-        # Call the Mist API to search for wireless clients at the site
-        logging.info("Fetching wireless clients data...")
-        client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
-        clients = mistapi.get_all(response=client_response, mist_session=apisession)
-        
-        # Call the Mist API to search for wireless client sessions at the site
-        logging.info("Fetching wireless client sessions data...")
-        session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(apisession, site_id, limit=1000)
-        sessions = mistapi.get_all(response=session_response, mist_session=apisession)
-        
-        if not clients and not sessions:
-            logging.warning(" No WiFi clients or sessions found at this site.")
-            print(" No WiFi clients or sessions found at this site.")
-            # Create empty CSV with headers
-            wifi_clients_path = get_csv_file_path("SiteWiFiClients.CSV")
-            with open(wifi_clients_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["site_id", "site_name", "message"])
-                writer.writerow([site_id, site_name, "No WiFi clients or sessions found"])
-            return
-        
-        # Create a dictionary to store session data by MAC address for easy lookup
-        sessions_by_mac = {}
-        if sessions:
-            for session in sessions:
-                mac = session.get("mac")
-                if mac:
-                    # If multiple sessions exist for the same MAC, store them in a list
-                    if mac in sessions_by_mac:
-                        if not isinstance(sessions_by_mac[mac], list):
-                            sessions_by_mac[mac] = [sessions_by_mac[mac]]
-                        sessions_by_mac[mac].append(session)
-                    else:
-                        sessions_by_mac[mac] = session
-        
-        # Merge client data with session data based on MAC address
-        enriched_clients = []
-        processed_macs = set()
-        
-        # Process clients and merge with matching sessions
-        if clients:
-            for client in clients:
-                client_mac = client.get("mac")
-                # Add site information
-                client["site_id"] = site_id
-                client["site_name"] = site_name
-                client["data_source"] = "client"
-                
-                # Merge with session data if available
-                if client_mac and client_mac in sessions_by_mac:
-                    session_data = sessions_by_mac[client_mac]
-                    if isinstance(session_data, list):
-                        # Multiple sessions - merge with the most recent one
-                        latest_session = max(session_data, key=lambda x: x.get("start_time", 0))
-                        for key, value in latest_session.items():
-                            if key not in client:  # Don't overwrite client data
-                                client[f"session_{key}"] = value
-                        client["session_count"] = len(session_data)
-                    else:
-                        # Single session
-                        for key, value in session_data.items():
-                            if key not in client:  # Don't overwrite client data
-                                client[f"session_{key}"] = value
-                        client["session_count"] = 1
-                    processed_macs.add(client_mac)
-                else:
-                    client["session_count"] = 0
-                
-                enriched_clients.append(client)
-        
-        # Add any sessions that don't have corresponding client data
-        if sessions:
-            for session in sessions:
-                session_mac = session.get("mac")
-                if session_mac and session_mac not in processed_macs:
-                    # This is a session without a corresponding current client
-                    session["site_id"] = site_id
-                    session["site_name"] = site_name
-                    session["data_source"] = "session_only"
-                    session["session_count"] = 1
-                    # Prefix session-specific fields to avoid conflicts
-                    session_data = {}
-                    for key, value in session.items():
-                        if key not in ["site_id", "site_name", "data_source", "session_count"]:
-                            session_data[f"session_{key}"] = value
-                        else:
-                            session_data[key] = value
-                    enriched_clients.append(session_data)
-        
-        if not enriched_clients:
-            logging.warning(" No data to export after processing.")
-            print(" No data to export after processing.")
-            return
-        
-        # Flatten and sanitize the data for CSV
-        flattened = DataProcessingUtils.flatten_nested_fields(enriched_clients)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        
-        # Write to CSV
-        DataExporter.save_data_to_output(sanitized, "SiteWiFiClients.CSV")
-        
-        client_count = len(clients) if clients else 0
-        session_count = len(sessions) if sessions else 0
-        total_records = len(enriched_clients)
-        
-        logging.info(f"! WiFi data exported to SiteWiFiClients.CSV ({client_count} clients, {session_count} sessions, {total_records} total records)")
-        print(f"! WiFi data exported to SiteWiFiClients.CSV")
-        print(f"   {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}")
-        
-    except Exception as e:
-        logging.error(f"! Failed to fetch WiFi data for site {site_id}: {e}")
-        print(f"! Failed to fetch WiFi data: {e}")
 
 def reboot_devices_by_gateway_template_list():
     """
@@ -38883,342 +39201,6 @@ def get_potential_anomaly_metrics():
 # Removed duplicate function definition - proper implementation exists at line 23437
 
 
-def export_site_anomaly_metrics_to_csv():
-    """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv.
-    
-    Dynamically discovers potential anomaly metrics from ConstInsightMetrics.csv and uses 
-    GET /api/v1/sites/:site_id/anomaly/:metric endpoint to retrieve anomaly events
-    for all site-scoped metrics related to anomaly detection (capacity, coverage, roaming, 
-    client connectivity, AP availability, etc.).
-    """
-    print("Export Site Anomaly Events:")
-    logging.info("Starting export of site anomaly events...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        print("! No site selected. Exiting.")
-        return
-    
-    # Get site name for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    # Clean site name for filename
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-    filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"
-    
-    # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
-    print("! Discovering potential anomaly metrics from Mist API definitions...")
-    potential_metrics = get_potential_anomaly_metrics()
-    
-    # Extract just the metric names for API calls
-    site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]
-    
-    # Log discovered metrics
-    print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")
-    for metric_info in potential_metrics:
-        print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")
-    
-    if not site_anomaly_metrics:
-        print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
-        return
-    
-    all_anomaly_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")
-    
-    # Temporarily suppress mistapi error logging to keep console clean
-    mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
-    original_levels = {}
-    for logger_name in mistapi_loggers:
-        logger = logging.getLogger(logger_name)
-        original_levels[logger_name] = logger.level
-        logger.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
-    
-    try:
-        for metric in site_anomaly_metrics:
-            try:
-                # Call the site anomaly API endpoint
-                response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(
-                    apisession, 
-                    site_id, 
-                    metric
-                )
-                anomaly_data = getattr(response, 'data', response) or {}
-                
-                if anomaly_data:
-                    # Add metric type identifier to each data point
-                    anomaly_data['metric_type'] = metric
-                    anomaly_data['site_id'] = site_id
-                    anomaly_data['site_name'] = site_name
-                    anomaly_data['data_type'] = 'site_anomaly_events'
-                    all_anomaly_data.append(anomaly_data)
-                    metrics_retrieved += 1
-                    print(f"!? Retrieved {metric} anomaly events")
-                    logging.debug(f"Successfully retrieved {metric} anomaly events for site {site_id}")
-                else:
-                    print(f"! No {metric} anomaly events available")
-                    logging.info(f"No {metric} anomaly events available for site {site_id}")
-            except Exception as metric_error:
-                print(f"! Error retrieving {metric} anomaly events: {metric_error}")
-                logging.warning(f"Error retrieving {metric} anomaly events for site {site_id}: {metric_error}")
-        
-        # Process and save all collected anomaly data
-        if all_anomaly_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} site anomaly event types for {site_name} to {filename}")
-        else:
-            print(f"! 0 anomaly events exported to {filename} (no data available)")
-            logging.warning(f"No anomaly events available for site {site_name}")
-            DataExporter.save_data_to_output([], filename)
-            
-    except Exception as e:
-        print(f"! Error exporting site anomaly events: {e}")
-        logging.error(f"Failed to export site anomaly events for {site_name}: {e}")
-    finally:
-        # Restore original logging levels
-        for logger_name, original_level in original_levels.items():
-            logging.getLogger(logger_name).setLevel(original_level)
-
-
-def export_site_device_anomaly_to_csv():
-    """Export device-specific anomaly events for a selected device to SiteDeviceAnomalyEvents_[SiteName]_[DeviceName].csv.
-    
-    Uses GET /api/v1/sites/:site_id/anomaly/:metric/device/:device_id endpoint to retrieve device anomaly events.
-    """
-    print("Export Site Device Anomaly Events:")
-    logging.info("Starting export of site device anomaly events...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        print("! No site selected. Exiting.")
-        return
-    
-    # Get site name for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    # Get device selection
-    device_selection = PromptUtils.select_device(site_id)
-    if not device_selection:
-        print("! No device selected. Exiting.")
-        return
-    
-    device_mac = device_selection[0]
-    device_name = device_selection[1]
-    
-    # Clean names for filename
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-    sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)
-    filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"
-    
-    # Define device-specific anomaly metrics
-    device_anomaly_metrics = [
-        "ap_availability",
-        "throughput",
-        "capacity"
-    ]
-    
-    all_device_anomaly_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(device_anomaly_metrics)} different device anomaly events for {device_name}...")
-    
-    # Temporarily suppress mistapi error logging to keep console clean
-    mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
-    original_levels = {}
-    for logger_name in mistapi_loggers:
-        logger = logging.getLogger(logger_name)
-        original_levels[logger_name] = logger.level
-        logger.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
-    
-    try:
-        for metric in device_anomaly_metrics:
-            try:
-                # Call the site device anomaly API endpoint
-                response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
-                    apisession, 
-                    site_id, 
-                    metric, 
-                    device_mac
-                )
-                device_anomaly_data = getattr(response, 'data', response) or {}
-                
-                if device_anomaly_data:
-                    # Add metadata
-                    device_anomaly_data['metric_type'] = metric
-                    device_anomaly_data['site_id'] = site_id
-                    device_anomaly_data['site_name'] = site_name
-                    device_anomaly_data['device_mac'] = device_mac
-                    device_anomaly_data['device_name'] = device_name
-                    device_anomaly_data['data_type'] = 'device_anomaly_events'
-                    all_device_anomaly_data.append(device_anomaly_data)
-                    metrics_retrieved += 1
-                    print(f"!? Retrieved {metric} device anomaly data")
-                    logging.debug(f"Successfully retrieved {metric} device anomaly data for {device_mac}")
-                else:
-                    print(f"! No {metric} device anomaly data available")
-                    logging.info(f"No {metric} device anomaly data available for {device_mac}")
-            except Exception as metric_error:
-                print(f"! Error retrieving {metric} device anomaly data: {metric_error}")
-                logging.warning(f"Error retrieving {metric} device anomaly data for {device_mac}: {metric_error}")
-        
-        # Process and save all collected device anomaly data
-        if all_device_anomaly_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} device anomaly event types for {device_name} to {filename}")
-        else:
-            print(f"! 0 device anomaly events exported to {filename} (no data available)")
-            logging.warning(f"No device anomaly events available for {device_name}")
-            DataExporter.save_data_to_output([], filename)
-            
-    except Exception as e:
-        print(f"! Error exporting device anomaly events: {e}")
-        logging.error(f"Failed to export device anomaly events for {device_name}: {e}")
-    finally:
-        # Restore original logging levels
-        for logger_name, original_level in original_levels.items():
-            logging.getLogger(logger_name).setLevel(original_level)
-
-
-def export_site_client_anomaly_to_csv():
-    """Export client-specific anomaly events for a selected client to SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
-    
-    Uses GET /api/v1/sites/:site_id/anomaly/:metric/client/:client_mac endpoint to retrieve client anomaly events
-    including connection success rates, band-specific roaming performance, and throughput issues.
-    """
-    print("Export Site Client Anomaly Events:")
-    logging.info("Starting export of site client anomaly events...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        print("! No site selected. Exiting.")
-        return
-    
-    # Get site name for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    # Use the guided client selection function with the site_id
-    client_mac, client_type, selected_site_id = prompt_client_selection(site_id)
-    if not client_mac:
-        print("! No client selected. Exiting.")
-        return
-    
-    # Get hostname from the client MAC (we'll need to look it up)
-    client_hostname = "Unknown"
-    try:
-        # Search for the client to get hostname
-        response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=100, duration="1d")
-        clients = getattr(response, 'data', response) or []
-        
-        for client in clients:
-            if client.get('mac') == client_mac:
-                client_hostname = client.get('hostname', client.get('name', 'Unknown'))
-                break
-                
-    except Exception as e:
-        logging.warning(f"Could not retrieve client hostname for {client_mac}: {e}")
-        client_hostname = client_mac  # Fallback to MAC address 
-    
-    # Clean names for filename
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-    filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
-    
-    # Define client-specific anomaly metrics (verified working metrics)
-    client_anomaly_metrics = [
-        "successful_connect",    # Note: uses underscore, not hyphen for client endpoint
-        "roaming",              # Client roaming issues  
-        "throughput"            # Client throughput anomalies
-    ]
-    
-    all_client_anomaly_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(client_anomaly_metrics)} different client anomaly events for {client_mac} ({client_hostname})...")
-    
-    # Temporarily suppress mistapi error logging to keep console clean
-    mistapi_loggers = ['apirequest', 'apiresponse', 'mistapi', 'mistapi.apirequest', 'mistapi.apiresponse']
-    original_levels = {}
-    for logger_name in mistapi_loggers:
-        logger = logging.getLogger(logger_name)
-        original_levels[logger_name] = logger.level
-        logger.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
-    
-    try:
-        for metric in client_anomaly_metrics:
-            try:
-                # Call the site client anomaly API endpoint
-                response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
-                    apisession, 
-                    site_id, 
-                    client_mac, 
-                    metric
-                )
-                client_anomaly_data = getattr(response, 'data', response) or {}
-                
-                if client_anomaly_data:
-                    # Add metadata
-                    client_anomaly_data['metric_type'] = metric
-                    client_anomaly_data['site_id'] = site_id
-                    client_anomaly_data['site_name'] = site_name
-                    client_anomaly_data['client_mac'] = client_mac
-                    client_anomaly_data['client_hostname'] = client_hostname
-                    client_anomaly_data['data_type'] = 'client_anomaly_events'
-                    all_client_anomaly_data.append(client_anomaly_data)
-                    metrics_retrieved += 1
-                    print(f"!? Retrieved {metric} client anomaly data")
-                    logging.debug(f"Successfully retrieved {metric} client anomaly data for {client_mac}")
-                else:
-                    print(f"! No {metric} client anomaly data available")
-                    logging.info(f"No {metric} client anomaly data available for {client_mac}")
-            except Exception as metric_error:
-                print(f"! Error retrieving {metric} client anomaly data: {metric_error}")
-                logging.warning(f"Error retrieving {metric} client anomaly data for {client_mac}: {metric_error}")
-        
-        # Process and save all collected client anomaly data
-        if all_client_anomaly_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} client anomaly event types for {client_mac} to {filename}")
-        else:
-            print(f"! 0 client anomaly events exported to {filename} (no data available)")
-            logging.warning(f"No client anomaly events available for {client_mac}")
-            DataExporter.save_data_to_output([], filename)
-            
-    except Exception as e:
-        print(f"! Error exporting client anomaly events: {e}")
-        logging.error(f"Failed to export client anomaly events for {client_mac}: {e}")
-    finally:
-        # Restore original logging levels
-        for logger_name, original_level in original_levels.items():
-            logging.getLogger(logger_name).setLevel(original_level)
-
-
 # ============================================================================
 # WLAN RADIUS AUTHENTICATION TIMER MANAGEMENT
 # ============================================================================
@@ -43180,7 +43162,7 @@ menu_actions = {
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
     "16": (GatewayExportUtils.synthetic_tests, "Export synthetic test results for all gateways"),
     "17": (OrgExportUtils.devices, "Export a list of all devices in the organization"),
-    "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
+    "18": (SiteExportUtils.settings, "Export configuration settings for all sites"),
     "19": (GatewayExportUtils.test_results_by_site, "Export all synthetic test results (including speed tests) for gateways"),
 
     # > Location-Enriched Exports
@@ -43189,25 +43171,25 @@ menu_actions = {
     "22": (OrgExportUtils.devices_with_site_info, "Export a list of all devices with associated site and address info"),
     "23": (lambda: (OrgExportUtils.current_guests(), OrgExportUtils.historical_guests()),"Export all current guest users and last 7 days of historical guests to CSV"),
     "24": (OrgExportUtils.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
-    "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
+    "25": (OrgExportUtils.combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
     "27": (OrgExportUtils.sites_list_api, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
     "28": (lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
     # Site-Specific Data Exports
     "29": (SiteExportUtils.port_stats, "Export port statistics for a selected site"),
-    "30": (export_site_clients_to_csv, "Export client statistics for a selected site"),
-    "31": (export_site_devices_to_csv, "Export device list for a selected site"),
-    "32": (export_site_device_stats_to_csv, "Export device statistics for a selected site"),
-    "33": (export_site_device_virtual_chassis_to_csv, "Export virtual chassis information for a selected switch device"),
-    "34": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
+    "30": (SiteExportUtils.clients, "Export client statistics for a selected site"),
+    "31": (SiteExportUtils.devices, "Export device list for a selected site"),
+    "32": (SiteExportUtils.device_stats, "Export device statistics for a selected site"),
+    "33": (SiteExportUtils.device_virtual_chassis, "Export virtual chassis information for a selected switch device"),
+    "34": (SiteExportUtils.wifi_clients, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
     
     # Organization Template Exports
     "35": (OrgExportUtils.all_templates, "Export all organization templates (gateway, network, RF, site, AP)"),
     "36": (OrgExportUtils.network_templates, "Export network template information for the organization"),
     "37": (OrgExportUtils.rf_templates, "Export RF template information for the organization"),
-    "38": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
-    "39": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
+    "38": (OrgExportUtils.ap_templates, "Export AP template information for the organization"),
+    "39": (OrgExportUtils.switch_templates, "Export switch template information for the organization"),
     
     # Organization Statistics & Analytics  
     "40": (OrgExportUtils.wireless_clients, "Export wireless client statistics for the organization"),
@@ -43287,7 +43269,7 @@ menu_actions = {
     "92": (convert_virtual_chassis_to_virtual_mac, " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (convert_virtual_chassis_by_site_list, " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
     "94": (check_virtual_chassis_conversion_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
-    "95": (lambda fast=False: export_gateway_device_stats_to_csv_with_freshness_check(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
+    "95": (lambda fast=False: GatewayExportUtils.device_stats_with_freshness(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
     "96": (GatewayExportUtils.wan_port_conflicts, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
     "97": (ssh_runner_interactive, "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH"),
     "98": (ssh_runner_by_gateway_template, "SSH Runner - Target gateways by template name (online gateways with management IPs only)"),
@@ -43302,9 +43284,9 @@ menu_actions = {
     "81": (export_site_device_insights_to_csv, "Export device-specific insight metrics for a selected site"),
     "82": (export_all_const_definitions_to_csv, "Export all available const definitions from the Mist API (comprehensive endpoint coverage)"),
     "83": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
-    "84": (export_site_anomaly_metrics_to_csv, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
-    "85": (export_site_device_anomaly_to_csv, "Export Site Device Anomaly Events (device-specific anomaly detection)"),
-    "86": (export_site_client_anomaly_to_csv, "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"),
+    "84": (SiteExportUtils.anomaly_events, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
+    "85": (SiteExportUtils.device_anomaly_events, "Export Site Device Anomaly Events (device-specific anomaly detection)"),
+    "86": (SiteExportUtils.client_anomaly_events, "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"),
     "87": (WebSocketCommands.ping_device, "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)"),
     "88": (WebSocketCommands.arp_device, "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)"),
     "89": (WebSocketCommands.service_ping_device, "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)"),
