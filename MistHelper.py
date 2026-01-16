@@ -2424,23 +2424,6 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
         logging.debug(f"EXIT: check_and_generate_csv - generation failed")
         return False
 
-def prepare_data_and_write_csv(data, filename, sort_key=None):
-    """
-    Flattens, sanitizes, optionally sorts, and writes data to a CSV file.
-    """
-    # Flatten nested dictionaries and lists
-    data = DataProcessingUtils.flatten_nested_fields(data)
-    
-    # Escape multiline strings for CSV compatibility
-    data = DataProcessingUtils.escape_multiline(data)
-    
-    # Sort data by the specified key if provided
-    if sort_key:
-        data = sorted(data, key=lambda x: x.get(sort_key, ""))
-    
-    # Write the processed data to a CSV file
-    DataExporter.save_data_to_output(data, filename)
-
 def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
     """
     Displays a PrettyTable from a list of dictionaries.
