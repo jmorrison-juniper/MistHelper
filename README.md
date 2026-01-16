@@ -550,6 +550,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.21.30",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "PromptUtils: Moved prompt_select_site_id_from_csv implementation into class method",
+          "PromptUtils: Added select_site_with_logging method, removed prompt_and_log_site_selection",
+          "PromptUtils: Removed prompt_site_selection, prompt_device_selection standalone functions",
+          "Reduced standalone function count from 234 to 230"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.21.00",
       "date": "2026-01-16",
       "changes": {

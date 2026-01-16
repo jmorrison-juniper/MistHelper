@@ -3614,7 +3614,7 @@ class PacketCaptureManager:
         logging.info("Starting site wireless client capture")
         
         # Get site selection
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         if not site_id:
             return
         
@@ -3772,7 +3772,7 @@ class PacketCaptureManager:
         logging.info("Starting site wired client capture")
         
         # Get site selection
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         if not site_id:
             return
         
@@ -3885,7 +3885,7 @@ class PacketCaptureManager:
         """Start gateway packet capture at site level."""
         logging.info("Starting site gateway capture")
         
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         if not site_id:
             return
         
@@ -4015,7 +4015,7 @@ class PacketCaptureManager:
         """Start switch packet capture at site level."""
         logging.info("Starting site switch capture")
         
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         if not site_id:
             return
         
@@ -4145,7 +4145,7 @@ class PacketCaptureManager:
         """Start new association packet capture at site level."""
         logging.info("Starting site new association capture")
         
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         if not site_id:
             return
         
@@ -4218,7 +4218,7 @@ class PacketCaptureManager:
         """Start scan radio packet capture at site level."""
         logging.info("Starting site scan capture")
         
-        site_id = prompt_and_log_site_selection()
+        site_id = PromptUtils.select_site_with_logging()
         logging.debug(f"Site selection returned: {site_id}")
         if not site_id:
             logging.warning("No site_id returned from selection - aborting capture")
@@ -8038,6 +8038,22 @@ class PromptUtils:
         return PromptUtils.select_site_id_from_csv()
     
     @staticmethod
+    def select_site_with_logging() -> Optional[str]:
+        """
+        Prompts the user to select a site from the CSV list and logs the selection.
+        
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        logging.info("Prompting user to select a site from SiteList.csv...")
+        site_id = PromptUtils.select_site_id_from_csv()
+        if site_id:
+            logging.info(f"! Selected site ID: {site_id}")
+        else:
+            logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
+        return site_id
+    
+    @staticmethod
     def select_device(site_id: str, device_type: str = "all") -> Optional[str]:
         """
         Prompts the user to select a device from the specified site and returns the device_id.
@@ -8263,21 +8279,6 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
 
     # Log the table output for reference (debug mode only)
     logging.debug("\n" + table.get_string())
-
-def prompt_and_log_site_selection() -> Optional[str]:
-    """
-    Prompts the user to select a site from the CSV list and logs the selection.
-    """
-    logging.info("Prompting user to select a site from SiteList.csv...")
-    site_id = PromptUtils.select_site_id_from_csv()
-    if site_id:
-        logging.info(f"! Selected site ID: {site_id}")
-        # You can store or use the selected site_id as needed here
-    else:
-        logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
-    
-    # CRITICAL: Return the site_id so callers can use it
-    return site_id
 
 def prompt_select_ap_mac_from_site(site_id: str) -> Optional[str]:
     """
@@ -39846,7 +39847,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         logging.debug("Debug mode enabled - verbose output active for WLAN template troubleshooting")
     
     # Step 1: Select site
-    site_id = prompt_and_log_site_selection()
+    site_id = PromptUtils.select_site_with_logging()
     if not site_id:
         logging.warning("No site selected for WLAN management")
         print("\n[!] No site selected. Exiting.")
