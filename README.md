@@ -550,6 +550,23 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.00.15",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "5-Item Rule: Created config dataclasses (SSHConnectionConfig, SSHExecutionConfig, WebSocketListenerConfig, AddressValidationConfig, MapViewerConfig) for parameter grouping",
+          "5-Item Rule: Refactored 8 SSH functions to accept config objects while maintaining backwards compatibility",
+          "5-Item Rule: Refactored listen_for_command_output, validate_addresses_with_nominatim, _launch_plotly_viewer to use config objects",
+          "Class Organization: Created ValidationUtils class with validate_site_id and validate_device_id static methods",
+          "Class Organization: Added backwards-compatible wrapper functions for existing code"
+        ],
+        "documentation": [
+          "Added dataclasses import and config classes section near top of MistHelper.py",
+          "Updated function docstrings to mark individual parameters as deprecated in favor of config objects"
+        ]
+      }
+    },
+    {
       "version": "26.01.15.23.56",
       "date": "2026-01-15",
       "changes": {

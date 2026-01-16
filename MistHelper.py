@@ -26,6 +26,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from typing import Tuple, Optional, List, Dict, Any, TYPE_CHECKING
 from types import ModuleType
+from dataclasses import dataclass, field
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -152,6 +153,68 @@ class PerformanceMonitor:
         elapsed = time.time() - self.start_time
         if is_debug_mode():
             print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
+
+
+# ============================================================================
+# CONFIGURATION DATACLASSES (5-Item Rule Compliance)
+# ============================================================================
+# These dataclasses group related parameters to comply with the 5-parameter limit
+# per function. Each dataclass encapsulates configuration for a specific domain.
+
+@dataclass
+class SSHConnectionConfig:
+    """Configuration for SSH connections - groups connection parameters."""
+    hostname: str
+    username: str
+    password: str
+    port: int = 22
+    timeout: int = 30
+    use_shell: bool = True
+
+
+@dataclass
+class SSHExecutionConfig:
+    """Configuration for SSH command execution - groups execution parameters."""
+    commands: List[str] = field(default_factory=list)
+    max_threads: int = 5
+    use_shell: bool = True
+
+
+@dataclass
+class WebSocketListenerConfig:
+    """Configuration for WebSocket command listeners."""
+    mist_host: str
+    mist_apitoken: str
+    site_id: str
+    device_id: str
+    session_id: str
+    timeout: int = 30
+    idle_timeout: int = 3
+    debug: bool = False
+
+
+@dataclass
+class AddressValidationConfig:
+    """Configuration for address validation with Nominatim."""
+    timeout: int = 5
+    debug: bool = False
+    skip_ssl_verify: bool = False
+    org_name: Optional[str] = None
+    site_name: Optional[str] = None
+    mist_duplicates: Optional[Dict] = None
+    ref_duplicates: Optional[Dict] = None
+
+
+@dataclass
+class MapViewerConfig:
+    """Configuration for interactive map viewer."""
+    site_id: str
+    site_name: str
+    map_id: str
+    coverage_data: Optional[Dict] = None
+    all_maps: Optional[List] = None
+    all_sites: Optional[List] = None
+
 
 # ============================================================================
 # EARLY DEPENDENCY AUTO-INSTALLER
@@ -6030,57 +6093,80 @@ def is_running_in_container() -> bool:
     logging.debug("Container detection: no container indicators found - running in direct mode")
     return False
 
+
+# ============================================================================
+# VALIDATION UTILITIES CLASS
+# ============================================================================
+class ValidationUtils:
+    """
+    Centralized validation utilities for input validation and sanitization.
+    All validation functions should be static methods in this class.
+    """
+    
+    @staticmethod
+    def validate_site_id(site_id: Optional[str], function_name: str = "unknown") -> bool:
+        """
+        Validates that site_id is not None or empty before making API calls.
+        
+        Args:
+            site_id: The site ID to validate
+            function_name: Name of the calling function for logging
+        
+        Returns:
+            bool: True if valid, False otherwise
+        
+        Raises:
+            ValueError: If site_id is None or empty
+        """
+        if site_id is None:
+            error_msg = f"! site_id is None in {function_name}. Cannot make API call."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        if isinstance(site_id, str) and site_id.strip() == "":
+            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        return True
+    
+    @staticmethod
+    def validate_device_id(device_id: Optional[str], function_name: str = "unknown") -> bool:
+        """
+        Validates that device_id is not None or empty before making API calls.
+        
+        Args:
+            device_id: The device ID to validate
+            function_name: Name of the calling function for logging
+        
+        Returns:
+            bool: True if valid, False otherwise
+        
+        Raises:
+            ValueError: If device_id is None or empty
+        """
+        if device_id is None:
+            error_msg = f"! device_id is None in {function_name}. Cannot make API call."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        if isinstance(device_id, str) and device_id.strip() == "":
+            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        return True
+
+
+# Backwards compatibility wrappers - delegate to ValidationUtils class
 def validate_site_id(site_id: Optional[str], function_name: str = "unknown") -> bool:
-    """
-    Validates that site_id is not None or empty before making API calls.
-    
-    Args:
-        site_id: The site ID to validate
-        function_name: Name of the calling function for logging
-    
-    Returns:
-        bool: True if valid, False otherwise
-    
-    Raises:
-        ValueError: If site_id is None or empty
-    """
-    if site_id is None:
-        error_msg = f"! site_id is None in {function_name}. Cannot make API call."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    if isinstance(site_id, str) and site_id.strip() == "":
-        error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    return True
+    """Backwards compatibility wrapper - use ValidationUtils.validate_site_id() instead."""
+    return ValidationUtils.validate_site_id(site_id, function_name)
+
 
 def validate_device_id(device_id: Optional[str], function_name: str = "unknown") -> bool:
-    """
-    Validates that device_id is not None or empty before making API calls.
-    
-    Args:
-        device_id: The device ID to validate
-        function_name: Name of the calling function for logging
-    
-    Returns:
-        bool: True if valid, False otherwise
-    
-    Raises:
-        ValueError: If device_id is None or empty
-    """
-    if device_id is None:
-        error_msg = f"! device_id is None in {function_name}. Cannot make API call."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    if isinstance(device_id, str) and device_id.strip() == "":
-        error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    return True
+    """Backwards compatibility wrapper - use ValidationUtils.validate_device_id() instead."""
+    return ValidationUtils.validate_device_id(device_id, function_name)
 
 def create_missing_csv_template(filename: str, headers: Optional[List[str]] = None, sample_data: Optional[List[List[str]]] = None) -> str:
     """
@@ -18717,7 +18803,42 @@ def launch_cli_shell(site_id=None, device_id=None, debug=False):
     if shell_url:
         run_interactive_shell(shell_url, debug=debug)
 
-def listen_for_command_output(mist_host, mist_apitoken, site_id, device_id, session_id, timeout=30, idle_timeout=3, debug=False):
+def listen_for_command_output(
+    mist_host: str = None,
+    mist_apitoken: str = None,
+    site_id: str = None,
+    device_id: str = None,
+    session_id: str = None,
+    timeout: int = 30,
+    idle_timeout: int = 3,
+    debug: bool = False,
+    config: WebSocketListenerConfig = None
+):
+    """
+    Listen for WebSocket command output from a Mist device.
+    
+    Args:
+        mist_host: Mist API host (deprecated, use config)
+        mist_apitoken: Mist API token (deprecated, use config)
+        site_id: Site ID (deprecated, use config)
+        device_id: Device ID (deprecated, use config)
+        session_id: Session ID (deprecated, use config)
+        timeout: Overall timeout in seconds (deprecated, use config)
+        idle_timeout: Idle timeout in seconds (deprecated, use config)
+        debug: Enable debug logging (deprecated, use config)
+        config: WebSocketListenerConfig object (preferred)
+    """
+    # Support both config object and individual parameters (backwards compatibility)
+    if config is not None:
+        mist_host = config.mist_host
+        mist_apitoken = config.mist_apitoken
+        site_id = config.site_id
+        device_id = config.device_id
+        session_id = config.session_id
+        timeout = config.timeout
+        idle_timeout = config.idle_timeout
+        debug = config.debug
+    
     if debug:
         websocket.enableTrace(True)
 
@@ -20053,20 +20174,33 @@ def normalize_state_name(state_str):
     
     return state_mapping.get(state, state)
 
-def validate_addresses_with_nominatim(mist_address, comparison_address, timeout=5, debug=False, skip_ssl_verify=False, org_name=None, mist_duplicates=None, ref_duplicates=None, site_name=None):
+def validate_addresses_with_nominatim(
+    mist_address: dict,
+    comparison_address: dict,
+    config: Optional[AddressValidationConfig] = None,
+    timeout: int = 5,
+    debug: bool = False,
+    skip_ssl_verify: bool = False,
+    org_name: Optional[str] = None,
+    mist_duplicates: Optional[Dict] = None,
+    ref_duplicates: Optional[Dict] = None,
+    site_name: Optional[str] = None
+):
     """
     Validate both address sets against Nominatim (OpenStreetMap) geocoding API
     to determine which is more accurate/complete.
     
     Args:
         mist_address (dict): Mist address data
-        comparison_address (dict): Comparison CSV address data  
-        timeout (int): HTTP request timeout in seconds
-        debug (bool): If True, enables detailed debug logging for API requests and responses
-        org_name (str): Organization name for intelligent tiebreaking
-        mist_duplicates (dict): Dictionary of duplicate Mist addresses {addr_key: [site_names]}
-        ref_duplicates (dict): Dictionary of duplicate reference addresses {addr_key: [site_names]}
-        site_name (str): Current site name being processed
+        comparison_address (dict): Comparison CSV address data
+        config (AddressValidationConfig): Configuration object (preferred over individual params)
+        timeout (int): HTTP request timeout in seconds (deprecated, use config)
+        debug (bool): Enable detailed debug logging (deprecated, use config)
+        skip_ssl_verify (bool): Skip SSL verification (deprecated, use config)
+        org_name (str): Organization name for intelligent tiebreaking (deprecated, use config)
+        mist_duplicates (dict): Dictionary of duplicate Mist addresses (deprecated, use config)
+        ref_duplicates (dict): Dictionary of duplicate reference addresses (deprecated, use config)
+        site_name (str): Current site name being processed (deprecated, use config)
         
     Returns:
         dict: {
@@ -20075,6 +20209,15 @@ def validate_addresses_with_nominatim(mist_address, comparison_address, timeout=
             'recommendation': str  # 'mist', 'comparison', or 'uncertain'
         }
     """
+    # Support both config object and individual parameters (backwards compatibility)
+    if config is not None:
+        timeout = config.timeout
+        debug = config.debug
+        skip_ssl_verify = config.skip_ssl_verify
+        org_name = config.org_name
+        site_name = config.site_name
+        mist_duplicates = config.mist_duplicates
+        ref_duplicates = config.ref_duplicates
     
     # Suppress SSL warnings if skip_ssl_verify is enabled
     if skip_ssl_verify:
@@ -27610,8 +27753,44 @@ class MapsManager:
             logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
             print(f"\n! Error launching map viewer: {e}")
     
-    def _launch_plotly_viewer(self, map_data, devices, zones, clients, site_id, site_name, map_id, coverage_data=None, all_maps=None, all_sites=None):
-        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap"""
+    def _launch_plotly_viewer(
+        self,
+        map_data: dict,
+        devices: list,
+        zones: list,
+        clients: list,
+        site_id: str = None,
+        site_name: str = None,
+        map_id: str = None,
+        coverage_data: dict = None,
+        all_maps: list = None,
+        all_sites: list = None,
+        config: MapViewerConfig = None
+    ):
+        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap
+        
+        Args:
+            map_data: Map data dictionary with geometry
+            devices: List of devices on the map
+            zones: List of zones on the map
+            clients: List of connected clients
+            site_id: Site ID (deprecated, use config)
+            site_name: Site name (deprecated, use config)
+            map_id: Map ID (deprecated, use config)
+            coverage_data: RF coverage data (deprecated, use config)
+            all_maps: All available maps (deprecated, use config)
+            all_sites: All available sites (deprecated, use config)
+            config: MapViewerConfig object (preferred)
+        """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            site_id = config.site_id
+            site_name = config.site_name
+            map_id = config.map_id
+            coverage_data = config.coverage_data
+            all_maps = config.all_maps
+            all_sites = config.all_sites
+        
         coverage_count = len(coverage_data.get('results', [])) if coverage_data else 0
         all_maps = all_maps or []
         all_sites = all_sites or []
@@ -44661,8 +44840,17 @@ class EnhancedSSHRunner:
         return logger
     
     @staticmethod
-    def run_multiple_ssh_commands_interactive(hostname: str, username: str, password: str, commands: list, 
-                                            port: int = 22, timeout: int = 30, use_shell: bool = True) -> bool:
+    def run_multiple_ssh_commands_interactive(
+        hostname: str = None,
+        username: str = None,
+        password: str = None,
+        commands: list = None,
+        port: int = 22,
+        timeout: int = 30,
+        use_shell: bool = True,
+        config: SSHConnectionConfig = None,
+        exec_config: SSHExecutionConfig = None
+    ) -> bool:
         """
         Connect via SSH and execute multiple commands with interactive prompt support
         
@@ -44672,17 +44860,31 @@ class EnhancedSSHRunner:
         3. show commands work in PCLI
         
         Args:
-            hostname: IP address or hostname
-            username: SSH username
-            password: SSH password
-            commands: List of commands/responses to execute
-            port: SSH port (default 22)
-            timeout: Connection timeout
-            use_shell: Use interactive shell mode (required for interactive prompts)
+            hostname: IP address or hostname (deprecated, use config)
+            username: SSH username (deprecated, use config)
+            password: SSH password (deprecated, use config)
+            commands: List of commands/responses to execute (deprecated, use exec_config)
+            port: SSH port (deprecated, use config)
+            timeout: Connection timeout (deprecated, use config)
+            use_shell: Use interactive shell mode (deprecated, use config)
+            config: SSHConnectionConfig object (preferred)
+            exec_config: SSHExecutionConfig object (preferred)
             
         Returns:
             bool: True if all commands successful, False otherwise
         """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            hostname = config.hostname
+            username = config.username
+            password = config.password
+            port = config.port
+            timeout = config.timeout
+            use_shell = config.use_shell
+        if exec_config is not None:
+            commands = exec_config.commands
+            use_shell = exec_config.use_shell
+        
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
         logger.debug(f"Starting SSH interactive multi-command execution: {hostname}:{port} - {len(commands)} commands")
@@ -44975,23 +45177,46 @@ Log file: {host_log_file}
                     logger.error(f"Even simple interactive footer failed: {e2}")
 
     @staticmethod
-    def run_multiple_ssh_commands(hostname: str, username: str, password: str, commands: list, 
-                                 port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
+    def run_multiple_ssh_commands(
+        hostname: str = None,
+        username: str = None,
+        password: str = None,
+        commands: list = None,
+        port: int = 22,
+        timeout: int = 30,
+        use_shell: bool = False,
+        config: SSHConnectionConfig = None,
+        exec_config: SSHExecutionConfig = None
+    ) -> bool:
         """
         Connect via SSH and execute multiple commands sequentially
         
         Args:
-            hostname: IP address or hostname
-            username: SSH username
-            password: SSH password
-            commands: List of commands to execute
-            port: SSH port (default 22)
-            timeout: Connection timeout
-            use_shell: Use interactive shell mode (better for network devices)
+            hostname: IP address or hostname (deprecated, use config)
+            username: SSH username (deprecated, use config)
+            password: SSH password (deprecated, use config)
+            commands: List of commands to execute (deprecated, use exec_config)
+            port: SSH port (deprecated, use config)
+            timeout: Connection timeout (deprecated, use config)
+            use_shell: Use interactive shell mode (deprecated, use config)
+            config: SSHConnectionConfig object (preferred)
+            exec_config: SSHExecutionConfig object (preferred)
             
         Returns:
             bool: True if all commands successful, False otherwise
         """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            hostname = config.hostname
+            username = config.username
+            password = config.password
+            port = config.port
+            timeout = config.timeout
+            use_shell = config.use_shell
+        if exec_config is not None:
+            commands = exec_config.commands
+            use_shell = exec_config.use_shell
+        
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
         logger.debug(f"Starting SSH multi-command execution: {hostname}:{port} - {len(commands)} commands (shell={use_shell})")
@@ -45162,23 +45387,41 @@ Log file: {host_log_file}
                     logger.error(f"Even simple multi-command footer failed: {e2}")
     
     @staticmethod
-    def run_ssh_command(hostname: str, username: str, password: str, command: str, 
-                       port: int = 22, timeout: int = 30, use_shell: bool = False) -> bool:
+    def run_ssh_command(
+        hostname: str = None,
+        username: str = None, 
+        password: str = None,
+        command: str = None,
+        port: int = 22,
+        timeout: int = 30,
+        use_shell: bool = False,
+        config: SSHConnectionConfig = None
+    ) -> bool:
         """
         Connect via SSH and execute a command
         
         Args:
-            hostname: IP address or hostname
-            username: SSH username
-            password: SSH password
+            hostname: IP address or hostname (deprecated, use config)
+            username: SSH username (deprecated, use config)
+            password: SSH password (deprecated, use config)
             command: Command to execute
-            port: SSH port (default 22)
-            timeout: Connection timeout
-            use_shell: Use interactive shell mode (better for network devices)
+            port: SSH port (deprecated, use config)
+            timeout: Connection timeout (deprecated, use config)
+            use_shell: Use interactive shell mode (deprecated, use config)
+            config: SSHConnectionConfig object (preferred)
             
         Returns:
             bool: True if successful, False otherwise
         """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            hostname = config.hostname
+            username = config.username
+            password = config.password
+            port = config.port
+            timeout = config.timeout
+            use_shell = config.use_shell
+        
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
         logger.debug(f"Starting SSH command execution: {hostname}:{port} - '{command}' (shell={use_shell})")
@@ -45324,23 +45567,46 @@ Log file: {host_log_file}
                     logger.error(f"Even simple footer failed: {e2}")
     
     @staticmethod
-    def run_ssh_command_on_host(hostname: str, username: str, password: str, commands: list, 
-                               port: int = 22, timeout: int = 30, use_shell: bool = True) -> tuple:
+    def run_ssh_command_on_host(
+        hostname: str = None,
+        username: str = None,
+        password: str = None,
+        commands: list = None,
+        port: int = 22,
+        timeout: int = 30,
+        use_shell: bool = True,
+        config: SSHConnectionConfig = None,
+        exec_config: SSHExecutionConfig = None
+    ) -> tuple:
         """
         Run SSH commands on a single host (for multi-threading)
         
         Args:
-            hostname: IP address or hostname
-            username: SSH username  
-            password: SSH password
-            commands: List of commands to execute
-            port: SSH port
-            timeout: Connection timeout
-            use_shell: Whether to use shell mode
+            hostname: IP address or hostname (deprecated, use config)
+            username: SSH username (deprecated, use config)
+            password: SSH password (deprecated, use config)
+            commands: List of commands to execute (deprecated, use exec_config)
+            port: SSH port (deprecated, use config)
+            timeout: Connection timeout (deprecated, use config)
+            use_shell: Whether to use shell mode (deprecated, use config)
+            config: SSHConnectionConfig object (preferred)
+            exec_config: SSHExecutionConfig object (preferred)
             
         Returns:
             tuple: (hostname, success, results_summary)
         """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            hostname = config.hostname
+            username = config.username
+            password = config.password
+            port = config.port
+            timeout = config.timeout
+            use_shell = config.use_shell
+        if exec_config is not None:
+            commands = exec_config.commands
+            use_shell = exec_config.use_shell
+        
         # Use the unified SSH runner logger (propagates to script.log)
         logger = logging.getLogger('ssh_runner_v2')
 
@@ -45384,25 +45650,48 @@ Log file: {host_log_file}
             return (hostname, False, f"Error: {e}")
     
     @staticmethod
-    def run_ssh_commands_multi_host(hosts: list, username: str, password: str, commands: list,
-                                   port: int = 22, timeout: int = 30, use_shell: bool = True,
-                                   max_threads: int = 5) -> dict:
+    def run_ssh_commands_multi_host(
+        hosts: list = None,
+        username: str = None,
+        password: str = None,
+        commands: list = None,
+        port: int = 22,
+        timeout: int = 30,
+        use_shell: bool = True,
+        max_threads: int = 5,
+        config: SSHConnectionConfig = None,
+        exec_config: SSHExecutionConfig = None
+    ) -> dict:
         """
         Run SSH commands on multiple hosts concurrently using threading
 
         Args:
             hosts: List of hostnames/IPs
-            username: SSH username
-            password: SSH password  
-            commands: List of commands to execute on each host
-            port: SSH port
-            timeout: Connection timeout
-            use_shell: Whether to use shell mode
-            max_threads: Maximum number of concurrent threads
+            username: SSH username (deprecated, use config)
+            password: SSH password (deprecated, use config)
+            commands: List of commands to execute on each host (deprecated, use exec_config)
+            port: SSH port (deprecated, use config)
+            timeout: Connection timeout (deprecated, use config)
+            use_shell: Whether to use shell mode (deprecated, use exec_config)
+            max_threads: Maximum number of concurrent threads (deprecated, use exec_config)
+            config: SSHConnectionConfig object (preferred) - note: hostname in config is ignored for multi-host
+            exec_config: SSHExecutionConfig object (preferred)
 
         Returns:
             dict: Results summary with success/failure counts per host
         """
+        # Support both config object and individual parameters (backwards compatibility)
+        if config is not None:
+            username = config.username
+            password = config.password
+            port = config.port
+            timeout = config.timeout
+            use_shell = config.use_shell
+        if exec_config is not None:
+            commands = exec_config.commands
+            max_threads = exec_config.max_threads
+            use_shell = exec_config.use_shell
+        
         logger = logging.getLogger('ssh_runner_v2')
         # Debug diagnostic for mysterious dict+float TypeError
         if logger.isEnabledFor(logging.DEBUG):
