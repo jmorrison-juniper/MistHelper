@@ -2550,6 +2550,41 @@ class CacheUtils:
             logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
 
         logging.info(f"Support package written to {csv_file_path}")
+    
+    @staticmethod
+    def create_address_parse_failures_csv(parse_failures: List[Dict[str, Any]], filename: str = "AddressParseFailures.csv") -> None:
+        """
+        Create a CSV file documenting address parsing failures.
+        
+        Args:
+            parse_failures: List of parse failure records
+            filename: Output filename
+        """
+        if not parse_failures:
+            logging.info("No address parsing failures to document.")
+            return
+        
+        try:
+            output_path = FilePathUtils.get_csv_path(filename)
+            
+            with open(output_path, "w", newline='', encoding="utf-8") as f:
+                fieldnames = [
+                    'site_id', 'site_name', 'device_id', 'device_serial', 'device_name',
+                    'original_address', 'parsed_tokens', 'failure_reason', 'timestamp'
+                ]
+                
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for failure in parse_failures:
+                    writer.writerow(failure)
+            
+            logging.info(f"Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+            print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+            
+        except Exception as e:
+            logging.error(f"Failed to create address parse failures CSV: {e}")
+            print(f"! Failed to create address parse failures CSV: {e}")
 
 
 # Backward compatibility wrapper - will be removed in future version
@@ -22076,39 +22111,10 @@ class AddressComparisonCounters:
             logging.info(f"Parse failure breakdown: {self.parse_failure_reasons}")
         logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
 
-def create_address_parse_failures_csv(parse_failures, filename="AddressParseFailures.csv"):
-    """
-    Create a CSV file documenting address parsing failures.
-    
-    Args:
-        parse_failures (list): List of parse failure records
-        filename (str): Output filename
-    """
-    if not parse_failures:
-        logging.info("No address parsing failures to document.")
-        return
-    
-    try:
-        output_path = FilePathUtils.get_csv_path(filename)
-        
-        with open(output_path, "w", newline='', encoding="utf-8") as f:
-            fieldnames = [
-                'site_id', 'site_name', 'device_id', 'device_serial', 'device_name',
-                'original_address', 'parsed_tokens', 'failure_reason', 'timestamp'
-            ]
-            
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for failure in parse_failures:
-                writer.writerow(failure)
-        
-        logging.info(f"Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
-        print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
-        
-    except Exception as e:
-        logging.error(f"Failed to create address parse failures CSV: {e}")
-        print(f"! Failed to create address parse failures CSV: {e}")
+# Backward compatibility wrapper - will be removed in future version
+def create_address_parse_failures_csv(parse_failures: List[Dict[str, Any]], filename: str = "AddressParseFailures.csv") -> None:
+    """Legacy function - use CacheUtils.create_address_parse_failures_csv() instead."""
+    return CacheUtils.create_address_parse_failures_csv(parse_failures, filename)
 
 
 # Backward compatibility wrapper - will be removed in future version
