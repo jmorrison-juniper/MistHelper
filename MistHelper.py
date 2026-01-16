@@ -9507,27 +9507,47 @@ class SiteExportUtils:
     @staticmethod
     def wlans():
         """Export WLANs for a site to SiteWlans.csv."""
-        export_site_wlans_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.wlans.listSiteWlans,
+            data_type="wlans",
+            sort_key="ssid"
+        )
     
     @staticmethod
     def beacons():
         """Export beacons for a site to SiteBeacons.csv."""
-        export_site_beacons_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.beacons.listSiteBeacons,
+            data_type="beacons",
+            sort_key="name"
+        )
     
     @staticmethod
     def maps():
         """Export maps for a site to SiteMaps.csv."""
-        export_site_maps_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.maps.listSiteMaps,
+            data_type="maps",
+            sort_key="name"
+        )
     
     @staticmethod
     def zones():
         """Export zones for a site to SiteZones.csv."""
-        export_site_zones_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.zones.listSiteZones,
+            data_type="zones",
+            sort_key="name"
+        )
     
     @staticmethod
     def insights():
         """Export insights for a site to SiteInsights.csv."""
-        export_site_insights_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics,
+            data_type="sle_metrics_insights",
+            sort_key="name"
+        )
     
     @staticmethod
     def system_events():
@@ -16876,45 +16896,6 @@ def export_org_switch_templates_to_csv():
             pass
         raise
 
-def export_site_wlans_to_csv():
-    """Export WLAN configuration for a specific site to SiteWlans.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.wlans.listSiteWlans,
-        data_type="wlans",
-        sort_key="ssid"
-    )
-
-def export_site_beacons_to_csv():
-    """Export beacon information for a specific site to SiteBeacons.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.beacons.listSiteBeacons,
-        data_type="beacons",
-        sort_key="name"
-    )
-
-def export_site_maps_to_csv():
-    """Export map information for a specific site to SiteMaps.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.maps.listSiteMaps,
-        data_type="maps",
-        sort_key="name"
-    )
-
-def export_site_zones_to_csv():
-    """Export zone information for a specific site to SiteZones.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.zones.listSiteZones,
-        data_type="zones",
-        sort_key="name"
-    )
-
-def export_site_insights_to_csv():
-    """Export SLE (Service Level Experience) metrics insights for a specific site to SiteInsights.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics,
-        data_type="sle_metrics_insights",
-        sort_key="name"
-    )
 
 def continuous_data_collection_loop():
     """
@@ -43582,11 +43563,11 @@ menu_actions = {
     "46": (OrgExportUtils.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "47": (OrgExportUtils.webhooks, "Export webhook configuration for the organization"),
     "48": (OrgExportUtils.wlans, "Export WLAN configuration for the organization"),
-    "49": (export_site_wlans_to_csv, "Export WLAN configuration for a selected site"),
-    "50": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
-    "51": (export_site_maps_to_csv, "Export map information for a selected site"),
-    "52": (export_site_zones_to_csv, "Export zone information for a selected site"),
-    "53": (export_site_insights_to_csv, "Export SLE (Service Level Experience) metrics insights for a selected site"),
+    "49": (SiteExportUtils.wlans, "Export WLAN configuration for a selected site"),
+    "50": (SiteExportUtils.beacons, "Export beacon information for a selected site"),
+    "51": (SiteExportUtils.maps, "Export map information for a selected site"),
+    "52": (SiteExportUtils.zones, "Export zone information for a selected site"),
+    "53": (SiteExportUtils.insights, "Export SLE (Service Level Experience) metrics insights for a selected site"),
     
     # ==============================
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
