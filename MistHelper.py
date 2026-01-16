@@ -17777,20 +17777,6 @@ class InteractiveDisplayUtils:
         )
         logging.info("Completed device_config execution.")
 
-def fetch_all_site_settings_from_api(apisession, org_id, limit=1000):
-    """
-    Backward compatibility wrapper - delegates to APIFetchUtils.all_site_settings().
-    
-    Args:
-        apisession: The Mist API session object.
-        org_id: The organization ID.
-        limit: (Unused) Maximum number of sites to fetch per API call.
-
-    Returns:
-        List of dictionaries, each containing the settings for a site.
-    """
-    return APIFetchUtils.all_site_settings(apisession, org_id, limit)
-
 
 # ============================================================================
 # GATEWAY EXPORT UTILITIES CLASS
@@ -20698,20 +20684,6 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
         logging.error(f"File I/O: Failed to write delay metrics to {filename}: {exception}")
         logging.debug(f"EXIT: append_delay_metrics_log - error")
 
-def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
-    """
-    Backward compatibility wrapper - delegates to APIFetchUtils.gateway_device_configs().
-    
-    Args:
-        apisession: Authenticated Mist API session.
-        org_id: Organization ID.
-        fast (bool): If True, enables high-concurrency mode with connection pool management.
-        max_workers (int): Optional override for number of concurrent threads.
-    
-    Returns:
-        List of device configuration dictionaries.
-    """
-    return APIFetchUtils.gateway_device_configs(apisession, org_id, fast, max_workers)
 
 def get_rate_limited_delay(smoothed_delay=None):
     """
@@ -46304,7 +46276,7 @@ def main():
             "GatewayExportUtils.test_results_by_site",
             "OrgExportUtils.devices_with_site_info",
             "export_gateway_device_configs_to_csv",
-            "fetch_gateway_device_configs_from_api",
+            "APIFetchUtils.gateway_device_configs",
             "compare_inventory_with_csv",
             "export_gateways_with_wan_overrides_to_csv",
             # Newly added fast-capable stats exporters:
