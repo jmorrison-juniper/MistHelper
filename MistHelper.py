@@ -9291,12 +9291,20 @@ class OrgExportUtils:
     @staticmethod
     def network_templates():
         """Export network templates to OrgNetworkTemplates.csv."""
-        export_org_network_templates_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+            data_type="network templates",
+            sort_key="name"
+        )
     
     @staticmethod
     def rf_templates():
         """Export RF templates to OrgRfTemplates.csv."""
-        export_org_rf_templates_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+            data_type="rf templates",
+            sort_key="name"
+        )
     
     @staticmethod
     def ap_templates():
@@ -16820,21 +16828,6 @@ def assign_aps_to_matching_device_profiles():
     
     logging.debug("EXIT: assign_aps_to_matching_device_profiles - complete")
 
-def export_org_network_templates_to_csv():
-    """Export network template information for the organization to OrgNetworkTemplates.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
-        data_type="network templates",
-        sort_key="name"
-    )
-
-def export_org_rf_templates_to_csv():
-    """Export RF template information for the organization to OrgRfTemplates.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
-        data_type="rf templates",
-        sort_key="name"
-    )
 
 def export_org_ap_templates_to_csv():
     """Export AP device profiles (templates) to OrgApTemplates.csv via canonical filtered endpoint.
@@ -43544,8 +43537,8 @@ menu_actions = {
     
     # Organization Template Exports
     "35": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
-    "36": (export_org_network_templates_to_csv, "Export network template information for the organization"),
-    "37": (export_org_rf_templates_to_csv, "Export RF template information for the organization"),
+    "36": (OrgExportUtils.network_templates, "Export network template information for the organization"),
+    "37": (OrgExportUtils.rf_templates, "Export RF template information for the organization"),
     "38": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
     "39": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
     
