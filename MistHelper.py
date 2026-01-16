@@ -20333,24 +20333,6 @@ def show_route_via_websocket():
     except Exception as e:
         print(f"! Error during shell session: {e}")
 
-def _export_gateway_templates_simple():
-    """
-    Simple gateway template export using fetch_and_display_api_data helper.
-    Note: Use GatewayExportUtils.templates() for full functionality.
-    
-    template_lookup = {t["id"]: t.get("name", "Unknown") for t in templates if "id" in t}
-    Fetches and exports all gateway templates in the organization to OrgGatewayTemplates.csv.
-    """
-    logging.info("Starting export of gateway templates (simple mode)...")
-    fetch_and_display_api_data(
-        title="Org Gateway Templates:",
-        api_call=mistapi.api.v1.orgs.gateway_templates.listOrgGatewayTemplates,
-        filename="OrgGatewayTemplates.csv",
-        sort_key="name",
-        limit=1000
-    )
-    logging.info(" Gateway templates exported to OrgGatewayTemplates.csv.")
-
 def ssh_runner_by_gateway_template(fast=False):
     """
     SSH runner that targets gateways by template name and online status.
