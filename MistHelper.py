@@ -2387,7 +2387,7 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
         freshness_minutes = CSV_FRESHNESS_MINUTES
         
     # Get the full path to the CSV file in the data directory
-    full_file_path = get_csv_file_path(file_name)
+    full_file_path = FilePathUtils.get_csv_path(file_name)
     
     # Check if the file already exists
     if os.path.exists(full_file_path):
@@ -5875,8 +5875,8 @@ class SFPTransceiverDataProcessor:
         """
         logging.debug("ENTRY: SFPTransceiverDataProcessor.merge_transceiver_data()")
 
-        org_port_stats_path = get_csv_file_path('OrgDevicePortStats.csv')
-        devices_with_site_info_path = get_csv_file_path('AllDevicesWithSiteInfo.csv')
+        org_port_stats_path = FilePathUtils.get_csv_path('OrgDevicePortStats.csv')
+        devices_with_site_info_path = FilePathUtils.get_csv_path('AllDevicesWithSiteInfo.csv')
 
         # Generate prerequisites if absent (idempotent behavior matches prior function)
         if not os.path.exists(org_port_stats_path):
@@ -5965,28 +5965,64 @@ class SFPTransceiverDataProcessor:
             raise
 
 
-    # NOTE: Legacy function name `process_and_merge_csv_for_sfp_address` removed; menu now invokes class method directly.
+class FilePathUtils:
+    """
+    Centralized file path utilities for consistent data directory handling.
+    Ensures all CSV and data files are placed in the correct data directory.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def get_csv_path(filename: str) -> str:
+        """
+        Helper function to ensure consistent CSV file paths in the data directory.
+        
+        Args:
+            filename (str): The CSV filename (with or without path)
+        
+        Returns:
+            str: Full path to the CSV file in the data directory
+        """
+        # Ensure data directory exists
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # If filename already includes a path, use it as-is
+        if os.path.dirname(filename):
+            return filename
+        
+        # Otherwise, place it in the data directory
+        return os.path.join(data_dir, filename)
+    
+    @staticmethod
+    def create_csv_template(filename: str, headers: Optional[List[str]] = None, sample_data: Optional[List[List[str]]] = None) -> str:
+        """
+        Creates a basic CSV file placeholder in the correct location.
+        
+        Args:
+            filename (str): Name of the CSV file to create
+            headers (list): List of header names (optional)
+            sample_data (list): Optional list of sample data rows (optional)
+        
+        Returns:
+            str: Full path to the created file
+        """
+        file_path = FilePathUtils.get_csv_path(filename)
+        
+        try:
+            # Just create an empty file in the correct location
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                if headers:
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                # Don't write sample data - user will add their own content
+            
+            logging.info(f"Created template file: {file_path}")
+            return file_path
+        except Exception as error:
+            logging.error(f"Failed to create template file {filename}: {error}")
+            raise
 
-def get_csv_file_path(filename: str) -> str:
-    """
-    Helper function to ensure consistent CSV file paths in the data directory.
-    
-    Args:
-        filename (str): The CSV filename (with or without path)
-    
-    Returns:
-        str: Full path to the CSV file in the data directory
-    """
-    # Ensure data directory exists
-    data_dir = "data"
-    os.makedirs(data_dir, exist_ok=True)
-    
-    # If filename already includes a path, use it as-is
-    if os.path.dirname(filename):
-        return filename
-    
-    # Otherwise, place it in the data directory
-    return os.path.join(data_dir, filename)
 
 def is_running_in_container() -> bool:
     """Determine if execution appears to be inside a container.
@@ -6140,35 +6176,8 @@ class ValidationUtils:
         return True
 
 
-def create_missing_csv_template(filename: str, headers: Optional[List[str]] = None, sample_data: Optional[List[List[str]]] = None) -> str:
-    """
-    Creates a basic CSV file placeholder in the correct location.
-    
-    Args:
-        filename (str): Name of the CSV file to create
-        headers (list): List of header names (optional)
-        sample_data (list): Optional list of sample data rows (optional)
-    
-    Returns:
-        str: Full path to the created file
-    """
-    file_path = get_csv_file_path(filename)
-    
-    try:
-        # Just create an empty file in the correct location
-        with open(file_path, 'w', newline='', encoding='utf-8') as f:
-            if headers:
-                writer = csv.writer(f)
-                writer.writerow(headers)
-            # Don't write sample data - user will add their own content
-        
-        logging.info(f"Created template file: {file_path}")
-        return file_path
-    except Exception as e:
-        logging.error(f"Failed to create template file {filename}: {e}")
-        raise
-
-# Note: get_csv_file_path function is defined above in the file - do not duplicate
+# Note: FilePathUtils.get_csv_path() and FilePathUtils.create_csv_template() 
+# are the canonical methods - see FilePathUtils class above
 
 def get_cached_or_prompted_org_id() -> str:
     """
@@ -6689,7 +6698,7 @@ class APIFetchUtils:
         # Load site names from SiteList.csv for enrichment
         site_name_lookup = {}
         try:
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as file_handle:
                 reader = csv.DictReader(file_handle)
                 site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
@@ -8034,7 +8043,7 @@ class PromptUtils:
         check_and_generate_csv(csv_file, OrgExportUtils.sites)
 
         # Get the full path to the CSV file in the data directory
-        csv_file_path = get_csv_file_path(csv_file)
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)
         
         # Load the site list from CSV
         with open(csv_file_path, mode='r', encoding='utf-8') as file:
@@ -9074,7 +9083,7 @@ class OrgExportUtils:
         all_rogue_aps = []
         all_rogue_clients = []
         try:
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
@@ -9352,7 +9361,7 @@ class OrgExportUtils:
         check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_clients = []
         try:
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
@@ -9394,7 +9403,7 @@ class OrgExportUtils:
         check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_aps = []
         try:
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
@@ -10070,7 +10079,7 @@ class OrgExportUtils:
         print("Switch Virtual Chassis Statistics:")
         logging.info("Exporting all switch virtual chassis stats...")
         check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-        inventory_path = get_csv_file_path("OrgInventory.csv")
+        inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
         with open(inventory_path, mode="r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
             switches = [row for row in reader if row.get("type") == "switch" and row.get("vc_mac", "").strip()]
@@ -10199,7 +10208,7 @@ class OrgExportUtils:
         OrgExportUtils.devices_with_site_info()
 
         # Load the enriched device + site info
-        devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
+        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
         with open(devices_with_site_info_path, mode="r", encoding="utf-8") as file:
             site_configs = list(csv.DictReader(file))
 
@@ -10312,7 +10321,7 @@ class OrgExportUtils:
             # Load from cached CSV files instead of making API calls
             site_lookup = {}
             try:
-                site_list_path = get_csv_file_path("SiteList.csv")
+                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
                 with open(site_list_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
                     site_lookup = {
@@ -10337,7 +10346,7 @@ class OrgExportUtils:
             # Load inventory from cached CSV
             inventory = []
             try:
-                inventory_path = get_csv_file_path("OrgInventory.csv")
+                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
                 with open(inventory_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
                     inventory = list(reader)
@@ -10549,7 +10558,7 @@ class OrgExportUtils:
             # Get all sites (use cached CSV if available)
             try:
                 check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-                site_list_path = get_csv_file_path("SiteList.csv")
+                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
                 with open(site_list_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
                     sites = [(row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")]
@@ -11509,7 +11518,7 @@ class SiteExportUtils:
         # Get site name for display
         site_name = "Unknown Site"
         try:
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
@@ -11537,7 +11546,7 @@ class SiteExportUtils:
                 logging.warning(" No WiFi clients or sessions found at this site.")
                 print(" No WiFi clients or sessions found at this site.")
                 # Create empty CSV with headers
-                wifi_clients_path = get_csv_file_path("SiteWiFiClients.CSV")
+                wifi_clients_path = FilePathUtils.get_csv_path("SiteWiFiClients.CSV")
                 with open(wifi_clients_path, "w", newline="", encoding="utf-8") as file_handle:
                     writer = csv.writer(file_handle)
                     writer.writerow(["site_id", "site_name", "message"])
@@ -16488,7 +16497,7 @@ def create_test_sites_from_csv():
         return
     
     # Load CSV file
-    csv_file_path = get_csv_file_path("NorthAmericanTestSites.csv")
+    csv_file_path = FilePathUtils.get_csv_path("NorthAmericanTestSites.csv")
     
     if not os.path.exists(csv_file_path):
         logging.error(f"CSV file not found: {csv_file_path}")
@@ -17868,7 +17877,7 @@ class GatewayExportUtils:
             try:
                 # Ensure cached CSVs present
                 check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-                inventory_path = get_csv_file_path("OrgInventory.csv")
+                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
                 with open(inventory_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
                     # Filter out None/empty site_ids and only include gateways
@@ -18137,7 +18146,7 @@ class GatewayExportUtils:
         check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
         
         # Load the gateway device stats using CSV reader
-        stats_path = get_csv_file_path(stats_file)
+        stats_path = FilePathUtils.get_csv_path(stats_file)
         try:
             gateway_data = []
             with open(stats_path, 'r', encoding='utf-8') as csvfile:
@@ -18286,19 +18295,19 @@ class GatewayExportUtils:
         # Load required data
         try:
             # Load sites with gateway template associations
-            with open(get_csv_file_path("SiteList.csv"), encoding="utf-8") as csvfile:
+            with open(FilePathUtils.get_csv_path("SiteList.csv"), encoding="utf-8") as csvfile:
                 sites = list(csv.DictReader(csvfile))
             
             # Load gateway templates for name lookups
-            with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
+            with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
                 templates = list(csv.DictReader(csvfile))
             
             # Load gateway device data with connection status
-            with open(get_csv_file_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
+            with open(FilePathUtils.get_csv_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
                 gateway_devices = list(csv.DictReader(csvfile))
             
             # Load gateway configurations with management IPs
-            with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
+            with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
                 gateway_configs = list(csv.DictReader(csvfile))
                 
         except FileNotFoundError as exception:
@@ -18436,7 +18445,7 @@ class GatewayExportUtils:
         # Write filtered dataset to CSV
         if not filtered_rows:
             logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
-            filtered_csv_path = get_csv_file_path("FilteredGatewayPortConfigs.csv")
+            filtered_csv_path = FilePathUtils.get_csv_path("FilteredGatewayPortConfigs.csv")
             with open(filtered_csv_path, "w", newline="", encoding="utf-8") as csvfile:
                 csvfile.write("No matching data found.\n")
         else:
@@ -18496,11 +18505,11 @@ class GatewayExportUtils:
         check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
 
         # Load data
-        with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
+        with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
             configs = list(csv.DictReader(csvfile))
-        with open(get_csv_file_path("SiteList_ListAPI.csv"), encoding="utf-8") as csvfile:
+        with open(FilePathUtils.get_csv_path("SiteList_ListAPI.csv"), encoding="utf-8") as csvfile:
             sites = list(csv.DictReader(csvfile))
-        with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
+        with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
             templates = list(csv.DictReader(csvfile))
 
         # Create lookups for site and template names
@@ -18589,7 +18598,7 @@ class GatewayExportUtils:
                 "port_netmask", "port_config_type", "port_usage", "overridden_from_template",
                 "device_id", "site_id", "template_id"
             ]
-            output_path = get_csv_file_path(output_file)
+            output_path = FilePathUtils.get_csv_path(output_file)
             with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
@@ -18818,14 +18827,14 @@ def get_gateway_devices_with_sites(apisession, org_id, fast=False):
             
             # Load inventory from cached CSV
             gateway_devices = []
-            inventory_path = get_csv_file_path("OrgInventory.csv")
+            inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
             with open(inventory_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 gateways = [row for row in reader if row.get("type") == "gateway" and row.get("site_id") and row.get("id")]
             
             # Load site names from cached CSV
             site_name_lookup = {}
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 site_name_lookup = {row.get("id"): row.get("name", "Unknown Site") for row in reader}
@@ -18926,7 +18935,7 @@ def generate_support_package():
     port_stats_data = load_csv_grouped_by_key('OrgDevicePortStats.csv', 'site_id')
 
     # Load speedtest data if available
-    gateway_test_results_path = get_csv_file_path('AllGatewayTestResults.csv')
+    gateway_test_results_path = FilePathUtils.get_csv_path('AllGatewayTestResults.csv')
     if os.path.exists(gateway_test_results_path):
         logging.debug("Loading AllGatewayTestResults.csv for speedtest data...")
         speedtest_data = load_csv_grouped_by_key('AllGatewayTestResults.csv', 'site_id')
@@ -18967,7 +18976,7 @@ def load_csv_grouped_by_key(filename, key):
     Adds logging for file loading and key distribution.
     """
     logging.info(f"Loading CSV file '{filename}' into dictionary keyed by '{key}'...")
-    csv_file_path = get_csv_file_path(filename)
+    csv_file_path = FilePathUtils.get_csv_path(filename)
     with open(csv_file_path, mode='r', encoding='utf-8') as file:
         reader = csv.DictReader(file)  # Create a CSV reader
         data_dict = {}  # Initialize an empty dictionary
@@ -19002,7 +19011,7 @@ def write_support_data_to_csv(data, filename):
     logging.debug(f"Final CSV fieldnames: {fieldnames}")
 
     # SECURITY: Use proper file path handling to ensure files go to data/ directory
-    csv_file_path = get_csv_file_path(filename)
+    csv_file_path = FilePathUtils.get_csv_path(filename)
     with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)  # Create a CSV writer
         writer.writeheader()  # Write the header row
@@ -20015,9 +20024,9 @@ def _handle_ws_close(output_lines, debug=False):
 def export_arp_output_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
     try:
         # SECURITY: Use proper file path handling for all file operations
-        txt_file_path = get_csv_file_path(txt_filename)
-        csv1_path = get_csv_file_path(csv1)
-        csv2_path = get_csv_file_path(csv2)
+        txt_file_path = FilePathUtils.get_csv_path(txt_filename)
+        csv1_path = FilePathUtils.get_csv_path(csv1)
+        csv2_path = FilePathUtils.get_csv_path(csv2)
         
         with open(txt_file_path, "r", encoding="utf-8") as f:
             raw_text = f.read()
@@ -20053,7 +20062,7 @@ def export_arp_output_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_datase
 def _save_output_to_file(compiled_output, filename="arp_output_raw.txt"):
     try:
         # SECURITY: Use proper file path handling to ensure files go to data/ directory
-        file_path = get_csv_file_path(filename)
+        file_path = FilePathUtils.get_csv_path(filename)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(compiled_output)
         logging.info(f"! ARP output saved to {file_path}")
@@ -20152,7 +20161,7 @@ def ssh_runner_by_gateway_template(fast=False):
     
     # Step 2: Read the gateway data
     try:
-        with open(get_csv_file_path("GatewayManagementIPs.csv"), encoding="utf-8") as f:
+        with open(FilePathUtils.get_csv_path("GatewayManagementIPs.csv"), encoding="utf-8") as f:
             gateways = list(csv.DictReader(f))
     except FileNotFoundError:
         print("! Error: Gateway management IP data not found. Please run Menu Option 4 first.")
@@ -21847,7 +21856,7 @@ def create_address_parse_failures_csv(parse_failures, filename="AddressParseFail
         return
     
     try:
-        output_path = get_csv_file_path(filename)
+        output_path = FilePathUtils.get_csv_path(filename)
         
         with open(output_path, "w", newline='', encoding="utf-8") as f:
             fieldnames = [
@@ -21969,7 +21978,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: OrgExportUtils.devices_with_site_info(fast=fast))
 
     # Load the enriched device + site info
-    devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
+    devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
     with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
         site_configs = list(csv.DictReader(f))
 
@@ -22015,7 +22024,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
 
     # Load the comparison CSV file
     try:
-        comparison_file_path = get_csv_file_path(comparison_file)
+        comparison_file_path = FilePathUtils.get_csv_path(comparison_file)
         with open(comparison_file_path, mode="r", encoding="utf-8") as f:
             comparison_data = list(csv.DictReader(f))
     except Exception as e:
@@ -22028,7 +22037,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
 
     # Load the address skip list for automatic corrections
     skip_addresses = []
-    skip_file_path = get_csv_file_path("AddressSkip.csv")
+    skip_file_path = FilePathUtils.get_csv_path("AddressSkip.csv")
     try:
         with open(skip_file_path, mode="r", encoding="utf-8") as f:
             skip_data = list(csv.DictReader(f))
@@ -22833,7 +22842,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 writer.writerows(diff_report_items)
             
             print(f"! Data integrity report saved to: {output_file}")
-            print(f"! Location: {get_csv_file_path(output_file)}")
+            print(f"! Location: {FilePathUtils.get_csv_path(output_file)}")
             print(f"\n  Data Integrity Summary:")
             print(f"   Found {len(diff_report_items)} address conflicts requiring review")
             if address_validation_enabled:
@@ -22890,7 +22899,7 @@ def set_wan2_interface_site_variable():
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     # Step 2: Load site data
-    site_list_path = get_csv_file_path("SiteList.csv")
+    site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
     with open(site_list_path, encoding="utf-8") as f:
         sites = list(csv.DictReader(f))
     
@@ -22969,13 +22978,13 @@ def set_wan2_interface_site_variable():
         return
     
     # Step 4: Load gateway configs to check for ge-0/0/1 overrides
-    gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
+    gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
     with open(gateway_configs_path, encoding="utf-8") as f:
         gateway_configs = list(csv.DictReader(f))
     
     # Step 4a: Load gateway templates to analyze IP configuration types for comparison
     # This enables intelligent DHCP vs Static IP conflict detection
-    template_configs_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    template_configs_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
     with open(template_configs_path, encoding="utf-8") as f:
         template_data = list(csv.DictReader(f))
     
@@ -23402,7 +23411,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     # Load templates
-    templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
     with open(templates_path, encoding="utf-8") as f:
         template_rows = list(csv.DictReader(f))
     
@@ -23412,7 +23421,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
         return
     
     # Load and EARLY FILTER sites (OPTIMIZATION: filter VRE sites immediately to reduce processing)
-    sites_path = get_csv_file_path("SiteList.csv")
+    sites_path = FilePathUtils.get_csv_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
         all_sites = list(csv.DictReader(f))
     
@@ -24082,7 +24091,7 @@ def convert_virtual_chassis_to_virtual_mac():
     check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
 
     # Load OrgInventory.csv and filter for switches at the selected site with a non-empty id 
-    inventory_path = get_csv_file_path("OrgInventory.csv")
+    inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
     with open(inventory_path, mode="r", encoding="utf-8") as file:
         reader = list(csv.DictReader(file))
         switches = [
@@ -24171,7 +24180,7 @@ def convert_virtual_chassis_by_site_list():
     
     # Check if VCConvert.CSV exists
     csv_file = "VCConvert.CSV"
-    csv_file_path = get_csv_file_path(csv_file)
+    csv_file_path = FilePathUtils.get_csv_path(csv_file)
     if not os.path.exists(csv_file_path):
         print(f"! File '{csv_file}' not found.")
         print(f"   Please create this file at: {csv_file_path}")
@@ -24181,7 +24190,7 @@ def convert_virtual_chassis_by_site_list():
         user_input = input("   Would you like to create an empty file to get started? (y/n): ").strip().lower()
         if user_input in ['y', 'yes']:
             try:
-                template_path = create_missing_csv_template("VCConvert.CSV")
+                template_path = FilePathUtils.create_csv_template("VCConvert.CSV")
                 print(f"! Empty file created at: {template_path}")
                 print("   Please edit the file to add your site names and run the script again.")
             except Exception as e:
@@ -24219,7 +24228,7 @@ def convert_virtual_chassis_by_site_list():
     # Load site list to get site IDs
     site_name_to_id = {}
     try:
-        site_list_path = get_csv_file_path("SiteList.csv")
+        site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
         with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24252,7 +24261,7 @@ def convert_virtual_chassis_by_site_list():
     # Load inventory and filter for virtual chassis switches in target sites
     switches_to_convert = []
     try:
-        inventory_path = get_csv_file_path("OrgInventory.csv")
+        inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
         with open(inventory_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24369,7 +24378,7 @@ def check_virtual_chassis_conversion_status():
     # Load inventory and filter for switches with vc_mac (virtual chassis switches)
     switches_with_vc_mac = []
     try:
-        inventory_path = get_csv_file_path("OrgInventory.csv")
+        inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
         with open(inventory_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24392,7 +24401,7 @@ def check_virtual_chassis_conversion_status():
     site_id_to_name = {}
     try:
         check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-        site_list_path = get_csv_file_path("SiteList.csv")
+        site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
         with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24461,7 +24470,7 @@ def check_virtual_chassis_conversion_status():
         DataExporter.save_data_to_output(sanitized_switches, filename)
         
         print(f"\n  Results exported to: {filename}")
-        print(f"   Location: {get_csv_file_path(filename)}")
+        print(f"   Location: {FilePathUtils.get_csv_path(filename)}")
         
         # Log results
         logging.info(f"Virtual chassis conversion status check completed:")
@@ -24488,7 +24497,7 @@ def reboot_devices_by_gateway_template_list():
     logging.info("[46] Starting reboot_devices_by_gateway_template_list")
 
     # Step 1: Check if the reboot list file exists
-    reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
+    reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
     if not os.path.exists(reboot_list_path):
         logging.error(" GatewayTemplateRebootList.CSV not found.")
         print(" GatewayTemplateRebootList.CSV not found.")
@@ -24499,7 +24508,7 @@ def reboot_devices_by_gateway_template_list():
         user_input = input("   Would you like to create an empty file to get started? (y/n): ").strip().lower()
         if user_input in ['y', 'yes']:
             try:
-                template_path = create_missing_csv_template("GatewayTemplateRebootList.CSV")
+                template_path = FilePathUtils.create_csv_template("GatewayTemplateRebootList.CSV")
                 print(f"! Empty file created at: {template_path}")
                 print("   Please edit the file to add your template names and run the script again.")
             except Exception as e:
@@ -24515,7 +24524,7 @@ def reboot_devices_by_gateway_template_list():
     # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
     template_name_to_id = {}
     try:
-        gateway_templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+        gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
         with open(gateway_templates_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24537,7 +24546,7 @@ def reboot_devices_by_gateway_template_list():
     # Step 4: Load reboot list of template names
     reboot_template_names = set()
     try:
-        reboot_list_path = get_csv_file_path("GatewayTemplateRebootList.CSV")
+        reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
         with open(reboot_list_path, encoding="utf-8") as f:
             reader = csv.reader(f)
             for row in reader:
@@ -24575,7 +24584,7 @@ def reboot_devices_by_gateway_template_list():
     template_id_to_name = {tid: name for name, tid in template_name_to_id.items()}  # Reverse lookup
     
     try:
-        site_list_path = get_csv_file_path("SiteList.csv")
+        site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
         with open(site_list_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24602,7 +24611,7 @@ def reboot_devices_by_gateway_template_list():
     # Step 7: Load AllSiteGatewayConfigs and filter gateway devices by site_id
     reboot_targets = []
     try:
-        gateway_configs_path = get_csv_file_path("AllSiteGatewayConfigs.csv")
+        gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
         with open(gateway_configs_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -24642,7 +24651,7 @@ def reboot_devices_by_gateway_template_list():
         # Count devices by type in target sites
         device_counts = {}
         try:
-            with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
+            with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     device_site_id = row.get("site_id", "").strip()
@@ -24780,7 +24789,7 @@ def reboot_devices_by_gateway_template_list():
 
     # Step 10: Write results to CSV
     try:
-        results_csv_path = get_csv_file_path("GatewayTemplateRebootResults.CSV")
+        results_csv_path = FilePathUtils.get_csv_path("GatewayTemplateRebootResults.CSV")
         with open(results_csv_path, "w", newline='', encoding="utf-8") as f:
             fieldnames = ["Template ID", "Template Name", "Device ID", "Device Name", "Site ID", "Site Name", "Status"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -32781,7 +32790,7 @@ class FirmwareManager:
         
         try:
             # Load gateway templates
-            gateway_templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+            gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
             with open(gateway_templates_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
@@ -32794,7 +32803,7 @@ class FirmwareManager:
             logging.info(f"Loaded {len(template_name_to_id)} gateway templates")
             
             # Load sites and map them to templates
-            site_list_path = get_csv_file_path("SiteList.csv")
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
@@ -34925,7 +34934,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
     else:
         # Check for bulk site upgrade file or get single site selection
         bulk_upgrade_file = "APUpgradeSiteList.CSV"
-        bulk_upgrade_file_path = get_csv_file_path(bulk_upgrade_file)
+        bulk_upgrade_file_path = FilePathUtils.get_csv_path(bulk_upgrade_file)
         
         if os.path.exists(bulk_upgrade_file_path):
             print(f"! Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
@@ -38117,7 +38126,7 @@ def get_potential_anomaly_metrics():
     ConstInsightMetrics.csv (if available) or fallback to known working metrics.
     """
     try:
-        anomaly_metrics_path = get_csv_file_path("ConstInsightMetrics.csv")
+        anomaly_metrics_path = FilePathUtils.get_csv_path("ConstInsightMetrics.csv")
         
         if not os.path.exists(anomaly_metrics_path):
             logging.warning("ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11).")
@@ -41697,7 +41706,7 @@ def extract_gateway_template_configuration():
     # Sanitize template name for filename
     safe_filename = EnhancedSSHRunner.sanitize_filename(template_name)
     json_filename = f"{safe_filename}_extracted_config.json"
-    json_filepath = get_csv_file_path(json_filename)  # Uses data/ directory
+    json_filepath = FilePathUtils.get_csv_path(json_filename)  # Uses data/ directory
     
     try:
         with open(json_filepath, 'w', encoding='utf-8') as json_file:
@@ -42154,7 +42163,7 @@ def clone_gateway_templates_by_state_and_country():
     print("\n  Step 1: Loading site data...")
     check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
-    sites_path = get_csv_file_path("SiteList.csv")
+    sites_path = FilePathUtils.get_csv_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
         all_sites = list(csv.DictReader(f))
     
@@ -42298,7 +42307,7 @@ def clone_gateway_templates_by_state_and_country():
     print("\n  Step 2: Loading gateway templates...")
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
-    templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
+    templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
     with open(templates_path, encoding="utf-8") as f:
         template_rows = list(csv.DictReader(f))
     
@@ -43702,7 +43711,7 @@ class EnhancedSSHRunner:
         
         # Ensure per-host-logs directory exists and is secure (in data folder)
         # SECURITY: Use proper data directory path to avoid permission issues
-        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        data_dir = os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))  # Get data directory path
         log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
@@ -44474,7 +44483,7 @@ class EnhancedSSHRunner:
         
         # Ensure per-host-logs directory exists and is secure (in data folder)
         # SECURITY: Use proper data directory path to avoid permission issues
-        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        data_dir = os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))  # Get data directory path
         log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
@@ -44806,7 +44815,7 @@ Log file: {host_log_file}
         
         # Ensure per-host-logs directory exists and is secure (in data folder)
         # SECURITY: Use proper data directory path to avoid permission issues
-        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        data_dir = os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))  # Get data directory path
         log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
@@ -45011,7 +45020,7 @@ Log file: {host_log_file}
         
         # Ensure per-host-logs directory exists and is secure (in data folder)
         # SECURITY: Use proper data directory path to avoid permission issues
-        data_dir = os.path.dirname(get_csv_file_path("dummy.csv"))  # Get data directory path
+        data_dir = os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))  # Get data directory path
         log_dir = os.path.join(data_dir, "per-host-logs")
         try:
             os.makedirs(log_dir, exist_ok=True)
