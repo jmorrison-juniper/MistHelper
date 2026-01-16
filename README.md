@@ -550,6 +550,56 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.09.23.25",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "OrgExportUtils: Moved network_templates, rf_templates implementations into class",
+          "Updated menu dispatcher to use OrgExportUtils class methods",
+          "Deleted 2 standalone export_org_*_templates_to_csv functions",
+          "Reduced standalone function count from 193 to 191"
+        ]
+      }
+    },
+    {
+      "version": "25.07.09.23.15",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "SiteExportUtils: Moved wlans, beacons, maps, zones, insights implementations into class",
+          "Updated menu dispatcher (49-53) to use SiteExportUtils class methods",
+          "Deleted 5 standalone export_site_*_to_csv functions",
+          "Reduced standalone function count from 198 to 193"
+        ]
+      }
+    },
+    {
+      "version": "25.07.09.23.00",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "OrgExportUtils: Moved 14 implementations (NAC, stats, config) into class methods",
+          "Functions: nac_clients, nac_tags, nac_portals, nac_rules, nac_events, assets, bgp_peers, tunnel_stats",
+          "Also: site_stats, mxedge_stats, alarm_templates, security_intel_profiles, invites, events",
+          "Deleted 14 standalone export_org_* functions",
+          "Reduced standalone function count from 212 to 198"
+        ]
+      }
+    },
+    {
+      "version": "25.07.09.22.45",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "OrgExportUtils: Moved 11 function implementations into class methods",
+          "Functions: wireless_clients, wired_clients, psks, webhooks, wlans, api_tokens, admins, sso, usage, msp, mx_edges",
+          "Updated menu dispatcher (40-41, 46-48, 54-59) to use OrgExportUtils class methods",
+          "Deleted 11 standalone export_org_*_to_csv functions",
+          "Reduced standalone function count from 223 to 212"
+        ]
+      }
+    },
+    {
       "version": "25.07.09.22.15",
       "date": "2025-07-09",
       "changes": {
