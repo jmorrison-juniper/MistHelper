@@ -6718,33 +6718,153 @@ class APIFetchUtils:
     @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):
         """
-        Fetch settings for all sites.
-        
+        Fetches configuration settings for all sites in the organization.
+
         Args:
-            apisession: The API session
-            org_id: The organization ID
-            limit: Pagination limit
-            
+            apisession: The Mist API session object.
+            org_id: The organization ID.
+            limit: (Unused) Maximum number of sites to fetch per API call.
+
         Returns:
-            list: List of site settings dictionaries
+            List of dictionaries, each containing the settings for a site.
         """
-        return fetch_all_site_settings_from_api(apisession, org_id, limit)
+        logging.info("Fetching all site settings...")
+
+        # Use mistapi.get_all to ensure pagination is handled for all sites
+        sites = fetch_all_sites_with_limit(org_id)
+
+        all_configs = []
+        for site in tqdm(sites, desc="Sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unnamed Site")
+            try:
+                # Fetch the site settings using the Mist API
+                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data
+                config["site_id"] = site_id
+                config["site_name"] = site_name
+                all_configs.append(config)
+                logging.info(f"! Fetched config for site: {site_name} (ID: {site_id})")
+            except Exception as error:
+                logging.warning(f"! Failed to fetch config for {site_name} (ID: {site_id}): {error}")
+
+        logging.info(f"Fetched settings for {len(all_configs)} sites.")
+        return all_configs
     
     @staticmethod
     def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):
         """
-        Fetch gateway device configurations.
+        Fetches configuration details for all gateway devices in the org using org inventory.
+        If `fast` is True, fetches each device config concurrently using connection pool management.
         
         Args:
-            apisession: The API session
-            org_id: The organization ID
-            fast: If True, enables concurrent processing
-            max_workers: Maximum concurrent workers
-            
+            apisession: Authenticated Mist API session.
+            org_id: Organization ID.
+            fast (bool): If True, enables high-concurrency mode with connection pool management.
+            max_workers (int): Optional override for number of concurrent threads.
+        
         Returns:
-            list: List of gateway configuration dictionaries
+            List of device configuration dictionaries.
         """
-        return fetch_gateway_device_configs_from_api(apisession, org_id, fast, max_workers)
+        logging.info("Fetching org inventory to find gateway devices...")
+        try:
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+            inventory = mistapi.get_all(response=response, mist_session=apisession)
+        except Exception as error:
+            logging.error(f"! Failed to fetch org inventory: {error}")
+            return []
+
+        logging.info(f"Found {len(inventory)} total devices in org inventory.")
+
+        # Load site names from SiteList.csv for enrichment
+        site_name_lookup = {}
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as file_handle:
+                reader = csv.DictReader(file_handle)
+                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
+        except Exception as error:
+            logging.warning(f"! Failed to load SiteList.csv for site names: {error}")
+
+        # Filter for gateway devices and build work list
+        work_items = []
+        for device in inventory:
+            if device.get("type") == "gateway":
+                site_id = device.get("site_id")
+                device_id = device.get("id")
+                if site_id and device_id:
+                    site_name = site_name_lookup.get(site_id, "Unknown")
+                    work_items.append((site_id, device_id, site_name))
+
+        logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
+
+        def fetch_config(work_item, connection_semaphore):
+            """Fetch configuration for a single device with retry logic."""
+            work_site_id, work_device_id, work_site_name = work_item
+            
+            with connection_semaphore:  # Limit concurrent connections
+                try:
+                    logging.debug(f"Fetching config for {work_device_id} ({work_site_name})")
+                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, work_site_id, work_device_id)
+                    config = getattr(config_response, "data", {})
+                    if config:
+                        # Add site metadata for enrichment
+                        config["site_name"] = work_site_name
+                        config["site_id"] = work_site_id
+                        logging.debug(f"! Config fetched for {work_device_id}")
+                        return config
+                    else:
+                        logging.warning(f"! Empty config for device {work_device_id}")
+                except Exception as inner_error:
+                    logging.error(f"! Failed to fetch config for device {work_device_id}: {inner_error}")
+                    return None
+
+        def retry_fetch_config(failed_items, connection_semaphore):
+            """Retry wrapper for device config fetching."""
+            max_retries = int(os.getenv('FAST_MODE_SEQUENTIAL_MAX_RETRIES', '1'))
+            retry_results = []
+            
+            for failed_work_item in failed_items:
+                failed_site_id, failed_device_id, failed_site_name = failed_work_item
+                
+                for attempt in range(max_retries + 1):
+                    result = fetch_config(failed_work_item, connection_semaphore)
+                    if result is not None:
+                        retry_results.append(result)
+                        break
+                    if attempt < max_retries:
+                        delay = 0.5 * (1.5 ** attempt)  # Exponential backoff
+                        logging.debug(f"Retrying device {failed_device_id} in {delay:.2f}s (attempt {attempt + 2}/{max_retries + 1})")
+                        time.sleep(delay)
+                else:
+                    logging.warning(f"! Failed to fetch config for device {failed_device_id} after {max_retries + 1} attempts")
+            
+            return retry_results
+
+        # Use connection pool management helper if fast mode is enabled
+        if fast:
+            successful_results, failed_items = execute_with_connection_pool_management(
+                work_items=work_items,
+                worker_function=fetch_config,
+                batch_description="gateway device configs",
+                retry_function=retry_fetch_config
+            )
+            all_device_configs = successful_results
+        else:
+            # Sequential processing for non-fast mode
+            all_device_configs = []
+            # Create a dummy semaphore for sequential processing
+            dummy_semaphore = threading.Semaphore(1)
+            
+            for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):
+                result = fetch_config(work_item, dummy_semaphore)
+                if result is not None:
+                    all_device_configs.append(result)
+
+        # Filter out None results
+        all_device_configs = [config for config in all_device_configs if config is not None]
+        
+        logging.info(f"! Completed fetching {len(all_device_configs)} gateway device configs.")
+        return all_device_configs
 
 
 # ============================================================================
@@ -17659,8 +17779,8 @@ class InteractiveDisplayUtils:
 
 def fetch_all_site_settings_from_api(apisession, org_id, limit=1000):
     """
-    Fetches configuration settings for all sites in the organization.
-
+    Backward compatibility wrapper - delegates to APIFetchUtils.all_site_settings().
+    
     Args:
         apisession: The Mist API session object.
         org_id: The organization ID.
@@ -17669,27 +17789,7 @@ def fetch_all_site_settings_from_api(apisession, org_id, limit=1000):
     Returns:
         List of dictionaries, each containing the settings for a site.
     """
-    logging.info("Fetching all site settings...")
-
-    # Use mistapi.get_all to ensure pagination is handled for all sites
-    sites = fetch_all_sites_with_limit(org_id)
-
-    all_configs = []
-    for site in tqdm(sites, desc="Sites", unit="site"):
-        site_id = site.get("id")
-        site_name = site.get("name", "Unnamed Site")
-        try:
-            # Fetch the site settings using the Mist API
-            config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data
-            config["site_id"] = site_id
-            config["site_name"] = site_name
-            all_configs.append(config)
-            logging.info(f"! Fetched config for site: {site_name} (ID: {site_id})")
-        except Exception as e:
-            logging.warning(f"! Failed to fetch config for {site_name} (ID: {site_id}): {e}")
-
-    logging.info(f"Fetched settings for {len(all_configs)} sites.")
-    return all_configs
+    return APIFetchUtils.all_site_settings(apisession, org_id, limit)
 
 
 # ============================================================================
@@ -20600,8 +20700,7 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
 
 def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
     """
-    Fetches configuration details for all gateway devices in the org using org inventory.
-    If `fast` is True, fetches each device config concurrently using connection pool management.
+    Backward compatibility wrapper - delegates to APIFetchUtils.gateway_device_configs().
     
     Args:
         apisession: Authenticated Mist API session.
@@ -20612,106 +20711,7 @@ def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_wo
     Returns:
         List of device configuration dictionaries.
     """
-    logging.info("Fetching org inventory to find gateway devices...")
-    try:
-        response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-        inventory = mistapi.get_all(response=response, mist_session=apisession)
-    except Exception as e:
-        logging.error(f"! Failed to fetch org inventory: {e}")
-        return []
-
-    logging.info(f"Found {len(inventory)} total devices in org inventory.")
-
-    # Load site names from SiteList.csv for enrichment
-    site_name_lookup = {}
-    try:
-        site_list_path = get_csv_file_path("SiteList.csv")
-        with open(site_list_path, mode="r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
-    except Exception as e:
-        logging.warning(f"! Failed to load SiteList.csv for site names: {e}")
-
-    # Filter for gateway devices and build work list
-    work_items = []
-    for device in inventory:
-        if device.get("type") == "gateway":
-            site_id = device.get("site_id")
-            device_id = device.get("id")
-            if site_id and device_id:
-                site_name = site_name_lookup.get(site_id, "Unknown")
-                work_items.append((site_id, device_id, site_name))
-
-    logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
-
-    def fetch_config(work_item, connection_semaphore):
-        """Fetch configuration for a single device with retry logic."""
-        site_id, device_id, site_name = work_item
-        
-        with connection_semaphore:  # Limit concurrent connections
-            try:
-                logging.debug(f"Fetching config for {device_id} ({site_name})")
-                response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-                config = getattr(response, "data", {})
-                if config:
-                    # Add site metadata for enrichment
-                    config["site_name"] = site_name
-                    config["site_id"] = site_id
-                    logging.debug(f"! Config fetched for {device_id}")
-                    return config
-                else:
-                    logging.warning(f"! Empty config for device {device_id}")
-            except Exception as e:
-                logging.error(f"! Failed to fetch config for device {device_id}: {e}")
-                return None
-
-    def retry_fetch_config(failed_items, connection_semaphore):
-        """Retry wrapper for device config fetching."""
-        max_retries = int(os.getenv('FAST_MODE_SEQUENTIAL_MAX_RETRIES', '1'))
-        retry_results = []
-        
-        for work_item in failed_items:
-            site_id, device_id, site_name = work_item
-            
-            for attempt in range(max_retries + 1):
-                result = fetch_config(work_item, connection_semaphore)
-                if result is not None:
-                    retry_results.append(result)
-                    break
-                if attempt < max_retries:
-                    delay = 0.5 * (1.5 ** attempt)  # Exponential backoff
-                    logging.debug(f"Retrying device {device_id} in {delay:.2f}s (attempt {attempt + 2}/{max_retries + 1})")
-                    time.sleep(delay)
-            else:
-                logging.warning(f"! Failed to fetch config for device {device_id} after {max_retries + 1} attempts")
-        
-        return retry_results
-
-    # Use connection pool management helper if fast mode is enabled
-    if fast:
-        successful_results, failed_items = execute_with_connection_pool_management(
-            work_items=work_items,
-            worker_function=fetch_config,
-            batch_description="gateway device configs",
-            retry_function=retry_fetch_config
-        )
-        all_device_configs = successful_results
-    else:
-        # Sequential processing for non-fast mode
-        all_device_configs = []
-        # Create a dummy semaphore for sequential processing
-        dummy_semaphore = threading.Semaphore(1)
-        
-        for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):
-            result = fetch_config(work_item, dummy_semaphore)
-            if result is not None:
-                all_device_configs.append(result)
-
-    # Filter out None results
-    all_device_configs = [config for config in all_device_configs if config is not None]
-    
-    logging.info(f"! Completed fetching {len(all_device_configs)} gateway device configs.")
-    return all_device_configs
+    return APIFetchUtils.gateway_device_configs(apisession, org_id, fast, max_workers)
 
 def get_rate_limited_delay(smoothed_delay=None):
     """
@@ -20881,7 +20881,10 @@ class AddressUtils:
     @staticmethod
     def normalize_zip(zip_code):
         """
-        Normalizes a zip code to compare only the first 5 digits.
+        Normalizes a zip code to compare only the first 5 digits:
+        - Removes everything after and including a dash
+        - If only 4 digits before dash, prepends a '0'
+        - Returns first 5 digits only
         
         Args:
             zip_code: The zip code to normalize
@@ -20889,12 +20892,31 @@ class AddressUtils:
         Returns:
             str: The normalized 5-digit zip code
         """
-        return normalize_zip_code(zip_code)
+        if not zip_code:
+            return ""
+        
+        # Convert to string and strip whitespace
+        zip_str = str(zip_code).strip()
+        
+        # Remove everything after and including a dash
+        if '-' in zip_str:
+            zip_str = zip_str.split('-')[0]
+        
+        # Remove any non-digit characters
+        zip_digits = ''.join(filter(str.isdigit, zip_str))
+        
+        # If only 4 digits, prepend a '0'
+        if len(zip_digits) == 4:
+            zip_digits = '0' + zip_digits
+        
+        # Return first 5 digits
+        return zip_digits[:5]
     
     @staticmethod
     def normalize_state(state_str):
         """
-        Normalizes a state name to its standard abbreviation.
+        Normalizes state names and abbreviations to a consistent format.
+        Converts both full state names and abbreviations to lowercase abbreviations.
         
         Args:
             state_str: The state string to normalize
@@ -20902,12 +20924,49 @@ class AddressUtils:
         Returns:
             str: The normalized state abbreviation
         """
-        return normalize_state_name(state_str)
+        if not state_str:
+            return ""
+        
+        # Convert to lowercase and strip
+        state = state_str.lower().strip()
+        
+        # State name to abbreviation mapping
+        state_mapping = {
+            # Full names to abbreviations
+            'alabama': 'al', 'alaska': 'ak', 'arizona': 'az', 'arkansas': 'ar', 'california': 'ca',
+            'colorado': 'co', 'connecticut': 'ct', 'delaware': 'de', 'florida': 'fl', 'georgia': 'ga',
+            'hawaii': 'hi', 'idaho': 'id', 'illinois': 'il', 'indiana': 'in', 'iowa': 'ia',
+            'kansas': 'ks', 'kentucky': 'ky', 'louisiana': 'la', 'maine': 'me', 'maryland': 'md',
+            'massachusetts': 'ma', 'michigan': 'mi', 'minnesota': 'mn', 'mississippi': 'ms', 'missouri': 'mo',
+            'montana': 'mt', 'nebraska': 'ne', 'nevada': 'nv', 'new hampshire': 'nh', 'new jersey': 'nj',
+            'new mexico': 'nm', 'new york': 'ny', 'north carolina': 'nc', 'north dakota': 'nd', 'ohio': 'oh',
+            'oklahoma': 'ok', 'oregon': 'or', 'pennsylvania': 'pa', 'rhode island': 'ri', 'south carolina': 'sc',
+            'south dakota': 'sd', 'tennessee': 'tn', 'texas': 'tx', 'utah': 'ut', 'vermont': 'vt',
+            'virginia': 'va', 'washington': 'wa', 'west virginia': 'wv', 'wisconsin': 'wi', 'wyoming': 'wy',
+            'district of columbia': 'dc',
+            
+            # Abbreviations to themselves (normalized to lowercase)
+            'al': 'al', 'ak': 'ak', 'az': 'az', 'ar': 'ar', 'ca': 'ca', 'co': 'co', 'ct': 'ct',
+            'de': 'de', 'fl': 'fl', 'ga': 'ga', 'hi': 'hi', 'id': 'id', 'il': 'il', 'in': 'in',
+            'ia': 'ia', 'ks': 'ks', 'ky': 'ky', 'la': 'la', 'me': 'me', 'md': 'md', 'ma': 'ma',
+            'mi': 'mi', 'mn': 'mn', 'ms': 'ms', 'mo': 'mo', 'mt': 'mt', 'ne': 'ne', 'nv': 'nv',
+            'nh': 'nh', 'nj': 'nj', 'nm': 'nm', 'ny': 'ny', 'nc': 'nc', 'nd': 'nd', 'oh': 'oh',
+            'ok': 'ok', 'or': 'or', 'pa': 'pa', 'ri': 'ri', 'sc': 'sc', 'sd': 'sd', 'tn': 'tn',
+            'tx': 'tx', 'ut': 'ut', 'vt': 'vt', 'va': 'va', 'wa': 'wa', 'wv': 'wv', 'wi': 'wi',
+            'wy': 'wy', 'dc': 'dc'
+        }
+        
+        return state_mapping.get(state, state)
     
     @staticmethod
     def normalize_address(address_str):
         """
-        Normalizes an address string for comparison.
+        Normalizes an address string for comparison by:
+        - Converting to lowercase
+        - Removing extra whitespace
+        - Standardizing common abbreviations
+        - Removing punctuation
+        - Unicode normalization for diacritics
         
         Args:
             address_str: The address string to normalize
@@ -20915,7 +20974,54 @@ class AddressUtils:
         Returns:
             str: The normalized address string
         """
-        return normalize_address_string(address_str)
+        if not address_str:
+            return ""
+        
+        # Unicode normalization (NFKD) and casefold for robust comparison
+        normalized = unicodedata.normalize('NFKD', address_str)
+        normalized = normalized.casefold().strip()
+        
+        # Remove extra whitespace and collapse multiple spaces
+        normalized = re.sub(r'\s+', ' ', normalized)
+        
+        # Common address abbreviations standardization
+        abbreviations = {
+            r'\bstreet\b': 'st',
+            r'\bst\b': 'st',
+            r'\bavenue\b': 'ave',
+            r'\bave\b': 'ave',
+            r'\bboulevard\b': 'blvd',
+            r'\bblvd\b': 'blvd',
+            r'\bbuilding\b': 'bldg',
+            r'\bsuite\b': 'ste',
+            r'\bnorth\b': 'n',
+            r'\bsouth\b': 's',
+            r'\beast\b': 'e',
+            r'\bwest\b': 'w',
+            r'\bdrive\b': 'dr',
+            r'\bdr\b': 'dr',
+            r'\broad\b': 'rd',
+            r'\brd\b': 'rd',
+            r'\blane\b': 'ln',
+            r'\bln\b': 'ln',
+            r'\bcourt\b': 'ct',
+            r'\bct\b': 'ct',
+            r'\bplace\b': 'pl',
+            r'\bpl\b': 'pl',
+            r'\bparkway\b': 'pkwy',
+            r'\bpkwy\b': 'pkwy',
+            r'\bhighway\b': 'hwy',
+            r'\bhwy\b': 'hwy',
+        }
+        
+        for full_form, abbrev in abbreviations.items():
+            normalized = re.sub(full_form, abbrev, normalized)
+        
+        # Remove punctuation and extra spaces
+        normalized = re.sub(r'[^\w\s]', ' ', normalized)
+        normalized = ' '.join(normalized.split())
+        
+        return normalized
     
     @staticmethod
     def parse_components(address_string, debug=False):
@@ -20946,72 +21052,14 @@ class AddressUtils:
         return calculate_string_similarity(str1, str2)
 
 
-# Backward compatibility - original address function definitions follow
+# Backward compatibility - delegate to AddressUtils class methods
 def normalize_zip_code(zip_code):
-    """
-    Normalizes a zip code to compare only the first 5 digits:
-    - Removes everything after and including a dash
-    - If only 4 digits before dash, prepends a '0'
-    - Returns first 5 digits only
-    """
-    if not zip_code:
-        return ""
-    
-    # Convert to string and strip whitespace
-    zip_str = str(zip_code).strip()
-    
-    # Remove everything after and including a dash
-    if '-' in zip_str:
-        zip_str = zip_str.split('-')[0]
-    
-    # Remove any non-digit characters
-    zip_digits = ''.join(filter(str.isdigit, zip_str))
-    
-    # If only 4 digits, prepend a '0'
-    if len(zip_digits) == 4:
-        zip_digits = '0' + zip_digits
-    
-    # Return first 5 digits
-    return zip_digits[:5]
+    """Backward compatibility wrapper - delegates to AddressUtils.normalize_zip()."""
+    return AddressUtils.normalize_zip(zip_code)
 
 def normalize_state_name(state_str):
-    """
-    Normalizes state names and abbreviations to a consistent format.
-    Converts both full state names and abbreviations to lowercase abbreviations.
-    """
-    if not state_str:
-        return ""
-    
-    # Convert to lowercase and strip
-    state = state_str.lower().strip()
-    
-    # State name to abbreviation mapping
-    state_mapping = {
-        # Full names to abbreviations
-        'alabama': 'al', 'alaska': 'ak', 'arizona': 'az', 'arkansas': 'ar', 'california': 'ca',
-        'colorado': 'co', 'connecticut': 'ct', 'delaware': 'de', 'florida': 'fl', 'georgia': 'ga',
-        'hawaii': 'hi', 'idaho': 'id', 'illinois': 'il', 'indiana': 'in', 'iowa': 'ia',
-        'kansas': 'ks', 'kentucky': 'ky', 'louisiana': 'la', 'maine': 'me', 'maryland': 'md',
-        'massachusetts': 'ma', 'michigan': 'mi', 'minnesota': 'mn', 'mississippi': 'ms', 'missouri': 'mo',
-        'montana': 'mt', 'nebraska': 'ne', 'nevada': 'nv', 'new hampshire': 'nh', 'new jersey': 'nj',
-        'new mexico': 'nm', 'new york': 'ny', 'north carolina': 'nc', 'north dakota': 'nd', 'ohio': 'oh',
-        'oklahoma': 'ok', 'oregon': 'or', 'pennsylvania': 'pa', 'rhode island': 'ri', 'south carolina': 'sc',
-        'south dakota': 'sd', 'tennessee': 'tn', 'texas': 'tx', 'utah': 'ut', 'vermont': 'vt',
-        'virginia': 'va', 'washington': 'wa', 'west virginia': 'wv', 'wisconsin': 'wi', 'wyoming': 'wy',
-        'district of columbia': 'dc',
-        
-        # Abbreviations to themselves (normalized to lowercase)
-        'al': 'al', 'ak': 'ak', 'az': 'az', 'ar': 'ar', 'ca': 'ca', 'co': 'co', 'ct': 'ct',
-        'de': 'de', 'fl': 'fl', 'ga': 'ga', 'hi': 'hi', 'id': 'id', 'il': 'il', 'in': 'in',
-        'ia': 'ia', 'ks': 'ks', 'ky': 'ky', 'la': 'la', 'me': 'me', 'md': 'md', 'ma': 'ma',
-        'mi': 'mi', 'mn': 'mn', 'ms': 'ms', 'mo': 'mo', 'mt': 'mt', 'ne': 'ne', 'nv': 'nv',
-        'nh': 'nh', 'nj': 'nj', 'nm': 'nm', 'ny': 'ny', 'nc': 'nc', 'nd': 'nd', 'oh': 'oh',
-        'ok': 'ok', 'or': 'or', 'pa': 'pa', 'ri': 'ri', 'sc': 'sc', 'sd': 'sd', 'tn': 'tn',
-        'tx': 'tx', 'ut': 'ut', 'vt': 'vt', 'va': 'va', 'wa': 'wa', 'wv': 'wv', 'wi': 'wi',
-        'wy': 'wy', 'dc': 'dc'
-    }
-    
-    return state_mapping.get(state, state)
+    """Backward compatibility wrapper - delegates to AddressUtils.normalize_state()."""
+    return AddressUtils.normalize_state(state_str)
 
 def validate_addresses_with_nominatim(
     mist_address: dict,
@@ -21557,65 +21605,8 @@ def apply_business_context_rules(mist_result, comparison_result, debug=False):
     return 'uncertain'
 
 def normalize_address_string(address_str):
-    """
-    Normalizes an address string for comparison by:
-    - Converting to lowercase
-    - Removing extra whitespace
-    - Standardizing common abbreviations
-    - Removing punctuation
-    - Unicode normalization for diacritics
-    """
-    
-    if not address_str:
-        return ""
-    
-    # Unicode normalization (NFKD) and casefold for robust comparison
-    normalized = unicodedata.normalize('NFKD', address_str)
-    normalized = normalized.casefold().strip()
-    
-    # Remove extra whitespace and collapse multiple spaces
-    normalized = re.sub(r'\s+', ' ', normalized)
-    
-    # Common address abbreviations standardization
-    abbreviations = {
-        r'\bstreet\b': 'st',
-        r'\bst\b': 'st',
-        r'\bavenue\b': 'ave',
-        r'\bave\b': 'ave',
-        r'\bboulevard\b': 'blvd',
-        r'\bblvd\b': 'blvd',
-        r'\bbuilding\b': 'bldg',
-        r'\bbuilding\b': 'bldg',
-        r'\bsuite\b': 'ste',
-        r'\bsuite\b': 'ste',
-        r'\bnorth\b': 'n',
-        r'\bsouth\b': 's',
-        r'\beast\b': 'e',
-        r'\bwest\b': 'w',
-        r'\bdrive\b': 'dr',
-        r'\bdr\b': 'dr',
-        r'\broad\b': 'rd',
-        r'\brd\b': 'rd',
-        r'\blane\b': 'ln',
-        r'\bln\b': 'ln',
-        r'\bcourt\b': 'ct',
-        r'\bct\b': 'ct',
-        r'\bplace\b': 'pl',
-        r'\bpl\b': 'pl',
-        r'\bparkway\b': 'pkwy',
-        r'\bpkwy\b': 'pkwy',
-        r'\bhighway\b': 'hwy',
-        r'\bhwy\b': 'hwy',
-    }
-    
-    for full_form, abbrev in abbreviations.items():
-        normalized = re.sub(full_form, abbrev, normalized)
-    
-    # Remove punctuation and extra spaces
-    normalized = re.sub(r'[^\w\s]', ' ', normalized)
-    normalized = ' '.join(normalized.split())
-    
-    return normalized
+    """Backward compatibility wrapper - delegates to AddressUtils.normalize_address()."""
+    return AddressUtils.normalize_address(address_str)
 
 def parse_address_components(address_string, debug=False):
     """

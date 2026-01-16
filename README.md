@@ -550,6 +550,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.10.05.15",
+      "date": "2025-07-10",
+      "changes": {
+        "refactoring": [
+          "OrgExportUtils: Moved export_org_specific_data implementation into export_data() method",
+          "SiteExportUtils: Moved export_site_specific_data implementation into export_data() method",
+          "Standalone functions now delegate to class methods for backward compatibility",
+          "Inverted wrapper pattern: class has implementation, standalone delegates"
+        ]
+      }
+    },
+    {
+      "version": "25.07.10.05.00",
+      "date": "2025-07-10",
+      "changes": {
+        "refactoring": [
+          "APIFetchUtils: Added 5 tenant fetch implementations as static methods",
+          "Methods: site_tenants, service_policy_tenants, gateway_template_tenants, organization_services, organization_tenants",
+          "Deleted standalone fetch_*_tenants functions",
+          "Reduced standalone function count from 136 to 131"
+        ]
+      }
+    },
+    {
       "version": "25.07.09.23.25",
       "date": "2025-07-09",
       "changes": {
