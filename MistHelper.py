@@ -21598,9 +21598,6 @@ def apply_business_context_rules(mist_result, comparison_result, debug=False):
         logging.debug("Business context rules inconclusive")
     return 'uncertain'
 
-def normalize_address_string(address_str):
-    """Backward compatibility wrapper - delegates to AddressUtils.normalize_address()."""
-    return AddressUtils.normalize_address(address_str)
 
 def parse_address_components(address_string, debug=False):
     """
