@@ -21450,10 +21450,6 @@ def normalize_zip_code(zip_code):
     """Backward compatibility wrapper - delegates to AddressUtils.normalize_zip()."""
     return AddressUtils.normalize_zip(zip_code)
 
-def normalize_state_name(state_str):
-    """Backward compatibility wrapper - delegates to AddressUtils.normalize_state()."""
-    return AddressUtils.normalize_state(state_str)
-
 def validate_addresses_with_nominatim(
     mist_address: dict,
     comparison_address: dict,
