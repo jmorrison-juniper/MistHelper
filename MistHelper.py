@@ -2464,32 +2464,54 @@ def check_and_generate_csv(file_name, generate_function, freshness_minutes=None)
         logging.debug(f"EXIT: check_and_generate_csv - generation failed")
         return False
 
-def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
+
+# ============================================================================
+# DISPLAY UTILITIES CLASS
+# ============================================================================
+class DisplayUtils:
     """
-    Displays a PrettyTable from a list of dictionaries.
+    Centralized display and output utilities.
+    Handles table formatting, pretty printing, etc.
     """
-    # Return early if there's no data to display
-    if not data:
-        return
+    
+    @staticmethod
+    def dict_list_as_pretty_table(data: List[Dict[str, Any]], fields: Optional[List[str]] = None, sortby: Optional[str] = None) -> None:
+        """
+        Displays a PrettyTable from a list of dictionaries.
+        
+        Args:
+            data: List of dictionaries to display
+            fields: Optional list of field names to display
+            sortby: Optional field name to sort by
+        """
+        # Return early if there's no data to display
+        if not data:
+            return
 
-    # Use provided fields or extract all unique keys
-    fields = fields or DataProcessingUtils.get_unique_keys(data)
+        # Use provided fields or extract all unique keys
+        fields = fields or DataProcessingUtils.get_unique_keys(data)
 
-    # Initialize the PrettyTable with field names
-    table = PrettyTable()
-    table.field_names = fields
+        # Initialize the PrettyTable with field names
+        table = PrettyTable()
+        table.field_names = fields
 
-    # Set the sort column if it's valid
-    if sortby and sortby in fields:
-        table.sortby = sortby
+        # Set the sort column if it's valid
+        if sortby and sortby in fields:
+            table.sortby = sortby
 
-    # Add each row of data to the table
-    for item in data:
-        row = [item.get(field, "") for field in fields]
-        table.add_row(row)
+        # Add each row of data to the table
+        for item in data:
+            row = [item.get(field, "") for field in fields]
+            table.add_row(row)
 
-    # Log the table as a string (debug mode only)
-    logging.debug("\n" + table.get_string())
+        # Log the table as a string (debug mode only)
+        logging.debug("\n" + table.get_string())
+
+
+# Backward compatibility wrapper - will be removed in future version
+def display_dict_list_as_pretty_table(data: List[Dict[str, Any]], fields: Optional[List[str]] = None, sortby: Optional[str] = None) -> None:
+    """Legacy function - use DisplayUtils.dict_list_as_pretty_table() instead."""
+    DisplayUtils.dict_list_as_pretty_table(data, fields, sortby)
 
 def interactive_fetch_device_data_to_csv(
     fetch_function=None,
