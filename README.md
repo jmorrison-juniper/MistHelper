@@ -550,6 +550,16 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.20.00",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "PromptUtils: Updated external call sites to use class methods (PromptUtils.select_*)",
+          "PromptUtils: 10 call sites updated across interactive_fetch_device_data_to_csv and PacketCaptureManager"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.19.30",
       "date": "2026-01-16",
       "changes": {

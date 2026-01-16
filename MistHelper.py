@@ -2539,13 +2539,13 @@ def interactive_fetch_device_data_to_csv(
     
     # Use provided site_id or prompt user
     if not site_id:
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             return
 
     # Use provided device_id or prompt user
     if not device_id:
-        device_id = prompt_select_device_id_from_inventory(site_id, device_type=device_type)
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type=device_type)
         if not device_id:
             return
 
@@ -3633,7 +3633,7 @@ class PacketCaptureManager:
         
         client_mac = None
         if client_choice == "1":
-            client_mac = prompt_select_client_mac_from_site(site_id)
+            client_mac = PromptUtils.select_client_mac(site_id)
             if not client_mac:
                 print("\n! No client selected")
                 return
@@ -3654,7 +3654,7 @@ class PacketCaptureManager:
         
         ap_mac = None
         if ap_choice == "1":
-            ap_mac = prompt_select_ap_mac_from_site(site_id)
+            ap_mac = PromptUtils.select_ap_mac(site_id)
             if ap_mac:
                 ap_mac = self.normalize_mac_address(ap_mac)
         elif ap_choice == "2":
@@ -3788,7 +3788,7 @@ class PacketCaptureManager:
         
         client_mac = None
         if client_choice == "1":
-            client_mac = prompt_select_client_mac_from_site(site_id)
+            client_mac = PromptUtils.select_client_mac(site_id)
             if not client_mac:
                 print("\n! No client selected")
                 return
@@ -3895,7 +3895,7 @@ class PacketCaptureManager:
         
         # Gateway selection - interactive list
         logging.debug("Prompting for gateway selection from site inventory")
-        gateway_mac = prompt_select_gateway_mac_from_site(site_id)
+        gateway_mac = PromptUtils.select_gateway_mac(site_id)
         if not gateway_mac:
             logging.warning("No gateway selected or gateway selection failed - aborting capture")
             return
@@ -3906,7 +3906,7 @@ class PacketCaptureManager:
         
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from gateway")
-        port_selection_result = prompt_select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
+        port_selection_result = PromptUtils.select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
         
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -4025,7 +4025,7 @@ class PacketCaptureManager:
         
         # Switch selection - interactive list
         logging.debug("Prompting for switch selection from site inventory")
-        switch_mac = prompt_select_switch_mac_from_site(site_id)
+        switch_mac = PromptUtils.select_switch_mac(site_id)
         if not switch_mac:
             logging.warning("No switch selected or switch selection failed - aborting capture")
             return
@@ -4036,7 +4036,7 @@ class PacketCaptureManager:
         
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from switch")
-        port_selection_result = prompt_select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
+        port_selection_result = PromptUtils.select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
         
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -4231,7 +4231,7 @@ class PacketCaptureManager:
         
         # AP Selection - interactive list
         logging.debug("Prompting for AP selection from site inventory")
-        ap_mac = prompt_select_ap_mac_from_site(site_id)
+        ap_mac = PromptUtils.select_ap_mac(site_id)
         if not ap_mac:
             logging.warning("No AP selected or AP selection failed - aborting capture")
             return
