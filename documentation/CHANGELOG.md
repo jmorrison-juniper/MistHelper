@@ -2,6 +2,22 @@
 
 ## Version History
 
+### version 26.01.16.22.00
+
+```json
+{
+  "refactoring": [
+    "Refactored bulk_upgrade_ap_firmware_by_site_impl (~2400 lines) into BulkAPFirmwareUpgrader class",
+    "Created ~50 focused methods following 5-item rule for better maintainability",
+    "11-step workflow: determine_sites -> discover_aps -> fetch_stats -> fetch_firmware -> select_versions -> configure -> confirm -> execute -> auto_upgrade -> status_check -> write_results",
+    "Resolved Pylance 'Code is too complex to analyze' warning"
+  ],
+  "bug-fixes": [
+    "Fixed type annotation for sites_to_upgrade attribute to handle Optional type properly"
+  ]
+}
+```
+
 ### version 24.12.22.16.30
 
 ```json

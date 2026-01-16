@@ -24,7 +24,7 @@ import platform
 from math import pi
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
-from typing import Tuple, Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Tuple, Optional, List, Dict, Any, TYPE_CHECKING, Callable
 from types import ModuleType
 from dataclasses import dataclass, field
 
@@ -1864,7 +1864,7 @@ class InputUtils:
             return False
     
     @staticmethod
-    def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> Optional[str]:
+    def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
         """
         Safely handle user input with proper EOF and KeyboardInterrupt handling.
         
@@ -1875,8 +1875,7 @@ class InputUtils:
             context: Context description for logging
         
         Returns:
-            str: User input or default_value on EOF/empty input
-            None: On KeyboardInterrupt
+            str: User input, default_value on EOF/empty input, or empty string on interrupt
         """
         try:
             user_input = input(prompt).strip()
@@ -1892,8 +1891,8 @@ class InputUtils:
             
             # If user provided empty input, no default, and empty not allowed
             if not user_input and not allow_empty:
-                logging.warning(f"Empty input not allowed for {context}, returning None")
-                return None
+                logging.warning(f"Empty input not allowed for {context}, returning empty string")
+                return ""
             
             # User provided non-empty input
             return user_input
@@ -1907,7 +1906,7 @@ class InputUtils:
             # Handle Ctrl+C
             print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")
             logging.info(f"KeyboardInterrupt encountered during {context}")
-            return None
+            return ""
 
 
 # ============================================================================
@@ -1916,10 +1915,10 @@ class InputUtils:
 
 # Configuration variables from .env (with defaults) - now managed by import manager
 config = import_manager.get_configuration()
-CSV_FRESHNESS_MINUTES = config['csv_freshness_minutes']
-AUTO_UPGRADE_UV = config['auto_upgrade_uv']
-AUTO_UPGRADE_DEPENDENCIES = config['auto_upgrade_dependencies']
-UPGRADE_CHECK_TIMEOUT = config['upgrade_check_timeout']
+CSV_FRESHNESS_MINUTES: int = config['csv_freshness_minutes']
+AUTO_UPGRADE_UV: bool = config['auto_upgrade_uv']
+AUTO_UPGRADE_DEPENDENCIES: bool = config['auto_upgrade_dependencies']
+UPGRADE_CHECK_TIMEOUT: int = config['upgrade_check_timeout']
 
 # Fast Mode Configuration from .env
 FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
@@ -2610,12 +2609,12 @@ class DisplayUtils:
         logging.debug("\n" + table.get_string())
     
     @staticmethod
-    def create_progress_bar(progress_percentage: int, bar_length: int = 20) -> str:
+    def create_progress_bar(progress_percentage: Optional[float], bar_length: int = 20) -> str:
         """
         Create an ASCII progress bar visualization for upgrade progress.
         
         Args:
-            progress_percentage: Progress value from 0 to 100
+            progress_percentage: Progress value from 0 to 100 (int or float)
             bar_length: Total length of the progress bar in characters
         
         Returns:
@@ -2648,7 +2647,7 @@ def interactive_fetch_device_data_to_csv(
     device_type="all",
     site_id=None,
     device_id=None,
-    config: DeviceFetchConfig = None
+    config: Optional[DeviceFetchConfig] = None
 ):
     """
     Fetches data for a specific device (by site_id/device_id if provided, else prompts user),
@@ -2671,6 +2670,10 @@ def interactive_fetch_device_data_to_csv(
         device_type = config.device_type
         site_id = config.site_id
         device_id = config.device_id
+    
+    # Validate required parameters
+    if fetch_function is None or filename is None or description is None:
+        raise ValueError("fetch_function, filename, and description are required")
     
     # Use provided site_id or prompt user
     if not site_id:
@@ -9780,6 +9783,8 @@ class OrgExportUtils:
             if list_func is None:
                 logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
                 raw_url = f"/api/v1/orgs/{current_org_id}/licenses"
+                if apisession is None:
+                    raise ValueError("API session not initialized")
                 response = apisession.mist_get(raw_url)
                 raw_items = getattr(response, 'data', response) or []
             else:
@@ -10275,7 +10280,7 @@ class OrgExportUtils:
         logging.info("Starting export of organization audit logs...")
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            kwargs = {"limit": 1000}
+            kwargs: Dict[str, Any] = {"limit": 1000}
             if duration:
                 kwargs["duration"] = duration
                 logging.info(f"Exporting audit logs for duration: {duration}")
@@ -10964,7 +10969,8 @@ class OrgExportUtils:
                     }
                     import concurrent.futures
                     retry_futures_list = list(retry_futures.keys())
-                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:
+                    # Type ignore needed: tqdm stubs incorrectly require iterable param
+                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[arg-type]
                         for future in concurrent.futures.as_completed(retry_futures_list):
                             site_info = retry_futures[future]
                             try:
@@ -13262,863 +13268,1007 @@ class WebSocketCommands:
         return show_ssr_routes_dedicated()
 
 
-def service_ping_device_websocket():
-    logging.debug("ENTER: service_ping_device_websocket")
+class ServicePingManager:
+    """
+    Manager class for SSR Service Ping operations via WebSocket.
     
-    debug_mode = is_debug_mode()
+    Handles tenant/service discovery, user interaction, and WebSocket execution
+    for service-specific ping operations on SSR gateways.
+    """
     
-    if debug_mode:
-        print("[DEBUG] Starting Service Ping via WebSocket operation...")
-        print(f"[DEBUG] Command line args: {sys.argv}")
-        print(f"[DEBUG] Debug mode detected: {debug_mode}")
+    # Default values for service ping operations
+    DEFAULT_HOST = "8.8.8.8"
+    DEFAULT_COUNT = 4
+    DEFAULT_SIZE = 56
+    MIN_SIZE = 56
+    MAX_SIZE = 65535
+    DEFAULT_TENANT = "testing-tools"
+    DEFAULT_SERVICE = "web-session"
     
-    try:
-        # Interactive site and device selection
-        site_id = PromptUtils.select_site_id_from_csv()
-        if not site_id:
+    def __init__(self):
+        """Initialize ServicePingManager with debug mode detection."""
+        self.debug_mode = is_debug_mode()
+        self.site_id: Optional[str] = None
+        self.device_id: Optional[str] = None
+        self.device_info: Optional[dict] = None
+        self.websocket_manager: Optional[WebSocketManager] = None
+        
+        # Tenant sources (in precedence order)
+        self.org_tenants: List[str] = []
+        self.site_tenants: List[str] = []
+        self.policy_tenants: List[str] = []
+        self.template_tenants: List[str] = []
+        self.device_tenants: List[str] = []
+        
+        # Service sources
+        self.org_services: List[dict] = []
+        self.org_service_names: List[str] = []
+        self.device_services: List[str] = []
+    
+    def _debug_print(self, message: str) -> None:
+        """Print debug message if debug mode is enabled."""
+        if self.debug_mode:
+            print(f"[DEBUG] {message}")
+    
+    def _select_site_and_device(self) -> bool:
+        """
+        Prompt user to select site and gateway device.
+        
+        Returns:
+            bool: True if selection successful, False otherwise
+        """
+        self.site_id = PromptUtils.select_site_id_from_csv()
+        if not self.site_id:
             print("! No site selected. Operation cancelled.")
-            return
-            
-        if debug_mode:
-            print(f"[DEBUG] Selected site_id = {site_id}")
+            return False
         
-        # Get device selection - ONLY gateways for Service Ping
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="gateway")
-        if not device_id:
+        self._debug_print(f"Selected site_id = {self.site_id}")
+        
+        self.device_id = PromptUtils.select_device_id_from_inventory(
+            self.site_id, device_type="gateway"
+        )
+        if not self.device_id:
             print("! No gateway devices found or selected. Service Ping requires an SSR gateway.")
-            return
+            return False
         
-        if debug_mode:
-            print(f"[DEBUG] Selected device_id = {device_id}")
+        self._debug_print(f"Selected device_id = {self.device_id}")
+        return True
+    
+    def _fetch_device_info(self) -> bool:
+        """
+        Fetch and validate device information.
         
-        # Get device details to check type and model for compatibility
-        device_info = None
+        Returns:
+            bool: True if device is valid for service ping, False otherwise
+        """
         try:
-            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway").data
-            device_info = next((device for device in rawdata if device.get('id') == device_id), None)
-            
-            if device_info:
-                device_type = device_info.get('type', 'unknown')
-                device_model = device_info.get('model', 'unknown')
-                device_name = device_info.get('name', f"Device {device_id[:8]}")
-                
-                if debug_mode:
-                    print(f"[DEBUG] Device type: {device_type}, model: {device_model}, name: {device_name}")
-                
-                # Provide device-specific guidance
-                if device_type == 'gateway':
-                    print(f"!? SSR Gateway detected (Model: {device_model})")
-                    print("   -> Service Ping allows ping packets to follow service-specific paths")
-                    print("   -> This is an SSR-specific feature")
-                elif device_type == 'ap':
-                    print(f"!? WARNING: Access Point detected (Model: {device_model})")
-                    print("   -> Service Ping is designed for SSR gateways")
-                    print("   -> This device may not support service ping functionality")
-                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
-                    if choice != 'y':
-                        print("Operation cancelled.")
-                        return
-                elif device_type == 'switch':
-                    print(f"!? WARNING: Switch detected (Model: {device_model})")
-                    print("   -> Service Ping is designed for SSR gateways")
-                    print("   -> Switches typically do not support service ping")
-                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
-                    if choice != 'y':
-                        print("Operation cancelled.")
-                        return
-                else:
-                    print(f"!? WARNING: Unknown device type detected (Model: {device_model})")
-                    print("   -> Service Ping is designed for SSR gateways")
-                    choice = input("   -> Continue anyway? (y/N): ").strip().lower()
-                    if choice != 'y':
-                        print("Operation cancelled.")
-                        return
-            
-        except Exception as device_error:
-            logging.warning(f"Could not retrieve device details: {device_error}")
-            if debug_mode:
-                print(f"[DEBUG] Device details error: {device_error}")
-            print("!? Cannot determine device type - proceeding with caution")
-            print("   -> Service Ping is designed for SSR gateways")
-            choice = input("   -> Continue anyway? (y/N): ").strip().lower()
-            if choice != 'y':
-                print("Operation cancelled.")
-                return
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(
+                apisession, self.site_id, type="gateway"
+            ).data
+            self.device_info = next(
+                (device for device in rawdata if device.get('id') == self.device_id), 
+                None
+            )
+        except Exception as error:
+            logging.warning(f"Could not retrieve device details: {error}")
+            self._debug_print(f"Device details error: {error}")
+            return self._confirm_unknown_device()
         
-        # Fetch organization services first (primary source)
-        print("\n-> Fetching organization services...")
-        org_services = APIFetchUtils.organization_services()
-        available_org_services = []
+        if not self.device_info:
+            return self._confirm_unknown_device()
         
-        if org_services:
-            available_org_services = [svc['name'] for svc in org_services if svc.get('name')]
-            print(f"   -> Found {len(available_org_services)} organization-level services")
-            if debug_mode:
-                print(f"[DEBUG] Organization services: {available_org_services}")
-        else:
-            print("   -> No organization-level services found")
+        return self._validate_device_type()
+    
+    def _validate_device_type(self) -> bool:
+        """Validate device type and prompt for confirmation if not a gateway."""
+        if self.device_info is None:
+            return self._confirm_unknown_device()
         
-        # Fetch organization tenants from networks (primary source)
-        print("-> Fetching organization tenants...")
-        org_tenants = APIFetchUtils.organization_tenants()
-        available_org_tenants = []
+        device_type = self.device_info.get('type', 'unknown')
+        device_model = self.device_info.get('model', 'unknown')
         
-        if org_tenants:
-            available_org_tenants = org_tenants
-            print(f"   -> Found {len(available_org_tenants)} organization-level tenants")
-            if debug_mode:
-                print(f"[DEBUG] Organization tenants: {available_org_tenants}")
+        self._debug_print(f"Device type: {device_type}, model: {device_model}")
+        
+        if device_type == 'gateway':
+            print(f"!? SSR Gateway detected (Model: {device_model})")
+            print("   -> Service Ping allows ping packets to follow service-specific paths")
+            return True
+        
+        # Non-gateway device - warn and confirm
+        type_messages = {
+            'ap': "Access Point",
+            'switch': "Switch"
+        }
+        device_label = type_messages.get(device_type, "Unknown device type")
+        print(f"!? WARNING: {device_label} detected (Model: {device_model})")
+        print("   -> Service Ping is designed for SSR gateways")
+        
+        return self._confirm_proceed()
+    
+    def _confirm_unknown_device(self) -> bool:
+        """Confirm proceeding with unknown device type."""
+        print("!? Cannot determine device type - proceeding with caution")
+        print("   -> Service Ping is designed for SSR gateways")
+        return self._confirm_proceed()
+    
+    def _confirm_proceed(self) -> bool:
+        """Prompt user to confirm proceeding with non-optimal device."""
+        choice = input("   -> Continue anyway? (y/N): ").strip().lower()
+        if choice != 'y':
+            print("Operation cancelled.")
+            return False
+        return True
+    
+    def _fetch_all_tenants(self) -> None:
+        """Fetch tenants from all sources."""
+        print("\n-> Fetching organization tenants...")
+        self._fetch_org_tenants()
+        
+        print("-> Fetching site tenants...")
+        self._fetch_site_tenants()
+        
+        print("-> Fetching service policy tenants...")
+        self._fetch_policy_tenants()
+        
+        print("-> Fetching gateway template tenants...")
+        self._fetch_template_tenants()
+    
+    def _fetch_org_tenants(self) -> None:
+        """Fetch organization-level tenants."""
+        tenants = APIFetchUtils.organization_tenants()
+        if tenants:
+            self.org_tenants = tenants
+            print(f"   -> Found {len(self.org_tenants)} organization-level tenants")
+            self._debug_print(f"Organization tenants: {self.org_tenants}")
         else:
             print("   -> No organization-level tenants found")
-        
-        # Fetch site tenants from derived networks (secondary source)
-        print("-> Fetching site tenants...")
-        site_tenants = APIFetchUtils.site_tenants(site_id)
-        available_site_tenants = []
-        
-        if site_tenants:
-            available_site_tenants = site_tenants
-            print(f"   -> Found {len(available_site_tenants)} site-level tenants")
-            if debug_mode:
-                print(f"[DEBUG] Site tenants: {available_site_tenants}")
+    
+    def _fetch_site_tenants(self) -> None:
+        """Fetch site-level tenants."""
+        if self.site_id is None:
+            return
+        tenants = APIFetchUtils.site_tenants(self.site_id)
+        if tenants:
+            self.site_tenants = tenants
+            print(f"   -> Found {len(self.site_tenants)} site-level tenants")
+            self._debug_print(f"Site tenants: {self.site_tenants}")
         else:
             print("   -> No site-level tenants found")
-        
-        # Fetch tenants from service policies (tertiary source)
-        print("-> Fetching service policy tenants...")
-        service_policy_tenants = APIFetchUtils.service_policy_tenants(site_id)
-        available_service_policy_tenants = []
-        
-        if service_policy_tenants:
-            available_service_policy_tenants = service_policy_tenants
-            print(f"   -> Found {len(available_service_policy_tenants)} service policy tenants")
-            if debug_mode:
-                print(f"[DEBUG] Service policy tenants: {available_service_policy_tenants}")
+    
+    def _fetch_policy_tenants(self) -> None:
+        """Fetch service policy tenants."""
+        tenants = APIFetchUtils.service_policy_tenants(self.site_id)
+        if tenants:
+            self.policy_tenants = tenants
+            print(f"   -> Found {len(self.policy_tenants)} service policy tenants")
+            self._debug_print(f"Service policy tenants: {self.policy_tenants}")
         else:
             print("   -> No service policy tenants found")
-        
-        # Fetch tenants from gateway templates (quaternary source)
-        print("-> Fetching gateway template tenants...")
-        gateway_template_tenants = APIFetchUtils.gateway_template_tenants(site_id)
-        available_gateway_template_tenants = []
-        
-        if gateway_template_tenants:
-            available_gateway_template_tenants = gateway_template_tenants
-            print(f"   -> Found {len(available_gateway_template_tenants)} gateway template tenants")
-            if debug_mode:
-                print(f"[DEBUG] Gateway template tenants: {available_gateway_template_tenants}")
+    
+    def _fetch_template_tenants(self) -> None:
+        """Fetch gateway template tenants."""
+        tenants = APIFetchUtils.gateway_template_tenants(self.site_id)
+        if tenants:
+            self.template_tenants = tenants
+            print(f"   -> Found {len(self.template_tenants)} gateway template tenants")
+            self._debug_print(f"Gateway template tenants: {self.template_tenants}")
         else:
             print("   -> No gateway template tenants found")
+    
+    def _fetch_all_services(self) -> None:
+        """Fetch services from organization and device configuration."""
+        print("\n-> Fetching organization services...")
+        self._fetch_org_services()
         
-        # Fetch device configuration for additional tenant and service options (fallback)
         print("-> Fetching device configuration for additional options...")
-        device_config = None
-        available_device_tenants = []
-        available_device_services = []
-        
+        self._fetch_device_config()
+    
+    def _fetch_org_services(self) -> None:
+        """Fetch organization-level services."""
+        services = APIFetchUtils.organization_services()
+        if services:
+            self.org_services = services
+            self.org_service_names = [svc['name'] for svc in services if svc.get('name')]
+            print(f"   -> Found {len(self.org_service_names)} organization-level services")
+            self._debug_print(f"Organization services: {self.org_service_names}")
+        else:
+            print("   -> No organization-level services found")
+    
+    def _fetch_device_config(self) -> None:
+        """Fetch device configuration for tenants and services."""
         try:
-            config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            config_response = mistapi.api.v1.sites.devices.getSiteDevice(
+                apisession, self.site_id, self.device_id
+            )
             device_config = getattr(config_response, "data", {})
+            self._debug_print(f"Device config keys: {list(device_config.keys())}")
             
-            if debug_mode:
-                print(f"[DEBUG] Device config keys: {list(device_config.keys())}")
+            self._extract_from_device_config(device_config)
+            self._extract_from_device_stats()
             
-            # Extract tenants and services from device configuration/stats
-            tenants_set = set()
-            services_set = set()
-            
-            # Method 1: Check service_policies
-            service_policies = device_config.get("service_policies", [])
-            for policy in service_policies:
-                if isinstance(policy, dict):
-                    tenant_name = policy.get("tenant", "")
-                    if tenant_name:
-                        tenants_set.add(tenant_name)
-                    
-                    # Extract services from policies
-                    services = policy.get("services", [])
-                    if isinstance(services, list):
-                        for service_item in services:
-                            if isinstance(service_item, dict):
-                                service_name = service_item.get("name", "")
-                                if service_name:
-                                    services_set.add(service_name)
-                            elif isinstance(service_item, str):
-                                services_set.add(service_item)
-            
-            # Method 2: Check routing instances for tenants
-            routing_instances = device_config.get("routing_instances", [])
-            for instance in routing_instances:
-                if isinstance(instance, dict):
-                    tenant_name = instance.get("name", "")
-                    if tenant_name and not tenant_name.startswith("_"):
-                        tenants_set.add(tenant_name)
-            
-            # Method 3: Check router configuration
-            router_config = device_config.get("router", {})
-            if isinstance(router_config, dict):
-                # Check for tenants in router config
-                tenants_config = router_config.get("tenants", [])
-                if isinstance(tenants_config, list):
-                    for tenant_item in tenants_config:
-                        if isinstance(tenant_item, dict):
-                            tenant_name = tenant_item.get("name", "")
-                            if tenant_name:
-                                tenants_set.add(tenant_name)
-                
-                # Check for services in router config
-                services_config = router_config.get("services", [])
-                if isinstance(services_config, list):
-                    for service_item in services_config:
-                        if isinstance(service_item, dict):
-                            service_name = service_item.get("name", "")
-                            if service_name:
-                                services_set.add(service_name)
-            
-            # Method 4: Check device stats for additional service/tenant info
-            try:
-                stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-                stats_data = getattr(stats_response, "data", {})
-                
-                # Look for tenant/service info in stats
-                if "service_stat" in stats_data:
-                    service_stats = stats_data.get("service_stat", [])
-                    for service_stat in service_stats:
-                        if isinstance(service_stat, dict):
-                            service_name = service_stat.get("name", "")
-                            if service_name and not service_name.startswith("_"):
-                                services_set.add(service_name)
-                
-                if debug_mode:
-                    print(f"[DEBUG] Stats keys: {list(stats_data.keys())}")
-                    
-            except Exception as stats_error:
-                if debug_mode:
-                    print(f"[DEBUG] Could not fetch stats: {stats_error}")
-            
-            # Convert to sorted lists and filter out internal/system entries
-            available_device_tenants = sorted([t for t in tenants_set if t and not t.startswith("_")])
-            available_device_services = sorted([s for s in services_set if s and not s.startswith("_")])
-            
-            if debug_mode:
-                print(f"[DEBUG] Found tenants from device: {available_device_tenants}")
-                print(f"[DEBUG] Found services from device: {available_device_services}")
-            
-            # Report device configuration results
-            if not available_device_tenants:
-                print("   -> No tenants found in device configuration")
-            else:
-                print(f"   -> Found {len(available_device_tenants)} tenants from device configuration")
-                
-            if not available_device_services:
-                print("   -> No additional services found in device configuration")
-            else:
-                print(f"   -> Found {len(available_device_services)} additional services from device configuration")
-                
-        except Exception as config_error:
-            logging.warning(f"Could not fetch device configuration: {config_error}")
-            if debug_mode:
-                print(f"[DEBUG] Config error: {config_error}")
+        except Exception as error:
+            logging.warning(f"Could not fetch device configuration: {error}")
+            self._debug_print(f"Config error: {error}")
             print("!? Cannot retrieve device configuration")
+    
+    def _extract_from_device_config(self, config: dict) -> None:
+        """Extract tenants and services from device configuration."""
+        tenants_set: set = set()
+        services_set: set = set()
         
-        # Combine organization, site, service policy, gateway template, and device tenants 
-        # (precedence: org > site > service policy > gateway template > device)
-        all_available_tenants = list(available_org_tenants)  # Start with org tenants
+        # Extract from service_policies
+        for policy in config.get("service_policies", []):
+            if isinstance(policy, dict):
+                if tenant := policy.get("tenant"):
+                    tenants_set.add(tenant)
+                self._extract_services_from_policy(policy, services_set)
         
-        # Add site tenants (if not already present from org)
-        for site_tenant in available_site_tenants:
-            if site_tenant not in all_available_tenants:
-                all_available_tenants.append(site_tenant)
+        # Extract from routing_instances
+        for instance in config.get("routing_instances", []):
+            if isinstance(instance, dict):
+                if name := instance.get("name"):
+                    if not name.startswith("_"):
+                        tenants_set.add(name)
         
-        # Add service policy tenants (if not already present from org or site)
-        for policy_tenant in available_service_policy_tenants:
-            if policy_tenant not in all_available_tenants:
-                all_available_tenants.append(policy_tenant)
+        # Extract from router configuration
+        self._extract_from_router_config(config.get("router", {}), tenants_set, services_set)
         
-        # Add gateway template tenants (if not already present)
-        for template_tenant in available_gateway_template_tenants:
-            if template_tenant not in all_available_tenants:
-                all_available_tenants.append(template_tenant)
+        # Filter and store results
+        self.device_tenants = sorted([t for t in tenants_set if t and not t.startswith("_")])
+        self.device_services = sorted([s for s in services_set if s and not s.startswith("_")])
         
-        # Add device tenants (if not already present from any other source)
-        for device_tenant in available_device_tenants:
-            if device_tenant not in all_available_tenants:
-                all_available_tenants.append(device_tenant)
+        self._report_device_config_results()
+    
+    def _extract_services_from_policy(self, policy: dict, services_set: set) -> None:
+        """Extract services from a service policy."""
+        services = policy.get("services", [])
+        if not isinstance(services, list):
+            return
         
-        # Combine organization and device services (org services take precedence)
-        all_available_services = list(available_org_services)  # Start with org services
-        for device_service in available_device_services:
-            if device_service not in all_available_services:
-                all_available_services.append(device_service)
+        for service_item in services:
+            if isinstance(service_item, dict):
+                if name := service_item.get("name"):
+                    services_set.add(name)
+            elif isinstance(service_item, str):
+                services_set.add(service_item)
+    
+    def _extract_from_router_config(self, router: dict, tenants: set, services: set) -> None:
+        """Extract tenants and services from router configuration."""
+        if not isinstance(router, dict):
+            return
         
-        # Force add default tenant "testing-tools" if not already present
-        if "testing-tools" not in all_available_tenants:
-            all_available_tenants.append("testing-tools")
-            if debug_mode:
-                print(f"[DEBUG] Added default tenant: testing-tools")
+        for tenant_item in router.get("tenants", []):
+            if isinstance(tenant_item, dict):
+                if name := tenant_item.get("name"):
+                    tenants.add(name)
         
-        # Force add default service "web-session" if not already present
-        if "web-session" not in all_available_services:
-            all_available_services.append("web-session")
-            if debug_mode:
-                print(f"[DEBUG] Added default service: web-session")
-        
-        if debug_mode:
-            print(f"[DEBUG] Combined tenant list: {all_available_tenants}")
-            print(f"[DEBUG] Combined service list: {all_available_services}")
-        
-        # Get service ping parameters from user
-        print("\n" + "=" * 50)
-        print("SERVICE PING CONFIGURATION")
-        print("=" * 50)
-        
-        # Tenant selection (organization, site, service policy, gateway template, and device tenants combined)
-        tenant = None
-        if all_available_tenants:
-            print("\nAvailable Tenants:")
+        for service_item in router.get("services", []):
+            if isinstance(service_item, dict):
+                if name := service_item.get("name"):
+                    services.add(name)
+    
+    def _extract_from_device_stats(self) -> None:
+        """Extract additional services from device stats."""
+        try:
+            stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
+                apisession, self.site_id, self.device_id
+            )
+            stats_data = getattr(stats_response, "data", {})
+            self._debug_print(f"Stats keys: {list(stats_data.keys())}")
             
-            current_index = 0
-            
-            # Show organization tenants first
-            org_tenant_count = len(available_org_tenants)
-            if org_tenant_count > 0:
-                print(f"  Organization Tenants ({org_tenant_count}):")
-                for tenant_name in available_org_tenants:
-                    print(f"    [{current_index}] {tenant_name} (org networks)")
-                    current_index += 1
-            
-            # Show site tenants (additional to org tenants)
-            site_only_tenants = [tenant for tenant in available_site_tenants if tenant not in available_org_tenants]
-            if site_only_tenants:
-                print(f"  Site Tenants ({len(site_only_tenants)}):")
-                for tenant_name in site_only_tenants:
-                    print(f"    [{current_index}] {tenant_name} (site networks)")
-                    current_index += 1
-            
-            # Show service policy tenants (additional to org and site tenants)
-            policy_only_tenants = [tenant for tenant in available_service_policy_tenants if tenant not in available_org_tenants and tenant not in available_site_tenants]
-            if policy_only_tenants:
-                print(f"  Service Policy Tenants ({len(policy_only_tenants)}):")
-                for tenant_name in policy_only_tenants:
-                    print(f"    [{current_index}] {tenant_name} (service policies)")
-                    current_index += 1
-            
-            # Show gateway template tenants (additional to org, site, and policy tenants)
-            template_only_tenants = [tenant for tenant in available_gateway_template_tenants 
-                                   if tenant not in available_org_tenants 
-                                   and tenant not in available_site_tenants 
-                                   and tenant not in available_service_policy_tenants]
-            if template_only_tenants:
-                print(f"  Gateway Template Tenants ({len(template_only_tenants)}):")
-                for tenant_name in template_only_tenants:
-                    print(f"    [{current_index}] {tenant_name} (gateway templates)")
-                    current_index += 1
-            
-            # Show device tenants (additional to all other sources)
-            device_only_tenants = [tenant for tenant in available_device_tenants 
-                                 if tenant not in available_org_tenants 
-                                 and tenant not in available_site_tenants 
-                                 and tenant not in available_service_policy_tenants
-                                 and tenant not in available_gateway_template_tenants]
-            if device_only_tenants:
-                print(f"  Device Configuration Tenants ({len(device_only_tenants)}):")
-                for tenant_name in device_only_tenants:
-                    print(f"    [{current_index}] {tenant_name} (device config)")
-                    current_index += 1
-            
-            # Show any remaining tenants that don't fit into the above categories (e.g., defaults)
-            remaining_tenants = [tenant for tenant in all_available_tenants 
-                               if tenant not in available_org_tenants 
-                               and tenant not in available_site_tenants 
-                               and tenant not in available_service_policy_tenants
-                               and tenant not in available_gateway_template_tenants
-                               and tenant not in available_device_tenants]
-            if remaining_tenants:
-                print(f"  Additional Tenants ({len(remaining_tenants)}):")
-                for tenant_name in remaining_tenants:
-                    print(f"    [{current_index}] {tenant_name} (default/custom)")
-                    current_index += 1
-            
-            # Find the index of "testing-tools" for default selection
-            testing_tools_index = None
-            if "testing-tools" in all_available_tenants:
-                testing_tools_index = all_available_tenants.index("testing-tools")
-            
-            print(f"  [{len(all_available_tenants)}] Skip tenant selection")
-            
-            while True:
-                try:
-                    if testing_tools_index is not None:
-                        selection = input(f"\nSelect tenant index (0-{len(all_available_tenants)}) [default: {testing_tools_index} (testing-tools)]: ").strip()
-                    else:
-                        selection = input(f"\nSelect tenant index (0-{len(all_available_tenants)}) [default: skip]: ").strip()
-                    
-                    if not selection:
-                        # Default behavior
-                        if testing_tools_index is not None:
-                            tenant = all_available_tenants[testing_tools_index]
-                            print(f"!? Using default tenant: {tenant}")
-                        break
-                    
-                    selection_index = int(selection)
-                    if 0 <= selection_index < len(all_available_tenants):
-                        tenant = all_available_tenants[selection_index]
-                        
-                        # Show which source the tenant came from
-                        if tenant in available_org_tenants:
-                            print(f"!? Selected organization tenant: {tenant}")
-                        elif tenant in available_site_tenants:
-                            print(f"!? Selected site tenant: {tenant}")
-                        elif tenant in available_service_policy_tenants:
-                            print(f"!? Selected service policy tenant: {tenant}")
-                        elif tenant in available_gateway_template_tenants:
-                            print(f"!? Selected gateway template tenant: {tenant}")
-                        elif tenant in available_device_tenants:
-                            print(f"!? Selected device configuration tenant: {tenant}")
-                        else:
-                            print(f"!? Selected default/custom tenant: {tenant}")
-                        break
-                    elif selection_index == len(all_available_tenants):
-                        # Skip tenant selection
-                        print("!? Skipping tenant selection")
-                        break
-                    else:
-                        print(f"Please enter a number between 0 and {len(all_available_tenants)}")
-                except ValueError:
-                    print("Please enter a valid number")
-                except KeyboardInterrupt:
-                    print("\nOperation cancelled")
-                    return
-        else:
-            print("\n-> No tenants found in organization networks, site networks, service policies, gateway templates, or device configuration")
-            
-            # For SSR service ping, tenant is often required, so offer manual entry
-            manual_tenant = input("-> Enter tenant name manually (or press Enter to skip): ").strip()
-            if manual_tenant:
-                tenant = manual_tenant
-                print(f"!? Manual tenant: {tenant}")
-            else:
-                print("-> Proceeding without tenant (may cause service ping to fail)")
-                tenant = None
-        
-        # Service selection - now using combined organization and device services
-        service = None
-        if all_available_services:
-            print("\nAvailable Services:")
-            
-            # Show organization services first
-            org_service_count = len(available_org_services)
-            if org_service_count > 0:
-                print(f"  Organization Services ({org_service_count}):")
-                for index, service_name in enumerate(available_org_services):
-                    # Find the service details from org_services
-                    service_details = next((svc for svc in org_services if svc['name'] == service_name), {})
-                    service_type = service_details.get('type', 'custom')
-                    service_desc = service_details.get('description', '')
-                    if service_desc:
-                        print(f"    [{index}] {service_name} ({service_type}) - {service_desc}")
-                    else:
-                        print(f"    [{index}] {service_name} ({service_type})")
-            
-            # Show device services if any (additional to org services)
-            device_only_services = [svc for svc in available_device_services if svc not in available_org_services]
-            device_service_start_index = org_service_count
-            if device_only_services:
-                print(f"  Device Configuration Services ({len(device_only_services)}):")
-                for index, service_name in enumerate(device_only_services, start=device_service_start_index):
-                    print(f"    [{index}] {service_name} (device config)")
-            
-            # Show any remaining services that don't fit into the above categories (e.g., defaults like "any")
-            remaining_services = [svc for svc in all_available_services 
-                                if svc not in available_org_services 
-                                and svc not in available_device_services]
-            remaining_service_start_index = device_service_start_index + len(device_only_services)
-            if remaining_services:
-                print(f"  Additional Services ({len(remaining_services)}):")
-                for index, service_name in enumerate(remaining_services, start=remaining_service_start_index):
-                    print(f"    [{index}] {service_name} (default/custom)")
-            
-            # Find the index of "web-session" for default selection
-            web_session_service_index = None
-            if "web-session" in all_available_services:
-                web_session_service_index = all_available_services.index("web-session")
-            
-            print(f"  [{len(all_available_services)}] Enter custom service name")
-            
-            while True:
-                try:
-                    if web_session_service_index is not None:
-                        selection = input(f"\nSelect service index (0-{len(all_available_services)}) or enter custom [default: {web_session_service_index} (web-session)]: ").strip()
-                    else:
-                        selection = input(f"\nSelect service index (0-{len(all_available_services)}) or enter custom: ").strip()
-                    
-                    # Check if it's a number (index selection)
-                    try:
-                        if not selection:
-                            # Default behavior
-                            if web_session_service_index is not None:
-                                service = all_available_services[web_session_service_index]
-                                print(f"!? Using default service: {service}")
-                                break
-                            else:
-                                print("Please enter a service name or select from the list")
-                                continue
-                        
-                        selection_index = int(selection)
-                        if 0 <= selection_index < len(all_available_services):
-                            service = all_available_services[selection_index]
+            for service_stat in stats_data.get("service_stat", []):
+                if isinstance(service_stat, dict):
+                    if name := service_stat.get("name"):
+                        if not name.startswith("_") and name not in self.device_services:
+                            self.device_services.append(name)
+                            self.device_services.sort()
                             
-                            # Show which source the service came from
-                            if service in available_org_services:
-                                print(f"!? Selected organization service: {service}")
-                                # Show service details if available
-                                service_details = next((svc for svc in org_services if svc['name'] == service), {})
-                                if service_details.get('description'):
-                                    print(f"  Description: {service_details['description']}")
-                                if service_details.get('type'):
-                                    print(f"  Type: {service_details['type']}")
-                            elif service in available_device_services:
-                                print(f"!? Selected device configuration service: {service}")
-                            else:
-                                print(f"!? Selected default/custom service: {service}")
-                            break
-                        elif selection_index == len(all_available_services):
-                            # Enter custom service name
-                            service = input("Enter custom service name: ").strip()
-                            if service:
-                                print(f"!? Custom service: {service}")
-                                break
-                            else:
-                                print("Service name cannot be empty")
-                        else:
-                            print(f"Please enter a number between 0 and {len(all_available_services)}")
-                    except ValueError:
-                        # Not a number, treat as custom service name
-                        if selection:
-                            service = selection
-                            print(f"!? Custom service: {service}")
-                            break
-                        else:
-                            print("Please enter a service name or select from the list")
-                except KeyboardInterrupt:
-                    print("\nOperation cancelled")
-                    return
-        else:
-            # If no services found in either source, require manual input
-            print("\n-> No services found in organization or device configuration")
-            while True:
-                service = input("Enter service name: ").strip()
-                if service:
-                    print(f"!? Custom service: {service}")
-                    break
-                print("Service is required. Please enter a service name.")
+        except Exception as error:
+            self._debug_print(f"Could not fetch stats: {error}")
+    
+    def _report_device_config_results(self) -> None:
+        """Report device configuration extraction results."""
+        self._debug_print(f"Found tenants from device: {self.device_tenants}")
+        self._debug_print(f"Found services from device: {self.device_services}")
         
-        # Required: Host to ping (with default)
+        if self.device_tenants:
+            print(f"   -> Found {len(self.device_tenants)} tenants from device configuration")
+        else:
+            print("   -> No tenants found in device configuration")
+        
+        if self.device_services:
+            print(f"   -> Found {len(self.device_services)} additional services from device configuration")
+        else:
+            print("   -> No additional services found in device configuration")
+    
+    def _build_combined_tenants(self) -> List[str]:
+        """Combine tenants from all sources with deduplication."""
+        combined = list(self.org_tenants)
+        
+        # Add from each source if not already present
+        for source in [self.site_tenants, self.policy_tenants, self.template_tenants, self.device_tenants]:
+            for tenant in source:
+                if tenant not in combined:
+                    combined.append(tenant)
+        
+        # Ensure default tenant exists
+        if self.DEFAULT_TENANT not in combined:
+            combined.append(self.DEFAULT_TENANT)
+            self._debug_print(f"Added default tenant: {self.DEFAULT_TENANT}")
+        
+        self._debug_print(f"Combined tenant list: {combined}")
+        return combined
+    
+    def _build_combined_services(self) -> List[str]:
+        """Combine services from all sources with deduplication."""
+        combined = list(self.org_service_names)
+        
+        for service in self.device_services:
+            if service not in combined:
+                combined.append(service)
+        
+        # Ensure default service exists
+        if self.DEFAULT_SERVICE not in combined:
+            combined.append(self.DEFAULT_SERVICE)
+            self._debug_print(f"Added default service: {self.DEFAULT_SERVICE}")
+        
+        self._debug_print(f"Combined service list: {combined}")
+        return combined
+    
+    def _prompt_for_tenant(self, available_tenants: List[str]) -> Optional[str]:
+        """Prompt user to select a tenant."""
+        if not available_tenants:
+            return self._prompt_manual_tenant()
+        
+        print("\nAvailable Tenants:")
+        self._display_tenant_categories(available_tenants)
+        
+        default_index = None
+        if self.DEFAULT_TENANT in available_tenants:
+            default_index = available_tenants.index(self.DEFAULT_TENANT)
+        
+        print(f"  [{len(available_tenants)}] Skip tenant selection")
+        
+        return self._get_tenant_selection(available_tenants, default_index)
+    
+    def _display_tenant_categories(self, all_tenants: List[str]) -> None:
+        """Display tenants organized by source category."""
+        index = 0
+        
+        # Organization tenants
+        if self.org_tenants:
+            print(f"  Organization Tenants ({len(self.org_tenants)}):")
+            for name in self.org_tenants:
+                print(f"    [{index}] {name} (org networks)")
+                index += 1
+        
+        # Site-only tenants
+        site_only = [t for t in self.site_tenants if t not in self.org_tenants]
+        if site_only:
+            print(f"  Site Tenants ({len(site_only)}):")
+            for name in site_only:
+                print(f"    [{index}] {name} (site networks)")
+                index += 1
+        
+        # Policy-only tenants
+        policy_only = [t for t in self.policy_tenants 
+                      if t not in self.org_tenants and t not in self.site_tenants]
+        if policy_only:
+            print(f"  Service Policy Tenants ({len(policy_only)}):")
+            for name in policy_only:
+                print(f"    [{index}] {name} (service policies)")
+                index += 1
+        
+        # Template-only tenants
+        template_only = [t for t in self.template_tenants
+                        if t not in self.org_tenants 
+                        and t not in self.site_tenants
+                        and t not in self.policy_tenants]
+        if template_only:
+            print(f"  Gateway Template Tenants ({len(template_only)}):")
+            for name in template_only:
+                print(f"    [{index}] {name} (gateway templates)")
+                index += 1
+        
+        # Device-only tenants
+        device_only = [t for t in self.device_tenants
+                      if t not in self.org_tenants
+                      and t not in self.site_tenants
+                      and t not in self.policy_tenants
+                      and t not in self.template_tenants]
+        if device_only:
+            print(f"  Device Configuration Tenants ({len(device_only)}):")
+            for name in device_only:
+                print(f"    [{index}] {name} (device config)")
+                index += 1
+        
+        # Remaining (defaults)
+        remaining = [t for t in all_tenants
+                    if t not in self.org_tenants
+                    and t not in self.site_tenants
+                    and t not in self.policy_tenants
+                    and t not in self.template_tenants
+                    and t not in self.device_tenants]
+        if remaining:
+            print(f"  Additional Tenants ({len(remaining)}):")
+            for name in remaining:
+                print(f"    [{index}] {name} (default/custom)")
+                index += 1
+    
+    def _get_tenant_selection(self, tenants: List[str], default_index: Optional[int]) -> Optional[str]:
+        """Get tenant selection from user input."""
+        while True:
+            try:
+                prompt = f"\nSelect tenant index (0-{len(tenants)})"
+                if default_index is not None:
+                    prompt += f" [default: {default_index} ({self.DEFAULT_TENANT})]: "
+                else:
+                    prompt += " [default: skip]: "
+                
+                selection = input(prompt).strip()
+                
+                if not selection:
+                    if default_index is not None:
+                        tenant = tenants[default_index]
+                        print(f"!? Using default tenant: {tenant}")
+                        return tenant
+                    return None
+                
+                idx = int(selection)
+                if idx == len(tenants):
+                    print("!? Skipping tenant selection")
+                    return None
+                
+                if 0 <= idx < len(tenants):
+                    tenant = tenants[idx]
+                    self._print_tenant_source(tenant)
+                    return tenant
+                
+                print(f"Please enter a number between 0 and {len(tenants)}")
+                
+            except ValueError:
+                print("Please enter a valid number")
+            except KeyboardInterrupt:
+                print("\nOperation cancelled")
+                raise
+    
+    def _print_tenant_source(self, tenant: str) -> None:
+        """Print the source of a selected tenant."""
+        if tenant in self.org_tenants:
+            print(f"!? Selected organization tenant: {tenant}")
+        elif tenant in self.site_tenants:
+            print(f"!? Selected site tenant: {tenant}")
+        elif tenant in self.policy_tenants:
+            print(f"!? Selected service policy tenant: {tenant}")
+        elif tenant in self.template_tenants:
+            print(f"!? Selected gateway template tenant: {tenant}")
+        elif tenant in self.device_tenants:
+            print(f"!? Selected device configuration tenant: {tenant}")
+        else:
+            print(f"!? Selected default/custom tenant: {tenant}")
+    
+    def _prompt_manual_tenant(self) -> Optional[str]:
+        """Prompt for manual tenant entry when none available."""
+        print("\n-> No tenants found in any configuration source")
+        manual = input("-> Enter tenant name manually (or press Enter to skip): ").strip()
+        if manual:
+            print(f"!? Manual tenant: {manual}")
+            return manual
+        print("-> Proceeding without tenant (may cause service ping to fail)")
+        return None
+    
+    def _prompt_for_service(self, available_services: List[str]) -> str:
+        """Prompt user to select a service."""
+        if not available_services:
+            return self._prompt_required_service()
+        
+        print("\nAvailable Services:")
+        self._display_service_categories(available_services)
+        
+        default_index = None
+        if self.DEFAULT_SERVICE in available_services:
+            default_index = available_services.index(self.DEFAULT_SERVICE)
+        
+        print(f"  [{len(available_services)}] Enter custom service name")
+        
+        return self._get_service_selection(available_services, default_index)
+    
+    def _display_service_categories(self, all_services: List[str]) -> None:
+        """Display services organized by source category."""
+        index = 0
+        
+        # Organization services
+        if self.org_service_names:
+            print(f"  Organization Services ({len(self.org_service_names)}):")
+            for name in self.org_service_names:
+                details = next((s for s in self.org_services if s['name'] == name), {})
+                svc_type = details.get('type', 'custom')
+                desc = details.get('description', '')
+                if desc:
+                    print(f"    [{index}] {name} ({svc_type}) - {desc}")
+                else:
+                    print(f"    [{index}] {name} ({svc_type})")
+                index += 1
+        
+        # Device-only services
+        device_only = [s for s in self.device_services if s not in self.org_service_names]
+        if device_only:
+            print(f"  Device Configuration Services ({len(device_only)}):")
+            for name in device_only:
+                print(f"    [{index}] {name} (device config)")
+                index += 1
+        
+        # Remaining (defaults)
+        remaining = [s for s in all_services
+                    if s not in self.org_service_names and s not in self.device_services]
+        if remaining:
+            print(f"  Additional Services ({len(remaining)}):")
+            for name in remaining:
+                print(f"    [{index}] {name} (default/custom)")
+                index += 1
+    
+    def _get_service_selection(self, services: List[str], default_index: Optional[int]) -> str:
+        """Get service selection from user input."""
+        while True:
+            try:
+                prompt = f"\nSelect service index (0-{len(services)}) or enter custom"
+                if default_index is not None:
+                    prompt += f" [default: {default_index} ({self.DEFAULT_SERVICE})]: "
+                else:
+                    prompt += ": "
+                
+                selection = input(prompt).strip()
+                
+                if not selection:
+                    if default_index is not None:
+                        service = services[default_index]
+                        print(f"!? Using default service: {service}")
+                        return service
+                    print("Please enter a service name or select from the list")
+                    continue
+                
+                try:
+                    idx = int(selection)
+                    if idx == len(services):
+                        return self._prompt_custom_service()
+                    
+                    if 0 <= idx < len(services):
+                        service = services[idx]
+                        self._print_service_source(service)
+                        return service
+                    
+                    print(f"Please enter a number between 0 and {len(services)}")
+                    
+                except ValueError:
+                    # Treat as custom service name
+                    print(f"!? Custom service: {selection}")
+                    return selection
+                    
+            except KeyboardInterrupt:
+                print("\nOperation cancelled")
+                raise
+    
+    def _print_service_source(self, service: str) -> None:
+        """Print the source of a selected service with details if available."""
+        if service in self.org_service_names:
+            print(f"!? Selected organization service: {service}")
+            details = next((s for s in self.org_services if s['name'] == service), {})
+            if details.get('description'):
+                print(f"  Description: {details['description']}")
+            if details.get('type'):
+                print(f"  Type: {details['type']}")
+        elif service in self.device_services:
+            print(f"!? Selected device configuration service: {service}")
+        else:
+            print(f"!? Selected default/custom service: {service}")
+    
+    def _prompt_custom_service(self) -> str:
+        """Prompt for custom service name."""
+        while True:
+            service = input("Enter custom service name: ").strip()
+            if service:
+                print(f"!? Custom service: {service}")
+                return service
+            print("Service name cannot be empty")
+    
+    def _prompt_required_service(self) -> str:
+        """Prompt for required service when none available."""
+        print("\n-> No services found in organization or device configuration")
+        while True:
+            service = input("Enter service name: ").strip()
+            if service:
+                print(f"!? Custom service: {service}")
+                return service
+            print("Service is required. Please enter a service name.")
+    
+    def _prompt_for_ping_parameters(self) -> dict:
+        """Prompt for ping parameters and build payload."""
+        # Host
         host = input("\nEnter target host/IP to ping [default: 8.8.8.8]: ").strip()
         if not host:
-            host = "8.8.8.8"
-            print("!? Using default destination: 8.8.8.8")
+            host = self.DEFAULT_HOST
+            print(f"!? Using default destination: {host}")
         
-        # Optional: Count (default 4)
+        # Count
+        count = self._prompt_for_count()
+        
+        # Size
+        size = self._prompt_for_size()
+        
+        # HA Node
+        node = self._prompt_for_node()
+        
+        return {"host": host, "count": count, "size": size, "node": node}
+    
+    def _prompt_for_count(self) -> int:
+        """Prompt for ping count."""
         count_input = input("Enter ping count [default: 4]: ").strip()
         try:
-            count = int(count_input) if count_input else 4
-            if count <= 0:
-                count = 4
+            count = int(count_input) if count_input else self.DEFAULT_COUNT
+            return max(1, count)
         except ValueError:
-            count = 4
-        
-        # Optional: Size (default 56, min 56, max 65535)
+            return self.DEFAULT_COUNT
+    
+    def _prompt_for_size(self) -> int:
+        """Prompt for packet size."""
         size_input = input("Enter packet size in bytes [default: 56]: ").strip()
         try:
-            size = int(size_input) if size_input else 56
-            if size < 56:
-                size = 56
-            elif size > 65535:
-                size = 65535
+            size = int(size_input) if size_input else self.DEFAULT_SIZE
+            return max(self.MIN_SIZE, min(size, self.MAX_SIZE))
         except ValueError:
-            size = 56
-        
-        # Optional: HA node (node0, node1)
+            return self.DEFAULT_SIZE
+    
+    def _prompt_for_node(self) -> Optional[str]:
+        """Prompt for HA node selection."""
         node_input = input("Enter HA node (node0/node1) [optional]: ").strip().lower()
-        node = node_input if node_input in ['node0', 'node1'] else None
-        
-        # Build service ping payload
-        # Based on Mist API documentation schema: utils_service_ping
-        # Example: {"count": 10, "host": "1.1.1.1", "service": "web-session"}
-        service_ping_payload = {
-            "host": host,
+        return node_input if node_input in ['node0', 'node1'] else None
+    
+    def _build_payload(self, service: str, tenant: Optional[str], params: dict) -> dict:
+        """Build service ping API payload."""
+        payload = {
+            "host": params["host"],
             "service": service,
-            "count": count,
-            "size": size
+            "count": params["count"],
+            "size": params["size"]
         }
         
-        # Add optional parameters if specified
         if tenant:
-            service_ping_payload["tenant"] = tenant
-        if node:
-            service_ping_payload["node"] = node
+            payload["tenant"] = tenant
+        if params["node"]:
+            payload["node"] = params["node"]
         
+        return payload
+    
+    def _display_configuration(self, payload: dict) -> None:
+        """Display service ping configuration summary."""
         print("\n" + "-" * 50)
-        print(f"Service Ping Configuration:")
-        print(f"  Host: {host}")
-        print(f"  Service: {service}")
-        print(f"  Count: {count}")
-        print(f"  Size: {size} bytes")
-        if tenant:
-            print(f"  Tenant: {tenant}")
-        if node:
-            print(f"  HA Node: {node}")
+        print("Service Ping Configuration:")
+        print(f"  Host: {payload['host']}")
+        print(f"  Service: {payload['service']}")
+        print(f"  Count: {payload['count']}")
+        print(f"  Size: {payload['size']} bytes")
+        if payload.get('tenant'):
+            print(f"  Tenant: {payload['tenant']}")
+        if payload.get('node'):
+            print(f"  HA Node: {payload['node']}")
         print("-" * 50)
         
-        # Validate service name format
-        if debug_mode:
-            if service in ["web-session", "LANS", "RBO_SSH"]:
-                print(f"[DEBUG] Using known valid service: {service}")
-            else:
-                print(f"[DEBUG] Using custom service: {service} (may not exist on device)")
+        self._debug_validate_service(payload['service'])
+    
+    def _debug_validate_service(self, service: str) -> None:
+        """Log debug information about service validation."""
+        if not self.debug_mode:
+            return
         
-        print(f"\n-> Executing Service Ping on device {device_id}...")
+        known_services = ["web-session", "LANS", "RBO_SSH"]
+        if service in known_services:
+            print(f"[DEBUG] Using known valid service: {service}")
+        else:
+            print(f"[DEBUG] Using custom service: {service} (may not exist on device)")
+    
+    def _setup_websocket(self) -> bool:
+        """Initialize and connect WebSocket."""
+        self.websocket_manager = WebSocketManager(apisession)
         
-        # Initialize WebSocket manager
-        websocket_manager = WebSocketManager(apisession)
-        
-        # Connect to WebSocket
-        if not websocket_manager.connect():
+        if not self.websocket_manager.connect():
             print("! Failed to establish WebSocket connection")
-            return
-            
-        if debug_mode:
-            print("[DEBUG] WebSocket connection established")
+            return False
         
-        # Subscribe to device command channel
-        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(command_channel):
+        self._debug_print("WebSocket connection established")
+        
+        command_channel = f"/sites/{self.site_id}/devices/{self.device_id}/cmd"
+        if not self.websocket_manager.subscribe_to_channel(command_channel):
             print("! Failed to subscribe to device command channel")
-            return
-            
-        if debug_mode:
-            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+            return False
         
+        self._debug_print(f"Subscribed to channel: {command_channel}")
         print("-> WebSocket connected and subscribed")
         
-        # Wait for subscription confirmation before sending command
         print("-> Waiting for subscription confirmation...")
-        if not websocket_manager.wait_for_subscription_confirmation(command_channel, timeout_seconds=15):
+        if not self.websocket_manager.wait_for_subscription_confirmation(command_channel, timeout_seconds=15):
             print("! Subscription confirmation not received within timeout")
             print("! Proceeding anyway, but results may not be received")
         else:
             print("-> Subscription confirmed")
         
+        return True
+    
+    def _execute_service_ping(self, payload: dict) -> Optional[str]:
+        """Execute service ping API call and return session ID."""
         print("-> Issuing Service Ping command...")
         
-        # Execute service ping using mistapi library
-        if debug_mode:
-            print(f"[DEBUG] Using mistapi.api.v1.sites.devices.servicePingFromSsr")
-            print(f"[DEBUG] Service ping payload being sent:")
-            print(f"[DEBUG]   {service_ping_payload}")
-            logging.debug(f"Service ping payload: {service_ping_payload}")
-        
-        # Always log the service ping request details to the log file
-        logging.info(f"Sending service ping via mistapi to device: {device_id}")
-        logging.info(f"Service ping payload: {service_ping_payload}")
+        self._debug_print(f"Service ping payload being sent: {payload}")
+        logging.info(f"Sending service ping via mistapi to device: {self.device_id}")
+        logging.info(f"Service ping payload: {payload}")
         
         try:
-            # Use mistapi library instead of direct requests
             response = mistapi.api.v1.sites.devices.servicePingFromSsr(
-                apisession, site_id, device_id, service_ping_payload
+                apisession, self.site_id, self.device_id, payload
             )
             
-            # Always log the response details to the log file
             logging.info(f"Service ping mistapi response status: {response.status_code}")
             logging.info(f"Service ping mistapi response data: {response.data}")
             
-            if debug_mode:
-                print(f"[DEBUG] mistapi Response Status = {response.status_code}")
-                print(f"[DEBUG] mistapi Response Data = {response.data}")
-                
-            if response.status_code == 200:
-                result = response.data
-                session_id = result.get("session", "")
-                if debug_mode:
-                    print(f"[DEBUG] Response data parsed: {result}")
-                    print(f"[DEBUG] Extracted session_id: {session_id}")
-                    logging.debug(f"Service ping response data: {result}")
-                    logging.debug(f"Service ping session_id: {session_id}")
-                if session_id:
-                    short_session_id = session_id[:8] + "..." if len(session_id) > 8 else session_id
-                    print(f"-> Service Ping command issued (session: {short_session_id})")
-                    if debug_mode:
-                        print(f"[DEBUG] Full session ID: {session_id}")
-                else:
-                    print("-> Service Ping command issued (no session ID returned)")
-                    session_id = None
+            self._debug_print(f"mistapi Response Status = {response.status_code}")
+            self._debug_print(f"mistapi Response Data = {response.data}")
+            
+            if response.status_code != 200:
+                print(f"Failed to issue Service Ping command. Status {response.status_code}: {response.data}")
+                logging.error(f"Service ping failed - status {response.status_code}: {response.data}")
+                return None
+            
+            session_id = response.data.get("session", "")
+            if session_id:
+                short_id = session_id[:8] + "..." if len(session_id) > 8 else session_id
+                print(f"-> Service Ping command issued (session: {short_id})")
+                self._debug_print(f"Full session ID: {session_id}")
             else:
-                error_msg = f"Failed to issue Service Ping command. mistapi status {response.status_code}: {response.data}"
-                print(error_msg)
-                logging.error(error_msg)
-                if debug_mode:
-                    print(f"[DEBUG] mistapi request failed - Status: {response.status_code}")
-                    print(f"[DEBUG] mistapi response data: {response.data}")
-                    logging.debug(f"Service ping failed - mistapi response: {response.data}")
-                return
-                
-        except Exception as api_error:
-            error_msg = f"Error issuing Service Ping command via mistapi: {api_error}"
-            print(error_msg)
-            logging.error(error_msg)
-            if debug_mode:
-                print(f"[DEBUG] mistapi exception details: {type(api_error).__name__}: {api_error}")
-                logging.debug(f"Service ping mistapi exception: {type(api_error).__name__}: {api_error}")
-            return
-        
-        # Proceed only if we have a session ID
-        if not session_id:
-            print("! No session ID received - cannot wait for results")
-            return
-        
-        # Wait for WebSocket results
+                print("-> Service Ping command issued (no session ID returned)")
+            
+            return session_id or None
+            
+        except Exception as error:
+            print(f"Error issuing Service Ping command via mistapi: {error}")
+            logging.error(f"Service ping error: {error}")
+            self._debug_print(f"mistapi exception details: {type(error).__name__}: {error}")
+            return None
+    
+    def _wait_for_results(self, session_id: str) -> Optional[dict]:
+        """Wait for WebSocket results."""
         print("-> Waiting for Service Ping results...")
         
-        if debug_mode:
-            print(f"[DEBUG] Full session ID = {session_id}")
-            print("[DEBUG] Starting to wait for WebSocket results...")
+        self._debug_print(f"Full session ID = {session_id}")
+        self._debug_print("Starting to wait for WebSocket results...")
         
-        # Use device-specific timeout
-        if device_info and device_info.get('type') == 'gateway':
-            timeout_seconds = 45  # Extended timeout for gateways
-            activity_timeout_seconds = 5  # Longer activity timeout for service ping
-            print("   -> Using extended timeout for SSR gateway (45 seconds total, 5 seconds activity)")
+        if self.websocket_manager is None:
+            return None
+        
+        # Determine timeout based on device type
+        if self.device_info and self.device_info.get('type') == 'gateway':
+            timeout_seconds = 45
+            activity_timeout = 5
+            print("   -> Using extended timeout for SSR gateway (45s total, 5s activity)")
         else:
-            timeout_seconds = 30  # Standard timeout for other devices
-            activity_timeout_seconds = 3  # Moderate activity timeout for non-gateways
+            timeout_seconds = 30
+            activity_timeout = 3
         
-        service_ping_result = websocket_manager.wait_for_command_result(
-            session_id, 
-            timeout_seconds=timeout_seconds, 
-            activity_timeout_seconds=activity_timeout_seconds
+        result = self.websocket_manager.wait_for_command_result(
+            session_id,
+            timeout_seconds=timeout_seconds,
+            activity_timeout_seconds=activity_timeout
         )
         
-        if debug_mode:
-            print(f"[DEBUG] wait_for_command_result returned: {service_ping_result is not None}")
-            if service_ping_result:
-                print(f"[DEBUG] Result keys: {list(service_ping_result.keys())}")
-                print(f"[DEBUG] Service ping operation completed successfully")
-            else:
-                print(f"[DEBUG] Service ping operation timed out or failed")
+        self._debug_print(f"wait_for_command_result returned: {result is not None}")
+        if result:
+            self._debug_print(f"Result keys: {list(result.keys())}")
         
-        # Safety check: Ensure WebSocket manager is cleaned up
-        try:
-            if hasattr(websocket_manager, 'ws') and websocket_manager.ws:
-                websocket_manager.close_connection()
-                if debug_mode:
-                    print(f"[DEBUG] WebSocket connection cleaned up")
-        except Exception as cleanup_error:
-            if debug_mode:
-                print(f"[DEBUG] WebSocket cleanup warning: {cleanup_error}")
-            logging.warning(f"WebSocket cleanup issue: {cleanup_error}")
-        
-        # Display results
-        if service_ping_result:
-            print("\n" + "=" * 60)
-            print("SERVICE PING RESULTS:")
-            print("=" * 60)
-            
-            # Add device-specific context
-            if device_info:
-                device_type = device_info.get('type', 'unknown')
-                device_model = device_info.get('model', 'unknown')
-                device_name = device_info.get('name', 'Unknown Device')
-                
-                print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
-                print(f"Service: {service} -> Host: {host}")
-                
-                if device_type == 'gateway':
-                    print("Note: Service-specific routing path used for ping packets")
-                else:
-                    print("Note: Device may not fully support service ping functionality")
-                    
-                print("-" * 60)
-            
-            # Display raw output if available
-            raw_output = service_ping_result.get("raw", "")
-            if raw_output:
-                print("PING OUTPUT:")
-                print("-" * 40)
-                print(raw_output)
-            
-            # Display parsed output if available  
-            parsed_output = service_ping_result.get("Output", "")
-            if parsed_output and parsed_output != raw_output:
-                print("\nPARSED OUTPUT:")
-                print("-" * 40)
-                print(parsed_output)
-            
-            if not raw_output and not parsed_output:
-                print("No output data received")
-                if device_info and device_info.get('type') != 'gateway':
-                    print("\nTroubleshooting for non-gateway devices:")
-                    print("-> Service Ping is designed specifically for SSR gateways")
-                    print("-> Try using regular ping (Menu 87) instead")
-                    print("-> Verify device supports service ping functionality")
-                
-            print("=" * 60)
-            
-            # Log the successful operation with device context
-            if device_info:
-                device_name = device_info.get('name', 'Unknown Device')
-                device_type = device_info.get('type', 'unknown')
-                logging.info(f"Service ping completed for {device_name} ({device_type}) - Service: {service}, Host: {host}")
-            else:
-                logging.info(f"Service ping completed for device {device_id} - Service: {service}, Host: {host}")
+        return result
+    
+    def _display_results(self, result: Optional[dict], payload: dict) -> None:
+        """Display service ping results."""
+        if result:
+            self._display_success_results(result, payload)
         else:
-            print("\nNo Service Ping results received within timeout period.")
-            
-            # Provide device-specific troubleshooting guidance
-            if device_info:
-                device_type = device_info.get('type', 'unknown')
-                device_name = device_info.get('name', 'Unknown Device')
-                print(f"Device: {device_name} ({device_type})")
-                
-                if device_type == 'gateway':
-                    print("\nTroubleshooting for SSR gateways:")
-                    print("-> Verify service name is valid for this SSR")
-                    print("-> Check if host is reachable through the specified service")
-                    print("-> Confirm SSR routing configuration for the service")
-                    print("-> Try with a different service name")
-                elif device_type == 'switch':
-                    print("\nNote: Switches typically do not support service ping")
-                    print("-> Try using regular ping (Menu 87) for basic connectivity")
-                    print("-> Service ping is an SSR-specific feature")
-                elif device_type == 'ap':
-                    print("\nNote: Access Points do not support service ping")
-                    print("-> Try using regular ping (Menu 87) for basic connectivity") 
-                    print("-> Service ping is an SSR-specific feature")
-                else:
-                    print("\nNote: Service ping is designed for SSR gateways")
-                    print("-> Try using regular ping (Menu 87) for basic connectivity")
-                
-            logging.warning(f"Service ping timeout - no results received for device {device_id}")
-            
-    except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
-        logging.info("Service ping operation cancelled by user")
+            self._display_timeout_results(payload)
+    
+    def _display_success_results(self, result: dict, payload: dict) -> None:
+        """Display successful ping results."""
+        print("\n" + "=" * 60)
+        print("SERVICE PING RESULTS:")
+        print("=" * 60)
         
-    except Exception as error:
-        print(f"Error during Service Ping operation: {error}")
-        logging.error(f"Service ping error: {error}")
-        logging.debug("EXIT: service_ping_device_websocket - error")
+        if self.device_info is not None:
+            self._display_device_context(payload)
         
-    finally:
-        # Always cleanup WebSocket connection
+        raw_output = result.get("raw", "")
+        if raw_output:
+            print("PING OUTPUT:")
+            print("-" * 40)
+            print(raw_output)
+        
+        parsed_output = result.get("Output", "")
+        if parsed_output and parsed_output != raw_output:
+            print("\nPARSED OUTPUT:")
+            print("-" * 40)
+            print(parsed_output)
+        
+        if not raw_output and not parsed_output:
+            print("No output data received")
+            if self.device_info and self.device_info.get('type') != 'gateway':
+                self._display_non_gateway_troubleshooting()
+        
+        print("=" * 60)
+        self._log_success(payload)
+    
+    def _display_device_context(self, payload: dict) -> None:
+        """Display device context in results."""
+        if self.device_info is None:
+            return
+        device_type = self.device_info.get('type', 'unknown')
+        device_model = self.device_info.get('model', 'unknown')
+        device_name = self.device_info.get('name', 'Unknown Device')
+        
+        print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
+        print(f"Service: {payload['service']} -> Host: {payload['host']}")
+        
+        if device_type == 'gateway':
+            print("Note: Service-specific routing path used for ping packets")
+        else:
+            print("Note: Device may not fully support service ping functionality")
+        
+        print("-" * 60)
+    
+    def _display_non_gateway_troubleshooting(self) -> None:
+        """Display troubleshooting for non-gateway devices."""
+        print("\nTroubleshooting for non-gateway devices:")
+        print("-> Service Ping is designed specifically for SSR gateways")
+        print("-> Try using regular ping (Menu 87) instead")
+        print("-> Verify device supports service ping functionality")
+    
+    def _log_success(self, payload: dict) -> None:
+        """Log successful operation."""
+        if self.device_info:
+            name = self.device_info.get('name', 'Unknown Device')
+            dtype = self.device_info.get('type', 'unknown')
+            logging.info(f"Service ping completed for {name} ({dtype}) - Service: {payload['service']}, Host: {payload['host']}")
+        else:
+            logging.info(f"Service ping completed for device {self.device_id} - Service: {payload['service']}, Host: {payload['host']}")
+    
+    def _display_timeout_results(self, payload: dict) -> None:
+        """Display timeout/no results message with troubleshooting."""
+        print("\nNo Service Ping results received within timeout period.")
+        
+        if not self.device_info:
+            logging.warning(f"Service ping timeout - no results received for device {self.device_id}")
+            return
+        
+        device_type = self.device_info.get('type', 'unknown')
+        device_name = self.device_info.get('name', 'Unknown Device')
+        print(f"Device: {device_name} ({device_type})")
+        
+        troubleshooting = {
+            'gateway': [
+                "Verify service name is valid for this SSR",
+                "Check if host is reachable through the specified service",
+                "Confirm SSR routing configuration for the service",
+                "Try with a different service name"
+            ],
+            'switch': [
+                "Switches typically do not support service ping",
+                "Try using regular ping (Menu 87) for basic connectivity",
+                "Service ping is an SSR-specific feature"
+            ],
+            'ap': [
+                "Access Points do not support service ping",
+                "Try using regular ping (Menu 87) for basic connectivity",
+                "Service ping is an SSR-specific feature"
+            ]
+        }
+        
+        tips = troubleshooting.get(device_type, [
+            "Service ping is designed for SSR gateways",
+            "Try using regular ping (Menu 87) for basic connectivity"
+        ])
+        
+        if device_type == 'gateway':
+            print("\nTroubleshooting for SSR gateways:")
+        else:
+            print(f"\nNote: {tips[0]}")
+            tips = tips[1:]
+        
+        for tip in tips:
+            print(f"-> {tip}")
+        
+        logging.warning(f"Service ping timeout - no results received for device {self.device_id}")
+    
+    def _cleanup(self) -> None:
+        """Clean up WebSocket connection."""
         try:
-            if 'websocket_manager' in locals():
-                websocket_manager.disconnect()
+            if self.websocket_manager is not None:
+                self.websocket_manager.disconnect()
                 print("-> WebSocket connection closed")
-        except Exception as cleanup_error:
-            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+        except Exception as error:
+            logging.warning(f"WebSocket cleanup error: {error}")
+    
+    def execute(self) -> None:
+        """
+        Main execution method for service ping operation.
+        
+        Orchestrates the complete service ping workflow:
+        1. Site and device selection
+        2. Device validation
+        3. Tenant and service discovery
+        4. User configuration prompts
+        5. WebSocket setup and execution
+        6. Results display and cleanup
+        """
+        logging.debug("ENTER: ServicePingManager.execute")
+        
+        if self.debug_mode:
+            print("[DEBUG] Starting Service Ping via WebSocket operation...")
+            print(f"[DEBUG] Command line args: {sys.argv}")
+        
+        try:
+            # Phase 1: Selection and validation
+            if not self._select_site_and_device():
+                return
             
-        logging.debug("EXIT: service_ping_device_websocket")
+            if not self._fetch_device_info():
+                return
+            
+            # Phase 2: Discovery
+            self._fetch_all_tenants()
+            self._fetch_all_services()
+            
+            # Phase 3: Build combined lists
+            all_tenants = self._build_combined_tenants()
+            all_services = self._build_combined_services()
+            
+            # Phase 4: User configuration
+            print("\n" + "=" * 50)
+            print("SERVICE PING CONFIGURATION")
+            print("=" * 50)
+            
+            tenant = self._prompt_for_tenant(all_tenants)
+            service = self._prompt_for_service(all_services)
+            params = self._prompt_for_ping_parameters()
+            
+            # Phase 5: Build and display payload
+            payload = self._build_payload(service, tenant, params)
+            self._display_configuration(payload)
+            
+            # Phase 6: Execute
+            print(f"\n-> Executing Service Ping on device {self.device_id}...")
+            
+            if not self._setup_websocket():
+                return
+            
+            session_id = self._execute_service_ping(payload)
+            if not session_id:
+                print("! No session ID received - cannot wait for results")
+                return
+            
+            # Phase 7: Wait and display results
+            result = self._wait_for_results(session_id)
+            self._display_results(result, payload)
+            
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user")
+            logging.info("Service ping operation cancelled by user")
+            
+        except Exception as error:
+            print(f"Error during Service Ping operation: {error}")
+            logging.error(f"Service ping error: {error}")
+            
+        finally:
+            self._cleanup()
+            logging.debug("EXIT: ServicePingManager.execute")
+
+
+def service_ping_device_websocket():
+    """Execute SSR service ping operation via WebSocket."""
+    manager = ServicePingManager()
+    manager.execute()
 
 
 # ============================================================================
@@ -20109,15 +20259,15 @@ def launch_cli_shell(site_id=None, device_id=None, debug=False):
         run_interactive_shell(shell_url, debug=debug)
 
 def listen_for_command_output(
-    mist_host: str = None,
-    mist_apitoken: str = None,
-    site_id: str = None,
-    device_id: str = None,
-    session_id: str = None,
+    mist_host: Optional[str] = None,
+    mist_apitoken: Optional[str] = None,
+    site_id: Optional[str] = None,
+    device_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     timeout: int = 30,
     idle_timeout: int = 3,
     debug: bool = False,
-    config: WebSocketListenerConfig = None
+    config: Optional[WebSocketListenerConfig] = None
 ):
     """
     Listen for WebSocket command output from a Mist device.
@@ -20402,7 +20552,7 @@ def ssh_runner_by_gateway_template(fast=False):
     
     # Step 1: Ensure gateway management IP data is current
     print("  1. Ensuring gateway management IP data is current...")
-    CacheUtils.check_and_generate_csv("GatewayManagementIPs.csv", lambda: export_gateway_management_ips_to_csv(fast=fast))
+    CacheUtils.check_and_generate_csv("GatewayManagementIPs.csv", lambda: GatewayExportUtils.management_ips(fast=fast))
     
     # Step 2: Read the gateway data
     try:
@@ -22822,7 +22972,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison address: {comp_addr_str}")
                 
                 validation_result = validate_addresses_with_nominatim(
-                    mist_address, comparison_address, ADDRESS_VALIDATION_TIMEOUT, debug=debug, skip_ssl_verify=skip_ssl_verify, org_name=org_name,
+                    mist_address, comparison_address, config=None, timeout=ADDRESS_VALIDATION_TIMEOUT, debug=debug, skip_ssl_verify=skip_ssl_verify, org_name=org_name,
                     mist_duplicates=mist_duplicates, ref_duplicates=ref_duplicates, site_name=device.get("site_name", "")
                 )
                 
@@ -24982,6 +25132,775 @@ def reboot_devices_by_gateway_template_list():
         print(f"! Failed to write results to CSV: {e}")
 
 
+class MapReplacementWizard:
+    """
+    Intelligent Map Replacement Wizard
+    
+    Replaces a floor plan image while intelligently preserving and translating:
+    - Device placements (APs, switches, gateways) with coordinate scaling
+    - Zones with vertex coordinate translation
+    - Walls and wayfinding paths
+    - Beacons and virtual beacons
+    """
+    
+    def __init__(self, maps_manager: 'MapsManager'):
+        """Initialize wizard with MapsManager reference."""
+        self.maps_manager = maps_manager
+        self.apisession = maps_manager.apisession
+        
+        # Site and map context
+        self.site_id: Optional[str] = None
+        self.site_name: Optional[str] = None
+        self.map_id: Optional[str] = None
+        self.map_name: str = ""
+        self.current_map: dict = {}
+        
+        # Original map properties
+        self.original_width_px: int = 0
+        self.original_height_px: int = 0
+        self.original_ppm: float = 1.0
+        self.original_width_m: float = 0.0
+        self.original_height_m: float = 0.0
+        
+        # New image properties
+        self.file_path: str = ""
+        self.new_width_px: int = 0
+        self.new_height_px: int = 0
+        
+        # Scaling configuration
+        self.scale_x: float = 1.0
+        self.scale_y: float = 1.0
+        self.new_ppm: float = 1.0
+        self.scaling_mode: str = "none"
+        
+        # Assets on map
+        self.devices_on_map: list = []
+        self.zones_on_map: list = []
+        self.beacons_on_map: list = []
+        self.vbeacons_on_map: list = []
+        self.wall_nodes: int = 0
+        self.wayfinding_nodes: int = 0
+        
+        # Results
+        self.backup_file: Optional[str] = None
+        self.errors: list = []
+    
+    def execute(self) -> None:
+        """Execute the map replacement wizard workflow."""
+        logging.info("intelligent_map_replacement_wizard initiated")
+        self._print_header()
+        
+        if not self._select_site():
+            return
+        
+        try:
+            self._validate_dependencies()
+            
+            if not self._step1_select_map():
+                return
+            if not self._step2_select_image():
+                return
+            if not self._step3_configure_scaling():
+                return
+            if not self._step4_create_backup():
+                return
+            self._step5_preview_changes()
+            if not self._step6_confirm_and_apply():
+                return
+            self._print_summary()
+            
+        except EOFError:
+            logging.info("EOF detected in map replacement wizard")
+        except ImportError as import_err:
+            print(f"\n! Missing required dependency: {import_err}")
+            print("Install with: pip install Pillow")
+            logging.error(f"Map replacement wizard import error: {import_err}")
+        except Exception as error:
+            logging.error(f"Error in map replacement wizard: {error}", exc_info=True)
+            print(f"\n! Error: {error}")
+    
+    def _print_header(self) -> None:
+        """Print wizard header and introduction."""
+        print("\n" + "=" * 80)
+        print("INTELLIGENT MAP REPLACEMENT WIZARD")
+        print("=" * 80)
+        print("\nThis wizard helps you replace a floor plan image while preserving")
+        print("device placements, zones, walls, and other map data.")
+        print("\nThe wizard will:")
+        print("  1. Backup current map data")
+        print("  2. Analyze dimension and scale differences")
+        print("  3. Calculate coordinate translations")
+        print("  4. Preview affected devices/zones")
+        print("  5. Apply changes with confirmation")
+        print("=" * 80)
+    
+    def _select_site(self) -> bool:
+        """Select site for map replacement."""
+        self.site_id, self.site_name = self.maps_manager.get_current_site()
+        if not self.site_id:
+            logging.warning("Map replacement wizard aborted: No site selected")
+            return False
+        logging.debug(f"Map replacement wizard - Site: {self.site_name} (ID: {self.site_id})")
+        return True
+    
+    def _validate_dependencies(self) -> None:
+        """Validate required dependencies are available."""
+        from PIL import Image  # noqa: F401
+    
+    def _step1_select_map(self) -> bool:
+        """Step 1: Select the map to replace."""
+        print("\n" + "-" * 80)
+        print("STEP 1: Select Map to Replace")
+        print("-" * 80)
+        
+        self.map_id = self.maps_manager._select_map_from_site(self.site_id, self.site_name)
+        if not self.map_id:
+            logging.info("Map replacement wizard aborted: No map selected")
+            return False
+        
+        if not self._fetch_current_map():
+            return False
+        
+        self._display_current_map_info()
+        self._fetch_map_assets()
+        self._display_asset_counts()
+        return True
+    
+    def _fetch_current_map(self) -> bool:
+        """Fetch current map details from API."""
+        print("\nFetching current map data...")
+        response = mistapi.api.v1.sites.maps.getSiteMap(
+            self.apisession, site_id=self.site_id, map_id=self.map_id
+        )
+        
+        if response.status_code != 200:
+            print(f"\n! Failed to fetch map details: HTTP {response.status_code}")
+            return False
+        
+        self.current_map = response.data
+        self.map_name = self.current_map.get('name', 'Unnamed')
+        self._store_original_properties()
+        return True
+    
+    def _store_original_properties(self) -> None:
+        """Store original map properties for comparison."""
+        self.original_width_px = self.current_map.get('width', 0)
+        self.original_height_px = self.current_map.get('height', 0)
+        self.original_ppm = self.current_map.get('ppm', 1)
+        self.original_width_m = self.current_map.get('width_m', 0)
+        self.original_height_m = self.current_map.get('height_m', 0)
+        self.wall_nodes = len(self.current_map.get('wall_path', {}).get('nodes', []))
+        self.wayfinding_nodes = len(self.current_map.get('wayfinding_path', {}).get('nodes', []))
+    
+    def _display_current_map_info(self) -> None:
+        """Display current map information."""
+        print(f"\n{'-' * 80}")
+        print(f"Current Map: {self.map_name}")
+        print(f"{'-' * 80}")
+        print(f"  Type: {self.current_map.get('type', 'N/A')}")
+        print(f"  Pixel Dimensions: {self.current_map.get('width', 'N/A')} x {self.current_map.get('height', 'N/A')} px")
+        print(f"  Physical Size: {self.current_map.get('width_m', 'N/A')} x {self.current_map.get('height_m', 'N/A')} meters")
+        print(f"  Scale (PPM): {self.current_map.get('ppm', 'N/A')} pixels/meter")
+        print(f"  Has Image: {'Yes' if 'url' in self.current_map else 'No'}")
+        print(f"  Has Walls: {'Yes' if self.current_map.get('wall_path', {}).get('nodes') else 'No'}")
+        print(f"  Has Wayfinding: {'Yes' if self.current_map.get('wayfinding_path', {}).get('nodes') else 'No'}")
+    
+    def _fetch_map_assets(self) -> None:
+        """Fetch all assets on the current map."""
+        self._fetch_devices_on_map()
+        self._fetch_zones_on_map()
+        self._fetch_beacons_on_map()
+    
+    def _fetch_devices_on_map(self) -> None:
+        """Fetch devices placed on this map."""
+        try:
+            response = mistapi.api.v1.sites.devices.listSiteDevices(
+                self.apisession, site_id=self.site_id, type="all"
+            )
+            if response.status_code == 200:
+                all_devices = response.data if isinstance(response.data, list) else []
+                self.devices_on_map = [d for d in all_devices if d.get('map_id') == self.map_id]
+        except Exception:
+            pass
+    
+    def _fetch_zones_on_map(self) -> None:
+        """Fetch zones on this map."""
+        try:
+            response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=self.site_id)
+            if response.status_code == 200:
+                self.zones_on_map = [z for z in response.data if z.get('map_id') == self.map_id]
+        except Exception:
+            pass
+    
+    def _fetch_beacons_on_map(self) -> None:
+        """Fetch beacons and virtual beacons on this map."""
+        try:
+            response = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=self.site_id)
+            if response.status_code == 200:
+                self.beacons_on_map = [b for b in response.data if b.get('map_id') == self.map_id]
+            
+            vresponse = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=self.site_id)
+            if vresponse.status_code == 200:
+                self.vbeacons_on_map = [v for v in vresponse.data if v.get('map_id') == self.map_id]
+        except Exception:
+            pass
+    
+    def _display_asset_counts(self) -> None:
+        """Display counts of assets on the map."""
+        print(f"\nAssets on this map:")
+        print(f"  Devices: {len(self.devices_on_map)}")
+        print(f"  Zones: {len(self.zones_on_map)}")
+        print(f"  BLE Beacons: {len(self.beacons_on_map)}")
+        print(f"  Virtual Beacons: {len(self.vbeacons_on_map)}")
+        print(f"  Wall Nodes: {self.wall_nodes}")
+        print(f"  Wayfinding Nodes: {self.wayfinding_nodes}")
+    
+    def _step2_select_image(self) -> bool:
+        """Step 2: Select new floor plan image."""
+        import os
+        from PIL import Image
+        
+        print(f"\n{'-' * 80}")
+        print("STEP 2: Select New Floor Plan Image")
+        print("-" * 80)
+        print("\nEnter the path to the new floor plan image:")
+        print("Supported formats: PNG, JPG, JPEG, GIF")
+        
+        try:
+            self.file_path = input("File path: ").strip().strip('"').strip("'")
+        except EOFError:
+            logging.info("EOF detected during file path input")
+            return False
+        
+        if not self._validate_file_path(os):
+            return False
+        
+        return self._read_image_dimensions(Image)
+    
+    def _validate_file_path(self, os_module) -> bool:
+        """Validate the provided file path."""
+        if not self.file_path:
+            print("\n! No file path provided")
+            return False
+        if not os_module.path.exists(self.file_path):
+            print(f"\n! File not found: {self.file_path}")
+            return False
+        if not os_module.path.isfile(self.file_path):
+            print(f"\n! Path is not a file: {self.file_path}")
+            return False
+        
+        valid_extensions = ['.png', '.jpg', '.jpeg', '.gif']
+        file_ext = os_module.path.splitext(self.file_path)[1].lower()
+        if file_ext not in valid_extensions:
+            print(f"\n! Invalid file type: {file_ext}")
+            print(f"Supported types: {', '.join(valid_extensions)}")
+            return False
+        return True
+    
+    def _read_image_dimensions(self, image_module) -> bool:
+        """Read dimensions from the new image file."""
+        try:
+            with image_module.open(self.file_path) as img:
+                self.new_width_px, self.new_height_px = img.size
+                print(f"\nNew image dimensions: {self.new_width_px} x {self.new_height_px} pixels")
+            return True
+        except Exception as img_err:
+            print(f"\n! Failed to read image dimensions: {img_err}")
+            return False
+    
+    def _step3_configure_scaling(self) -> bool:
+        """Step 3: Configure scaling mode."""
+        print(f"\n{'-' * 80}")
+        print("STEP 3: Configure Scaling")
+        print("-" * 80)
+        
+        same_dimensions = (self.new_width_px == self.original_width_px and 
+                         self.new_height_px == self.original_height_px)
+        
+        if same_dimensions:
+            self._configure_same_dimensions()
+            return True
+        
+        return self._configure_different_dimensions()
+    
+    def _configure_same_dimensions(self) -> None:
+        """Configure scaling for matching dimensions."""
+        print("\nImage dimensions match exactly - no coordinate translation needed.")
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self.new_ppm = self.original_ppm
+        self.scaling_mode = "none"
+    
+    def _configure_different_dimensions(self) -> bool:
+        """Configure scaling for different dimensions."""
+        width_ratio, height_ratio = self._display_dimension_comparison()
+        self._display_scaling_options()
+        
+        try:
+            scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
+        except EOFError:
+            logging.info("EOF detected during scale mode selection")
+            return False
+        
+        self._apply_scaling_choice(scale_choice, width_ratio, height_ratio)
+        return True
+    
+    def _display_dimension_comparison(self) -> tuple:
+        """Display dimension comparison and return ratios."""
+        print(f"\nDimension comparison:")
+        print(f"  Original: {self.original_width_px} x {self.original_height_px} px")
+        print(f"  New:      {self.new_width_px} x {self.new_height_px} px")
+        
+        width_ratio = self.new_width_px / self.original_width_px if self.original_width_px > 0 else 1
+        height_ratio = self.new_height_px / self.original_height_px if self.original_height_px > 0 else 1
+        
+        print(f"\n  Width ratio:  {width_ratio:.4f}x ({'+' if width_ratio > 1 else ''}{((width_ratio - 1) * 100):.1f}%)")
+        print(f"  Height ratio: {height_ratio:.4f}x ({'+' if height_ratio > 1 else ''}{((height_ratio - 1) * 100):.1f}%)")
+        
+        aspect_diff = abs(width_ratio - height_ratio)
+        if aspect_diff < 0.01:
+            print(f"\n  Aspect ratio: Preserved (uniform scaling)")
+        else:
+            print(f"\n  WARNING: Aspect ratio differs by {aspect_diff:.2%}")
+            print("  This may cause device placements to appear distorted.")
+        
+        return width_ratio, height_ratio
+    
+    def _display_scaling_options(self) -> None:
+        """Display available scaling options."""
+        print("\nScaling options:")
+        print("  1. Proportional - Scale all coordinates by image ratio (recommended)")
+        print("  2. Preserve Physical - Keep real-world positions, update PPM only")
+        print("  3. Manual PPM - Enter new pixels-per-meter value manually")
+        print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
+    
+    def _apply_scaling_choice(self, choice: str, width_ratio: float, height_ratio: float) -> None:
+        """Apply the selected scaling mode."""
+        if choice == "1":
+            self._apply_proportional_scaling(width_ratio, height_ratio)
+        elif choice == "2":
+            self._apply_preserve_physical_scaling()
+        elif choice == "3":
+            self._apply_manual_ppm_scaling(width_ratio, height_ratio)
+        else:
+            self._apply_no_scaling()
+    
+    def _apply_proportional_scaling(self, width_ratio: float, height_ratio: float) -> None:
+        """Apply proportional scaling mode."""
+        self.scale_x = width_ratio
+        self.scale_y = height_ratio
+        self.new_ppm = self.original_ppm
+        self.scaling_mode = "proportional"
+        print(f"\nUsing proportional scaling: x={self.scale_x:.4f}, y={self.scale_y:.4f}")
+    
+    def _apply_preserve_physical_scaling(self) -> None:
+        """Apply preserve physical dimensions scaling mode."""
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        if self.original_width_m and self.original_width_m > 0:
+            self.new_ppm = self.new_width_px / self.original_width_m
+        else:
+            self.new_ppm = self.new_width_px / (self.original_width_px / self.original_ppm) if self.original_ppm else 1
+        self.scaling_mode = "preserve_physical"
+        print(f"\nPreserving physical positions. New PPM: {self.new_ppm:.2f}")
+    
+    def _apply_manual_ppm_scaling(self, width_ratio: float, height_ratio: float) -> None:
+        """Apply manual PPM scaling mode."""
+        try:
+            new_ppm_input = input(f"Enter new PPM (current: {self.original_ppm:.2f}): ").strip()
+            self.new_ppm = float(new_ppm_input) if new_ppm_input else self.original_ppm
+        except (ValueError, EOFError):
+            print("Invalid PPM value, using original")
+            self.new_ppm = self.original_ppm
+        self.scale_x = width_ratio
+        self.scale_y = height_ratio
+        self.scaling_mode = "manual_ppm"
+        print(f"\nUsing manual PPM: {self.new_ppm:.2f}, scaling: x={self.scale_x:.4f}, y={self.scale_y:.4f}")
+    
+    def _apply_no_scaling(self) -> None:
+        """Apply no scaling mode."""
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self.new_ppm = self.original_ppm
+        self.scaling_mode = "none"
+        print("\nNo coordinate scaling - image replacement only")
+    
+    def _step4_create_backup(self) -> bool:
+        """Step 4: Create backup of current map data."""
+        print(f"\n{'-' * 80}")
+        print("STEP 4: Creating Backup")
+        print("-" * 80)
+        
+        print("\nBacking up current map data...")
+        self.backup_file = self.maps_manager._backup_map_geometry(
+            api_session=self.apisession,
+            site_id=self.site_id,
+            map_id=self.map_id,
+            map_name=self.map_name,
+            backup_reason="pre_replacement"
+        )
+        
+        if self.backup_file:
+            print(f"Backup saved: {self.backup_file}")
+            return True
+        
+        return self._handle_backup_warning()
+    
+    def _handle_backup_warning(self) -> bool:
+        """Handle case where backup may not have completed."""
+        print("! Warning: Backup may not have completed fully")
+        try:
+            proceed = input("Continue anyway? (yes/no): ").strip().lower()
+            if proceed not in ['yes', 'y']:
+                print("\n! Operation cancelled")
+                return False
+            return True
+        except EOFError:
+            return False
+    
+    def _step5_preview_changes(self) -> None:
+        """Step 5: Preview changes before applying."""
+        print(f"\n{'-' * 80}")
+        print("STEP 5: Preview Changes")
+        print("-" * 80)
+        
+        self._display_image_changes()
+        
+        if self._should_show_coordinate_preview():
+            self._preview_coordinate_translations()
+        else:
+            print("\n  No coordinate changes required (same dimensions or no scaling selected)")
+    
+    def _display_image_changes(self) -> None:
+        """Display image property changes."""
+        print(f"\nMap: {self.map_name}")
+        print(f"\nImage Changes:")
+        print(f"  Dimensions: {self.original_width_px}x{self.original_height_px} -> {self.new_width_px}x{self.new_height_px} px")
+        print(f"  PPM: {self.original_ppm:.2f} -> {self.new_ppm:.2f}")
+        print(f"  Scaling Mode: {self.scaling_mode}")
+    
+    def _should_show_coordinate_preview(self) -> bool:
+        """Check if coordinate preview should be shown."""
+        return self.scaling_mode != "none" and (self.scale_x != 1.0 or self.scale_y != 1.0)
+    
+    def _preview_coordinate_translations(self) -> None:
+        """Preview coordinate translations for all asset types."""
+        print(f"\nCoordinate Translation (scale_x={self.scale_x:.4f}, scale_y={self.scale_y:.4f}):")
+        self._preview_device_translations()
+        self._preview_zone_translations()
+        self._preview_geometry_translations()
+    
+    def _preview_device_translations(self) -> None:
+        """Preview device coordinate translations."""
+        if not self.devices_on_map:
+            return
+        print(f"\n  Devices ({len(self.devices_on_map)}):")
+        for device in self.devices_on_map[:5]:
+            old_x, old_y = device.get('x', 0), device.get('y', 0)
+            new_x, new_y = old_x * self.scale_x, old_y * self.scale_y
+            name = device.get('name', device.get('mac', 'Unknown'))
+            print(f"    {name}: ({old_x:.1f}, {old_y:.1f}) -> ({new_x:.1f}, {new_y:.1f})")
+        if len(self.devices_on_map) > 5:
+            print(f"    ... and {len(self.devices_on_map) - 5} more devices")
+    
+    def _preview_zone_translations(self) -> None:
+        """Preview zone coordinate translations."""
+        if not self.zones_on_map:
+            return
+        print(f"\n  Zones ({len(self.zones_on_map)}):")
+        for zone in self.zones_on_map[:3]:
+            zone_name = zone.get('name', 'Unnamed')
+            vertex_count = len(zone.get('vertices', []))
+            print(f"    {zone_name}: {vertex_count} vertices will be scaled")
+        if len(self.zones_on_map) > 3:
+            print(f"    ... and {len(self.zones_on_map) - 3} more zones")
+    
+    def _preview_geometry_translations(self) -> None:
+        """Preview wall and wayfinding geometry translations."""
+        if self.wall_nodes <= 0 and self.wayfinding_nodes <= 0:
+            return
+        print(f"\n  Geometry:")
+        if self.wall_nodes > 0:
+            print(f"    {self.wall_nodes} wall nodes will be scaled")
+        if self.wayfinding_nodes > 0:
+            print(f"    {self.wayfinding_nodes} wayfinding nodes will be scaled")
+    
+    def _step6_confirm_and_apply(self) -> bool:
+        """Step 6: Confirm and apply changes."""
+        print(f"\n{'-' * 80}")
+        print("STEP 6: Confirm and Apply")
+        print("-" * 80)
+        
+        if not self._get_confirmation():
+            return False
+        
+        logging.info(f"Map replacement confirmed for map {self.map_id} with scaling_mode={self.scaling_mode}")
+        print("\nApplying changes...")
+        
+        self._apply_map_properties()
+        self._apply_image_upload()
+        self._apply_asset_updates()
+        return True
+    
+    def _get_confirmation(self) -> bool:
+        """Get user confirmation to proceed."""
+        print("\n! WARNING: This will modify the map and update all device/zone positions.")
+        print("! A backup has been saved. Review the preview above before proceeding.")
+        
+        try:
+            confirm = input("\nType 'REPLACE' to proceed: ").strip()
+        except EOFError:
+            logging.info("EOF detected during confirmation")
+            return False
+        
+        if confirm != "REPLACE":
+            print("\n! Operation cancelled")
+            return False
+        return True
+    
+    def _apply_map_properties(self) -> None:
+        """Apply map property updates."""
+        print("  Updating map properties...")
+        try:
+            map_update = self._build_map_update_payload()
+            response = mistapi.api.v1.sites.maps.updateSiteMap(
+                self.apisession, site_id=self.site_id, map_id=self.map_id, body=map_update
+            )
+            
+            if response.status_code == 200:
+                print("    Map properties updated successfully")
+            else:
+                self.errors.append(f"Map update failed: HTTP {response.status_code}")
+                print(f"    ! Failed to update map: HTTP {response.status_code}")
+        except Exception as map_err:
+            self.errors.append(f"Map update error: {map_err}")
+            print(f"    ! Error updating map: {map_err}")
+    
+    def _build_map_update_payload(self) -> dict:
+        """Build the map update payload with scaled paths."""
+        map_update = {
+            'width': self.new_width_px,
+            'height': self.new_height_px,
+            'ppm': self.new_ppm
+        }
+        
+        if self.new_ppm and self.new_ppm > 0:
+            map_update['width_m'] = self.new_width_px / self.new_ppm
+            map_update['height_m'] = self.new_height_px / self.new_ppm
+        
+        if self._should_scale_geometry():
+            self._add_scaled_paths(map_update)
+        
+        return map_update
+    
+    def _should_scale_geometry(self) -> bool:
+        """Check if geometry should be scaled."""
+        return self.scaling_mode == "proportional" and (self.scale_x != 1.0 or self.scale_y != 1.0)
+    
+    def _add_scaled_paths(self, map_update: dict) -> None:
+        """Add scaled wall and wayfinding paths to update payload."""
+        if self.current_map.get('wall_path', {}).get('nodes'):
+            scaled_wall = self._scale_path_nodes(self.current_map['wall_path']['nodes'])
+            map_update['wall_path'] = {'nodes': scaled_wall}
+            logging.debug(f"Scaled {len(scaled_wall)} wall nodes")
+        
+        if self.current_map.get('wayfinding_path', {}).get('nodes'):
+            scaled_wf = self._scale_path_nodes(self.current_map['wayfinding_path']['nodes'])
+            map_update['wayfinding_path'] = {'nodes': scaled_wf}
+            logging.debug(f"Scaled {len(scaled_wf)} wayfinding nodes")
+    
+    def _scale_path_nodes(self, nodes: list) -> list:
+        """Scale path node coordinates."""
+        scaled_nodes = []
+        for node in nodes:
+            scaled_node = {}
+            for key, value in node.items():
+                if key == 'x' and isinstance(value, (int, float)):
+                    scaled_node[key] = value * self.scale_x
+                elif key == 'y' and isinstance(value, (int, float)):
+                    scaled_node[key] = value * self.scale_y
+                else:
+                    scaled_node[key] = value
+            scaled_nodes.append(scaled_node)
+        return scaled_nodes
+    
+    def _apply_image_upload(self) -> None:
+        """Upload the new image file."""
+        print("  Uploading new image...")
+        try:
+            response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+                self.apisession, site_id=self.site_id, map_id=self.map_id, file=self.file_path
+            )
+            
+            if response.status_code in [200, 201]:
+                print("    Image uploaded successfully")
+            else:
+                self.errors.append(f"Image upload failed: HTTP {response.status_code}")
+                print(f"    ! Failed to upload image: HTTP {response.status_code}")
+        except Exception as img_err:
+            self.errors.append(f"Image upload error: {img_err}")
+            print(f"    ! Error uploading image: {img_err}")
+    
+    def _apply_asset_updates(self) -> None:
+        """Apply coordinate updates to all map assets."""
+        if not self._should_scale_geometry():
+            return
+        
+        self._update_device_positions()
+        self._update_zone_positions()
+        self._update_beacon_positions()
+        self._update_vbeacon_positions()
+    
+    def _update_device_positions(self) -> None:
+        """Update device positions with scaled coordinates."""
+        if not self.devices_on_map:
+            return
+        
+        print(f"  Updating {len(self.devices_on_map)} device positions...")
+        updated, failed = 0, 0
+        
+        for device in self.devices_on_map:
+            try:
+                device_id = device.get('id')
+                new_x = device.get('x', 0) * self.scale_x
+                new_y = device.get('y', 0) * self.scale_y
+                
+                response = mistapi.api.v1.sites.devices.updateSiteDevice(
+                    self.apisession, site_id=self.site_id, device_id=device_id,
+                    body={'x': new_x, 'y': new_y}
+                )
+                
+                if response.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+                    logging.warning(f"Device update failed for {device_id}: HTTP {response.status_code}")
+            except Exception as dev_err:
+                failed += 1
+                logging.error(f"Device update error for {device.get('id')}: {dev_err}")
+        
+        print(f"    Devices updated: {updated}, failed: {failed}")
+        if failed > 0:
+            self.errors.append(f"{failed} device updates failed")
+    
+    def _update_zone_positions(self) -> None:
+        """Update zone vertex positions with scaled coordinates."""
+        if not self.zones_on_map:
+            return
+        
+        print(f"  Updating {len(self.zones_on_map)} zone positions...")
+        updated, failed = 0, 0
+        
+        for zone in self.zones_on_map:
+            try:
+                zone_id = zone.get('id')
+                vertices = zone.get('vertices', [])
+                
+                if vertices:
+                    scaled_vertices = [
+                        {'x': v.get('x', 0) * self.scale_x, 'y': v.get('y', 0) * self.scale_y}
+                        for v in vertices
+                    ]
+                    response = mistapi.api.v1.sites.zones.updateSiteZone(
+                        self.apisession, site_id=self.site_id, zone_id=zone_id,
+                        body={'vertices': scaled_vertices}
+                    )
+                    if response.status_code == 200:
+                        updated += 1
+                    else:
+                        failed += 1
+                        logging.warning(f"Zone update failed for {zone_id}: HTTP {response.status_code}")
+                else:
+                    updated += 1
+            except Exception as zone_err:
+                failed += 1
+                logging.error(f"Zone update error for {zone.get('id')}: {zone_err}")
+        
+        print(f"    Zones updated: {updated}, failed: {failed}")
+        if failed > 0:
+            self.errors.append(f"{failed} zone updates failed")
+    
+    def _update_beacon_positions(self) -> None:
+        """Update beacon positions with scaled coordinates."""
+        if not self.beacons_on_map:
+            return
+        
+        print(f"  Updating {len(self.beacons_on_map)} beacon positions...")
+        updated, failed = 0, 0
+        
+        for beacon in self.beacons_on_map:
+            try:
+                beacon_id = beacon.get('id')
+                new_x = beacon.get('x', 0) * self.scale_x
+                new_y = beacon.get('y', 0) * self.scale_y
+                
+                response = mistapi.api.v1.sites.beacons.updateSiteBeacon(
+                    self.apisession, site_id=self.site_id, beacon_id=beacon_id,
+                    body={'x': new_x, 'y': new_y}
+                )
+                if response.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        
+        print(f"    Beacons updated: {updated}, failed: {failed}")
+        if failed > 0:
+            self.errors.append(f"{failed} beacon updates failed")
+    
+    def _update_vbeacon_positions(self) -> None:
+        """Update virtual beacon positions with scaled coordinates."""
+        if not self.vbeacons_on_map:
+            return
+        
+        print(f"  Updating {len(self.vbeacons_on_map)} virtual beacon positions...")
+        updated, failed = 0, 0
+        
+        for vbeacon in self.vbeacons_on_map:
+            try:
+                vbeacon_id = vbeacon.get('id')
+                new_x = vbeacon.get('x', 0) * self.scale_x
+                new_y = vbeacon.get('y', 0) * self.scale_y
+                
+                response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
+                    self.apisession, site_id=self.site_id, vbeacon_id=vbeacon_id,
+                    body={'x': new_x, 'y': new_y}
+                )
+                if response.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        
+        print(f"    Virtual beacons updated: {updated}, failed: {failed}")
+        if failed > 0:
+            self.errors.append(f"{failed} virtual beacon updates failed")
+    
+    def _print_summary(self) -> None:
+        """Print final summary of the operation."""
+        print(f"\n{'=' * 80}")
+        print("MAP REPLACEMENT COMPLETE")
+        print("=" * 80)
+        print(f"\nMap: {self.map_name}")
+        print(f"New Dimensions: {self.new_width_px} x {self.new_height_px} px")
+        print(f"New PPM: {self.new_ppm:.2f}")
+        print(f"Scaling Mode: {self.scaling_mode}")
+        
+        if self.errors:
+            print(f"\n! Completed with {len(self.errors)} warning(s):")
+            for err in self.errors:
+                print(f"  - {err}")
+            print(f"\nBackup file: {self.backup_file}")
+            print("Use the backup to restore if needed.")
+        else:
+            print("\nAll changes applied successfully!")
+            print(f"Backup file: {self.backup_file}")
+        
+        logging.info(f"Map replacement wizard completed for {self.map_id}: scaling_mode={self.scaling_mode}, errors={len(self.errors)}")
+
+
 class MapsManager:
     """
     Comprehensive Maps Management System for Mist Sites
@@ -26395,649 +27314,10 @@ class MapsManager:
             print(f"\n! Error cloning map: {e}")
     
     def intelligent_map_replacement_wizard(self):
-        """
-        Intelligent Map Replacement Wizard
-        
-        Replaces a floor plan image while intelligently preserving and translating:
-        - Device placements (APs, switches, gateways) with coordinate scaling
-        - Zones with vertex coordinate translation
-        - Walls and wayfinding paths
-        - Beacons and virtual beacons
-        
-        Supports different scale/dimension scenarios:
-        1. Same dimensions - direct replacement
-        2. Different dimensions, same scale - coordinate translation
-        3. Different dimensions, different scale - intelligent scaling with preview
-        """
-        logging.info("intelligent_map_replacement_wizard initiated")
-        print("\n" + "=" * 80)
-        print("INTELLIGENT MAP REPLACEMENT WIZARD")
-        print("=" * 80)
-        print("\nThis wizard helps you replace a floor plan image while preserving")
-        print("device placements, zones, walls, and other map data.")
-        print("\nThe wizard will:")
-        print("  1. Backup current map data")
-        print("  2. Analyze dimension and scale differences")
-        print("  3. Calculate coordinate translations")
-        print("  4. Preview affected devices/zones")
-        print("  5. Apply changes with confirmation")
-        print("=" * 80)
-        
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            logging.warning("Map replacement wizard aborted: No site selected")
-            return
-        
-        logging.debug(f"Map replacement wizard - Site: {site_name} (ID: {site_id})")
-        
-        try:
-            import os
-            from PIL import Image
-            import requests
-            import tempfile
-            import json
-            
-            # Step 1: Select the map to update
-            print("\n" + "-" * 80)
-            print("STEP 1: Select Map to Replace")
-            print("-" * 80)
-            
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                logging.info("Map replacement wizard aborted: No map selected")
-                return
-            
-            # Fetch current map details
-            print("\nFetching current map data...")
-            current_map_response = mistapi.api.v1.sites.maps.getSiteMap(
-                self.apisession,
-                site_id=site_id,
-                map_id=map_id
-            )
-            
-            if current_map_response.status_code != 200:
-                print(f"\n! Failed to fetch map details: HTTP {current_map_response.status_code}")
-                return
-            
-            current_map = current_map_response.data
-            map_name = current_map.get('name', 'Unnamed')
-            
-            # Display current map info
-            print(f"\n{'-' * 80}")
-            print(f"Current Map: {map_name}")
-            print(f"{'-' * 80}")
-            print(f"  Type: {current_map.get('type', 'N/A')}")
-            print(f"  Pixel Dimensions: {current_map.get('width', 'N/A')} x {current_map.get('height', 'N/A')} px")
-            print(f"  Physical Size: {current_map.get('width_m', 'N/A')} x {current_map.get('height_m', 'N/A')} meters")
-            print(f"  Scale (PPM): {current_map.get('ppm', 'N/A')} pixels/meter")
-            print(f"  Has Image: {'Yes' if 'url' in current_map else 'No'}")
-            print(f"  Has Walls: {'Yes' if current_map.get('wall_path', {}).get('nodes') else 'No'}")
-            print(f"  Has Wayfinding: {'Yes' if current_map.get('wayfinding_path', {}).get('nodes') else 'No'}")
-            
-            # Store original properties
-            original_width_px = current_map.get('width', 0)
-            original_height_px = current_map.get('height', 0)
-            original_ppm = current_map.get('ppm', 1)
-            original_width_m = current_map.get('width_m', 0)
-            original_height_m = current_map.get('height_m', 0)
-            
-            # Count devices on this map
-            devices_on_map = []
-            try:
-                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    self.apisession,
-                    site_id=site_id,
-                    type="all"
-                )
-                if devices_response.status_code == 200:
-                    all_devices = devices_response.data if isinstance(devices_response.data, list) else []
-                    devices_on_map = [d for d in all_devices if d.get('map_id') == map_id]
-            except Exception:
-                pass
-            
-            # Count zones on this map
-            zones_on_map = []
-            try:
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(
-                    self.apisession,
-                    site_id=site_id
-                )
-                if zones_response.status_code == 200:
-                    zones_on_map = [z for z in zones_response.data if z.get('map_id') == map_id]
-            except Exception:
-                pass
-            
-            # Count beacons
-            beacons_on_map = []
-            vbeacons_on_map = []
-            try:
-                beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons(
-                    self.apisession,
-                    site_id=site_id
-                )
-                if beacons_response.status_code == 200:
-                    beacons_on_map = [b for b in beacons_response.data if b.get('map_id') == map_id]
-                
-                vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(
-                    self.apisession,
-                    site_id=site_id
-                )
-                if vbeacons_response.status_code == 200:
-                    vbeacons_on_map = [v for v in vbeacons_response.data if v.get('map_id') == map_id]
-            except Exception:
-                pass
-            
-            print(f"\nAssets on this map:")
-            print(f"  Devices: {len(devices_on_map)}")
-            print(f"  Zones: {len(zones_on_map)}")
-            print(f"  BLE Beacons: {len(beacons_on_map)}")
-            print(f"  Virtual Beacons: {len(vbeacons_on_map)}")
-            wall_nodes = len(current_map.get('wall_path', {}).get('nodes', []))
-            wayfinding_nodes = len(current_map.get('wayfinding_path', {}).get('nodes', []))
-            print(f"  Wall Nodes: {wall_nodes}")
-            print(f"  Wayfinding Nodes: {wayfinding_nodes}")
-            
-            # Step 2: Get new image file
-            print(f"\n{'-' * 80}")
-            print("STEP 2: Select New Floor Plan Image")
-            print("-" * 80)
-            print("\nEnter the path to the new floor plan image:")
-            print("Supported formats: PNG, JPG, JPEG, GIF")
-            
-            try:
-                file_path = input("File path: ").strip()
-            except EOFError:
-                logging.info("EOF detected during file path input")
-                return
-            
-            # Clean up path
-            file_path = file_path.strip('"').strip("'")
-            
-            if not file_path:
-                print("\n! No file path provided")
-                return
-            
-            if not os.path.exists(file_path):
-                print(f"\n! File not found: {file_path}")
-                return
-            
-            if not os.path.isfile(file_path):
-                print(f"\n! Path is not a file: {file_path}")
-                return
-            
-            # Validate file extension
-            valid_extensions = ['.png', '.jpg', '.jpeg', '.gif']
-            file_ext = os.path.splitext(file_path)[1].lower()
-            if file_ext not in valid_extensions:
-                print(f"\n! Invalid file type: {file_ext}")
-                print(f"Supported types: {', '.join(valid_extensions)}")
-                return
-            
-            # Get new image dimensions
-            try:
-                with Image.open(file_path) as img:
-                    new_width_px, new_height_px = img.size
-                    print(f"\nNew image dimensions: {new_width_px} x {new_height_px} pixels")
-            except Exception as img_err:
-                print(f"\n! Failed to read image dimensions: {img_err}")
-                return
-            
-            # Step 3: Determine scaling mode
-            print(f"\n{'-' * 80}")
-            print("STEP 3: Configure Scaling")
-            print("-" * 80)
-            
-            # Check if dimensions are the same
-            same_dimensions = (new_width_px == original_width_px and new_height_px == original_height_px)
-            
-            if same_dimensions:
-                print("\nImage dimensions match exactly - no coordinate translation needed.")
-                scale_x = 1.0
-                scale_y = 1.0
-                new_ppm = original_ppm
-                scaling_mode = "none"
-            else:
-                print(f"\nDimension comparison:")
-                print(f"  Original: {original_width_px} x {original_height_px} px")
-                print(f"  New:      {new_width_px} x {new_height_px} px")
-                
-                width_ratio = new_width_px / original_width_px if original_width_px > 0 else 1
-                height_ratio = new_height_px / original_height_px if original_height_px > 0 else 1
-                
-                print(f"\n  Width ratio:  {width_ratio:.4f}x ({'+' if width_ratio > 1 else ''}{((width_ratio - 1) * 100):.1f}%)")
-                print(f"  Height ratio: {height_ratio:.4f}x ({'+' if height_ratio > 1 else ''}{((height_ratio - 1) * 100):.1f}%)")
-                
-                # Check if aspect ratio is preserved
-                aspect_diff = abs(width_ratio - height_ratio)
-                if aspect_diff < 0.01:
-                    print(f"\n  Aspect ratio: Preserved (uniform scaling)")
-                else:
-                    print(f"\n  WARNING: Aspect ratio differs by {aspect_diff:.2%}")
-                    print("  This may cause device placements to appear distorted.")
-                
-                print("\nScaling options:")
-                print("  1. Proportional - Scale all coordinates by image ratio (recommended)")
-                print("  2. Preserve Physical - Keep real-world positions, update PPM only")
-                print("  3. Manual PPM - Enter new pixels-per-meter value manually")
-                print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
-                
-                try:
-                    scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
-                except EOFError:
-                    logging.info("EOF detected during scale mode selection")
-                    return
-                
-                if scale_choice == "1":
-                    # Proportional scaling
-                    scale_x = width_ratio
-                    scale_y = height_ratio
-                    new_ppm = original_ppm  # PPM stays same, coordinates scale
-                    scaling_mode = "proportional"
-                    print(f"\nUsing proportional scaling: x={scale_x:.4f}, y={scale_y:.4f}")
-                    
-                elif scale_choice == "2":
-                    # Preserve physical dimensions - adjust PPM
-                    scale_x = 1.0
-                    scale_y = 1.0
-                    if original_width_m and original_width_m > 0:
-                        new_ppm = new_width_px / original_width_m
-                    else:
-                        new_ppm = new_width_px / (original_width_px / original_ppm) if original_ppm else 1
-                    scaling_mode = "preserve_physical"
-                    print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
-                    
-                elif scale_choice == "3":
-                    # Manual PPM entry
-                    try:
-                        new_ppm_input = input(f"Enter new PPM (current: {original_ppm:.2f}): ").strip()
-                        new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
-                    except (ValueError, EOFError):
-                        print("Invalid PPM value, using original")
-                        new_ppm = original_ppm
-                    scale_x = width_ratio
-                    scale_y = height_ratio
-                    scaling_mode = "manual_ppm"
-                    print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={scale_x:.4f}, y={scale_y:.4f}")
-                    
-                else:
-                    # No scaling
-                    scale_x = 1.0
-                    scale_y = 1.0
-                    new_ppm = original_ppm
-                    scaling_mode = "none"
-                    print("\nNo coordinate scaling - image replacement only")
-            
-            # Step 4: Create backup
-            print(f"\n{'-' * 80}")
-            print("STEP 4: Creating Backup")
-            print("-" * 80)
-            
-            print("\nBacking up current map data...")
-            backup_file = self._backup_map_geometry(
-                api_session=self.apisession,
-                site_id=site_id,
-                map_id=map_id,
-                map_name=map_name,
-                backup_reason="pre_replacement"
-            )
-            
-            if backup_file:
-                print(f"Backup saved: {backup_file}")
-            else:
-                print("! Warning: Backup may not have completed fully")
-                try:
-                    proceed = input("Continue anyway? (yes/no): ").strip().lower()
-                    if proceed not in ['yes', 'y']:
-                        print("\n! Operation cancelled")
-                        return
-                except EOFError:
-                    return
-            
-            # Step 5: Preview changes
-            print(f"\n{'-' * 80}")
-            print("STEP 5: Preview Changes")
-            print("-" * 80)
-            
-            print(f"\nMap: {map_name}")
-            print(f"\nImage Changes:")
-            print(f"  Dimensions: {original_width_px}x{original_height_px} -> {new_width_px}x{new_height_px} px")
-            print(f"  PPM: {original_ppm:.2f} -> {new_ppm:.2f}")
-            print(f"  Scaling Mode: {scaling_mode}")
-            
-            if scaling_mode != "none" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"\nCoordinate Translation (scale_x={scale_x:.4f}, scale_y={scale_y:.4f}):")
-                
-                # Preview device translations
-                if devices_on_map:
-                    print(f"\n  Devices ({len(devices_on_map)}):")
-                    for idx, device in enumerate(devices_on_map[:5]):  # Show first 5
-                        old_x = device.get('x', 0)
-                        old_y = device.get('y', 0)
-                        new_x = old_x * scale_x
-                        new_y = old_y * scale_y
-                        name = device.get('name', device.get('mac', 'Unknown'))
-                        print(f"    {name}: ({old_x:.1f}, {old_y:.1f}) -> ({new_x:.1f}, {new_y:.1f})")
-                    if len(devices_on_map) > 5:
-                        print(f"    ... and {len(devices_on_map) - 5} more devices")
-                
-                # Preview zone translations
-                if zones_on_map:
-                    print(f"\n  Zones ({len(zones_on_map)}):")
-                    for idx, zone in enumerate(zones_on_map[:3]):
-                        zone_name = zone.get('name', 'Unnamed')
-                        vertex_count = len(zone.get('vertices', []))
-                        print(f"    {zone_name}: {vertex_count} vertices will be scaled")
-                    if len(zones_on_map) > 3:
-                        print(f"    ... and {len(zones_on_map) - 3} more zones")
-                
-                if wall_nodes > 0 or wayfinding_nodes > 0:
-                    print(f"\n  Geometry:")
-                    if wall_nodes > 0:
-                        print(f"    {wall_nodes} wall nodes will be scaled")
-                    if wayfinding_nodes > 0:
-                        print(f"    {wayfinding_nodes} wayfinding nodes will be scaled")
-            else:
-                print("\n  No coordinate changes required (same dimensions or no scaling selected)")
-            
-            # Step 6: Confirm and apply
-            print(f"\n{'-' * 80}")
-            print("STEP 6: Confirm and Apply")
-            print("-" * 80)
-            
-            print("\n! WARNING: This will modify the map and update all device/zone positions.")
-            print("! A backup has been saved. Review the preview above before proceeding.")
-            
-            try:
-                confirm = input("\nType 'REPLACE' to proceed: ").strip()
-            except EOFError:
-                logging.info("EOF detected during confirmation")
-                return
-            
-            if confirm != "REPLACE":
-                print("\n! Operation cancelled")
-                return
-            
-            logging.info(f"Map replacement confirmed for map {map_id} with scaling_mode={scaling_mode}")
-            
-            # Apply changes
-            print("\nApplying changes...")
-            errors = []
-            
-            # 6a. Update map properties (dimensions, PPM)
-            print("  Updating map properties...")
-            try:
-                map_update = {
-                    'width': new_width_px,
-                    'height': new_height_px,
-                    'ppm': new_ppm
-                }
-                
-                # Calculate new physical dimensions
-                if new_ppm and new_ppm > 0:
-                    map_update['width_m'] = new_width_px / new_ppm
-                    map_update['height_m'] = new_height_px / new_ppm
-                
-                # Scale wall paths if needed
-                if scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                    if current_map.get('wall_path', {}).get('nodes'):
-                        scaled_wall_path = {'nodes': []}
-                        for node in current_map['wall_path']['nodes']:
-                            scaled_node = {}
-                            for key, value in node.items():
-                                if key == 'x' and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_x
-                                elif key == 'y' and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_y
-                                else:
-                                    scaled_node[key] = value
-                            scaled_wall_path['nodes'].append(scaled_node)
-                        map_update['wall_path'] = scaled_wall_path
-                        logging.debug(f"Scaled {len(scaled_wall_path['nodes'])} wall nodes")
-                    
-                    if current_map.get('wayfinding_path', {}).get('nodes'):
-                        scaled_wf_path = {'nodes': []}
-                        for node in current_map['wayfinding_path']['nodes']:
-                            scaled_node = {}
-                            for key, value in node.items():
-                                if key == 'x' and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_x
-                                elif key == 'y' and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_y
-                                else:
-                                    scaled_node[key] = value
-                            scaled_wf_path['nodes'].append(scaled_node)
-                        map_update['wayfinding_path'] = scaled_wf_path
-                        logging.debug(f"Scaled {len(scaled_wf_path['nodes'])} wayfinding nodes")
-                
-                update_response = mistapi.api.v1.sites.maps.updateSiteMap(
-                    self.apisession,
-                    site_id=site_id,
-                    map_id=map_id,
-                    body=map_update
-                )
-                
-                if update_response.status_code == 200:
-                    print("    Map properties updated successfully")
-                else:
-                    errors.append(f"Map update failed: HTTP {update_response.status_code}")
-                    print(f"    ! Failed to update map: HTTP {update_response.status_code}")
-                    
-            except Exception as map_err:
-                errors.append(f"Map update error: {map_err}")
-                print(f"    ! Error updating map: {map_err}")
-            
-            # 6b. Upload new image
-            print("  Uploading new image...")
-            try:
-                upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
-                    self.apisession,
-                    site_id=site_id,
-                    map_id=map_id,
-                    file=file_path
-                )
-                
-                if upload_response.status_code in [200, 201]:
-                    print("    Image uploaded successfully")
-                else:
-                    errors.append(f"Image upload failed: HTTP {upload_response.status_code}")
-                    print(f"    ! Failed to upload image: HTTP {upload_response.status_code}")
-                    
-            except Exception as img_err:
-                errors.append(f"Image upload error: {img_err}")
-                print(f"    ! Error uploading image: {img_err}")
-            
-            # 6c. Update device positions
-            if devices_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(devices_on_map)} device positions...")
-                devices_updated = 0
-                devices_failed = 0
-                
-                for device in devices_on_map:
-                    try:
-                        device_id = device.get('id')
-                        old_x = device.get('x', 0)
-                        old_y = device.get('y', 0)
-                        new_x = old_x * scale_x
-                        new_y = old_y * scale_y
-                        
-                        device_update = {
-                            'x': new_x,
-                            'y': new_y
-                        }
-                        
-                        update_dev_response = mistapi.api.v1.sites.devices.updateSiteDevice(
-                            self.apisession,
-                            site_id=site_id,
-                            device_id=device_id,
-                            body=device_update
-                        )
-                        
-                        if update_dev_response.status_code == 200:
-                            devices_updated += 1
-                        else:
-                            devices_failed += 1
-                            logging.warning(f"Device update failed for {device_id}: HTTP {update_dev_response.status_code}")
-                            
-                    except Exception as dev_err:
-                        devices_failed += 1
-                        logging.error(f"Device update error for {device.get('id')}: {dev_err}")
-                
-                print(f"    Devices updated: {devices_updated}, failed: {devices_failed}")
-                if devices_failed > 0:
-                    errors.append(f"{devices_failed} device updates failed")
-            
-            # 6d. Update zone positions
-            if zones_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(zones_on_map)} zone positions...")
-                zones_updated = 0
-                zones_failed = 0
-                
-                for zone in zones_on_map:
-                    try:
-                        zone_id = zone.get('id')
-                        vertices = zone.get('vertices', [])
-                        
-                        if vertices:
-                            scaled_vertices = []
-                            for vertex in vertices:
-                                scaled_vertex = {
-                                    'x': vertex.get('x', 0) * scale_x,
-                                    'y': vertex.get('y', 0) * scale_y
-                                }
-                                scaled_vertices.append(scaled_vertex)
-                            
-                            zone_update = {'vertices': scaled_vertices}
-                            
-                            update_zone_response = mistapi.api.v1.sites.zones.updateSiteZone(
-                                self.apisession,
-                                site_id=site_id,
-                                zone_id=zone_id,
-                                body=zone_update
-                            )
-                            
-                            if update_zone_response.status_code == 200:
-                                zones_updated += 1
-                            else:
-                                zones_failed += 1
-                                logging.warning(f"Zone update failed for {zone_id}: HTTP {update_zone_response.status_code}")
-                        else:
-                            zones_updated += 1  # No vertices to update
-                            
-                    except Exception as zone_err:
-                        zones_failed += 1
-                        logging.error(f"Zone update error for {zone.get('id')}: {zone_err}")
-                
-                print(f"    Zones updated: {zones_updated}, failed: {zones_failed}")
-                if zones_failed > 0:
-                    errors.append(f"{zones_failed} zone updates failed")
-            
-            # 6e. Update beacon positions
-            if beacons_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(beacons_on_map)} beacon positions...")
-                beacons_updated = 0
-                beacons_failed = 0
-                
-                for beacon in beacons_on_map:
-                    try:
-                        beacon_id = beacon.get('id')
-                        old_x = beacon.get('x', 0)
-                        old_y = beacon.get('y', 0)
-                        
-                        beacon_update = {
-                            'x': old_x * scale_x,
-                            'y': old_y * scale_y
-                        }
-                        
-                        update_beacon_response = mistapi.api.v1.sites.beacons.updateSiteBeacon(
-                            self.apisession,
-                            site_id=site_id,
-                            beacon_id=beacon_id,
-                            body=beacon_update
-                        )
-                        
-                        if update_beacon_response.status_code == 200:
-                            beacons_updated += 1
-                        else:
-                            beacons_failed += 1
-                            
-                    except Exception as beacon_err:
-                        beacons_failed += 1
-                        logging.error(f"Beacon update error: {beacon_err}")
-                
-                print(f"    Beacons updated: {beacons_updated}, failed: {beacons_failed}")
-                if beacons_failed > 0:
-                    errors.append(f"{beacons_failed} beacon updates failed")
-            
-            # 6f. Update virtual beacon positions
-            if vbeacons_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(vbeacons_on_map)} virtual beacon positions...")
-                vbeacons_updated = 0
-                vbeacons_failed = 0
-                
-                for vbeacon in vbeacons_on_map:
-                    try:
-                        vbeacon_id = vbeacon.get('id')
-                        old_x = vbeacon.get('x', 0)
-                        old_y = vbeacon.get('y', 0)
-                        
-                        vbeacon_update = {
-                            'x': old_x * scale_x,
-                            'y': old_y * scale_y
-                        }
-                        
-                        update_vbeacon_response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
-                            self.apisession,
-                            site_id=site_id,
-                            vbeacon_id=vbeacon_id,
-                            body=vbeacon_update
-                        )
-                        
-                        if update_vbeacon_response.status_code == 200:
-                            vbeacons_updated += 1
-                        else:
-                            vbeacons_failed += 1
-                            
-                    except Exception as vbeacon_err:
-                        vbeacons_failed += 1
-                        logging.error(f"Virtual beacon update error: {vbeacon_err}")
-                
-                print(f"    Virtual beacons updated: {vbeacons_updated}, failed: {vbeacons_failed}")
-                if vbeacons_failed > 0:
-                    errors.append(f"{vbeacons_failed} virtual beacon updates failed")
-            
-            # Summary
-            print(f"\n{'=' * 80}")
-            print("MAP REPLACEMENT COMPLETE")
-            print("=" * 80)
-            print(f"\nMap: {map_name}")
-            print(f"New Dimensions: {new_width_px} x {new_height_px} px")
-            print(f"New PPM: {new_ppm:.2f}")
-            print(f"Scaling Mode: {scaling_mode}")
-            
-            if errors:
-                print(f"\n! Completed with {len(errors)} warning(s):")
-                for err in errors:
-                    print(f"  - {err}")
-                print(f"\nBackup file: {backup_file}")
-                print("Use the backup to restore if needed.")
-            else:
-                print("\nAll changes applied successfully!")
-                print(f"Backup file: {backup_file}")
-            
-            logging.info(f"Map replacement wizard completed for {map_id}: scaling_mode={scaling_mode}, errors={len(errors)}")
-            
-        except EOFError:
-            logging.info("EOF detected in map replacement wizard")
-            return
-        except ImportError as import_err:
-            print(f"\n! Missing required dependency: {import_err}")
-            print("Install with: pip install Pillow")
-            logging.error(f"Map replacement wizard import error: {import_err}")
-            return
-        except Exception as e:
-            logging.error(f"Error in map replacement wizard: {e}", exc_info=True)
-            print(f"\n! Error: {e}")
-    
+        """Entry point for Intelligent Map Replacement Wizard."""
+        wizard = MapReplacementWizard(self)
+        wizard.execute()
+
     def maps_without_images_report(self):
         """Generate report of maps that don't have uploaded images"""
         print("\n" + "-" * 80)
@@ -27921,13 +28201,13 @@ class MapsManager:
         devices: list,
         zones: list,
         clients: list,
-        site_id: str = None,
-        site_name: str = None,
-        map_id: str = None,
-        coverage_data: dict = None,
-        all_maps: list = None,
-        all_sites: list = None,
-        config: MapViewerConfig = None
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
+        map_id: Optional[str] = None,
+        coverage_data: Optional[dict] = None,
+        all_maps: Optional[list] = None,
+        all_sites: Optional[list] = None,
+        config: Optional[MapViewerConfig] = None
     ):
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap
         
@@ -28180,7 +28460,8 @@ class MapsManager:
         # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
         # by inverting the Y-axis in the layout
         if 'url' in map_data:
-            logging.debug(f"Adding map background image: {map_data.get('url')[:100]}...")
+            map_url = map_data.get('url', '')
+            logging.debug(f"Adding map background image: {map_url[:100] if map_url else 'empty URL'}...")
             fig.add_layout_image(
                 source=map_data['url'],
                 x=0, y=0,
@@ -35052,7 +35333,938 @@ def bulk_upgrade_switch_firmware_by_site():
     return firmware_manager.execute_switch_firmware_upgrade_with_mode_selection()
 
 
-
+class BulkAPFirmwareUpgrader:
+    """
+    Bulk AP Firmware Upgrade Manager
+    
+    Manages the complete workflow for upgrading AP firmware across one or more sites:
+    - Site selection (override, file-based, or interactive)
+    - AP discovery and grouping by model
+    - Firmware version analysis and selection
+    - Cross-model compatibility analysis
+    - Advanced upgrade configuration (strategies, P2P, scheduling)
+    - Upgrade execution and tracking
+    - Auto-upgrade configuration
+    """
+    
+    def __init__(self, org_id: str, sites_override: Optional[list] = None):
+        """Initialize the bulk AP firmware upgrader."""
+        self.org_id = org_id
+        self.sites_override = sites_override
+        
+        # Site context
+        self.sites_to_upgrade: list = []
+        self.all_sites_aps: dict = {}
+        
+        # AP data
+        self.all_aps: list = []
+        self.aps_by_model: dict = {}
+        self.ap_versions: dict = {}
+        
+        # Firmware data
+        self.available_versions: list = []
+        self.model_version_ranges: dict = {}
+        
+        # Upgrade plan
+        self.upgrade_plan: dict = {}
+        self.upgrade_config: dict = {}
+        self.upgrade_ids: list = []
+        
+        # Results tracking
+        self.results: list = []
+        self.successful_upgrades: int = 0
+        self.failed_upgrades: int = 0
+    
+    def execute(self) -> None:
+        """Execute the bulk AP firmware upgrade workflow."""
+        logging.info("Starting advanced bulk AP firmware upgrade by site...")
+        logging.debug("bulk_upgrade_ap_firmware_by_site_impl() initiated")
+        logging.debug(f"Using org_id: {self.org_id}")
+        
+        try:
+            if not self._step1_determine_sites():
+                return
+            if not self._step2_discover_aps():
+                return
+            if not self._step3_fetch_firmware_stats():
+                return
+            if not self._step4_fetch_available_firmware():
+                return
+            if not self._step5_select_firmware_versions():
+                return
+            if not self._step6_configure_upgrade():
+                return
+            if not self._step7_confirm_upgrade():
+                return
+            self._step8_execute_upgrades()
+            self._step9_configure_auto_upgrade()
+            self._step10_offer_status_check()
+            self._step11_write_results()
+        except KeyboardInterrupt:
+            print("\n Operation cancelled by user.")
+            logging.info("Bulk AP firmware upgrade cancelled by user interrupt")
+    
+    # =========================================================================
+    # STEP 1: SITE SELECTION
+    # =========================================================================
+    
+    def _step1_determine_sites(self) -> bool:
+        """Determine which sites to upgrade based on mode."""
+        if self.sites_override is not None:
+            return self._use_override_sites()
+        return self._determine_sites_from_file_or_interactive()
+    
+    def _use_override_sites(self) -> bool:
+        """Use template-provided sites for upgrade."""
+        if self.sites_override is None:
+            return False
+        self.sites_to_upgrade = self.sites_override
+        print(f"! Template-based upgrade mode - using {len(self.sites_to_upgrade)} provided sites")
+        logging.info(f"Using template-provided sites: {len(self.sites_to_upgrade)} sites")
+        for site in self.sites_to_upgrade:
+            logging.debug(f"  Template site: {site['name']} (ID: {site['id']})")
+        return True
+    
+    def _determine_sites_from_file_or_interactive(self) -> bool:
+        """Determine sites from file or interactive selection."""
+        bulk_upgrade_file = "APUpgradeSiteList.CSV"
+        bulk_upgrade_file_path = FilePathUtils.get_csv_path(bulk_upgrade_file)
+        
+        if os.path.exists(bulk_upgrade_file_path):
+            return self._load_sites_from_file(bulk_upgrade_file, bulk_upgrade_file_path)
+        return self._select_site_interactively(bulk_upgrade_file)
+    
+    def _load_sites_from_file(self, filename: str, filepath: str) -> bool:
+        """Load sites from bulk upgrade file."""
+        print(f"! Found {filename} - Loading sites for bulk upgrade...")
+        logging.info(f"Found {filename} file, proceeding with bulk site upgrade")
+        
+        org_sites = self._fetch_org_sites_for_lookup()
+        if not org_sites:
+            return False
+        
+        site_names = self._read_site_names_from_file(filepath)
+        if not site_names:
+            return False
+        
+        return self._resolve_site_names(site_names, org_sites)
+    
+    def _fetch_org_sites_for_lookup(self) -> Optional[dict]:
+        """Fetch organization sites for name-to-ID lookup."""
+        print(f"   Fetching organization sites for name-to-ID lookup...")
+        try:
+            all_org_sites = fetch_all_sites_with_limit(self.org_id)
+            site_name_to_id = {}
+            for site in all_org_sites:
+                site_name = site.get("name", "").strip()
+                site_id = site.get("id", "").strip()
+                if site_name and site_id:
+                    site_name_to_id[site_name] = site_id
+            logging.info(f"Built lookup table for {len(site_name_to_id)} organization sites")
+            return site_name_to_id
+        except Exception as e:
+            print(f"! Failed to fetch organization sites: {e}")
+            logging.error(f"Failed to fetch organization sites for lookup: {e}")
+            return None
+    
+    def _read_site_names_from_file(self, filepath: str) -> Optional[list]:
+        """Read site names from bulk upgrade file."""
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                site_names = [line.strip() for line in f if line.strip()]
+            if not site_names:
+                print(f"! No site names found in file")
+                return None
+            print(f"   Read {len(site_names)} site names from file")
+            return site_names
+        except Exception as e:
+            print(f"! Failed to read file: {e}")
+            logging.error(f"Failed to read bulk upgrade file: {e}")
+            return None
+    
+    def _resolve_site_names(self, site_names: list, site_lookup: dict) -> bool:
+        """Resolve site names to site IDs."""
+        missing_sites = []
+        for site_name in site_names:
+            if site_name in site_lookup:
+                self.sites_to_upgrade.append({'name': site_name, 'id': site_lookup[site_name]})
+            else:
+                missing_sites.append(site_name)
+        
+        if missing_sites:
+            self._report_missing_sites(missing_sites, site_lookup)
+        
+        if not self.sites_to_upgrade:
+            print(f"! No valid sites found")
+            return False
+        
+        print(f"! Successfully resolved {len(self.sites_to_upgrade)} site(s) for bulk upgrade")
+        return True
+    
+    def _report_missing_sites(self, missing: list, available: dict) -> None:
+        """Report sites that weren't found."""
+        print(f"   Warning: {len(missing)} site(s) not found:")
+        for site in missing:
+            print(f"      !? '{site}'")
+    
+    def _select_site_interactively(self, filename: str) -> bool:
+        """Select site interactively when no file exists."""
+        print(f"! {filename} not found - Single site mode")
+        print(f"   To enable bulk mode, create '{filename}' in data/ folder")
+        
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            print(" No site selected. Exiting.")
+            return False
+        
+        site_name = self._get_site_name(site_id)
+        self.sites_to_upgrade = [{'name': site_name, 'id': site_id}]
+        return True
+    
+    def _get_site_name(self, site_id: str) -> str:
+        """Get site name from site ID."""
+        try:
+            sites = fetch_all_sites_with_limit(self.org_id)
+            return next((s["name"] for s in sites if s.get("id") == site_id), site_id)
+        except Exception:
+            return site_id
+    
+    # =========================================================================
+    # STEP 2: AP DISCOVERY
+    # =========================================================================
+    
+    def _step2_discover_aps(self) -> bool:
+        """Discover APs across all selected sites."""
+        print(f"\n  Fetching APs across {len(self.sites_to_upgrade)} site(s)...")
+        
+        for site_info in self.sites_to_upgrade:
+            self._fetch_aps_for_site(site_info)
+        
+        if not self.all_aps:
+            print(" No APs found across any selected sites.")
+            return False
+        
+        self._display_ap_discovery_summary()
+        return True
+    
+    def _fetch_aps_for_site(self, site_info: dict) -> None:
+        """Fetch APs for a single site."""
+        site_id, site_name = site_info['id'], site_info['name']
+        try:
+            print(f"   Fetching APs at site '{site_name}'...")
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
+            site_aps = mistapi.get_all(response=response, mist_session=apisession)
+            
+            if site_aps:
+                for ap in site_aps:
+                    ap['_site_id'] = site_id
+                    ap['_site_name'] = site_name
+                self.all_aps.extend(site_aps)
+                self.all_sites_aps[site_id] = {'name': site_name, 'aps': site_aps, 'count': len(site_aps)}
+                print(f"      Found {len(site_aps)} APs at '{site_name}'")
+            else:
+                self.all_sites_aps[site_id] = {'name': site_name, 'aps': [], 'count': 0}
+                print(f"      No APs found at site '{site_name}'")
+        except Exception as e:
+            self.all_sites_aps[site_id] = {'name': site_name, 'aps': [], 'count': 0, 'error': str(e)}
+            print(f"      Failed to fetch APs for site '{site_name}': {e}")
+    
+    def _display_ap_discovery_summary(self) -> None:
+        """Display AP discovery summary."""
+        total_aps = len(self.all_aps)
+        sites_with_aps = len([s for s in self.all_sites_aps.values() if s['count'] > 0])
+        
+        print(f"\n  AP Discovery Summary:")
+        print(f"   !? Total APs found: {total_aps}")
+        print(f"   !? Sites with APs: {sites_with_aps}/{len(self.sites_to_upgrade)}")
+        
+        for site_data in self.all_sites_aps.values():
+            status = f" (Error: {site_data['error']})" if 'error' in site_data else ""
+            print(f"   !? {site_data['name']}: {site_data['count']} APs{status}")
+    
+    # =========================================================================
+    # STEP 3: FIRMWARE STATS COLLECTION
+    # =========================================================================
+    
+    def _step3_fetch_firmware_stats(self) -> bool:
+        """Fetch firmware stats and group APs by model."""
+        print(f"\n  Getting current firmware versions from device statistics...")
+        
+        stats_lookup = self._fetch_all_ap_stats()
+        self._process_aps_with_stats(stats_lookup)
+        self._display_model_summary()
+        return True
+    
+    def _fetch_all_ap_stats(self) -> dict:
+        """Fetch device stats for all sites."""
+        stats_lookup = {}
+        for site_id, site_data in self.all_sites_aps.items():
+            if site_data['count'] == 0:
+                continue
+            site_stats = self._fetch_site_ap_stats(site_id, site_data['name'])
+            stats_lookup.update(site_stats)
+        return stats_lookup
+    
+    def _fetch_site_ap_stats(self, site_id: str, site_name: str) -> dict:
+        """Fetch AP stats for a single site."""
+        lookup = {}
+        try:
+            print(f"   Fetching device statistics for APs at '{site_name}'...")
+            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                apisession, site_id, type="ap", limit=1000
+            )
+            site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+            if site_stats:
+                for stats in site_stats:
+                    device_id = stats.get("id") or stats.get("device_id") or stats.get("mac")
+                    if device_id:
+                        lookup[device_id] = stats
+        except Exception as e:
+            logging.error(f"Failed to fetch stats for site {site_name}: {e}")
+        return lookup
+    
+    def _process_aps_with_stats(self, stats_lookup: dict) -> None:
+        """Process APs and extract version information."""
+        for ap in self.all_aps:
+            model = ap.get("model", "Unknown")
+            device_id = ap.get("id")
+            
+            if model not in self.aps_by_model:
+                self.aps_by_model[model] = []
+            self.aps_by_model[model].append(ap)
+            
+            version = self._get_ap_version(ap, stats_lookup)
+            self.ap_versions[device_id] = version
+    
+    def _get_ap_version(self, ap: dict, stats_lookup: dict) -> str:
+        """Get firmware version for an AP."""
+        device_id = ap.get("id")
+        device_mac = ap.get("mac")
+        
+        for key in [device_id, device_mac]:
+            if key and key in stats_lookup:
+                stats = stats_lookup[key]
+                if isinstance(stats, dict):
+                    return stats.get("version", "Unknown")
+        return "Unknown"
+    
+    def _display_model_summary(self) -> None:
+        """Display summary of AP models found."""
+        print(f"\n  AP Models found across {len(self.sites_to_upgrade)} site(s):")
+        for model, devices in self.aps_by_model.items():
+            versions = set(self.ap_versions.get(d.get("id"), "Unknown") for d in devices)
+            versions_text = ", ".join(sorted(versions, reverse=True)) if "Unknown" not in versions else "Unknown"
+            print(f"   !? {model}: {len(devices)} devices (Current versions: {versions_text})")
+    
+    # =========================================================================
+    # STEP 4: AVAILABLE FIRMWARE VERSIONS
+    # =========================================================================
+    
+    def _step4_fetch_available_firmware(self) -> bool:
+        """Fetch available firmware versions from API."""
+        print(f"\n  Fetching available firmware versions...")
+        try:
+            response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, self.org_id)
+            self.available_versions = response.data
+            self._build_model_version_ranges()
+            return True
+        except Exception as e:
+            print(f"! Failed to fetch available firmware versions: {e}")
+            return False
+    
+    def _build_model_version_ranges(self) -> None:
+        """Build model-to-versions mapping."""
+        if not self.available_versions:
+            return
+        for version_info in self.available_versions:
+            if not isinstance(version_info, dict):
+                continue
+            models = version_info.get("models", [])
+            model = version_info.get("model")
+            version = version_info.get("version", "Unknown")
+            
+            for m in (models if models else ([model] if model else [])):
+                if m:
+                    if m not in self.model_version_ranges:
+                        self.model_version_ranges[m] = []
+                    self.model_version_ranges[m].append(version)
+    
+    # =========================================================================
+    # STEP 5: FIRMWARE VERSION SELECTION
+    # =========================================================================
+    
+    def _step5_select_firmware_versions(self) -> bool:
+        """Let user select firmware version for each model."""
+        print(f"\n  Firmware Version Selection:")
+        print("=" * 60)
+        
+        self._display_current_version_summary()
+        self._display_compatibility_analysis()
+        
+        for model, devices in self.aps_by_model.items():
+            if not self._select_version_for_model(model, devices):
+                continue
+        
+        if not self.upgrade_plan:
+            print(" No firmware upgrades selected. Exiting.")
+            return False
+        
+        return self._validate_upgrade_plan()
+    
+    def _display_current_version_summary(self) -> None:
+        """Display current firmware status summary."""
+        print(f"! Current Firmware Status Summary:")
+        all_versions = {}
+        for model, devices in self.aps_by_model.items():
+            for device in devices:
+                version = self.ap_versions.get(device.get("id"), "Unknown")
+                if version not in all_versions:
+                    all_versions[version] = []
+                all_versions[version].append(f"{device.get('name', 'Unnamed')} ({model})")
+        
+        for version, device_list in sorted(all_versions.items(), reverse=True):
+            print(f"   Version {version}: {len(device_list)} devices")
+    
+    def _display_compatibility_analysis(self) -> None:
+        """Display cross-model compatibility analysis."""
+        site_models = set(self.aps_by_model.keys())
+        matching_models = site_models.intersection(set(self.model_version_ranges.keys()))
+        
+        if len(matching_models) <= 1:
+            return
+        
+        print(f"\n  Version Compatibility Analysis:")
+        universal = self._find_universal_versions(matching_models)
+        if universal:
+            print(f"   UNIVERSAL versions (compatible with ALL models):")
+            print(f"      {', '.join(sorted(universal, reverse=True)[:5])}")
+    
+    def _find_universal_versions(self, models: set) -> list:
+        """Find versions compatible with all models."""
+        all_versions = set()
+        for model in models:
+            if model in self.model_version_ranges:
+                all_versions.update(self.model_version_ranges[model])
+        
+        universal = []
+        for version in all_versions:
+            if all(version in self.model_version_ranges.get(m, []) for m in models):
+                universal.append(version)
+        return universal
+    
+    def _select_version_for_model(self, model: str, devices: list) -> bool:
+        """Select firmware version for a specific model."""
+        model_versions = self._get_versions_for_model(model)
+        if not model_versions:
+            print(f"!  No firmware versions found for model '{model}' - skipping")
+            return False
+        
+        print(f"\n  Model: {model} ({len(devices)} devices)")
+        self._display_model_versions(model, model_versions)
+        
+        return self._get_user_version_selection(model, devices, model_versions)
+    
+    def _get_versions_for_model(self, model: str) -> list:
+        """Get deduplicated, sorted versions for a model."""
+        raw_versions = []
+        for v in self.available_versions:
+            if isinstance(v, dict):
+                models = v.get("models", [])
+                single = v.get("model")
+                if model in models or single == model:
+                    raw_versions.append(v)
+        
+        # Deduplicate
+        version_dict = {}
+        for v in raw_versions:
+            num = v.get("version", "Unknown")
+            if num not in version_dict:
+                version_dict[num] = v
+        
+        # Sort by version
+        versions = list(version_dict.values())
+        try:
+            versions.sort(key=lambda x: tuple(map(int, x.get("version", "0").split("."))), reverse=True)
+        except ValueError:
+            versions.sort(key=lambda x: x.get("version", ""), reverse=True)
+        return versions
+    
+    def _display_model_versions(self, model: str, versions: list) -> None:
+        """Display available versions for a model."""
+        current = set(self.ap_versions.get(d.get("id"), "Unknown") 
+                     for d in self.aps_by_model[model])
+        print(f"   Current versions: {', '.join(sorted(current, reverse=True))}")
+        print(f"   Available versions ({len(versions)} found):")
+        
+        for idx, v in enumerate(versions[:15]):  # Show top 15
+            num = v.get("version", "Unknown")
+            indicators = []
+            if v.get("recommended"):
+                indicators.append("RECOMMENDED")
+            if num in current:
+                indicators.append("CURRENT")
+            ind_text = f" [{', '.join(indicators)}]" if indicators else ""
+            print(f"      [{idx}] {num}{ind_text}")
+    
+    def _get_user_version_selection(self, model: str, devices: list, versions: list) -> bool:
+        """Get user's version selection for a model."""
+        while True:
+            try:
+                user_input = input(f"Select version for {model} (0-{len(versions)-1}, 's' to skip): ").strip().lower()
+                if user_input == 's':
+                    print(f"!  Skipping firmware upgrade for {model}")
+                    return False
+                
+                idx = int(user_input)
+                if 0 <= idx < len(versions):
+                    selected = versions[idx]
+                    self.upgrade_plan[model] = {
+                        "version": selected.get("version"),
+                        "version_info": selected,
+                        "devices": devices
+                    }
+                    print(f"! Selected version {selected.get('version')} for {model}")
+                    return True
+                print(f"! Invalid selection.")
+            except ValueError:
+                print(" Invalid input.")
+            except KeyboardInterrupt:
+                return False
+    
+    def _validate_upgrade_plan(self) -> bool:
+        """Validate and display upgrade plan summary."""
+        print(f"\n  Upgrade Plan Summary:")
+        print("=" * 60)
+        
+        total = sum(len(p["devices"]) for p in self.upgrade_plan.values())
+        versions = set(p["version"] for p in self.upgrade_plan.values())
+        
+        for model, plan in self.upgrade_plan.items():
+            print(f"   {model}: {len(plan['devices'])} devices firmware {plan['version']}")
+        
+        print(f"\n   Total: {total} devices, {len(versions)} version(s)")
+        
+        if len(versions) > 1:
+            confirm = input("\n  Proceed with multi-version upgrade? (y/n): ").strip().lower() or "y"
+            if confirm not in ['y', 'yes']:
+                return False
+        return True
+    
+    # =========================================================================
+    # STEP 6: UPGRADE CONFIGURATION
+    # =========================================================================
+    
+    def _step6_configure_upgrade(self) -> bool:
+        """Configure advanced upgrade options."""
+        print(f"\n  Advanced Upgrade Configuration:")
+        print("=" * 60)
+        
+        self._select_strategy()
+        self._configure_strategy_options()
+        self._configure_p2p()
+        self._configure_scheduling()
+        self._configure_force_option()
+        self._display_final_config()
+        return True
+    
+    def _select_strategy(self) -> None:
+        """Select upgrade strategy."""
+        strategies = {
+            "1": ("big_bang", "Upgrade all at once"),
+            "2": ("canary", "Phased rollout"),
+            "3": ("rrm", "RRM-aware upgrade"),
+            "4": ("serial", "One at a time")
+        }
+        
+        print(" Select upgrade strategy:")
+        for key, (name, desc) in strategies.items():
+            print(f"   [{key}] {name.upper()}: {desc}")
+        
+        choice = input("Select (1-4, default=3): ").strip() or "3"
+        strategy = strategies.get(choice, strategies["3"])[0]
+        
+        self.upgrade_config = {
+            "strategy": strategy,
+            "force": False,
+            "enable_p2p": True,
+            "max_failure_percentage": 5,
+            "start_time": None,
+            "canary_phases": [1, 10, 50, 100],
+            "p2p_cluster_size": 10,
+            "reboot": True
+        }
+        print(f"! Selected strategy: {strategy.upper()}")
+    
+    def _configure_strategy_options(self) -> None:
+        """Configure strategy-specific options."""
+        if self.upgrade_config["strategy"] == "canary":
+            self._configure_canary_options()
+        elif self.upgrade_config["strategy"] == "rrm":
+            self._configure_rrm_options()
+    
+    def _configure_canary_options(self) -> None:
+        """Configure canary strategy options."""
+        print(f"\n  Canary Strategy Configuration:")
+        try:
+            failure = input(f"Max failure % (default=5): ").strip()
+            if failure:
+                self.upgrade_config["max_failure_percentage"] = int(failure)
+        except ValueError:
+            pass
+    
+    def _configure_rrm_options(self) -> None:
+        """Configure RRM strategy options."""
+        print(f"\n  RRM Strategy Configuration:")
+        self.upgrade_config["rrm_node_order"] = "fringe_to_center"
+        self.upgrade_config["rrm_first_batch_percentage"] = 2
+        self.upgrade_config["rrm_max_batch_percentage"] = 10
+    
+    def _configure_p2p(self) -> None:
+        """Configure P2P settings."""
+        print(f"\n  Peer-to-Peer Configuration:")
+        enable = input("Enable P2P firmware sharing? (Y/n): ").strip().lower()
+        self.upgrade_config["enable_p2p"] = enable not in ['n', 'no']
+        if self.upgrade_config["enable_p2p"]:
+            print(" P2P enabled")
+    
+    def _configure_scheduling(self) -> None:
+        """Configure scheduling options."""
+        print(f"\n  Scheduling Options:")
+        schedule = input("Schedule for later? (y/N): ").strip().lower()
+        if schedule in ['y', 'yes']:
+            self._get_scheduled_time()
+    
+    def _get_scheduled_time(self) -> None:
+        """Get scheduled start time from user."""
+        try:
+            time_input = input("Start time (+minutes or YYYY-MM-DD HH:MM): ").strip()
+            if time_input.startswith('+'):
+                minutes = int(time_input[1:])
+                self.upgrade_config["start_time"] = int(time.time()) + (minutes * 60)
+            else:
+                dt = datetime.strptime(time_input, '%Y-%m-%d %H:%M')
+                self.upgrade_config["start_time"] = int(dt.timestamp())
+        except ValueError:
+            print(" Invalid format, scheduling immediately")
+    
+    def _configure_force_option(self) -> None:
+        """Configure force upgrade option."""
+        force = input("Force upgrade even if same version? (y/N): ").strip().lower()
+        self.upgrade_config["force"] = force in ['y', 'yes']
+    
+    def _display_final_config(self) -> None:
+        """Display final upgrade configuration."""
+        print(f"\n  Final Configuration:")
+        print(f"Strategy: {self.upgrade_config['strategy'].upper()}")
+        print(f"P2P: {self.upgrade_config['enable_p2p']}")
+        print(f"Force: {self.upgrade_config['force']}")
+    
+    # =========================================================================
+    # STEP 7: CONFIRMATION
+    # =========================================================================
+    
+    def _step7_confirm_upgrade(self) -> bool:
+        """Display warnings and get user confirmation."""
+        total = sum(len(p["devices"]) for p in self.upgrade_plan.values())
+        
+        self._display_upgrade_warnings(total)
+        self._display_final_plan()
+        
+        return self._get_upgrade_confirmation(total)
+    
+    def _display_upgrade_warnings(self, total: int) -> None:
+        """Display critical upgrade warnings."""
+        print(f"\n" + "??" * 50)
+        print(" CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE:")
+        print("!? APs will REBOOT during upgrade")
+        print("!? Wi-Fi connectivity will be TEMPORARILY LOST")
+        print("!? Upgrades take 5-15 minutes per device")
+        print(f"!? Strategy: {self.upgrade_config['strategy'].upper()}")
+        print("??" * 50)
+    
+    def _display_final_plan(self) -> None:
+        """Display final upgrade plan."""
+        print(f"\n  Final Plan:")
+        if len(self.sites_to_upgrade) > 1:
+            print(f"   Bulk upgrade: {len(self.sites_to_upgrade)} sites")
+        for model, plan in self.upgrade_plan.items():
+            print(f"   {model}: {len(plan['devices'])} devices firmware {plan['version']}")
+    
+    def _get_upgrade_confirmation(self, total: int) -> bool:
+        """Get user confirmation for upgrade."""
+        print(f"\n  Type 'UPGRADE' to confirm upgrading {total} devices:")
+        try:
+            confirm = input(">>> ").strip()
+            if confirm != "UPGRADE":
+                print(" Upgrade cancelled.")
+                return False
+            print(" User confirmed. Proceeding...")
+            logging.info(f"User confirmed upgrade for {total} devices")
+            return True
+        except (KeyboardInterrupt, EOFError):
+            return False
+    
+    # =========================================================================
+    # STEP 8: EXECUTE UPGRADES
+    # =========================================================================
+    
+    def _step8_execute_upgrades(self) -> None:
+        """Execute firmware upgrades across all sites."""
+        print("\n  Starting firmware upgrade operations...")
+        print("=" * 60)
+        
+        devices_by_site = self._organize_devices_by_site()
+        
+        for site_index, (site_id, site_data) in enumerate(devices_by_site.items(), 1):
+            self._execute_site_upgrade(site_index, len(devices_by_site), site_id, site_data)
+    
+    def _organize_devices_by_site(self) -> dict:
+        """Organize upgrade plan devices by site."""
+        devices_by_site = {}
+        for model, plan in self.upgrade_plan.items():
+            for device in plan["devices"]:
+                site_id = device.get("_site_id")
+                site_name = device.get("_site_name")
+                if site_id not in devices_by_site:
+                    devices_by_site[site_id] = {'name': site_name, 'devices': [], 'models': {}}
+                devices_by_site[site_id]['devices'].append(device)
+                if model not in devices_by_site[site_id]['models']:
+                    devices_by_site[site_id]['models'][model] = {'version': plan["version"], 'devices': []}
+                devices_by_site[site_id]['models'][model]['devices'].append(device)
+        return devices_by_site
+    
+    def _execute_site_upgrade(self, index: int, total: int, site_id: str, site_data: dict) -> None:
+        """Execute upgrade for a single site."""
+        site_name = site_data['name']
+        print(f"\n   Site {index}/{total}: {site_name} ({len(site_data['devices'])} devices)")
+        
+        try:
+            versions = set(m['version'] for m in site_data['models'].values())
+            if len(versions) == 1:
+                self._execute_single_version_upgrade(site_id, site_name, site_data)
+            else:
+                self._execute_multi_version_upgrade(site_id, site_name, site_data)
+            self._log_upgrade_results(site_id, site_name, site_data, "Upgrade Initiated")
+        except Exception as e:
+            print(f"      Failed: {e}")
+            self.failed_upgrades += len(site_data['devices'])
+            self._log_upgrade_results(site_id, site_name, site_data, f"ERROR: {e}")
+    
+    def _execute_single_version_upgrade(self, site_id: str, site_name: str, site_data: dict) -> None:
+        """Execute upgrade when all devices use same version."""
+        version = list(site_data['models'].values())[0]['version']
+        device_ids = [d.get("id") for d in site_data['devices'] if d.get("id")]
+        
+        body = self._build_upgrade_body(version, device_ids)
+        resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
+        
+        if hasattr(resp, "data") and resp.data and isinstance(resp.data, dict):
+            upgrade_id = resp.data.get("upgrade_id")
+            if upgrade_id:
+                self.upgrade_ids.append(upgrade_id)
+                print(f"      Upgrade initiated - ID: {upgrade_id}")
+        
+        self.successful_upgrades += len(site_data['devices'])
+    
+    def _execute_multi_version_upgrade(self, site_id: str, site_name: str, site_data: dict) -> None:
+        """Execute upgrade when devices use different versions."""
+        print(f"      Multiple versions - executing per model...")
+        for model, model_info in site_data['models'].items():
+            version = model_info['version']
+            devices = model_info['devices']
+            device_ids = [d.get("id") for d in devices if d.get("id")]
+            
+            body = self._build_upgrade_body(version, device_ids)
+            resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
+            
+            if hasattr(resp, "data") and resp.data and isinstance(resp.data, dict):
+                if "upgrade_id" in resp.data:
+                    self.upgrade_ids.append(resp.data["upgrade_id"])
+            
+            self.successful_upgrades += len(devices)
+            print(f"         !? {model}: {len(devices)} devices firmware {version}")
+    
+    def _build_upgrade_body(self, version: str, device_ids: list) -> dict:
+        """Build upgrade API request body."""
+        body = {
+            "strategy": self.upgrade_config["strategy"],
+            "force": self.upgrade_config["force"],
+            "enable_p2p": self.upgrade_config["enable_p2p"],
+            "max_failure_percentage": self.upgrade_config["max_failure_percentage"],
+            "reboot": self.upgrade_config["reboot"],
+            "version": version,
+            "device_ids": device_ids
+        }
+        if self.upgrade_config["enable_p2p"]:
+            body["p2p_cluster_size"] = self.upgrade_config["p2p_cluster_size"]
+        if self.upgrade_config["strategy"] == "canary":
+            body["canary_phases"] = self.upgrade_config["canary_phases"]
+        elif self.upgrade_config["strategy"] == "rrm":
+            for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage"]:
+                if key in self.upgrade_config:
+                    body[key] = self.upgrade_config[key]
+        if self.upgrade_config.get("start_time"):
+            body["start_time"] = self.upgrade_config["start_time"]
+        return body
+    
+    def _log_upgrade_results(self, site_id: str, site_name: str, site_data: dict, status: str) -> None:
+        """Log upgrade results for each device."""
+        for device in site_data['devices']:
+            target = self._get_device_target_version(device)
+            self.results.append({
+                "Site ID": site_id,
+                "Site Name": site_name,
+                "Device ID": device.get("id", "Unknown"),
+                "Device Name": device.get("name", "Unnamed"),
+                "Device MAC": device.get("mac", "Unknown"),
+                "Model": device.get("model", "Unknown"),
+                "Current Version": self.ap_versions.get(device.get("id"), "Unknown"),
+                "Target Version": target,
+                "Strategy": self.upgrade_config["strategy"],
+                "P2P Enabled": self.upgrade_config["enable_p2p"],
+                "Max Failure %": self.upgrade_config["max_failure_percentage"],
+                "Force Upgrade": self.upgrade_config["force"],
+                "Upgrade ID": self.upgrade_ids[-1] if self.upgrade_ids else "N/A",
+                "Status": status,
+                "Timestamp": datetime.now(timezone.utc).isoformat()
+            })
+    
+    def _get_device_target_version(self, device: dict) -> str:
+        """Get target version for a device."""
+        for model, plan in self.upgrade_plan.items():
+            if device in plan["devices"]:
+                return plan["version"]
+        return "Unknown"
+    
+    # =========================================================================
+    # STEP 9: AUTO-UPGRADE CONFIGURATION
+    # =========================================================================
+    
+    def _step9_configure_auto_upgrade(self) -> None:
+        """Configure site auto-upgrade settings."""
+        print(f"\n  Configuring site auto-upgrade settings...")
+        
+        # Use first site for auto-upgrade config
+        if not self.sites_to_upgrade:
+            return
+        
+        site = self.sites_to_upgrade[0]
+        site_id, site_name = site['id'], site['name']
+        
+        target_versions = set(p["version"] for p in self.upgrade_plan.values())
+        
+        if len(target_versions) == 1:
+            self._configure_single_version_auto_upgrade(site_id, site_name, list(target_versions)[0])
+        else:
+            self._configure_multi_version_auto_upgrade(site_id, site_name)
+    
+    def _configure_single_version_auto_upgrade(self, site_id: str, site_name: str, version: str) -> None:
+        """Configure auto-upgrade for single version scenario."""
+        prompt = input(f"Configure site auto-upgrade? (Y/n): ").strip().lower()
+        if prompt in ['n', 'no']:
+            return
+        
+        try:
+            custom_versions = {model: plan["version"] for model, plan in self.upgrade_plan.items()}
+            auto_upgrade = {"enabled": True, "version": "custom", "custom_versions": custom_versions}
+            
+            settings = {"auto_upgrade": auto_upgrade}
+            mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+            print(f"   Site auto-upgrade configured successfully")
+        except Exception as e:
+            print(f"   Failed to configure auto-upgrade: {e}")
+    
+    def _configure_multi_version_auto_upgrade(self, site_id: str, site_name: str) -> None:
+        """Configure auto-upgrade for multi-version scenario."""
+        print(f"   Multiple versions - configuring model-specific auto-upgrade...")
+        
+        try:
+            custom_versions = {model: plan["version"] for model, plan in self.upgrade_plan.items()}
+            auto_upgrade = {"enabled": True, "version": "custom", "custom_versions": custom_versions}
+            
+            settings = {"auto_upgrade": auto_upgrade}
+            mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+            print(f"   Site auto-upgrade configured with model-specific versions")
+        except Exception as e:
+            print(f"   Failed to configure auto-upgrade: {e}")
+    
+    # =========================================================================
+    # STEP 10: STATUS CHECK
+    # =========================================================================
+    
+    def _step10_offer_status_check(self) -> None:
+        """Offer to check upgrade status."""
+        if self.successful_upgrades == 0:
+            return
+        
+        print(f"\n Firmware upgrades initiated successfully!")
+        print(f"   {self.successful_upgrades} upgrades started")
+        
+        self._save_upgrade_tracking()
+        
+        print(f"\n Reminder: Monitor progress using menu option 60")
+        try:
+            check = input(f"\n Check upgrade status now? (y/n): ").strip().lower()
+            if check in ['y', 'yes']:
+                check_firmware_upgrade_status_direct()
+        except (EOFError, KeyboardInterrupt):
+            pass
+    
+    def _save_upgrade_tracking(self) -> None:
+        """Save upgrade IDs for tracking."""
+        if not self.upgrade_ids:
+            return
+        try:
+            tracking_file = "ActiveUpgrades.json"
+            tracking_data = []
+            if os.path.exists(tracking_file):
+                with open(tracking_file, 'r') as f:
+                    tracking_data = json.load(f)
+            
+            for upgrade_id in self.upgrade_ids:
+                tracking_data.append({
+                    'upgrade_id': upgrade_id,
+                    'org_id': self.org_id,
+                    'strategy': self.upgrade_config['strategy'],
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'status': 'initiated'
+                })
+            
+            with open(tracking_file, 'w') as f:
+                json.dump(tracking_data, f, indent=2)
+        except Exception as e:
+            logging.warning(f"Failed to save tracking: {e}")
+    
+    # =========================================================================
+    # STEP 11: WRITE RESULTS
+    # =========================================================================
+    
+    def _step11_write_results(self) -> None:
+        """Write upgrade results to CSV."""
+        if not self.results:
+            return
+        
+        site_name = self.sites_to_upgrade[0]['name'] if self.sites_to_upgrade else "Unknown"
+        filename = os.path.join("data", f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        
+        try:
+            fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC",
+                         "Model", "Current Version", "Target Version", "Strategy", "P2P Enabled",
+                         "Max Failure %", "Force Upgrade", "Upgrade ID", "Status", "Timestamp"]
+            
+            with open(filename, "w", newline='', encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(self.results)
+            
+            print(f"\n  Advanced Firmware Upgrade Completed!")
+            print(f"   Successful: {self.successful_upgrades}")
+            print(f"   Failed: {self.failed_upgrades}")
+            print(f"   Results: {filename}")
+            logging.info(f"Upgrade results written to {filename}")
+        except Exception as e:
+            print(f"! Failed to write results: {e}")
 
 
 def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None):
@@ -35063,2435 +36275,8 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
         org_id: Organization ID
         sites_to_upgrade_override: Optional list of site dicts for template-based upgrades
     """
-    logging.info("Starting advanced bulk AP firmware upgrade by site...")
-    logging.debug("bulk_upgrade_ap_firmware_by_site_impl() initiated")
-    logging.debug(f"Using org_id: {org_id}")
-    
-    # Step 1: Determine site selection method (override, file, or interactive)
-    sites_to_upgrade = []
-    
-    if sites_to_upgrade_override is not None:
-        # Template-based upgrade mode - use provided sites
-        sites_to_upgrade = sites_to_upgrade_override
-        print(f"! Template-based upgrade mode - using {len(sites_to_upgrade)} provided sites")
-        logging.info(f"Using template-provided sites: {len(sites_to_upgrade)} sites")
-        for site in sites_to_upgrade:
-            logging.debug(f"  Template site: {site['name']} (ID: {site['id']})")
-    else:
-        # Check for bulk site upgrade file or get single site selection
-        bulk_upgrade_file = "APUpgradeSiteList.CSV"
-        bulk_upgrade_file_path = FilePathUtils.get_csv_path(bulk_upgrade_file)
-        
-        if os.path.exists(bulk_upgrade_file_path):
-            print(f"! Found {bulk_upgrade_file} - Loading sites for bulk upgrade...")
-            logging.info(f"Found {bulk_upgrade_file} file, proceeding with bulk site upgrade")
-            logging.debug(f"Bulk upgrade file path: {os.path.abspath(bulk_upgrade_file_path)}")
-        
-            # First, get all sites in the organization for reverse lookup
-            print(f"   Fetching organization sites for name-to-ID lookup...")
-            logging.debug("Fetching organization sites for name-to-ID mapping")
-            try:
-                all_org_sites = fetch_all_sites_with_limit(org_id)
-                logging.debug(f"Retrieved {len(all_org_sites)} organization sites")
-                
-                # Build lookup dictionary: site_name -> site_id
-                site_name_to_id = {}
-                for site in all_org_sites:
-                    site_name = site.get("name", "").strip()
-                    site_id = site.get("id", "").strip()
-                    if site_name and site_id:
-                        site_name_to_id[site_name] = site_id
-                
-                logging.info(f"Built lookup table for {len(site_name_to_id)} organization sites")
-                logging.debug(f"Site name mappings: {list(site_name_to_id.keys())[:10]}...")  # Log first 10 site names
-                
-            except Exception as e:
-                print(f"! Failed to fetch organization sites: {e}")
-                logging.error(f"Failed to fetch organization sites for lookup: {e}")
-                return
-            
-            # Read site names from file (headerless format)
-            try:
-                logging.debug(f"Reading site names from {bulk_upgrade_file_path}")
-                with open(bulk_upgrade_file_path, 'r', encoding='utf-8') as f:
-                    site_names = []
-                    for line_num, line in enumerate(f, 1):
-                        site_name = line.strip()
-                        if site_name:  # Skip empty lines
-                            site_names.append(site_name)
-                            logging.debug(f"Line {line_num}: Added site '{site_name}'")
-                
-                if not site_names:
-                    print(f"! No site names found in {bulk_upgrade_file}")
-                    logging.error(f"No site names found in {bulk_upgrade_file}")
-                    return
-                
-                print(f"   Read {len(site_names)} site names from file")
-                logging.info(f"Read {len(site_names)} site names from file: {site_names}")
-                
-                # Resolve site names to site IDs
-                sites_to_upgrade = []
-                missing_sites = []
-                
-                for site_name in site_names:
-                    if site_name in site_name_to_id:
-                        site_id = site_name_to_id[site_name]
-                        sites_to_upgrade.append({
-                            'name': site_name,
-                            'id': site_id
-                        })
-                        logging.debug(f"Resolved site '{site_name}' to ID: {site_id}")
-                    else:
-                        missing_sites.append(site_name)
-                        logging.warning(f"Site '{site_name}' not found in organization")
-                
-                # Report results
-                if missing_sites:
-                    print(f"   Warning: {len(missing_sites)} site(s) not found in organization:")
-                    for missing_site in missing_sites:
-                        print(f"      !? '{missing_site}'")
-                    print(f"   Available sites in organization:")
-                    available_names = sorted(site_name_to_id.keys())
-                    for name in available_names[:10]:  # Show first 10 as examples
-                        print(f"      !? '{name}'")
-                    if len(available_names) > 10:
-                        print(f"      ... and {len(available_names) - 10} more")
-                        
-                if not sites_to_upgrade:
-                    print(f"! No valid sites found - none of the names in {bulk_upgrade_file} match organization sites")
-                    logging.error(f"No valid sites found in {bulk_upgrade_file}")
-                    return
-                
-                print(f"! Successfully resolved {len(sites_to_upgrade)} site(s) for bulk upgrade:")
-                for site in sites_to_upgrade:
-                    print(f"   !? {site['name']} (ID: {site['id']})")
-                
-                logging.info(f"Resolved {len(sites_to_upgrade)} sites for bulk upgrade from {bulk_upgrade_file}")
-                
-            except Exception as e:
-                print(f"! Failed to read {bulk_upgrade_file}: {e}")
-                logging.error(f"Failed to read {bulk_upgrade_file}: {e}")
-                return
-        else:
-            print(f"! {bulk_upgrade_file} not found - Single site mode")
-            print(f"   To enable bulk upgrade mode, create '{bulk_upgrade_file}' in the data/ folder")
-            print(f"   File format: one site name per line (no header)")
-            logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
-        
-        # Single site selection (existing behavior)
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            print(" No site selected. Exiting.")
-            return
-        
-        # Get site name for display
-        try:
-            sites = fetch_all_sites_with_limit(org_id)
-            site_name = next((site["name"] for site in sites if site.get("id") == site_id), site_id)
-            logging.info(f"Selected site: {site_name} (ID: {site_id})")
-        except Exception as e:
-            logging.error(f"Failed to get site name: {e}")
-            site_name = site_id
-        
-        # Convert single site to list format for unified processing
-        sites_to_upgrade = [{
-            'name': site_name,
-            'id': site_id
-        }]
-    
-    # Step 2: Get all APs across all selected sites
-    all_aps = []
-    all_sites_aps = {}  # Track APs per site
-    
-    print(f"\n  Fetching APs across {len(sites_to_upgrade)} site(s)...")
-    logging.debug(f"Starting AP discovery across {len(sites_to_upgrade)} sites")
-    
-    for site_info in sites_to_upgrade:
-        site_id = site_info['id']
-        site_name = site_info['name']
-        
-        try:
-            print(f"   Fetching APs at site '{site_name}'...")
-            logging.debug(f"Fetching APs for site: {site_name} (ID: {site_id})")
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
-            site_aps = mistapi.get_all(response=response, mist_session=apisession)
-            
-            if site_aps:
-                # Add site info to each AP for tracking
-                for access_point in site_aps:
-                    access_point['_site_id'] = site_id
-                    access_point['_site_name'] = site_name
-                
-                all_aps.extend(site_aps)
-                all_sites_aps[site_id] = {
-                    'name': site_name,
-                    'aps': site_aps,
-                    'count': len(site_aps)
-                }
-                
-                print(f"      Found {len(site_aps)} APs at '{site_name}'")
-                logging.info(f"Found {len(site_aps)} APs at site {site_name} (ID: {site_id})")
-                logging.debug(f"AP models at {site_name}: {list(set(device.get('model', 'Unknown') for device in site_aps))}")
-            else:
-                print(f"      No APs found at site '{site_name}'")
-                logging.warning(f"No APs found at site {site_name} (ID: {site_id})")
-                all_sites_aps[site_id] = {
-                    'name': site_name,
-                    'aps': [],
-                    'count': 0
-                }
-                
-        except Exception as e:
-            print(f"      Failed to fetch APs for site '{site_name}': {e}")
-            logging.error(f"Failed to fetch APs for site {site_id} ({site_name}): {e}")
-            all_sites_aps[site_id] = {
-                'name': site_name,
-                'aps': [],
-                'count': 0,
-                'error': str(e)
-            }
-    
-    if not all_aps:
-        print(" No APs found across any selected sites.")
-        logging.warning("No APs found across any selected sites")
-        return
-    
-    total_aps = len(all_aps)
-    sites_with_aps = len([s for s in all_sites_aps.values() if s['count'] > 0])
-    
-    print(f"\n  AP Discovery Summary:")
-    print(f"   !? Total APs found: {total_aps}")
-    print(f"   !? Sites with APs: {sites_with_aps}/{len(sites_to_upgrade)}")
-    
-    for site_id, site_data in all_sites_aps.items():
-        site_name = site_data['name']
-        ap_count = site_data['count']
-        if 'error' in site_data:
-            print(f"   !? {site_name}: {ap_count} APs (Error: {site_data['error']})")
-        else:
-            print(f"   !? {site_name}: {ap_count} APs")
-    
-    logging.info(f"Total AP discovery: {total_aps} APs across {sites_with_aps} sites")
-    
-    # Use all_aps for the rest of the processing (existing variable name)
-    aps = all_aps
-    
-    # Debug: Log the structure of the first AP to see available fields
-    if aps and len(aps) > 0:
-        sample_ap = aps[0]
-        available_fields = list(sample_ap.keys()) if isinstance(sample_ap, dict) else []
-        logging.debug(f"Sample AP device structure - Available fields: {available_fields}")
-        
-        # Check if version field exists in device config (it typically doesn't)
-        if 'version' in sample_ap:
-            logging.debug(f"Found version in device config: {sample_ap.get('version')}")
-        else:
-            logging.debug("No version field in device config - will need to use device stats")
-    
-    # Step 3: Group APs by model and get current firmware versions from device stats
-    aps_by_model = {}
-    ap_versions = {}  # Cache for AP versions {device_id: version}
-    
-    print(f"\n  Getting current firmware versions from device statistics...")
-    
-    # For multi-site upgrades, we need to fetch stats per site
-    all_ap_stats = []
-    stats_lookup = {}
-    
-    for site_id, site_data in all_sites_aps.items():
-        if site_data['count'] == 0:
-            continue  # Skip sites with no APs
-            
-        site_name = site_data['name']
-        site_aps = site_data['aps']
-        
-        print(f"   Fetching device statistics for {len(site_aps)} APs at '{site_name}'...")
-        
-        try:
-            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                apisession, 
-                site_id, 
-                type="ap",
-                limit=1000
-            )
-            site_ap_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
-            
-            if site_ap_stats:
-                all_ap_stats.extend(site_ap_stats)
-                
-                # Build lookup for this site's devices
-                for stats in site_ap_stats:
-                    device_id = stats.get("id") or stats.get("device_id") or stats.get("mac")
-                    if device_id:
-                        stats_lookup[device_id] = stats
-                
-                logging.info(f"Retrieved stats for {len(site_ap_stats)} devices at site {site_name}")
-            else:
-                logging.warning(f"No device stats returned for site {site_name}")
-                
-        except Exception as e:
-            logging.error(f"Failed to fetch bulk device stats for site {site_name}: {e}")
-            print(f"   Failed to fetch stats for site '{site_name}': {e}")
-            # Continue with other sites
-    
-    if all_ap_stats:
-        logging.info(f"Retrieved stats for {len(all_ap_stats)} total devices via bulk API calls across {len(sites_to_upgrade)} sites")
-        logging.debug(f"Stats lookup built with {len(stats_lookup)} entries")
-        
-        # Log sample stats structure for debugging
-        if len(all_ap_stats) > 0:
-            sample_stats = all_ap_stats[0]
-            available_fields = list(sample_stats.keys()) if isinstance(sample_stats, dict) else []
-            logging.debug(f"Sample device stats structure - Available fields: {available_fields}")
-            
-            # Look for version-related fields in bulk stats
-            version_fields = [field for field in available_fields if 'version' in field.lower()]
-            if version_fields:
-                logging.debug(f"Version-related fields in bulk stats: {version_fields}")
-            else:
-                logging.debug("No version fields found in bulk stats data")
-    else:
-        logging.warning("No device stats retrieved from any site")
-        print(f"   No device statistics retrieved - falling back to individual calls")
-    
-    # Process each AP device
-    for access_point in aps:
-        model = access_point.get("model", "Unknown")
-        device_id = access_point.get("id")
-        device_mac = access_point.get("mac")
-        ap_site_id = access_point.get("_site_id")  # Site info added during discovery
-        ap_site_name = access_point.get("_site_name")
-        
-        if model not in aps_by_model:
-            aps_by_model[model] = []
-        aps_by_model[model].append(access_point)
-        
-        # Get current firmware version from device stats
-        current_version = "Unknown"
-        
-        if device_id:
-            # First try to use the bulk stats lookup
-            stats_data = None
-            for lookup_key in [device_id, device_mac]:  # Try both ID and MAC as keys
-                if lookup_key and lookup_key in stats_lookup:
-                    stats_data = stats_lookup[lookup_key]
-                    logging.debug(f"Found stats for device {access_point.get('name', 'Unnamed')} using key {lookup_key}")
-                    break
-            
-            # If bulk lookup failed, fall back to individual API call
-            if not stats_data and ap_site_id:
-                try:
-                    logging.debug(f"Bulk lookup failed for device {device_id}, making individual API call to site {ap_site_name}")
-                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, ap_site_id, device_id)
-                    stats_data = getattr(stats_resp, "data", {})
-                except Exception as e:
-                    logging.warning(f"Could not get individual stats for device {device_id} at site {ap_site_name}: {e}")
-                    stats_data = {}
-            
-            # Extract version from stats data
-            if isinstance(stats_data, dict):
-                # Enhanced debugging for first device only to avoid log spam
-                if ap == aps[0]:  # Only debug first AP device
-                    available_fields = list(stats_data.keys())
-                    logging.debug(f"First device {ap.get('name', 'Unnamed')} (ID: {device_id}) stats fields: {available_fields}")
-                    
-                    # Look for version-related fields
-                    version_fields = [field for field in available_fields if 'version' in field.lower()]
-                    if version_fields:
-                        logging.debug(f"Version-related fields found: {version_fields}")
-                        for field in version_fields:
-                            logging.debug(f"Field '{field}': {stats_data.get(field)}")
-                
-                # Extract version using standard field
-                current_version = stats_data.get("version", "Unknown")
-                logging.debug(f"Device {ap.get('name', 'Unnamed')} (ID: {device_id}) at site {ap_site_name} version: {current_version}")
-            else:
-                logging.debug(f"Stats data for device {device_id} is not a dict: {type(stats_data)}")
-        
-        ap_versions[device_id] = current_version
-    
-    # Summary of API optimization
-    bulk_stats_count = len([v for v in ap_versions.values() if v != "Unknown"])
-    individual_calls_needed = len([v for v in ap_versions.values() if v == "Unknown"])
-    
-    print(f"   Retrieved {bulk_stats_count} device versions via bulk API call")
-    if individual_calls_needed > 0:
-        print(f"   {individual_calls_needed} devices required individual calls")
-    
-    logging.info(f"API optimization: {bulk_stats_count} versions from bulk call, {individual_calls_needed} individual calls needed")
-    
-    print(f"\n  AP Models found across {len(sites_to_upgrade)} site(s):")
-    for model, devices in aps_by_model.items():
-        # Get current versions for this model from our cached stats
-        current_versions = set()
-        for device in devices:
-            device_id = device.get("id")
-            current_version = ap_versions.get(device_id, "Unknown")
-            current_versions.add(current_version)
-        
-        # Format current versions display
-        if current_versions and "Unknown" not in current_versions:
-            current_versions_sorted = sorted(current_versions, reverse=True)
-            versions_text = ", ".join(current_versions_sorted)
-            print(f"   !? {model}: {len(devices)} devices (Current versions: {versions_text})")
-        else:
-            print(f"   !? {model}: {len(devices)} devices (Current versions: Unknown)")
-            
-        # Show individual device details with site information for better visibility
-        if len(sites_to_upgrade) > 1:
-            # Multi-site mode - show site grouping
-            devices_by_site = {}
-            for device in devices:
-                site_name = device.get("_site_name", "Unknown Site")
-                if site_name not in devices_by_site:
-                    devices_by_site[site_name] = []
-                devices_by_site[site_name].append(device)
-            
-            for site_name, site_devices in devices_by_site.items():
-                print(f"      {site_name} ({len(site_devices)} devices):")
-                for device in site_devices:
-                    device_name = device.get("name", "Unnamed")
-                    device_mac = device.get("mac", "Unknown")
-                    device_id = device.get("id")
-                    device_version = ap_versions.get(device_id, "Unknown")
-                    print(f"         - {device_name} (MAC: {device_mac}): v{device_version}")
-        else:
-            # Single site mode - show devices directly
-            for device in devices:
-                device_name = device.get("name", "Unnamed")
-                device_mac = device.get("mac", "Unknown")
-                device_id = device.get("id")
-                device_version = ap_versions.get(device_id, "Unknown")
-                print(f"      - {device_name} (MAC: {device_mac}): v{device_version}")
-    
-    # Step 4: Get available firmware versions for each model
-    print(f"\n  Fetching available firmware versions...")
-    logging.debug("Fetching available firmware versions from API")
-    try:
-        versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, org_id)
-        available_versions = versions_response.data
-        logging.info(f"Retrieved firmware versions for organization")
-        
-        # Log raw response for debugging
-        if available_versions:
-            total_versions = len(available_versions) if isinstance(available_versions, list) else 0
-            logging.debug(f"Raw firmware API response contains {total_versions} version entries")
-            if total_versions > 0 and isinstance(available_versions, list):
-                sample_version = available_versions[0]
-                logging.debug(f"Sample version entry structure: {sample_version}")
-                
-                # Debug: Check if we have "models" vs "model" field
-                has_models = any(v.get("models") for v in available_versions[:5] if isinstance(v, dict))
-                has_model = any(v.get("model") for v in available_versions[:5] if isinstance(v, dict))
-                logging.debug(f"Firmware API field analysis: has_models={has_models}, has_model={has_model}")
-                
-                # Debug: Check available metadata fields
-                if isinstance(sample_version, dict):
-                    available_fields = list(sample_version.keys())
-                    logging.debug(f"Available firmware metadata fields: {available_fields}")
-        else:
-            logging.warning("No firmware versions returned from API")
-            
-    except Exception as e:
-        logging.error(f"Failed to fetch available firmware versions: {e}")
-        print(f"! Failed to fetch available firmware versions: {e}")
-        return
-    
-    # Step 5: Let user select firmware version for each model
-    upgrade_plan = {}
-    print(f"\n  Firmware Version Selection:")
-    print("=" * 60)
-    
-    # Show current version summary across all APs
-    print(f"! Current Firmware Status Summary:")
-    all_current_versions = {}
-    for model, devices in aps_by_model.items():
-        for device in devices:
-            device_id = device.get("id")
-            version = ap_versions.get(device_id, "Unknown")
-            
-            if version not in all_current_versions:
-                all_current_versions[version] = []
-            all_current_versions[version].append(f"{device.get('name', 'Unnamed')} ({model})")
-    
-    for version, device_list in sorted(all_current_versions.items(), reverse=True):
-        print(f"   Version {version}: {len(device_list)} devices")
-        for device_info in device_list:
-            print(f"      !? {device_info}")
-    print()
-    
-    # Show summary of what was found
-    if available_versions:
-        total_raw_versions = len(available_versions) if isinstance(available_versions, list) else 0
-        print(f"! Found {total_raw_versions} firmware entries from API")
-        logging.info(f"Processing {total_raw_versions} raw firmware version entries for {len(aps_by_model)} AP models")
-        
-        # Debug: Show what models are available in firmware data
-        all_firmware_models = set()
-        model_version_ranges = {}  # Track version ranges per model
-        
-        if isinstance(available_versions, list):
-            for version_info in available_versions:
-                if isinstance(version_info, dict):
-                    # Try both "models" (plural) and "model" (singular) fields
-                    models = version_info.get("models", [])
-                    model = version_info.get("model")
-                    version_num = version_info.get("version", "Unknown")
-                    
-                    target_models = models if models else ([model] if model else [])
-                    
-                    for target_model in target_models:
-                        all_firmware_models.add(target_model)
-                        
-                        # Track version ranges for compatibility analysis
-                        if target_model not in model_version_ranges:
-                            model_version_ranges[target_model] = []
-                        model_version_ranges[target_model].append(version_num)
-        
-        site_models = set(aps_by_model.keys())
-        
-        logging.debug(f"Models found at site: {sorted(site_models)}")
-        logging.debug(f"Models with firmware available: {sorted(all_firmware_models)}")
-        
-        # Check for model matches
-        matching_models = site_models.intersection(all_firmware_models)
-        missing_models = site_models - all_firmware_models
-        
-        if matching_models:
-            logging.info(f"Models with firmware available: {sorted(matching_models)}")
-        if missing_models:
-            logging.warning(f"Models without specific firmware versions: {sorted(missing_models)}")
-            print(f"!  Models without specific firmware versions: {', '.join(sorted(missing_models))}")
-        
-        # Analyze version compatibility across models using API data
-        if len(matching_models) > 1:
-            print(f"\n  Version Compatibility Analysis (API-based):")
-            print(f"   Analyzing firmware compatibility across {len(matching_models)} AP models...")
-            
-            # Build comprehensive model-to-versions mapping from API data
-            api_model_versions = {}
-            all_versions_in_api = set()
-            
-            for model in matching_models:
-                if model in model_version_ranges:
-                    model_versions = set(model_version_ranges[model])
-                    api_model_versions[model] = model_versions
-                    all_versions_in_api.update(model_versions)
-            
-            # Find versions that are compatible across multiple models
-            version_compatibility = {}  # version -> set of compatible models
-            
-            for version in all_versions_in_api:
-                compatible_models = set()
-                for model, model_versions in api_model_versions.items():
-                    if version in model_versions:
-                        compatible_models.add(model)
-                
-                if len(compatible_models) > 1:  # Version works with multiple models
-                    version_compatibility[version] = compatible_models
-            
-            # Sort versions by compatibility (most compatible first)
-            if version_compatibility:
-                sorted_by_compatibility = sorted(
-                    version_compatibility.items(),
-                    key=lambda x: (len(x[1]), tuple(map(int, x[0].split("."))) if x[0].replace(".", "").isdigit() else (0,)),
-                    reverse=True
-                )
-                
-                print(f"   Cross-compatible versions (work with multiple models):")
-                for version, compatible_models in sorted_by_compatibility[:10]:  # Show top 10
-                    model_list = ", ".join(sorted(compatible_models))
-                    coverage = f"{len(compatible_models)}/{len(matching_models)}"
-                    if len(compatible_models) == len(matching_models):
-                        print(f"      {version}: ALL models ({model_list}) - UNIVERSAL")
-                    elif len(compatible_models) >= len(matching_models) * 0.7:  # 70%+ coverage
-                        print(f"      {version}: {coverage} models ({model_list}) - HIGH COMPATIBILITY")
-                    else:
-                        print(f"      {version}: {coverage} models ({model_list})")
-                
-                # Highlight universal versions
-                universal_versions = [v for v, models in version_compatibility.items() if len(models) == len(matching_models)]
-                if universal_versions:
-                    sorted_universal = sorted(universal_versions, key=lambda x: tuple(map(int, x.split("."))) if x.replace(".", "").isdigit() else (0,), reverse=True)
-                    print(f"\n   UNIVERSAL versions (compatible with ALL {len(matching_models)} models):")
-                    print(f"      {', '.join(sorted_universal[:5])}{' ...' if len(sorted_universal) > 5 else ''}")
-                    print(f"   Recommendation: Use universal version for simplified management")
-                    logging.info(f"Found {len(universal_versions)} universal versions across all models")
-                else:
-                    print(f"\n    NO universal versions found - mixed-version upgrade required")
-                    print(f"   Recommendation: Select optimal version per model based on compatibility matrix above")
-                    logging.warning("No universal firmware versions found across all AP models")
-            else:
-                print(f"    NO cross-compatible versions found - each model has unique firmware options")
-                logging.warning("No cross-compatible versions found between models")
-            
-            # Show model-specific version counts for context
-            print(f"\n   Model-specific firmware availability:")
-            for model in sorted(matching_models):
-                if model in api_model_versions:
-                    versions = api_model_versions[model]
-                    sorted_versions = sorted(versions, key=lambda x: tuple(map(int, x.split("."))) if x.replace(".", "").isdigit() else (0,), reverse=True)
-                    latest_version = sorted_versions[0] if sorted_versions else "Unknown"
-                    oldest_version = sorted_versions[-1] if len(sorted_versions) > 1 else latest_version
-                    
-                    if len(sorted_versions) > 1:
-                        range_text = f"{oldest_version} to {latest_version}"
-                    else:
-                        range_text = latest_version
-                    
-                    print(f"      !? {model}: {len(versions)} versions ({range_text})")
-        
-        elif len(matching_models) == 1:
-            model = list(matching_models)[0]
-            print(f"\n  Single model environment: {model}")
-            if model in model_version_ranges:
-                versions = model_version_ranges[model]
-                print(f"   {len(versions)} firmware versions available for {model}")
-            else:
-                print(f"    No specific firmware versions found for {model}")
-    
-    
-    for model, devices in aps_by_model.items():
-        # Filter available versions for this specific model only
-        raw_model_versions = []
-        if available_versions and isinstance(available_versions, list):
-            for version_info in available_versions:
-                if isinstance(version_info, dict):
-                    # Check both "models" (plural) and "model" (singular) fields
-                    models = version_info.get("models", [])
-                    single_model = version_info.get("model")
-                    
-                    # Only include versions that explicitly list this model
-                    if model in models or single_model == model:
-                        raw_model_versions.append(version_info)
-        
-        # Deduplicate versions by version number while preserving metadata
-        version_dict = {}
-        for version_info in raw_model_versions:
-            version_num = version_info.get("version", "Unknown")
-            if version_num not in version_dict:
-                version_dict[version_num] = version_info
-            else:
-                # Merge metadata from duplicate entries, preferring non-empty values
-                existing = version_dict[version_num]
-                for key in ["release_date", "recommended", "package_url"]:
-                    if not existing.get(key) and version_info.get(key):
-                        existing[key] = version_info.get(key)
-        
-        # Convert back to list and sort by version (newest first, assuming semantic versioning)
-        model_versions = list(version_dict.values())
-        try:
-            # Sort by version number (descending) - handle different version formats
-            model_versions.sort(key=lambda x: tuple(map(int, x.get("version", "0.0.0").split("."))), reverse=True)
-        except ValueError:
-            # Fallback to string sorting if version parsing fails
-            model_versions.sort(key=lambda x: x.get("version", ""), reverse=True)
-        
-        if not model_versions:
-            print(f"!  No firmware versions found for model '{model}' - skipping {len(devices)} devices")
-            print(f"   (This model may not have specific firmware versions listed, or no updates available)")
-            logging.warning(f"No firmware versions found for model {model} - checked {len(raw_model_versions)} entries before deduplication")
-            continue
-        
-        logging.debug(f"Model {model}: Found {len(raw_model_versions)} raw entries, {len(model_versions)} unique versions after deduplication")
-        
-        print(f"\n  Model: {model} ({len(devices)} devices)")
-        
-        # Show current versions of devices using cached stats
-        current_versions = set()
-        for device in devices:
-            device_id = device.get("id")
-            current_version = ap_versions.get(device_id, "Unknown")
-            current_versions.add(current_version)
-        
-        if current_versions and "Unknown" not in current_versions:
-            current_versions_sorted = sorted(current_versions, reverse=True)
-            print(f"   Current versions in use: {', '.join(current_versions_sorted)}")
-        else:
-            print(f"   Current versions in use: Unknown")
-        
-        # Check if this model has version compatibility constraints
-        if len(aps_by_model) > 1:
-            model_version_count = len(model_versions)
-            all_other_models = [m for m in aps_by_model.keys() if m != model]
-            
-            # Estimate version compatibility with other models
-            compatibility_note = ""
-            if model_version_count < 10:  # Fewer versions might indicate older/constrained model
-                compatibility_note = f" (Limited version range - may have compatibility constraints)"
-            elif model_version_count > 30:  # Many versions might indicate newer/flexible model
-                compatibility_note = f" (Wide version range available)"
-            
-            if compatibility_note:
-                print(f"   Model compatibility: {model_version_count} versions available{compatibility_note}")
-                if len(all_other_models) > 0:
-                    print(f"   Note: Different models may support different version ranges")
-        
-        # Display available versions with index - now model-specific and deduplicated
-        print(f"   Available firmware versions for {model} ({len(model_versions)} found):")
-        
-        # Build cross-compatibility information if multiple models present
-        other_models = [m for m in aps_by_model.keys() if m != model]
-        cross_compatibility = {}
-        
-        if other_models and 'model_version_ranges' in locals():
-            # Check which versions from this model are also available for other models
-            for version_info in model_versions:
-                version_num = version_info.get("version", "Unknown")
-                compatible_models = []
-                
-                # Check each other model to see if they also support this version
-                for other_model in other_models:
-                    if other_model in model_version_ranges:
-                        if version_num in model_version_ranges[other_model]:
-                            compatible_models.append(other_model)
-                
-                if compatible_models:
-                    cross_compatibility[version_num] = compatible_models
-        
-        for idx, version in enumerate(model_versions):
-            version_num = version.get("version", "Unknown")
-            is_recommended = version.get("recommended", False)
-            
-            # Build version display with indicators
-            indicators = []
-            
-            if is_recommended:
-                indicators.append("RECOMMENDED")
-            
-            # Check if this version is currently in use
-            if version_num in current_versions:
-                indicators.append("CURRENT")
-            
-            # Check cross-compatibility with other models
-            if version_num in cross_compatibility:
-                compatible_models = cross_compatibility[version_num]
-                if len(compatible_models) == len(other_models):
-                    indicators.append("UNIVERSAL")  # Works with all other models
-                elif len(compatible_models) >= len(other_models) * 0.7:  # 70%+ compatibility
-                    indicators.append("HIGH COMPAT")
-                else:
-                    indicators.append("SOME COMPAT")
-            elif other_models:  # Only show if there are other models to be compatible with
-                indicators.append("MODEL SPECIFIC")
-            
-            # Format indicators
-            indicator_text = f" [{', '.join(indicators)}]" if indicators else ""
-            
-            # Show cross-compatibility details for better user understanding
-            compat_detail = ""
-            if version_num in cross_compatibility:
-                compatible_models = cross_compatibility[version_num]
-                if len(compatible_models) > 0:
-                    compat_detail = f" (also works with: {', '.join(compatible_models)})"
-            
-            print(f"      [{idx}] {version_num}{indicator_text}{compat_detail}")
-            
-            # Log version details for debugging
-            logging.debug(f"Model {model} version {idx}: {version_num}, recommended: {is_recommended}, cross_compatible: {cross_compatibility.get(version_num, [])}")
-        
-        # Add guidance about cross-compatibility if multiple models present
-        if other_models and cross_compatibility:
-            universal_versions = [v for v, models in cross_compatibility.items() if len(models) == len(other_models)]
-            if universal_versions:
-                print(f"   UNIVERSAL versions work with all models: {', '.join(universal_versions[:3])}")
-            else:
-                high_compat_versions = [v for v, models in cross_compatibility.items() if len(models) >= len(other_models) * 0.7]
-                if high_compat_versions:
-                    print(f"   HIGH COMPATIBILITY versions work with most models: {', '.join(high_compat_versions[:3])}")
-        
-        print()  # Add blank line for readability
-        
-        # Get user selection
-        while True:
-            try:
-                user_input = input(f"Select firmware version for {model} (0-{len(model_versions)-1}, or 's' to skip): ").strip().lower()
-                
-                if user_input == 's':
-                    print(f"!  Skipping firmware upgrade for {model}")
-                    logging.info(f"User chose to skip firmware upgrade for model {model}")
-                    break
-                
-                version_idx = int(user_input)
-                if 0 <= version_idx < len(model_versions):
-                    selected_version = model_versions[version_idx]
-                    version_num = selected_version.get("version", "Unknown")
-                    is_recommended = selected_version.get("recommended", False)
-                    is_current = version_num in current_versions
-                    
-                    # Provide feedback about the selection
-                    selection_notes = []
-                    if is_recommended:
-                        selection_notes.append("RECOMMENDED")
-                    if is_current:
-                        selection_notes.append("CURRENT")
-                    
-                    notes_text = f" ({', '.join(selection_notes)})" if selection_notes else ""
-                    
-                    upgrade_plan[model] = {
-                        "version": version_num,
-                        "version_info": selected_version,
-                        "devices": devices
-                    }
-                    print(f"! Selected version {version_num} for {model}{notes_text}")
-                    logging.info(f"User selected firmware version {version_num} for model {model} (recommended: {is_recommended}, current: {is_current})")
-                    break
-                else:
-                    print(f"! Invalid selection. Please enter a number between 0 and {len(model_versions)-1}, or 's' to skip.")
-                    
-            except ValueError:
-                print(" Invalid input. Please enter a number or 's' to skip.")
-            except KeyboardInterrupt:
-                print("\n Operation cancelled by user.")
-                logging.info("Bulk AP firmware upgrade cancelled by user interrupt")
-                return
-    
-    if not upgrade_plan:
-        print(" No firmware upgrades selected. Exiting.")
-        logging.info("No firmware upgrades selected by user")
-        return
-    
-    # Step 5.5: Upgrade Plan Summary and Compatibility Validation
-    print(f"\n  Upgrade Plan Summary:")
-    print("=" * 60)
-    
-    total_devices_to_upgrade = 0
-    selected_versions = set()
-    models_in_plan = list(upgrade_plan.keys())
-    
-    for model, plan_info in upgrade_plan.items():
-        version = plan_info["version"]
-        device_count = len(plan_info["devices"])
-        total_devices_to_upgrade += device_count
-        selected_versions.add(version)
-        
-        print(f"   {model}: {device_count} devices firmware {version}")
-    
-    print(f"\n  Summary:")
-    print(f"   !? Total models: {len(upgrade_plan)}")
-    print(f"   !? Total devices: {total_devices_to_upgrade}")
-    print(f"   !? Firmware versions: {len(selected_versions)}")
-    
-    # Highlight coordination considerations for mixed-version upgrades
-    if len(selected_versions) > 1:
-        sorted_versions = sorted(selected_versions, key=lambda x: tuple(map(int, x.split("."))) if x.replace(".", "").isdigit() else (0,), reverse=True)
-        print(f"\n   Multi-Version Upgrade Detected:")
-        print(f"   Versions selected: {', '.join(sorted_versions)}")
-        
-        # Analyze if any selected versions are cross-compatible
-        if 'model_version_ranges' in locals():
-            # Check if any of the selected versions could have been universal
-            could_be_universal = []
-            for version in selected_versions:
-                compatible_count = 0
-                for model in models_in_plan:
-                    if model in model_version_ranges and version in model_version_ranges[model]:
-                        compatible_count += 1
-                
-                if compatible_count == len(models_in_plan):
-                    could_be_universal.append(version)
-            
-            if could_be_universal:
-                print(f"   Analysis: Version(s) {', '.join(could_be_universal)} could work with ALL models")
-                print(f"   Consider: You chose model-specific versions despite universal options available")
-                print(f"      This may be optimal for performance/features per model")
-            else:
-                print(f"   Analysis: No single version compatible with all selected models")
-                print(f"   Multi-version upgrade is necessary due to model firmware constraints")
-        
-        print(f"\n   Coordination considerations:")
-        print(f"      !? Each model will upgrade to its optimal version")
-        print(f"      !? Network features may vary between firmware versions")
-        print(f"      !? Monitor compatibility for shared network functions")
-        print(f"      !? Consider upgrade timing to minimize impact")
-        
-        logging.info(f"Multi-version upgrade plan: {len(selected_versions)} different versions across {len(models_in_plan)} models")
-        
-        # Ask user for confirmation on mixed-version upgrade
-        print(f"\n  Proceed with multi-version upgrade plan?")
-        confirm_mixed = input("   Continue? (y/n, default=y): ").strip().lower() or "y"
-        if confirm_mixed not in ['y', 'yes']:
-            print(" Mixed-version upgrade cancelled by user.")
-            logging.info("Mixed-version upgrade cancelled by user")
-            return
-        else:
-            print(" Multi-version upgrade plan confirmed.")
-    else:
-        single_version = list(selected_versions)[0]
-        print(f"\n Single-Version Upgrade:")
-        print(f"   All {len(models_in_plan)} model(s) will upgrade to firmware {single_version}")
-        
-        # Analyze if this version is truly universal or if users just happened to select the same version
-        if len(models_in_plan) > 1 and 'model_version_ranges' in locals():
-            universal_compatibility = True
-            for model in models_in_plan:
-                if model not in model_version_ranges or single_version not in model_version_ranges[model]:
-                    universal_compatibility = False
-                    break
-            
-            if universal_compatibility:
-                print(f"   Excellent choice: {single_version} is UNIVERSAL (compatible with all models)")
-                print(f"   Unified firmware version simplifies management and ensures feature consistency")
-            else:
-                print(f"    Note: Selected version may not be verified as compatible with all models")
-                print(f"   Proceed with caution and monitor compatibility during upgrade")
-        else:
-            print(f"   Consistent firmware version across all AP models")
-        
-        logging.info(f"Single-version upgrade plan: all models upgrading to {single_version}")
-    
-    print(f"\n  Ready to proceed with advanced configuration...")
-    logging.info(f"Upgrade plan validated: {total_devices_to_upgrade} devices across {len(models_in_plan)} models")
-    
-    # Step 6: Advanced Configuration Options
-    print(f"\n  Advanced Upgrade Configuration:")
-    print("=" * 60)
-    
-    # Select upgrade strategy
-    strategies = {
-        "1": ("big_bang", "Upgrade all devices at once (fastest, higher risk)"),
-        "2": ("canary", "Phased rollout with configurable phases (safer, slower)"),
-        "3": ("rrm", "Radio Resource Management aware upgrade (AP-only, intelligent)"),
-        "4": ("serial", "One device at a time (safest, slowest)")
-    }
-    
-    print(" Select upgrade strategy:")
-    for key, (strategy, description) in strategies.items():
-        print(f"   [{key}] {strategy.upper()}: {description}")
-    
-    while True:
-        try:
-            strategy_choice = input("Select strategy (1-4, default=3 for rrm): ").strip() or "3"
-            if strategy_choice in strategies:
-                selected_strategy, strategy_desc = strategies[strategy_choice]
-                print(f"! Selected strategy: {selected_strategy.upper()}")
-                logging.info(f"User selected upgrade strategy: {selected_strategy}")
-                break
-            else:
-                print(" Invalid selection. Please choose 1-4.")
-        except KeyboardInterrupt:
-            print("\n Operation cancelled by user.")
-            logging.info("AP firmware upgrade cancelled during strategy selection")
-            return
-    
-    # Advanced strategy-specific options
-    upgrade_config = {
-        "strategy": selected_strategy,
-        "force": False,
-        "enable_p2p": True,  # Default to enabled
-        "max_failure_percentage": 5,
-        "start_time": None,
-        "canary_phases": [1, 10, 50, 100],
-        "p2p_cluster_size": 10,
-        "reboot": True  # APs auto-reboot, but explicit for clarity
-    }
-    
-    # Strategy-specific configuration
-    if selected_strategy == "canary":
-        print(f"\n  Canary Strategy Configuration:")
-        
-        # Custom phases
-        use_custom_phases = input("Use custom canary phases? (y/N): ").strip().lower()
-        if use_custom_phases in ['y', 'yes']:
-            while True:
-                try:
-                    phases_input = input("Enter comma-separated percentages (e.g., 2,10,25,100): ").strip()
-                    if phases_input:
-                        phases = [int(phase_str.strip()) for phase_str in phases_input.split(',')]
-                        if all(1 <= p <= 100 for p in phases) and phases[-1] == 100:
-                            upgrade_config["canary_phases"] = phases
-                            print(f"! Custom phases: {phases}")
-                            break
-                        else:
-                            print(" Phases must be 1-100 and end with 100")
-                    else:
-                        break
-                except ValueError:
-                    print(" Invalid format. Use comma-separated numbers.")
-        
-        # Failure threshold
-        try:
-            failure_input = input(f"Max failure percentage per phase (default={upgrade_config['max_failure_percentage']}%): ").strip()
-            if failure_input:
-                failure_pct = int(failure_input)
-                if 0 <= failure_pct <= 100:
-                    upgrade_config["max_failure_percentage"] = failure_pct
-                    print(f"! Max failures: {failure_pct}%")
-        except ValueError:
-            print(" Invalid input, using default failure threshold")
-    
-    elif selected_strategy == "rrm":
-        print(f"\n  RRM Strategy Configuration:")
-        
-        # RRM-specific options
-        rrm_options = {
-            "rrm_node_order": "fringe_to_center",
-            "rrm_first_batch_percentage": 2,
-            "rrm_max_batch_percentage": 10,
-            "rrm_slow_ramp": True,
-            "rrm_mesh_upgrade": "sequential"
-        }
-        
-        # Node order selection
-        node_orders = {
-            "1": ("fringe_to_center", "Start from edge APs (recommended)"),
-            "2": ("center_to_fringe", "Start from central APs")
-        }
-        
-        print("Select RRM node order:")
-        for key, (order, desc) in node_orders.items():
-            print(f"   [{key}] {desc}")
-        
-        order_choice = input("Select order (1-2, default=1): ").strip() or "1"
-        if order_choice in node_orders:
-            rrm_options["rrm_node_order"] = node_orders[order_choice][0]
-            print(f"! Node order: {node_orders[order_choice][1]}")
-        
-        # Batch size configuration
-        try:
-            first_batch = input(f"First batch percentage (default={rrm_options['rrm_first_batch_percentage']}%): ").strip()
-            if first_batch:
-                rrm_options["rrm_first_batch_percentage"] = int(first_batch)
-            
-            max_batch = input(f"Max batch percentage (default={rrm_options['rrm_max_batch_percentage']}%): ").strip()
-            if max_batch:
-                rrm_options["rrm_max_batch_percentage"] = int(max_batch)
-        except ValueError:
-            print(" Invalid input, using default batch sizes")
-        
-        upgrade_config.update(rrm_options)
-    
-    # P2P Configuration (all strategies)
-    print(f"\n  Peer-to-Peer (P2P) Configuration:")
-    enable_p2p = input("Enable AP-to-AP firmware sharing? (Y/n): ").strip().lower()
-    if enable_p2p not in ['n', 'no']:
-        upgrade_config["enable_p2p"] = True
-        print(" P2P enabled - APs will share firmware locally")
-        
-        try:
-            cluster_size = input(f"P2P cluster size (default={upgrade_config['p2p_cluster_size']}): ").strip()
-            if cluster_size:
-                upgrade_config["p2p_cluster_size"] = int(cluster_size)
-                print(f"! P2P cluster size: {upgrade_config['p2p_cluster_size']}")
-        except ValueError:
-            print(" Invalid input, using default cluster size")
-    else:
-        print(" P2P disabled - all firmware downloads from cloud")
-    
-    # Scheduling Options
-    print(f"\n  Scheduling Options:")
-    schedule_later = input("Schedule upgrade for later? (y/N): ").strip().lower()
-    if schedule_later in ['y', 'yes']:
-        while True:
-            try:
-                time_input = input("Enter start time (YYYY-MM-DD HH:MM or +minutes): ").strip()
-                if time_input.startswith('+'):
-                    # Relative time
-                    minutes = int(time_input[1:])
-                    start_time = int(time.time()) + (minutes * 60)
-                    upgrade_config["start_time"] = start_time
-                    scheduled_time = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M')
-                    print(f"! Scheduled for: {scheduled_time}")
-                    break
-                else:
-                    # Absolute time
-                    dt = datetime.strptime(time_input, '%Y-%m-%d %H:%M')
-                    start_time = int(dt.timestamp())
-                    upgrade_config["start_time"] = start_time
-                    print(f"! Scheduled for: {time_input}")
-                    break
-            except ValueError:
-                print(" Invalid format. Use 'YYYY-MM-DD HH:MM' or '+minutes'")
-                retry = input("Try again? (y/N): ").strip().lower()
-                if retry not in ['y', 'yes']:
-                    break
-    
-    # Force upgrade option
-    force_upgrade = input("Force upgrade even if same version? (y/N): ").strip().lower()
-    if force_upgrade in ['y', 'yes']:
-        upgrade_config["force"] = True
-        print(" Force upgrade enabled")
-    
-    # Display final configuration
-    print(f"\n  Final Upgrade Configuration:")
-    print("=" * 60)
-    print(f"Strategy: {upgrade_config['strategy'].upper()}")
-    if upgrade_config.get('start_time'):
-        scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
-        print(f"Scheduled: {scheduled_time}")
-    else:
-        print("Scheduled: Immediate")
-    print(f"P2P Enabled: {upgrade_config['enable_p2p']}")
-    if upgrade_config['enable_p2p']:
-        print(f"P2P Cluster Size: {upgrade_config['p2p_cluster_size']}")
-    print(f"Force Upgrade: {upgrade_config['force']}")
-    print(f"Max Failure Rate: {upgrade_config['max_failure_percentage']}%")
-    
-    if upgrade_config['strategy'] == 'canary':
-        print(f"Canary Phases: {upgrade_config['canary_phases']}%")
-    elif upgrade_config['strategy'] == 'rrm':
-        print(f"RRM Node Order: {upgrade_config.get('rrm_node_order', 'fringe_to_center')}")
-        print(f"RRM First Batch: {upgrade_config.get('rrm_first_batch_percentage', 2)}%")
-        print(f"RRM Max Batch: {upgrade_config.get('rrm_max_batch_percentage', 10)}%")
-    
-    # Step 7: Display upgrade plan and affected devices
-    total_devices = sum(len(plan["devices"]) for plan in upgrade_plan.values())
-    print(f"\n  Final Firmware Upgrade Plan:")
-    print("=" * 60)
-    
-    if len(sites_to_upgrade) > 1:
-        print(f"Bulk Upgrade Mode: {len(sites_to_upgrade)} sites")
-        for site_info in sites_to_upgrade:
-            site_count = sum(1 for plan in upgrade_plan.values() 
-                           for device in plan["devices"] 
-                           if device.get("_site_id") == site_info['id'])
-            print(f"   !? {site_info['name']}: {site_count} devices")
-    else:
-        print(f"Site: {sites_to_upgrade[0]['name']}")
-    
-    print(f"Total devices to upgrade: {total_devices}")
-    print(f"Upgrade strategy: {upgrade_config['strategy'].upper()}")
-    
-    for model, plan in upgrade_plan.items():
-        version = plan["version"]
-        devices = plan["devices"]
-        print(f"\n  {model} Firmware {version} ({len(devices)} devices):")
-        
-        if len(sites_to_upgrade) > 1:
-            # Group devices by site for multi-site display
-            devices_by_site = {}
-            for device in devices:
-                site_name = device.get("_site_name", "Unknown Site")
-                if site_name not in devices_by_site:
-                    devices_by_site[site_name] = []
-                devices_by_site[site_name].append(device)
-            
-            for site_name, site_devices in devices_by_site.items():
-                print(f"   {site_name} ({len(site_devices)} devices):")
-                for device in site_devices:
-                    device_name = device.get("name", "Unnamed")
-                    mac = device.get("mac", "Unknown")
-                    device_id = device.get("id")
-                    current_version = ap_versions.get(device_id, "Unknown")
-                    print(f"      !? {device_name} (MAC: {mac}) - Current: {current_version}")
-        else:
-            # Single site display
-            for device in devices:
-                device_name = device.get("name", "Unnamed")
-                mac = device.get("mac", "Unknown")
-                device_id = device.get("id")
-                current_version = ap_versions.get(device_id, "Unknown")
-                print(f"   !? {device_name} (MAC: {mac}) - Current: {current_version}")
-    
-    # Step 8: Display warnings and get user confirmation
-    warning_lines = [
-        " CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE OPERATION:",
-        "!? This action will UPGRADE FIRMWARE on Access Point devices",
-        "!? APs will REBOOT during the upgrade process",
-        "!? Wi-Fi connectivity will be TEMPORARILY LOST during upgrades", 
-        "!? Users will experience Wi-Fi service interruptions",
-        "!? Firmware upgrades can take 5-15 minutes per device",
-        "!? Failed upgrades may require manual recovery",
-        "!? This is a DISRUPTIVE network operation",
-        "!? Always ensure you have physical access to devices if recovery is needed",
-        f"!? Upgrade strategy: {upgrade_config['strategy'].upper()}",
-        f"!? Max failure tolerance: {upgrade_config['max_failure_percentage']}%",
-        "!? P2P enabled: " + ("Yes" if upgrade_config['enable_p2p'] else "No"),
-        "!? The script owner bears NO LIABILITY for any consequences",
-        "!? Proceed only if you understand and accept these risks"
-    ]
-    
-    print("\n" + "??" * 50)
-    for line in warning_lines:
-        print(line)
-    print("??" * 50)
-    
-    print(f"\n  Summary:")
-    if len(sites_to_upgrade) > 1:
-        print(f"   !? Bulk upgrade across {len(sites_to_upgrade)} sites")
-        sites_with_devices = len(set(device.get("_site_name") for plan in upgrade_plan.values() for device in plan["devices"]))
-        print(f"   !? Sites with devices to upgrade: {sites_with_devices}")
-    else:
-        print(f"   !? Site: {sites_to_upgrade[0]['name']}")
-    print(f"   !? Total APs to upgrade: {total_devices}")
-    print(f"   !? Models affected: {len(upgrade_plan)}")
-    print(f"   !? Strategy: {upgrade_config['strategy'].upper()}")
-    
-    # Show target firmware versions for each model
-    print(f"   !? Target firmware versions:")
-    for model, plan in upgrade_plan.items():
-        version = plan["version"]
-        device_count = len(plan["devices"])
-        print(f"      - {model}: v{version} ({device_count} devices)")
-    
-    if upgrade_config.get('start_time'):
-        scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
-        print(f"   !? Scheduled: {scheduled_time}")
-    else:
-        print(f"   !? Scheduled: Immediate")
-    
-    # Get user confirmation with liability waiver
-    print(f"\n  Do you want to proceed with upgrading {total_devices} AP devices?")
-    print("   Type 'UPGRADE' (all caps) to confirm, or anything else to cancel:")
-    print("   By typing 'UPGRADE', you acknowledge and accept all risks and liability.")
-    
-    try:
-        user_input = input(">>> ").strip()
-        if user_input != "UPGRADE":
-            print(" Advanced firmware upgrade operation cancelled by user.")
-            logging.info("Advanced AP firmware upgrade operation cancelled by user input")
-            return
-        else:
-            print(" User confirmed advanced firmware upgrade operation. Proceeding...")
-            logging.info(f"! LIABILITY WAIVER ACCEPTED: User confirmed advanced AP firmware upgrade for {total_devices} devices at site {site_name}")
-            logging.info(f"User input: '{user_input}' - User accepts full responsibility for firmware upgrade risks")
-            logging.info(f"Upgrade strategy: {upgrade_config['strategy']}, P2P: {upgrade_config['enable_p2p']}, Max failures: {upgrade_config['max_failure_percentage']}%")
-            # Log detailed upgrade plan for audit trail
-            plan_summary = []
-            for model, plan in upgrade_plan.items():
-                plan_summary.append(f"{model}?{plan['version']} ({len(plan['devices'])} devices)")
-            logging.info(f"Upgrade plan: {'; '.join(plan_summary)}")
-            
-    except KeyboardInterrupt:
-        print("\n Firmware upgrade operation cancelled by user (Ctrl+C).")
-        logging.info("AP firmware upgrade operation cancelled by user interrupt")
-        return
-    except Exception as e:
-        print(f"! Error getting user input: {e}")
-        logging.error(f"Error getting user input for upgrade confirmation: {e}")
-        return
-    
-    # Step 9: Execute advanced firmware upgrades
-    print("\n  Starting advanced AP firmware upgrade operations...")
-    print("=" * 60)
-    logging.info("Starting firmware upgrade execution phase")
-    logging.debug(f"Upgrade strategy: {upgrade_config['strategy']}, P2P: {upgrade_config['enable_p2p']}, Max failures: {upgrade_config['max_failure_percentage']}%")
-    
-    results = []
-    successful_upgrades = 0
-    failed_upgrades = 0
-    upgrade_ids = []  # Track multiple upgrade IDs for multi-site
-    
-    # Organize devices by site for execution
-    logging.debug("Organizing devices by site for execution")
-    devices_by_site = {}
-    for model, plan in upgrade_plan.items():
-        version = plan["version"]
-        devices = plan["devices"]
-        logging.debug(f"Processing {len(devices)} devices for model {model} firmware {version}")
-        
-        for device in devices:
-            site_id = device.get("_site_id")
-            site_name = device.get("_site_name")
-            
-            if site_id not in devices_by_site:
-                logging.debug(f"Creating new site entry for {site_name} (ID: {site_id})")
-                devices_by_site[site_id] = {
-                    'name': site_name,
-                    'devices': [],
-                    'models': {}
-                }
-            
-            devices_by_site[site_id]['devices'].append(device)
-            
-            # Track model/version per site
-            if model not in devices_by_site[site_id]['models']:
-                devices_by_site[site_id]['models'][model] = {
-                    'version': version,
-                    'devices': []
-                }
-            devices_by_site[site_id]['models'][model]['devices'].append(device)
-    
-    logging.debug(f"Device organization complete: {len(devices_by_site)} sites")
-    for site_id, site_data in devices_by_site.items():
-        logging.debug(f"  Site {site_data['name']}: {len(site_data['devices'])} devices, {len(site_data['models'])} models")
-    
-    total_sites_to_upgrade = len(devices_by_site)
-    total_devices = sum(len(site_data['devices']) for site_data in devices_by_site.values())
-    logging.debug(f"Upgrade execution will process {total_devices} devices across {total_sites_to_upgrade} sites")
-    
-    print(f"\n  Executing upgrades across {total_sites_to_upgrade} site(s) with {total_devices} devices...")
-    
-    for site_index, (site_id, site_data) in enumerate(devices_by_site.items(), 1):
-        site_name = site_data['name']
-        site_devices = site_data['devices']
-        site_models = site_data['models']
-        
-        logging.debug(f"Starting upgrade execution for site {site_index}/{total_sites_to_upgrade}: {site_name}")
-        print(f"\n   Site {site_index}/{total_sites_to_upgrade}: {site_name} ({len(site_devices)} devices)")
-        print(f"   Strategy: {upgrade_config['strategy'].upper()}")
-        print(f"   P2P Enabled: {upgrade_config['enable_p2p']}")
-        
-        try:
-            # Prepare upgrade request for this site
-            device_ids = [device.get("id") for device in site_devices if device.get("id")]
-            
-            # Check if all devices in this site use the same firmware version
-            site_versions = set(model_info['version'] for model_info in site_models.values())
-            
-            if len(site_versions) == 1:
-                # Single version for this site
-                target_version = list(site_versions)[0]
-                
-                upgrade_body = {
-                    "strategy": upgrade_config["strategy"],
-                    "force": upgrade_config["force"],
-                    "enable_p2p": upgrade_config["enable_p2p"],
-                    "max_failure_percentage": upgrade_config["max_failure_percentage"],
-                    "reboot": upgrade_config["reboot"],
-                    "version": target_version,
-                    "device_ids": device_ids
-                }
-                
-                # Add P2P configuration
-                if upgrade_config["enable_p2p"]:
-                    upgrade_body["p2p_cluster_size"] = upgrade_config["p2p_cluster_size"]
-                
-                # Add strategy-specific options
-                if upgrade_config["strategy"] == "canary":
-                    upgrade_body["canary_phases"] = upgrade_config["canary_phases"]
-                elif upgrade_config["strategy"] == "rrm":
-                    for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage", "rrm_slow_ramp", "rrm_mesh_upgrade"]:
-                        if key in upgrade_config:
-                            upgrade_body[key] = upgrade_config[key]
-                
-                # Add scheduling
-                if upgrade_config.get("start_time"):
-                    upgrade_body["start_time"] = upgrade_config["start_time"]
-                
-                logging.debug(f"Prepared upgrade body for site {site_name}: {upgrade_body}")
-                print(f"      Upgrading all devices to version {target_version}...")
-                logging.info(f"Initiating upgrade for site {site_name} with {len(device_ids)} devices to version {target_version}")
-                
-                logging.debug(f"Calling upgradeSiteDevices API for site {site_id}")
-                resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(
-                    apisession,
-                    site_id,
-                    body=upgrade_body
-                )
-                logging.debug(f"upgradeSiteDevices API call completed for site {site_name}")
-                
-                # Handle response
-                upgrade_id = None
-                if hasattr(resp, "data") and resp.data:
-                    logging.debug(f"Upgrade response data: {resp.data}")
-                    if isinstance(resp.data, dict) and "upgrade_id" in resp.data:
-                        upgrade_id = resp.data["upgrade_id"]
-                        upgrade_ids.append(upgrade_id)
-                        logging.debug(f"Upgrade ID captured: {upgrade_id}")
-                        print(f"      Upgrade initiated - ID: {upgrade_id}")
-                    else:
-                        logging.debug(f"Upgrade initiated without specific upgrade ID")
-                        print(f"      Upgrade command sent successfully")
-                else:
-                    logging.warning(f"Upgrade response missing data for site {site_name}")
-                
-                successful_upgrades += len(site_devices)
-                logging.info(f"! Site {site_name} upgrade initiated for {len(site_devices)} devices")
-                
-            else:
-                # Multiple versions for this site - separate calls per model
-                print(f"      Multiple firmware versions for site - executing per model...")
-                
-                for model, model_info in site_models.items():
-                    model_version = model_info['version']
-                    model_devices = model_info['devices']
-                    model_device_ids = [device.get("id") for device in model_devices if device.get("id")]
-                    
-                    print(f"         !? {model}: {len(model_devices)} devices v{model_version}")
-                    
-                    model_upgrade_body = {
-                        "strategy": upgrade_config["strategy"],
-                        "force": upgrade_config["force"],
-                        "enable_p2p": upgrade_config["enable_p2p"],
-                        "max_failure_percentage": upgrade_config["max_failure_percentage"],
-                        "reboot": upgrade_config["reboot"],
-                        "version": model_version,
-                        "device_ids": model_device_ids
-                    }
-                    
-                    # Add P2P and strategy configs
-                    if upgrade_config["enable_p2p"]:
-                        model_upgrade_body["p2p_cluster_size"] = upgrade_config["p2p_cluster_size"]
-                    if upgrade_config["strategy"] == "canary":
-                        model_upgrade_body["canary_phases"] = upgrade_config["canary_phases"]
-                    elif upgrade_config["strategy"] == "rrm":
-                        for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage", "rrm_slow_ramp", "rrm_mesh_upgrade"]:
-                            if key in upgrade_config:
-                                model_upgrade_body[key] = upgrade_config[key]
-                    if upgrade_config.get("start_time"):
-                        model_upgrade_body["start_time"] = upgrade_config["start_time"]
-                    
-                    logging.debug(f"Prepared per-model upgrade body for {model}: {model_upgrade_body}")
-                    logging.debug(f"Calling upgradeSiteDevices API for {model} devices in site {site_name}")
-                    model_resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(
-                        apisession,
-                        site_id,
-                        body=model_upgrade_body
-                    )
-                    logging.debug(f"Per-model upgradeSiteDevices API call completed for {model}")
-                    
-                    # Handle model upgrade response
-                    if hasattr(model_resp, "data") and model_resp.data and isinstance(model_resp.data, dict):
-                        logging.debug(f"Per-model upgrade response data for {model}: {model_resp.data}")
-                        if "upgrade_id" in model_resp.data:
-                            model_upgrade_id = model_resp.data["upgrade_id"]
-                            upgrade_ids.append(model_upgrade_id)
-                            logging.debug(f"Per-model upgrade ID captured for {model}: {model_upgrade_id}")
-                            print(f"            {model} upgrade initiated - ID: {model_upgrade_id}")
-                        else:
-                            logging.debug(f"Per-model upgrade initiated for {model} without specific upgrade ID")
-                            print(f"            {model} upgrade command sent")
-                    else:
-                        logging.warning(f"Per-model upgrade response missing data for {model} in site {site_name}")
-                    
-                    successful_upgrades += len(model_devices)
-            
-            # Log each device for audit trail
-            for device in site_devices:
-                device_name = device.get("name", "Unnamed")
-                device_mac = device.get("mac", "Unknown")
-                device_id = device.get("id", "Unknown")
-                device_model = device.get("model", "Unknown")
-                current_version = ap_versions.get(device_id, "Unknown")
-                
-                # Find target version for this device
-                target_version = "Unknown"
-                for model, plan in upgrade_plan.items():
-                    if device in plan["devices"]:
-                        target_version = plan["version"]
-                        break
-                
-                results.append({
-                    "Site ID": site_id,
-                    "Site Name": site_name,
-                    "Device ID": device_id,
-                    "Device Name": device_name,
-                    "Device MAC": device_mac,
-                    "Model": device_model,
-                    "Current Version": current_version,
-                    "Target Version": target_version,
-                    "Strategy": upgrade_config["strategy"],
-                    "P2P Enabled": upgrade_config["enable_p2p"],
-                    "Max Failure %": upgrade_config["max_failure_percentage"],
-                    "Force Upgrade": upgrade_config["force"],
-                    "Upgrade ID": upgrade_id or "Multiple",
-                    "Status": "Advanced Upgrade Initiated",
-                    "Timestamp": datetime.now(timezone.utc).isoformat()
-                })
-                
-        except Exception as e:
-            error_status = f"ERROR: {e}"
-            print(f"      Failed to initiate upgrade for site {site_name}: {e}")
-            logging.error(f"! Failed to initiate upgrade for site {site_name}: {e}")
-            failed_upgrades += len(site_devices)
-            
-            # Log failed devices
-            for device in site_devices:
-                device_name = device.get("name", "Unnamed")
-                device_mac = device.get("mac", "Unknown")
-                device_id = device.get("id", "Unknown")
-                device_model = device.get("model", "Unknown")
-                current_version = ap_versions.get(device_id, "Unknown")
-                
-                # Find target version for this device
-                target_version = "Unknown"
-                for model, plan in upgrade_plan.items():
-                    if device in plan["devices"]:
-                        target_version = plan["version"]
-                        break
-                
-                results.append({
-                    "Site ID": site_id,
-                    "Site Name": site_name,
-                    "Device ID": device_id,
-                    "Device Name": device_name,
-                    "Device MAC": device_mac,
-                    "Model": device_model,
-                    "Current Version": current_version,
-                    "Target Version": target_version,
-                    "Strategy": upgrade_config["strategy"],
-                    "P2P Enabled": upgrade_config["enable_p2p"],
-                    "Max Failure %": upgrade_config["max_failure_percentage"],
-                    "Force Upgrade": upgrade_config["force"],
-                    "Upgrade ID": "Failed",
-                    "Status": error_status,
-                    "Timestamp": datetime.now(timezone.utc).isoformat()
-                })
-    
-    # Step 10: Configure site auto-upgrade settings
-    logging.debug(f"Starting auto-upgrade configuration for site {site_name} (ID: {site_id})")
-    print(f"\n  Configuring site auto-upgrade settings...")
-    
-    # Collect unique versions from upgrade plan
-    target_versions = set(plan["version"] for plan in upgrade_plan.values())
-    logging.debug(f"Collected target versions from upgrade plan: {target_versions}")
-    
-    if len(target_versions) == 1:
-        # Single version - configure auto-upgrade for the site
-        target_version = list(target_versions)[0]
-        logging.debug(f"Single target version detected: {target_version}")
-        
-        auto_upgrade_prompt = input(f"Configure site auto-upgrade settings? (Y/n): ").strip().lower()
-        logging.debug(f"User auto-upgrade configuration choice: '{auto_upgrade_prompt}'")
-        if auto_upgrade_prompt not in ['n', 'no']:
-            try:
-                logging.debug(f"Proceeding with auto-upgrade configuration for site {site_name}")
-                print(f"   Configuring site auto-upgrade settings...")
-                
-                # Get current site settings to check existing auto-upgrade configuration
-                logging.debug(f"Retrieving current auto-upgrade settings for site {site_name}")
-                current_auto_upgrade = None
-                current_settings = {}
-                try:
-                    current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
-                    logging.debug(f"API call getSiteSetting completed for site {site_id}")
-                    current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
-                    current_auto_upgrade = current_settings.get("auto_upgrade", {}) if isinstance(current_settings, dict) else {}
-                    
-                    logging.debug(f"Current auto-upgrade settings retrieved: {current_auto_upgrade}")
-                    
-                    # Display current auto-upgrade settings if they exist
-                    if current_auto_upgrade and current_auto_upgrade.get("enabled"):
-                        logging.debug(f"Auto-upgrade currently enabled for site {site_name}")
-                        print(f"   Current auto-upgrade settings:")
-                        print(f"      !? Enabled: Yes")
-                        print(f"      !? Version: {current_auto_upgrade.get('version', 'Not set')}")
-                        print(f"      !? Time of day: {current_auto_upgrade.get('time_of_day', 'Not set')}")
-                        day_of_week = current_auto_upgrade.get('day_of_week')
-                        if day_of_week:
-                            print(f"      !? Day of week: {day_of_week}")
-                        else:
-                            print(f"      !? Day of week: Every day")
-                    else:
-                        logging.debug(f"Auto-upgrade currently disabled or not configured for site {site_name}")
-                        print(f"   Current auto-upgrade: Disabled or not configured")
-                        
-                except Exception as e:
-                    logging.warning(f"Could not retrieve current site settings: {e}")
-                    print(f"   Could not retrieve current settings: {e}")
-                
-                # Auto-upgrade configuration options
-                logging.debug(f"Presenting auto-upgrade configuration options for target version {target_version}")
-                print(f"\n   Auto-upgrade configuration options:")
-                print(f"      [1] Enable auto-upgrade to version {target_version}")
-                print(f"      [2] Disable auto-upgrade") 
-                print(f"      [3] Skip auto-upgrade configuration")
-                
-                config_choice = input(f"   Select option (1-3, default=1): ").strip() or "1"
-                logging.debug(f"User auto-upgrade configuration choice: '{config_choice}'")
-                
-                if config_choice == "2":
-                    # Disable auto-upgrade
-                    logging.debug(f"Configuring auto-upgrade to be disabled for site {site_name}")
-                    new_auto_upgrade = {
-                        "enabled": False
-                    }
-                    print(f"   Auto-upgrade will be disabled")
-                elif config_choice == "3":
-                    # Skip configuration
-                    logging.debug(f"Skipping auto-upgrade configuration for site {site_name}")
-                    print("   Skipping site auto-upgrade configuration")
-                    logging.info("User chose to skip site auto-upgrade configuration")
-                    # Continue without configuring auto-upgrade
-                    pass
-                else:
-                    # Enable auto-upgrade (option 1 or fallback)
-                    logging.debug(f"Enabling comprehensive auto-upgrade for site {site_name} with target version {target_version}")
-                    print(f"   Configuring comprehensive auto-upgrade settings...")
-                    print(f"   This ensures all AP models get appropriate firmware automatically")
-                    
-                    # Build custom_versions dictionary starting with models from the upgrade plan
-                    custom_versions = {}
-                    models_in_upgrade_plan = set(upgrade_plan.keys())
-                    logging.debug(f"Models in upgrade plan: {models_in_upgrade_plan}")
-                    
-                    # Get all models from the upgrade plan and set their target versions
-                    for model, plan in upgrade_plan.items():
-                        model_version = plan["version"]
-                        custom_versions[model] = model_version
-                        logging.debug(f"Setting custom version for {model}: {model_version}")
-                        print(f"      {model}: {model_version} (from upgrade plan)")
-                    
-                    logging.debug(f"Starting AP model family analysis for comprehensive auto-upgrade coverage")
-                    print(f"\n   Analyzing all available AP models for comprehensive auto-upgrade coverage...")
-                    
-                    # Get all available models from the firmware API
-                    all_available_models = set()
-                    model_version_ranges = {}
-                    
-                    if 'available_versions' in locals() and available_versions:
-                        logging.debug(f"Processing available_versions data with {len(available_versions)} entries")
-                        for version_info in available_versions:
-                            if isinstance(version_info, dict):
-                                # Try both "models" (plural) and "model" (singular) fields
-                                models = version_info.get("models", [])
-                                model = version_info.get("model")
-                                version_num = version_info.get("version", "Unknown")
-                                
-                                target_models = models if models else ([model] if model else [])
-                                
-                                for target_model in target_models:
-                                    if target_model:
-                                        all_available_models.add(target_model)
-                                        
-                                        # Track version ranges for comprehensive coverage
-                                        if target_model not in model_version_ranges:
-                                            model_version_ranges[target_model] = []
-                                        model_version_ranges[target_model].append(version_num)
-                    
-                    logging.debug(f"All available models discovered: {all_available_models}")
-                    logging.debug(f"Model version ranges: {len(model_version_ranges)} models tracked")
-                    
-                    # Find models that are available but not in the current upgrade plan
-                    models_not_in_plan = all_available_models - models_in_upgrade_plan
-                    logging.debug(f"Models not in upgrade plan: {models_not_in_plan}")
-                    
-                    if models_not_in_plan:
-                        logging.debug(f"Processing {len(models_not_in_plan)} additional AP models for auto-upgrade configuration")
-                        print(f"\n   Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
-                        
-                        # Group models by their available firmware versions (AP families)
-                        def get_version_signature(model_versions):
-                            """Create a signature of available versions for grouping"""
-                            return tuple(sorted(set(model_versions)))
-                        
-                        model_families = {}  # signature -> list of models
-                        for model in models_not_in_plan:
-                            if model in model_version_ranges:
-                                signature = get_version_signature(model_version_ranges[model])
-                                if signature not in model_families:
-                                    model_families[signature] = []
-                                model_families[signature].append(model)
-                        
-                        logging.debug(f"Created {len(model_families)} AP model families based on firmware version signatures")
-                        
-                        # Display grouped models
-                        family_count = 0
-                        for signature, models in model_families.items():
-                            family_count += 1
-                            logging.debug(f"Family {family_count}: {models} with {len(signature)} firmware versions")
-                            if len(models) > 1:
-                                print(f"      !? AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
-                            else:
-                                print(f"      !? {models[0]} ({len(signature)} firmware versions)")
-                        
-                        print(f"\n   Configure auto-upgrade for additional models:")
-                        print(f"   Models with identical firmware versions are grouped together as families.")
-                        print(f"   This ensures new APs of ANY model will auto-upgrade to appropriate firmware.")
-                        
-                        configure_additional = input(f"   Configure auto-upgrade for additional models? (Y/n): ").strip().lower()
-                        logging.debug(f"User choice for additional model configuration: '{configure_additional}'")
-                        
-                        if configure_additional not in ['n', 'no']:
-                            logging.debug(f"Proceeding with firmware version selection for {len(model_families)} model families")
-                            print(f"\n   Selecting firmware versions for additional model families...")
-                            print(f"   Strategy: Highest version per major revision (e.g., highest 0.12.x, highest 0.14.x)")
-                            
-                            # Process each family group
-                            for family_idx, (signature, models) in enumerate(model_families.items(), 1):
-                                if not models:  # Skip empty groups
-                                    logging.debug(f"Skipping empty family group {family_idx}")
-                                    continue
-                                    
-                                logging.debug(f"Processing family {family_idx} with models: {models}")
-                                
-                                # Get firmware versions for this family (all models have the same versions)
-                                representative_model = models[0]
-                                if representative_model not in model_version_ranges:
-                                    logging.warning(f"No firmware versions found for representative model {representative_model} in family {models}")
-                                    print(f"      No firmware versions found for model family {models}")
-                                    continue
-                                
-                                family_versions = model_version_ranges[representative_model]
-                                logging.debug(f"Family {family_idx} has {len(family_versions)} firmware versions: {family_versions}")
-                                
-                                # Group versions by major revision
-                                major_revisions = {}
-                                for version in family_versions:
-                                    try:
-                                        # Extract major.minor (e.g., "0.12" from "0.12.27452")
-                                        parts = version.split(".")
-                                        if len(parts) >= 2:
-                                            major_minor = f"{parts[0]}.{parts[1]}"
-                                            if major_minor not in major_revisions:
-                                                major_revisions[major_minor] = []
-                                            major_revisions[major_minor].append(version)
-                                    except:
-                                        # Fallback for non-standard version formats
-                                        major_minor = "other"
-                                        if major_minor not in major_revisions:
-                                            major_revisions[major_minor] = []
-                                        major_revisions[major_minor].append(version)
-                                
-                                logging.debug(f"Family {family_idx} major revisions: {list(major_revisions.keys())}")
-                                
-                                # Find highest version for each major revision
-                                highest_per_major = {}
-                                for major_minor, versions in major_revisions.items():
-                                    try:
-                                        # Sort versions within this major revision
-                                        sorted_versions = sorted(versions, key=lambda x: tuple(map(int, x.split("."))), reverse=True)
-                                        highest_per_major[major_minor] = sorted_versions[0]
-                                    except:
-                                        # Fallback to string sorting
-                                        sorted_versions = sorted(versions, reverse=True)
-                                        highest_per_major[major_minor] = sorted_versions[0]
-                                
-                                logging.debug(f"Family {family_idx} highest versions per major: {highest_per_major}")
-                                
-                                # Display family information
-                                if len(models) > 1:
-                                    print(f"\n      AP Family {family_idx}: {', '.join(sorted(models))}")
-                                    print(f"         These models share identical firmware version compatibility")
-                                else:
-                                    print(f"\n      Model: {models[0]}")
-                                    
-                                print(f"         Available major revisions with highest versions:")
-                                
-                                # Display options for this family
-                                major_options = {}
-                                for idx, (major_minor, highest_version) in enumerate(sorted(highest_per_major.items()), 1):
-                                    print(f"            [{idx}] {major_minor}.x {highest_version}")
-                                    major_options[str(idx)] = highest_version
-                                
-                                print(f"            [s] Skip this family")
-                                
-                                # Get user selection for the entire family
-                                while True:
-                                    try:
-                                        family_name = f"Family {family_idx}" if len(models) > 1 else models[0]
-                                        user_choice = input(f"         Select firmware for {family_name} (1-{len(major_options)}, s): ").strip().lower()
-                                        
-                                        if user_choice == 's':
-                                            print(f"         Skipping {family_name}")
-                                            break
-                                        elif user_choice in major_options:
-                                            selected_version = major_options[user_choice]
-                                            # Apply the selected version to all models in this family
-                                            for model in models:
-                                                custom_versions[model] = selected_version
-                                            print(f"         {family_name} firmware {selected_version}")
-                                            print(f"            Applied to: {', '.join(sorted(models))}")
-                                            break
-                                        else:
-                                            print(f"         Invalid selection. Please choose 1-{len(major_options)} or 's'.")
-                                    except KeyboardInterrupt:
-                                        print("\n         Configuration cancelled.")
-                                        break
-                    
-                    # Validate that we have comprehensive model coverage
-                    total_models_configured = len(custom_versions)
-                    models_from_plan = len(models_in_upgrade_plan)
-                    models_additionally_configured = total_models_configured - models_from_plan
-                    
-                    print(f"\n   Auto-upgrade coverage summary:")
-                    print(f"      !? Models from upgrade plan: {models_from_plan}")
-                    print(f"      !? Additional models configured: {models_additionally_configured}")
-                    print(f"      !? Total models configured: {total_models_configured}")
-                    
-                    if total_models_configured > 0:
-                        print(f"\n   Complete auto-upgrade model configuration:")
-                        for model, version in sorted(custom_versions.items()):
-                            status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                            print(f"      !? {model} firmware {version} ({status})")
-
-                    new_auto_upgrade = {
-                        "enabled": True,
-                        "version": "custom",  # Use "custom" to indicate custom_versions are in use
-                        "custom_versions": custom_versions
-                    }
-                    
-                    # Time scheduling configuration
-                    print(f"\n   Auto-upgrade time scheduling:")
-                    
-                    # Check if user wants to maintain current time settings or change them
-                    if current_auto_upgrade and current_auto_upgrade.get("time_of_day"):
-                        current_time = current_auto_upgrade.get("time_of_day")
-                        current_day = current_auto_upgrade.get("day_of_week")
-                        
-                        if current_day:
-                            current_schedule = f"{current_time} on {current_day}"
-                        else:
-                            current_schedule = f"{current_time} every day"
-                        
-                        maintain_time = input(f"   Keep current schedule ({current_schedule})? (Y/n): ").strip().lower()
-                        
-                        if maintain_time not in ['n', 'no']:
-                            # Maintain current time settings
-                            new_auto_upgrade["time_of_day"] = current_time
-                            if current_day:
-                                new_auto_upgrade["day_of_week"] = current_day
-                            print(f"   Maintaining current schedule: {current_schedule}")
-                        else:
-                            # Configure new time settings
-                            print(f"   Configure new auto-upgrade schedule:")
-                            new_auto_upgrade.update(get_auto_upgrade_time_settings())
-                    else:
-                        # No current time settings, get new ones
-                        print(f"   Configure auto-upgrade schedule:")
-                        new_auto_upgrade.update(get_auto_upgrade_time_settings())
-                
-                # Only proceed with site settings update if user didn't choose to skip
-                if config_choice != "3":
-                    # Prepare final site settings update
-                    logging.debug(f"Preparing auto-upgrade settings update for site {site_name}")
-                    site_settings_body = {
-                        "auto_upgrade": new_auto_upgrade
-                    }
-                    logging.debug(f"Auto-upgrade configuration to apply: {new_auto_upgrade}")
-                    
-                    # Merge with existing settings to preserve other configurations
-                    if isinstance(current_settings, dict):
-                        logging.debug(f"Merging with existing site settings to preserve other configurations")
-                        current_settings.update(site_settings_body)
-                        site_settings_body = current_settings
-                    
-                    # Update site settings
-                    logging.debug(f"Calling updateSiteSettings API for site {site_id}")
-                    settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
-                        apisession,
-                        site_id,
-                        body=site_settings_body
-                    )
-                    logging.debug(f"updateSiteSettings API call completed for site {site_name}")
-                    
-                    if new_auto_upgrade.get("enabled", False):
-                        logging.info(f"Site auto-upgrade configured successfully for {site_name}")
-                        print(f"   Site auto-upgrade configured successfully")
-                        custom_versions = new_auto_upgrade.get("custom_versions", {})
-                        if custom_versions:
-                            logging.debug(f"Auto-upgrade configured with {len(custom_versions)} custom model versions")
-                            print(f"   New/replacement APs will auto-upgrade per model:")
-                            for model, version in custom_versions.items():
-                                print(f"      !? {model}: {version}")
-                            
-                            # Log with model details
-                            version_summary = ", ".join([f"{m}:{v}" for m, v in custom_versions.items()])
-                            logging.info(f"Site auto-upgrade configured: site={site_id}, custom_versions={version_summary}")
-                        else:
-                            logging.debug(f"Auto-upgrade configured with standard version {target_version}")
-                            print(f"   New/replacement APs will auto-upgrade to configured version")
-                            logging.info(f"Site auto-upgrade configured: site={site_id}")
-                    else:
-                        logging.info(f"Site auto-upgrade disabled for {site_name}")
-                        print(f"   Site auto-upgrade disabled successfully")
-                        print(f"   New/replacement APs will NOT auto-upgrade")
-                        logging.info(f"Site auto-upgrade disabled: site={site_id}")
-                    
-                    # Add to results for audit trail
-                    if new_auto_upgrade.get("enabled", False):
-                        # Auto-upgrade is enabled - set appropriate values
-                        custom_versions = new_auto_upgrade.get("custom_versions", {})
-                        if custom_versions:
-                            version_summary = ", ".join([f"{m}:{v}" for m, v in custom_versions.items()])
-                            target_version_display = f"Custom: {version_summary}"
-                            status_display = "Site Auto-Upgrade Configured (Custom Versions)"
-                        else:
-                            target_version_display = target_version
-                            status_display = "Site Auto-Upgrade Configured"
-                    else:
-                        # Auto-upgrade is disabled
-                        target_version_display = "DISABLED"
-                        status_display = "Site Auto-Upgrade Disabled"
-                    
-                    auto_upgrade_result = {
-                        "Site ID": site_id,
-                        "Site Name": site_name,
-                        "Device ID": "SITE_CONFIG",
-                        "Device Name": "Auto-Upgrade Setting",
-                        "Device MAC": "N/A",
-                        "Model": "Site Configuration",
-                        "Current Version": "N/A",
-                        "Target Version": target_version_display,
-                        "Strategy": upgrade_config["strategy"],
-                        "P2P Enabled": upgrade_config["enable_p2p"],
-                        "Max Failure %": upgrade_config["max_failure_percentage"],
-                        "Force Upgrade": upgrade_config["force"],
-                        "Upgrade ID": "SITE_AUTO_UPGRADE",
-                        "Status": status_display,
-                        "Timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                    
-                    results.append(auto_upgrade_result)
-                
-            except Exception as e:
-                error_msg = f"Failed to configure site auto-upgrade: {e}"
-                print(f"   {error_msg}")
-                logging.error(f"! {error_msg}")
-                
-                # Add failure to results
-                auto_upgrade_result = {
-                    "Site ID": site_id,
-                    "Site Name": site_name,
-                    "Device ID": "SITE_CONFIG",
-                    "Device Name": "Auto-Upgrade Setting",
-                    "Device MAC": "N/A",
-                    "Model": "Site Configuration",
-                    "Current Version": "N/A",
-                    "Target Version": "ERROR",
-                    "Strategy": upgrade_config["strategy"],
-                    "P2P Enabled": upgrade_config["enable_p2p"],
-                    "Max Failure %": upgrade_config["max_failure_percentage"],
-                    "Force Upgrade": upgrade_config["force"],
-                    "Upgrade ID": "SITE_AUTO_UPGRADE",
-                    "Status": f"ERROR: {e}",
-                    "Timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                results.append(auto_upgrade_result)
-        else:
-            print("   Skipping site auto-upgrade configuration")
-            logging.info("User chose to skip site auto-upgrade configuration")
-    
-    else:
-        # Multiple versions - need careful auto-upgrade configuration
-        print(f"   Multiple firmware versions in upgrade plan:")
-        for version in sorted(target_versions):
-            models_with_version = [model for model, plan in upgrade_plan.items() if plan["version"] == version]
-            print(f"      !? Version {version}: {', '.join(models_with_version)}")
-        
-        print(f"\n   Auto-Upgrade Configuration for Mixed-Model Environment:")
-        print(f"   Site auto-upgrade must handle different AP models with different firmware capabilities.")
-        
-        # Analyze what models exist in the upgrade plan
-        all_models_in_plan = set(upgrade_plan.keys())
-        print(f"\n   AP Models in this upgrade plan: {', '.join(sorted(all_models_in_plan))}")
-        
-        # Provide enhanced options for mixed-model auto-upgrade
-        print(f"\n   Auto-upgrade options for mixed-model environment:")
-        print(f"      [1] Configure custom versions per model (RECOMMENDED)")
-        print(f"         !? Each AP model gets its optimal firmware version")
-        print(f"         !? New APs will auto-upgrade to model-appropriate firmware")
-        print(f"         !? Handles model compatibility constraints automatically")
-        print(f"      [2] Disable auto-upgrade")
-        print(f"         !? Manual firmware management required for new APs")
-        print(f"         !? Prevents version conflicts but requires more maintenance")
-        print(f"      [3] Skip auto-upgrade configuration")
-        print(f"         !? Leave current auto-upgrade settings unchanged")
-        
-        auto_upgrade_choice = input("   Select auto-upgrade option (1-3, default=1): ").strip() or "1"
-        
-        try:
-            if auto_upgrade_choice == "3":
-                print("   Skipping site auto-upgrade configuration")
-                logging.info("User chose to skip site auto-upgrade configuration for multi-version upgrade")
-                
-            elif auto_upgrade_choice == "2":
-                # Disable auto-upgrade
-                print(f"   Disabling site auto-upgrade...")
-                
-                # Configure auto-upgrade disabled
-                site_settings_body = {
-                    "auto_upgrade": {
-                        "enabled": False
-                    }
-                }
-                
-                # Get and merge current settings
-                try:
-                    current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
-                    current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
-                    if isinstance(current_settings, dict):
-                        current_settings.update(site_settings_body)
-                        site_settings_body = current_settings
-                except Exception as e:
-                    logging.warning(f"Could not retrieve current site settings: {e}")
-                
-                settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
-                    apisession,
-                    site_id,
-                    body=site_settings_body
-                )
-                
-                print(f"   Site auto-upgrade disabled successfully")
-                print(f"   New/replacement APs will NOT auto-upgrade")
-                print(f"   Manual firmware management will be required for new devices")
-                logging.info(f"Site auto-upgrade disabled: site={site_id} (user selected disable from multi-version upgrade)")
-                
-                # Add to results
-                auto_upgrade_result = {
-                    "Site ID": site_id,
-                    "Site Name": site_name,
-                    "Device ID": "SITE_CONFIG",
-                    "Device Name": "Auto-Upgrade Setting",
-                    "Device MAC": "N/A",
-                    "Model": "Site Configuration",
-                    "Current Version": "N/A",
-                    "Target Version": "DISABLED",
-                    "Strategy": upgrade_config["strategy"],
-                    "P2P Enabled": upgrade_config["enable_p2p"],
-                    "Max Failure %": upgrade_config["max_failure_percentage"],
-                    "Force Upgrade": upgrade_config["force"],
-                    "Upgrade ID": "SITE_AUTO_UPGRADE",
-                    "Status": "Site Auto-Upgrade Disabled (Mixed-Model Protection)",
-                    "Timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                results.append(auto_upgrade_result)
-                
-            else:
-                # Option 1 (default): Configure custom versions per model
-                print(f"   Configuring model-specific auto-upgrade versions...")
-                print(f"   This ensures each AP model gets compatible firmware automatically")
-                
-                # Build custom_versions dictionary starting with models from the upgrade plan
-                custom_versions = {}
-                models_in_upgrade_plan = set(upgrade_plan.keys())
-                
-                for model, plan in upgrade_plan.items():
-                    model_version = plan["version"]
-                    custom_versions[model] = model_version
-                    print(f"      {model} firmware {model_version} (from upgrade plan)")
-                
-                print(f"\n   Analyzing all available AP models for comprehensive auto-upgrade coverage...")
-                
-                # Get all available models from the firmware API
-                all_available_models = set()
-                model_version_ranges = {}
-                
-                if 'available_versions' in locals() and available_versions:
-                    for version_info in available_versions:
-                        if isinstance(version_info, dict):
-                            # Try both "models" (plural) and "model" (singular) fields
-                            models = version_info.get("models", [])
-                            model = version_info.get("model")
-                            version_num = version_info.get("version", "Unknown")
-                            
-                            target_models = models if models else ([model] if model else [])
-                            
-                            for target_model in target_models:
-                                if target_model:
-                                    all_available_models.add(target_model)
-                                    
-                                    # Track version ranges for comprehensive coverage
-                                    if target_model not in model_version_ranges:
-                                        model_version_ranges[target_model] = []
-                                    model_version_ranges[target_model].append(version_num)
-                
-                # Find models that are available but not in the current upgrade plan
-                models_not_in_plan = all_available_models - models_in_upgrade_plan
-                
-                if models_not_in_plan:
-                    print(f"\n   Found {len(models_not_in_plan)} additional AP models available for auto-upgrade:")
-                    
-                    # Group models by their available firmware versions (AP families)
-                    def get_version_signature(model_versions):
-                        """Create a signature of available versions for grouping"""
-                        return tuple(sorted(set(model_versions)))
-                    
-                    model_families = {}  # signature -> list of models
-                    for model in models_not_in_plan:
-                        if model in model_version_ranges:
-                            signature = get_version_signature(model_version_ranges[model])
-                            if signature not in model_families:
-                                model_families[signature] = []
-                            model_families[signature].append(model)
-                    
-                    # Display grouped models
-                    family_count = 0
-                    for signature, models in model_families.items():
-                        family_count += 1
-                        if len(models) > 1:
-                            print(f"      !? AP Family {family_count}: {', '.join(sorted(models))} ({len(signature)} firmware versions)")
-                        else:
-                            print(f"      !? {models[0]} ({len(signature)} firmware versions)")
-                    
-                    print(f"\n   Configure auto-upgrade for additional models:")
-                    print(f"   Models with identical firmware versions are grouped together as families.")
-                    print(f"   This ensures new APs of ANY model will auto-upgrade to appropriate firmware.")
-                    
-                    configure_additional = input(f"   Configure auto-upgrade for additional models? (Y/n): ").strip().lower()
-                    
-                    if configure_additional not in ['n', 'no']:
-                        print(f"\n   Selecting firmware versions for additional model families...")
-                        print(f"   Strategy: Highest version per major revision (e.g., highest 0.12.x, highest 0.14.x)")
-                        
-                        # Process each family group
-                        for family_idx, (signature, models) in enumerate(model_families.items(), 1):
-                            if not models:  # Skip empty groups
-                                continue
-                                
-                            # Get firmware versions for this family (all models have the same versions)
-                            representative_model = models[0]
-                            if representative_model not in model_version_ranges:
-                                print(f"      No firmware versions found for model family {models}")
-                                continue
-                            
-                            family_versions = model_version_ranges[representative_model]
-                            
-                            # Group versions by major revision
-                            major_revisions = {}
-                            for version in family_versions:
-                                try:
-                                    # Extract major.minor (e.g., "0.12" from "0.12.27452")
-                                    parts = version.split(".")
-                                    if len(parts) >= 2:
-                                        major_minor = f"{parts[0]}.{parts[1]}"
-                                        if major_minor not in major_revisions:
-                                            major_revisions[major_minor] = []
-                                        major_revisions[major_minor].append(version)
-                                except:
-                                    # Fallback for non-standard version formats
-                                    major_minor = "other"
-                                    if major_minor not in major_revisions:
-                                        major_revisions[major_minor] = []
-                                    major_revisions[major_minor].append(version)
-                            
-                            # Find highest version for each major revision
-                            highest_per_major = {}
-                            for major_minor, versions in major_revisions.items():
-                                try:
-                                    # Sort versions within this major revision
-                                    sorted_versions = sorted(versions, key=lambda x: tuple(map(int, x.split("."))), reverse=True)
-                                    highest_per_major[major_minor] = sorted_versions[0]
-                                except:
-                                    # Fallback to string sorting
-                                    sorted_versions = sorted(versions, reverse=True)
-                                    highest_per_major[major_minor] = sorted_versions[0]
-                            
-                            # Display family information
-                            if len(models) > 1:
-                                print(f"\n      AP Family {family_idx}: {', '.join(sorted(models))}")
-                                print(f"         These models share identical firmware version compatibility")
-                            else:
-                                print(f"\n      Model: {models[0]}")
-                                
-                            print(f"         Available major revisions with highest versions:")
-                            
-                            # Display options for this family
-                            major_options = {}
-                            for idx, (major_minor, highest_version) in enumerate(sorted(highest_per_major.items()), 1):
-                                print(f"            [{idx}] {major_minor}.x {highest_version}")
-                                major_options[str(idx)] = highest_version
-                            
-                            print(f"            [s] Skip this family")
-                            
-                            # Get user selection for the entire family
-                            while True:
-                                try:
-                                    family_name = f"Family {family_idx}" if len(models) > 1 else models[0]
-                                    user_choice = input(f"         Select firmware for {family_name} (1-{len(major_options)}, s): ").strip().lower()
-                                    
-                                    if user_choice == 's':
-                                        print(f"         Skipping {family_name}")
-                                        break
-                                    elif user_choice in major_options:
-                                        selected_version = major_options[user_choice]
-                                        # Apply the selected version to all models in this family
-                                        for model in models:
-                                            custom_versions[model] = selected_version
-                                        print(f"         {family_name} firmware {selected_version}")
-                                        print(f"            Applied to: {', '.join(sorted(models))}")
-                                        break
-                                    else:
-                                        print(f"         Invalid selection. Please choose 1-{len(major_options)} or 's'.")
-                                except KeyboardInterrupt:
-                                    print("\n         Configuration cancelled.")
-                                    break
-                
-                # Validate that we have comprehensive model coverage
-                total_models_configured = len(custom_versions)
-                models_from_plan = len(models_in_upgrade_plan)
-                models_additionally_configured = total_models_configured - models_from_plan
-                
-                print(f"\n   Auto-upgrade coverage summary:")
-                print(f"      !? Models from upgrade plan: {models_from_plan}")
-                print(f"      !? Additional models configured: {models_additionally_configured}")
-                print(f"      !? Total models configured: {total_models_configured}")
-                
-                if total_models_configured > 0:
-                    print(f"\n   Complete auto-upgrade model configuration:")
-                    for model, version in sorted(custom_versions.items()):
-                        status = "from upgrade plan" if model in models_in_upgrade_plan else "additional coverage"
-                        print(f"      !? {model} firmware {version} ({status})")
-                
-                # Configure auto-upgrade with comprehensive model-specific versions
-                new_auto_upgrade = {
-                    "enabled": True,
-                    "version": "custom",  # Use "custom" to indicate custom_versions are in use
-                    "custom_versions": custom_versions
-                }
-                
-                # Time scheduling configuration for comprehensive auto-upgrade
-                print(f"\n   Auto-upgrade time scheduling:")
-                print(f"   Configure when new APs should automatically upgrade their firmware.")
-                
-                # Get time settings (reuse existing function)
-                time_settings = get_auto_upgrade_time_settings()
-                new_auto_upgrade.update(time_settings)
-                
-                # Prepare final site settings update
-                site_settings_body = {
-                    "auto_upgrade": new_auto_upgrade
-                }
-                
-                # Get and merge current settings to preserve other configurations
-                try:
-                    current_settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
-                    current_settings = current_settings_resp.data if hasattr(current_settings_resp, 'data') else {}
-                    if isinstance(current_settings, dict):
-                        current_settings.update(site_settings_body)
-                        site_settings_body = current_settings
-                except Exception as e:
-                    logging.warning(f"Could not retrieve current site settings for merge: {e}")
-                
-                # Update site settings
-                settings_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
-                    apisession,
-                    site_id,
-                    body=site_settings_body
-                )
-                
-                print(f"   Site auto-upgrade configured with model-specific versions")
-                print(f"   New APs will auto-upgrade to model-appropriate firmware:")
-                
-                # Show the configured versions
-                for model, version in custom_versions.items():
-                    print(f"      !? New {model} APs firmware {version}")
-                
-                # Show time schedule
-                time_of_day = new_auto_upgrade.get("time_of_day", "02:00")
-                day_of_week = new_auto_upgrade.get("day_of_week")
-                if day_of_week:
-                    schedule_text = f"every {day_of_week} at {time_of_day}"
-                else:
-                    schedule_text = f"daily at {time_of_day}"
-                    
-                print(f"   Schedule: {schedule_text}")
-                print(f"   + Model compatibility: Protected - each model gets appropriate firmware")
-                
-                logging.info(f"Site auto-upgrade configured with custom versions: {custom_versions}")
-                logging.info(f"Auto-upgrade schedule: {schedule_text}")
-                
-                # Build version summary for results
-                version_summary = ", ".join([f"{m}:{v}" for m, v in custom_versions.items()])
-                
-                # Add to results
-                auto_upgrade_result = {
-                    "Site ID": site_id,
-                    "Site Name": site_name,
-                    "Device ID": "SITE_CONFIG",
-                    "Device Name": "Auto-Upgrade Setting",
-                    "Device MAC": "N/A",
-                    "Model": "Site Configuration",
-                    "Current Version": "N/A",
-                    "Target Version": f"Custom: {version_summary}",
-                    "Strategy": upgrade_config["strategy"],
-                    "P2P Enabled": upgrade_config["enable_p2p"],
-                    "Max Failure %": upgrade_config["max_failure_percentage"],
-                    "Force Upgrade": upgrade_config["force"],
-                    "Upgrade ID": "SITE_AUTO_UPGRADE",
-                    "Status": "Site Auto-Upgrade Configured (Model-Specific Versions)",
-                    "Timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                results.append(auto_upgrade_result)
-                
-        except Exception as e:
-            print(f"   Error during auto-upgrade configuration: {e}")
-            logging.error(f"Error during auto-upgrade configuration: {e}")
-
-    # Step 11: Offer to check upgrade status
-    if successful_upgrades > 0:
-        print(f"\n Firmware upgrade{'s' if successful_upgrades > 1 else ''} initiated successfully!")
-        print(f"   {successful_upgrades} upgrade{'s' if successful_upgrades > 1 else ''} started across {len(devices_by_site)} site{'s' if len(devices_by_site) > 1 else ''}")
-        
-        if upgrade_ids:
-            logging.info(f"Upgrade monitoring - {len(upgrade_ids)} upgrade(s) initiated across {len(devices_by_site)} site(s)")
-            
-            # Store upgrade IDs to file for later retrieval by option 60
-            try:
-                upgrade_tracking_file = "ActiveUpgrades.json"
-                upgrade_tracking_data = []
-                
-                # Load existing data if file exists
-                if os.path.exists(upgrade_tracking_file):
-                    try:
-                        with open(upgrade_tracking_file, 'r', encoding='utf-8') as f:
-                            upgrade_tracking_data = json.load(f)
-                    except:
-                        upgrade_tracking_data = []
-                
-                # Add new upgrade records with detailed model tracking
-                timestamp = datetime.now(timezone.utc).isoformat()
-                for upgrade_id in upgrade_ids:
-                    # Find which site this upgrade belongs to by matching with results
-                    matching_sites = []
-                    upgrade_models = {}
-                    total_devices_for_upgrade = 0
-                    
-                    # Search through results to find devices with this upgrade_id
-                    for result in results:
-                        result_upgrade_id = result.get("Upgrade ID")
-                        if result_upgrade_id == upgrade_id or (result_upgrade_id == "Multiple" and len(upgrade_ids) == 1):
-                            site_id = result["Site ID"]
-                            site_name = result["Site Name"]
-                            model = result["Model"]
-                            target_version = result["Target Version"]
-                            
-                            # Track site info
-                            site_key = f"{site_id}|{site_name}"
-                            if site_key not in matching_sites:
-                                matching_sites.append(site_key)
-                            
-                            # Track model/version combinations
-                            if model not in upgrade_models:
-                                upgrade_models[model] = {
-                                    'version': target_version,
-                                    'device_count': 0
-                                }
-                            upgrade_models[model]['device_count'] += 1
-                            total_devices_for_upgrade += 1
-                    
-                    # Use first matching site, or fallback to first site from devices_by_site
-                    if matching_sites:
-                        site_parts = matching_sites[0].split("|", 1)
-                        upgrade_site_id = site_parts[0]
-                        upgrade_site_name = site_parts[1] if len(site_parts) > 1 else "Unknown"
-                    else:
-                        # Fallback to first site
-                        first_site_id = next(iter(devices_by_site.keys()))
-                        upgrade_site_id = first_site_id
-                        upgrade_site_name = devices_by_site[first_site_id]['name']
-                    
-                    # Determine upgrade type for better tracking
-                    upgrade_type = "mixed_model" if len(upgrade_models) > 1 else "single_model"
-                    version_summary = None
-                    
-                    if upgrade_type == "single_model":
-                        # Single model - use the version directly
-                        model_name = next(iter(upgrade_models.keys()))
-                        version_summary = f"{model_name} {upgrade_models[model_name]['version']}"
-                    else:
-                        # Multiple models - create summary
-                        model_summaries = []
-                        for model, info in upgrade_models.items():
-                            model_summaries.append(f"{model}:{info['version']}")
-                        version_summary = ", ".join(model_summaries)
-                    
-                    upgrade_record = {
-                        'upgrade_id': upgrade_id,
-                        'site_id': upgrade_site_id,
-                        'site_name': upgrade_site_name,
-                        'org_id': org_id,
-                        'strategy': upgrade_config['strategy'],
-                        'initiated_timestamp': timestamp,
-                        'total_devices': total_devices_for_upgrade or sum(len(plan["devices"]) for plan in upgrade_plan.values()),
-                        'upgrade_type': upgrade_type,
-                        'version_summary': version_summary,
-                        'models_and_versions': {model: info['version'] for model, info in upgrade_models.items()} or {model: plan["version"] for model, plan in upgrade_plan.items()},
-                        'device_counts_by_model': {model: info['device_count'] for model, info in upgrade_models.items()},
-                        'p2p_enabled': upgrade_config.get('enable_p2p', False),
-                        'max_failure_percentage': upgrade_config.get('max_failure_percentage', 5),
-                        'status': 'initiated'
-                    }
-                    upgrade_tracking_data.append(upgrade_record)
-                
-                # Clean up old records (older than 7 days)
-                cutoff_time = datetime.now(timezone.utc) - timedelta(days=7)
-                upgrade_tracking_data = [
-                    record for record in upgrade_tracking_data
-                    if datetime.fromisoformat(record.get('initiated_timestamp', '1970-01-01T00:00:00+00:00')) > cutoff_time
-                ]
-                
-                # Save updated data
-                with open(upgrade_tracking_file, 'w', encoding='utf-8') as f:
-                    json.dump(upgrade_tracking_data, f, indent=2, ensure_ascii=False)
-                
-                print(f"   Upgrade tracking data saved to {upgrade_tracking_file}")
-                logging.info(f"Saved {len(upgrade_ids)} upgrade IDs to tracking file {upgrade_tracking_file}")
-                
-            except Exception as e:
-                print(f"   Warning: Failed to save upgrade tracking data: {e}")
-                logging.warning(f"Failed to save upgrade tracking data: {e}")
-        
-        # Offer to check upgrade status now
-        print(f"\n Reminder: You can monitor upgrade progress using menu option 60")
-        print(f"   Option 60: Check current firmware upgrade status across organization")
-        
-        try:
-            check_now = input(f"\n Would you like to check the upgrade status now? (y/n): ").strip().lower()
-            if check_now in ['y', 'yes']:
-                print(f"\n Checking upgrade status...")
-                check_firmware_upgrade_status_direct()
-            else:
-                print(f"   You can check upgrade status anytime using menu option 60")
-        except (EOFError, KeyboardInterrupt):
-            print(f"\n   You can check upgrade status anytime using menu option 60")
-    
-    # Step 12: Write results to CSV
-    try:
-        results_filename = os.path.join("data", f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-        with open(results_filename, "w", newline='', encoding="utf-8") as f:
-            if results:
-                fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC", 
-                            "Model", "Current Version", "Target Version", "Strategy", "P2P Enabled",
-                            "Max Failure %", "Force Upgrade", "Upgrade ID", "Status", "Timestamp"]
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(results)
-        
-        print(f"\n  Advanced Firmware Upgrade Operation Completed!")
-        print(f"   Successful upgrades initiated: {successful_upgrades} devices")
-        print(f"   Failed upgrade attempts: {failed_upgrades} devices")
-        print(f"   Detailed results logged to: {results_filename}")
-        print(f"   Strategy used: {upgrade_config['strategy'].upper()}")
-        
-        # Show mixed-model upgrade summary if applicable
-        unique_versions_used = set()
-        models_upgraded = set()
-        for result in results:
-            if result.get("Status") != "ERROR":
-                unique_versions_used.add(result.get("Target Version", "Unknown"))
-                models_upgraded.add(result.get("Model", "Unknown"))
-        
-        if len(unique_versions_used) > 1:
-            print(f"   Mixed-Model Upgrade: {len(models_upgraded)} models, {len(unique_versions_used)} firmware versions")
-            for model in sorted(models_upgraded):
-                # Find the version for this model
-                model_version = "Unknown"
-                for result in results:
-                    if result.get("Model") == model and result.get("Status") != "ERROR":
-                        model_version = result.get("Target Version", "Unknown")
-                        break
-                model_device_count = sum(1 for r in results if r.get("Model") == model and r.get("Status") != "ERROR")
-                print(f"      !? {model}: {model_device_count} devices firmware {model_version}")
-            print(f"   This is normal behavior when different AP models support different firmware ranges")
-        else:
-            single_version = list(unique_versions_used)[0] if unique_versions_used else "Unknown"
-            print(f"   Unified Upgrade: All {len(models_upgraded)} model(s) upgrading to firmware {single_version}")
-        
-        if upgrade_id:
-            print(f"   Primary Upgrade ID: {upgrade_id}")
-        
-        print(f"\n  Important Notes:")
-        print(f"   !? Upgrades will continue in the background")
-        print(f"   !? Monitor device status in Mist portal or API")
-        print(f"   !? Strategy '{upgrade_config['strategy']}' controls rollout pace")
-        if upgrade_config['enable_p2p']:
-            print(f"   !? P2P enabled - APs will share firmware locally")
-        print(f"   !? APs will reboot during upgrade process")
-        print(f"   !? Full upgrade process may take 5-15 minutes per device")
-        if upgrade_config['strategy'] in ['canary', 'rrm']:
-            print(f"   !? Phased rollout will continue automatically based on strategy")
-        if upgrade_config.get('start_time'):
-            scheduled_time = datetime.fromtimestamp(upgrade_config['start_time']).strftime('%Y-%m-%d %H:%M')
-            print(f"   !? Upgrade scheduled for: {scheduled_time}")
-        
-        # Check if auto-upgrade was configured or disabled
-        auto_upgrade_configured = any(r.get("Device ID") == "SITE_CONFIG" and "Configured" in r.get("Status", "") for r in results)
-        auto_upgrade_disabled = any(r.get("Device ID") == "SITE_CONFIG" and "Disabled" in r.get("Status", "") for r in results)
-        
-        if auto_upgrade_configured:
-            print(f"   !? Site auto-upgrade configured - new APs will auto-upgrade")
-        elif auto_upgrade_disabled:
-            print(f"   !? Site auto-upgrade disabled - new APs will NOT auto-upgrade")
-        
-        logging.info(f"! Advanced AP firmware upgrade results written to {results_filename} ({len(results)} entries)")
-        logging.info(f"Advanced firmware upgrade summary: {successful_upgrades} successful, {failed_upgrades} failed, strategy: {upgrade_config['strategy']}")
-        
-    except Exception as e:
-        logging.error(f"! Failed to write results to CSV: {e}")
-        print(f"! Failed to write results to CSV: {e}")
+    upgrader = BulkAPFirmwareUpgrader(org_id, sites_to_upgrade_override)
+    upgrader.execute()
 
 
 # SWITCH FIRMWARE UPGRADE IMPLEMENTATION FUNCTION
@@ -41208,7 +39993,7 @@ class MistHelperTUI:
                 
                 # Handle objects with __dict__ (like APIResponse)
                 if hasattr(obj, '__dict__'):
-                    result = {"__type__": type(obj).__name__}
+                    result: Dict[str, Any] = {"__type__": type(obj).__name__}
                     for attr_name in dir(obj):
                         # Skip private/magic methods and callables
                         if attr_name.startswith('_') or callable(getattr(obj, attr_name, None)):
@@ -42756,7 +41541,7 @@ menu_actions = {
     "1": (OrgExportUtils.alarms, "Export all organization alarms from the past day"),
     "2": (OrgExportUtils.device_events, "Export all device events from the past 24 hours"),
     "3": (lambda: OrgExportUtils.audit_logs(full_history=False), "Export audit logs for the organization (last 24 hours)"),
-    "4": (lambda fast=False: export_gateway_management_ips_to_csv(fast=fast), "Export gateway management overlay IPs grouped by template association"),
+    "4": (lambda fast=False: GatewayExportUtils.management_ips(fast=fast), "Export gateway management overlay IPs grouped by template association"),
     
     # > WebSocket Device Commands
     "5": (WebSocketCommands.show_mac_table, "Show MAC table on switch device via WebSocket (Layer 2 switching table)"),
@@ -42813,12 +41598,12 @@ menu_actions = {
     "41": (OrgExportUtils.wired_clients, "Export wired client statistics for the organization"),
     
     # Security & Monitoring
-    "42": (export_org_security_events_to_csv, "Export security events for the organization"),
-    "43": (export_org_rogue_clients_to_csv, "Export rogue client detections for the organization"),
-    "44": (export_org_rogue_aps_to_csv, "Export rogue AP detections for the organization"),
+    "42": (OrgExportUtils.security_events, "Export security events for the organization"),
+    "43": (OrgExportUtils.rogue_clients, "Export rogue client detections for the organization"),
+    "44": (OrgExportUtils.rogue_aps, "Export rogue AP detections for the organization"),
     
     # Configuration & Management (Read-Only)
-    "45": (export_org_licenses_to_csv, "Export license information for the organization"),
+    "45": (OrgExportUtils.licenses, "Export license information for the organization"),
     "46": (OrgExportUtils.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "47": (OrgExportUtils.webhooks, "Export webhook configuration for the organization"),
     "48": (OrgExportUtils.wlans, "Export WLAN configuration for the organization"),
@@ -42862,7 +41647,7 @@ menu_actions = {
     # ==============================
     
     # > Site Selection & Interactive Tools
-    "70": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
+    "70": (PromptUtils.select_site_with_logging, "Select a site (used by other functions)"),
     "71": (InteractiveDisplayUtils.site_inventory, "View device inventory for a selected site"),
     "72": (InteractiveDisplayUtils.device_stats, "View statistics for a selected device at a site"),
     "73": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
@@ -44574,15 +43359,15 @@ class EnhancedSSHRunner:
     
     @staticmethod
     def run_multiple_ssh_commands_interactive(
-        hostname: str = None,
-        username: str = None,
-        password: str = None,
-        commands: list = None,
+        hostname: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        commands: Optional[list] = None,
         port: int = 22,
         timeout: int = 30,
         use_shell: bool = True,
-        config: SSHConnectionConfig = None,
-        exec_config: SSHExecutionConfig = None
+        config: Optional[SSHConnectionConfig] = None,
+        exec_config: Optional[SSHExecutionConfig] = None
     ) -> bool:
         """
         Connect via SSH and execute multiple commands with interactive prompt support
@@ -44617,6 +43402,12 @@ class EnhancedSSHRunner:
         if exec_config is not None:
             commands = exec_config.commands
             use_shell = exec_config.use_shell
+        
+        # Validate required parameters
+        if hostname is None or username is None or password is None:
+            raise ValueError("hostname, username, and password are required")
+        if commands is None:
+            commands = []
         
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
@@ -44911,15 +43702,15 @@ Log file: {host_log_file}
 
     @staticmethod
     def run_multiple_ssh_commands(
-        hostname: str = None,
-        username: str = None,
-        password: str = None,
-        commands: list = None,
+        hostname: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        commands: Optional[list] = None,
         port: int = 22,
         timeout: int = 30,
         use_shell: bool = False,
-        config: SSHConnectionConfig = None,
-        exec_config: SSHExecutionConfig = None
+        config: Optional[SSHConnectionConfig] = None,
+        exec_config: Optional[SSHExecutionConfig] = None
     ) -> bool:
         """
         Connect via SSH and execute multiple commands sequentially
@@ -44949,6 +43740,12 @@ Log file: {host_log_file}
         if exec_config is not None:
             commands = exec_config.commands
             use_shell = exec_config.use_shell
+        
+        # Validate required parameters
+        if hostname is None or username is None or password is None:
+            raise ValueError("hostname, username, and password are required")
+        if commands is None:
+            commands = []
         
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
@@ -45121,14 +43918,14 @@ Log file: {host_log_file}
     
     @staticmethod
     def run_ssh_command(
-        hostname: str = None,
-        username: str = None, 
-        password: str = None,
-        command: str = None,
+        hostname: Optional[str] = None,
+        username: Optional[str] = None, 
+        password: Optional[str] = None,
+        command: Optional[str] = None,
         port: int = 22,
         timeout: int = 30,
         use_shell: bool = False,
-        config: SSHConnectionConfig = None
+        config: Optional[SSHConnectionConfig] = None
     ) -> bool:
         """
         Connect via SSH and execute a command
@@ -45154,6 +43951,12 @@ Log file: {host_log_file}
             port = config.port
             timeout = config.timeout
             use_shell = config.use_shell
+        
+        # Validate required parameters
+        if hostname is None or username is None or password is None:
+            raise ValueError("hostname, username, and password are required")
+        if command is None:
+            command = ""
         
         # Get the already-configured logger
         logger = logging.getLogger('ssh_runner_v2')
@@ -45301,15 +44104,15 @@ Log file: {host_log_file}
     
     @staticmethod
     def run_ssh_command_on_host(
-        hostname: str = None,
-        username: str = None,
-        password: str = None,
-        commands: list = None,
+        hostname: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        commands: Optional[list] = None,
         port: int = 22,
         timeout: int = 30,
         use_shell: bool = True,
-        config: SSHConnectionConfig = None,
-        exec_config: SSHExecutionConfig = None
+        config: Optional[SSHConnectionConfig] = None,
+        exec_config: Optional[SSHExecutionConfig] = None
     ) -> tuple:
         """
         Run SSH commands on a single host (for multi-threading)
@@ -45339,6 +44142,12 @@ Log file: {host_log_file}
         if exec_config is not None:
             commands = exec_config.commands
             use_shell = exec_config.use_shell
+        
+        # Validate required parameters
+        if hostname is None or username is None or password is None:
+            raise ValueError("hostname, username, and password are required")
+        if commands is None:
+            commands = []
         
         # Use the unified SSH runner logger (propagates to script.log)
         logger = logging.getLogger('ssh_runner_v2')
@@ -45384,16 +44193,16 @@ Log file: {host_log_file}
     
     @staticmethod
     def run_ssh_commands_multi_host(
-        hosts: list = None,
-        username: str = None,
-        password: str = None,
-        commands: list = None,
+        hosts: Optional[list] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        commands: Optional[list] = None,
         port: int = 22,
         timeout: int = 30,
         use_shell: bool = True,
         max_threads: int = 5,
-        config: SSHConnectionConfig = None,
-        exec_config: SSHExecutionConfig = None
+        config: Optional[SSHConnectionConfig] = None,
+        exec_config: Optional[SSHExecutionConfig] = None
     ) -> dict:
         """
         Run SSH commands on multiple hosts concurrently using threading
@@ -45424,6 +44233,14 @@ Log file: {host_log_file}
             commands = exec_config.commands
             max_threads = exec_config.max_threads
             use_shell = exec_config.use_shell
+        
+        # Validate required parameters
+        if hosts is None:
+            hosts = []
+        if username is None or password is None:
+            raise ValueError("username and password are required")
+        if commands is None:
+            commands = []
         
         logger = logging.getLogger('ssh_runner_v2')
         # Debug diagnostic for mysterious dict+float TypeError
