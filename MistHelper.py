@@ -34066,36 +34066,6 @@ def check_firmware_upgrade_status_direct():
     firmware_manager = FirmwareManager(apisession, org_id)
     return firmware_manager.check_firmware_upgrade_status()
 
-def check_firmware_upgrade_status():
-    """
-    DEPRECATED: Use FirmwareManager.check_firmware_upgrade_status() instead.
-    
-    Maintained for backward compatibility.
-    
-    Check current firmware upgrade status across the organization.
-    
-    This function provides comprehensive upgrade status monitoring with:
-    1. Device-level firmware status from device statistics (fwupdate field)
-    2. Site-level upgrade operations and history
-    3. Organization-wide upgrade tracking
-    4. Current version vs. available version comparison
-    5. Upgrade progress monitoring for active operations
-    6. Failed upgrade identification and retry status
-    7. Bulk status export to CSV for analysis
-    8. Interactive site/device filtering options
-    
-    Reports include:
-    - Current firmware versions and upgrade status per device
-    - Active upgrade operations with progress tracking
-    - Failed upgrades with error details and retry information
-    - Upgrade history and completion statistics
-    - Version mismatch identification across sites
-    """
-    org_id = get_cached_or_prompted_org_id()
-    firmware_manager = FirmwareManager(apisession, org_id)
-    return firmware_manager.check_firmware_upgrade_status()
-
-
 def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     """
     Implementation function for firmware upgrade status checking.
@@ -37401,7 +37371,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             check_now = input(f"\n Would you like to check the upgrade status now? (y/n): ").strip().lower()
             if check_now in ['y', 'yes']:
                 print(f"\n Checking upgrade status...")
-                check_firmware_upgrade_status()
+                check_firmware_upgrade_status_direct()
             else:
                 print(f"   You can check upgrade status anytime using menu option 60")
         except (EOFError, KeyboardInterrupt):
