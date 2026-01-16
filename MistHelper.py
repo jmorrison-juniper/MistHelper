@@ -6024,66 +6024,71 @@ class FilePathUtils:
             raise
 
 
-def is_running_in_container() -> bool:
-    """Determine if execution appears to be inside a container.
-
-    Detection strategy is deliberately multi-factor and conservative. A positive
-    result enables continuous interactive looping behavior. False negatives can
-    cause the menu to exit after one operation (observed issue when attaching
-    via SSH inside the container with a different runtime user name).
-
-    Order of checks (first positive returns immediately):
-      1. Explicit override environment variables:
-         - MISTHELPER_FORCE_CONTAINER_LOOP
-         - MISTHELPER_CONTAINER
-         Any of: '1','true','yes','on' (case-insensitive)
-      2. Standard /.dockerenv sentinel file
-      3. Well-known container environment variables
-      4. cgroup markers
-      5. Runtime user name 'misthelper'
-      6. /app path detection with sshd presence
-
-    SECURITY: Only boolean enabling of loop behavior; no privileged actions.
+# ============================================================================
+# ENVIRONMENT UTILITIES CLASS
+# ============================================================================
+class EnvironmentUtils:
     """
-    try:
-        true_values = {"1", "true", "yes", "on"}
-        # Explicit operator override (most reliable and fastest)
-        for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
+    Centralized environment detection utilities.
+    Handles container detection, runtime environment identification, etc.
+    """
+    
+    # Constants for container detection
+    TRUE_VALUES = {"1", "true", "yes", "on"}
+    OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")
+    CONTAINER_ENV_VARS = (
+        'CONTAINER',
+        'DOCKER_CONTAINER',
+        'PODMAN_CONTAINER',
+        'KUBERNETES_SERVICE_HOST',
+        'CONTAINERD_NAMESPACE'
+    )
+    CGROUP_INDICATORS = ('docker', 'containerd', 'podman', 'lxc')
+    
+    @staticmethod
+    def _check_override_env_vars() -> Optional[bool]:
+        """Check for explicit container override environment variables."""
+        for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:
             value = os.environ.get(explicit_var, "").strip().lower()
-            if value in true_values:
+            if value in EnvironmentUtils.TRUE_VALUES:
                 logging.debug(f"Container detection: override via {explicit_var}={value}")
                 return True
-
-        # /.dockerenv sentinel
+        return None
+    
+    @staticmethod
+    def _check_dockerenv_file() -> bool:
+        """Check for /.dockerenv sentinel file."""
         if os.path.exists('/.dockerenv'):
             logging.debug("Container detection: /.dockerenv present")
             return True
-
-        container_env_vars = [
-            'CONTAINER',
-            'DOCKER_CONTAINER',
-            'PODMAN_CONTAINER',
-            'KUBERNETES_SERVICE_HOST',
-            'CONTAINERD_NAMESPACE'
-        ]
-        for env_var in container_env_vars:
+        return False
+    
+    @staticmethod
+    def _check_container_env_vars() -> bool:
+        """Check for well-known container environment variables."""
+        for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:
             if os.environ.get(env_var):
                 logging.debug(f"Container detection: environment variable {env_var} present")
                 return True
-
-        # cgroup heuristic
+        return False
+    
+    @staticmethod
+    def _check_cgroup_markers() -> bool:
+        """Check cgroup file for container indicators."""
         try:
             with open('/proc/1/cgroup', 'r', encoding='utf-8', errors='ignore') as cgroup_file:
                 cgroup_content = cgroup_file.read().lower()
-                for indicator in ('docker', 'containerd', 'podman', 'lxc'):
+                for indicator in EnvironmentUtils.CGROUP_INDICATORS:
                     if indicator in cgroup_content:
                         logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
                         return True
         except (FileNotFoundError, PermissionError):
-            # Not Linux or insufficient permissions; ignore silently
             pass
-
-        # Runtime user name heuristic
+        return False
+    
+    @staticmethod
+    def _check_runtime_user() -> bool:
+        """Check if running as the 'misthelper' user."""
         try:
             import pwd  # Unix only
             current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
@@ -6091,25 +6096,70 @@ def is_running_in_container() -> bool:
                 logging.debug("Container detection: running as user 'misthelper'")
                 return True
         except Exception:
-            # Non-Unix or lookup failure; treat as non-container for this heuristic step
             pass
-
-        # Heuristic: application installed in canonical container path /app and script present
+        return False
+    
+    @staticmethod
+    def _check_app_path_with_sshd() -> bool:
+        """Check for canonical container path /app with sshd presence."""
         try:
             this_file_dir = os.path.abspath(os.path.dirname(__file__))
             if this_file_dir.startswith('/app') and os.path.exists('/app/MistHelper.py'):
-                # Additional guard: presence of sshd in typical container location indicates container packaging
                 if os.path.exists('/usr/sbin/sshd'):
                     logging.debug("Container detection: /app path with MistHelper.py and sshd present")
                     return True
         except Exception:
             pass
-    except Exception as container_detection_error:
-        logging.debug(f"Container detection failed with exception: {container_detection_error}")
+        return False
     
-    # If we reach here, no container indicators were found
-    logging.debug("Container detection: no container indicators found - running in direct mode")
-    return False
+    @staticmethod
+    def is_running_in_container() -> bool:
+        """Determine if execution appears to be inside a container.
+
+        Detection strategy is deliberately multi-factor and conservative. A positive
+        result enables continuous interactive looping behavior. False negatives can
+        cause the menu to exit after one operation.
+
+        Order of checks (first positive returns immediately):
+          1. Explicit override environment variables
+          2. Standard /.dockerenv sentinel file
+          3. Well-known container environment variables
+          4. cgroup markers
+          5. Runtime user name 'misthelper'
+          6. /app path detection with sshd presence
+
+        SECURITY: Only boolean enabling of loop behavior; no privileged actions.
+        """
+        try:
+            # Check override first (explicit operator control)
+            override_result = EnvironmentUtils._check_override_env_vars()
+            if override_result is not None:
+                return override_result
+            
+            # Check standard indicators in order of reliability
+            checks = [
+                EnvironmentUtils._check_dockerenv_file,
+                EnvironmentUtils._check_container_env_vars,
+                EnvironmentUtils._check_cgroup_markers,
+                EnvironmentUtils._check_runtime_user,
+                EnvironmentUtils._check_app_path_with_sshd,
+            ]
+            
+            for check in checks:
+                if check():
+                    return True
+                    
+        except Exception as container_detection_error:
+            logging.debug(f"Container detection failed with exception: {container_detection_error}")
+        
+        logging.debug("Container detection: no container indicators found - running in direct mode")
+        return False
+
+
+# Backward compatibility wrapper - will be removed in future version
+def is_running_in_container() -> bool:
+    """Legacy function - use EnvironmentUtils.is_running_in_container() instead."""
+    return EnvironmentUtils.is_running_in_container()
 
 
 # ============================================================================
