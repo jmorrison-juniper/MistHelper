@@ -21998,10 +21998,6 @@ def apply_business_context_rules(mist_result, comparison_result, debug=False):
     return 'uncertain'
 
 
-def calculate_string_similarity(str1, str2):
-    """Backward compatibility wrapper - delegates to AddressUtils.calculate_similarity()."""
-    return AddressUtils.calculate_similarity(str1, str2)
-
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
     
