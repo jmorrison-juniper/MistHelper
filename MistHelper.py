@@ -9887,6 +9887,167 @@ class OrgExportUtils:
             logging.error(f"Failed to export audit logs: {e}")
             logging.debug("EXIT: OrgExportUtils.audit_logs - error")
             raise
+    
+    @staticmethod
+    def all_templates():
+        """
+        Export all organization templates (gateway, network, RF, site, AP) to CSV files.
+        """
+        logging.info("Starting export of organization templates...")
+        try:
+            fetch_and_display_api_data(
+                title="Gateway Templates:",
+                api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
+                filename="OrgGatewayTemplates.csv",
+                sort_key="name",
+                limit=1000
+            )
+        except Exception as e:
+            logging.error(f"Failed to export gateway templates: {e}")
+        try:
+            fetch_and_display_api_data(
+                title="Network Templates:",
+                api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+                filename="OrgNetworkTemplates.csv",
+                sort_key="name",
+                limit=1000
+            )
+        except Exception as e:
+            logging.error(f"Failed to export network templates: {e}")
+        try:
+            fetch_and_display_api_data(
+                title="RF Templates:",
+                api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+                filename="OrgRfTemplates.csv",
+                sort_key="name",
+                limit=1000
+            )
+        except Exception as e:
+            logging.error(f"Failed to export RF templates: {e}")
+        try:
+            fetch_and_display_api_data(
+                title="Site Templates:",
+                api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
+                filename="OrgSiteTemplates.csv",
+                sort_key="name",
+                limit=1000
+            )
+        except Exception as e:
+            logging.error(f"Failed to export site templates: {e}")
+        try:
+            fetch_and_display_api_data(
+                title="AP Templates:",
+                api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
+                filename="OrgApTemplates.csv",
+                sort_key="name",
+                limit=1000
+            )
+        except Exception as e:
+            logging.error(f"Failed to export AP templates: {e}")
+        logging.info(" Organization templates export completed")
+    
+    @staticmethod
+    def current_guests():
+        """
+        Export all current guest users in the org to OrgCurrentGuests.csv
+        """
+        print("Current and Historical Guest Users:")
+        logging.info("Exporting all current guest users in the org...")
+        org_id = get_cached_or_prompted_org_id()
+        logging.debug(f"Using org_id: {org_id} for current guest export.")
+        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
+        guests = mistapi.get_all(response=response, mist_session=apisession)
+        logging.info(f"Fetched {len(guests)} current guest users from API.")
+        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = DataProcessingUtils.escape_multiline(guests)
+        DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")
+        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
+        logging.info(" Current guests exported to OrgCurrentGuests.csv")
+    
+    @staticmethod
+    def historical_guests():
+        """
+        Export all guest users from the last 7 days to OrgHistoricalGuests.csv
+        """
+        logging.info("Exporting all guest users from the last 7 days...")
+        org_id = get_cached_or_prompted_org_id()
+        end_time = int(time.time())
+        start_time = end_time - 7 * 24 * 3600
+        logging.debug(f"Fetching guest authorizations from {start_time} to {end_time} (epoch seconds).")
+        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
+            apisession, org_id, limit=1000, start=start_time, end=end_time
+        )
+        guests = mistapi.get_all(response=response, mist_session=apisession)
+        logging.info(f"Fetched {len(guests)} historical guest users from API.")
+        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = DataProcessingUtils.escape_multiline(guests)
+        DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")
+        print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
+        logging.info(" Historical guests exported to OrgHistoricalGuests.csv")
+    
+    @staticmethod
+    def switch_vc_stats():
+        """
+        Export virtual chassis stats (including stacking cable info) for all switches in the org.
+        """
+        print("Switch Virtual Chassis Statistics:")
+        logging.info("Exporting all switch virtual chassis stats...")
+        check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+        inventory_path = get_csv_file_path("OrgInventory.csv")
+        with open(inventory_path, mode="r", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            switches = [row for row in reader if row.get("type") == "switch" and row.get("vc_mac", "").strip()]
+        if not switches:
+            logging.warning("No switches found in OrgInventory.csv.")
+            return
+        all_vc_stats = []
+        for switch in tqdm(switches, desc="Switches", unit="switch"):
+            site_id = switch.get("site_id")
+            device_id = switch.get("id")
+            name = switch.get("name", "")
+            mac = switch.get("mac", "")
+            model = switch.get("model", "")
+            serial = switch.get("serial", "")
+            logging.debug(f"Processing switch: name={name}, id={device_id}, site_id={site_id}, mac={mac}, model={model}, serial={serial}")
+            if not site_id or not device_id:
+                logging.warning(f"Skipping switch with missing site_id or device_id: name={name}, mac={mac}")
+                continue
+            try:
+                vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id).data
+                logging.debug(f"Fetched VC stats for switch {name} ({device_id}): {vc_stats}")
+                entry = {**switch, **vc_stats}
+                all_vc_stats.append(entry)
+            except Exception as e:
+                logging.warning(f"Failed to fetch VC stats for switch {name} ({device_id}): {e}")
+        logging.info(f"Flattening and sanitizing {len(all_vc_stats)} VC stats entries for CSV export.")
+        all_vc_stats = DataProcessingUtils.flatten_nested_fields(all_vc_stats)
+        all_vc_stats = DataProcessingUtils.escape_multiline(all_vc_stats)
+        DataExporter.save_data_to_output(all_vc_stats, "OrgSwitchVCStats.csv")
+        print(f"! {len(all_vc_stats)} switch VC stats exported to OrgSwitchVCStats.csv")
+        logging.info(f"! Switch VC stats exported to OrgSwitchVCStats.csv ({len(all_vc_stats)} records).")
+        if all_vc_stats:
+            logging.debug(f"Sample VC stats row: {all_vc_stats[0]}")
+            table = PrettyTable()
+            summary_fields = ["name", "mac", "model", "serial", "site_id", "vc_mac", "status", "members_0_vc_role", "members_1_vc_role"]
+            table.field_names = [f for f in summary_fields if f in all_vc_stats[0]]
+            for row in all_vc_stats:
+                table.add_row([row.get(f, "") for f in table.field_names])
+            logging.debug("\n" + table.get_string())
+    
+    @staticmethod
+    def devices():
+        """
+        Fetches and exports a list of all devices in the organization to OrgDevices.csv.
+        Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+        """
+        logging.info("Starting export of all organization devices...")
+        fetch_and_display_api_data(
+            title="Org Devices:",
+            api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
+            filename="OrgDevices.csv",
+            sort_key="type"
+        )
+        logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
 
 
 # ============================================================================
@@ -14080,74 +14241,6 @@ def export_vpn_peer_stats_to_csv(fast: bool = False):
     )
 
 
-def export_organization_templates_to_csv():
-    """
-    Export all organization templates (gateway, network, RF, site, AP) to CSV files.
-    """
-    logging.info("Starting export of organization templates...")
-    
-    # Gateway templates
-    try:
-        fetch_and_display_api_data(
-            title="Gateway Templates:",
-            api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
-            filename="OrgGatewayTemplates.csv",
-            sort_key="name",
-            limit=1000
-        )
-    except Exception as e:
-        logging.error(f"Failed to export gateway templates: {e}")
-    
-    # Network templates
-    try:
-        fetch_and_display_api_data(
-            title="Network Templates:",
-            api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
-            filename="OrgNetworkTemplates.csv",
-            sort_key="name",
-            limit=1000
-        )
-    except Exception as e:
-        logging.error(f"Failed to export network templates: {e}")
-    
-    # RF templates
-    try:
-        fetch_and_display_api_data(
-            title="RF Templates:",
-            api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
-            filename="OrgRfTemplates.csv",
-            sort_key="name",
-            limit=1000
-        )
-    except Exception as e:
-        logging.error(f"Failed to export RF templates: {e}")
-    
-    # Site templates
-    try:
-        fetch_and_display_api_data(
-            title="Site Templates:",
-            api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
-            filename="OrgSiteTemplates.csv",
-            sort_key="name",
-            limit=1000
-        )
-    except Exception as e:
-        logging.error(f"Failed to export site templates: {e}")
-    
-    # AP templates
-    try:
-        fetch_and_display_api_data(
-            title="AP Templates:",
-            api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
-            filename="OrgApTemplates.csv",
-            sort_key="name",
-            limit=1000
-        )
-    except Exception as e:
-        logging.error(f"Failed to export AP templates: {e}")
-    
-    logging.info(" Organization templates export completed")
-
 # ==============================
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
 # ==============================
@@ -16880,20 +16973,6 @@ class InteractiveDisplayUtils:
         )
         logging.info("Completed device_config execution.")
 
-def export_all_devices_to_csv():
-    """
-    Fetches and exports a list of all devices in the organization to OrgDevices.csv.
-    Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
-    """
-    logging.info("Starting export of all organization devices...")  # Log start of function
-    fetch_and_display_api_data(
-        title="Org Devices:",
-        api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
-        filename="OrgDevices.csv",
-        sort_key="type"
-    )
-    logging.info("Completed export_all_devices_to_csv and wrote results to OrgDevices.csv.")  # Log completion
-
 def fetch_all_site_settings_from_api(apisession, org_id, limit=1000):
     """
     Fetches configuration settings for all sites in the organization.
@@ -17932,7 +18011,7 @@ def generate_support_package():
         ("OrgAlarms.csv", OrgExportUtils.alarms),
         ("OrgDeviceEvents.csv", OrgExportUtils.device_events),
         ("SiteList.csv", OrgExportUtils.sites),
-        ("OrgDevices.csv", export_all_devices_to_csv),
+        ("OrgDevices.csv", OrgExportUtils.devices),
         ("OrgDeviceStats.csv", OrgExportUtils.device_stats),
         ("OrgDevicePortStats.csv", export_device_port_stats_to_csv),
         ("AllGatewayTestResults.csv", export_gateway_test_results_by_site_to_csv),
@@ -18777,121 +18856,6 @@ def view_marvis_insights():
         print("   !? Verify Marvis/VNA licensing and enablement")
         print("   !? Confirm user permissions for AI troubleshooting")
         print("   !? Check organization feature settings")
-
-def export_current_guest_users_to_csv():
-    """
-    Export all current guest users in the org to OrgCurrentGuests.csv
-    """
-    print("Current and Historical Guest Users:")
-    logging.info("Exporting all current guest users in the org...")  # Log start of function
-    org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id} for current guest export.")
-
-    # Call the Mist API to get current guest authorizations
-    response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
-    guests = mistapi.get_all(response=response, mist_session=apisession)
-    logging.info(f"Fetched {len(guests)} current guest users from API.")
-
-    # Flatten nested fields for CSV compatibility
-    guests = DataProcessingUtils.flatten_nested_fields(guests)
-    # Escape multiline strings for CSV compatibility
-    guests = DataProcessingUtils.escape_multiline(guests)
-
-    # Write the processed data to a CSV file
-    DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")
-    print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
-    logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log completion
-
-def export_historical_guest_users_to_csv():
-    """
-    Export all guest users from the last 7 days to OrgHistoricalGuests.csv
-    """
-    logging.info("Exporting all guest users from the last 7 days...")  # Log start of function
-    org_id = get_cached_or_prompted_org_id()
-    # Calculate epoch for 7 days ago
-    end_time = int(time.time())
-    start_time = end_time - 7 * 24 * 3600
-    logging.debug(f"Fetching guest authorizations from {start_time} to {end_time} (epoch seconds).")
-    # Call the Mist API to get guest authorizations in the last 7 days
-    response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
-        apisession, org_id, limit=1000, start=start_time, end=end_time
-    )
-    guests = mistapi.get_all(response=response, mist_session=apisession)
-    logging.info(f"Fetched {len(guests)} historical guest users from API.")
-    # Flatten nested fields for CSV compatibility
-    guests = DataProcessingUtils.flatten_nested_fields(guests)
-    # Escape multiline strings for CSV compatibility
-    guests = DataProcessingUtils.escape_multiline(guests)
-    # Write the processed data to a CSV file
-    DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")
-    print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
-    logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log completion
-
-def export_switch_vc_stats_to_csv():
-    """
-    Export virtual chassis stats (including stacking cable info) for all switches in the org.
-    """
-    print("Switch Virtual Chassis Statistics:")
-    logging.info("Exporting all switch virtual chassis stats...")
-
-    # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-
-    # Load OrgInventory.csv and filter for switches that are virtual chassis (`vc_mac` present and not empty)
-    inventory_path = get_csv_file_path("OrgInventory.csv")
-    with open(inventory_path, mode="r", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        switches = [row for row in reader if row.get("type") == "switch" and row.get("vc_mac", "").strip()]
-
-    if not switches:
-        logging.warning("No switches found in OrgInventory.csv.")
-        return
-
-    all_vc_stats = []
-
-    for switch in tqdm(switches, desc="Switches", unit="switch"):
-        site_id = switch.get("site_id")
-        device_id = switch.get("id")
-        name = switch.get("name", "")
-        mac = switch.get("mac", "")
-        model = switch.get("model", "")
-        serial = switch.get("serial", "")
-
-        # Log which switch is being processed
-        logging.debug(f"Processing switch: name={name}, id={device_id}, site_id={site_id}, mac={mac}, model={model}, serial={serial}")
-
-        if not site_id or not device_id:
-            logging.warning(f"Skipping switch with missing site_id or device_id: name={name}, mac={mac}")
-            continue
-
-        try:
-            # Get VC stats for this switch (returns a flat dict)
-            vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id).data
-            logging.debug(f"Fetched VC stats for switch {name} ({device_id}): {vc_stats}")
-            # Merge all switch info and VC info into a single dictionary
-            entry = {**switch, **vc_stats}
-            all_vc_stats.append(entry)
-        except Exception as e:
-            logging.warning(f"Failed to fetch VC stats for switch {name} ({device_id}): {e}")
-
-    # Flatten and write to CSV
-    logging.info(f"Flattening and sanitizing {len(all_vc_stats)} VC stats entries for CSV export.")
-    all_vc_stats = DataProcessingUtils.flatten_nested_fields(all_vc_stats)
-    all_vc_stats = DataProcessingUtils.escape_multiline(all_vc_stats)
-    DataExporter.save_data_to_output(all_vc_stats, "OrgSwitchVCStats.csv")
-    print(f"! {len(all_vc_stats)} switch VC stats exported to OrgSwitchVCStats.csv")
-    logging.info(f"! Switch VC stats exported to OrgSwitchVCStats.csv ({len(all_vc_stats)} records).")
-    # Optionally log a preview of the data
-    if all_vc_stats:
-        logging.debug(f"Sample VC stats row: {all_vc_stats[0]}")
-        # Display a summary PrettyTable for quick inspection
-        table = PrettyTable()
-        summary_fields = ["name", "mac", "model", "serial", "site_id", "vc_mac", "status", "members_0_vc_role", "members_1_vc_role"]
-        table.field_names = [f for f in summary_fields if f in all_vc_stats[0]]
-
-        for row in all_vc_stats:
-            table.add_row([row.get(f, "") for f in table.field_names])
-        logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
 def create_shell_session(site_id, device_id):
     """
@@ -24786,7 +24750,7 @@ def reboot_devices_by_gateway_template_list():
         return
 
     # Step 2: Ensure required CSVs are fresh
-    check_and_generate_csv("OrgDevices.csv", export_all_devices_to_csv)
+    check_and_generate_csv("OrgDevices.csv", OrgExportUtils.devices)
     check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=True))
@@ -43300,7 +43264,7 @@ menu_actions = {
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
     "16": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
-    "17": (export_all_devices_to_csv, "Export a list of all devices in the organization"),
+    "17": (OrgExportUtils.devices, "Export a list of all devices in the organization"),
     "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
     "19": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
 
@@ -43308,8 +43272,8 @@ menu_actions = {
     "20": (export_sites_with_location_to_csv, "Export a list of sites with location and timezone info"),
     "21": (export_gateways_with_site_info_to_csv, "Export a list of gateways with associated site and address info"),
     "22": (export_devices_with_site_info_to_csv, "Export a list of all devices with associated site and address info"),
-    "23": (lambda: (export_current_guest_users_to_csv(), export_historical_guest_users_to_csv()),"Export all current guest users and last 7 days of historical guests to CSV"),
-    "24": (export_switch_vc_stats_to_csv, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
+    "23": (lambda: (OrgExportUtils.current_guests(), OrgExportUtils.historical_guests()),"Export all current guest users and last 7 days of historical guests to CSV"),
+    "24": (OrgExportUtils.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
     "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
     "27": (OrgExportUtils.sites_list_api, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
@@ -43324,7 +43288,7 @@ menu_actions = {
     "34": (export_site_wifi_clients_to_csv, "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"),
     
     # Organization Template Exports
-    "35": (export_organization_templates_to_csv, "Export all organization templates (gateway, network, RF, site, AP)"),
+    "35": (OrgExportUtils.all_templates, "Export all organization templates (gateway, network, RF, site, AP)"),
     "36": (OrgExportUtils.network_templates, "Export network template information for the organization"),
     "37": (OrgExportUtils.rf_templates, "Export RF template information for the organization"),
     "38": (export_org_ap_templates_to_csv, "Export AP template information for the organization"),
@@ -46937,6 +46901,11 @@ if __name__ == "__main__":
     finally:
         logging.info("=== MistHelper application ending ===")
 #hi
+
+
+
+
+
 
 
 
