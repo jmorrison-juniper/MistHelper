@@ -550,6 +550,28 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.15.21.30",
+      "date": "2026-01-15",
+      "changes": {
+        "refactoring": [
+          "Class Organization: Created 10 new utility classes to group standalone functions",
+          "Class Organization: Added PromptUtils for user input/selection operations (8 methods)",
+          "Class Organization: Added OrgExportUtils for organization data exports (30+ methods)",
+          "Class Organization: Added SiteExportUtils for site data exports (15+ methods)",
+          "Class Organization: Added GatewayExportUtils for gateway data exports (10 methods)",
+          "Class Organization: Added TroubleshootUtils for Marvis AI troubleshooting (3 methods)",
+          "Class Organization: Added AddressUtils for address normalization/parsing (5 methods)",
+          "Class Organization: Added RoutingUtils for routing table parsing (10 methods)",
+          "Class Organization: Added InteractiveDisplayUtils for interactive displays (4 methods)",
+          "Class Organization: Added APIFetchUtils for data fetching operations (8 methods)",
+          "Class Organization: Added DataProcessingUtils for data transformation (5 methods)",
+          "Code Quality: Total classes increased from 19 to 29",
+          "Code Quality: Class methods increased to 375 with organized groupings",
+          "Backwards Compatibility: All original functions retained as wrappers to new class methods"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.00.15",
       "date": "2026-01-16",
       "changes": {

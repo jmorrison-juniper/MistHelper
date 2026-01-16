@@ -6268,6 +6268,135 @@ def get_cached_or_prompted_org_id() -> str:
     org_id = org_id_list[0]
     return org_id
 
+
+# ============================================================================
+# API FETCH UTILITIES CLASS
+# ============================================================================
+class APIFetchUtils:
+    """
+    Centralized API fetch utilities.
+    Groups all data fetching functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def all_sites_with_limit(org_id):
+        """
+        Fetch all sites with pagination limit.
+        
+        Args:
+            org_id: The organization ID
+            
+        Returns:
+            list: List of site dictionaries
+        """
+        return fetch_all_sites_with_limit(org_id)
+    
+    @staticmethod
+    def all_inventory_with_limit(org_id):
+        """
+        Fetch all inventory with pagination limit.
+        
+        Args:
+            org_id: The organization ID
+            
+        Returns:
+            list: List of inventory dictionaries
+        """
+        return fetch_all_inventory_with_limit(org_id)
+    
+    @staticmethod
+    def organization_services() -> List[Dict[str, Any]]:
+        """
+        Fetch all services defined at the organization level.
+        
+        Returns:
+            list: List of service dictionaries
+        """
+        return fetch_organization_services()
+    
+    @staticmethod
+    def organization_tenants() -> List[str]:
+        """
+        Fetch all tenant names from organization services.
+        
+        Returns:
+            list: List of tenant names
+        """
+        return fetch_organization_tenants()
+    
+    @staticmethod
+    def site_tenants(site_id: str) -> List[str]:
+        """
+        Fetch all tenant names for a specific site.
+        
+        Args:
+            site_id: The site ID
+            
+        Returns:
+            list: List of tenant names
+        """
+        return fetch_site_tenants(site_id)
+    
+    @staticmethod
+    def service_policy_tenants(site_id=None):
+        """
+        Fetch tenant names from service policies.
+        
+        Args:
+            site_id: Optional site ID for site-level policies
+            
+        Returns:
+            list: List of tenant names
+        """
+        return fetch_service_policy_tenants(site_id)
+    
+    @staticmethod
+    def gateway_template_tenants(site_id=None):
+        """
+        Fetch tenant names from gateway templates.
+        
+        Args:
+            site_id: Optional site ID for site-level templates
+            
+        Returns:
+            list: List of tenant names
+        """
+        return fetch_gateway_template_tenants(site_id)
+    
+    @staticmethod
+    def all_site_settings(apisession, org_id, limit=1000):
+        """
+        Fetch settings for all sites.
+        
+        Args:
+            apisession: The API session
+            org_id: The organization ID
+            limit: Pagination limit
+            
+        Returns:
+            list: List of site settings dictionaries
+        """
+        return fetch_all_site_settings_from_api(apisession, org_id, limit)
+    
+    @staticmethod
+    def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):
+        """
+        Fetch gateway device configurations.
+        
+        Args:
+            apisession: The API session
+            org_id: The organization ID
+            fast: If True, enables concurrent processing
+            max_workers: Maximum concurrent workers
+            
+        Returns:
+            list: List of gateway configuration dictionaries
+        """
+        return fetch_gateway_device_configs_from_api(apisession, org_id, fast, max_workers)
+
+
+# Backward compatibility - original fetch function definitions follow
 def fetch_organization_services() -> List[Dict[str, Any]]:
     """
     Fetch all services defined at the organization level using the Mist API.
@@ -6646,6 +6775,86 @@ def fetch_gateway_template_tenants(site_id=None):
         logging.error(f"Error fetching tenants from gateway templates: {error}")
         return []
 
+
+# ============================================================================
+# DATA PROCESSING UTILITIES CLASS
+# ============================================================================
+class DataProcessingUtils:
+    """
+    Centralized data processing utilities.
+    Groups all data transformation functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
+        """
+        Recursively flattens a nested dictionary, joining keys with sep.
+        
+        Args:
+            d: Dictionary to flatten
+            parent_key: Parent key prefix for nested keys
+            sep: Separator for nested keys
+            
+        Returns:
+            dict: Flattened dictionary
+        """
+        return flatten_dict_recursively(d, parent_key, sep)
+    
+    @staticmethod
+    def flatten_nested_fields(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Flatten nested fields in a list of dictionaries.
+        
+        Args:
+            data: List of dictionaries to process
+            
+        Returns:
+            list: List of dictionaries with flattened nested fields
+        """
+        return flatten_nested_fields_in_list(data)
+    
+    @staticmethod
+    def convert_list_values_to_strings(data):
+        """
+        Convert list values to CSV-compatible strings.
+        
+        Args:
+            data: Data containing list values
+            
+        Returns:
+            Data with list values converted to strings
+        """
+        return convert_list_values_to_csv_strings(data)
+    
+    @staticmethod
+    def get_unique_keys(data):
+        """
+        Get all unique dictionary keys from a list of dictionaries.
+        
+        Args:
+            data: List of dictionaries
+            
+        Returns:
+            set: Set of unique keys
+        """
+        return get_all_unique_dict_keys(data)
+    
+    @staticmethod
+    def escape_multiline(data):
+        """
+        Escape multiline strings for CSV compatibility.
+        
+        Args:
+            data: Data containing multiline strings
+            
+        Returns:
+            Data with escaped multiline strings
+        """
+        return escape_multiline_strings_for_csv(data)
+
+
+# Backward compatibility - original data processing function definitions follow
 def flatten_dict_recursively(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
     """
     Recursively flattens a nested dictionary, joining keys with `sep`.
@@ -7761,6 +7970,146 @@ def execute_with_connection_pool_management(work_items: List[Any], worker_functi
     logging.info(f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed")
     return successful_results, failed_items
 
+
+# ============================================================================
+# PROMPT UTILITIES CLASS
+# ============================================================================
+class PromptUtils:
+    """
+    Centralized prompt utilities for user input and selection operations.
+    Groups all interactive selection functions (sites, devices, ports, clients).
+    All methods are static to avoid unnecessary object instantiation.
+    """
+
+    @staticmethod
+    def select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> Optional[str]:
+        """
+        Prompts the user to select a device by index or name from the device inventory at a given site.
+        Returns the corresponding device ID, or None if not found.
+        
+        SECURITY: Always fetch all device types from API first (type=all), then filter locally
+        to avoid Mist API's default behavior of only returning APs.
+        
+        Args:
+            site_id (str): The site ID to filter devices by
+            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
+            csv_filename (str): Name of the inventory CSV file
+            
+        Returns:
+            str: The selected device ID or None if no selection made
+        """
+        return prompt_select_device_id_from_inventory(site_id, device_type, csv_filename)
+    
+    @staticmethod
+    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> Optional[str]:
+        """
+        Prompts the user to select a site by index or name from SiteList.csv.
+        Returns the corresponding site ID.
+        
+        Args:
+            csv_file (str): Name of the site list CSV file
+            
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        return prompt_select_site_id_from_csv(csv_file)
+    
+    @staticmethod
+    def select_site() -> Optional[str]:
+        """
+        Prompts the user to select a site and returns the site_id.
+        Uses the existing CSV-based site selection functionality.
+        
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        return prompt_select_site_id_from_csv()
+    
+    @staticmethod
+    def select_device(site_id: str, device_type: str = "all") -> Optional[str]:
+        """
+        Prompts the user to select a device from the specified site and returns the device_id.
+        
+        Args:
+            site_id (str): The site ID to filter devices by
+            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
+            
+        Returns:
+            str: The selected device ID or None if no selection made
+        """
+        return prompt_select_device_id_from_inventory(site_id, device_type)
+    
+    @staticmethod
+    def select_ap_mac(site_id: str) -> Optional[str]:
+        """
+        Prompts the user to select an AP from the specified site and returns the AP MAC address.
+        
+        Args:
+            site_id (str): The site ID to filter APs by
+            
+        Returns:
+            str: The selected AP MAC address (normalized) or None if no selection made
+        """
+        return prompt_select_ap_mac_from_site(site_id)
+    
+    @staticmethod
+    def select_client_mac(site_id: str) -> Optional[str]:
+        """
+        Prompts the user to select a client from currently connected clients at the site.
+        
+        Args:
+            site_id (str): The site ID to fetch clients from
+            
+        Returns:
+            str: The selected client MAC address (normalized) or None if no selection made
+        """
+        return prompt_select_client_mac_from_site(site_id)
+    
+    @staticmethod
+    def select_gateway_mac(site_id: str) -> Optional[str]:
+        """
+        Prompts the user to select a gateway from the specified site and returns the gateway MAC.
+        
+        Args:
+            site_id (str): The site ID to filter gateways by
+            
+        Returns:
+            str: The selected gateway MAC address (normalized) or None if no selection made
+        """
+        return prompt_select_gateway_mac_from_site(site_id)
+    
+    @staticmethod
+    def select_switch_mac(site_id: str) -> Optional[str]:
+        """
+        Prompts the user to select a switch from the specified site and returns the switch MAC.
+        
+        Args:
+            site_id (str): The site ID to filter switches by
+            
+        Returns:
+            str: The selected switch MAC address (normalized) or None if no selection made
+        """
+        return prompt_select_switch_mac_from_site(site_id)
+    
+    @staticmethod
+    def select_ports_from_device(site_id: str, device_mac: str, device_type: str = "switch", return_available: bool = False):
+        """
+        Prompts the user to select one or more ports from a device (switch or gateway).
+        Displays port status information from device stats.
+        
+        Args:
+            site_id (str): The site ID where the device is located
+            device_mac (str): The MAC address of the device
+            device_type (str): Type of device ("switch" or "gateway")
+            return_available (bool): If True, return all available ports along with selection
+            
+        Returns:
+            Selected ports or None if no selection made
+        """
+        return prompt_select_ports_from_device(site_id, device_mac, device_type, return_available)
+
+
+# Backward compatibility - original function definitions follow
 def prompt_select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> Optional[str]:
     """
     Prompts the user to select a device by index or name from the device inventory at a given site.
@@ -8931,6 +9280,315 @@ def export_org_specific_data(api_call, data_type, sort_key="name", **api_kwargs)
         limit=1000,
         **api_kwargs
     )
+
+
+# ============================================================================
+# ORGANIZATION DATA EXPORT UTILITIES CLASS
+# ============================================================================
+class OrgExportUtils:
+    """
+    Centralized organization-level data export utilities.
+    Groups all export_org_* functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def export_data(api_call, data_type, sort_key="name", **api_kwargs):
+        """
+        Generic function to export organization-specific data to CSV.
+        
+        Args:
+            api_call: The mistapi function to call
+            data_type: Description of the data type (e.g., "licenses", "templates")
+            sort_key: Field to sort results by
+            **api_kwargs: Additional arguments to pass to the API call
+        """
+        export_org_specific_data(api_call, data_type, sort_key, **api_kwargs)
+    
+    @staticmethod
+    def wireless_clients():
+        """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
+        export_org_wireless_clients_to_csv()
+    
+    @staticmethod
+    def wired_clients():
+        """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
+        export_org_wired_clients_to_csv()
+    
+    @staticmethod
+    def security_events():
+        """Export security policies, intelligence profiles, and rogue data."""
+        export_org_security_events_to_csv()
+    
+    @staticmethod
+    def sle_metrics():
+        """Export SLE (Service Level Experience) metrics to OrgSleMetrics.csv."""
+        export_org_sle_metrics_to_csv()
+    
+    @staticmethod
+    def sites_sle_summary():
+        """Export SLE summary across all sites to OrgSitesSLESummary.csv."""
+        export_org_sites_sle_summary_to_csv()
+    
+    @staticmethod
+    def insight_metrics():
+        """Export organization insight metrics to OrgInsightMetrics.csv."""
+        export_org_insight_metrics_to_csv()
+    
+    @staticmethod
+    def rogue_clients():
+        """Export rogue clients to OrgRogueClients.csv."""
+        export_org_rogue_clients_to_csv()
+    
+    @staticmethod
+    def rogue_aps():
+        """Export rogue APs to OrgRogueAps.csv."""
+        export_org_rogue_aps_to_csv()
+    
+    @staticmethod
+    def licenses():
+        """Export organization licenses to OrgLicenses.csv."""
+        export_org_licenses_to_csv()
+    
+    @staticmethod
+    def psks():
+        """Export organization PSKs to OrgPsks.csv."""
+        export_org_psks_to_csv()
+    
+    @staticmethod
+    def webhooks():
+        """Export organization webhooks to OrgWebhooks.csv."""
+        export_org_webhooks_to_csv()
+    
+    @staticmethod
+    def wlans():
+        """Export organization WLANs to OrgWlans.csv."""
+        export_org_wlans_to_csv()
+    
+    @staticmethod
+    def api_tokens():
+        """Export organization API tokens to OrgApiTokens.csv."""
+        export_org_api_tokens_to_csv()
+    
+    @staticmethod
+    def admins():
+        """Export organization admins to OrgAdmins.csv."""
+        export_org_admins_to_csv()
+    
+    @staticmethod
+    def sso():
+        """Export organization SSO configuration to OrgSso.csv."""
+        export_org_sso_to_csv()
+    
+    @staticmethod
+    def usage():
+        """Export organization usage data to OrgUsage.csv."""
+        export_org_usage_to_csv()
+    
+    @staticmethod
+    def msp():
+        """Export MSP data to OrgMsp.csv."""
+        export_org_msp_to_csv()
+    
+    @staticmethod
+    def mx_edges():
+        """Export MX Edge data to OrgMxEdges.csv."""
+        export_org_mx_edges_to_csv()
+    
+    @staticmethod
+    def network_templates():
+        """Export network templates to OrgNetworkTemplates.csv."""
+        export_org_network_templates_to_csv()
+    
+    @staticmethod
+    def rf_templates():
+        """Export RF templates to OrgRfTemplates.csv."""
+        export_org_rf_templates_to_csv()
+    
+    @staticmethod
+    def ap_templates():
+        """Export AP templates to OrgApTemplates.csv."""
+        export_org_ap_templates_to_csv()
+    
+    @staticmethod
+    def switch_templates():
+        """Export switch templates to OrgSwitchTemplates.csv."""
+        export_org_switch_templates_to_csv()
+    
+    @staticmethod
+    def nac_clients():
+        """Export NAC clients to OrgNacClients.csv."""
+        export_org_nac_clients_to_csv()
+    
+    @staticmethod
+    def nac_tags():
+        """Export NAC tags to OrgNacTags.csv."""
+        export_org_nac_tags_to_csv()
+    
+    @staticmethod
+    def nac_portals():
+        """Export NAC portals to OrgNacPortals.csv."""
+        export_org_nac_portals_to_csv()
+    
+    @staticmethod
+    def nac_rules():
+        """Export NAC rules to OrgNacRules.csv."""
+        export_org_nac_rules_to_csv()
+    
+    @staticmethod
+    def nac_events():
+        """Export NAC events to OrgNacEvents.csv."""
+        export_org_nac_events_to_csv()
+    
+    @staticmethod
+    def assets():
+        """Export organization assets to OrgAssets.csv."""
+        export_org_assets_to_csv()
+    
+    @staticmethod
+    def bgp_peers():
+        """Export BGP peer data to OrgBgpPeers.csv."""
+        export_org_bgp_peers_to_csv()
+    
+    @staticmethod
+    def tunnel_stats():
+        """Export tunnel statistics to OrgTunnelStats.csv."""
+        export_org_tunnel_stats_to_csv()
+    
+    @staticmethod
+    def site_stats():
+        """Export site statistics to OrgSiteStats.csv."""
+        export_org_site_stats_to_csv()
+    
+    @staticmethod
+    def mxedge_stats():
+        """Export MX Edge statistics to OrgMxedgeStats.csv."""
+        export_org_mxedge_stats_to_csv()
+    
+    @staticmethod
+    def alarm_templates():
+        """Export alarm templates to OrgAlarmTemplates.csv."""
+        export_org_alarm_templates_to_csv()
+    
+    @staticmethod
+    def security_intel_profiles():
+        """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
+        export_org_security_intel_profiles_to_csv()
+    
+    @staticmethod
+    def invites():
+        """Export organization invites to OrgInvites.csv."""
+        export_org_invites_to_csv()
+    
+    @staticmethod
+    def events():
+        """Export organization events to OrgEvents.csv."""
+        export_org_events_to_csv()
+
+
+# ============================================================================
+# SITE DATA EXPORT UTILITIES CLASS
+# ============================================================================
+class SiteExportUtils:
+    """
+    Centralized site-level data export utilities.
+    Groups all export_site_* functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def export_data(api_call, data_type, sort_key="name", **api_kwargs):
+        """
+        Generic function to export site-specific data to CSV.
+        
+        Args:
+            api_call: The mistapi function to call
+            data_type: Description of the data type (e.g., "port stats", "clients")
+            sort_key: Field to sort results by
+            **api_kwargs: Additional arguments to pass to the API call
+        """
+        export_site_specific_data(api_call, data_type, sort_key, **api_kwargs)
+    
+    @staticmethod
+    def port_stats():
+        """Export port statistics for a site to SitePortStats.csv."""
+        export_site_port_stats_to_csv()
+    
+    @staticmethod
+    def device_virtual_chassis():
+        """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
+        export_site_device_virtual_chassis_to_csv()
+    
+    @staticmethod
+    def clients():
+        """Export client data for a site to SiteClients.csv."""
+        export_site_clients_to_csv()
+    
+    @staticmethod
+    def devices():
+        """Export device data for a site to SiteDevices.csv."""
+        export_site_devices_to_csv()
+    
+    @staticmethod
+    def device_stats():
+        """Export device statistics for a site to SiteDeviceStats.csv."""
+        export_site_device_stats_to_csv()
+    
+    @staticmethod
+    def insight_metrics():
+        """Export insight metrics for a site to SiteInsightMetrics.csv."""
+        export_site_insight_metrics_to_csv()
+    
+    @staticmethod
+    def client_insights():
+        """Export client insights for a site to SiteClientInsights.csv."""
+        export_site_client_insights_to_csv()
+    
+    @staticmethod
+    def device_insights():
+        """Export device insights for a site to SiteDeviceInsights.csv."""
+        export_site_device_insights_to_csv()
+    
+    @staticmethod
+    def wlans():
+        """Export WLANs for a site to SiteWlans.csv."""
+        export_site_wlans_to_csv()
+    
+    @staticmethod
+    def beacons():
+        """Export beacons for a site to SiteBeacons.csv."""
+        export_site_beacons_to_csv()
+    
+    @staticmethod
+    def maps():
+        """Export maps for a site to SiteMaps.csv."""
+        export_site_maps_to_csv()
+    
+    @staticmethod
+    def zones():
+        """Export zones for a site to SiteZones.csv."""
+        export_site_zones_to_csv()
+    
+    @staticmethod
+    def insights():
+        """Export insights for a site to SiteInsights.csv."""
+        export_site_insights_to_csv()
+    
+    @staticmethod
+    def system_events():
+        """Export system events for a site to SiteSystemEvents.csv."""
+        export_site_system_events_to_csv()
+    
+    @staticmethod
+    def fast_roam_events():
+        """Export fast roam events for a site to SiteFastRoamEvents.csv."""
+        export_site_fast_roam_events_to_csv()
+    
+    @staticmethod
+    def wifi_clients(site_id=None):
+        """Export WiFi clients for a site to SiteWifiClients.csv."""
+        export_site_wifi_clients_to_csv(site_id)
+
 
 def export_open_org_alarms_to_csv():
     """
@@ -10906,6 +11564,123 @@ def service_ping_device_websocket():
         logging.debug("EXIT: service_ping_device_websocket")
 
 
+# ============================================================================
+# ROUTING UTILITIES CLASS
+# ============================================================================
+class RoutingUtils:
+    """
+    Centralized routing and forwarding table parsing utilities.
+    Groups all routing-related functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def parse_forwarding_table(raw_output):
+        """
+        Parse the raw JSON forwarding table output into structured data.
+        
+        Args:
+            raw_output (str): Raw JSON string containing forwarding table data
+            
+        Returns:
+            list: List of parsed forwarding table entries
+        """
+        return parse_forwarding_table_output(raw_output)
+    
+    @staticmethod
+    def display_forwarding_summary(entries):
+        """
+        Display a summary of forwarding table entries.
+        
+        Args:
+            entries (list): List of forwarding table entries
+        """
+        display_forwarding_table_summary(entries)
+    
+    @staticmethod
+    def display_prefix_table(prefix, entries):
+        """
+        Display forwarding table entries for a specific prefix.
+        
+        Args:
+            prefix (str): The prefix to display entries for
+            entries (list): List of forwarding table entries
+        """
+        display_prefix_table(prefix, entries)
+    
+    @staticmethod
+    def parse_routing_table(raw_output):
+        """
+        Parse raw routing table output into structured data.
+        
+        Args:
+            raw_output (str): Raw routing table output string
+            
+        Returns:
+            list: List of parsed routing table entries
+        """
+        return parse_routing_table_output(raw_output)
+    
+    @staticmethod
+    def parse_juniper_routing(raw_output):
+        """
+        Parse Juniper-format routing table output.
+        
+        Args:
+            raw_output (str): Raw Juniper routing table output
+            
+        Returns:
+            list: List of parsed routing entries
+        """
+        return parse_juniper_routing_table(raw_output)
+    
+    @staticmethod
+    def parse_ssr_routing(json_data):
+        """
+        Parse SSR routing table JSON data.
+        
+        Args:
+            json_data: SSR routing table in JSON format
+            
+        Returns:
+            list: List of parsed SSR routing entries
+        """
+        return parse_ssr_routing_json(json_data)
+    
+    @staticmethod
+    def display_routing_summary(route_entries, query_params):
+        """
+        Display a summary of routing table entries.
+        
+        Args:
+            route_entries (list): List of routing entries
+            query_params: Query parameters for filtering
+        """
+        display_routing_table_summary(route_entries, query_params)
+    
+    @staticmethod
+    def display_routing_details(route_entries):
+        """
+        Display detailed routing table information.
+        
+        Args:
+            route_entries (list): List of routing entries
+        """
+        display_routing_table_details(route_entries)
+    
+    @staticmethod
+    def display_ssr_routing(route_entries, query_params):
+        """
+        Display SSR routing table information.
+        
+        Args:
+            route_entries (list): List of SSR routing entries
+            query_params: Query parameters for filtering
+        """
+        display_ssr_routing_table(route_entries, query_params)
+
+
+# Backward compatibility - original routing function definitions follow
 def parse_forwarding_table_output(raw_output):
     """
     Parse the raw JSON forwarding table output into structured data.
@@ -16713,6 +17488,51 @@ def export_site_fast_roam_events_to_csv():
         duration=f"{hours}h"
     )
 
+
+# ============================================================================
+# INTERACTIVE DISPLAY UTILITIES CLASS
+# ============================================================================
+class InteractiveDisplayUtils:
+    """
+    Centralized interactive display utilities.
+    Groups all interactive_display_* functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def site_inventory():
+        """
+        Prompts the user to select a site and displays its device inventory.
+        """
+        interactive_display_site_inventory()
+    
+    @staticmethod
+    def device_stats(site_id=None, device_id=None):
+        """
+        Fetches and displays detailed statistics for a specific device.
+        
+        Args:
+            site_id: Optional site ID (prompts if not provided)
+            device_id: Optional device ID (prompts if not provided)
+        """
+        interactive_display_device_stats(site_id, device_id)
+    
+    @staticmethod
+    def device_tests():
+        """
+        Prompts user to select a gateway device and displays its synthetic test stats.
+        """
+        interactive_display_device_tests()
+    
+    @staticmethod
+    def device_config():
+        """
+        Prompts user to select a device and displays its configuration details.
+        """
+        interactive_display_device_config()
+
+
+# Backward compatibility - original interactive function definitions follow
 def interactive_display_site_inventory():
     """
     Prompts the user to select a site and displays its device inventory.
@@ -16841,6 +17661,105 @@ def export_site_settings_to_csv():
         logging.warning(" No site configs found.")
         print("! No site configurations found.")
 
+
+# ============================================================================
+# GATEWAY EXPORT UTILITIES CLASS
+# ============================================================================
+class GatewayExportUtils:
+    """
+    Centralized gateway data export utilities.
+    Groups all export_gateway_* functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def synthetic_tests(fast=False):
+        """
+        Collects and exports synthetic test stats for all gateways in the organization.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing and uses cached inventory data
+        """
+        export_gateway_synthetic_tests_to_csv(fast)
+    
+    @staticmethod
+    def test_results_by_site(fast=False):
+        """
+        Exports gateway test results organized by site.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateway_test_results_by_site_to_csv(fast)
+    
+    @staticmethod
+    def device_stats(fast=False):
+        """
+        Exports gateway device statistics.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateway_device_stats_to_csv(fast)
+    
+    @staticmethod
+    def device_stats_with_freshness(fast=False):
+        """
+        Exports gateway device statistics with freshness check.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateway_device_stats_to_csv_with_freshness_check(fast)
+    
+    @staticmethod
+    def wan_port_conflicts():
+        """Exports gateways with WAN port conflicts."""
+        export_gateways_with_wan_port_conflicts_to_csv()
+    
+    @staticmethod
+    def with_site_info():
+        """Exports gateways with their associated site information."""
+        export_gateways_with_site_info_to_csv()
+    
+    @staticmethod
+    def management_ips(fast=False):
+        """
+        Exports gateway management IPs.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateway_management_ips_to_csv(fast)
+    
+    @staticmethod
+    def device_configs(debug=False, fast=False):
+        """
+        Exports gateway device configurations.
+        
+        Args:
+            debug (bool): If True, enables debug logging
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateway_device_configs_to_csv(debug, fast)
+    
+    @staticmethod
+    def templates():
+        """Exports gateway templates."""
+        export_gateway_templates_to_csv()
+    
+    @staticmethod
+    def with_wan_overrides(fast=False):
+        """
+        Exports gateways with WAN overrides.
+        
+        Args:
+            fast (bool): If True, enables concurrent processing
+        """
+        export_gateways_with_wan_overrides_to_csv(fast)
+
+
+# Backward compatibility - original gateway function definitions follow
 def export_gateway_synthetic_tests_to_csv(fast=False):
     """
     Collects and exports synthetic test stats for all gateways in the organization.
@@ -18129,6 +19048,43 @@ def prompt_client_selection(site_id=None):
         print(f"! Error searching for clients: {e}")
         return None, None, None
 
+
+# ============================================================================
+# TROUBLESHOOTING UTILITIES CLASS
+# ============================================================================
+class TroubleshootUtils:
+    """
+    Centralized troubleshooting utilities using Marvis AI.
+    Groups all troubleshooting functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def client_connectivity():
+        """
+        Troubleshoot client connectivity issues using Marvis AI.
+        Uses guided client selection instead of manual MAC address entry.
+        """
+        troubleshoot_client_connectivity()
+    
+    @staticmethod
+    def device_performance():
+        """
+        Troubleshoot device performance issues using Marvis AI.
+        Uses guided device selection for targeted analysis.
+        """
+        troubleshoot_device_performance()
+    
+    @staticmethod
+    def network_connectivity():
+        """
+        Troubleshoot network connectivity issues using Marvis AI.
+        Analyzes network-wide connectivity patterns at the site level.
+        """
+        troubleshoot_network_connectivity()
+
+
+# Backward compatibility - original troubleshoot function definitions follow
 def troubleshoot_client_connectivity():
     """
     Troubleshoot client connectivity issues using Marvis AI.
@@ -20108,6 +21064,86 @@ def export_combined_inventory_with_site_info():
     print(f"! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
     print(f"! Master inventory exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv ({len(master_csv_data)} devices)")
 
+
+# ============================================================================
+# ADDRESS UTILITIES CLASS
+# ============================================================================
+class AddressUtils:
+    """
+    Centralized address normalization and parsing utilities.
+    Groups all address-related functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def normalize_zip(zip_code):
+        """
+        Normalizes a zip code to compare only the first 5 digits.
+        
+        Args:
+            zip_code: The zip code to normalize
+            
+        Returns:
+            str: The normalized 5-digit zip code
+        """
+        return normalize_zip_code(zip_code)
+    
+    @staticmethod
+    def normalize_state(state_str):
+        """
+        Normalizes a state name to its standard abbreviation.
+        
+        Args:
+            state_str: The state string to normalize
+            
+        Returns:
+            str: The normalized state abbreviation
+        """
+        return normalize_state_name(state_str)
+    
+    @staticmethod
+    def normalize_address(address_str):
+        """
+        Normalizes an address string for comparison.
+        
+        Args:
+            address_str: The address string to normalize
+            
+        Returns:
+            str: The normalized address string
+        """
+        return normalize_address_string(address_str)
+    
+    @staticmethod
+    def parse_components(address_string, debug=False):
+        """
+        Parses an address string into its component parts.
+        
+        Args:
+            address_string: The address string to parse
+            debug: If True, enable debug logging
+            
+        Returns:
+            dict: Dictionary of parsed address components
+        """
+        return parse_address_components(address_string, debug)
+    
+    @staticmethod
+    def calculate_similarity(str1, str2):
+        """
+        Calculates the similarity between two strings.
+        
+        Args:
+            str1: First string
+            str2: Second string
+            
+        Returns:
+            float: Similarity score between 0 and 1
+        """
+        return calculate_string_similarity(str1, str2)
+
+
+# Backward compatibility - original address function definitions follow
 def normalize_zip_code(zip_code):
     """
     Normalizes a zip code to compare only the first 5 digits:
