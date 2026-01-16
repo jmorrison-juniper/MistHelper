@@ -9311,72 +9311,134 @@ class OrgExportUtils:
     @staticmethod
     def nac_clients():
         """Export NAC clients to OrgNacClients.csv."""
-        export_org_nac_clients_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients,
+            data_type="nac clients",
+            sort_key="mac"
+        )
     
     @staticmethod
     def nac_tags():
         """Export NAC tags to OrgNacTags.csv."""
-        export_org_nac_tags_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags,
+            data_type="nac tags",
+            sort_key="name"
+        )
     
     @staticmethod
     def nac_portals():
         """Export NAC portals to OrgNacPortals.csv."""
-        export_org_nac_portals_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals,
+            data_type="nac portals",
+            sort_key="name"
+        )
     
     @staticmethod
     def nac_rules():
         """Export NAC rules to OrgNacRules.csv."""
-        export_org_nac_rules_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules,
+            data_type="nac rules",
+            sort_key="name"
+        )
     
     @staticmethod
     def nac_events():
         """Export NAC events to OrgNacEvents.csv."""
-        export_org_nac_events_to_csv()
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("org NAC events export", hours)
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
+            data_type="nac events",
+            sort_key="timestamp",
+            duration=f"{hours}h"
+        )
     
     @staticmethod
     def assets():
         """Export organization assets to OrgAssets.csv."""
-        export_org_assets_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.stats.searchOrgAssets,
+            data_type="assets",
+            sort_key="name"
+        )
     
     @staticmethod
     def bgp_peers():
         """Export BGP peer data to OrgBgpPeers.csv."""
-        export_org_bgp_peers_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers,
+            data_type="bgp peers",
+            sort_key="peer_ip"
+        )
     
     @staticmethod
     def tunnel_stats():
         """Export tunnel statistics to OrgTunnelStats.csv."""
-        export_org_tunnel_stats_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels,
+            data_type="tunnel stats",
+            sort_key="name"
+        )
     
     @staticmethod
     def site_stats():
         """Export site statistics to OrgSiteStats.csv."""
-        export_org_site_stats_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats,
+            data_type="site stats",
+            sort_key="name"
+        )
     
     @staticmethod
     def mxedge_stats():
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
-        export_org_mxedge_stats_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats,
+            data_type="mx edge stats",
+            sort_key="name"
+        )
     
     @staticmethod
     def alarm_templates():
         """Export alarm templates to OrgAlarmTemplates.csv."""
-        export_org_alarm_templates_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
+            data_type="alarm templates",
+            sort_key="name"
+        )
     
     @staticmethod
     def security_intel_profiles():
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
-        export_org_security_intel_profiles_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
+            data_type="security intel profiles",
+            sort_key="name"
+        )
     
     @staticmethod
     def invites():
         """Export organization invites to OrgInvites.csv."""
-        export_org_invites_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.invites.listOrgInvites,
+            data_type="invites",
+            sort_key="email"
+        )
     
     @staticmethod
     def events():
         """Export organization events to OrgEvents.csv."""
-        export_org_events_to_csv()
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("org events export", hours)
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
+            data_type="events",
+            sort_key="timestamp",
+            duration=f"{hours}h"
+        )
 
 
 # ============================================================================
@@ -16926,130 +16988,6 @@ def continuous_data_collection_loop():
         print(f"! Fatal error in continuous loop: {e}")
     
     print(" Continuous data collection loop ended.")
-
-# === NAC (Network Access Control) Functions ===
-
-def export_org_nac_clients_to_csv():
-    """Export NAC client information for the organization to OrgNacClients.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients,
-        data_type="nac clients",
-        sort_key="mac"
-    )
-
-def export_org_nac_tags_to_csv():
-    """Export NAC tags/policies for the organization to OrgNacTags.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags,
-        data_type="nac tags",
-        sort_key="name"
-    )
-
-def export_org_nac_portals_to_csv():
-    """Export NAC portals configuration for the organization to OrgNacPortals.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals,
-        data_type="nac portals",
-        sort_key="name"
-    )
-
-def export_org_nac_rules_to_csv():
-    """Export NAC rules/policies for the organization to OrgNacRules.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules,
-        data_type="nac rules",
-        sort_key="name"
-    )
-
-def export_org_nac_events_to_csv():
-    """Export NAC events for the organization to OrgNacEvents.csv."""
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("org NAC events export", hours)
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
-        data_type="nac events",
-        sort_key="timestamp",
-        duration=f"{hours}h"
-    )
-
-# === Statistics & Analytics Functions ===
-
-def export_org_assets_to_csv():
-    """Export asset tracking statistics for the organization to OrgAssets.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.stats.searchOrgAssets,
-        data_type="assets",
-        sort_key="name"
-    )
-
-def export_org_bgp_peers_to_csv():
-    """Export BGP peer statistics for the organization to OrgBgpPeers.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers,
-        data_type="bgp peers",
-        sort_key="peer_ip"
-    )
-
-def export_org_tunnel_stats_to_csv():
-    """Export tunnel statistics for the organization to OrgTunnelStats.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels,
-        data_type="tunnel stats",
-        sort_key="name"
-    )
-
-def export_org_site_stats_to_csv():
-    """Export site-level statistics for the organization to OrgSiteStats.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats,
-        data_type="site stats",
-        sort_key="name"
-    )
-
-def export_org_mxedge_stats_to_csv():
-    """Export MX Edge statistics for the organization to OrgMxEdgeStats.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats,
-        data_type="mx edge stats",
-        sort_key="name"
-    )
-
-# === Configuration & Management Functions ===
-
-def export_org_alarm_templates_to_csv():
-    """Export alarm template configurations for the organization to OrgAlarmTemplates.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
-        data_type="alarm templates",
-        sort_key="name"
-    )
-
-def export_org_security_intel_profiles_to_csv():
-    """Export security intelligence profiles for the organization to OrgSecurityIntelProfiles.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
-        data_type="security intel profiles",
-        sort_key="name"
-    )
-
-def export_org_invites_to_csv():
-    """Export pending admin invitations for the organization to OrgInvites.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.invites.listOrgInvites,
-        data_type="invites",
-        sort_key="email"
-    )
-
-def export_org_events_to_csv():
-    """Export general organization events to OrgEvents.csv."""
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("org events export", hours)
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
-        data_type="events",
-        sort_key="timestamp",
-        duration=f"{hours}h"
-    )
 
 # === Site-Level Functions ===
 
