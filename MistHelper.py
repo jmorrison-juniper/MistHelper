@@ -20998,16 +20998,224 @@ class AddressUtils:
     @staticmethod
     def parse_components(address_string, debug=False):
         """
-        Parses an address string into its component parts.
+        Parse address components with defensive parsing and robust heuristics.
+        
+        Handles:
+        - Defensive parsing with length checks
+        - "Unknown" address detection  
+        - Puerto Rico US territory mapping
+        - Right-to-left parsing (country, zip, city, street)
+        - Unicode normalization
+        - Graceful error handling
         
         Args:
-            address_string: The address string to parse
-            debug: If True, enable debug logging
+            address_string (str): Raw address string
+            debug (bool): Enable debug logging
             
         Returns:
-            dict: Dictionary of parsed address components
+            dict: {
+                'address': str,
+                'city': str, 
+                'state': str,
+                'zip': str,
+                'country': str,
+                'is_parseable': bool,
+                'parse_reason': str,
+                'original': str
+            }
         """
-        return parse_address_components(address_string, debug)
+        if debug:
+            logging.debug(f"PARSE_ADDRESS: Input: '{address_string}'")
+        
+        # Initialize default result
+        result = {
+            'address': None,
+            'city': None,
+            'state': None,
+            'zip': None,
+            'country': None,
+            'is_parseable': False,
+            'parse_reason': 'unparsed',
+            'original': address_string or ""
+        }
+        
+        # Handle empty or None input
+        if not address_string or not str(address_string).strip():
+            result['parse_reason'] = 'empty_input'
+            if debug:
+                logging.debug("PARSE_ADDRESS: Empty input")
+            return result
+        
+        # Handle "Unknown" addresses
+        cleaned_input = str(address_string).strip()
+        if cleaned_input.lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+            result['parse_reason'] = 'unknown_address'
+            if debug:
+                logging.debug("PARSE_ADDRESS: Unknown address detected")
+            return result
+        
+        try:
+            # Unicode normalization and defensive cleaning
+            normalized = unicodedata.normalize('NFKD', cleaned_input)
+            
+            # Trim whitespace, collapse repeated commas, remove empty tokens
+            parts = [part.strip() for part in normalized.split(',')]
+            parts = [part for part in parts if part]  # Remove empty parts
+            
+            if not parts:
+                result['parse_reason'] = 'no_parts_after_cleaning'
+                if debug:
+                    logging.debug("PARSE_ADDRESS: No parts after cleaning")
+                return result
+            
+            if debug:
+                logging.debug(f"PARSE_ADDRESS: Cleaned parts: {parts}")
+            
+            # Parse from right to left (country, postal/ZIP, city, street)
+            
+            # Step 1: Detect country (last token if recognizable)
+            country = None
+            remaining_parts = parts[:]
+            
+            if len(remaining_parts) > 0:
+                last_part = remaining_parts[-1].strip().lower()
+                
+                # Country detection patterns
+                if last_part in ['usa', 'united states', 'united states of america', 'us']:
+                    country = 'US'
+                    remaining_parts = remaining_parts[:-1]
+                elif last_part in ['puerto rico', 'pr']:
+                    country = 'US'  # Puerto Rico is US territory
+                    remaining_parts = remaining_parts[:-1]
+                elif len(last_part) == 2 and last_part.isalpha():
+                    # Assume 2-letter country code
+                    country = last_part.upper()
+                    remaining_parts = remaining_parts[:-1]
+            
+            # Step 2: Detect ZIP/postal code (numeric patterns)
+            zip_code = None
+            if len(remaining_parts) > 0:
+                last_part = remaining_parts[-1].strip()
+                
+                # US ZIP pattern: 5 digits or 5+4 format
+                if re.match(r'^\d{5}(-?\d{4})?$', last_part):
+                    zip_code = last_part
+                    remaining_parts = remaining_parts[:-1]
+                    # If no country detected but ZIP found, assume US
+                    if not country:
+                        country = 'US'
+            
+            # Step 3: Handle Puerto Rico special case
+            state = None
+            if len(remaining_parts) > 0:
+                last_part = remaining_parts[-1].strip().lower()
+                
+                # Check for Puerto Rico in various positions
+                if last_part == 'puerto rico':
+                    state = 'PR'
+                    country = 'US'
+                    remaining_parts = remaining_parts[:-1]
+                elif country == 'US' and last_part == 'pr':
+                    state = 'PR'
+                    remaining_parts = remaining_parts[:-1]
+                elif len(last_part) <= 2 and last_part.isalpha():
+                    # Assume state abbreviation
+                    state = last_part.upper()
+                    remaining_parts = remaining_parts[:-1]
+                elif len(remaining_parts) > 1:
+                    # Check if it's a full state name
+                    state_normalized = AddressUtils.normalize_state(last_part)
+                    if state_normalized:
+                        state = state_normalized.upper()
+                        remaining_parts = remaining_parts[:-1]
+            
+            # Step 4: Detect city (next remaining part from right)
+            city = None
+            if len(remaining_parts) > 0:
+                city = remaining_parts[-1].strip()
+                remaining_parts = remaining_parts[:-1]
+            
+            # Step 5: Everything else is street address
+            address = None
+            if remaining_parts:
+                address = ', '.join(remaining_parts).strip()
+            
+            # Populate result
+            result.update({
+                'address': address,
+                'city': city,
+                'state': state,
+                'zip': zip_code,
+                'country': country,
+                'is_parseable': True,
+                'parse_reason': 'success'
+            })
+            
+            if debug:
+                logging.debug(f"PARSE_ADDRESS: Parsed result: {result}")
+            
+            return result
+            
+        except Exception as exception:
+            result['parse_reason'] = f'exception: {str(exception)}'
+            if debug:
+                logging.warning(f"PARSE_ADDRESS: Exception during parsing: {exception}")
+            return result
+    
+    @staticmethod
+    def enhanced_parse(address_string, debug=False):
+        """
+        Enhanced address parsing using usaddress-scourgify for US addresses.
+        Falls back to heuristic parsing for non-US or failed cases.
+        
+        Args:
+            address_string (str): Raw address string
+            debug (bool): Enable debug logging
+            
+        Returns:
+            dict: Same format as parse_components
+        """
+        # Check if normalize_address_record is available
+        if normalize_address_record is None:
+            if debug:
+                logging.debug("USADDRESS_PARSE: usaddress-scourgify not available, using heuristic parsing")
+            return AddressUtils.parse_components(address_string, debug=debug)
+        
+        try:
+            if debug:
+                logging.debug(f"USADDRESS_PARSE: Attempting usaddress parsing for: '{address_string}'")
+            
+            # Try usaddress-scourgify
+            parsed = normalize_address_record(address_string)
+            
+            result = {
+                'address': parsed.get('address_line_1', ''),
+                'city': parsed.get('city', ''),
+                'state': parsed.get('state', ''),
+                'zip': parsed.get('postal_code', ''),
+                'country': 'US',  # usaddress is US-focused
+                'is_parseable': True,
+                'parse_reason': 'usaddress_success',
+                'original': address_string or ""
+            }
+            
+            # Handle address_line_2 if present
+            if parsed.get('address_line_2'):
+                # Combine address lines with space
+                address_parts = [parsed.get('address_line_1', ''), parsed.get('address_line_2', '')]
+                result['address'] = ' '.join(part for part in address_parts if part)
+            
+            if debug:
+                logging.debug(f"USADDRESS_PARSE: Success: {result}")
+            
+            return result
+            
+        except Exception as usaddress_error:
+            if debug:
+                logging.debug(f"USADDRESS_PARSE: Failed with: {usaddress_error}")
+            
+            # Fall back to heuristic parsing
+            return AddressUtils.parse_components(address_string, debug=debug)
     
     @staticmethod
     def calculate_similarity(str1, str2):
@@ -21602,223 +21810,30 @@ def apply_business_context_rules(mist_result, comparison_result, debug=False):
 def parse_address_components(address_string, debug=False):
     """
     Parse address components with defensive parsing and robust heuristics.
-    
-    Handles:
-    - Defensive parsing with length checks
-    - "Unknown" address detection  
-    - Puerto Rico US territory mapping
-    - Right-to-left parsing (country, zip, city, street)
-    - Unicode normalization
-    - Graceful error handling
+    Backward compatibility shim - delegates to AddressUtils.parse_components().
     
     Args:
         address_string (str): Raw address string
         debug (bool): Enable debug logging
         
     Returns:
-        dict: {
-            'address': str,
-            'city': str, 
-            'state': str,
-            'zip': str,
-            'country': str,
-            'is_parseable': bool,
-            'parse_reason': str,
-            'original': str
-        }
+        dict: Parsed address components
     """
-    
-    if debug:
-        logging.debug(f"PARSE_ADDRESS: Input: '{address_string}'")
-    
-    # Initialize default result
-    result = {
-        'address': None,
-        'city': None,
-        'state': None,
-        'zip': None,
-        'country': None,
-        'is_parseable': False,
-        'parse_reason': 'unparsed',
-        'original': address_string or ""
-    }
-    
-    # Handle empty or None input
-    if not address_string or not str(address_string).strip():
-        result['parse_reason'] = 'empty_input'
-        if debug:
-            logging.debug("PARSE_ADDRESS: Empty input")
-        return result
-    
-    # Handle "Unknown" addresses
-    cleaned_input = str(address_string).strip()
-    if cleaned_input.lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
-        result['parse_reason'] = 'unknown_address'
-        if debug:
-            logging.debug("PARSE_ADDRESS: Unknown address detected")
-        return result
-    
-    try:
-        # Unicode normalization and defensive cleaning
-        normalized = unicodedata.normalize('NFKD', cleaned_input)
-        
-        # Trim whitespace, collapse repeated commas, remove empty tokens
-        parts = [part.strip() for part in normalized.split(',')]
-        parts = [part for part in parts if part]  # Remove empty parts
-        
-        if not parts:
-            result['parse_reason'] = 'no_parts_after_cleaning'
-            if debug:
-                logging.debug("PARSE_ADDRESS: No parts after cleaning")
-            return result
-        
-        if debug:
-            logging.debug(f"PARSE_ADDRESS: Cleaned parts: {parts}")
-        
-        # Parse from right to left (country, postal/ZIP, city, street)
-        
-        # Step 1: Detect country (last token if recognizable)
-        country = None
-        remaining_parts = parts[:]
-        
-        if len(remaining_parts) > 0:
-            last_part = remaining_parts[-1].strip().lower()
-            
-            # Country detection patterns
-            if last_part in ['usa', 'united states', 'united states of america', 'us']:
-                country = 'US'
-                remaining_parts = remaining_parts[:-1]
-            elif last_part in ['puerto rico', 'pr']:
-                country = 'US'  # Puerto Rico is US territory
-                remaining_parts = remaining_parts[:-1]
-            elif len(last_part) == 2 and last_part.isalpha():
-                # Assume 2-letter country code
-                country = last_part.upper()
-                remaining_parts = remaining_parts[:-1]
-        
-        # Step 2: Detect ZIP/postal code (numeric patterns)
-        zip_code = None
-        if len(remaining_parts) > 0:
-            last_part = remaining_parts[-1].strip()
-            
-            # US ZIP pattern: 5 digits or 5+4 format
-            if re.match(r'^\d{5}(-?\d{4})?$', last_part):
-                zip_code = last_part
-                remaining_parts = remaining_parts[:-1]
-                # If no country detected but ZIP found, assume US
-                if not country:
-                    country = 'US'
-        
-        # Step 3: Handle Puerto Rico special case
-        state = None
-        if len(remaining_parts) > 0:
-            last_part = remaining_parts[-1].strip().lower()
-            
-            # Check for Puerto Rico in various positions
-            if last_part == 'puerto rico':
-                state = 'PR'
-                country = 'US'
-                remaining_parts = remaining_parts[:-1]
-            elif country == 'US' and last_part == 'pr':
-                state = 'PR'
-                remaining_parts = remaining_parts[:-1]
-            elif len(last_part) <= 2 and last_part.isalpha():
-                # Assume state abbreviation
-                state = last_part.upper()
-                remaining_parts = remaining_parts[:-1]
-            elif len(remaining_parts) > 1:
-                # Check if it's a full state name
-                state_normalized = normalize_state_name(last_part)
-                if state_normalized:
-                    state = state_normalized.upper()
-                    remaining_parts = remaining_parts[:-1]
-        
-        # Step 4: Detect city (next remaining part from right)
-        city = None
-        if len(remaining_parts) > 0:
-            city = remaining_parts[-1].strip()
-            remaining_parts = remaining_parts[:-1]
-        
-        # Step 5: Everything else is street address
-        address = None
-        if remaining_parts:
-            address = ', '.join(remaining_parts).strip()
-        
-        # Populate result
-        result.update({
-            'address': address,
-            'city': city,
-            'state': state,
-            'zip': zip_code,
-            'country': country,
-            'is_parseable': True,
-            'parse_reason': 'success'
-        })
-        
-        if debug:
-            logging.debug(f"PARSE_ADDRESS: Parsed result: {result}")
-        
-        return result
-        
-    except Exception as e:
-        result['parse_reason'] = f'exception: {str(e)}'
-        if debug:
-            logging.warning(f"PARSE_ADDRESS: Exception during parsing: {e}")
-        return result
+    return AddressUtils.parse_components(address_string, debug)
 
 def enhanced_usaddress_parse(address_string, debug=False):
     """
     Enhanced address parsing using usaddress-scourgify for US addresses.
-    Falls back to heuristic parsing for non-US or failed cases.
+    Backward compatibility shim - delegates to AddressUtils.enhanced_parse().
     
     Args:
         address_string (str): Raw address string
         debug (bool): Enable debug logging
         
     Returns:
-        dict: Same format as parse_address_components
+        dict: Parsed address components
     """
-    # Check if normalize_address_record is available
-    if normalize_address_record is None:
-        if debug:
-            logging.debug("USADDRESS_PARSE: usaddress-scourgify not available, using heuristic parsing")
-        return parse_address_components(address_string, debug=debug)
-    
-    try:
-        if debug:
-            logging.debug(f"USADDRESS_PARSE: Attempting usaddress parsing for: '{address_string}'")
-        
-        # Try usaddress-scourgify
-        parsed = normalize_address_record(address_string)
-        
-        result = {
-            'address': parsed.get('address_line_1', ''),
-            'city': parsed.get('city', ''),
-            'state': parsed.get('state', ''),
-            'zip': parsed.get('postal_code', ''),
-            'country': 'US',  # usaddress is US-focused
-            'is_parseable': True,
-            'parse_reason': 'usaddress_success',
-            'original': address_string or ""
-        }
-        
-        # Handle address_line_2 if present
-        if parsed.get('address_line_2'):
-            # Combine address lines with space
-            address_parts = [parsed.get('address_line_1', ''), parsed.get('address_line_2', '')]
-            result['address'] = ' '.join(part for part in address_parts if part)
-        
-        if debug:
-            logging.debug(f"USADDRESS_PARSE: Success: {result}")
-        
-        return result
-        
-    except Exception as usaddress_error:
-        if debug:
-            logging.debug(f"USADDRESS_PARSE: Failed with: {usaddress_error}")
-        
-        # Fall back to heuristic parsing
-        return parse_address_components(address_string, debug=debug)
+    return AddressUtils.enhanced_parse(address_string, debug)
 
 def calculate_string_similarity(str1, str2):
     """Backward compatibility wrapper - delegates to AddressUtils.calculate_similarity()."""
