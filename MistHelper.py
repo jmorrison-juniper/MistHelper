@@ -9165,7 +9165,93 @@ class OrgExportUtils:
     @staticmethod
     def security_events():
         """Export security policies, intelligence profiles, and rogue data."""
-        export_org_security_events_to_csv()
+        print("Export Organization Security Data:")
+        logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
+        current_org_id = get_cached_or_prompted_org_id()
+        policies = []
+        try:
+            logging.info("Fetching organization security policies (secpolicies)...")
+            resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, current_org_id, limit=1000)
+            policies = mistapi.get_all(response=resp, mist_session=apisession) or []
+            logging.debug(f"Security policies fetched: {len(policies)}")
+        except Exception as e:
+            logging.warning(f"Failed to fetch security policies: {e}")
+        if policies:
+            processed = DataProcessingUtils.flatten_nested_fields(policies)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")
+            print(f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv")
+            logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")
+        else:
+            print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")
+            logging.warning("No data to export for OrgSecurityPolicies.csv (zero policies returned).")
+            DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")
+        secintel_profiles = []
+        try:
+            logging.info("Fetching organization security intelligence profiles...")
+            resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, current_org_id)
+            secintel_profiles = mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
+            logging.debug(f"Security intelligence profiles fetched: {len(secintel_profiles)}")
+        except Exception as e:
+            logging.warning(f"Failed to fetch security intelligence profiles: {e}")
+        if secintel_profiles:
+            processed_si = DataProcessingUtils.flatten_nested_fields(secintel_profiles)
+            processed_si = DataProcessingUtils.escape_multiline(processed_si)
+            DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")
+            print(f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv")
+            logging.info(f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv")
+        else:
+            print("! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)")
+            logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
+            DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")
+        logging.info("Fetching rogue APs and clients from all sites via insights...")
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        all_rogue_aps = []
+        all_rogue_clients = []
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                sites = list(csv.DictReader(f))
+            for site in tqdm(sites, desc="Sites", unit="site"):
+                site_id = site.get("id")
+                site_name = site.get("name", "Unknown Site")
+                if not site_id:
+                    continue
+                try:
+                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration="7d", limit=1000)
+                    site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
+                    for rogue_access_point in site_rogue_aps:
+                        rogue_access_point["site_id"] = site_id
+                        rogue_access_point["site_name"] = site_name
+                        rogue_access_point["rogue_type"] = "AP"
+                    all_rogue_aps.extend(site_rogue_aps)
+                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration="7d", limit=1000)
+                    site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession) or []
+                    for client in site_rogue_clients:
+                        client["site_id"] = site_id
+                        client["site_name"] = site_name
+                        client["rogue_type"] = "Client"
+                    all_rogue_clients.extend(site_rogue_clients)
+                    logging.info(f"! Fetched {len(site_rogue_aps)} rogue APs and {len(site_rogue_clients)} rogue clients from site: {site_name}")
+                except Exception as e:
+                    logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
+                    continue
+                time.sleep(0.2)
+        except Exception as e:
+            logging.error(f"Failed to process sites for rogue data: {e}")
+        all_rogue_data = all_rogue_aps + all_rogue_clients
+        if all_rogue_data:
+            processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)
+            processed_r = DataProcessingUtils.escape_multiline(processed_r)
+            DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")
+            print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")
+            logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")
+        else:
+            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
+            logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")
+            DataExporter.save_data_to_output([], "OrgRogueData.csv")
+        print("Security data export completed (3 files generated)")
+        logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
     
     @staticmethod
     def sle_metrics():
@@ -9185,17 +9271,121 @@ class OrgExportUtils:
     @staticmethod
     def rogue_clients():
         """Export rogue clients to OrgRogueClients.csv."""
-        export_org_rogue_clients_to_csv()
+        logging.info("Starting export of rogue clients from all sites...")
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        all_rogue_clients = []
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                sites = list(csv.DictReader(f))
+            for site in tqdm(sites, desc="Sites", unit="site"):
+                site_id = site.get("id")
+                site_name = site.get("name", "Unknown Site")
+                if not site_id:
+                    continue
+                try:
+                    response = mistapi.api.v1.sites.insights.listSiteRogueClients(
+                        apisession, site_id, duration="7d", limit=1000
+                    )
+                    clients = mistapi.get_all(response=response, mist_session=apisession)
+                    for client in clients:
+                        client["site_id"] = site_id
+                        client["site_name"] = site_name
+                    all_rogue_clients.extend(clients)
+                    logging.info(f"! Fetched {len(clients)} rogue clients from site: {site_name}")
+                except Exception as e:
+                    logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
+                    continue
+                time.sleep(0.5)
+        except Exception as e:
+            logging.error(f"Failed to process sites for rogue clients: {e}")
+            return
+        if all_rogue_clients:
+            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
+            DataExporter.save_data_to_output(sanitized, "OrgRogueClients")
+            logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
+            print(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
+        else:
+            logging.info("No rogue clients found across all sites")
+            print(" No rogue clients detected across all sites")
     
     @staticmethod
     def rogue_aps():
         """Export rogue APs to OrgRogueAps.csv."""
-        export_org_rogue_aps_to_csv()
+        logging.info("Starting export of rogue APs from all sites...")
+        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        all_rogue_aps = []
+        try:
+            site_list_path = get_csv_file_path("SiteList.csv")
+            with open(site_list_path, mode="r", encoding="utf-8") as f:
+                sites = list(csv.DictReader(f))
+            for site in tqdm(sites, desc="Sites", unit="site"):
+                site_id = site.get("id")
+                site_name = site.get("name", "Unknown Site")
+                if not site_id:
+                    continue
+                try:
+                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
+                        apisession, site_id, duration="7d", limit=1000
+                    )
+                    aps = mistapi.get_all(response=response, mist_session=apisession)
+                    for access_point in aps:
+                        access_point["site_id"] = site_id
+                        access_point["site_name"] = site_name
+                    all_rogue_aps.extend(aps)
+                    logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")
+                except Exception as e:
+                    logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
+                    continue
+                time.sleep(0.5)
+        except Exception as e:
+            logging.error(f"Failed to process sites for rogue APs: {e}")
+            return
+        if all_rogue_aps:
+            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
+            DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")
+            logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
+            print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
+        else:
+            logging.info("No rogue APs found across all sites")
+            print(" No rogue APs detected across all sites")
     
     @staticmethod
     def licenses():
         """Export organization licenses to OrgLicenses.csv."""
-        export_org_licenses_to_csv()
+        logging.info("Starting export of organization licenses (canonical endpoint)...")
+        filename = "OrgLicenses.csv"
+        current_org_id = get_cached_or_prompted_org_id()
+        try:
+            list_func = getattr(mistapi.api.v1.orgs.licenses, 'listOrgLicenses', None)
+            if list_func is None:
+                logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
+                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"
+                response = apisession.mist_get(raw_url)
+                raw_items = getattr(response, 'data', response) or []
+            else:
+                response = list_func(apisession, current_org_id, limit=1000)
+                raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
+            if not isinstance(raw_items, list):
+                logging.debug("License endpoint returned non-list payload; normalizing to list")
+                raw_items = [raw_items]
+            if not raw_items:
+                logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
+                DataExporter.save_data_to_output([], filename)
+                return
+            processed = DataProcessingUtils.flatten_nested_fields(raw_items)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            DataExporter.save_data_to_output(processed, filename)
+            logging.info(f"Exported {len(processed)} license records to {filename}.")
+        except Exception as e:
+            logging.error(f"Failed to export licenses: {e}")
+            try:
+                DataExporter.save_data_to_output([], filename)
+            except Exception:
+                pass
+            raise
     
     @staticmethod
     def psks():
@@ -9309,12 +9499,58 @@ class OrgExportUtils:
     @staticmethod
     def ap_templates():
         """Export AP templates to OrgApTemplates.csv."""
-        export_org_ap_templates_to_csv()
+        print("Export Organization AP Templates:")
+        logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
+        org_id = get_cached_or_prompted_org_id()
+        filename = "OrgApTemplates.csv"
+        try:
+            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=1000)
+            ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
+            if not ap_profiles:
+                print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")
+                logging.info("No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv")
+                DataExporter.save_data_to_output([], filename)
+                return
+            processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            DataExporter.save_data_to_output(processed, filename)
+            print(f"! {len(processed)} AP templates exported to {filename}")
+            logging.info(f"Exported {len(processed)} AP templates to {filename}.")
+        except Exception as e:
+            logging.error(f"Failed to export AP templates: {e}")
+            try:
+                DataExporter.save_data_to_output([], filename)
+            except Exception:
+                pass
+            raise
     
     @staticmethod
     def switch_templates():
         """Export switch templates to OrgSwitchTemplates.csv."""
-        export_org_switch_templates_to_csv()
+        print("Export Organization Switch Templates:")
+        logging.info("Starting export of organization switch templates (canonical networktemplates)...")
+        org_id = get_cached_or_prompted_org_id()
+        filename = "OrgSwitchTemplates.csv"
+        try:
+            response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
+            switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
+            if not switch_profiles:
+                print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
+                logging.info("No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv")
+                DataExporter.save_data_to_output([], filename)
+                return
+            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            DataExporter.save_data_to_output(processed, filename)
+            print(f"! {len(processed)} switch templates exported to {filename}")
+            logging.info(f"Exported {len(processed)} switch templates to {filename}.")
+        except Exception as e:
+            logging.error(f"Failed to export switch templates: {e}")
+            try:
+                DataExporter.save_data_to_output([], filename)
+            except Exception:
+                pass
+            raise
     
     @staticmethod
     def nac_clients():
@@ -9475,27 +9711,133 @@ class SiteExportUtils:
     @staticmethod
     def port_stats():
         """Export port statistics for a site to SitePortStats.csv."""
-        export_site_port_stats_to_csv()
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts,
+            data_type="port stats",
+            sort_key="mac"
+        )
     
     @staticmethod
     def device_virtual_chassis():
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
-        export_site_device_virtual_chassis_to_csv()
+        print("Export Virtual Chassis Information:")
+        logging.info("Starting export of site device virtual chassis information...")
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        device_id = PromptUtils.select_device(site_id, device_type="switch")
+        if not device_id:
+            logging.error("No switch device selected. Exiting.")
+            return
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')
+        devices = mistapi.get_all(response=response, mist_session=apisession)
+        device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
+        logging.info(f"Exporting virtual chassis information for device: {device_name}")
+        try:
+            response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
+            if response.data:
+                vc_data = [response.data] if isinstance(response.data, dict) else response.data
+                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
+                sanitized = DataProcessingUtils.escape_multiline(flattened)
+                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
+                DataExporter.save_data_to_output(sanitized, filename)
+                logging.info(f"! Virtual chassis information exported to {filename}")
+                if sanitized:
+                    print(f"\n!! Virtual Chassis Summary for {device_name}:")
+                    print(f"   * Records exported: {len(sanitized)}")
+                    if 'members' in sanitized[0]:
+                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")
+                    if 'preprovisioned' in sanitized[0]:
+                        print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
+                    print(f"   * Data saved to: {filename}")
+            else:
+                logging.warning(f"! No virtual chassis data returned for device {device_name}")
+                print(f"! No virtual chassis data found for device {device_name}")
+        except Exception as e:
+            logging.error(f"! Failed to export virtual chassis information: {e}")
+            print(f"! Failed to export virtual chassis information: {e}")
     
     @staticmethod
     def clients():
         """Export client data for a site to SiteClients.csv."""
-        export_site_clients_to_csv()
+        print("Site Client Statistics:")
+        logging.info("Starting export of site client statistics...")
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        sites = fetch_all_sites_with_limit(org_id)
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        logging.info(f"Exporting client statistics for site: {site_name}")
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            if rawdata:
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
+                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
+                DataExporter.save_data_to_output(sanitized_data, filename)
+                print(f"! {len(rawdata)} client records exported to {filename}")
+            else:
+                print("! No client data found for this site")
+        except Exception as e:
+            logging.error(f"Error fetching client stats for site {site_name}: {e}")
+            print(f"! Error fetching client data: {e}")
     
     @staticmethod
     def devices():
         """Export device data for a site to SiteDevices.csv."""
-        export_site_devices_to_csv()
+        print("Site Device List:")
+        logging.info("Starting export of site device list...")
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        sites = fetch_all_sites_with_limit(org_id)
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        logging.info(f"Exporting device list for site: {site_name}")
+        try:
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+            rawdata = getattr(response, 'data', [])
+            if rawdata:
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
+                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
+                DataExporter.save_data_to_output(sanitized_data, filename)
+                print(f"! {len(rawdata)} devices exported to {filename}")
+            else:
+                print("! No devices found for this site")
+        except Exception as e:
+            logging.error(f"Error fetching devices for site {site_name}: {e}")
+            print(f"! Error fetching device data: {e}")
     
     @staticmethod
     def device_stats():
         """Export device statistics for a site to SiteDeviceStats.csv."""
-        export_site_device_stats_to_csv()
+        print("Site Device Statistics:")
+        logging.info("Starting export of site device statistics...")
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        sites = fetch_all_sites_with_limit(org_id)
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        logging.info(f"Exporting device statistics for site: {site_name}")
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            if rawdata:
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
+                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
+                DataExporter.save_data_to_output(sanitized_data, filename)
+                print(f"! {len(rawdata)} device stats exported to {filename}")
+            else:
+                print("! No device statistics found for this site")
+        except Exception as e:
+            logging.error(f"Error fetching device stats for site {site_name}: {e}")
+            print(f"! Error fetching device statistics: {e}")
     
     @staticmethod
     def insight_metrics():
@@ -13725,74 +14067,6 @@ def export_vpn_peer_stats_to_csv(fast: bool = False):
         limit=1000
     )
 
-def export_site_port_stats_to_csv():
-    """Export port statistics for a specific site to SitePortStats.csv."""
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts,
-        data_type="port stats",
-        sort_key="mac"
-    )
-
-def export_site_device_virtual_chassis_to_csv():
-    """
-    Export virtual chassis information for switches at a specific site.
-    Prompts user to select a site and device, then exports VC details.
-    """
-    print("Export Virtual Chassis Information:")
-    logging.info("Starting export of site device virtual chassis information...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get device selection (filtered for switches)
-    device_id = PromptUtils.select_device(site_id, device_type="switch")
-    if not device_id:
-        logging.error("No switch device selected. Exiting.")
-        return
-    
-    # Get device name for display
-    response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')
-    devices = mistapi.get_all(response=response, mist_session=apisession)
-    device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
-    
-    logging.info(f"Exporting virtual chassis information for device: {device_name}")
-    
-    try:
-        # Make API call to get virtual chassis information
-        response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
-        
-        if response.data:
-            # Convert to list format for CSV processing
-            vc_data = [response.data] if isinstance(response.data, dict) else response.data
-            
-            # Process and save the data
-            flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)
-            
-            filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
-            DataExporter.save_data_to_output(sanitized, filename)
-            
-            logging.info(f"! Virtual chassis information exported to {filename}")
-            
-            # Display summary
-            if sanitized:
-                print(f"\n!! Virtual Chassis Summary for {device_name}:")
-                print(f"   * Records exported: {len(sanitized)}")
-                if 'members' in sanitized[0]:
-                    print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")
-                if 'preprovisioned' in sanitized[0]:
-                    print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
-                print(f"   * Data saved to: {filename}")
-        else:
-            logging.warning(f"! No virtual chassis data returned for device {device_name}")
-            print(f"! No virtual chassis data found for device {device_name}")
-            
-    except Exception as e:
-        logging.error(f"! Failed to export virtual chassis information: {e}")
-        print(f"! Failed to export virtual chassis information: {e}")
 
 def export_organization_templates_to_csv():
     """
@@ -13861,225 +14135,6 @@ def export_organization_templates_to_csv():
         logging.error(f"Failed to export AP templates: {e}")
     
     logging.info(" Organization templates export completed")
-
-def export_site_clients_to_csv():
-    """
-    Export client statistics for a specific site to SiteClients.csv.
-    Prompts user to select a site and exports connected client information.
-    """
-    print("Site Client Statistics:")
-    logging.info("Starting export of site client statistics...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for display
-    sites = fetch_all_sites_with_limit(org_id)
-    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    
-    logging.info(f"Exporting client statistics for site: {site_name}")
-    
-    # Fetch site client stats directly
-    try:
-        response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        
-        if rawdata:
-            # Process and save data
-            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
-            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
-            filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
-            DataExporter.save_data_to_output(sanitized_data, filename)
-            print(f"! {len(rawdata)} client records exported to {filename}")
-        else:
-            print("! No client data found for this site")
-    except Exception as e:
-        logging.error(f"Error fetching client stats for site {site_name}: {e}")
-        print(f"! Error fetching client data: {e}")
-
-def export_site_devices_to_csv():
-    """
-    Export device list for a specific site to SiteDevices.csv.
-    Prompts user to select a site and exports device information.
-    """
-    print("Site Device List:")
-    logging.info("Starting export of site device list...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for display
-    sites = fetch_all_sites_with_limit(org_id)
-    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    
-    logging.info(f"Exporting device list for site: {site_name}")
-    
-    # Fetch site devices directly
-    try:
-        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-        rawdata = getattr(response, 'data', [])
-        
-        if rawdata:
-            # Process and save data
-            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
-            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
-            filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
-            DataExporter.save_data_to_output(sanitized_data, filename)
-            print(f"! {len(rawdata)} devices exported to {filename}")
-        else:
-            print("! No devices found for this site")
-    except Exception as e:
-        logging.error(f"Error fetching devices for site {site_name}: {e}")
-        print(f"! Error fetching device data: {e}")
-
-def export_site_device_stats_to_csv():
-    """
-    Export device statistics for a specific site to SiteDeviceStats.csv.
-    Prompts user to select a site and exports device statistics.
-    """
-    print("Site Device Statistics:")
-    logging.info("Starting export of site device statistics...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for display
-    sites = fetch_all_sites_with_limit(org_id)
-    site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    
-    logging.info(f"Exporting device statistics for site: {site_name}")
-    
-    # Fetch site device stats directly
-    try:
-        response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        
-        if rawdata:
-            # Process and save data
-            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
-            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
-            filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
-            DataExporter.save_data_to_output(sanitized_data, filename)
-            print(f"! {len(rawdata)} device stats exported to {filename}")
-        else:
-            print("! No device statistics found for this site")
-    except Exception as e:
-        logging.error(f"Error fetching device stats for site {site_name}: {e}")
-        print(f"! Error fetching device statistics: {e}")
-
-
-def export_org_security_events_to_csv():
-    """Export security policies (OrgSecurityPolicies.csv), security intelligence profiles (OrgSecIntelProfiles.csv), and site rogue data (OrgRogueData.csv)."""
-    print("Export Organization Security Data:")
-    logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
-    org_id = get_cached_or_prompted_org_id()
-
-    # 1. Security Policies
-    policies = []
-    try:
-        logging.info("Fetching organization security policies (secpolicies)...")
-        resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, org_id, limit=1000)
-        policies = mistapi.get_all(response=resp, mist_session=apisession) or []
-        logging.debug(f"Security policies fetched: {len(policies)}")
-    except Exception as e:
-        logging.warning(f"Failed to fetch security policies: {e}")
-    if policies:
-        processed = DataProcessingUtils.flatten_nested_fields(policies)
-        processed = DataProcessingUtils.escape_multiline(processed)
-        DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")
-        print(f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv")
-        logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")
-    else:
-        print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")
-        logging.warning("No data to export for OrgSecurityPolicies.csv (zero policies returned).")
-        DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")
-
-    # 2. Security Intelligence Profiles (use available endpoint)
-    secintel_profiles = []
-    try:
-        logging.info("Fetching organization security intelligence profiles...")
-        resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, org_id)
-        secintel_profiles = mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
-        logging.debug(f"Security intelligence profiles fetched: {len(secintel_profiles)}")
-    except Exception as e:
-        logging.warning(f"Failed to fetch security intelligence profiles: {e}")
-    if secintel_profiles:
-        processed_si = DataProcessingUtils.flatten_nested_fields(secintel_profiles)
-        processed_si = DataProcessingUtils.escape_multiline(processed_si)
-        DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")
-        print(f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv")
-        logging.info(f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv")
-    else:
-        print("! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)")
-        logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
-        DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")
-
-    # 3. Rogue Events (site-level via insights)
-    logging.info("Fetching rogue APs and clients from all sites via insights...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
-    all_rogue_aps = []
-    all_rogue_clients = []
-    try:
-        site_list_path = get_csv_file_path("SiteList.csv")
-        with open(site_list_path, mode="r", encoding="utf-8") as f:
-            sites = list(csv.DictReader(f))
-        for site in tqdm(sites, desc="Sites", unit="site"):
-            site_id = site.get("id")
-            site_name = site.get("name", "Unknown Site")
-            if not site_id:
-                continue
-            try:
-                # Get rogue APs
-                response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration="7d", limit=1000)
-                site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
-                for rogue_access_point in site_rogue_aps:
-                    rogue_access_point["site_id"] = site_id
-                    rogue_access_point["site_name"] = site_name
-                    rogue_access_point["rogue_type"] = "AP"
-                all_rogue_aps.extend(site_rogue_aps)
-                
-                # Get rogue clients  
-                response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration="7d", limit=1000)
-                site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession) or []
-                for client in site_rogue_clients:
-                    client["site_id"] = site_id
-                    client["site_name"] = site_name
-                    client["rogue_type"] = "Client"
-                all_rogue_clients.extend(site_rogue_clients)
-                
-                logging.info(f"! Fetched {len(site_rogue_aps)} rogue APs and {len(site_rogue_clients)} rogue clients from site: {site_name}")
-            except Exception as e:
-                logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
-                continue
-            time.sleep(0.2)
-    except Exception as e:
-        logging.error(f"Failed to process sites for rogue data: {e}")
-
-    # Combine all rogue data
-    all_rogue_data = all_rogue_aps + all_rogue_clients
-
-    if all_rogue_data:
-        processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)
-        processed_r = DataProcessingUtils.escape_multiline(processed_r)
-        DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")
-        print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")
-        logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")
-    else:
-        print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
-        logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")
-        DataExporter.save_data_to_output([], "OrgRogueData.csv")
-
-    print("Security data export completed (3 files generated)")
-    logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
 
 # ==============================
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
@@ -15551,166 +15606,6 @@ def export_org_insight_metrics_to_csv():
         DataExporter.save_data_to_output([], "OrgSitesData.csv")
         DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
 
-def export_org_rogue_clients_to_csv():
-    """Export rogue client detections from all sites to OrgRogueClients.csv."""
-    logging.info("Starting export of rogue clients from all sites...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
-    
-    all_rogue_clients = []
-    
-    try:
-        # Load sites
-        site_list_path = get_csv_file_path("SiteList.csv")
-        with open(site_list_path, mode="r", encoding="utf-8") as f:
-            sites = list(csv.DictReader(f))
-            
-        for site in tqdm(sites, desc="Sites", unit="site"):
-            site_id = site.get("id")
-            site_name = site.get("name", "Unknown Site")
-            
-            if not site_id:
-                continue
-                
-            try:
-                # Get rogue clients for this site
-                response = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                    apisession, site_id, duration="7d", limit=1000
-                )
-                clients = mistapi.get_all(response=response, mist_session=apisession)
-                
-                # Add site context to each client
-                for client in clients:
-                    client["site_id"] = site_id
-                    client["site_name"] = site_name
-                    
-                all_rogue_clients.extend(clients)
-                logging.info(f"! Fetched {len(clients)} rogue clients from site: {site_name}")
-                
-            except Exception as e:
-                logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
-                continue
-                
-            # Rate limiting
-            time.sleep(0.5)
-                
-    except Exception as e:
-        logging.error(f"Failed to process sites for rogue clients: {e}")
-        return
-        
-    # Save rogue clients
-    if all_rogue_clients:
-        flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        DataExporter.save_data_to_output(sanitized, "OrgRogueClients")
-        logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
-        print(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
-    else:
-        logging.info("No rogue clients found across all sites")
-        print(" No rogue clients detected across all sites")
-
-def export_org_rogue_aps_to_csv():
-    """Export rogue AP detections from all sites to OrgRogueAPs.csv."""
-    logging.info("Starting export of rogue APs from all sites...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
-    
-    all_rogue_aps = []
-    
-    try:
-        # Load sites
-        site_list_path = get_csv_file_path("SiteList.csv")
-        with open(site_list_path, mode="r", encoding="utf-8") as f:
-            sites = list(csv.DictReader(f))
-            
-        for site in tqdm(sites, desc="Sites", unit="site"):
-            site_id = site.get("id")
-            site_name = site.get("name", "Unknown Site")
-            
-            if not site_id:
-                continue
-                
-            try:
-                # Get rogue APs for this site
-                response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                    apisession, site_id, duration="7d", limit=1000
-                )
-                aps = mistapi.get_all(response=response, mist_session=apisession)
-                
-                # Add site context to each AP
-                for access_point in aps:
-                    access_point["site_id"] = site_id
-                    access_point["site_name"] = site_name
-                    
-                all_rogue_aps.extend(aps)
-                logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")
-                
-            except Exception as e:
-                logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
-                continue
-                
-            # Rate limiting
-            time.sleep(0.5)
-                
-    except Exception as e:
-        logging.error(f"Failed to process sites for rogue APs: {e}")
-        return
-        
-    # Save rogue APs
-    if all_rogue_aps:
-        flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")
-        logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
-        print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
-    else:
-        logging.info("No rogue APs found across all sites")
-        print(" No rogue APs detected across all sites")
-
-def export_org_licenses_to_csv():
-    """Export organization license entitlements to OrgLicenses.csv using the canonical list endpoint.
-
-    Rationale: Per user directive, remove multi-endpoint fallback / probing logic. We use the
-    detailed list endpoint only. If it returns zero records we log and still emit an empty file.
-    """
-    logging.info("Starting export of organization licenses (canonical endpoint)...")
-    filename = "OrgLicenses.csv"
-    org_id = get_cached_or_prompted_org_id()
-
-    try:
-        # Canonical endpoint: listOrgLicenses (paginated). We deliberately do NOT call the summary endpoint.
-        list_func = getattr(mistapi.api.v1.orgs.licenses, 'listOrgLicenses', None)
-        if list_func is None:
-            # Library wrapper absent - this is a version compatibility shim, not an alternate data source.
-            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-            raw_url = f"/api/v1/orgs/{org_id}/licenses"
-            response = apisession.mist_get(raw_url)  # type: ignore[union-attr]
-            raw_items = getattr(response, 'data', response) or []
-        else:
-            response = list_func(apisession, org_id, limit=1000)
-            raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
-
-        if not isinstance(raw_items, list):
-            # Defensive normalization: if API ever returns a dict, convert to single-element list.
-            logging.debug("License endpoint returned non-list payload; normalizing to list")
-            raw_items = [raw_items]
-
-        if not raw_items:
-            logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-            DataExporter.save_data_to_output([], filename)
-            return
-
-        processed = DataProcessingUtils.flatten_nested_fields(raw_items)
-        processed = DataProcessingUtils.escape_multiline(processed)
-        DataExporter.save_data_to_output(processed, filename)
-        logging.info(f"Exported {len(processed)} license records to {filename}.")
-    except Exception as e:
-        logging.error(f"Failed to export licenses: {e}")
-        # Emit an empty file to keep test harness consistent, then re-raise for visibility
-        try:
-            DataExporter.save_data_to_output([], filename)
-        except Exception:
-            pass
-        raise
-
 
 def create_test_sites_from_csv():
     """
@@ -16827,67 +16722,6 @@ def assign_aps_to_matching_device_profiles():
         logging.info(f"Skipped APs exported to {skipped_filename}")
     
     logging.debug("EXIT: assign_aps_to_matching_device_profiles - complete")
-
-
-def export_org_ap_templates_to_csv():
-    """Export AP device profiles (templates) to OrgApTemplates.csv via canonical filtered endpoint.
-
-    Single call only (type='ap'). If zero returned we write an empty file without secondary probing.
-    """
-    print("Export Organization AP Templates:")
-    logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
-    org_id = get_cached_or_prompted_org_id()
-    filename = "OrgApTemplates.csv"
-    try:
-        response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=1000)
-        ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-        if not ap_profiles:
-            print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")
-            logging.info("No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv")
-            DataExporter.save_data_to_output([], filename)
-            return
-        processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)
-        processed = DataProcessingUtils.escape_multiline(processed)
-        DataExporter.save_data_to_output(processed, filename)
-        print(f"! {len(processed)} AP templates exported to {filename}")
-        logging.info(f"Exported {len(processed)} AP templates to {filename}.")
-    except Exception as e:
-        logging.error(f"Failed to export AP templates: {e}")
-        try:
-            DataExporter.save_data_to_output([], filename)
-        except Exception:
-            pass
-        raise
-
-def export_org_switch_templates_to_csv():
-    """Export switch device profiles (templates) to OrgSwitchTemplates.csv via canonical filtered endpoint.
-
-    Single call only (type='switch'). If zero returned we emit an empty file without retries.
-    """
-    print("Export Organization Switch Templates:")
-    logging.info("Starting export of organization switch templates (canonical networktemplates)...")
-    org_id = get_cached_or_prompted_org_id()
-    filename = "OrgSwitchTemplates.csv"
-    try:
-        response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
-        switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-        if not switch_profiles:
-            print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
-            logging.info("No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv")
-            DataExporter.save_data_to_output([], filename)
-            return
-        processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
-        processed = DataProcessingUtils.escape_multiline(processed)
-        DataExporter.save_data_to_output(processed, filename)
-        print(f"! {len(processed)} switch templates exported to {filename}")
-        logging.info(f"Exported {len(processed)} switch templates to {filename}.")
-    except Exception as e:
-        logging.error(f"Failed to export switch templates: {e}")
-        try:
-            DataExporter.save_data_to_output([], filename)
-        except Exception:
-            pass
-        raise
 
 
 def continuous_data_collection_loop():
@@ -43528,7 +43362,7 @@ menu_actions = {
     "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
     # Site-Specific Data Exports
-    "29": (export_site_port_stats_to_csv, "Export port statistics for a selected site"),
+    "29": (SiteExportUtils.port_stats, "Export port statistics for a selected site"),
     "30": (export_site_clients_to_csv, "Export client statistics for a selected site"),
     "31": (export_site_devices_to_csv, "Export device list for a selected site"),
     "32": (export_site_device_stats_to_csv, "Export device statistics for a selected site"),
