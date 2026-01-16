@@ -550,6 +550,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.10.05.30",
+      "date": "2025-07-10",
+      "changes": {
+        "refactoring": [
+          "APIFetchUtils: Moved all_site_settings, gateway_device_configs implementations into class",
+          "AddressUtils: Moved normalize_zip, normalize_state, normalize_address, calculate_similarity into class",
+          "Standalone functions now delegate to class methods for backward compatibility",
+          "Reduced code duplication by consolidating implementation in utility classes"
+        ]
+      }
+    },
+    {
       "version": "25.07.10.05.15",
       "date": "2025-07-10",
       "changes": {

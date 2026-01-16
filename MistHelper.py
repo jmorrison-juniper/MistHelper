@@ -21040,16 +21040,38 @@ class AddressUtils:
     @staticmethod
     def calculate_similarity(str1, str2):
         """
-        Calculates the similarity between two strings.
+        Calculate similarity percentage between two strings using RapidFuzz for better performance.
+        Falls back to difflib if RapidFuzz is not available.
         
         Args:
             str1: First string
             str2: Second string
             
         Returns:
-            float: Similarity score between 0 and 1
+            float: Similarity score as percentage from 0-100
         """
-        return calculate_string_similarity(str1, str2)
+        if not str1 and not str2:
+            return 100.0  # Both empty, consider perfect match
+        if not str1 or not str2:
+            return 0.0    # One empty, one not, no match
+        
+        # Normalize both strings
+        norm_str1 = AddressUtils.normalize_address(str1)
+        norm_str2 = AddressUtils.normalize_address(str2)
+        
+        # Try RapidFuzz for better performance and accuracy if available
+        if fuzz is not None:
+            try:
+                # Use token-based similarity for better address matching
+                similarity = fuzz.token_sort_ratio(norm_str1, norm_str2) / 100.0
+                return similarity * 100
+            except Exception:
+                pass  # Fall through to difflib fallback
+        
+        # Fall back to difflib
+        import difflib
+        similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
+        return similarity * 100
 
 
 # Backward compatibility - delegate to AddressUtils class methods
@@ -21830,34 +21852,8 @@ def enhanced_usaddress_parse(address_string, debug=False):
         return parse_address_components(address_string, debug=debug)
 
 def calculate_string_similarity(str1, str2):
-    """
-    Calculate similarity percentage between two strings using RapidFuzz for better performance.
-    Falls back to difflib if RapidFuzz is not available.
-    
-    Returns a percentage from 0-100.
-    """
-    if not str1 and not str2:
-        return 100.0  # Both empty, consider perfect match
-    if not str1 or not str2:
-        return 0.0    # One empty, one not, no match
-    
-    # Normalize both strings
-    norm_str1 = normalize_address_string(str1)
-    norm_str2 = normalize_address_string(str2)
-    
-    # Try RapidFuzz for better performance and accuracy if available
-    if fuzz is not None:
-        try:
-            # Use token-based similarity for better address matching
-            similarity = fuzz.token_sort_ratio(norm_str1, norm_str2) / 100.0
-            return similarity * 100
-        except Exception:
-            pass  # Fall through to difflib fallback
-    
-    # Fall back to difflib
-    import difflib
-    similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
-    return similarity * 100
+    """Backward compatibility wrapper - delegates to AddressUtils.calculate_similarity()."""
+    return AddressUtils.calculate_similarity(str1, str2)
 
 def check_address_should_skip(comparison_address, skip_addresses, debug=False):
     """
