@@ -5936,13 +5936,13 @@ class SFPTransceiverDataProcessor:
         # Generate prerequisites if absent (idempotent behavior matches prior function)
         if not os.path.exists(org_port_stats_path):
             print("* OrgDevicePortStats.csv not found. Generating it now...")
-            logging.info("OrgDevicePortStats.csv missing; invoking export_device_port_stats_to_csv()")
-            export_device_port_stats_to_csv()
+            logging.info("OrgDevicePortStats.csv missing; invoking OrgExportUtils.device_port_stats()")
+            OrgExportUtils.device_port_stats()
 
         if not os.path.exists(devices_with_site_info_path):
             print("* AllDevicesWithSiteInfo.csv not found. Generating it now...")
-            logging.info("AllDevicesWithSiteInfo.csv missing; invoking export_devices_with_site_info_to_csv()")
-            export_devices_with_site_info_to_csv()
+            logging.info("AllDevicesWithSiteInfo.csv missing; invoking OrgExportUtils.devices_with_site_info()")
+            OrgExportUtils.devices_with_site_info()
 
         try:
             # Load context keyed by MAC
@@ -10048,6 +10048,587 @@ class OrgExportUtils:
             sort_key="type"
         )
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
+    
+    @staticmethod
+    def vpn_peer_stats(fast: bool = False):
+        """Export VPN peer path statistics to OrgVPNPeerStats.csv.
+
+        Fast Mode Behavior:
+            - Skip API call on fresh cache (age < CSV_FRESHNESS_MINUTES).
+            - Normal fetch otherwise.
+        SECURITY: Read-only; safe to cache.
+        """
+        output_file = "OrgVPNPeerStats.csv"
+        if fast and os.path.exists(output_file):
+            try:
+                mtime = os.path.getmtime(output_file)
+                age_minutes = (time.time() - mtime) / 60.0
+                if age_minutes < CSV_FRESHNESS_MINUTES:
+                    logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
+                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                    return
+            except Exception as e:
+                logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
+        logging.info("Starting export of organization VPN peer path statistics...")
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("org vpn peer path statistics export", hours)
+        fetch_and_display_api_data(
+            title="Org VPN Peer Stats:",
+            api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
+            filename=output_file,
+            sort_key="mac",
+            duration=f"{hours}h",
+            limit=1000
+        )
+    
+    @staticmethod
+    def sites_with_location():
+        """
+        Export a list of sites with all available fields to SitesWithLocations.csv.
+        """
+        print("Sites with Location and Timezone Info:")
+        logging.info("Listing Sites with Full Info:")
+        org_id = get_cached_or_prompted_org_id()
+        logging.debug(f"Using org_id: {org_id} for site location export.")
+        sites = fetch_all_sites_with_limit(org_id)
+        logging.info(f"Fetched {len(sites)} sites from the organization.")
+        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
+        sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)
+        DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")
+        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
+        logging.info(" Full site data written to SitesWithLocations.csv")
+    
+    @staticmethod
+    def combined_inventory_with_site_info():
+        """
+        Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
+        grouped by calendar week based on 'created_time' field.
+        Also generates a summary report with device counts per week.
+        
+        Outputs:
+            - Weekly CSV files: data/CombinedInventory_ByWeek/YYYY_Week_##.csv
+            - Summary report: data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv
+            - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
+              (with simplified headers: serial, model, Street Address, City, State, Zip)
+        """
+        print("Combined Inventory with Site Info by Calendar Week:")
+
+        # Load environment variables
+        load_dotenv()
+        END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
+        END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
+
+        # Always regenerate fresh data
+        OrgExportUtils.devices_with_site_info()
+
+        # Load the enriched device + site info
+        devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
+        with open(devices_with_site_info_path, mode="r", encoding="utf-8") as file:
+            site_configs = list(csv.DictReader(file))
+
+        # Create a subfolder for weekly CSV files in the data directory
+        output_folder = os.path.join("data", "CombinedInventory_ByWeek")
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Initialize data structures for weekly grouping and summary
+        weekly_data = defaultdict(list)
+        summary_data = defaultdict(int)
+
+        # Process each device entry
+        for device in site_configs:
+            try:
+                created_time = int(device.get("created_time", 0))
+                created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+                year, week, _ = created_date.isocalendar()
+                week_key = f"{year}_Week_{week:02d}"
+
+                weekly_data[week_key].append({
+                    "Full Site": device.get("site_name", ""),
+                    "System Serial Number": device.get("serial", ""),
+                    "System Model Number": device.get("model", ""),
+                    "End Customer Name": END_CUSTOMER_NAME,
+                    "Address Line 1": device.get("street", ""),
+                    "Address Line 2": "",
+                    "City": device.get("city", ""),
+                    "State": device.get("state", ""),
+                    "Country": device.get("country", "US"),
+                    "Zip Code / Postal Code": device.get("zip_code", ""),
+                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID
+                })
+
+                summary_data[(year, week)] += 1
+            except Exception as exception:
+                logging.warning(f"! Skipping device due to error: {exception}")
+
+        # Define output CSV columns
+        fieldnames = [
+            "Full Site", "System Serial Number", "System Model Number", "End Customer Name",
+            "Address Line 1", "Address Line 2", "City", "State", "Country",
+            "Zip Code / Postal Code", "End Customer Account ID"
+        ]
+
+        # Write weekly CSV files
+        for week_key, rows in weekly_data.items():
+            output_file = os.path.join(output_folder, f"{week_key}.csv")
+            with open(output_file, mode="w", newline="", encoding="utf-8") as file:
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+        # Write summary report
+        summary_file = os.path.join(output_folder, "CombinedInventory_Summary.csv")
+        with open(summary_file, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Year", "Week", "Device Count"])
+            for (year, week), count in sorted(summary_data.items()):
+                writer.writerow([year, week, count])
+
+        # Export master CSV with simplified column headers
+        master_csv_data = []
+        for device in site_configs:
+            master_csv_data.append({
+                "serial": device.get("serial", ""),
+                "model": device.get("model", ""),
+                "Street Address": device.get("street", ""),
+                "City": device.get("city", ""),
+                "State": device.get("state", ""),
+                "Zip": device.get("zip_code", "")
+            })
+        
+        master_csv_file = os.path.join(output_folder, "CombinedInventory_Master.csv")
+        master_csv_fieldnames = ["serial", "model", "Street Address", "City", "State", "Zip"]
+        with open(master_csv_file, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=master_csv_fieldnames)
+            writer.writeheader()
+            writer.writerows(master_csv_data)
+
+        # Count the total weekly files created
+        total_weeks = len(weekly_data)
+        total_devices = len(site_configs)
+        print(f"! {total_weeks} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)")
+        print(f"! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
+        print(f"! Master inventory exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv ({len(master_csv_data)} devices)")
+    
+    @staticmethod
+    def devices_with_site_info(fast: bool = False):
+        """
+        Fetches all devices in the organization, enriches them with site and address info,
+        and exports the result to AllDevicesWithSiteInfo.csv. Also logs and displays a summary table.
+        
+        Args:
+            fast (bool): If True, enables optimized processing mode with enhanced caching
+                        and concurrent site lookups where applicable.
+        """
+        print("All Devices with Site and Address Info:")
+        logging.info("Fetching All Devices with Site Info...")
+        if fast:
+            logging.info(" Fast mode enabled for devices with site info export")
+        
+        org_id = get_cached_or_prompted_org_id()
+
+        # Ensure required CSV files are available, using caching where possible
+        if fast:
+            # Use cached data when fast mode is enabled
+            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+            
+            # Load from cached CSV files instead of making API calls
+            site_lookup = {}
+            try:
+                site_list_path = get_csv_file_path("SiteList.csv")
+                with open(site_list_path, mode="r", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    site_lookup = {
+                        row["id"]: {
+                            "name": row.get("name", ""),
+                            "address": row.get("address", "")
+                        } for row in reader
+                    }
+                logging.debug(f"Loaded {len(site_lookup)} sites from cached SiteList.csv")
+            except Exception as exception:
+                logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {exception}")
+                # Fallback to API if cached data fails
+                sites = fetch_all_sites_with_limit(org_id)
+                site_lookup = {
+                    site["id"]: {
+                        "name": site.get("name", ""),
+                        "address": site.get("address", "")
+                    } for site in sites
+                }
+                logging.debug(f"Loaded {len(site_lookup)} sites from API fallback")
+
+            # Load inventory from cached CSV
+            inventory = []
+            try:
+                inventory_path = get_csv_file_path("OrgInventory.csv")
+                with open(inventory_path, mode="r", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    inventory = list(reader)
+                logging.debug(f"Loaded {len(inventory)} devices from cached OrgInventory.csv")
+            except Exception as exception:
+                logging.warning(f"Failed to load from cached OrgInventory.csv, falling back to API: {exception}")
+                # Fallback to API if cached data fails
+                inventory = fetch_all_inventory_with_limit(org_id)
+                logging.debug(f"Loaded {len(inventory)} devices from API fallback")
+        else:
+            # Original behavior: fetch directly from API
+            # Fetch all sites and build a lookup dictionary for site info
+            sites = fetch_all_sites_with_limit(org_id)
+            site_lookup = {
+                site["id"]: {
+                    "name": site.get("name", ""),
+                    "address": site.get("address", "")
+                } for site in sites
+            }
+            logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+
+            # Fetch org inventory (all devices)
+            inventory = fetch_all_inventory_with_limit(org_id)
+            logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
+
+        def split_address(address):
+            """
+            Splits a full address string into street, city, state, zip, and country.
+            Returns empty strings if parsing fails.
+            """
+            try:
+                parts = address.split(", ")
+                street = parts[0]
+                city = parts[1]
+                state_zip = parts[2].split()
+                state = state_zip[0]
+                zip_code = state_zip[1]
+                country = parts[3]
+                return street, city, state, zip_code, country
+            except Exception as exception:
+                logging.debug(f"Failed to split address '{address}': {exception}")
+                return address, "", "", "", ""
+
+        enriched_devices = []
+        for device in tqdm(inventory, desc="Processing Devices", unit="device"):
+            site_id = device.get("site_id")
+            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
+            device["site_name"] = site_info["name"]
+            device["site_address"] = site_info["address"]
+            street, city, state, zip_code, country = split_address(site_info["address"])
+            device["street"] = street
+            device["city"] = city
+            device["state"] = state
+            device["zip_code"] = zip_code
+            device["country"] = country
+            enriched_devices.append(device)
+            logging.debug(f"Enriched device {device.get('name', '')} ({device.get('mac', '')}) with site info.")
+
+        # Flatten nested fields and escape multiline strings for CSV compatibility
+        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
+        enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)
+        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
+        DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")
+        print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
+        logging.info(f"All device data written to AllDevicesWithSiteInfo.csv ({len(enriched_devices)} records).")
+
+        # Display a summary table in logs
+        table = PrettyTable()
+        table.field_names = ["name", "mac", "model", "serial", "type", "site_name", "street", "city", "state", "zip_code", "country"]
+        for dev in enriched_devices:
+            table.add_row([
+                dev.get("name", ""),
+                dev.get("mac", ""),
+                dev.get("model", ""),
+                dev.get("serial", ""),
+                dev.get("type", ""),
+                dev.get("site_name", ""),
+                dev.get("street", ""),
+                dev.get("city", ""),
+                dev.get("state", ""),
+                dev.get("zip_code", ""),
+                dev.get("country", "")
+            ])
+        logging.debug("\n" + table.get_string())
+    
+    @staticmethod
+    def gateways_with_site_info():
+        """
+        Fetches all gateway devices in the organization, enriches them with site and address info,
+        and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
+        """
+        print("Gateways with Site and Address Info:")
+        logging.info("Fetching Gateways with Site Info...")
+        org_id = get_cached_or_prompted_org_id()
+
+        # Fetch site list and build a lookup dictionary for site info
+        sites = fetch_all_sites_with_limit(org_id)
+        site_lookup = {
+            site["id"]: {
+                "name": site.get("name", ""),
+                "address": site.get("address", "")
+            } for site in sites
+        }
+        logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+
+        # Fetch org inventory (all devices)
+        inventory = fetch_all_inventory_with_limit(org_id)
+        logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
+
+        def split_address(address):
+            """
+            Splits a full address string into street, city, state, zip, and country.
+            Returns empty strings if parsing fails.
+            """
+            try:
+                parts = address.split(", ")
+                street = parts[0]
+                city = parts[1]
+                state_zip = parts[2].split()
+                state = state_zip[0]
+                zip_code = state_zip[1]
+                country = parts[3]
+                return street, city, state, zip_code, country
+            except Exception as exception:
+                logging.debug(f"Failed to split address '{address}': {exception}")
+                return address, "", "", "", ""
+
+        # Filter for gateways and enrich with site info
+        gateways = []
+        for device in tqdm(inventory, desc="Processing Gateways", unit="device"):
+            if device.get("type") == "gateway":
+                site_id = device.get("site_id")
+                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
+                device["site_name"] = site_info["name"]
+                device["site_address"] = site_info["address"]
+                street, city, state, zip_code, country = split_address(site_info["address"])
+                device["street"] = street
+                device["city"] = city
+                device["state"] = state
+                device["zip_code"] = zip_code
+                device["country"] = country
+                gateways.append(device)
+        logging.info(f"Enriched {len(gateways)} gateway devices with site info.")
+
+        # Flatten nested fields and escape multiline strings for CSV compatibility
+        gateways = DataProcessingUtils.flatten_nested_fields(gateways)
+        gateways = DataProcessingUtils.escape_multiline(gateways)
+        gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
+        DataExporter.save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")
+        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
+        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
+
+        # Display a summary table in logs
+        table = PrettyTable()
+        table.field_names = ["name", "mac", "model", "serial", "site_name", "street", "city", "state", "zip_code", "country"]
+        for gateway in gateways:
+            table.add_row([
+                gateway.get("name", ""),
+                gateway.get("mac", ""),
+                gateway.get("model", ""),
+                gateway.get("serial", ""),
+                gateway.get("site_name", ""),
+                gateway.get("street", ""),
+                gateway.get("city", ""),
+                gateway.get("state", ""),
+                gateway.get("zip_code", ""),
+                gateway.get("country", "")
+            ])
+        logging.debug("\n" + table.get_string())
+    
+    @staticmethod
+    def device_port_stats(fast: bool = False):
+        """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
+
+        Fast Mode Behavior:
+            - Skips API call if recent CSV exists (freshness based on `CSV_FRESHNESS_MINUTES`).
+            - Parallelizes data retrieval across sites for faster collection.
+            - Uses connection pool management to limit concurrent API calls.
+        
+        Performance Optimization:
+            - Non-fast mode: Single org-level API call with serial pagination (slow but simple)
+            - Fast mode: Parallel site-level API calls (faster, scales with site count)
+        
+        SECURITY: Read-only aggregation; caching is safe.
+        """
+        output_file = "OrgDevicePortStats.csv"
+        if fast and os.path.exists(output_file):
+            try:
+                mtime = os.path.getmtime(output_file)
+                age_minutes = (time.time() - mtime) / 60.0
+                if age_minutes < CSV_FRESHNESS_MINUTES:
+                    logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
+                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                    return
+            except Exception as exception:
+                logging.debug(f"Fast mode freshness check failed for {output_file}: {exception}")
+        
+        logging.info("Starting export of organization device port statistics...")
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("org device port statistics export", hours)
+        
+        if fast:
+            # Fast mode: Parallelize by site for better performance
+            logging.info("* Fast mode: Parallelizing port stats retrieval across sites")
+            
+            # Get org_id for API calls
+            org_id = get_cached_or_prompted_org_id()
+            
+            # Get all sites (use cached CSV if available)
+            try:
+                check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+                site_list_path = get_csv_file_path("SiteList.csv")
+                with open(site_list_path, mode="r", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    sites = [(row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")]
+                logging.info(f"* Loaded {len(sites)} sites from cached data")
+                logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
+            except Exception as exception:
+                logging.warning(f"* Could not use cached sites, fetching from API: {exception}")
+                site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+                site_data = mistapi.get_all(response=site_response, mist_session=apisession)
+                sites = [(site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")]
+                logging.info(f"* Fetched {len(sites)} sites from API")
+                logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
+            
+            # Worker function to fetch port stats for a single site
+            def fetch_site_port_stats(site_info, connection_semaphore):
+                """Fetch port statistics for a single site with retry logic."""
+                site_id, site_name = site_info
+                
+                for attempt in range(FAST_MODE_MAX_RETRIES + 1):
+                    try:
+                        # Use semaphore to limit concurrent connections
+                        with connection_semaphore:
+                            response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+                                apisession, 
+                                site_id, 
+                                duration=f"{hours}h",
+                                limit=1000
+                            )
+                            port_stats = mistapi.get_all(response=response, mist_session=apisession)
+                        
+                        # SAFETY: Validate that port_stats is a list, not a dict or other type
+                        if not isinstance(port_stats, list):
+                            logging.error(f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}")
+                            return []
+                        
+                        # Add site information to each record
+                        for stat in port_stats:
+                            stat['site_id'] = site_id
+                            stat['site_name'] = site_name
+                        
+                        if attempt > 0:
+                            logging.info(f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)")
+                        else:
+                            logging.debug(f"! Collected {len(port_stats)} port stats from site {site_name}")
+                        return port_stats
+                        
+                    except Exception as exception:
+                        if attempt < FAST_MODE_MAX_RETRIES:
+                            backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)
+                            logging.warning(f"! Attempt {attempt + 1} failed for site {site_name}: {exception}")
+                            logging.info(f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})")
+                            time.sleep(backoff_delay)
+                        else:
+                            logging.error(f"! Final attempt failed for site {site_name}: {exception}")
+                            return []
+                return []
+            
+            # Retry function for failed sites
+            def retry_failed_sites(failed_sites, connection_semaphore):
+                retry_results = []
+                still_failed = []
+                retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
+                
+                if retry_threads <= 0:
+                    logging.warning(" FAST MODE: No available threads for retry; skipping retries")
+                    return [], failed_sites
+                    
+                with ThreadPoolExecutor(max_workers=retry_threads) as executor:
+                    retry_futures = {
+                        executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info
+                        for site_info in failed_sites
+                    }
+                    import concurrent.futures
+                    retry_futures_list = list(retry_futures.keys())
+                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:
+                        for future in concurrent.futures.as_completed(retry_futures_list):
+                            site_info = retry_futures[future]
+                            try:
+                                result = future.result()
+                                if result:
+                                    retry_results.extend(result)
+                                    logging.info(f" FAST RETRY OK: {site_info[1]}")
+                                else:
+                                    still_failed.append(site_info)
+                                    logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")
+                            except Exception as exception:
+                                still_failed.append(site_info)
+                                logging.error(f" FAST RETRY EXC: {site_info[1]} -> {exception}")
+                            finally:
+                                pbar.update(1)
+                return retry_results, still_failed
+            
+            # Execute parallel site fetches
+            start_time = time.time()
+            logging.debug(f"Start time type: {type(start_time)}, value: {start_time}")
+            
+            # SAFETY: Validate start_time is actually a float
+            if not isinstance(start_time, (int, float)):
+                logging.error(f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}")
+                logging.error(f"! time module type: {type(time)}, time.time type: {type(time.time)}")
+                raise TypeError(f"start_time must be a number, got {type(start_time)}")
+            
+            successful_results, failed_sites = execute_with_connection_pool_management(
+                work_items=sites,
+                worker_function=fetch_site_port_stats,
+                batch_description="sites",
+                retry_function=retry_failed_sites
+            )
+            
+            logging.debug(f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}")
+            logging.debug(f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}")
+            
+            # Flatten results (each successful result is a list of port stats)
+            all_port_stats = []
+            for idx, result_list in enumerate(successful_results):
+                logging.debug(f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}")
+                if isinstance(result_list, list):
+                    all_port_stats.extend(result_list)
+                else:
+                    logging.warning(f"Unexpected result type at index {idx}: {type(result_list)}, value: {result_list}")
+            
+            end_time = time.time()
+            logging.debug(f"End time type: {type(end_time)}, value: {end_time}")
+            duration = end_time - start_time
+            logging.debug(f"Duration calculation successful: {duration}")
+            
+            logging.info(f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s")
+            print(f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s")
+            
+            # Save results
+            if all_port_stats:
+                # Sort by MAC address if available
+                try:
+                    all_port_stats = sorted(all_port_stats, key=lambda x: x.get('mac', ''))
+                except Exception as exception:
+                    logging.debug(f"Could not sort by MAC: {exception}")
+                
+                # Process and save
+                flattened = DataProcessingUtils.flatten_nested_fields(all_port_stats)
+                sanitized = DataProcessingUtils.escape_multiline(flattened)
+                DataExporter.save_data_to_output(sanitized, output_file, api_function_name='searchSiteSwOrGwPorts')
+                print(f"! {len(all_port_stats)} port stat records exported to {output_file}")
+                logging.info(f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)")
+            else:
+                logging.warning(" No port statistics collected. CSV not created.")
+                print("! No port statistics collected. CSV not created.")
+        else:
+            # Non-fast mode: Original org-level search (serial pagination)
+            fetch_and_display_api_data(
+                title="Org Device Port Stats:",
+                api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
+                filename=output_file,
+                sort_key="mac",
+                duration=f"{hours}h",
+                limit=1000
+            )
 
 
 # ============================================================================
@@ -14008,239 +14589,6 @@ def _validate_ping_target(target):
     return False
 
 
-def export_device_port_stats_to_csv(fast: bool = False):
-    """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
-
-    Fast Mode Behavior:
-        - Skips API call if recent CSV exists (freshness based on `CSV_FRESHNESS_MINUTES`).
-        - Parallelizes data retrieval across sites for faster collection.
-        - Uses connection pool management to limit concurrent API calls.
-    
-    Performance Optimization:
-        - Non-fast mode: Single org-level API call with serial pagination (slow but simple)
-        - Fast mode: Parallel site-level API calls (faster, scales with site count)
-    
-    SECURITY: Read-only aggregation; caching is safe.
-    """
-    output_file = "OrgDevicePortStats.csv"
-    if fast and os.path.exists(output_file):
-        try:
-            mtime = os.path.getmtime(output_file)
-            age_minutes = (time.time() - mtime) / 60.0
-            if age_minutes < CSV_FRESHNESS_MINUTES:
-                logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                return
-        except Exception as e:  # pragma: no cover
-            logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
-    
-    logging.info("Starting export of organization device port statistics...")
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("org device port statistics export", hours)
-    
-    if fast:
-        # Fast mode: Parallelize by site for better performance
-        logging.info("* Fast mode: Parallelizing port stats retrieval across sites")
-        
-        # Get org_id for API calls
-        org_id = get_cached_or_prompted_org_id()
-        
-        # Get all sites (use cached CSV if available)
-        try:
-            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-            site_list_path = get_csv_file_path("SiteList.csv")
-            with open(site_list_path, mode="r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                sites = [(row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")]
-            logging.info(f"* Loaded {len(sites)} sites from cached data")
-            logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
-        except Exception as e:
-            logging.warning(f"* Could not use cached sites, fetching from API: {e}")
-            site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
-            site_data = mistapi.get_all(response=site_response, mist_session=apisession)
-            sites = [(site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")]
-            logging.info(f"* Fetched {len(sites)} sites from API")
-            logging.debug(f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}")
-        
-        # Worker function to fetch port stats for a single site
-        def fetch_site_port_stats(site_info, connection_semaphore):
-            """Fetch port statistics for a single site with retry logic."""
-            site_id, site_name = site_info
-            
-            for attempt in range(FAST_MODE_MAX_RETRIES + 1):
-                try:
-                    # Use semaphore to limit concurrent connections
-                    with connection_semaphore:
-                        response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
-                            apisession, 
-                            site_id, 
-                            duration=f"{hours}h",
-                            limit=1000
-                        )
-                        port_stats = mistapi.get_all(response=response, mist_session=apisession)
-                    
-                    # SAFETY: Validate that port_stats is a list, not a dict or other type
-                    if not isinstance(port_stats, list):
-                        logging.error(f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}")
-                        return []
-                    
-                    # Add site information to each record
-                    for stat in port_stats:
-                        stat['site_id'] = site_id
-                        stat['site_name'] = site_name
-                    
-                    if attempt > 0:
-                        logging.info(f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)")
-                    else:
-                        logging.debug(f"! Collected {len(port_stats)} port stats from site {site_name}")
-                    return port_stats
-                    
-                except Exception as e:
-                    if attempt < FAST_MODE_MAX_RETRIES:
-                        backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)
-                        logging.warning(f"! Attempt {attempt + 1} failed for site {site_name}: {e}")
-                        logging.info(f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})")
-                        time.sleep(backoff_delay)
-                    else:
-                        logging.error(f"! Final attempt failed for site {site_name}: {e}")
-                        return []
-            return []
-        
-        # Retry function for failed sites
-        def retry_failed_sites(failed_sites, connection_semaphore):
-            retry_results = []
-            still_failed = []
-            retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
-            
-            if retry_threads <= 0:
-                logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                return [], failed_sites
-                
-            with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                retry_futures = {
-                    executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info
-                    for site_info in failed_sites
-                }
-                # Wrap the futures dict keys for tqdm progress tracking
-                # CRITICAL FIX: Use fully qualified concurrent.futures.as_completed to bypass any monkey-patching
-                # Direct import to avoid tqdm or other wrappers interfering with parameters
-                import concurrent.futures
-                retry_futures_list = list(retry_futures.keys())
-                with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg]
-                    for future in concurrent.futures.as_completed(retry_futures_list):
-                        site_info = retry_futures[future]
-                        try:
-                            result = future.result()
-                            if result:
-                                retry_results.extend(result)
-                                logging.info(f" FAST RETRY OK: {site_info[1]}")
-                            else:
-                                still_failed.append(site_info)
-                                logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")
-                        except Exception as e:
-                            still_failed.append(site_info)
-                            logging.error(f" FAST RETRY EXC: {site_info[1]} -> {e}")
-                        finally:
-                            pbar.update(1)
-            return retry_results, still_failed
-        
-        # Execute parallel site fetches
-        start_time = time.time()
-        logging.debug(f"Start time type: {type(start_time)}, value: {start_time}")
-        
-        # SAFETY: Validate start_time is actually a float
-        if not isinstance(start_time, (int, float)):
-            logging.error(f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}")
-            logging.error(f"! time module type: {type(time)}, time.time type: {type(time.time)}")
-            raise TypeError(f"start_time must be a number, got {type(start_time)}")
-        
-        successful_results, failed_sites = execute_with_connection_pool_management(
-            work_items=sites,
-            worker_function=fetch_site_port_stats,
-            batch_description="sites",
-            retry_function=retry_failed_sites
-        )
-        
-        logging.debug(f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}")
-        logging.debug(f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}")
-        
-        # Flatten results (each successful result is a list of port stats)
-        all_port_stats = []
-        for idx, result_list in enumerate(successful_results):
-            logging.debug(f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}")
-            if isinstance(result_list, list):
-                all_port_stats.extend(result_list)
-            else:
-                logging.warning(f"Unexpected result type at index {idx}: {type(result_list)}, value: {result_list}")
-        
-        end_time = time.time()
-        logging.debug(f"End time type: {type(end_time)}, value: {end_time}")
-        duration = end_time - start_time
-        logging.debug(f"Duration calculation successful: {duration}")
-        
-        logging.info(f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s")
-        print(f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s")
-        
-        # Save results
-        if all_port_stats:
-            # Sort by MAC address if available
-            try:
-                all_port_stats = sorted(all_port_stats, key=lambda x: x.get('mac', ''))
-            except Exception as e:
-                logging.debug(f"Could not sort by MAC: {e}")
-            
-            # Process and save
-            flattened = DataProcessingUtils.flatten_nested_fields(all_port_stats)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)
-            DataExporter.save_data_to_output(sanitized, output_file, api_function_name='searchSiteSwOrGwPorts')
-            print(f"! {len(all_port_stats)} port stat records exported to {output_file}")
-            logging.info(f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)")
-        else:
-            logging.warning(" No port statistics collected. CSV not created.")
-            print("! No port statistics collected. CSV not created.")
-    else:
-        # Non-fast mode: Original org-level search (serial pagination)
-        fetch_and_display_api_data(
-            title="Org Device Port Stats:",
-            api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
-            filename=output_file,
-            sort_key="mac",
-            duration=f"{hours}h",
-            limit=1000
-        )
-
-def export_vpn_peer_stats_to_csv(fast: bool = False):
-    """Export VPN peer path statistics to `OrgVPNPeerStats.csv`.
-
-    Fast Mode Behavior:
-        - Skip API call on fresh cache (age < `CSV_FRESHNESS_MINUTES`).
-        - Normal fetch otherwise.
-    SECURITY: Read-only; safe to cache.
-    """
-    output_file = "OrgVPNPeerStats.csv"
-    if fast and os.path.exists(output_file):
-        try:
-            mtime = os.path.getmtime(output_file)
-            age_minutes = (time.time() - mtime) / 60.0
-            if age_minutes < CSV_FRESHNESS_MINUTES:
-                logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                return
-        except Exception as e:  # pragma: no cover
-            logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
-    logging.info("Starting export of organization VPN peer path statistics...")
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("org vpn peer path statistics export", hours)
-    fetch_and_display_api_data(
-        title="Org VPN Peer Stats:",
-        api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
-        filename=output_file,
-        sort_key="mac",
-        duration=f"{hours}h",
-        limit=1000
-    )
-
-
 # ==============================
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
 # ==============================
@@ -16875,12 +17223,12 @@ def continuous_data_collection_loop():
                 
                 # 4. Organization device port stats
                 print("  Collecting organization device port stats...")
-                export_device_port_stats_to_csv()
+                OrgExportUtils.device_port_stats()
                 time.sleep(0.75)
                 
                 # 5. VPN peer path stats
                 print("  Collecting VPN peer path stats...")
-                export_vpn_peer_stats_to_csv()
+                OrgExportUtils.vpn_peer_stats()
                 time.sleep(0.75)
                 
                 print(f"  Loop {loop_count} completed successfully")
@@ -17066,7 +17414,7 @@ class GatewayExportUtils:
     @staticmethod
     def with_site_info():
         """Exports gateways with their associated site information."""
-        export_gateways_with_site_info_to_csv()
+        OrgExportUtils.gateways_with_site_info()
     
     @staticmethod
     def management_ips(fast=False):
@@ -17761,248 +18109,6 @@ def export_gateways_with_wan_port_conflicts_to_csv():
         print(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
         print(" This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
 
-def export_sites_with_location_to_csv():
-    """
-    Export a list of sites with all available fields to SitesWithLocations.csv.
-    """
-    print("Sites with Location and Timezone Info:")
-    logging.info("Listing Sites with Full Info:")
-    org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id} for site location export.")
-
-    # Fetch all sites using unified page size helper
-    sites = fetch_all_sites_with_limit(org_id)
-    logging.info(f"Fetched {len(sites)} sites from the organization.")
-
-    # Flatten and sanitize all site data
-    flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
-    sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)
-
-    # Write to CSV
-    DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")
-    print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
-    logging.info(" Full site data written to SitesWithLocations.csv")
-
-def export_gateways_with_site_info_to_csv():
-    """
-    Fetches all gateway devices in the organization, enriches them with site and address info,
-    and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
-    """
-    print("Gateways with Site and Address Info:")
-    logging.info("Fetching Gateways with Site Info...")
-    org_id = get_cached_or_prompted_org_id()
-
-    # Fetch site list and build a lookup dictionary for site info
-    sites = fetch_all_sites_with_limit(org_id)
-    site_lookup = {
-        site["id"]: {
-            "name": site.get("name", ""),
-            "address": site.get("address", "")
-        } for site in sites
-    }
-    logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
-
-    # Fetch org inventory (all devices)
-    inventory = fetch_all_inventory_with_limit(org_id)
-    logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
-
-    def split_address(address):
-        """
-        Splits a full address string into street, city, state, zip, and country.
-        Returns empty strings if parsing fails.
-        """
-        try:
-            parts = address.split(", ")
-            street = parts[0]
-            city = parts[1]
-            state_zip = parts[2].split()
-            state = state_zip[0]
-            zip_code = state_zip[1]
-            country = parts[3]
-            return street, city, state, zip_code, country
-        except Exception as e:
-            logging.debug(f"Failed to split address '{address}': {e}")
-            return address, "", "", "", ""
-
-    # Filter for gateways and enrich with site info
-    gateways = []
-    for device in tqdm(inventory, desc="Processing Gateways", unit="device"):
-        if device.get("type") == "gateway":
-            site_id = device.get("site_id")
-            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
-            device["site_name"] = site_info["name"]
-            device["site_address"] = site_info["address"]
-            street, city, state, zip_code, country = split_address(site_info["address"])
-            device["street"] = street
-            device["city"] = city
-            device["state"] = state
-            device["zip_code"] = zip_code
-            device["country"] = country
-            gateways.append(device)
-    logging.info(f"Enriched {len(gateways)} gateway devices with site info.")
-
-    # Flatten nested fields and escape multiline strings for CSV compatibility
-    gateways = DataProcessingUtils.flatten_nested_fields(gateways)
-    gateways = DataProcessingUtils.escape_multiline(gateways)
-    gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
-    DataExporter.save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")
-    print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
-    logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
-
-    # Display a summary table in logs
-    table = PrettyTable()
-    table.field_names = ["name", "mac", "model", "serial", "site_name", "street", "city", "state", "zip_code", "country"]
-    for gateway in gateways:
-        table.add_row([
-            gateway.get("name", ""),
-            gateway.get("mac", ""),
-            gateway.get("model", ""),
-            gateway.get("serial", ""),
-            gateway.get("site_name", ""),
-            gateway.get("street", ""),
-            gateway.get("city", ""),
-            gateway.get("state", ""),
-            gateway.get("zip_code", ""),
-            gateway.get("country", "")
-        ])
-    logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
-
-def export_devices_with_site_info_to_csv(fast=False):
-    """
-    Fetches all devices in the organization, enriches them with site and address info,
-    and exports the result to AllDevicesWithSiteInfo.csv. Also logs and displays a summary table.
-    
-    Args:
-        fast (bool): If True, enables optimized processing mode with enhanced caching
-                    and concurrent site lookups where applicable.
-    """
-    print("All Devices with Site and Address Info:")
-    logging.info("Fetching All Devices with Site Info...")  # Log start of function
-    if fast:
-        logging.info(" Fast mode enabled for devices with site info export")
-    
-    org_id = get_cached_or_prompted_org_id()
-
-    # Ensure required CSV files are available, using caching where possible
-    if fast:
-        # Use cached data when fast mode is enabled
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-        check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-        
-        # Load from cached CSV files instead of making API calls
-        site_lookup = {}
-        try:
-            site_list_path = get_csv_file_path("SiteList.csv")
-            with open(site_list_path, mode="r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                site_lookup = {
-                    row["id"]: {
-                        "name": row.get("name", ""),
-                        "address": row.get("address", "")
-                    } for row in reader
-                }
-            logging.debug(f"Loaded {len(site_lookup)} sites from cached SiteList.csv")
-        except Exception as e:
-            logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {e}")
-            # Fallback to API if cached data fails
-            sites = fetch_all_sites_with_limit(org_id)
-            site_lookup = {
-                site["id"]: {
-                    "name": site.get("name", ""),
-                    "address": site.get("address", "")
-                } for site in sites
-            }
-            logging.debug(f"Loaded {len(site_lookup)} sites from API fallback")
-
-        # Load inventory from cached CSV
-        inventory = []
-        try:
-            inventory_path = get_csv_file_path("OrgInventory.csv")
-            with open(inventory_path, mode="r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                inventory = list(reader)
-            logging.debug(f"Loaded {len(inventory)} devices from cached OrgInventory.csv")
-        except Exception as e:
-            logging.warning(f"Failed to load from cached OrgInventory.csv, falling back to API: {e}")
-            # Fallback to API if cached data fails
-            inventory = fetch_all_inventory_with_limit(org_id)
-            logging.debug(f"Loaded {len(inventory)} devices from API fallback")
-    else:
-        # Original behavior: fetch directly from API
-        # Fetch all sites and build a lookup dictionary for site info
-        sites = fetch_all_sites_with_limit(org_id)
-        site_lookup = {
-            site["id"]: {
-                "name": site.get("name", ""),
-                "address": site.get("address", "")
-            } for site in sites
-        }
-        logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
-
-        # Fetch org inventory (all devices)
-        inventory = fetch_all_inventory_with_limit(org_id)
-        logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
-
-    def split_address(address):
-        """
-        Splits a full address string into street, city, state, zip, and country.
-        Returns empty strings if parsing fails.
-        """
-        try:
-            parts = address.split(", ")
-            street = parts[0]
-            city = parts[1]
-            state_zip = parts[2].split()
-            state = state_zip[0]
-            zip_code = state_zip[1]
-            country = parts[3]
-            return street, city, state, zip_code, country
-        except Exception as e:
-            logging.debug(f"Failed to split address '{address}': {e}")
-            return address, "", "", "", ""
-
-    enriched_devices = []
-    for device in tqdm(inventory, desc="Processing Devices", unit="device"):
-        site_id = device.get("site_id")
-        site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
-        device["site_name"] = site_info["name"]
-        device["site_address"] = site_info["address"]
-        street, city, state, zip_code, country = split_address(site_info["address"])
-        device["street"] = street
-        device["city"] = city
-        device["state"] = state
-        device["zip_code"] = zip_code
-        device["country"] = country
-        enriched_devices.append(device)
-        logging.debug(f"Enriched device {device.get('name', '')} ({device.get('mac', '')}) with site info.")
-
-    # Flatten nested fields and escape multiline strings for CSV compatibility
-    enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
-    enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)
-    enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
-    DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")
-    print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
-    logging.info(f"All device data written to AllDevicesWithSiteInfo.csv ({len(enriched_devices)} records).")
-
-    # Display a summary table in logs
-    table = PrettyTable()
-    table.field_names = ["name", "mac", "model", "serial", "type", "site_name", "street", "city", "state", "zip_code", "country"]
-    for dev in enriched_devices:
-        table.add_row([
-            dev.get("name", ""),
-            dev.get("mac", ""),
-            dev.get("model", ""),
-            dev.get("serial", ""),
-            dev.get("type", ""),
-            dev.get("site_name", ""),
-            dev.get("street", ""),
-            dev.get("city", ""),
-            dev.get("state", ""),
-            dev.get("zip_code", ""),
-            dev.get("country", "")
-        ])
-    logging.debug("\n" + table.get_string())  # Log the table output for reference (debug mode only)
-
 def generate_support_package():
     logging.info("Generating support package for each site...")
 
@@ -18013,7 +18119,7 @@ def generate_support_package():
         ("SiteList.csv", OrgExportUtils.sites),
         ("OrgDevices.csv", OrgExportUtils.devices),
         ("OrgDeviceStats.csv", OrgExportUtils.device_stats),
-        ("OrgDevicePortStats.csv", export_device_port_stats_to_csv),
+        ("OrgDevicePortStats.csv", OrgExportUtils.device_port_stats),
         ("AllGatewayTestResults.csv", export_gateway_test_results_by_site_to_csv),
     ]
 
@@ -19221,8 +19327,8 @@ def loop_refresh_core_datasets(delay=None, debug=False):
             OrgExportUtils.sites()
             OrgExportUtils.inventory()
             OrgExportUtils.device_stats()
-            export_device_port_stats_to_csv()
-            export_vpn_peer_stats_to_csv()
+            OrgExportUtils.device_port_stats()
+            OrgExportUtils.vpn_peer_stats()
             logging.info(" All datasets refreshed.")
 
             # Determine delay
@@ -19420,7 +19526,7 @@ def export_gateway_management_ips_to_csv(fast=False):
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     print("  3. Ensuring gateway device data with connection status is current...")
-    check_and_generate_csv("GatewaysWithSiteInfo.csv", export_gateways_with_site_info_to_csv)
+    check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgExportUtils.gateways_with_site_info)
     
     print("  4. Ensuring gateway configurations with management IPs are current...")
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
@@ -20157,116 +20263,6 @@ def get_rate_limited_delay(smoothed_delay=None):
         logging.error(f"Failed to calculate dynamic delay: {e}. Using default 500ms fallback delay.")
         logging.debug(f"EXIT: get_rate_limited_delay - error fallback")
         return smoothed_delay, 0.5
-
-def export_combined_inventory_with_site_info():
-    """
-    Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
-    grouped by calendar week based on 'created_time' field.
-    Also generates a summary report with device counts per week.
-    
-    Outputs:
-        - Weekly CSV files: data/CombinedInventory_ByWeek/YYYY_Week_##.csv
-        - Summary report: data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv
-        - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
-          (with simplified headers: serial, model, Street Address, City, State, Zip)
-    """
-    print("Combined Inventory with Site Info by Calendar Week:")
-
-    # Load environment variables
-    load_dotenv()
-    END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
-    END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
-
-    # Always regenerate fresh data
-    export_devices_with_site_info_to_csv()
-
-    # Load the enriched device + site info
-    devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
-    with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
-        site_configs = list(csv.DictReader(f))
-
-    # Create a subfolder for weekly CSV files in the data directory
-    output_folder = os.path.join("data", "CombinedInventory_ByWeek")
-    os.makedirs(output_folder, exist_ok=True)
-
-    # Initialize data structures for weekly grouping and summary
-    weekly_data = defaultdict(list)
-    summary_data = defaultdict(int)
-
-    # Process each device entry
-    for device in site_configs:
-        try:
-            created_time = int(device.get("created_time", 0))
-            created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
-            year, week, _ = created_date.isocalendar()
-            week_key = f"{year}_Week_{week:02d}"
-
-            weekly_data[week_key].append({
-                "Full Site": device.get("site_name", ""),
-                "System Serial Number": device.get("serial", ""),
-                "System Model Number": device.get("model", ""),
-                "End Customer Name": END_CUSTOMER_NAME,
-                "Address Line 1": device.get("street", ""),
-                "Address Line 2": "",
-                "City": device.get("city", ""),
-                "State": device.get("state", ""),
-                "Country": device.get("country", "US"),
-                "Zip Code / Postal Code": device.get("zip_code", ""),
-                "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID
-            })
-
-            summary_data[(year, week)] += 1
-        except Exception as e:
-            logging.warning(f"! Skipping device due to error: {e}")
-
-    # Define output CSV columns
-    fieldnames = [
-        "Full Site", "System Serial Number", "System Model Number", "End Customer Name",
-        "Address Line 1", "Address Line 2", "City", "State", "Country",
-        "Zip Code / Postal Code", "End Customer Account ID"
-    ]
-
-    # Write weekly CSV files
-    for week_key, rows in weekly_data.items():
-        output_file = os.path.join(output_folder, f"{week_key}.csv")
-        with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-
-    # Write summary report
-    summary_file = os.path.join(output_folder, "CombinedInventory_Summary.csv")
-    with open(summary_file, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Year", "Week", "Device Count"])
-        for (year, week), count in sorted(summary_data.items()):
-            writer.writerow([year, week, count])
-
-    # Export master CSV with simplified column headers
-    master_csv_data = []
-    for device in site_configs:
-        master_csv_data.append({
-            "serial": device.get("serial", ""),
-            "model": device.get("model", ""),
-            "Street Address": device.get("street", ""),
-            "City": device.get("city", ""),
-            "State": device.get("state", ""),
-            "Zip": device.get("zip_code", "")
-        })
-    
-    master_csv_file = os.path.join(output_folder, "CombinedInventory_Master.csv")
-    master_csv_fieldnames = ["serial", "model", "Street Address", "City", "State", "Zip"]
-    with open(master_csv_file, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=master_csv_fieldnames)
-        writer.writeheader()
-        writer.writerows(master_csv_data)
-
-    # Count the total weekly files created
-    total_weeks = len(weekly_data)
-    total_devices = len(site_configs)
-    print(f"! {total_weeks} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)")
-    print(f"! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
-    print(f"! Master inventory exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv ({len(master_csv_data)} devices)")
 
 
 # ============================================================================
@@ -21727,7 +21723,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             logging.debug("Address validation disabled")
     
     # Use efficient caching instead of always regenerating fresh data
-    check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: export_devices_with_site_info_to_csv(fast=fast))
+    check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: OrgExportUtils.devices_with_site_info(fast=fast))
 
     # Load the enriched device + site info
     devices_with_site_info_path = get_csv_file_path("AllDevicesWithSiteInfo.csv")
@@ -43258,8 +43254,8 @@ menu_actions = {
     "11": (OrgExportUtils.sites, "Export a list of all sites in the organization"),
     "12": (OrgExportUtils.inventory, "Export the full inventory of devices in the organization"),
     "13": (OrgExportUtils.device_stats, "Export statistics for all devices in the organization"),
-    "14": (export_device_port_stats_to_csv, "Export port-level statistics for switches and gateways"),
-    "15": (export_vpn_peer_stats_to_csv, "Export VPN peer path statistics for the organization"),
+    "14": (OrgExportUtils.device_port_stats, "Export port-level statistics for switches and gateways"),
+    "15": (OrgExportUtils.vpn_peer_stats, "Export VPN peer path statistics for the organization"),
 
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
@@ -43269,9 +43265,9 @@ menu_actions = {
     "19": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
 
     # > Location-Enriched Exports
-    "20": (export_sites_with_location_to_csv, "Export a list of sites with location and timezone info"),
-    "21": (export_gateways_with_site_info_to_csv, "Export a list of gateways with associated site and address info"),
-    "22": (export_devices_with_site_info_to_csv, "Export a list of all devices with associated site and address info"),
+    "20": (OrgExportUtils.sites_with_location, "Export a list of sites with location and timezone info"),
+    "21": (OrgExportUtils.gateways_with_site_info, "Export a list of gateways with associated site and address info"),
+    "22": (OrgExportUtils.devices_with_site_info, "Export a list of all devices with associated site and address info"),
     "23": (lambda: (OrgExportUtils.current_guests(), OrgExportUtils.historical_guests()),"Export all current guest users and last 7 days of historical guests to CSV"),
     "24": (OrgExportUtils.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
     "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
@@ -46534,15 +46530,15 @@ def main():
             "export_gateway_device_stats_to_csv_with_freshness_check",
             "export_gateway_device_stats_to_csv",
             "export_gateway_test_results_by_site_to_csv",
-            "export_devices_with_site_info_to_csv",
+            "OrgExportUtils.devices_with_site_info",
             "export_gateway_device_configs_to_csv",
             "fetch_gateway_device_configs_from_api",
             "compare_inventory_with_csv",
             "export_gateways_with_wan_overrides_to_csv",
             # Newly added fast-capable stats exporters:
             "OrgExportUtils.device_stats",
-            "export_device_port_stats_to_csv",
-            "export_vpn_peer_stats_to_csv",
+            "OrgExportUtils.device_port_stats",
+            "OrgExportUtils.vpn_peer_stats",
         ]
         logging.info("FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: " + ", ".join(fast_capable))
         print("* Fast mode active (caching/concurrency). Functions optimized:")
@@ -46901,6 +46897,18 @@ if __name__ == "__main__":
     finally:
         logging.info("=== MistHelper application ending ===")
 #hi
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
