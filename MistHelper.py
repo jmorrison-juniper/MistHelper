@@ -6425,6 +6425,38 @@ class ValidationUtils:
             raise ValueError(error_msg)
         
         return True
+    
+    @staticmethod
+    def validate_ping_target(target: str) -> bool:
+        """
+        Validate ping target hostname or IP address.
+        
+        Args:
+            target: Target hostname or IP address
+            
+        Returns:
+            bool: True if valid target, False otherwise
+        """
+        if not target or len(target.strip()) == 0:
+            return False
+            
+        target = target.strip()
+        
+        # Check if it's a valid IP address
+        try:
+            ipaddress.ip_address(target)
+            return True
+        except ValueError:
+            pass
+            
+        # Check if it's a valid hostname
+        # Basic hostname validation: alphanumeric, dots, hyphens
+        if re.match(r'^[a-zA-Z0-9.-]+$', target) and len(target) <= 253:
+            # Ensure it doesn't start or end with a dot or hyphen
+            if not target.startswith(('.', '-')) and not target.endswith(('.', '-')):
+                return True
+                
+        return False
 
 
 # ============================================================================
@@ -15936,36 +15968,10 @@ def show_ssr_routes_dedicated():
         logging.debug("EXIT: show_ssr_routes_dedicated")
 
 
-def _validate_ping_target(target):
-    """
-    Validate ping target hostname or IP address.
-    
-    Args:
-        target (str): Target hostname or IP address
-        
-    Returns:
-        bool: True if valid target, False otherwise
-    """
-    if not target or len(target.strip()) == 0:
-        return False
-        
-    target = target.strip()
-    
-    # Check if it's a valid IP address
-    try:
-        ipaddress.ip_address(target)
-        return True
-    except ValueError:
-        pass
-        
-    # Check if it's a valid hostname
-    # Basic hostname validation: alphanumeric, dots, hyphens
-    if re.match(r'^[a-zA-Z0-9.-]+$', target) and len(target) <= 253:
-        # Ensure it doesn't start or end with a dot or hyphen
-        if not target.startswith(('.', '-')) and not target.endswith(('.', '-')):
-            return True
-            
-    return False
+# Backward compatibility wrapper - will be removed in future version
+def _validate_ping_target(target: str) -> bool:
+    """Legacy function - use ValidationUtils.validate_ping_target() instead."""
+    return ValidationUtils.validate_ping_target(target)
 
 
 # ==============================
