@@ -2467,10 +2467,10 @@ def prepare_data_and_write_csv(data, filename, sort_key=None):
     Flattens, sanitizes, optionally sorts, and writes data to a CSV file.
     """
     # Flatten nested dictionaries and lists
-    data = flatten_nested_fields_in_list(data)
+    data = DataProcessingUtils.flatten_nested_fields(data)
     
     # Escape multiline strings for CSV compatibility
-    data = escape_multiline_strings_for_csv(data)
+    data = DataProcessingUtils.escape_multiline(data)
     
     # Sort data by the specified key if provided
     if sort_key:
@@ -2488,7 +2488,7 @@ def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
         return
 
     # Use provided fields or extract all unique keys
-    fields = fields or get_all_unique_dict_keys(data)
+    fields = fields or DataProcessingUtils.get_unique_keys(data)
 
     # Initialize the PrettyTable with field names
     table = PrettyTable()
@@ -2556,8 +2556,8 @@ def interactive_fetch_device_data_to_csv(
     stats = fetch_function(apisession, site_id, device_id).data
 
     # Flatten and sanitize the data
-    stats = flatten_nested_fields_in_list([stats])
-    stats = escape_multiline_strings_for_csv(stats)
+    stats = DataProcessingUtils.flatten_nested_fields([stats])
+    stats = DataProcessingUtils.escape_multiline(stats)
 
     # Write the data to a CSV file
     DataExporter.save_data_to_output(stats, filename)
@@ -6962,28 +6962,6 @@ class DataProcessingUtils:
         return data
 
 
-# Backward compatibility wrappers - delegate to DataProcessingUtils class methods
-def flatten_dict_recursively(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
-    """Backward compatibility wrapper for DataProcessingUtils.flatten_dict."""
-    return DataProcessingUtils.flatten_dict(d, parent_key, sep)
-
-def flatten_nested_fields_in_list(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Backward compatibility wrapper for DataProcessingUtils.flatten_nested_fields."""
-    return DataProcessingUtils.flatten_nested_fields(data)
-
-def convert_list_values_to_csv_strings(data):
-    """Backward compatibility wrapper for DataProcessingUtils.convert_list_values_to_strings."""
-    return DataProcessingUtils.convert_list_values_to_strings(data)
-
-def get_all_unique_dict_keys(data):
-    """Backward compatibility wrapper for DataProcessingUtils.get_unique_keys."""
-    return DataProcessingUtils.get_unique_keys(data)
-
-def escape_multiline_strings_for_csv(data):
-    """Backward compatibility wrapper for DataProcessingUtils.escape_multiline."""
-    return DataProcessingUtils.escape_multiline(data)
-
-
 def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
     """
     Optimized formatter for Marvis API responses to create readable CSV files.
@@ -7073,7 +7051,7 @@ def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
                     formatted_data.append(formatted_row)
         
         # Apply final CSV-friendly formatting
-        formatted_data = escape_multiline_strings_for_csv(formatted_data)
+        formatted_data = DataProcessingUtils.escape_multiline(formatted_data)
         
         logging.info(f"Marvis data formatting complete: {len(formatted_data)} rows for {analysis_type} analysis")
         return formatted_data
@@ -7083,8 +7061,8 @@ def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
         # Fall back to old method if new formatting fails
         logging.info("Falling back to legacy flattening method")
         fallback_data = [api_response_data] if not isinstance(api_response_data, list) else api_response_data
-        fallback_data = flatten_nested_fields_in_list(fallback_data)
-        fallback_data = escape_multiline_strings_for_csv(fallback_data)
+        fallback_data = DataProcessingUtils.flatten_nested_fields(fallback_data)
+        fallback_data = DataProcessingUtils.escape_multiline(fallback_data)
         return fallback_data
 
 
@@ -7114,8 +7092,8 @@ def write_dict_list_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
         csv_file_path = csv_file
         
     logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
-    data = escape_multiline_strings_for_csv(data)
-    fields = get_all_unique_dict_keys(data)
+    data = DataProcessingUtils.escape_multiline(data)
+    fields = DataProcessingUtils.get_unique_keys(data)
     logging.debug(f"CSV fields determined: {fields}")
 
     try:
@@ -7398,7 +7376,7 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
     
     # Process data to handle formatting for database storage
     try:
-        processed_data = escape_multiline_strings_for_csv(data)
+        processed_data = DataProcessingUtils.escape_multiline(data)
         logging.debug(f"Successfully processed data for SQLite compatibility at {timestamp}")
     except Exception as e:
         logging.error(f"Failed to process data: {e} at {timestamp}")
@@ -7407,7 +7385,7 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
     
     # Get all unique fields and determine strategy
     try:
-        fields = get_all_unique_dict_keys(processed_data)
+        fields = DataProcessingUtils.get_unique_keys(processed_data)
         if not fields:
             logging.error(f"No fields found in data for table {table_name} at {timestamp}")
             logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no fields")
@@ -7658,8 +7636,8 @@ class DataExporter:
             logging.debug(f"Data sorted by key: {sort_key}")
         
         # Apply standard processing
-        processed_data = flatten_nested_fields_in_list(processed_data)
-        processed_data = escape_multiline_strings_for_csv(processed_data)
+        processed_data = DataProcessingUtils.flatten_nested_fields(processed_data)
+        processed_data = DataProcessingUtils.escape_multiline(processed_data)
         
         # Save the processed data
         success = DataExporter.save_data_to_output(processed_data, filename, api_function_name)
@@ -7804,11 +7782,11 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         data = [entry for entry in rawdata if isinstance(entry, dict)]
         if sort_key:
             data = sorted(data, key=lambda x: x.get(sort_key, ""))
-        data = flatten_nested_fields_in_list(data)
-        data = escape_multiline_strings_for_csv(data)
+        data = DataProcessingUtils.flatten_nested_fields(data)
+        data = DataProcessingUtils.escape_multiline(data)
         
         # Determine all unique fields for table display
-        fields = get_all_unique_dict_keys(data)
+        fields = DataProcessingUtils.get_unique_keys(data)
         logging.debug(f"Unique fields for table: {fields}")
 
         # Prepare and display PrettyTable
@@ -8145,8 +8123,8 @@ def prompt_select_device_id_from_inventory(site_id: str, device_type: str = "all
 
     # Sort, flatten, and sanitize the inventory data for display and CSV export
     inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-    inventory = flatten_nested_fields_in_list(inventory)
-    inventory = escape_multiline_strings_for_csv(inventory)
+    inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+    inventory = DataProcessingUtils.escape_multiline(inventory)
     DataExporter.save_data_to_output(inventory, csv_filename)
     logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
 
@@ -8226,11 +8204,11 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     # Sort inventory by model for easier viewing
     inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
     # Flatten nested fields for CSV and table compatibility
-    inventory = flatten_nested_fields_in_list(inventory)
+    inventory = DataProcessingUtils.flatten_nested_fields(inventory)
     # Escape multiline strings for CSV compatibility
-    inventory = escape_multiline_strings_for_csv(inventory)
+    inventory = DataProcessingUtils.escape_multiline(inventory)
     # Get all unique fields for CSV/table columns
-    fields = get_all_unique_dict_keys(inventory)
+    fields = DataProcessingUtils.get_unique_keys(inventory)
     # Write inventory to CSV
     DataExporter.save_data_to_output(inventory, csv_filename)
     logging.info(f"Device inventory written to {csv_filename} ({len(inventory)} rows)")
@@ -9220,10 +9198,10 @@ def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs
             rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
 
         # Flatten nested fields for CSV compatibility
-        data = flatten_nested_fields_in_list(rawdata)
+        data = DataProcessingUtils.flatten_nested_fields(rawdata)
         
         # Escape multiline strings for CSV
-        data = escape_multiline_strings_for_csv(data)
+        data = DataProcessingUtils.escape_multiline(data)
 
         # Write processed data to output
         DataExporter.save_data_to_output(data, filename)
@@ -9239,7 +9217,7 @@ def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs
 
         # Display the data in a table (only in debug mode, otherwise just log summary)
         if is_debug_mode():
-            fields = get_all_unique_dict_keys(data)
+            fields = DataProcessingUtils.get_unique_keys(data)
             table = PrettyTable()
             table.field_names = fields
             table.valign = "t"
@@ -9665,8 +9643,8 @@ def export_all_org_device_events_52w_to_csv():
     events = mistapi.get_all(response=response, mist_session=apisession)
     logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
     # Flatten and sanitize for CSV
-    events = flatten_nested_fields_in_list(events)
-    events = escape_multiline_strings_for_csv(events)
+    events = DataProcessingUtils.flatten_nested_fields(events)
+    events = DataProcessingUtils.escape_multiline(events)
     # Write all data to CSV in one operation
     DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
     logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
@@ -9714,8 +9692,8 @@ def export_audit_logs_to_csv(full_history=False, duration=None):
             return
 
         # Flatten and sanitize for CSV
-        data = flatten_nested_fields_in_list(rawdata)
-        data = escape_multiline_strings_for_csv(data)
+        data = DataProcessingUtils.flatten_nested_fields(rawdata)
+        data = DataProcessingUtils.escape_multiline(data)
         DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")
         print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
         logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
@@ -13459,8 +13437,8 @@ def export_all_sites_list_to_csv():
         print(" No sites returned from API.")
         return
     # Flatten and sanitize for CSV
-    sites = flatten_nested_fields_in_list(sites)
-    sites = escape_multiline_strings_for_csv(sites)
+    sites = DataProcessingUtils.flatten_nested_fields(sites)
+    sites = DataProcessingUtils.escape_multiline(sites)
     DataExporter.save_data_to_output(sites, output_file)
     logging.info(f"! Sites exported to {output_file}")
     print(f"! Sites exported to {output_file}")
@@ -13694,8 +13672,8 @@ def export_device_port_stats_to_csv(fast: bool = False):
                 logging.debug(f"Could not sort by MAC: {e}")
             
             # Process and save
-            flattened = flatten_nested_fields_in_list(all_port_stats)
-            sanitized = escape_multiline_strings_for_csv(flattened)
+            flattened = DataProcessingUtils.flatten_nested_fields(all_port_stats)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
             DataExporter.save_data_to_output(sanitized, output_file, api_function_name='searchSiteSwOrGwPorts')
             print(f"! {len(all_port_stats)} port stat records exported to {output_file}")
             logging.info(f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)")
@@ -13788,8 +13766,8 @@ def export_site_device_virtual_chassis_to_csv():
             vc_data = [response.data] if isinstance(response.data, dict) else response.data
             
             # Process and save the data
-            flattened = flatten_nested_fields_in_list(vc_data)
-            sanitized = escape_multiline_strings_for_csv(flattened)
+            flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
             
             filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
             DataExporter.save_data_to_output(sanitized, filename)
@@ -13908,8 +13886,8 @@ def export_site_clients_to_csv():
         
         if rawdata:
             # Process and save data
-            flattened_data = flatten_nested_fields_in_list(rawdata)
-            sanitized_data = escape_multiline_strings_for_csv(flattened_data)
+            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
             filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
             DataExporter.save_data_to_output(sanitized_data, filename)
             print(f"! {len(rawdata)} client records exported to {filename}")
@@ -13946,8 +13924,8 @@ def export_site_devices_to_csv():
         
         if rawdata:
             # Process and save data
-            flattened_data = flatten_nested_fields_in_list(rawdata)
-            sanitized_data = escape_multiline_strings_for_csv(flattened_data)
+            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
             filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
             DataExporter.save_data_to_output(sanitized_data, filename)
             print(f"! {len(rawdata)} devices exported to {filename}")
@@ -13984,8 +13962,8 @@ def export_site_device_stats_to_csv():
         
         if rawdata:
             # Process and save data
-            flattened_data = flatten_nested_fields_in_list(rawdata)
-            sanitized_data = escape_multiline_strings_for_csv(flattened_data)
+            flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)
             filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
             DataExporter.save_data_to_output(sanitized_data, filename)
             print(f"! {len(rawdata)} device stats exported to {filename}")
@@ -14027,8 +14005,8 @@ def export_org_security_events_to_csv():
     except Exception as e:
         logging.warning(f"Failed to fetch security policies: {e}")
     if policies:
-        processed = flatten_nested_fields_in_list(policies)
-        processed = escape_multiline_strings_for_csv(processed)
+        processed = DataProcessingUtils.flatten_nested_fields(policies)
+        processed = DataProcessingUtils.escape_multiline(processed)
         DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")
         print(f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv")
         logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")
@@ -14047,8 +14025,8 @@ def export_org_security_events_to_csv():
     except Exception as e:
         logging.warning(f"Failed to fetch security intelligence profiles: {e}")
     if secintel_profiles:
-        processed_si = flatten_nested_fields_in_list(secintel_profiles)
-        processed_si = escape_multiline_strings_for_csv(processed_si)
+        processed_si = DataProcessingUtils.flatten_nested_fields(secintel_profiles)
+        processed_si = DataProcessingUtils.escape_multiline(processed_si)
         DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")
         print(f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv")
         logging.info(f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv")
@@ -14102,8 +14080,8 @@ def export_org_security_events_to_csv():
     all_rogue_data = all_rogue_aps + all_rogue_clients
 
     if all_rogue_data:
-        processed_r = flatten_nested_fields_in_list(all_rogue_data)
-        processed_r = escape_multiline_strings_for_csv(processed_r)
+        processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)
+        processed_r = DataProcessingUtils.escape_multiline(processed_r)
         DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")
         print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")
         logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")
@@ -14265,8 +14243,8 @@ def export_org_sle_metrics_to_csv():
         
         if all_sle_data:
             # Flatten and process the data for CSV export
-            processed = flatten_nested_fields_in_list(all_sle_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_sle_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, "OrgSLEMetrics.csv")
             print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")
             logging.info(f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv")
@@ -14306,8 +14284,8 @@ def export_org_sites_sle_summary_to_csv():
             continue
     
     if all_sites_sle_data:
-        processed = flatten_nested_fields_in_list(all_sites_sle_data)
-        processed = escape_multiline_strings_for_csv(processed)
+        processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
+        processed = DataProcessingUtils.escape_multiline(processed)
         DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")
         print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
         logging.info(f"Exported {len(processed)} sites SLE summary to OrgSitesSLESummary.csv")
@@ -14377,8 +14355,8 @@ def export_site_insight_metrics_to_csv():
                 continue
         
         if all_insight_data:
-            processed = flatten_nested_fields_in_list(all_insight_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} site insight metrics exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} site insight metrics for {site_name} to {filename}")
@@ -14503,8 +14481,8 @@ def export_site_client_insights_to_csv():
                 continue
         
         if all_client_data:
-            processed = flatten_nested_fields_in_list(all_client_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_client_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}")
@@ -14603,8 +14581,8 @@ def export_site_device_insights_to_csv():
                 continue
         
         if all_device_data:
-            processed = flatten_nested_fields_in_list(all_device_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_device_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} device insight metrics for {device_name} at {site_name} to {filename}")
@@ -15135,7 +15113,7 @@ def export_all_const_definitions_to_csv():
                             data_list = [const_data] if const_data else []
                         
                         # Process and save the data
-                        processed = escape_multiline_strings_for_csv(data_list)
+                        processed = DataProcessingUtils.escape_multiline(data_list)
                         DataExporter.save_data_to_output(processed, filename)
                         print(f"  ! {len(processed)} {description.lower()} exported to {filename}")
                         logging.info(f"Exported {len(processed)} fresh {description.lower()} to {filename}")
@@ -15537,22 +15515,22 @@ def export_org_insight_metrics_to_csv():
             print("! Exporting to normalized CSV files...")
             
             # Summary data
-            processed_summary = escape_multiline_strings_for_csv(all_summary_data)
+            processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)
             DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")
             print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
             
             # Time series data
-            processed_time_series = escape_multiline_strings_for_csv(all_time_series_data)
+            processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)
             DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")
             print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
             
             # Results data
-            processed_results = escape_multiline_strings_for_csv(all_results_data)
+            processed_results = DataProcessingUtils.escape_multiline(all_results_data)
             DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")
             print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
             
             # Sites data
-            processed_sites = escape_multiline_strings_for_csv(all_sites_data)
+            processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)
             DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")
             print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
             
@@ -15560,8 +15538,8 @@ def export_org_insight_metrics_to_csv():
             logging.info(f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files")
             
             # Also save a legacy combined file for compatibility
-            processed_legacy = flatten_nested_fields_in_list(all_insight_data)
-            processed_legacy = escape_multiline_strings_for_csv(processed_legacy)
+            processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+            processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)
             DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")
             print(f"  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
             
@@ -15633,8 +15611,8 @@ def export_org_rogue_clients_to_csv():
         
     # Save rogue clients
     if all_rogue_clients:
-        flattened = flatten_nested_fields_in_list(all_rogue_clients)
-        sanitized = escape_multiline_strings_for_csv(flattened)
+        flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
         DataExporter.save_data_to_output(sanitized, "OrgRogueClients")
         logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
         print(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
@@ -15690,8 +15668,8 @@ def export_org_rogue_aps_to_csv():
         
     # Save rogue APs
     if all_rogue_aps:
-        flattened = flatten_nested_fields_in_list(all_rogue_aps)
-        sanitized = escape_multiline_strings_for_csv(flattened)
+        flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
         DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")
         logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
         print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
@@ -15732,8 +15710,8 @@ def export_org_licenses_to_csv():
             DataExporter.save_data_to_output([], filename)
             return
 
-        processed = flatten_nested_fields_in_list(raw_items)
-        processed = escape_multiline_strings_for_csv(processed)
+        processed = DataProcessingUtils.flatten_nested_fields(raw_items)
+        processed = DataProcessingUtils.escape_multiline(processed)
         DataExporter.save_data_to_output(processed, filename)
         logging.info(f"Exported {len(processed)} license records to {filename}.")
     except Exception as e:
@@ -16988,8 +16966,8 @@ def export_org_ap_templates_to_csv():
             logging.info("No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv")
             DataExporter.save_data_to_output([], filename)
             return
-        processed = flatten_nested_fields_in_list(ap_profiles)
-        processed = escape_multiline_strings_for_csv(processed)
+        processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)
+        processed = DataProcessingUtils.escape_multiline(processed)
         DataExporter.save_data_to_output(processed, filename)
         print(f"! {len(processed)} AP templates exported to {filename}")
         logging.info(f"Exported {len(processed)} AP templates to {filename}.")
@@ -17018,8 +16996,8 @@ def export_org_switch_templates_to_csv():
             logging.info("No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv")
             DataExporter.save_data_to_output([], filename)
             return
-        processed = flatten_nested_fields_in_list(switch_profiles)
-        processed = escape_multiline_strings_for_csv(processed)
+        processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
+        processed = DataProcessingUtils.escape_multiline(processed)
         DataExporter.save_data_to_output(processed, filename)
         print(f"! {len(processed)} switch templates exported to {filename}")
         logging.info(f"Exported {len(processed)} switch templates to {filename}.")
@@ -17454,9 +17432,9 @@ def export_site_settings_to_csv():
     if data:
         logging.info(f"Fetched settings for {len(data)} sites. Flattening and sanitizing data...")
         # Flatten nested fields for CSV compatibility
-        data = flatten_nested_fields_in_list(data)
+        data = DataProcessingUtils.flatten_nested_fields(data)
         # Escape multiline strings for CSV compatibility
-        data = escape_multiline_strings_for_csv(data)
+        data = DataProcessingUtils.escape_multiline(data)
         # Write the processed data to a CSV file
         DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")
         print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
@@ -17704,8 +17682,8 @@ def export_gateway_synthetic_tests_to_csv(fast=False):
 
     if all_stats:
         filename = "AllGatewaySyntheticTests.csv"
-        flattened = flatten_nested_fields_in_list(all_stats)
-        sanitized = escape_multiline_strings_for_csv(flattened)
+        flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
         DataExporter.save_data_to_output(sanitized, filename)
         print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
         logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
@@ -17912,8 +17890,8 @@ def export_gateway_test_results_by_site_to_csv(fast: bool = False):
 
     if all_results:
         filename = "AllGatewayTestResults.csv"
-        flattened = flatten_nested_fields_in_list(all_results)
-        sanitized = escape_multiline_strings_for_csv(flattened)
+        flattened = DataProcessingUtils.flatten_nested_fields(all_results)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
         DataExporter.save_data_to_output(sanitized, filename)
         print(f"! {len(all_results)} gateway test results exported to {filename}")
         logging.info(f"! All test results saved to {filename} ({len(all_results)} records).")
@@ -18067,7 +18045,7 @@ def export_gateway_device_stats_to_csv(fast=False):
         # Sanitize and flatten nested data structures
         sanitized = []
         for stats in all_stats:
-            flat_record = flatten_dict_recursively(stats)
+            flat_record = DataProcessingUtils.flatten_dict(stats)
             sanitized.append(flat_record)
         
         filename = "AllGatewayDeviceStats.csv"
@@ -18220,8 +18198,8 @@ def export_sites_with_location_to_csv():
     logging.info(f"Fetched {len(sites)} sites from the organization.")
 
     # Flatten and sanitize all site data
-    flattened_sites = flatten_nested_fields_in_list(sites)
-    sanitized_sites = escape_multiline_strings_for_csv(flattened_sites)
+    flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
+    sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)
 
     # Write to CSV
     DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")
@@ -18287,8 +18265,8 @@ def export_gateways_with_site_info_to_csv():
     logging.info(f"Enriched {len(gateways)} gateway devices with site info.")
 
     # Flatten nested fields and escape multiline strings for CSV compatibility
-    gateways = flatten_nested_fields_in_list(gateways)
-    gateways = escape_multiline_strings_for_csv(gateways)
+    gateways = DataProcessingUtils.flatten_nested_fields(gateways)
+    gateways = DataProcessingUtils.escape_multiline(gateways)
     gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
     DataExporter.save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")
     print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
@@ -18422,8 +18400,8 @@ def export_devices_with_site_info_to_csv(fast=False):
         logging.debug(f"Enriched device {device.get('name', '')} ({device.get('mac', '')}) with site info.")
 
     # Flatten nested fields and escape multiline strings for CSV compatibility
-    enriched_devices = flatten_nested_fields_in_list(enriched_devices)
-    enriched_devices = escape_multiline_strings_for_csv(enriched_devices)
+    enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
+    enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)
     enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
     DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")
     print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
@@ -19267,8 +19245,8 @@ def view_marvis_insights():
                                     formatted_insights = format_marvis_data_for_csv(response.data, "sites")
                                 else:
                                     # Use legacy formatting for other insight types
-                                    formatted_insights = flatten_nested_fields_in_list(insights_data)
-                                    formatted_insights = escape_multiline_strings_for_csv(formatted_insights)
+                                    formatted_insights = DataProcessingUtils.flatten_nested_fields(insights_data)
+                                    formatted_insights = DataProcessingUtils.escape_multiline(formatted_insights)
                                 
                                 filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"
                                 DataExporter.save_data_to_output(formatted_insights, filename)
@@ -19339,9 +19317,9 @@ def export_current_guest_users_to_csv():
     logging.info(f"Fetched {len(guests)} current guest users from API.")
 
     # Flatten nested fields for CSV compatibility
-    guests = flatten_nested_fields_in_list(guests)
+    guests = DataProcessingUtils.flatten_nested_fields(guests)
     # Escape multiline strings for CSV compatibility
-    guests = escape_multiline_strings_for_csv(guests)
+    guests = DataProcessingUtils.escape_multiline(guests)
 
     # Write the processed data to a CSV file
     DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")
@@ -19365,9 +19343,9 @@ def export_historical_guest_users_to_csv():
     guests = mistapi.get_all(response=response, mist_session=apisession)
     logging.info(f"Fetched {len(guests)} historical guest users from API.")
     # Flatten nested fields for CSV compatibility
-    guests = flatten_nested_fields_in_list(guests)
+    guests = DataProcessingUtils.flatten_nested_fields(guests)
     # Escape multiline strings for CSV compatibility
-    guests = escape_multiline_strings_for_csv(guests)
+    guests = DataProcessingUtils.escape_multiline(guests)
     # Write the processed data to a CSV file
     DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")
     print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
@@ -19422,8 +19400,8 @@ def export_switch_vc_stats_to_csv():
 
     # Flatten and write to CSV
     logging.info(f"Flattening and sanitizing {len(all_vc_stats)} VC stats entries for CSV export.")
-    all_vc_stats = flatten_nested_fields_in_list(all_vc_stats)
-    all_vc_stats = escape_multiline_strings_for_csv(all_vc_stats)
+    all_vc_stats = DataProcessingUtils.flatten_nested_fields(all_vc_stats)
+    all_vc_stats = DataProcessingUtils.escape_multiline(all_vc_stats)
     DataExporter.save_data_to_output(all_vc_stats, "OrgSwitchVCStats.csv")
     print(f"! {len(all_vc_stats)} switch VC stats exported to OrgSwitchVCStats.csv")
     logging.info(f"! Switch VC stats exported to OrgSwitchVCStats.csv ({len(all_vc_stats)} records).")
@@ -20455,8 +20433,8 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
         return
 
     # Flatten and sanitize the data
-    flattened = flatten_nested_fields_in_list(data)
-    sanitized = escape_multiline_strings_for_csv(flattened)
+    flattened = DataProcessingUtils.flatten_nested_fields(data)
+    sanitized = DataProcessingUtils.escape_multiline(flattened)
 
     # Write full dataset to CSV
     DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
@@ -23227,8 +23205,8 @@ def export_gateway_templates_to_csv():
         print("No gateway templates found for this organization.")
         return
     # Flatten and sanitize for CSV
-    templates = flatten_nested_fields_in_list(templates)
-    templates = escape_multiline_strings_for_csv(templates)
+    templates = DataProcessingUtils.flatten_nested_fields(templates)
+    templates = DataProcessingUtils.escape_multiline(templates)
     DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")
     print(f"! {len(templates)} gateway templates exported to OrgGatewayTemplates.csv")
     logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
@@ -25161,8 +25139,8 @@ def check_virtual_chassis_conversion_status():
     # Export to CSV
     try:
         # Flatten any nested fields for CSV export
-        flattened_switches = flatten_nested_fields_in_list(all_switches)
-        sanitized_switches = escape_multiline_strings_for_csv(flattened_switches)
+        flattened_switches = DataProcessingUtils.flatten_nested_fields(all_switches)
+        sanitized_switches = DataProcessingUtils.escape_multiline(flattened_switches)
         
         # Save to CSV
         filename = "VirtualChassisConversionStatus.csv"
@@ -25325,8 +25303,8 @@ def export_site_wifi_clients_to_csv(site_id=None):
             return
         
         # Flatten and sanitize the data for CSV
-        flattened = flatten_nested_fields_in_list(enriched_clients)
-        sanitized = escape_multiline_strings_for_csv(flattened)
+        flattened = DataProcessingUtils.flatten_nested_fields(enriched_clients)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
         
         # Write to CSV
         DataExporter.save_data_to_output(sanitized, "SiteWiFiClients.CSV")
@@ -26343,7 +26321,7 @@ class MapsManager:
             # Flatten and prepare data
             maps_data = []
             for map_item in maps:
-                flattened = flatten_dict_recursively(map_item)
+                flattened = DataProcessingUtils.flatten_dict(map_item)
                 flattened['site_id'] = site_id
                 flattened['site_name'] = site_name
                 flattened['org_id'] = self.org_id
@@ -26393,7 +26371,7 @@ class MapsManager:
                         maps = maps_response.data
                         for map_item in maps:
                             # Flatten nested structures
-                            flattened = flatten_dict_recursively(map_item)
+                            flattened = DataProcessingUtils.flatten_dict(map_item)
                             flattened['site_id'] = site['id']
                             flattened['site_name'] = site.get('name', 'Unknown')
                             flattened['org_id'] = self.org_id
@@ -26449,7 +26427,7 @@ class MapsManager:
                         maps = maps_response.data
                         for map_item in maps:
                             if 'url' in map_item or 'thumbnail_url' in map_item:
-                                flattened = flatten_dict_recursively(map_item)
+                                flattened = DataProcessingUtils.flatten_dict(map_item)
                                 flattened['site_id'] = site['id']
                                 flattened['site_name'] = site.get('name', 'Unknown')
                                 flattened['org_id'] = self.org_id
@@ -28149,7 +28127,7 @@ class MapsManager:
             if export_choice in ['yes', 'y']:
                 devices_data = []
                 for device in devices_on_map:
-                    flattened = flatten_dict_recursively(device)
+                    flattened = DataProcessingUtils.flatten_dict(device)
                     flattened['site_id'] = site_id
                     flattened['site_name'] = site_name
                     devices_data.append(flattened)
@@ -39677,8 +39655,8 @@ def export_site_anomaly_metrics_to_csv():
         
         # Process and save all collected anomaly data
         if all_anomaly_data:
-            processed = flatten_nested_fields_in_list(all_anomaly_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} site anomaly event types for {site_name} to {filename}")
@@ -39785,8 +39763,8 @@ def export_site_device_anomaly_to_csv():
         
         # Process and save all collected device anomaly data
         if all_device_anomaly_data:
-            processed = flatten_nested_fields_in_list(all_device_anomaly_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} device anomaly event types for {device_name} to {filename}")
@@ -39906,8 +39884,8 @@ def export_site_client_anomaly_to_csv():
         
         # Process and save all collected client anomaly data
         if all_client_anomaly_data:
-            processed = flatten_nested_fields_in_list(all_client_anomaly_data)
-            processed = escape_multiline_strings_for_csv(processed)
+            processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
             DataExporter.save_data_to_output(processed, filename)
             print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
             logging.info(f"Exported {metrics_retrieved} client anomaly event types for {client_mac} to {filename}")
@@ -47522,3 +47500,7 @@ if __name__ == "__main__":
     finally:
         logging.info("=== MistHelper application ending ===")
 #hi
+
+
+
+

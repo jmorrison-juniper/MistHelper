@@ -550,6 +550,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.19.15",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "DataProcessingUtils: Removed 5 wrapper functions per agents.md no-wrapper rule",
+          "DataProcessingUtils: Updated 100+ call sites to use class methods directly",
+          "DataProcessingUtils: flatten_nested_fields, escape_multiline, get_unique_keys, flatten_dict, convert_list_values_to_strings now called via class"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.18.45",
       "date": "2026-01-16",
       "changes": {
