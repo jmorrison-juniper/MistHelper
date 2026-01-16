@@ -39322,38 +39322,6 @@ def manage_wlan_radius_auth_timers(debug=False):
     logging.info("WLAN authentication timer management completed")
 
 
-def ssh_runner_main():
-    """SSH Runner entry point - delegates to class-based application logic"""
-    try:
-        # Create argument parser
-        parser = EnhancedSSHRunner.create_argument_parser()
-        
-        # Parse arguments
-        args = parser.parse_args()
-        
-        # Run the application
-        ssh_main_success = EnhancedSSHRunner.run_application(args)
-        
-        # If application returns False and it's likely due to missing parameters, show help
-        if not ssh_main_success:
-            # Check if we have the basic requirements that would indicate help is needed
-            if not any([args.hostname, args.interactive]):
-                parser.print_help()
-        
-        # Exit with appropriate code
-        sys.exit(0 if ssh_main_success else 1)
-        
-    except argparse.ArgumentTypeError as e:
-        print(f"[ERROR] Invalid argument: {e}")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n[INTERRUPT] Operation cancelled by user")
-        sys.exit(130)
-    except Exception as e:
-        print(f"[ERROR] Fatal error: {e}")
-        sys.exit(1)
-
-
 def ssh_runner_interactive():
     """SSH Runner wrapper for menu system integration - runs with auto-detection and interactive prompts"""
     try:
