@@ -8823,6 +8823,32 @@ class PromptUtils:
             logging.error(f"Exception in PromptUtils.select_ports_from_device: {error}", exc_info=True)
             return None
 
+    @staticmethod
+    def select_site_and_device_ids(site_id=None, device_id=None):
+        """
+        Returns site_id and device_id, either from arguments or via interactive prompts.
+        
+        Args:
+            site_id: Optional pre-selected site ID
+            device_id: Optional pre-selected device ID
+            
+        Returns:
+            tuple: (site_id, device_id) or (None, None) if selection failed
+        """
+        if not site_id:
+            site_id = PromptUtils.select_site_id_from_csv()
+            if not site_id:
+                print(" No site selected.")
+                return None, None
+
+        if not device_id:
+            device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
+            if not device_id:
+                print(" No device selected.")
+                return None, None
+
+        return site_id, device_id
+
 
 # Backward compatibility - original function definitions follow
 def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
@@ -19200,24 +19226,6 @@ def export_switch_vc_stats_to_csv():
             table.add_row([row.get(f, "") for f in table.field_names])
         logging.debug("\n" + table.get_string())  # Log the table output (debug mode only)
 
-def prompt_select_site_and_device_ids(site_id=None, device_id=None):
-    """
-    Returns site_id and device_id, either from arguments or via interactive prompts.
-    """
-    if not site_id:
-        site_id = PromptUtils.select_site_id_from_csv()
-        if not site_id:
-            print(" No site selected.")
-            return None, None
-
-    if not device_id:
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
-        if not device_id:
-            print(" No device selected.")
-            return None, None
-
-    return site_id, device_id
-
 def create_shell_session(site_id, device_id):
     """
     Creates a shell session and returns the WebSocket URL.
@@ -19317,7 +19325,7 @@ def run_interactive_shell(shell_url, debug=False):
     listen_keyboard(on_release=_ws_out, delay_second_char=0, delay_other_chars=0, lower=False)
 
 def launch_cli_shell(site_id=None, device_id=None, debug=False):
-    site_id, device_id = prompt_select_site_and_device_ids(site_id, device_id)
+    site_id, device_id = PromptUtils.select_site_and_device_ids(site_id, device_id)
     if not site_id or not device_id:
         return
     shell_url = create_shell_session(site_id, device_id)
@@ -19546,7 +19554,7 @@ def trigger_arp_command(mist_host, mist_apitoken, site_id, device_id):
 
 def run_arp_via_websocket(site_id=None, device_id=None):
     if not site_id or not device_id:
-        site_id, device_id = prompt_select_site_and_device_ids(site_id, device_id)
+        site_id, device_id = PromptUtils.select_site_and_device_ids(site_id, device_id)
     if not site_id or not device_id:
         return
 
@@ -19701,7 +19709,7 @@ def show_route_via_websocket():
     and saves the output to ws.log.
     """
     logging.info("Launching shell to run 'show route 0.0.0.0'...")
-    site_id, device_id = prompt_select_site_and_device_ids()
+    site_id, device_id = PromptUtils.select_site_and_device_ids()
     if not site_id or not device_id:
         return
 
@@ -20066,7 +20074,7 @@ def show_dhcp_security_binding():
     Saves output to ws_dhcp.log.
     """
     logging.info("Launching shell to run 'show dhcp-security binding'...")
-    site_id, device_id = prompt_select_site_and_device_ids()
+    site_id, device_id = PromptUtils.select_site_and_device_ids()
     if not site_id or not device_id:
         return
 
@@ -20106,7 +20114,7 @@ def show_vlans():
     Saves output to ws_vlans.log.
     """
     logging.info("Launching shell to run 'show vlans'...")
-    site_id, device_id = prompt_select_site_and_device_ids()
+    site_id, device_id = PromptUtils.select_site_and_device_ids()
     if not site_id or not device_id:
         return
 
