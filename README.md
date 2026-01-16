@@ -550,6 +550,22 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.15.22.45",
+      "date": "2026-01-15",
+      "changes": {
+        "refactoring": [
+          "5-Item Rule: Added DeviceFetchConfig dataclass for interactive_fetch_device_data_to_csv parameter grouping",
+          "DataProcessingUtils: Moved implementation directly into class methods, eliminating wrapper delegation pattern",
+          "DataProcessingUtils: flatten_dict, flatten_nested_fields, convert_list_values_to_strings, get_unique_keys, escape_multiline now contain actual logic",
+          "Backwards Compatibility: Original standalone functions retained as thin wrappers to class methods",
+          "Code Quality: Established pattern for class-based implementation with backward-compatible wrappers"
+        ],
+        "documentation": [
+          "Updated interactive_fetch_device_data_to_csv docstring to support config object pattern"
+        ]
+      }
+    },
+    {
       "version": "26.01.15.21.30",
       "date": "2026-01-15",
       "changes": {

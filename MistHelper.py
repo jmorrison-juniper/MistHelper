@@ -216,6 +216,17 @@ class MapViewerConfig:
     all_sites: Optional[List] = None
 
 
+@dataclass
+class DeviceFetchConfig:
+    """Configuration for interactive device data fetching - groups fetch parameters."""
+    fetch_function: Any
+    filename: str
+    description: str
+    device_type: str = "all"
+    site_id: Optional[str] = None
+    device_id: Optional[str] = None
+
+
 # ============================================================================
 # EARLY DEPENDENCY AUTO-INSTALLER
 # ============================================================================
@@ -2495,11 +2506,37 @@ def display_dict_list_as_pretty_table(data, fields=None, sortby=None):
     # Log the table as a string (debug mode only)
     logging.debug("\n" + table.get_string())
 
-def interactive_fetch_device_data_to_csv(fetch_function, filename, description, device_type="all", site_id=None, device_id=None):
+def interactive_fetch_device_data_to_csv(
+    fetch_function=None,
+    filename=None,
+    description=None,
+    device_type="all",
+    site_id=None,
+    device_id=None,
+    config: DeviceFetchConfig = None
+):
     """
     Fetches data for a specific device (by site_id/device_id if provided, else prompts user),
     writes the result to a CSV file, and displays it as a PrettyTable.
+    
+    Args:
+        fetch_function: API function to call (deprecated, use config)
+        filename: Output filename (deprecated, use config)
+        description: Action description (deprecated, use config)
+        device_type: Device type filter (deprecated, use config)
+        site_id: Site ID (deprecated, use config)
+        device_id: Device ID (deprecated, use config)
+        config: DeviceFetchConfig object (preferred)
     """
+    # Support both config object and individual parameters (backwards compatibility)
+    if config is not None:
+        fetch_function = config.fetch_function
+        filename = config.filename
+        description = config.description
+        device_type = config.device_type
+        site_id = config.site_id
+        device_id = config.device_id
+    
     # Use provided site_id or prompt user
     if not site_id:
         site_id = prompt_select_site_id_from_csv()
@@ -6784,12 +6821,18 @@ class DataProcessingUtils:
     Centralized data processing utilities.
     Groups all data transformation functions for better code organization.
     All methods are static to avoid unnecessary object instantiation.
+    
+    Implementation Note: Methods contain the actual logic rather than delegating
+    to standalone functions, per the 5-Item Rule class organization requirement.
     """
     
     @staticmethod
     def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
         """
         Recursively flattens a nested dictionary, joining keys with sep.
+        Lists of dicts are flattened with indexed keys.
+        Non-dict lists are joined as comma-separated strings.
+        All keys are converted to strings for CSV/JSON compatibility.
         
         Args:
             d: Dictionary to flatten
@@ -6799,12 +6842,29 @@ class DataProcessingUtils:
         Returns:
             dict: Flattened dictionary
         """
-        return flatten_dict_recursively(d, parent_key, sep)
+        items = []
+        for k, v in d.items():
+            k_str = str(k)
+            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
+            if isinstance(v, dict):
+                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
+            elif isinstance(v, list):
+                if all(isinstance(i, dict) for i in v):
+                    for idx, item in enumerate(v):
+                        items.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
+                else:
+                    items.append((new_key, ','.join(map(str, v))))
+            else:
+                items.append((new_key, v))
+        return dict(items)
     
     @staticmethod
     def flatten_nested_fields(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Flatten nested fields in a list of dictionaries.
+        Attempts to parse stringified dicts/lists.
+        Recursively flattens nested dicts and lists of dicts.
+        Joins non-dict lists as comma-separated strings.
         
         Args:
             data: List of dictionaries to process
@@ -6812,130 +6872,117 @@ class DataProcessingUtils:
         Returns:
             list: List of dictionaries with flattened nested fields
         """
-        return flatten_nested_fields_in_list(data)
+        flattened = []
+        for entry in data:
+            if not isinstance(entry, dict):
+                logging.debug(f"Skipping non-dictionary entry: {type(entry).__name__}")
+                continue
+                
+            new_entry = {}
+            for key, value in entry.items():
+                # Try to parse stringified dicts/lists
+                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):
+                    try:
+                        value = ast.literal_eval(value)
+                    except Exception:
+                        try:
+                            value = json.loads(value)
+                        except Exception:
+                            pass  # Leave as string if parsing fails
+
+                if isinstance(value, dict):
+                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)
+                    new_entry.update(flat)
+                elif isinstance(value, list):
+                    if all(isinstance(i, dict) for i in value):
+                        for idx, item in enumerate(value):
+                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")
+                            new_entry.update(flat)
+                    else:
+                        new_entry[key] = ','.join(map(str, value))
+                else:
+                    new_entry[key] = value
+            flattened.append(new_entry)
+        return flattened
     
     @staticmethod
     def convert_list_values_to_strings(data):
         """
-        Convert list values to CSV-compatible strings.
+        Convert list, tuple, or set values to CSV-compatible comma-separated strings.
         
         Args:
-            data: Data containing list values
+            data: List of dictionaries containing list values
             
         Returns:
             Data with list values converted to strings
         """
-        return convert_list_values_to_csv_strings(data)
+        for entry in data:
+            for key, value in entry.items():
+                if isinstance(value, (list, tuple, set)):
+                    logging.debug(f"Converting list/tuple/set at key '{key}' to string")
+                    entry[key] = ','.join(map(str, value))
+        return data
     
     @staticmethod
     def get_unique_keys(data):
         """
         Get all unique dictionary keys from a list of dictionaries.
+        Returns a sorted list of string keys.
         
         Args:
             data: List of dictionaries
             
         Returns:
-            set: Set of unique keys
+            list: Sorted list of unique keys as strings
         """
-        return get_all_unique_dict_keys(data)
+        fields = set()
+        for entry in data:
+            fields.update(entry.keys())
+        return sorted(str(f) for f in fields)
     
     @staticmethod
     def escape_multiline(data):
         """
         Escape multiline strings for CSV compatibility.
+        Joins list values as comma-separated strings.
+        Replaces newline characters with escaped versions.
         
         Args:
-            data: Data containing multiline strings
+            data: List of dictionaries containing multiline strings
             
         Returns:
             Data with escaped multiline strings
         """
-        return escape_multiline_strings_for_csv(data)
+        for entry in data:
+            for key, value in entry.items():
+                if isinstance(value, list):
+                    entry[key] = ','.join(map(str, value))
+                elif isinstance(value, str):
+                    entry[key] = value.replace('\n', '\\n').replace('\r', '')
+        return data
 
 
-# Backward compatibility - original data processing function definitions follow
+# Backward compatibility wrappers - delegate to DataProcessingUtils class methods
 def flatten_dict_recursively(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
-    """
-    Recursively flattens a nested dictionary, joining keys with `sep`.
-    Lists of dicts are flattened with indexed keys.
-    Non-dict lists are joined as comma-separated strings.
-    All keys are converted to strings for CSV/JSON compatibility.
-    """
-    items = []
-    for k, v in d.items():
-        k_str = str(k)
-        new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
-        # If the value is a dictionary, recurse
-        if isinstance(v, dict):
-            items.extend(flatten_dict_recursively(v, new_key, sep=sep).items())
-        # If the value is a list
-        elif isinstance(v, list):
-            if all(isinstance(i, dict) for i in v):
-                # If all items are dicts, flatten each with an index
-                for idx, item in enumerate(v):
-                    items.extend(flatten_dict_recursively(item, f"{new_key}{sep}{idx}", sep=sep).items())
-            else:
-                # Otherwise, join list items as a comma-separated string
-                items.append((new_key, ','.join(map(str, v))))
-        else:
-            # Base case: not a dict or list, just add the value
-            items.append((new_key, v))
-    # Uncomment the next line to enable debug logging of the flattening process
-    # logging.debug(f"Flattened dict at key '{parent_key}': {dict(items)}")
-    return dict(items)
+    """Backward compatibility wrapper for DataProcessingUtils.flatten_dict."""
+    return DataProcessingUtils.flatten_dict(d, parent_key, sep)
 
 def flatten_nested_fields_in_list(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Flattens all nested fields in a list of dictionaries.
-    - Attempts to parse stringified dicts/lists.
-    - Recursively flattens nested dicts and lists of dicts.
-    - Joins non-dict lists as comma-separated strings.
-    """
-    flattened = []
-    for entry in data:
-        # Skip entries that are not dictionaries (defensive programming)
-        if not isinstance(entry, dict):
-            logging.debug(f"Skipping non-dictionary entry: {type(entry).__name__} - {entry}")
-            continue
-            
-        new_entry = {}
-        for key, value in entry.items():
-            # Try to parse stringified dicts/lists
-            if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):
-                try:
-                    value = ast.literal_eval(value)
-                    logging.debug(f"Parsed stringified value for key '{key}': {value}")
-                except Exception:
-                    try:
-                        value = json.loads(value)
-                        logging.debug(f"JSON loaded value for key '{key}': {value}")
-                    except Exception:
-                        # Leave as string if parsing fails
-                        logging.debug(f"Failed to parse value for key '{key}', leaving as string.")
+    """Backward compatibility wrapper for DataProcessingUtils.flatten_nested_fields."""
+    return DataProcessingUtils.flatten_nested_fields(data)
 
-            # Flatten if it's a dict or list of dicts
-            if isinstance(value, dict):
-                # Recursively flatten nested dict
-                flat = flatten_dict_recursively(value, parent_key=key)
-                new_entry.update(flat)
-                logging.debug(f"Flattened dict for key '{key}': {flat}")
-            elif isinstance(value, list):
-                if all(isinstance(i, dict) for i in value):
-                    # Flatten each dict in the list with an index
-                    for idx, item in enumerate(value):
-                        flat = flatten_dict_recursively(item, parent_key=f"{key}_{idx}")
-                        new_entry.update(flat)
-                        logging.debug(f"Flattened dict in list for key '{key}_{idx}': {flat}")
-                else:
-                    # Join non-dict lists as comma-separated strings
-                    new_entry[key] = ','.join(map(str, value))
-                    logging.debug(f"Joined list for key '{key}': {new_entry[key]}")
-            else:
-                # Base case: not a dict or list, just add the value
-                new_entry[key] = value
-        flattened.append(new_entry)
-    return flattened
+def convert_list_values_to_csv_strings(data):
+    """Backward compatibility wrapper for DataProcessingUtils.convert_list_values_to_strings."""
+    return DataProcessingUtils.convert_list_values_to_strings(data)
+
+def get_all_unique_dict_keys(data):
+    """Backward compatibility wrapper for DataProcessingUtils.get_unique_keys."""
+    return DataProcessingUtils.get_unique_keys(data)
+
+def escape_multiline_strings_for_csv(data):
+    """Backward compatibility wrapper for DataProcessingUtils.escape_multiline."""
+    return DataProcessingUtils.escape_multiline(data)
+
 
 def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
     """
@@ -7040,51 +7087,6 @@ def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
         fallback_data = escape_multiline_strings_for_csv(fallback_data)
         return fallback_data
 
-def convert_list_values_to_csv_strings(data):
-    """
-    Converts all list, tuple, or set values in a list of dictionaries to comma-separated strings.
-    Adds debug logging for each conversion.
-    """
-    for entry in data:
-        for key, value in entry.items():
-            if isinstance(value, (list, tuple, set)):
-                # Log the conversion for debugging
-                logging.debug(f"Converting list/tuple/set at key '{key}' to string: {value}")
-                entry[key] = ','.join(map(str, value))
-    return data
-
-def get_all_unique_dict_keys(data):
-    """
-    Returns a sorted list of all unique keys present in a list of dictionaries.
-    Useful for determining CSV fieldnames or PrettyTable columns.
-    """
-    fields = set()
-    for entry in data:
-        # Add all keys from each dictionary to the set
-        fields.update(entry.keys())
-    # Log the discovered unique keys for debugging
-    logging.debug(f"Discovered unique keys: {fields}")
-    # Convert all keys to strings for sorting and CSV compatibility
-    return sorted(str(f) for f in fields)
-
-def escape_multiline_strings_for_csv(data):
-    """
-    Escapes multiline strings in a list of dictionaries for CSV compatibility.
-    - Joins list values as comma-separated strings.
-    - Replaces newline characters in strings with '\\n' and removes carriage returns.
-    """
-    for entry in data:
-        for key, value in entry.items():
-            if isinstance(value, list):
-                # Convert list to comma-separated string for CSV compatibility
-                logging.debug(f"Converting list at key '{key}' to string: {value}")
-                entry[key] = ','.join(map(str, value))
-            elif isinstance(value, str):
-                # Replace newlines and carriage returns in strings
-                if '\n' in value or '\r' in value:
-                    logging.debug(f"Escaping newlines in string at key '{key}': {repr(value)}")
-                entry[key] = value.replace('\n', '\\n').replace('\r', '')
-    return data
 
 def write_dict_list_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
     """
