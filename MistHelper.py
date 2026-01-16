@@ -1836,79 +1836,99 @@ def log_dynamic_lookback(context: str, hours: int) -> None:
     TimeUtils.log_dynamic_lookback(context, hours)
 
 # ============================================================================
-# IMPORT STATUS AND HELPER FUNCTIONS
+# IMPORT STATUS AND INPUT UTILITIES CLASS
 # ============================================================================
 
-def ensure_tqdm_available():
-    """Ensure tqdm is available and properly imported."""
-    global tqdm
-    
-    # Check if tqdm is properly imported (not our fallback)
-    if hasattr(tqdm, '__module__') and tqdm.__module__ == 'tqdm':
-        logging.debug("tqdm is properly imported and available")
-        return True
-    
-    # Try to get tqdm from the import manager
-    tqdm_from_manager = import_manager.get_import('tqdm')
-    if tqdm_from_manager:
-        tqdm = tqdm_from_manager
-        logging.info("Retrieved tqdm from import manager")
-        return True
-    
-    # Try importing tqdm directly
-    try:
-        from tqdm import tqdm as real_tqdm
-        tqdm = real_tqdm
-        logging.info("Successfully imported tqdm directly")
-        return True
-    except ImportError:
-        logging.warning("tqdm package is not available - progress bars will be disabled")
-        return False
 
-def safe_input(prompt, default_value="", allow_empty=True, context="unknown"):
+class InputUtils:
     """
-    Safely handle user input with proper EOF and KeyboardInterrupt handling.
-    
-    Args:
-        prompt: The prompt message to display
-        default_value: Value to return if user provides empty input or EOF
-        allow_empty: Whether to allow empty input (only applies when default_value is not set)
-        context: Context description for logging
-    
-    Returns:
-        str: User input or default_value on EOF/empty input
-        None: On KeyboardInterrupt
+    Centralized input handling utilities.
+    Handles safe input with EOF handling, tqdm availability, etc.
     """
-    try:
-        user_input = input(prompt).strip()
+    
+    @staticmethod
+    def ensure_tqdm_available() -> bool:
+        """Ensure tqdm is available and properly imported."""
+        global tqdm
         
-        # If user provided empty input and we have a default value, use it
-        if not user_input and default_value:
-            logging.debug(f"Empty input for {context}, using default: '{default_value}'")
-            return default_value
+        # Check if tqdm is properly imported (not our fallback)
+        if hasattr(tqdm, '__module__') and tqdm.__module__ == 'tqdm':
+            logging.debug("tqdm is properly imported and available")
+            return True
         
-        # If user provided empty input, no default, but empty is allowed
-        if not user_input and allow_empty:
+        # Try to get tqdm from the import manager
+        tqdm_from_manager = import_manager.get_import('tqdm')
+        if tqdm_from_manager:
+            tqdm = tqdm_from_manager
+            logging.info("Retrieved tqdm from import manager")
+            return True
+        
+        # Try importing tqdm directly
+        try:
+            from tqdm import tqdm as real_tqdm
+            tqdm = real_tqdm
+            logging.info("Successfully imported tqdm directly")
+            return True
+        except ImportError:
+            logging.warning("tqdm package is not available - progress bars will be disabled")
+            return False
+    
+    @staticmethod
+    def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> Optional[str]:
+        """
+        Safely handle user input with proper EOF and KeyboardInterrupt handling.
+        
+        Args:
+            prompt: The prompt message to display
+            default_value: Value to return if user provides empty input or EOF
+            allow_empty: Whether to allow empty input (only applies when default_value is not set)
+            context: Context description for logging
+        
+        Returns:
+            str: User input or default_value on EOF/empty input
+            None: On KeyboardInterrupt
+        """
+        try:
+            user_input = input(prompt).strip()
+            
+            # If user provided empty input and we have a default value, use it
+            if not user_input and default_value:
+                logging.debug(f"Empty input for {context}, using default: '{default_value}'")
+                return default_value
+            
+            # If user provided empty input, no default, but empty is allowed
+            if not user_input and allow_empty:
+                return user_input
+            
+            # If user provided empty input, no default, and empty not allowed
+            if not user_input and not allow_empty:
+                logging.warning(f"Empty input not allowed for {context}, returning None")
+                return None
+            
+            # User provided non-empty input
             return user_input
-        
-        # If user provided empty input, no default, and empty not allowed
-        if not user_input and not allow_empty:
-            logging.warning(f"Empty input not allowed for {context}, returning None")
+            
+        except EOFError:
+            # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
+            print(f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'")
+            logging.info(f"EOF encountered on input during {context} - returning default: '{default_value}'")
+            return default_value
+        except KeyboardInterrupt:
+            # Handle Ctrl+C
+            print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")
+            logging.info(f"KeyboardInterrupt encountered during {context}")
             return None
-        
-        # User provided non-empty input
-        return user_input
-        
-    except EOFError:
-        # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
-        print(f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'")
-        logging.info(f"EOF encountered on input during {context} - returning default: '{default_value}'")
-        return default_value
-    except KeyboardInterrupt:
-        # Handle Ctrl+C
-        print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")
-        logging.info(f"KeyboardInterrupt encountered during {context}")
-        return None
+
+
+# Backward compatibility wrappers - will be removed in future version
+def ensure_tqdm_available() -> bool:
+    """Legacy function - use InputUtils.ensure_tqdm_available() instead."""
+    return InputUtils.ensure_tqdm_available()
+
+
+def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> Optional[str]:
+    """Legacy function - use InputUtils.safe_input() instead."""
+    return InputUtils.safe_input(prompt, default_value, allow_empty, context)
 
 # ============================================================================
 # CONFIGURATION VARIABLES
