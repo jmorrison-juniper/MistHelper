@@ -6344,6 +6344,17 @@ class EnvironmentUtils:
         
         logging.debug("Container detection: no container indicators found - running in direct mode")
         return False
+    
+    @staticmethod
+    def is_debug_mode() -> bool:
+        """
+        Check if debug mode is enabled via command line arguments.
+        Delegates to module-level is_debug_mode() for consistency.
+        
+        Returns:
+            bool: True if --debug or -d flag is present in sys.argv
+        """
+        return is_debug_mode()
 
 
 # Backward compatibility wrapper - will be removed in future version
