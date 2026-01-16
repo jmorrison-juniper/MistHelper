@@ -8486,6 +8486,9 @@ class PromptUtils:
         Prompts the user to select one or more ports from a device (switch or gateway).
         Displays port status information from device stats.
         
+        NOTE: This function is large (~400 lines) and should be refactored into smaller
+        helper methods within the class per the 5-item/10-20 lines rule in agents.md.
+        
         Args:
             site_id (str): The site ID where the device is located
             device_mac (str): The MAC address of the device
@@ -8495,7 +8498,330 @@ class PromptUtils:
         Returns:
             Selected ports or None if no selection made
         """
-        return prompt_select_ports_from_device(site_id, device_mac, device_type, return_available)
+        logging.debug(f"Fetching port information for {device_type} {device_mac} at site {site_id}")
+        
+        try:
+            # Normalize the input MAC for comparison (remove colons, lowercase)
+            normalized_input_mac = str(device_mac).replace(":", "").replace("-", "").lower()
+            logging.debug(f"Normalized input MAC for comparison: {normalized_input_mac}")
+            
+            # First get device ID from MAC
+            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type)
+            devices = devices_response.data
+            
+            device = None
+            for dev in devices:
+                dev_mac = dev.get("mac", "")
+                # Normalize device MAC for comparison
+                normalized_dev_mac = str(dev_mac).replace(":", "").replace("-", "").lower()
+                logging.debug(f"Comparing device {dev.get('name', 'Unknown')}: {dev_mac} (normalized: {normalized_dev_mac})")
+                
+                if normalized_dev_mac == normalized_input_mac:
+                    device = dev
+                    logging.debug(f"MAC match found for device: {dev.get('name', 'Unknown')}")
+                    break
+            
+            if not device:
+                print(f"\n! Could not find {device_type} with MAC {device_mac}")
+                logging.error(f"Device not found with MAC: {device_mac} (normalized: {normalized_input_mac})")
+                logging.error(f"Available devices: {[d.get('mac') for d in devices]}")
+                return None
+            
+            device_id = device.get("id")
+            device_name = device.get("name", "Unknown")
+            
+            # Get device stats which includes port information
+            logging.debug(f"Fetching device stats for device_id: {device_id}")
+            port_stat = {}
+            
+            if device_type in ["switch", "gateway"]:
+                # For switches/gateways, use dedicated port search API
+                logging.info(f"Fetching switch/gateway port stats using searchSiteSwOrGwPorts for device {device_id}")
+                try:
+                    ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+                        apisession, 
+                        site_id,
+                        mac=device_mac,
+                        limit=1000
+                    )
+                    ports_results = ports_search_response.data.get("results", [])
+                    logging.info(f"Retrieved {len(ports_results)} port stat entries from searchSiteSwOrGwPorts")
+                    
+                    for port_obj in ports_results:
+                        port_id = port_obj.get("port_id")
+                        if port_id:
+                            port_stat[port_id] = port_obj
+                            
+                    if port_stat:
+                        logging.info(f"Successfully converted {len(port_stat)} switch/gateway ports to dict format")
+                        if port_stat:
+                            sample_port = list(port_stat.keys())[0]
+                            sample_data = port_stat[sample_port]
+                            logging.debug(f"Sample port '{sample_port}' data: speed={sample_data.get('speed')}, full_duplex={sample_data.get('full_duplex')}, up={sample_data.get('up')}")
+                    else:
+                        logging.warning(f"searchSiteSwOrGwPorts returned no port data for device {device_mac}")
+                        
+                except Exception as port_search_error:
+                    logging.error(f"Error fetching switch/gateway port stats: {port_search_error}")
+                    logging.debug(f"Traceback: ", exc_info=True)
+            else:
+                logging.info(f"Fetching AP port stats using getSiteDeviceStats for device {device_id}")
+                stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+                stats_data = stats_response.data
+                
+                if "port_stat" in stats_data:
+                    port_stat = stats_data.get("port_stat", {})
+                    logging.info(f"Found port_stat (AP-style) with {len(port_stat)} ports")
+                else:
+                    logging.warning(f"No port_stat found in AP stats for device {device_id}")
+            
+            # Get device config for port profiles and descriptions
+            logging.debug(f"Fetching device config for port profiles and descriptions")
+            try:
+                device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                device_config = device_config_response.data
+                port_config = device_config.get("port_config", {})
+            except Exception as cfg_error:
+                logging.warning(f"Could not fetch device config for port details: {cfg_error}")
+                port_config = {}
+            
+            # Build a mapping from individual port names to their config
+            port_to_config = {}
+            if port_config:
+                logging.info(f"Building port_to_config mapping from {len(port_config)} port_config entries")
+                for port_range_key, cfg in port_config.items():
+                    expanded_ports = _expand_port_range_string(port_range_key)
+                    logging.debug(f"Port config key '{port_range_key}' expands to {len(expanded_ports)} ports")
+                    for individual_port in expanded_ports:
+                        port_to_config[individual_port] = cfg
+                logging.info(f"Created port_to_config mapping with {len(port_to_config)} individual port entries")
+            else:
+                logging.warning("No port_config available to build mapping")
+            
+            if not port_stat:
+                logging.warning(f"No port_stat found in device stats for device {device_id}")
+                logging.debug(f"Attempting to get port configuration from device config instead")
+                
+                try:
+                    if port_config:
+                        logging.info(f"Found {len(port_config)} configured port entries in device config")
+                        port_stat = {}
+                        for port_range_key, port_cfg in port_config.items():
+                            expanded_ports = _expand_port_range_string(port_range_key)
+                            logging.debug(f"Expanded port range '{port_range_key}' to {len(expanded_ports)} ports")
+                            
+                            for individual_port in expanded_ports:
+                                usage = port_cfg.get("usage", "")
+                                port_up = usage not in ["disabled", "", None]
+                                speed_value = port_cfg.get("speed", "N/A")
+                                duplex_value = port_cfg.get("duplex", "N/A")
+                                full_duplex = duplex_value == "full" or duplex_value == "auto"
+                                
+                                port_stat[individual_port] = {
+                                    "up": port_up,
+                                    "speed": speed_value,
+                                    "full_duplex": full_duplex,
+                                    "duplex": duplex_value,
+                                    "_fallback": True
+                                }
+                        
+                        logging.info(f"Expanded to {len(port_stat)} individual ports")
+                    else:
+                        print(f"\n! No port information available for {device_type}: {device_name}")
+                        print(f"  This device may be offline or not yet reporting statistics.")
+                        logging.warning(f"No port_stat or port_config found for device {device_id}")
+                        return None
+                        
+                except Exception as config_error:
+                    print(f"\n! No port information available for {device_type}: {device_name}")
+                    print(f"  This device may be offline or not yet reporting statistics.")
+                    logging.error(f"Could not fetch device config: {config_error}")
+                    return None
+            
+            # Filter and sort ports
+            exclude_prefixes = ["fxp", "em", "me", "vme", "irb", "lo", "vlan", "bme", "cbp", "jsrv", "pip"]
+            available_ports = []
+            
+            for port_name, port_info in port_stat.items():
+                if any(port_name.startswith(prefix) for prefix in exclude_prefixes):
+                    logging.debug(f"Excluding management/service port: {port_name}")
+                    continue
+                
+                port_up = port_info.get("up", False)
+                if not port_up:
+                    logging.debug(f"Excluding DOWN port: {port_name}")
+                    continue
+                    
+                available_ports.append((port_name, port_info))
+            
+            if not available_ports:
+                print(f"\n! No network ports available for {device_type}: {device_name}")
+                logging.warning(f"No user-facing ports found for device {device_id}")
+                return None
+            
+            # Sort ports naturally
+            def natural_sort_key(port_tuple):
+                port_name = port_tuple[0]
+                import re
+                parts = re.split(r'(\d+)', port_name)
+                return [int(part) if part.isdigit() else part for part in parts]
+            
+            available_ports = sorted(available_ports, key=natural_sort_key)
+            
+            # Prepare selection table
+            table = PrettyTable()
+            table.field_names = ["Index", "Port Name", "Status", "Speed", "Duplex", "Profile", "Description"]
+            table.max_width = 120
+            table.align["Description"] = "l"
+            table.align["Profile"] = "l"
+            index_to_port = {}
+            
+            for idx, (port_name, port_info) in enumerate(available_ports):
+                port_up = port_info.get("up", False)
+                status = "UP" if port_up else "DOWN"
+                
+                speed = port_info.get("speed", "N/A")
+                if isinstance(speed, str):
+                    speed_str = speed.upper()
+                    if speed_str == "AUTO":
+                        speed_str = "Auto"
+                    elif speed_str.endswith("G"):
+                        try:
+                            gig_value = int(speed_str[:-1])
+                            speed_str = f"{gig_value * 1000} Mbps"
+                        except ValueError:
+                            speed_str = speed
+                elif isinstance(speed, (int, float)) and speed > 0:
+                    speed_str = f"{speed} Mbps"
+                else:
+                    speed_str = "N/A"
+                
+                duplex_value = port_info.get("duplex", "")
+                if duplex_value:
+                    if duplex_value == "full":
+                        duplex_str = "Full"
+                    elif duplex_value == "half":
+                        duplex_str = "Half"
+                    elif duplex_value == "auto":
+                        duplex_str = "Auto"
+                    else:
+                        duplex_str = str(duplex_value).capitalize()
+                else:
+                    full_duplex = port_info.get("full_duplex", False)
+                    duplex_str = "Full" if full_duplex else "Half"
+                
+                port_cfg = port_to_config.get(port_name, {})
+                port_profile = port_cfg.get("port_profile", "N/A")
+                port_description = port_cfg.get("description", "")
+                
+                if len(port_description) > 30:
+                    port_description = port_description[:27] + "..."
+                if not port_description:
+                    port_description = "-"
+                
+                table.add_row([idx, port_name, status, speed_str, duplex_str, port_profile, port_description])
+                index_to_port[idx] = port_name
+            
+            print("\n" + "=" * 80)
+            print(f" SELECT PORTS FROM {device_type.upper()}: {device_name}")
+            print("=" * 80)
+            print(f"  Device MAC: {device_mac}")
+            print(f"  Available Ports: {len(available_ports)}")
+            
+            using_fallback = any(port_info.get("_fallback", False) for _, port_info in available_ports)
+            if using_fallback:
+                print(f"  NOTE: Speed/Duplex showing configured values (device stats unavailable)")
+            
+            print("=" * 80)
+            print(table)
+            print("\n" + "!" * 80)
+            print("  API LIMITATION: Maximum 6 ports per capture")
+            print("!" * 80)
+            print("\nPort Selection Options:")
+            print("  - Enter a single index (e.g., '0') for one port")
+            print("  - Enter multiple indices separated by commas (e.g., '0,2,5')")
+            print("  - Enter a range (e.g., '0-3' for ports 0, 1, 2, 3)")
+            if len(available_ports) <= 6:
+                print("  - Press Enter with no input to capture on ALL ports (default)")
+            else:
+                print("  - Press Enter with no input to capture on ALL ports (NOT AVAILABLE - exceeds 6 port limit)")
+            print("  - Enter 'c' to cancel")
+            
+            user_input = safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
+            logging.debug(f"User input for port selection: {user_input}")
+            
+            if user_input.lower() == 'c':
+                print("\n! Port selection cancelled")
+                logging.info("Port selection cancelled by user")
+                return None
+            
+            if not user_input or user_input.lower() == 'all':
+                if len(available_ports) > 6:
+                    print(f"\n! ERROR: Cannot select all {len(available_ports)} ports - API maximum is 6 ports per capture")
+                    print(f"  Please select up to 6 specific ports from the list above")
+                    logging.error(f"User attempted to select all {len(available_ports)} ports, exceeds API limit of 6")
+                    return None
+                
+                print(f"\n! Selected ALL {len(available_ports)} ports for capture")
+                logging.info(f"User selected all {len(available_ports)} ports (within 6-port limit)")
+                if return_available:
+                    return [], available_ports
+                return []
+            
+            selected_indices = set()
+            
+            try:
+                parts = user_input.split(',')
+                for part in parts:
+                    part = part.strip()
+                    
+                    if '-' in part:
+                        range_parts = part.split('-')
+                        if len(range_parts) == 2:
+                            start_idx = int(range_parts[0].strip())
+                            end_idx = int(range_parts[1].strip())
+                            for i in range(start_idx, end_idx + 1):
+                                if i in index_to_port:
+                                    selected_indices.add(i)
+                                else:
+                                    print(f"\n! Warning: Index {i} is out of range, skipping")
+                                    logging.warning(f"Invalid port index in range: {i}")
+                    else:
+                        idx = int(part)
+                        if idx in index_to_port:
+                            selected_indices.add(idx)
+                        else:
+                            print(f"\n! Warning: Index {idx} is out of range, skipping")
+                            logging.warning(f"Invalid port index: {idx}")
+                
+                if not selected_indices:
+                    print("\n! No valid ports selected")
+                    logging.error("No valid port indices provided")
+                    return None
+                
+                selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]
+                
+                if len(selected_ports) > 6:
+                    print(f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture")
+                    print(f"  Please refine your selection to 6 or fewer ports")
+                    logging.error(f"User selected {len(selected_ports)} ports, exceeds API limit of 6")
+                    return None
+                
+                print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")
+                logging.info(f"User selected ports: {selected_ports}")
+                if return_available:
+                    return selected_ports, available_ports
+                return selected_ports
+                
+            except ValueError as value_error:
+                print(f"\n! Invalid input format: {value_error}")
+                logging.error(f"Port selection parse error: {value_error}")
+                return None
+                
+        except Exception as error:
+            print(f"\n! Error fetching port information: {error}")
+            logging.error(f"Exception in PromptUtils.select_ports_from_device: {error}", exc_info=True)
+            return None
 
 
 # Backward compatibility - original function definitions follow
@@ -8634,405 +8960,6 @@ def _expand_port_range_string(port_range_string: str) -> list:
             expanded_ports.append(port_part)
     
     return expanded_ports
-
-def prompt_select_ports_from_device(site_id: str, device_mac: str, device_type: str = "switch", return_available: bool = False):
-    """
-    Prompts the user to select one or more ports from a device (switch or gateway).
-    Displays port status information from device stats.
-    
-    Args:
-        site_id (str): The site ID where the device is located
-        device_mac (str): The MAC address of the device
-        device_type (str): Type of device ("switch" or "gateway") for display purposes
-        return_available (bool): If True, return tuple of (selected_ports, available_ports)
-    
-    Returns:
-        list or tuple: List of selected port names (e.g., ["ge-0/0/0", "ge-0/0/1"]) or empty list for all ports, or None on error.
-                      If return_available=True, returns (selected_ports, available_ports) where available_ports is list of (name, data) tuples.
-    """
-    logging.debug(f"Fetching port information for {device_type} {device_mac} at site {site_id}")
-    
-    try:
-        # Normalize the input MAC for comparison (remove colons, lowercase)
-        normalized_input_mac = str(device_mac).replace(":", "").replace("-", "").lower()
-        logging.debug(f"Normalized input MAC for comparison: {normalized_input_mac}")
-        
-        # First get device ID from MAC
-        devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type)
-        devices = devices_response.data
-        
-        device = None
-        for dev in devices:
-            dev_mac = dev.get("mac", "")
-            # Normalize device MAC for comparison
-            normalized_dev_mac = str(dev_mac).replace(":", "").replace("-", "").lower()
-            logging.debug(f"Comparing device {dev.get('name', 'Unknown')}: {dev_mac} (normalized: {normalized_dev_mac})")
-            
-            if normalized_dev_mac == normalized_input_mac:
-                device = dev
-                logging.debug(f"MAC match found for device: {dev.get('name', 'Unknown')}")
-                break
-        
-        if not device:
-            print(f"\n! Could not find {device_type} with MAC {device_mac}")
-            logging.error(f"Device not found with MAC: {device_mac} (normalized: {normalized_input_mac})")
-            logging.error(f"Available devices: {[d.get('mac') for d in devices]}")
-            return None
-        
-        device_id = device.get("id")
-        device_name = device.get("name", "Unknown")
-        
-        # Get device stats which includes port information
-        logging.debug(f"Fetching device stats for device_id: {device_id}")
-        # Get port statistics using the appropriate API for the device type
-        # Switches and Gateways: Use searchSiteSwOrGwPorts for detailed port-level stats
-        # APs: Use getSiteDeviceStats which includes port_stat
-        port_stat = {}
-        
-        if device_type in ["switch", "gateway"]:
-            # For switches/gateways, use dedicated port search API
-            logging.info(f"Fetching switch/gateway port stats using searchSiteSwOrGwPorts for device {device_id}")
-            try:
-                ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
-                    apisession, 
-                    site_id,
-                    mac=device_mac,  # Filter by device MAC
-                    limit=1000  # Get all ports
-                )
-                ports_results = ports_search_response.data.get("results", [])
-                logging.info(f"Retrieved {len(ports_results)} port stat entries from searchSiteSwOrGwPorts")
-                
-                # Convert array of port objects to dict keyed by port_id
-                for port_obj in ports_results:
-                    port_id = port_obj.get("port_id")
-                    if port_id:
-                        port_stat[port_id] = port_obj
-                        
-                if port_stat:
-                    logging.info(f"Successfully converted {len(port_stat)} switch/gateway ports to dict format")
-                    # Log sample port for debugging
-                    if port_stat:
-                        sample_port = list(port_stat.keys())[0]
-                        sample_data = port_stat[sample_port]
-                        logging.debug(f"Sample port '{sample_port}' data: speed={sample_data.get('speed')}, full_duplex={sample_data.get('full_duplex')}, up={sample_data.get('up')}")
-                else:
-                    logging.warning(f"searchSiteSwOrGwPorts returned no port data for device {device_mac}")
-                    
-            except Exception as port_search_error:
-                logging.error(f"Error fetching switch/gateway port stats: {port_search_error}")
-                logging.debug(f"Traceback: ", exc_info=True)
-        else:
-            # For APs, use getSiteDeviceStats which includes port_stat
-            logging.info(f"Fetching AP port stats using getSiteDeviceStats for device {device_id}")
-            stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            stats_data = stats_response.data
-            
-            if "port_stat" in stats_data:
-                port_stat = stats_data.get("port_stat", {})
-                logging.info(f"Found port_stat (AP-style) with {len(port_stat)} ports")
-            else:
-                logging.warning(f"No port_stat found in AP stats for device {device_id}")
-        
-        # Also get device config for port profiles and descriptions
-        # This is needed regardless of whether port_stat exists
-        logging.debug(f"Fetching device config for port profiles and descriptions")
-        try:
-            device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            device_config = device_config_response.data
-            port_config = device_config.get("port_config", {})
-        except Exception as cfg_error:
-            logging.warning(f"Could not fetch device config for port details: {cfg_error}")
-            port_config = {}
-        
-        # Build a mapping from individual port names to their config (handles port ranges)
-        port_to_config = {}
-        if port_config:
-            logging.info(f"Building port_to_config mapping from {len(port_config)} port_config entries")
-            for port_range_key, cfg in port_config.items():
-                expanded_ports = _expand_port_range_string(port_range_key)
-                logging.debug(f"Port config key '{port_range_key}' expands to {len(expanded_ports)} ports, has profile: {cfg.get('port_profile', 'NONE')}")
-                for individual_port in expanded_ports:
-                    port_to_config[individual_port] = cfg
-            logging.info(f"Created port_to_config mapping with {len(port_to_config)} individual port entries")
-        else:
-            logging.warning("No port_config available to build mapping")
-        
-        if not port_stat:
-            logging.warning(f"No port_stat found in device stats for device {device_id}")
-            logging.debug(f"Attempting to get port configuration from device config instead")
-            
-            # Fallback: Try to get port information from device configuration
-            # Note: port_config was already fetched above, so we can use it here
-            try:
-                if port_config:
-                    logging.info(f"Found {len(port_config)} configured port entries in device config")
-                    # Use port_config as source instead of port_stat
-                    # Convert port_config format to port_stat-like format for consistency
-                    # NOTE: port_config keys may be port RANGES like "ge-0/0/0-2, ge-0/1/2-3"
-                    # We need to expand these to individual port names for display and API submission
-                    port_stat = {}
-                    for port_range_key, port_cfg in port_config.items():
-                        # Expand port ranges to individual port names
-                        expanded_ports = _expand_port_range_string(port_range_key)
-                        logging.debug(f"Expanded port range '{port_range_key}' to {len(expanded_ports)} ports: {expanded_ports}")
-                        
-                        for individual_port in expanded_ports:
-                            # Create a port_stat-like entry from port_config
-                            # NOTE: These are CONFIGURED values, not actual operational stats
-                            # When stats are unavailable, we show config as a fallback
-                            usage = port_cfg.get("usage", "")
-                            
-                            # Determine if port is up based on usage
-                            port_up = usage not in ["disabled", "", None]
-                            
-                            # Get speed from port_config (configured, not actual)
-                            speed_value = port_cfg.get("speed", "N/A")
-                            
-                            # Get duplex from port_config (configured, not actual)
-                            duplex_value = port_cfg.get("duplex", "N/A")
-                            full_duplex = duplex_value == "full" or duplex_value == "auto"
-                            
-                            port_stat[individual_port] = {
-                                "up": port_up,
-                                "speed": speed_value,
-                                "full_duplex": full_duplex,
-                                "duplex": duplex_value,
-                                "_fallback": True  # Flag to indicate this is config, not stats
-                            }
-                    
-                    logging.info(f"Expanded to {len(port_stat)} individual ports")
-                else:
-                    print(f"\n! No port information available for {device_type}: {device_name}")
-                    print(f"  This device may be offline or not yet reporting statistics.")
-                    logging.warning(f"No port_stat or port_config found for device {device_id}")
-                    return None
-                    
-            except Exception as config_error:
-                print(f"\n! No port information available for {device_type}: {device_name}")
-                print(f"  This device may be offline or not yet reporting statistics.")
-                logging.error(f"Could not fetch device config: {config_error}")
-                return None
-        
-        # NOTE: We do NOT enrich port_stat with config data for speed/duplex
-        # Speed and duplex should come from live stats (actual operational values)
-        # Only port_profile and description come from config
-        
-        # Filter and sort ports (exclude management/internal ports and DOWN ports)
-        # Management/service ports to exclude: fxp, em, me, vme, irb, lo, vlan, bme, cbp, jsrv, pip
-        exclude_prefixes = ["fxp", "em", "me", "vme", "irb", "lo", "vlan", "bme", "cbp", "jsrv", "pip"]
-        available_ports = []
-        
-        for port_name, port_info in port_stat.items():
-            # Skip internal/management/service ports
-            if any(port_name.startswith(prefix) for prefix in exclude_prefixes):
-                logging.debug(f"Excluding management/service port: {port_name}")
-                continue
-            
-            # Skip DOWN ports to keep table focused on active connections
-            port_up = port_info.get("up", False)
-            if not port_up:
-                logging.debug(f"Excluding DOWN port: {port_name}")
-                continue
-                
-            available_ports.append((port_name, port_info))
-        
-        if not available_ports:
-            print(f"\n! No network ports available for {device_type}: {device_name}")
-            logging.warning(f"No user-facing ports found for device {device_id}")
-            return None
-        
-        # Sort ports naturally (ge-0/0/0, ge-0/0/1, etc.)
-        def natural_sort_key(port_tuple):
-            port_name = port_tuple[0]
-            # Extract numbers for sorting
-            import re
-            parts = re.split(r'(\d+)', port_name)
-            return [int(part) if part.isdigit() else part for part in parts]
-        
-        available_ports = sorted(available_ports, key=natural_sort_key)
-        
-        # Prepare selection table with profile and description
-        table = PrettyTable()
-        table.field_names = ["Index", "Port Name", "Status", "Speed", "Duplex", "Profile", "Description"]
-        table.max_width = 120  # Allow wider table for descriptions
-        table.align["Description"] = "l"  # Left-align descriptions
-        table.align["Profile"] = "l"  # Left-align profiles
-        index_to_port = {}
-        
-        for idx, (port_name, port_info) in enumerate(available_ports):
-            port_up = port_info.get("up", False)
-            status = "UP" if port_up else "DOWN"
-            
-            # Get speed - handle various formats
-            speed = port_info.get("speed", "N/A")
-            if isinstance(speed, str):
-                # Handle string values like "auto", "1g", "10g"
-                speed_str = speed.upper()
-                if speed_str == "AUTO":
-                    speed_str = "Auto"
-                elif speed_str.endswith("G"):
-                    # Convert "1g" to "1000 Mbps", "10g" to "10000 Mbps"
-                    try:
-                        gig_value = int(speed_str[:-1])
-                        speed_str = f"{gig_value * 1000} Mbps"
-                    except ValueError:
-                        speed_str = speed
-            elif isinstance(speed, (int, float)) and speed > 0:
-                speed_str = f"{speed} Mbps"
-            else:
-                speed_str = "N/A"
-            
-            # Get duplex - show actual mode (Full/Half/Auto)
-            duplex_value = port_info.get("duplex", "")
-            if duplex_value:
-                if duplex_value == "full":
-                    duplex_str = "Full"
-                elif duplex_value == "half":
-                    duplex_str = "Half"
-                elif duplex_value == "auto":
-                    duplex_str = "Auto"
-                else:
-                    duplex_str = str(duplex_value).capitalize()
-            else:
-                # Fallback to full_duplex boolean
-                full_duplex = port_info.get("full_duplex", False)
-                duplex_str = "Full" if full_duplex else "Half"
-            
-            # Get port profile and description from config mapping
-            port_cfg = port_to_config.get(port_name, {})
-            port_profile = port_cfg.get("port_profile", "N/A")
-            port_description = port_cfg.get("description", "")
-            
-            # Log if we have config but no profile
-            if port_cfg and port_profile == "N/A":
-                logging.debug(f"Port {port_name} has config but no port_profile field. Config keys: {list(port_cfg.keys())}")
-            
-            # Truncate description if too long
-            if len(port_description) > 30:
-                port_description = port_description[:27] + "..."
-            if not port_description:
-                port_description = "-"
-            
-            table.add_row([
-                idx,
-                port_name,
-                status,
-                speed_str,
-                duplex_str,
-                port_profile,
-                port_description
-            ])
-            index_to_port[idx] = port_name
-        
-        print("\n" + "=" * 80)
-        print(f" SELECT PORTS FROM {device_type.upper()}: {device_name}")
-        print("=" * 80)
-        print(f"  Device MAC: {device_mac}")
-        print(f"  Available Ports: {len(available_ports)}")
-        
-        # Check if we're showing fallback data
-        using_fallback = any(port_info.get("_fallback", False) for _, port_info in available_ports)
-        if using_fallback:
-            print(f"  NOTE: Speed/Duplex showing configured values (device stats unavailable)")
-        
-        print("=" * 80)
-        print(table)
-        print("\n" + "!" * 80)
-        print("  API LIMITATION: Maximum 6 ports per capture")
-        print("!" * 80)
-        print("\nPort Selection Options:")
-        print("  - Enter a single index (e.g., '0') for one port")
-        print("  - Enter multiple indices separated by commas (e.g., '0,2,5')")
-        print("  - Enter a range (e.g., '0-3' for ports 0, 1, 2, 3)")
-        if len(available_ports) <= 6:
-            print("  - Press Enter with no input to capture on ALL ports (default)")
-        else:
-            print("  - Press Enter with no input to capture on ALL ports (NOT AVAILABLE - exceeds 6 port limit)")
-        print("  - Enter 'c' to cancel")
-        
-        user_input = safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
-        logging.debug(f"User input for port selection: {user_input}")
-        
-        # Handle cancel
-        if user_input.lower() == 'c':
-            print("\n! Port selection cancelled")
-            logging.info("Port selection cancelled by user")
-            return None
-        
-        # Handle empty input or 'all' - check if within 6-port limit
-        if not user_input or user_input.lower() == 'all':
-            if len(available_ports) > 6:
-                print(f"\n! ERROR: Cannot select all {len(available_ports)} ports - API maximum is 6 ports per capture")
-                print(f"  Please select up to 6 specific ports from the list above")
-                logging.error(f"User attempted to select all {len(available_ports)} ports, exceeds API limit of 6")
-                return None
-            
-            print(f"\n! Selected ALL {len(available_ports)} ports for capture")
-            logging.info(f"User selected all {len(available_ports)} ports (within 6-port limit)")
-            if return_available:
-                return [], available_ports
-            return []  # Empty list signals "all ports"
-        
-        # Parse user selection
-        selected_indices = set()
-        
-        try:
-            # Split by commas
-            parts = user_input.split(',')
-            for part in parts:
-                part = part.strip()
-                
-                # Check for range (e.g., "0-3")
-                if '-' in part:
-                    range_parts = part.split('-')
-                    if len(range_parts) == 2:
-                        start_idx = int(range_parts[0].strip())
-                        end_idx = int(range_parts[1].strip())
-                        for i in range(start_idx, end_idx + 1):
-                            if i in index_to_port:
-                                selected_indices.add(i)
-                            else:
-                                print(f"\n! Warning: Index {i} is out of range, skipping")
-                                logging.warning(f"Invalid port index in range: {i}")
-                else:
-                    # Single index
-                    idx = int(part)
-                    if idx in index_to_port:
-                        selected_indices.add(idx)
-                    else:
-                        print(f"\n! Warning: Index {idx} is out of range, skipping")
-                        logging.warning(f"Invalid port index: {idx}")
-            
-            if not selected_indices:
-                print("\n! No valid ports selected")
-                logging.error("No valid port indices provided")
-                return None
-            
-            # Convert indices to port names
-            selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]
-            
-            # Validate 6-port API limit
-            if len(selected_ports) > 6:
-                print(f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture")
-                print(f"  Please refine your selection to 6 or fewer ports")
-                logging.error(f"User selected {len(selected_ports)} ports, exceeds API limit of 6")
-                return None
-            
-            print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")
-            logging.info(f"User selected ports: {selected_ports}")
-            if return_available:
-                return selected_ports, available_ports
-            return selected_ports
-            
-        except ValueError as value_error:
-            print(f"\n! Invalid input format: {value_error}")
-            logging.error(f"Port selection parse error: {value_error}")
-            return None
-            
-    except Exception as error:
-        print(f"\n! Error fetching port information: {error}")
-        logging.error(f"Exception in prompt_select_ports_from_device: {error}", exc_info=True)
-        return None
 
 def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
     """
