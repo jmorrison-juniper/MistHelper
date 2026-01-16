@@ -2415,54 +2415,79 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     }
 }
 
-def check_and_generate_csv(file_name, generate_function, freshness_minutes=None):
-    """
-    Checks if a CSV file exists and is fresh (modified within the last `freshness_minutes`).
-    If not, it runs the `generate_function` to regenerate the file.
-    freshness_minutes is now settable via the .env file as CSV_FRESHNESS_MINUTES.
-    """
-    logging.debug(f"ENTRY: check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})")
-    
-    if freshness_minutes is None:
-        freshness_minutes = CSV_FRESHNESS_MINUTES
-        
-    # Get the full path to the CSV file in the data directory
-    full_file_path = FilePathUtils.get_csv_path(file_name)
-    
-    # Check if the file already exists
-    if os.path.exists(full_file_path):
-        try:
-            # Get the last modified time of the file
-            file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
-            logging.debug(f"File I/O: Successfully read modification time for {full_file_path}: {file_mtime}")
-            
-            # Check if the file is still fresh
-            if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
-                # Log that the cached file is being used
-                logging.info(f"! Using cached {file_name} (fresh)")
-                logging.debug(f"EXIT: check_and_generate_csv - using cached file")
-                return True
-            else:
-                # Log that the file is stale and will be regenerated
-                logging.info(f"* {file_name} is older than {freshness_minutes} minutes. Regenerating...")
-        except OSError as e:
-            logging.error(f"File I/O: Failed to read modification time for {full_file_path}: {e}")
-            logging.info(f"* {file_name} exists but cannot read metadata. Regenerating...")
-    else:
-        # Log that the file does not exist and will be generated
-        logging.info(f"* {file_name} not found. Generating...")
 
-    # Call the function to generate the file
-    logging.info(f"* Running {generate_function.__name__} to generate {file_name}...")
-    try:
-        generate_function()
-        logging.info(f"! {file_name} generated or refreshed.")
-        logging.debug(f"EXIT: check_and_generate_csv - file generated successfully")
-        return True
-    except Exception as e:
-        logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {e}")
-        logging.debug(f"EXIT: check_and_generate_csv - generation failed")
-        return False
+# ============================================================================
+# CACHE UTILITIES CLASS
+# ============================================================================
+class CacheUtils:
+    """
+    Centralized cache management utilities.
+    Handles CSV caching, freshness checks, regeneration, etc.
+    """
+    
+    @staticmethod
+    def check_and_generate_csv(file_name: str, generate_function: Callable, freshness_minutes: Optional[int] = None) -> bool:
+        """
+        Checks if a CSV file exists and is fresh (modified within the last `freshness_minutes`).
+        If not, it runs the `generate_function` to regenerate the file.
+        freshness_minutes is now settable via the .env file as CSV_FRESHNESS_MINUTES.
+        
+        Args:
+            file_name: Name of the CSV file to check/generate
+            generate_function: Function to call to generate the file
+            freshness_minutes: Optional override for cache freshness threshold
+        
+        Returns:
+            bool: True if file exists and is fresh or was generated successfully
+        """
+        logging.debug(f"ENTRY: check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})")
+        
+        if freshness_minutes is None:
+            freshness_minutes = CSV_FRESHNESS_MINUTES
+            
+        # Get the full path to the CSV file in the data directory
+        full_file_path = FilePathUtils.get_csv_path(file_name)
+        
+        # Check if the file already exists
+        if os.path.exists(full_file_path):
+            try:
+                # Get the last modified time of the file
+                file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
+                logging.debug(f"File I/O: Successfully read modification time for {full_file_path}: {file_mtime}")
+                
+                # Check if the file is still fresh
+                if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
+                    # Log that the cached file is being used
+                    logging.info(f"! Using cached {file_name} (fresh)")
+                    logging.debug(f"EXIT: check_and_generate_csv - using cached file")
+                    return True
+                else:
+                    # Log that the file is stale and will be regenerated
+                    logging.info(f"* {file_name} is older than {freshness_minutes} minutes. Regenerating...")
+            except OSError as error:
+                logging.error(f"File I/O: Failed to read modification time for {full_file_path}: {error}")
+                logging.info(f"* {file_name} exists but cannot read metadata. Regenerating...")
+        else:
+            # Log that the file does not exist and will be generated
+            logging.info(f"* {file_name} not found. Generating...")
+
+        # Call the function to generate the file
+        logging.info(f"* Running {generate_function.__name__} to generate {file_name}...")
+        try:
+            generate_function()
+            logging.info(f"! {file_name} generated or refreshed.")
+            logging.debug(f"EXIT: check_and_generate_csv - file generated successfully")
+            return True
+        except Exception as error:
+            logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
+            logging.debug(f"EXIT: check_and_generate_csv - generation failed")
+            return False
+
+
+# Backward compatibility wrapper - will be removed in future version
+def check_and_generate_csv(file_name: str, generate_function: Callable, freshness_minutes: Optional[int] = None) -> bool:
+    """Legacy function - use CacheUtils.check_and_generate_csv() instead."""
+    return CacheUtils.check_and_generate_csv(file_name, generate_function, freshness_minutes)
 
 
 # ============================================================================
