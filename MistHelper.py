@@ -21998,66 +21998,9 @@ def apply_business_context_rules(mist_result, comparison_result, debug=False):
     return 'uncertain'
 
 
-def parse_address_components(address_string, debug=False):
-    """
-    Parse address components with defensive parsing and robust heuristics.
-    Backward compatibility shim - delegates to AddressUtils.parse_components().
-    
-    Args:
-        address_string (str): Raw address string
-        debug (bool): Enable debug logging
-        
-    Returns:
-        dict: Parsed address components
-    """
-    return AddressUtils.parse_components(address_string, debug)
-
-def enhanced_usaddress_parse(address_string, debug=False):
-    """
-    Enhanced address parsing using usaddress-scourgify for US addresses.
-    Backward compatibility shim - delegates to AddressUtils.enhanced_parse().
-    
-    Args:
-        address_string (str): Raw address string
-        debug (bool): Enable debug logging
-        
-    Returns:
-        dict: Parsed address components
-    """
-    return AddressUtils.enhanced_parse(address_string, debug)
-
 def calculate_string_similarity(str1, str2):
     """Backward compatibility wrapper - delegates to AddressUtils.calculate_similarity()."""
     return AddressUtils.calculate_similarity(str1, str2)
-
-def check_address_should_skip(comparison_address, skip_addresses, debug=False):
-    """
-    Backward compatibility shim - delegates to AddressUtils.check_should_skip().
-    
-    Args:
-        comparison_address (dict): Address from comparison CSV to check
-        skip_addresses (list): List of addresses to skip from AddressSkip.csv
-        debug (bool): Enable debug logging
-        
-    Returns:
-        tuple: (should_skip: bool, skip_reason: str)
-    """
-    return AddressUtils.check_should_skip(comparison_address, skip_addresses, debug)
-
-def enhanced_compare_addresses_with_threshold(mist_address, comparison_address, threshold, debug=False):
-    """
-    Backward compatibility shim - delegates to AddressUtils.compare_with_threshold().
-    
-    Args:
-        mist_address (dict): Dictionary with address keys
-        comparison_address (dict): Dictionary with address keys  
-        threshold (float): Minimum similarity percentage for match
-        debug (bool): Enable debug logging
-        
-    Returns:
-        dict: Comparison result with similarity scores
-    """
-    return AddressUtils.compare_with_threshold(mist_address, comparison_address, threshold, debug)
 
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
@@ -22578,7 +22521,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 }
             else:
                 # Use enhanced parsing for combined address
-                parsed_mist = enhanced_usaddress_parse(mist_address_raw, debug=debug)
+                parsed_mist = AddressUtils.enhanced_parse(mist_address_raw, debug=debug)
                 if not parsed_mist['is_parseable']:
                     # Document parsing failure
                     failure_record = {
@@ -22623,7 +22566,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             comparison_address_raw = f"{comparison_address_data.get('Address', '')}, {comparison_address_data.get('City', '')}, {comparison_address_data.get('State', '')}, {comparison_address_data.get('Zip', '')}".strip(", ")
             
             if comparison_address_raw and comparison_address_raw != "   ":
-                parsed_comp = enhanced_usaddress_parse(comparison_address_raw, debug=debug)
+                parsed_comp = AddressUtils.enhanced_parse(comparison_address_raw, debug=debug)
                 if not parsed_comp['is_parseable']:
                     # Document parsing failure for comparison address
                     failure_record = {
@@ -22659,7 +22602,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Comparison address: {comparison_address}")
             
             # Enhanced address comparison with defensive parsing
-            comparison_result = enhanced_compare_addresses_with_threshold(
+            comparison_result = AddressUtils.compare_with_threshold(
                 mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD, debug=debug
             )
             
@@ -22733,7 +22676,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         device_serial = conflict['device_serial']
         
         # Check if comparison address should be automatically skipped
-        should_skip, skip_reason = check_address_should_skip(comparison_address, skip_addresses, debug=debug)
+        should_skip, skip_reason = AddressUtils.check_should_skip(comparison_address, skip_addresses, debug=debug)
         
         if should_skip:
             # Automatically treat as a match (Mist address is correct)
