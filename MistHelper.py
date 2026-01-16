@@ -1855,34 +1855,6 @@ def ensure_tqdm_available():
         logging.warning("tqdm package is not available - progress bars will be disabled")
         return False
 
-def clean_unicode_for_logging(message):
-    """Clean Unicode characters from log messages to prevent encoding errors on Windows."""
-    if isinstance(message, str):
-        # Replace common Unicode characters with ASCII equivalents
-        replacements = {
-            'OK': '[OK]',
-            'FAIL': '[FAIL]',
-            'WARN': '[WARN]',
-            '*': '*',
-            '-': '-',
-            '-': '-',
-            '-': '-',
-            ''': "'",
-            ''': "'",
-            '"': '"',
-            '"': '"',
-        }
-        for unicode_char, ascii_replacement in replacements.items():
-            message = message.replace(unicode_char, ascii_replacement)
-        
-        # Remove any remaining non-ASCII characters
-        message = message.encode('ascii', 'replace').decode('ascii')
-    return message
-
-def safe_print(message):
-    """Print message with Unicode characters cleaned for Windows compatibility."""
-    print(clean_unicode_for_logging(str(message)))
-
 def safe_input(prompt, default_value="", allow_empty=True, context="unknown"):
     """
     Safely handle user input with proper EOF and KeyboardInterrupt handling.
