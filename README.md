@@ -550,6 +550,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.20.30",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "APIFetchUtils: Updated 7 call sites to use class methods directly",
+          "InteractiveDisplayUtils: Updated menu dispatcher to use class methods for options 71-74",
+          "TroubleshootUtils: Updated poll_marvis_actions to use class methods for troubleshooting calls"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.20.00",
       "date": "2026-01-16",
       "changes": {

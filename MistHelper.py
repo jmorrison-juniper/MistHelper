@@ -10760,7 +10760,7 @@ def service_ping_device_websocket():
         
         # Fetch organization services first (primary source)
         print("\n-> Fetching organization services...")
-        org_services = fetch_organization_services()
+        org_services = APIFetchUtils.organization_services()
         available_org_services = []
         
         if org_services:
@@ -10773,7 +10773,7 @@ def service_ping_device_websocket():
         
         # Fetch organization tenants from networks (primary source)
         print("-> Fetching organization tenants...")
-        org_tenants = fetch_organization_tenants()
+        org_tenants = APIFetchUtils.organization_tenants()
         available_org_tenants = []
         
         if org_tenants:
@@ -10786,7 +10786,7 @@ def service_ping_device_websocket():
         
         # Fetch site tenants from derived networks (secondary source)
         print("-> Fetching site tenants...")
-        site_tenants = fetch_site_tenants(site_id)
+        site_tenants = APIFetchUtils.site_tenants(site_id)
         available_site_tenants = []
         
         if site_tenants:
@@ -10799,7 +10799,7 @@ def service_ping_device_websocket():
         
         # Fetch tenants from service policies (tertiary source)
         print("-> Fetching service policy tenants...")
-        service_policy_tenants = fetch_service_policy_tenants(site_id)
+        service_policy_tenants = APIFetchUtils.service_policy_tenants(site_id)
         available_service_policy_tenants = []
         
         if service_policy_tenants:
@@ -10812,7 +10812,7 @@ def service_ping_device_websocket():
         
         # Fetch tenants from gateway templates (quaternary source)
         print("-> Fetching gateway template tenants...")
-        gateway_template_tenants = fetch_gateway_template_tenants(site_id)
+        gateway_template_tenants = APIFetchUtils.gateway_template_tenants(site_id)
         available_gateway_template_tenants = []
         
         if gateway_template_tenants:
@@ -17418,7 +17418,7 @@ def export_site_settings_to_csv():
     logging.debug(f"Using org_id: {org_id} for site settings export.")
 
     # Fetch all site settings using the helper function
-    data = fetch_all_site_settings_from_api(apisession, org_id, limit=1000)
+    data = APIFetchUtils.all_site_settings(apisession, org_id, limit=1000)
     if data:
         logging.info(f"Fetched settings for {len(data)} sites. Flattening and sanitizing data...")
         # Flatten nested fields for CSV compatibility
@@ -18570,14 +18570,14 @@ def poll_marvis_actions():
     logging.debug(f"MARVIS DEBUG: User selected option: {choice}")
     
     if choice == "1":
-        logging.debug("MARVIS DEBUG: Calling troubleshoot_client_connectivity()")
-        troubleshoot_client_connectivity()
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")
+        TroubleshootUtils.client_connectivity()
     elif choice == "2":
-        logging.debug("MARVIS DEBUG: Calling troubleshoot_device_performance()")
-        troubleshoot_device_performance()
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")
+        TroubleshootUtils.device_performance()
     elif choice == "3":
-        logging.debug("MARVIS DEBUG: Calling troubleshoot_network_connectivity()")
-        troubleshoot_network_connectivity()
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")
+        TroubleshootUtils.network_connectivity()
     elif choice == "4":
         logging.debug("MARVIS DEBUG: Calling view_marvis_insights()")
         view_marvis_insights()
@@ -20417,7 +20417,7 @@ def export_gateway_device_configs_to_csv(debug=False, fast=False):
     """
     logging.info("Starting export of all gateway device configurations...")
     org_id = get_cached_or_prompted_org_id()
-    data = fetch_gateway_device_configs_from_api(apisession, org_id, fast=fast)
+    data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)
     if not data:
         logging.warning(" No device configs found.")
         return
@@ -43938,10 +43938,10 @@ menu_actions = {
     
     # > Site Selection & Interactive Tools
     "70": (prompt_and_log_site_selection, "Select a site (used by other functions)"),
-    "71": (interactive_display_site_inventory, "View device inventory for a selected site"),
-    "72": (interactive_display_device_stats, "View statistics for a selected device at a site"),
-    "73": (interactive_display_device_tests, "View synthetic test stats for a selected gateway device"),
-    "74": (interactive_display_device_config, "View configuration details for a selected device"),
+    "71": (InteractiveDisplayUtils.site_inventory, "View device inventory for a selected site"),
+    "72": (InteractiveDisplayUtils.device_stats, "View statistics for a selected device at a site"),
+    "73": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
+    "74": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
     
     # > Continuous Operations & Monitoring
     "75": (lambda debug=False: loop_refresh_core_datasets(delay=None, debug=debug), "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'"),
