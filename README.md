@@ -550,6 +550,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.18.45",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "RoutingUtils: Removed 13 wrapper functions per agents.md no-wrapper rule",
+          "RoutingUtils: Updated all call sites to use class methods directly (RoutingUtils.parse_forwarding_table, etc.)",
+          "Code Quality: Call sites now reference RoutingUtils class methods without intermediate wrappers"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.05.30",
       "date": "2026-01-16",
       "changes": {
@@ -558,8 +569,7 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
           "RoutingUtils: parse_forwarding_table, display_forwarding_summary, display_prefix_table_impl now in class",
           "RoutingUtils: parse_routing_table, parse_juniper_routing, parse_ssr_routing with full implementations",
           "RoutingUtils: display_routing_summary, display_routing_details, display_ssr_routing moved to class",
-          "RoutingUtils: Helper methods parse_standard_route_line, parse_protocol_route_line, parse_tabular_route_line, normalize_json_route_entry added",
-          "Backwards Compatibility: All original standalone functions retained as thin wrappers"
+          "RoutingUtils: Helper methods parse_standard_route_line, parse_protocol_route_line, parse_tabular_route_line, normalize_json_route_entry added"
         ]
       }
     },

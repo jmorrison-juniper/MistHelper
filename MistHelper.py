@@ -12321,72 +12321,6 @@ class RoutingUtils:
                 print(f"   {dest} | {next_hop} | {protocol} | {route_name} | {status} | {selection_reason} | {weight} | {metric} | {local_pref} | {as_path} | {vrf}")
 
 
-# Backward compatibility wrapper for parse_forwarding_table_output
-def parse_forwarding_table_output(raw_output):
-    """Backward compatibility wrapper for RoutingUtils.parse_forwarding_table."""
-    return RoutingUtils.parse_forwarding_table(raw_output)
-
-
-def display_forwarding_table_summary(entries):
-    """Backward compatibility wrapper for RoutingUtils.display_forwarding_summary."""
-    RoutingUtils.display_forwarding_summary(entries)
-
-
-def display_prefix_table(prefix, entries):
-    """Backward compatibility wrapper for RoutingUtils.display_prefix_table_impl."""
-    RoutingUtils.display_prefix_table_impl(prefix, entries)
-
-
-def parse_routing_table_output(raw_output):
-    """Backward compatibility wrapper for RoutingUtils.parse_routing_table."""
-    return RoutingUtils.parse_routing_table(raw_output)
-
-
-def parse_juniper_routing_table(raw_output):
-    """Backward compatibility wrapper for RoutingUtils.parse_juniper_routing."""
-    return RoutingUtils.parse_juniper_routing(raw_output)
-
-
-def parse_standard_route_line(line):
-    """Backward compatibility wrapper for RoutingUtils.parse_standard_route_line."""
-    return RoutingUtils.parse_standard_route_line(line)
-
-
-def parse_protocol_route_line(line):
-    """Backward compatibility wrapper for RoutingUtils.parse_protocol_route_line."""
-    return RoutingUtils.parse_protocol_route_line(line)
-
-
-def parse_tabular_route_line(line):
-    """Backward compatibility wrapper for RoutingUtils.parse_tabular_route_line."""
-    return RoutingUtils.parse_tabular_route_line(line)
-
-
-def normalize_json_route_entry(route_data):
-    """Backward compatibility wrapper for RoutingUtils.normalize_json_route_entry."""
-    return RoutingUtils.normalize_json_route_entry(route_data)
-
-
-def parse_ssr_routing_json(json_data):
-    """Backward compatibility wrapper for RoutingUtils.parse_ssr_routing."""
-    return RoutingUtils.parse_ssr_routing(json_data)
-
-
-def display_routing_table_summary(route_entries, query_params):
-    """Backward compatibility wrapper for RoutingUtils.display_routing_summary."""
-    RoutingUtils.display_routing_summary(route_entries, query_params)
-
-
-def display_routing_table_details(route_entries):
-    """Backward compatibility wrapper for RoutingUtils.display_routing_details."""
-    RoutingUtils.display_routing_details(route_entries)
-
-
-def display_ssr_routing_table(route_entries, query_params):
-    """Backward compatibility wrapper for RoutingUtils.display_ssr_routing."""
-    RoutingUtils.display_ssr_routing(route_entries, query_params)
-
-
 def show_forwarding_table_websocket():
     """
     Execute show forwarding table command on a gateway/SSR device via WebSocket.
@@ -12608,8 +12542,8 @@ def show_forwarding_table_websocket():
             # Parse and display forwarding table data in a user-friendly format
             raw_output = forwarding_table_result.get("raw", "")
             if raw_output:
-                forwarding_entries = parse_forwarding_table_output(raw_output)
-                display_forwarding_table_summary(forwarding_entries)
+                forwarding_entries = RoutingUtils.parse_forwarding_table(raw_output)
+                RoutingUtils.display_forwarding_summary(forwarding_entries)
             
             # Display any other output fields that might be present
             output_fields = forwarding_table_result.get("Output", "")
@@ -12617,8 +12551,8 @@ def show_forwarding_table_websocket():
                 print("\n" + "=" * 40)
                 print("ADDITIONAL OUTPUT:")
                 print("=" * 40)
-                additional_entries = parse_forwarding_table_output(output_fields)
-                display_forwarding_table_summary(additional_entries)
+                additional_entries = RoutingUtils.parse_forwarding_table(output_fields)
+                RoutingUtils.display_forwarding_summary(additional_entries)
                 
             # Show debug information if enabled
             if debug_mode:
@@ -12962,8 +12896,8 @@ def show_routing_table_websocket():
             # Parse and display routing table data in a user-friendly format
             raw_output = route_result.get("raw", "")
             if raw_output:
-                route_entries = parse_routing_table_output(raw_output)
-                display_routing_table_summary(route_entries, route_payload)
+                route_entries = RoutingUtils.parse_routing_table(raw_output)
+                RoutingUtils.display_routing_summary(route_entries, route_payload)
             
             # Display any other output fields that might be present
             output_fields = route_result.get("Output", "")
@@ -12971,8 +12905,8 @@ def show_routing_table_websocket():
                 print("\n" + "=" * 40)
                 print("ADDITIONAL OUTPUT:")
                 print("=" * 40)
-                additional_entries = parse_routing_table_output(output_fields)
-                display_routing_table_summary(additional_entries, route_payload)
+                additional_entries = RoutingUtils.parse_routing_table(output_fields)
+                RoutingUtils.display_routing_summary(additional_entries, route_payload)
                 
             # Show debug information if enabled
             if debug_mode:
@@ -13359,13 +13293,13 @@ def show_ssr_routes_dedicated():
                 raw_output = route_result.get("raw", "")
                 if raw_output:
                     # Try SSR JSON parser first
-                    route_entries = parse_ssr_routing_json(raw_output)
+                    route_entries = RoutingUtils.parse_ssr_routing(raw_output)
                     if route_entries:
-                        display_ssr_routing_table(route_entries, request_body)
+                        RoutingUtils.display_ssr_routing(route_entries, request_body)
                     else:
                         # Fallback to generic parser for other formats
-                        route_entries = parse_routing_table_output(raw_output)
-                        display_routing_table_summary(route_entries, request_body)
+                        route_entries = RoutingUtils.parse_routing_table(raw_output)
+                        RoutingUtils.display_routing_summary(route_entries, request_body)
                 
                 # Display any other output fields that might be present
                 output_fields = route_result.get("Output", "")
@@ -13373,12 +13307,12 @@ def show_ssr_routes_dedicated():
                     print("\n" + "=" * 40)
                     print("ADDITIONAL OUTPUT:")
                     print("=" * 40)
-                    additional_entries = parse_ssr_routing_json(output_fields)
+                    additional_entries = RoutingUtils.parse_ssr_routing(output_fields)
                     if additional_entries:
-                        display_ssr_routing_table(additional_entries, request_body)
+                        RoutingUtils.display_ssr_routing(additional_entries, request_body)
                     else:
-                        additional_entries = parse_routing_table_output(output_fields)
-                        display_routing_table_summary(additional_entries, request_body)
+                        additional_entries = RoutingUtils.parse_routing_table(output_fields)
+                        RoutingUtils.display_routing_summary(additional_entries, request_body)
                     
                 # Show debug information if enabled
                 if debug_mode:
