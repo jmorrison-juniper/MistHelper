@@ -21252,6 +21252,81 @@ class AddressUtils:
         import difflib
         similarity = difflib.SequenceMatcher(None, norm_str1, norm_str2).ratio()
         return similarity * 100
+    
+    @staticmethod
+    def check_should_skip(comparison_address, skip_addresses, debug=False):
+        """
+        Check if a comparison address should be automatically skipped.
+        
+        Args:
+            comparison_address (dict): Address from comparison CSV to check
+            skip_addresses (list): List of addresses to skip from AddressSkip.csv
+            debug (bool): Enable debug logging
+            
+        Returns:
+            tuple: (should_skip: bool, skip_reason: str)
+        """
+        if not skip_addresses:
+            return False, ""
+        
+        # Normalize comparison address fields for matching
+        comp_addr = str(comparison_address.get('address', '')).strip().upper()
+        comp_city = str(comparison_address.get('city', '')).strip().upper()
+        comp_state = str(comparison_address.get('state', '')).strip().upper()
+        comp_zip = str(comparison_address.get('zip', '')).strip().upper()
+        
+        for skip_entry in skip_addresses:
+            skip_addr = str(skip_entry.get('Skip_Address', '')).strip().upper()
+            skip_city = str(skip_entry.get('Skip_City', '')).strip().upper()
+            skip_state = str(skip_entry.get('Skip_State', '')).strip().upper()
+            skip_zip = str(skip_entry.get('Skip_Zip', '')).strip().upper()
+            skip_reason = skip_entry.get('Reason', 'Address in skip list')
+            
+            # Check for exact matches (case-insensitive)
+            if (comp_addr == skip_addr and 
+                comp_city == skip_city and 
+                comp_state == skip_state and 
+                comp_zip == skip_zip):
+                
+                if debug:
+                    logging.debug(f"ADDRESS_SKIP: Found exact match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+                return True, skip_reason
+                
+            # Check for partial matches (any field matches and others are empty in skip list)
+            partial_match = False
+            matching_fields = 0
+            
+            if skip_addr and comp_addr == skip_addr:
+                partial_match = True
+                matching_fields += 1
+            if skip_city and comp_city == skip_city:
+                partial_match = True
+                matching_fields += 1
+            if skip_state and comp_state == skip_state:
+                partial_match = True
+                matching_fields += 1
+            if skip_zip and comp_zip == skip_zip:
+                partial_match = True
+                matching_fields += 1
+                
+            # For wildcard patterns: require at least 3 empty fields AND only 1 matching field
+            # For specific addresses: require at least 2 matching fields
+            empty_fields = sum([1 for field in [skip_addr, skip_city, skip_state, skip_zip] if not field])
+            populated_fields = 4 - empty_fields
+            
+            if partial_match:
+                # Wildcard pattern (mostly empty fields): require exactly 1 match
+                if empty_fields >= 3 and matching_fields == 1:
+                    if debug:
+                        logging.debug(f"ADDRESS_SKIP: Found wildcard match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+                    return True, skip_reason
+                # Specific address pattern: require at least 50% field match
+                elif populated_fields >= 2 and matching_fields >= max(2, populated_fields // 2):
+                    if debug:
+                        logging.debug(f"ADDRESS_SKIP: Found specific address match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
+                    return True, skip_reason
+        
+        return False, ""
 
 
 # Backward compatibility - delegate to AddressUtils class methods
@@ -21841,7 +21916,7 @@ def calculate_string_similarity(str1, str2):
 
 def check_address_should_skip(comparison_address, skip_addresses, debug=False):
     """
-    Check if a comparison address should be automatically skipped (treating Mist address as correct).
+    Backward compatibility shim - delegates to AddressUtils.check_should_skip().
     
     Args:
         comparison_address (dict): Address from comparison CSV to check
@@ -21851,67 +21926,7 @@ def check_address_should_skip(comparison_address, skip_addresses, debug=False):
     Returns:
         tuple: (should_skip: bool, skip_reason: str)
     """
-    if not skip_addresses:
-        return False, ""
-    
-    # Normalize comparison address fields for matching
-    comp_addr = str(comparison_address.get('address', '')).strip().upper()
-    comp_city = str(comparison_address.get('city', '')).strip().upper()
-    comp_state = str(comparison_address.get('state', '')).strip().upper()
-    comp_zip = str(comparison_address.get('zip', '')).strip().upper()
-    
-    for skip_entry in skip_addresses:
-        skip_addr = str(skip_entry.get('Skip_Address', '')).strip().upper()
-        skip_city = str(skip_entry.get('Skip_City', '')).strip().upper()
-        skip_state = str(skip_entry.get('Skip_State', '')).strip().upper()
-        skip_zip = str(skip_entry.get('Skip_Zip', '')).strip().upper()
-        skip_reason = skip_entry.get('Reason', 'Address in skip list')
-        
-        # Check for exact matches (case-insensitive)
-        if (comp_addr == skip_addr and 
-            comp_city == skip_city and 
-            comp_state == skip_state and 
-            comp_zip == skip_zip):
-            
-            if debug:
-                logging.debug(f"ADDRESS_SKIP: Found exact match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
-            return True, skip_reason
-            
-        # Check for partial matches (any field matches and others are empty in skip list)
-        partial_match = False
-        matching_fields = 0
-        
-        if skip_addr and comp_addr == skip_addr:
-            partial_match = True
-            matching_fields += 1
-        if skip_city and comp_city == skip_city:
-            partial_match = True
-            matching_fields += 1
-        if skip_state and comp_state == skip_state:
-            partial_match = True
-            matching_fields += 1
-        if skip_zip and comp_zip == skip_zip:
-            partial_match = True
-            matching_fields += 1
-            
-        # For wildcard patterns: require at least 3 empty fields AND only 1 matching field
-        # For specific addresses: require at least 2 matching fields
-        empty_fields = sum([1 for f in [skip_addr, skip_city, skip_state, skip_zip] if not f])
-        populated_fields = 4 - empty_fields
-        
-        if partial_match:
-            # Wildcard pattern (mostly empty fields): require exactly 1 match
-            if empty_fields >= 3 and matching_fields == 1:
-                if debug:
-                    logging.debug(f"ADDRESS_SKIP: Found wildcard match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
-                return True, skip_reason
-            # Specific address pattern: require at least 50% field match
-            elif populated_fields >= 2 and matching_fields >= max(2, populated_fields // 2):
-                if debug:
-                    logging.debug(f"ADDRESS_SKIP: Found specific address match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
-                return True, skip_reason
-    
-    return False, ""
+    return AddressUtils.check_should_skip(comparison_address, skip_addresses, debug)
 
 def enhanced_compare_addresses_with_threshold(mist_address, comparison_address, threshold, debug=False):
     """
@@ -22032,76 +22047,6 @@ def enhanced_compare_addresses_with_threshold(mist_address, comparison_address, 
         logging.debug(f"ENHANCED_COMPARE: Result: {result}")
     
     return result
-
-def compare_addresses_with_threshold(mist_address, comparison_address, threshold):
-    """
-    Compare two address dictionaries and return overall similarity percentage and field-by-field breakdown.
-    
-    Args:
-        mist_address (dict): Dictionary with keys: address, city, state, zip, country
-        comparison_address (dict): Dictionary with keys: address, city, state, zip, country  
-        threshold (float): Minimum similarity percentage required to be considered a match
-        
-    Returns:
-        dict: {
-            'overall_similarity': float,
-            'is_match': bool,
-            'field_similarities': {
-                'address': float,
-                'city': float, 
-                'state': float,
-                'zip': float
-            },
-            'failed_fields': list
-        }
-    """
-    # Field weights for overall similarity calculation
-    field_weights = {
-        'address': 0.4,    # Street address is most important
-        'city': 0.3,       # City is very important
-        'state': 0.2,      # State is important
-        'zip': 0.1         # Zip is least weighted since we already have zip comparison
-    }
-    
-    field_similarities = {}
-    failed_fields = []
-    
-    # Compare address fields (ignore country as requested)
-    for field, weight in field_weights.items():
-        mist_value = mist_address.get(field, "").strip()
-        comp_value = comparison_address.get(field, "").strip()
-        
-        if field == 'zip':
-            # Use normalized zip comparison
-            mist_norm = normalize_zip_code(mist_value)
-            comp_norm = normalize_zip_code(comp_value)
-            similarity = 100.0 if mist_norm == comp_norm else 0.0
-        elif field == 'state':
-            # Use normalized state comparison (handles abbreviations vs full names)
-            mist_norm = normalize_state_name(mist_value)
-            comp_norm = normalize_state_name(comp_value)
-            similarity = 100.0 if mist_norm == comp_norm else 0.0
-        else:
-            # Use string similarity for address and city fields
-            similarity = calculate_string_similarity(mist_value, comp_value)
-        
-        field_similarities[field] = similarity
-        
-        if similarity < threshold:
-            failed_fields.append(field)
-    
-    # Calculate weighted overall similarity
-    overall_similarity = sum(field_similarities[field] * field_weights[field] 
-                           for field in field_weights.keys())
-    
-    is_match = overall_similarity >= threshold
-    
-    return {
-        'overall_similarity': overall_similarity,
-        'is_match': is_match,
-        'field_similarities': field_similarities,
-        'failed_fields': failed_fields
-    }
 
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
