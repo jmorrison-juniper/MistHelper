@@ -550,6 +550,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.05.30",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "RoutingUtils: Moved 15+ routing functions into class with full implementations",
+          "RoutingUtils: parse_forwarding_table, display_forwarding_summary, display_prefix_table_impl now in class",
+          "RoutingUtils: parse_routing_table, parse_juniper_routing, parse_ssr_routing with full implementations",
+          "RoutingUtils: display_routing_summary, display_routing_details, display_ssr_routing moved to class",
+          "RoutingUtils: Helper methods parse_standard_route_line, parse_protocol_route_line, parse_tabular_route_line, normalize_json_route_entry added",
+          "Backwards Compatibility: All original standalone functions retained as thin wrappers"
+        ]
+      }
+    },
+    {
       "version": "26.01.15.22.45",
       "date": "2026-01-15",
       "changes": {

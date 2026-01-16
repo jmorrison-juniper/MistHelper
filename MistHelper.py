@@ -11574,6 +11574,9 @@ class RoutingUtils:
     Centralized routing and forwarding table parsing utilities.
     Groups all routing-related functions for better code organization.
     All methods are static to avoid unnecessary object instantiation.
+    
+    Implementation Note: Methods contain the actual logic rather than delegating
+    to standalone functions, per the 5-Item Rule class organization requirement.
     """
     
     @staticmethod
@@ -11587,33 +11590,170 @@ class RoutingUtils:
         Returns:
             list: List of parsed forwarding table entries
         """
-        return parse_forwarding_table_output(raw_output)
+        entries = []
+        
+        if not raw_output or not raw_output.strip():
+            return entries
+        
+        try:
+            # Split multiple JSON objects (WebSocket can send multiple chunks)
+            json_chunks = []
+            for line in raw_output.strip().split('\n'):
+                line = line.strip()
+                if line and line.startswith('{') and line.endswith('}'):
+                    try:
+                        chunk = json.loads(line)
+                        json_chunks.append(chunk)
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Process all chunks and extract forwarding table rows
+            for chunk in json_chunks:
+                if isinstance(chunk, dict) and 'rows' in chunk:
+                    rows = chunk.get('rows', [])
+                    for row in rows:
+                        if isinstance(row, dict):
+                            # Clean up None values and empty strings
+                            cleaned_entry = {}
+                            for key, value in row.items():
+                                if value == "None" or value == "":
+                                    cleaned_entry[key] = "-"
+                                else:
+                                    cleaned_entry[key] = value
+                            entries.append(cleaned_entry)
+        
+        except Exception as error:
+            logging.error(f"Error parsing forwarding table output: {error}")
+            return [{"raw_data": raw_output}]
+        
+        return entries
     
     @staticmethod
     def display_forwarding_summary(entries):
         """
-        Display a summary of forwarding table entries.
+        Display a user-friendly summary of forwarding table entries.
         
         Args:
-            entries (list): List of forwarding table entries
+            entries (list): List of forwarding table entry dictionaries
         """
-        display_forwarding_table_summary(entries)
+        if not entries:
+            print("-> No forwarding table entries found")
+            return
+        
+        # Handle raw data fallback
+        if len(entries) == 1 and "raw_data" in entries[0]:
+            print("-> Raw forwarding table data (parsing failed):")
+            raw_data = entries[0]["raw_data"]
+            print(raw_data[:1000] + "..." if len(raw_data) > 1000 else raw_data)
+            return
+        
+        print(f"-> Total forwarding table entries: {len(entries)}")
+        
+        # Analyze the data for summary statistics
+        prefixes = set()
+        services = set()
+        tenants = set()
+        protocols = set()
+        interfaces = set()
+        
+        for entry in entries:
+            if entry.get('ip_prefix') and entry['ip_prefix'] != '-':
+                prefixes.add(entry['ip_prefix'])
+            if entry.get('service') and entry['service'] != '-':
+                services.add(entry['service'])
+            if entry.get('tenant') and entry['tenant'] != '-':
+                tenants.add(entry['tenant'])
+            if entry.get('protocol') and entry['protocol'] != '-':
+                protocols.add(entry['protocol'])
+            if entry.get('next_hops_interface') and entry['next_hops_interface'] != '-':
+                interfaces.add(entry['next_hops_interface'])
+        
+        # Display summary statistics
+        print(f"-> Unique IP prefixes: {len(prefixes)}")
+        print(f"-> Unique services: {len(services)}")
+        print(f"-> Unique tenants: {len(tenants)}")
+        print(f"-> Protocols: {', '.join(sorted(protocols)) if protocols else 'None'}")
+        print(f"-> Next-hop interfaces: {len(interfaces)}")
+        
+        # Group entries by IP prefix for better readability
+        prefix_groups = {}
+        for entry in entries:
+            prefix = entry.get('ip_prefix', 'Unknown')
+            if prefix not in prefix_groups:
+                prefix_groups[prefix] = []
+            prefix_groups[prefix].append(entry)
+        
+        # Display detailed table for all prefixes
+        print(f"\n-> Detailed forwarding table by IP prefix:")
+        for prefix in sorted(prefix_groups.keys()):
+            RoutingUtils.display_prefix_table_impl(prefix, prefix_groups[prefix])
+        
+        # Show interface summary
+        if interfaces:
+            print(f"\n-> Active next-hop interfaces:")
+            for interface in sorted(interfaces):
+                if interface != '-':
+                    interface_entries = [e for e in entries if e.get('next_hops_interface') == interface]
+                    print(f"   {interface}: {len(interface_entries)} routes")
     
     @staticmethod
-    def display_prefix_table(prefix, entries):
+    def display_prefix_table_impl(prefix, entries):
         """
-        Display forwarding table entries for a specific prefix.
+        Display a formatted table for entries with a specific IP prefix.
         
         Args:
-            prefix (str): The prefix to display entries for
-            entries (list): List of forwarding table entries
+            prefix (str): IP prefix to display
+            entries (list): List of forwarding table entries for this prefix
         """
-        display_prefix_table(prefix, entries)
+        if not entries:
+            return
+        
+        print(f"\n-> Routes for {prefix} ({len(entries)} entries):")
+        
+        try:
+            table = PrettyTable()
+            table.field_names = ["Port", "Protocol", "Service", "Tenant", "Next Hop Interface", "Vector", "Cost"]
+            table.align = "l"
+            table.max_width = 20
+            
+            for entry in entries:
+                service_val = entry.get('service', '-')
+                tenant_val = entry.get('tenant', '-')
+                interface_val = entry.get('next_hops_interface', '-')
+                table.add_row([
+                    entry.get('port', '-'),
+                    entry.get('protocol', '-'),
+                    service_val[:18] + '..' if len(service_val) > 20 else service_val,
+                    tenant_val[:15] + '..' if len(tenant_val) > 17 else tenant_val,
+                    interface_val[:15] + '..' if len(interface_val) > 17 else interface_val,
+                    entry.get('vector', '-'),
+                    entry.get('cost', '-')
+                ])
+            
+            print(table)
+                
+        except Exception as error:
+            # Fallback to simple text formatting if prettytable fails
+            print("   Port   | Protocol | Service              | Tenant           | Next Hop Interface")
+            print("   " + "-" * 80)
+            for entry in entries:
+                port = entry.get('port', '-')[:6]
+                protocol = entry.get('protocol', '-')[:8]
+                service = entry.get('service', '-')[:20]
+                tenant = entry.get('tenant', '-')[:16]
+                interface = entry.get('next_hops_interface', '-')[:18]
+                print(f"   {port:<6} | {protocol:<8} | {service:<20} | {tenant:<16} | {interface}")
     
     @staticmethod
     def parse_routing_table(raw_output):
         """
         Parse raw routing table output into structured data.
+        
+        Handles routing table output from various device types including:
+        - Switches with Layer 3 capabilities
+        - SRX routers
+        - SSR gateways
+        - Other routing-capable devices
         
         Args:
             raw_output (str): Raw routing table output string
@@ -11621,12 +11761,206 @@ class RoutingUtils:
         Returns:
             list: List of parsed routing table entries
         """
-        return parse_routing_table_output(raw_output)
+        if not raw_output:
+            return []
+        
+        # Detect Juniper routing table format and use specialized parser
+        if any(pattern in raw_output for pattern in ['inet.0:', 'inet6.0:', 'Limit/Threshold:']):
+            return RoutingUtils.parse_juniper_routing(raw_output)
+        
+        # Fallback to generic parsing for other device types
+        routes = []
+        lines = raw_output.strip().split('\n')
+        
+        for line_num, line in enumerate(lines):
+            line = line.strip()
+            if not line or line.startswith('#') or line.startswith('show'):
+                continue
+                
+            # Pattern 1: Standard route entry with prefix, next-hop, protocol
+            if ' via ' in line or ' dev ' in line or ' proto ' in line:
+                route_entry = RoutingUtils.parse_standard_route_line(line)
+                if route_entry:
+                    routes.append(route_entry)
+                    
+            # Pattern 2: Tabular format with columns
+            elif any(indicator in line.lower() for indicator in ['bgp', 'ospf', 'static', 'direct', 'connected']):
+                route_entry = RoutingUtils.parse_protocol_route_line(line)
+                if route_entry:
+                    routes.append(route_entry)
+                    
+            # Pattern 3: JSON-like structured output (some devices)
+            elif line.startswith('{') and line.endswith('}'):
+                try:
+                    route_data = json.loads(line)
+                    route_entry = RoutingUtils.normalize_json_route_entry(route_data)
+                    if route_entry:
+                        routes.append(route_entry)
+                except Exception:
+                    continue
+                    
+            # Pattern 4: Space-separated tabular data
+            elif len(line.split()) >= 3:
+                route_entry = RoutingUtils.parse_tabular_route_line(line)
+                if route_entry:
+                    routes.append(route_entry)
+        
+        return routes
+    
+    @staticmethod
+    def parse_standard_route_line(line):
+        """Parse a standard route line with via/dev/proto keywords."""
+        try:
+            parts = line.split()
+            if len(parts) < 2:
+                return None
+                
+            route_entry = {
+                'destination': parts[0] if parts[0] != '*' else 'default',
+                'next_hop': '',
+                'interface': '',
+                'protocol': '',
+                'metric': '',
+                'admin_distance': ''
+            }
+            
+            # Extract next hop
+            if ' via ' in line:
+                via_index = line.find(' via ')
+                via_part = line[via_index + 5:].split()[0]
+                route_entry['next_hop'] = via_part
+                
+            # Extract interface  
+            if ' dev ' in line:
+                dev_index = line.find(' dev ')
+                dev_part = line[dev_index + 5:].split()[0]
+                route_entry['interface'] = dev_part
+                
+            # Extract protocol
+            if ' proto ' in line:
+                proto_index = line.find(' proto ')
+                proto_part = line[proto_index + 7:].split()[0]
+                route_entry['protocol'] = proto_part
+                
+            # Extract metric
+            if ' metric ' in line:
+                metric_index = line.find(' metric ')
+                metric_part = line[metric_index + 8:].split()[0]
+                route_entry['metric'] = metric_part
+                
+            return route_entry
+            
+        except Exception:
+            return None
+    
+    @staticmethod
+    def parse_protocol_route_line(line):
+        """Parse a route line containing protocol information."""
+        try:
+            parts = line.split()
+            if len(parts) < 2:
+                return None
+                
+            route_entry = {
+                'destination': '',
+                'next_hop': '',
+                'interface': '',
+                'protocol': '',
+                'metric': '',
+                'admin_distance': ''
+            }
+            
+            # Look for destination (first IP-like field)
+            for part in parts:
+                if '/' in part or (any(char.isdigit() for char in part) and '.' in part):
+                    route_entry['destination'] = part
+                    break
+                    
+            # Identify protocol
+            for protocol in ['bgp', 'ospf', 'static', 'direct', 'connected', 'kernel', 'evpn']:
+                if protocol in line.lower():
+                    route_entry['protocol'] = protocol.upper()
+                    break
+                    
+            # Look for next hop (IP address pattern)
+            ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+            ip_matches = re.findall(ip_pattern, line)
+            if len(ip_matches) > 1:
+                route_entry['next_hop'] = ip_matches[1]
+            elif len(ip_matches) == 1 and route_entry['destination'] != ip_matches[0]:
+                route_entry['next_hop'] = ip_matches[0]
+                
+            return route_entry
+            
+        except Exception:
+            return None
+    
+    @staticmethod
+    def parse_tabular_route_line(line):
+        """Parse a space-separated tabular route line."""
+        try:
+            parts = line.split()
+            if len(parts) < 3:
+                return None
+                
+            route_entry = {
+                'destination': parts[0] if parts[0] not in ['*', '>'] else (parts[1] if len(parts) > 1 else ''),
+                'next_hop': '',
+                'interface': '',
+                'protocol': '',
+                'metric': '',
+                'admin_distance': ''
+            }
+            
+            for part in parts[1:]:
+                # Look for next hop (IP address)
+                if '.' in part and any(char.isdigit() for char in part) and part != route_entry['destination']:
+                    if not route_entry['next_hop']:
+                        route_entry['next_hop'] = part
+                        
+                # Look for interface (common prefixes)
+                elif any(part.lower().startswith(prefix) for prefix in ['eth', 'ge-', 'xe-', 'fe-', 'lo', 'vlan']):
+                    route_entry['interface'] = part
+                    
+                # Look for protocol indicators
+                elif part.upper() in ['BGP', 'OSPF', 'STATIC', 'DIRECT', 'CONNECTED', 'KERNEL']:
+                    route_entry['protocol'] = part.upper()
+                    
+                # Look for metric (numeric)
+                elif part.isdigit() and not route_entry['metric']:
+                    route_entry['metric'] = part
+                    
+            return route_entry
+            
+        except Exception:
+            return None
+    
+    @staticmethod
+    def normalize_json_route_entry(route_data):
+        """Normalize a JSON route entry to standard format."""
+        try:
+            route_entry = {
+                'destination': route_data.get('destination', route_data.get('prefix', '')),
+                'next_hop': route_data.get('next_hop', route_data.get('nexthop', route_data.get('gateway', ''))),
+                'interface': route_data.get('interface', route_data.get('dev', route_data.get('outgoing_interface', ''))),
+                'protocol': route_data.get('protocol', route_data.get('proto', '')).upper(),
+                'metric': str(route_data.get('metric', route_data.get('cost', ''))),
+                'admin_distance': str(route_data.get('admin_distance', route_data.get('distance', '')))
+            }
+            return route_entry
+        except Exception:
+            return None
     
     @staticmethod
     def parse_juniper_routing(raw_output):
         """
-        Parse Juniper-format routing table output.
+        Parse Juniper-specific routing table output format.
+        
+        Juniper routing tables have a specific multi-line format:
+        - Route table sections (inet.0:, inet6.0:)
+        - Multi-line route entries with continuation lines
+        - Route preferences indicated by >, *, +
+        - Protocol information in brackets like *[Direct/0]
         
         Args:
             raw_output (str): Raw Juniper routing table output
@@ -11634,889 +11968,423 @@ class RoutingUtils:
         Returns:
             list: List of parsed routing entries
         """
-        return parse_juniper_routing_table(raw_output)
+        routes = []
+        lines = raw_output.strip().split('\n')
+        current_route = None
+        current_table = ""
+        
+        for line in lines:
+            line_stripped = line.strip()
+            
+            if not line_stripped:
+                continue
+                
+            # Detect routing table sections
+            if line_stripped.endswith(':') and any(table in line_stripped for table in ['inet.0', 'inet6.0', 'mpls.0']):
+                current_table = line_stripped.replace(':', '')
+                continue
+                
+            # Skip limit/threshold lines
+            if 'Limit/Threshold' in line_stripped or line_stripped == '+':
+                continue
+                
+            parts = line_stripped.split()
+            if not parts:
+                continue
+                
+            # Main route line (starts with destination prefix)
+            if ('/' in parts[0] and not parts[0].startswith('>') and not parts[0].startswith('*') 
+                and not line_stripped.startswith(' ') and not line_stripped.startswith('>')):
+                
+                if current_route:
+                    routes.append(current_route)
+                    
+                current_route = {
+                    'destination': parts[0],
+                    'next_hop': '',
+                    'interface': '',
+                    'protocol': '',
+                    'metric': '',
+                    'admin_distance': '',
+                    'table': current_table,
+                    'active': False,
+                    'selected': False
+                }
+                
+                # Look for protocol information in brackets
+                line_remainder = ' '.join(parts[1:])
+                if '[' in line_remainder and ']' in line_remainder:
+                    bracket_start = line_remainder.find('[')
+                    bracket_end = line_remainder.find(']')
+                    bracket_content = line_remainder[bracket_start + 1:bracket_end]
+                    
+                    if line_remainder.startswith('*'):
+                        current_route['selected'] = True
+                        
+                    if '/' in bracket_content:
+                        protocol_parts = bracket_content.split('/')
+                        current_route['protocol'] = protocol_parts[0]
+                        current_route['admin_distance'] = protocol_parts[1]
+                    else:
+                        current_route['protocol'] = bracket_content
+                        
+            # Continuation lines
+            elif (current_route and (line_stripped.startswith('>') or line_stripped.startswith('*') 
+                                    or line.startswith(' ') or line.startswith('\t'))):
+                
+                if line_stripped.startswith('>'):
+                    current_route['active'] = True
+                    line_stripped = line_stripped[1:].strip()
+                    
+                if ' via ' in line_stripped:
+                    via_parts = line_stripped.split(' via ')[1].strip()
+                    if ',' in via_parts:
+                        next_hop_part, interface_part = via_parts.split(',', 1)
+                        current_route['next_hop'] = next_hop_part.strip()
+                        current_route['interface'] = interface_part.strip()
+                    else:
+                        if '.' in via_parts and '/' not in via_parts:
+                            current_route['interface'] = via_parts.strip()
+                        else:
+                            current_route['next_hop'] = via_parts.strip()
+                
+                elif line_stripped in ['Local']:
+                    current_route['next_hop'] = 'Local'
+                elif '.' in line_stripped and len(line_stripped.split()) == 1:
+                    current_route['interface'] = line_stripped
+        
+        if current_route:
+            routes.append(current_route)
+        
+        return routes
     
     @staticmethod
     def parse_ssr_routing(json_data):
         """
-        Parse SSR routing table JSON data.
+        Parse SSR/SRX routing table JSON data from the dedicated API.
+        
+        The SSR API returns structured JSON with columns definition and rows data.
         
         Args:
-            json_data: SSR routing table in JSON format
+            json_data (str): Raw JSON string from SSR API
             
         Returns:
-            list: List of parsed SSR routing entries
+            list: List of parsed routing table entries as dictionaries
         """
-        return parse_ssr_routing_json(json_data)
+        try:
+            data = json.loads(json_data)
+            
+            if data.get("status") != "SUCCESS":
+                return []
+                
+            columns = data.get("columns", [])
+            rows = data.get("rows", [])
+            
+            if not columns or not rows:
+                return []
+            
+            route_entries = []
+            for row in rows:
+                route_entry = {
+                    'destination': row.get('prefix', ''),
+                    'next_hop': row.get('nextHops', ''),
+                    'interface': '',
+                    'protocol': 'BGP' if 'bgp' in data.get("message", "").lower() else 'Unknown',
+                    'admin_distance': '',
+                    'metric': str(row.get('metric', '')),
+                    'status': row.get('status', ''),
+                    'vrf': row.get('vrfName', 'default'),
+                    'name': row.get('name', ''),
+                    'weight': str(row.get('weight', '')),
+                    'as_path': row.get('path', ''),
+                    'local_preference': str(row.get('localPreference', '')),
+                    'selection_reason': row.get('selectionReason', '')
+                }
+                route_entries.append(route_entry)
+                
+            return route_entries
+            
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            logging.warning(f"Failed to parse SSR routing JSON: {error}")
+            return []
     
     @staticmethod
     def display_routing_summary(route_entries, query_params):
         """
-        Display a summary of routing table entries.
+        Display a formatted summary of routing table entries.
         
         Args:
-            route_entries (list): List of routing entries
-            query_params: Query parameters for filtering
+            route_entries (list): List of parsed routing table entries
+            query_params (dict): Original query parameters for context
         """
-        display_routing_table_summary(route_entries, query_params)
+        if not route_entries:
+            print("-> No routing table entries found")
+            if query_params:
+                print("  -> Try adjusting query parameters:")
+                for key, value in query_params.items():
+                    print(f"    - {key}: {value}")
+            return
+        
+        print(f"-> Total routing table entries: {len(route_entries)}")
+        
+        # Group routes by protocol for summary
+        protocols = {}
+        destinations = set()
+        next_hops = set()
+        interfaces = set()
+        tables = set()
+        active_routes = 0
+        
+        for entry in route_entries:
+            protocol = entry.get('protocol', 'Unknown').upper()
+            if protocol and protocol != 'UNKNOWN':
+                protocols[protocol] = protocols.get(protocol, 0) + 1
+            
+            if entry.get('destination') and entry.get('destination') != '-':
+                destinations.add(entry['destination'])
+            if entry.get('next_hop') and entry.get('next_hop') not in ['-', '']:
+                next_hops.add(entry['next_hop'])
+            if entry.get('interface') and entry.get('interface') not in ['-', '']:
+                interfaces.add(entry['interface'])
+            if entry.get('table'):
+                tables.add(entry['table'])
+            if entry.get('active'):
+                active_routes += 1
+        
+        # Display protocol summary  
+        if protocols:
+            print(f"-> Protocols: {', '.join([f'{proto}({count})' for proto, count in protocols.items()])}")
+        
+        # Display table summary if multiple tables
+        if len(tables) > 1:
+            print(f"-> Routing tables: {', '.join(sorted(tables))}")
+        
+        print(f"-> Unique destinations: {len(destinations)}")
+        print(f"-> Unique next hops: {len(next_hops)}")
+        print(f"-> Unique interfaces: {len(interfaces)}")
+        
+        if active_routes > 0:
+            print(f"-> Active routes (marked with >): {active_routes}")
+        
+        # Display detailed routing table
+        print(f"\n-> Detailed routing table:")
+        RoutingUtils.display_routing_details(route_entries)
     
     @staticmethod
     def display_routing_details(route_entries):
         """
-        Display detailed routing table information.
+        Display detailed routing table in a formatted table.
         
         Args:
-            route_entries (list): List of routing entries
+            route_entries (list): List of parsed routing table entries
         """
-        display_routing_table_details(route_entries)
+        if not route_entries:
+            return
+            
+        try:
+            table = PrettyTable()
+            table.field_names = ["Status", "Destination", "Next Hop", "Interface", "Protocol", "Admin Dist"]
+            table.align = "l"
+            
+            for entry in route_entries:
+                status = ""
+                if entry.get('active'):
+                    status += ">"
+                if entry.get('selected'):
+                    status += "*"
+                if not status:
+                    status = " "
+                    
+                dest = entry.get('destination', '-') or '-'
+                next_hop = entry.get('next_hop', '-') or '-'
+                interface = entry.get('interface', '-') or '-'
+                protocol = entry.get('protocol', '-') or '-'
+                admin_dist = entry.get('admin_distance', '-') or '-'
+                
+                table.add_row([status, dest, next_hop, interface, protocol, admin_dist])
+            
+            print(table)
+            
+            print("\nStatus Legend:")
+            print("  > = Active route (installed in forwarding table)")
+            print("  * = Selected route (best route among alternatives)")
+                
+        except Exception:
+            # Fallback to simple text formatting
+            print("   Status | Destination              | Next Hop        | Interface       | Protocol | Dist")
+            print("   " + "-" * 95)
+            for entry in route_entries:
+                status = ""
+                if entry.get('active'):
+                    status += ">"
+                if entry.get('selected'):
+                    status += "*"
+                if not status:
+                    status = " "
+                    
+                dest = entry.get('destination', '-')
+                next_hop = entry.get('next_hop', '-')
+                interface = entry.get('interface', '-')
+                protocol = entry.get('protocol', '-')
+                admin_dist = entry.get('admin_distance', '-')
+                print(f"   {status:<6} | {dest:<25} | {next_hop:<15} | {interface:<15} | {protocol:<8} | {admin_dist}")
+            
+            print("\nStatus Legend:")
+            print("  > = Active route, * = Selected route")
     
     @staticmethod
     def display_ssr_routing(route_entries, query_params):
         """
-        Display SSR routing table information.
+        Display SSR/SRX routing table with enhanced BGP-specific information.
         
         Args:
-            route_entries (list): List of SSR routing entries
-            query_params: Query parameters for filtering
+            route_entries (list): List of parsed SSR routing table entries
+            query_params (dict): Original query parameters for context
         """
-        display_ssr_routing_table(route_entries, query_params)
+        if not route_entries:
+            print("-> No routing table entries found")
+            if query_params:
+                print("  -> Try adjusting query parameters:")
+                for key, value in query_params.items():
+                    print(f"    - {key}: {value}")
+            return
+        
+        # Count and categorize routes
+        total_routes = len(route_entries)
+        protocols = {}
+        vrfs = {}
+        next_hops = set()
+        
+        for entry in route_entries:
+            protocol = entry.get('protocol', 'Unknown')
+            protocols[protocol] = protocols.get(protocol, 0) + 1
+            
+            vrf = entry.get('vrf', 'default')
+            vrfs[vrf] = vrfs.get(vrf, 0) + 1
+            
+            next_hop = entry.get('next_hop', '')
+            if next_hop and next_hop != '0.0.0.0':
+                next_hops.add(next_hop)
+        
+        # Display summary
+        print(f"-> Total routing table entries: {total_routes}")
+        
+        protocol_summary = ", ".join([f"{proto}({count})" for proto, count in protocols.items()])
+        print(f"-> Protocols: {protocol_summary}")
+        
+        vrf_summary = ", ".join([f"{vrf}({count})" for vrf, count in vrfs.items()])
+        print(f"-> VRFs: {vrf_summary}")
+        
+        print(f"-> Unique next hops: {len(next_hops)}")
+        
+        # Display detailed table using prettytable
+        try:
+            table = PrettyTable()
+            table.field_names = ["Destination", "Next Hop", "Protocol", "Route Name", "Status", "Selection Reason", "Weight", "Metric", "Local Pref", "AS Path", "VRF"]
+            table.align = "l"
+            
+            for entry in route_entries:
+                vrf = entry.get('vrf', 'default')
+                destination = entry.get('destination', '-')
+                next_hop = entry.get('next_hop', '-')
+                protocol = entry.get('protocol', '-')
+                status = entry.get('status', '-')
+                weight = entry.get('weight', '-')
+                metric = entry.get('metric', '-')
+                local_pref = entry.get('local_preference', '-')
+                as_path = entry.get('as_path', '-')
+                route_name = entry.get('name', '-')
+                selection_reason = entry.get('selection_reason', '-')
+                
+                table.add_row([destination, next_hop, protocol, route_name, status, selection_reason, weight, metric, local_pref, as_path, vrf])
+            
+            print(f"\n-> Detailed routing table:")
+            print(table)
+            
+        except Exception:
+            # Fallback to simple formatting
+            print(f"\n-> Detailed routing table:")
+            print("   Destination | Next Hop | Protocol | Route Name | Status | Selection Reason | Weight | Metric | Local Pref | AS Path | VRF")
+            print("   " + "-" * 140)
+            for entry in route_entries:
+                dest = entry.get('destination', '-')
+                next_hop = entry.get('next_hop', '-')
+                protocol = entry.get('protocol', '-')
+                route_name = entry.get('name', '-')
+                status = entry.get('status', '-')
+                selection_reason = entry.get('selection_reason', '-')
+                weight = entry.get('weight', '-')
+                metric = entry.get('metric', '-')
+                local_pref = entry.get('local_preference', '-')
+                as_path = entry.get('as_path', '-')
+                vrf = entry.get('vrf', 'default')
+                print(f"   {dest} | {next_hop} | {protocol} | {route_name} | {status} | {selection_reason} | {weight} | {metric} | {local_pref} | {as_path} | {vrf}")
 
 
-# Backward compatibility - original routing function definitions follow
+# Backward compatibility wrapper for parse_forwarding_table_output
 def parse_forwarding_table_output(raw_output):
-    """
-    Parse the raw JSON forwarding table output into structured data.
-    
-    Args:
-        raw_output (str): Raw JSON string containing forwarding table data
-        
-    Returns:
-        list: List of parsed forwarding table entries
-    """
-    entries = []
-    
-    if not raw_output or not raw_output.strip():
-        return entries
-    
-    try:
-        # Split multiple JSON objects (WebSocket can send multiple chunks)
-        json_chunks = []
-        for line in raw_output.strip().split('\n'):
-            line = line.strip()
-            if line and line.startswith('{') and line.endswith('}'):
-                try:
-                    chunk = json.loads(line)
-                    json_chunks.append(chunk)
-                except json.JSONDecodeError:
-                    continue
-        
-        # Process all chunks and extract forwarding table rows
-        for chunk in json_chunks:
-            if isinstance(chunk, dict) and 'rows' in chunk:
-                rows = chunk.get('rows', [])
-                for row in rows:
-                    if isinstance(row, dict):
-                        # Clean up None values and empty strings
-                        cleaned_entry = {}
-                        for key, value in row.items():
-                            if value == "None" or value == "":
-                                cleaned_entry[key] = "-"
-                            else:
-                                cleaned_entry[key] = value
-                        entries.append(cleaned_entry)
-    
-    except Exception as e:
-        logging.error(f"Error parsing forwarding table output: {e}")
-        # Return raw data if parsing fails
-        return [{"raw_data": raw_output}]
-    
-    return entries
+    """Backward compatibility wrapper for RoutingUtils.parse_forwarding_table."""
+    return RoutingUtils.parse_forwarding_table(raw_output)
 
 
 def display_forwarding_table_summary(entries):
-    """
-    Display a user-friendly summary of forwarding table entries.
-    
-    Args:
-        entries (list): List of forwarding table entry dictionaries
-    """
-    if not entries:
-        print("-> No forwarding table entries found")
-        return
-    
-    # Handle raw data fallback
-    if len(entries) == 1 and "raw_data" in entries[0]:
-        print("-> Raw forwarding table data (parsing failed):")
-        print(entries[0]["raw_data"][:1000] + "..." if len(entries[0]["raw_data"]) > 1000 else entries[0]["raw_data"])
-        return
-    
-    print(f"-> Total forwarding table entries: {len(entries)}")
-    
-    # Analyze the data for summary statistics
-    prefixes = set()
-    services = set()
-    tenants = set()
-    protocols = set()
-    interfaces = set()
-    
-    for entry in entries:
-        if entry.get('ip_prefix') and entry['ip_prefix'] != '-':
-            prefixes.add(entry['ip_prefix'])
-        if entry.get('service') and entry['service'] != '-':
-            services.add(entry['service'])
-        if entry.get('tenant') and entry['tenant'] != '-':
-            tenants.add(entry['tenant'])
-        if entry.get('protocol') and entry['protocol'] != '-':
-            protocols.add(entry['protocol'])
-        if entry.get('next_hops_interface') and entry['next_hops_interface'] != '-':
-            interfaces.add(entry['next_hops_interface'])
-    
-    # Display summary statistics
-    print(f"-> Unique IP prefixes: {len(prefixes)}")
-    print(f"-> Unique services: {len(services)}")
-    print(f"-> Unique tenants: {len(tenants)}")
-    print(f"-> Protocols: {', '.join(sorted(protocols)) if protocols else 'None'}")
-    print(f"-> Next-hop interfaces: {len(interfaces)}")
-    
-    # Group entries by IP prefix for better readability
-    prefix_groups = {}
-    for entry in entries:
-        prefix = entry.get('ip_prefix', 'Unknown')
-        if prefix not in prefix_groups:
-            prefix_groups[prefix] = []
-        prefix_groups[prefix].append(entry)
-    
-    # Display detailed table for all prefixes (removed artificial limiting)
-    print(f"\n-> Detailed forwarding table by IP prefix:")
-    for prefix in sorted(prefix_groups.keys()):
-        display_prefix_table(prefix, prefix_groups[prefix])
-    
-    # Show interface summary
-    if interfaces:
-        print(f"\n-> Active next-hop interfaces:")
-        for interface in sorted(interfaces):
-            if interface != '-':
-                interface_entries = [e for e in entries if e.get('next_hops_interface') == interface]
-                print(f"   {interface}: {len(interface_entries)} routes")
+    """Backward compatibility wrapper for RoutingUtils.display_forwarding_summary."""
+    RoutingUtils.display_forwarding_summary(entries)
 
 
 def display_prefix_table(prefix, entries):
-    """
-    Display a formatted table for entries with a specific IP prefix.
-    
-    Args:
-        prefix (str): IP prefix to display
-        entries (list): List of forwarding table entries for this prefix
-    """
-    if not entries:
-        return
-    
-    print(f"\n-> Routes for {prefix} ({len(entries)} entries):")
-    
-    # Use prettytable if available, otherwise fall back to simple formatting
-    try:
-        table = PrettyTable()
-        table.field_names = ["Port", "Protocol", "Service", "Tenant", "Next Hop Interface", "Vector", "Cost"]
-        table.align = "l"
-        table.max_width = 20
-        
-        # Show ALL entries (removed truncation limit)
-        for entry in entries:
-            table.add_row([
-                entry.get('port', '-'),
-                entry.get('protocol', '-'),
-                entry.get('service', '-')[:18] + '..' if len(entry.get('service', '-')) > 20 else entry.get('service', '-'),
-                entry.get('tenant', '-')[:15] + '..' if len(entry.get('tenant', '-')) > 17 else entry.get('tenant', '-'),
-                entry.get('next_hops_interface', '-')[:15] + '..' if len(entry.get('next_hops_interface', '-')) > 17 else entry.get('next_hops_interface', '-'),
-                entry.get('vector', '-'),
-                entry.get('cost', '-')
-            ])
-        
-        print(table)
-            
-    except Exception as e:
-        # Fallback to simple text formatting if prettytable fails
-        print("   Port   | Protocol | Service              | Tenant           | Next Hop Interface")
-        print("   " + "-" * 80)
-        # Show ALL entries (removed truncation limit)
-        for entry in entries:
-            port = entry.get('port', '-')[:6]
-            protocol = entry.get('protocol', '-')[:8]
-            service = entry.get('service', '-')[:20]
-            tenant = entry.get('tenant', '-')[:16]
-            interface = entry.get('next_hops_interface', '-')[:18]
-            print(f"   {port:<6} | {protocol:<8} | {service:<20} | {tenant:<16} | {interface}")
+    """Backward compatibility wrapper for RoutingUtils.display_prefix_table_impl."""
+    RoutingUtils.display_prefix_table_impl(prefix, entries)
 
 
 def parse_routing_table_output(raw_output):
-    """
-    Parse routing table output from Mist device show route command.
-    
-    This function handles routing table output from various device types including:
-    - Switches with Layer 3 capabilities
-    - SRX routers
-    - SSR gateways
-    - Other routing-capable devices
-    
-    The output contains routing protocol information (RIB) showing routes learned
-    from BGP, OSPF, static configuration, directly connected networks, etc.
-    
-    Args:
-        raw_output (str): Raw output from show route command
-        
-    Returns:
-        list: List of parsed routing table entries as dictionaries
-    """
-    if not raw_output:
-        return []
-    
-    # Detect Juniper routing table format and use specialized parser
-    if any(pattern in raw_output for pattern in ['inet.0:', 'inet6.0:', 'Limit/Threshold:']):
-        return parse_juniper_routing_table(raw_output)
-    
-    # Fallback to generic parsing for other device types
-    routes = []
-    lines = raw_output.strip().split('\n')
-    
-    # Look for common routing table patterns across different device types
-    # Handle various output formats from different device vendors/models
-    
-    for line_num, line in enumerate(lines):
-        line = line.strip()
-        if not line or line.startswith('#') or line.startswith('show'):
-            continue
-            
-        # Parse common routing table patterns
-        # Different devices may have different output formats
-        
-        # Pattern 1: Standard route entry with prefix, next-hop, protocol
-        # Example: "192.168.1.0/24 via 10.0.0.1 dev eth0 proto bgp metric 100"
-        if ' via ' in line or ' dev ' in line or ' proto ' in line:
-            route_entry = parse_standard_route_line(line)
-            if route_entry:
-                routes.append(route_entry)
-                
-        # Pattern 2: Tabular format with columns
-        # Look for lines that appear to be route entries based on common fields
-        elif any(indicator in line.lower() for indicator in ['bgp', 'ospf', 'static', 'direct', 'connected']):
-            route_entry = parse_protocol_route_line(line)
-            if route_entry:
-                routes.append(route_entry)
-                
-        # Pattern 3: JSON-like structured output (some devices)
-        elif line.startswith('{') and line.endswith('}'):
-            try:
-                import json
-                route_data = json.loads(line)
-                route_entry = normalize_json_route_entry(route_data)
-                if route_entry:
-                    routes.append(route_entry)
-            except:
-                continue
-                
-        # Pattern 4: Space-separated tabular data
-        elif len(line.split()) >= 3:
-            route_entry = parse_tabular_route_line(line)
-            if route_entry:
-                routes.append(route_entry)
-    
-    return routes
+    """Backward compatibility wrapper for RoutingUtils.parse_routing_table."""
+    return RoutingUtils.parse_routing_table(raw_output)
 
 
 def parse_juniper_routing_table(raw_output):
-    """
-    Parse Juniper-specific routing table output format.
-    
-    Juniper routing tables have a specific multi-line format:
-    - Route table sections (inet.0:, inet6.0:)
-    - Multi-line route entries with continuation lines
-    - Route preferences indicated by >, *, +
-    - Protocol information in brackets like *[Direct/0]
-    
-    Example format:
-    0.0.0.0/0        *[Static/5] 00:01:02
-                    > via 192.168.1.1, irb.0
-    192.168.1.0/24   *[Direct/0] 1d 02:03:04
-                    > via irb.0
-    
-    Args:
-        raw_output (str): Raw routing table output from Juniper device
-        
-    Returns:
-        list: Parsed route entries
-    """
-    routes = []
-    lines = raw_output.strip().split('\n')
-    current_route = None
-    current_table = ""
-    
-    for line in lines:
-        line_stripped = line.strip()
-        
-        # Skip empty lines and headers
-        if not line_stripped:
-            continue
-            
-        # Detect routing table sections
-        if line_stripped.endswith(':') and any(table in line_stripped for table in ['inet.0', 'inet6.0', 'mpls.0']):
-            current_table = line_stripped.replace(':', '')
-            continue
-            
-        # Skip limit/threshold lines
-        if 'Limit/Threshold' in line_stripped or line_stripped == '+':
-            continue
-            
-        # Parse route entries
-        parts = line_stripped.split()
-        if not parts:
-            continue
-            
-        # Main route line (starts with destination prefix, not > or *)
-        if ('/' in parts[0] and not parts[0].startswith('>') and not parts[0].startswith('*') 
-            and not line_stripped.startswith(' ') and not line_stripped.startswith('>')):
-            
-            # Save previous route if exists
-            if current_route:
-                routes.append(current_route)
-                
-            # Start new route entry
-            current_route = {
-                'destination': parts[0],
-                'next_hop': '',
-                'interface': '',
-                'protocol': '',
-                'metric': '',
-                'admin_distance': '',
-                'table': current_table,
-                'active': False,
-                'selected': False
-            }
-            
-            # Look for protocol information in brackets on same line
-            line_remainder = ' '.join(parts[1:])
-            if '[' in line_remainder and ']' in line_remainder:
-                # Extract protocol and admin distance from [Protocol/admin_dist]
-                bracket_start = line_remainder.find('[')
-                bracket_end = line_remainder.find(']')
-                bracket_content = line_remainder[bracket_start + 1:bracket_end]
-                
-                # Mark as selected if starts with *
-                if line_remainder.startswith('*'):
-                    current_route['selected'] = True
-                    
-                if '/' in bracket_content:
-                    protocol_parts = bracket_content.split('/')
-                    current_route['protocol'] = protocol_parts[0]
-                    current_route['admin_distance'] = protocol_parts[1]
-                else:
-                    current_route['protocol'] = bracket_content
-                    
-        # Continuation lines (indented or start with > or *)
-        elif (current_route and (line_stripped.startswith('>') or line_stripped.startswith('*') 
-                                or line.startswith(' ') or line.startswith('\t'))):
-            
-            # Mark route as active if line starts with >
-            if line_stripped.startswith('>'):
-                current_route['active'] = True
-                line_stripped = line_stripped[1:].strip()
-                
-            # Parse via and interface information
-            if ' via ' in line_stripped:
-                # Extract next hop and interface
-                via_parts = line_stripped.split(' via ')[1].strip()
-                if ',' in via_parts:
-                    # Format: "via 192.168.1.1, irb.0"
-                    next_hop_part, interface_part = via_parts.split(',', 1)
-                    current_route['next_hop'] = next_hop_part.strip()
-                    current_route['interface'] = interface_part.strip()
-                else:
-                    # Format: "via irb.0" (direct interface)
-                    if '.' in via_parts and not '/' in via_parts:
-                        current_route['interface'] = via_parts.strip()
-                    else:
-                        current_route['next_hop'] = via_parts.strip()
-            
-            # Look for standalone interface (like "Local" or interface names)
-            elif line_stripped in ['Local']:
-                current_route['next_hop'] = 'Local'
-            elif '.' in line_stripped and len(line_stripped.split()) == 1:
-                current_route['interface'] = line_stripped
-    
-    # Add the last route
-    if current_route:
-        routes.append(current_route)
-    
-    return routes
+    """Backward compatibility wrapper for RoutingUtils.parse_juniper_routing."""
+    return RoutingUtils.parse_juniper_routing(raw_output)
 
 
 def parse_standard_route_line(line):
-    """Parse a standard route line with via/dev/proto keywords."""
-    try:
-        parts = line.split()
-        if len(parts) < 2:
-            return None
-            
-        route_entry = {
-            'destination': parts[0] if parts[0] != '*' else 'default',
-            'next_hop': '',
-            'interface': '',
-            'protocol': '',
-            'metric': '',
-            'admin_distance': ''
-        }
-        
-        # Extract next hop
-        if ' via ' in line:
-            via_index = line.find(' via ')
-            via_part = line[via_index + 5:].split()[0]
-            route_entry['next_hop'] = via_part
-            
-        # Extract interface  
-        if ' dev ' in line:
-            dev_index = line.find(' dev ')
-            dev_part = line[dev_index + 5:].split()[0]
-            route_entry['interface'] = dev_part
-            
-        # Extract protocol
-        if ' proto ' in line:
-            proto_index = line.find(' proto ')
-            proto_part = line[proto_index + 7:].split()[0]
-            route_entry['protocol'] = proto_part
-            
-        # Extract metric
-        if ' metric ' in line:
-            metric_index = line.find(' metric ')
-            metric_part = line[metric_index + 8:].split()[0]
-            route_entry['metric'] = metric_part
-            
-        return route_entry
-        
-    except Exception as e:
-        return None
+    """Backward compatibility wrapper for RoutingUtils.parse_standard_route_line."""
+    return RoutingUtils.parse_standard_route_line(line)
 
 
 def parse_protocol_route_line(line):
-    """Parse a route line containing protocol information."""
-    try:
-        parts = line.split()
-        if len(parts) < 2:
-            return None
-            
-        route_entry = {
-            'destination': '',
-            'next_hop': '',
-            'interface': '',
-            'protocol': '',
-            'metric': '',
-            'admin_distance': ''
-        }
-        
-        # Look for destination (first IP-like field)
-        for i, part in enumerate(parts):
-            if '/' in part or any(char.isdigit() for char in part) and '.' in part:
-                route_entry['destination'] = part
-                break
-                
-        # Identify protocol
-        for protocol in ['bgp', 'ospf', 'static', 'direct', 'connected', 'kernel', 'evpn']:
-            if protocol in line.lower():
-                route_entry['protocol'] = protocol.upper()
-                break
-                
-        # Look for next hop (IP address pattern)
-        import re
-        ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
-        ip_matches = re.findall(ip_pattern, line)
-        if len(ip_matches) > 1:  # First might be destination
-            route_entry['next_hop'] = ip_matches[1]
-        elif len(ip_matches) == 1 and route_entry['destination'] != ip_matches[0]:
-            route_entry['next_hop'] = ip_matches[0]
-            
-        return route_entry
-        
-    except Exception as e:
-        return None
+    """Backward compatibility wrapper for RoutingUtils.parse_protocol_route_line."""
+    return RoutingUtils.parse_protocol_route_line(line)
 
 
 def parse_tabular_route_line(line):
-    """Parse a space-separated tabular route line."""
-    try:
-        parts = line.split()
-        if len(parts) < 3:
-            return None
-            
-        route_entry = {
-            'destination': parts[0] if parts[0] not in ['*', '>'] else (parts[1] if len(parts) > 1 else ''),
-            'next_hop': '',
-            'interface': '',
-            'protocol': '',
-            'metric': '',
-            'admin_distance': ''
-        }
-        
-        # Common patterns for different positions
-        for i, part in enumerate(parts[1:], 1):
-            # Look for next hop (IP address)
-            if '.' in part and any(char.isdigit() for char in part) and part != route_entry['destination']:
-                if not route_entry['next_hop']:
-                    route_entry['next_hop'] = part
-                    
-            # Look for interface (often starts with common prefixes)
-            elif any(part.lower().startswith(prefix) for prefix in ['eth', 'ge-', 'xe-', 'fe-', 'lo', 'vlan']):
-                route_entry['interface'] = part
-                
-            # Look for protocol indicators
-            elif part.upper() in ['BGP', 'OSPF', 'STATIC', 'DIRECT', 'CONNECTED', 'KERNEL']:
-                route_entry['protocol'] = part.upper()
-                
-            # Look for metric (numeric)
-            elif part.isdigit() and not route_entry['metric']:
-                route_entry['metric'] = part
-                
-        return route_entry
-        
-    except Exception as e:
-        return None
+    """Backward compatibility wrapper for RoutingUtils.parse_tabular_route_line."""
+    return RoutingUtils.parse_tabular_route_line(line)
 
 
 def normalize_json_route_entry(route_data):
-    """Normalize a JSON route entry to standard format."""
-    try:
-        route_entry = {
-            'destination': route_data.get('destination', route_data.get('prefix', '')),
-            'next_hop': route_data.get('next_hop', route_data.get('nexthop', route_data.get('gateway', ''))),
-            'interface': route_data.get('interface', route_data.get('dev', route_data.get('outgoing_interface', ''))),
-            'protocol': route_data.get('protocol', route_data.get('proto', '')).upper(),
-            'metric': str(route_data.get('metric', route_data.get('cost', ''))),
-            'admin_distance': str(route_data.get('admin_distance', route_data.get('distance', '')))
-        }
-        return route_entry
-    except:
-        return None
+    """Backward compatibility wrapper for RoutingUtils.normalize_json_route_entry."""
+    return RoutingUtils.normalize_json_route_entry(route_data)
 
 
 def parse_ssr_routing_json(json_data):
-    """
-    Parse SSR/SRX routing table JSON data from the dedicated API.
-    
-    The SSR API returns structured JSON with columns definition and rows data:
-    {
-        "status": "SUCCESS",
-        "finished": true,
-        "message": "Bgp Routes Table",
-        "columns": [
-            {"id": "vrfName", "display_name": "Vrf Name", "type": "STRING"},
-            {"id": "prefix", "display_name": "Prefix", "type": "STRING"},
-            {"id": "name", "display_name": "Name", "type": "STRING"},
-            {"id": "metric", "display_name": "Metric", "type": "NUMBER"},
-            {"id": "weight", "display_name": "Weight", "type": "NUMBER"},
-            {"id": "path", "display_name": "AS Path", "type": "STRING"},
-            {"id": "localPreference", "display_name": "Local Preference", "type": "NUMBER"},
-            {"id": "status", "display_name": "Status", "type": "STRING"},
-            {"id": "selectionReason", "display_name": "Selection Reason", "type": "STRING"},
-            {"id": "nextHops", "display_name": "Next Hops", "type": "STRING"}
-        ],
-        "rows": [...]
-    }
-    
-    Args:
-        json_data (str): Raw JSON string from SSR API
-        
-    Returns:
-        list: List of parsed routing table entries as dictionaries
-    """
-    try:
-        # json is already imported globally
-        data = json.loads(json_data)
-        
-        if data.get("status") != "SUCCESS":
-            return []
-            
-        columns = data.get("columns", [])
-        rows = data.get("rows", [])
-        
-        if not columns or not rows:
-            return []
-        
-        route_entries = []
-        for row in rows:
-            # Map SSR fields to standard routing table format
-            route_entry = {
-                'destination': row.get('prefix', ''),
-                'next_hop': row.get('nextHops', ''),
-                'interface': '',  # SSR doesn't provide interface in this API
-                'protocol': 'BGP' if 'bgp' in data.get("message", "").lower() else 'Unknown',
-                'admin_distance': '',  # Not directly provided
-                'metric': str(row.get('metric', '')),
-                'status': row.get('status', ''),
-                'vrf': row.get('vrfName', 'default'),
-                'name': row.get('name', ''),
-                'weight': str(row.get('weight', '')),
-                'as_path': row.get('path', ''),
-                'local_preference': str(row.get('localPreference', '')),
-                'selection_reason': row.get('selectionReason', '')
-            }
-            route_entries.append(route_entry)
-            
-        return route_entries
-        
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        logging.warning(f"Failed to parse SSR routing JSON: {e}")
-        return []
+    """Backward compatibility wrapper for RoutingUtils.parse_ssr_routing."""
+    return RoutingUtils.parse_ssr_routing(json_data)
 
 
 def display_routing_table_summary(route_entries, query_params):
-    """
-    Display a formatted summary of routing table entries.
-    
-    Args:
-        route_entries (list): List of parsed routing table entries
-        query_params (dict): Original query parameters for context
-    """
-    if not route_entries:
-        print("-> No routing table entries found")
-        if query_params:
-            print("  -> Try adjusting query parameters:")
-            for key, value in query_params.items():
-                print(f"    - {key}: {value}")
-        return
-    
-    print(f"-> Total routing table entries: {len(route_entries)}")
-    
-    # Group routes by protocol for summary
-    protocols = {}
-    destinations = set()
-    next_hops = set()
-    interfaces = set()
-    tables = set()
-    active_routes = 0
-    
-    for entry in route_entries:
-        protocol = entry.get('protocol', 'Unknown').upper()
-        if protocol and protocol != 'UNKNOWN':
-            protocols[protocol] = protocols.get(protocol, 0) + 1
-        
-        if entry.get('destination') and entry.get('destination') != '-':
-            destinations.add(entry['destination'])
-        if entry.get('next_hop') and entry.get('next_hop') not in ['-', '']:
-            next_hops.add(entry['next_hop'])
-        if entry.get('interface') and entry.get('interface') not in ['-', '']:
-            interfaces.add(entry['interface'])
-        if entry.get('table'):
-            tables.add(entry['table'])
-        if entry.get('active'):
-            active_routes += 1
-    
-    # Display protocol summary  
-    if protocols:
-        print(f"-> Protocols: {', '.join([f'{proto}({count})' for proto, count in protocols.items()])}")
-    
-    # Display table summary if multiple tables
-    if len(tables) > 1:
-        print(f"-> Routing tables: {', '.join(sorted(tables))}")
-    
-    print(f"-> Unique destinations: {len(destinations)}")
-    print(f"-> Unique next hops: {len(next_hops)}")
-    print(f"-> Unique interfaces: {len(interfaces)}")
-    
-    if active_routes > 0:
-        print(f"-> Active routes (marked with >): {active_routes}")
-    
-    # Display detailed routing table
-    print(f"\n-> Detailed routing table:")
-    display_routing_table_details(route_entries)
+    """Backward compatibility wrapper for RoutingUtils.display_routing_summary."""
+    RoutingUtils.display_routing_summary(route_entries, query_params)
 
 
 def display_routing_table_details(route_entries):
-    """
-    Display detailed routing table in a formatted table.
-    
-    Args:
-        route_entries (list): List of parsed routing table entries
-    """
-    if not route_entries:
-        return
-        
-    # Use prettytable if available, otherwise fall back to simple formatting
-    try:
-        table = PrettyTable()
-        table.field_names = ["Status", "Destination", "Next Hop", "Interface", "Protocol", "Admin Dist"]
-        table.align = "l"
-        # Remove max_width to prevent truncation
-        
-        # Show all entries with full data (no truncation)
-        for entry in route_entries:
-            # Create status indicator
-            status = ""
-            if entry.get('active'):
-                status += ">"
-            if entry.get('selected'):
-                status += "*"
-            if not status:
-                status = " "
-                
-            # Clean up fields - replace empty/None with dash
-            dest = entry.get('destination', '-')
-            if not dest or dest == '':
-                dest = '-'
-                
-            next_hop = entry.get('next_hop', '-')
-            if not next_hop or next_hop == '':
-                next_hop = '-'
-                
-            interface = entry.get('interface', '-')
-            if not interface or interface == '':
-                interface = '-'
-                
-            protocol = entry.get('protocol', '-')
-            if not protocol or protocol == '':
-                protocol = '-'
-                
-            admin_dist = entry.get('admin_distance', '-')
-            if not admin_dist or admin_dist == '':
-                admin_dist = '-'
-            
-            # Add row without truncation
-            table.add_row([
-                status,
-                dest,
-                next_hop,
-                interface,
-                protocol,
-                admin_dist
-            ])
-        
-        print(table)
-        
-        # Add legend for status indicators
-        print("\nStatus Legend:")
-        print("  > = Active route (installed in forwarding table)")
-        print("  * = Selected route (best route among alternatives)")
-            
-    except Exception as e:
-        # Fallback to simple text formatting if prettytable fails
-        print("   Status | Destination              | Next Hop        | Interface       | Protocol | Dist")
-        print("   " + "-" * 95)
-        for entry in route_entries:
-            status = ""
-            if entry.get('active'):
-                status += ">"
-            if entry.get('selected'):
-                status += "*"
-            if not status:
-                status = " "
-                
-            dest = entry.get('destination', '-')
-            next_hop = entry.get('next_hop', '-')
-            interface = entry.get('interface', '-')
-            protocol = entry.get('protocol', '-')
-            admin_dist = entry.get('admin_distance', '-')
-            print(f"   {status:<6} | {dest:<25} | {next_hop:<15} | {interface:<15} | {protocol:<8} | {admin_dist}")
-        
-        print("\nStatus Legend:")
-        print("  > = Active route, * = Selected route")
+    """Backward compatibility wrapper for RoutingUtils.display_routing_details."""
+    RoutingUtils.display_routing_details(route_entries)
 
 
 def display_ssr_routing_table(route_entries, query_params):
-    """
-    Display SSR/SRX routing table with enhanced BGP-specific information.
-    
-    Args:
-        route_entries (list): List of parsed SSR routing table entries
-        query_params (dict): Original query parameters for context
-    """
-    if not route_entries:
-        print("-> No routing table entries found")
-        if query_params:
-            print("  -> Try adjusting query parameters:")
-            for key, value in query_params.items():
-                print(f"    - {key}: {value}")
-        return
-    
-    # Count and categorize routes
-    total_routes = len(route_entries)
-    protocols = {}
-    vrfs = {}
-    next_hops = set()
-    
-    for entry in route_entries:
-        protocol = entry.get('protocol', 'Unknown')
-        protocols[protocol] = protocols.get(protocol, 0) + 1
-        
-        vrf = entry.get('vrf', 'default')
-        vrfs[vrf] = vrfs.get(vrf, 0) + 1
-        
-        next_hop = entry.get('next_hop', '')
-        if next_hop and next_hop != '0.0.0.0':
-            next_hops.add(next_hop)
-    
-    # Display summary
-    print(f"-> Total routing table entries: {total_routes}")
-    
-    protocol_summary = ", ".join([f"{proto}({count})" for proto, count in protocols.items()])
-    print(f"-> Protocols: {protocol_summary}")
-    
-    vrf_summary = ", ".join([f"{vrf}({count})" for vrf, count in vrfs.items()])
-    print(f"-> VRFs: {vrf_summary}")
-    
-    print(f"-> Unique next hops: {len(next_hops)}")
-    
-    # Display detailed table using prettytable
-    try:
-        table = PrettyTable()
-        table.field_names = ["Destination", "Next Hop", "Protocol", "Route Name", "Status", "Selection Reason", "Weight", "Metric", "Local Pref", "AS Path", "VRF"]
-        table.align = "l"
-        # Remove max_width to allow full data display
-        
-        for entry in route_entries:
-            vrf = entry.get('vrf', 'default')
-            destination = entry.get('destination', '-')
-            next_hop = entry.get('next_hop', '-')
-            protocol = entry.get('protocol', '-')
-            status = entry.get('status', '-')
-            weight = entry.get('weight', '-')
-            metric = entry.get('metric', '-')
-            local_pref = entry.get('local_preference', '-')
-            as_path = entry.get('as_path', '-')
-            route_name = entry.get('name', '-')
-            selection_reason = entry.get('selection_reason', '-')
-            
-            # No truncation - show full data
-            table.add_row([
-                destination,
-                next_hop,
-                protocol,
-                route_name,
-                status,
-                selection_reason,
-                weight,
-                metric,
-                local_pref,
-                as_path,
-                vrf
-            ])
-        
-        print(f"\n-> Detailed routing table:")
-        print(table)
-        
-    except Exception as e:
-        # Fallback to simple formatting
-        print(f"\n-> Detailed routing table:")
-        print("   Destination | Next Hop | Protocol | Route Name | Status | Selection Reason | Weight | Metric | Local Pref | AS Path | VRF")
-        print("   " + "-" * 140)
-        for entry in route_entries:
-            dest = entry.get('destination', '-')
-            next_hop = entry.get('next_hop', '-')
-            protocol = entry.get('protocol', '-')
-            route_name = entry.get('name', '-')
-            status = entry.get('status', '-')
-            selection_reason = entry.get('selection_reason', '-')
-            weight = entry.get('weight', '-')
-            metric = entry.get('metric', '-')
-            local_pref = entry.get('local_preference', '-')
-            as_path = entry.get('as_path', '-')
-            vrf = entry.get('vrf', 'default')
-            print(f"   {dest} | {next_hop} | {protocol} | {route_name} | {status} | {selection_reason} | {weight} | {metric} | {local_pref} | {as_path} | {vrf}")
+    """Backward compatibility wrapper for RoutingUtils.display_ssr_routing."""
+    RoutingUtils.display_ssr_routing(route_entries, query_params)
 
 
 def show_forwarding_table_websocket():
