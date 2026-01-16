@@ -1819,16 +1819,6 @@ def log_dynamic_lookback(context: str, hours: int):
 # IMPORT STATUS AND HELPER FUNCTIONS
 # ============================================================================
 
-def get_import_status():
-    """Get status of all imports for debugging."""
-    return {
-        'required_packages': import_manager.required_packages,
-        'optional_packages': import_manager.optional_packages,
-        'failed_imports': import_manager.failed_imports,
-        'successful_imports': list(import_manager.imports.keys()),
-        'installed_packages': import_manager.installed_packages
-    }
-
 def ensure_tqdm_available():
     """Ensure tqdm is available and properly imported."""
     global tqdm
