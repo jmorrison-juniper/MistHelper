@@ -2634,6 +2634,37 @@ class DisplayUtils:
 
         # Log the table as a string (debug mode only)
         logging.debug("\n" + table.get_string())
+    
+    @staticmethod
+    def create_progress_bar(progress_percentage: int, bar_length: int = 20) -> str:
+        """
+        Create an ASCII progress bar visualization for upgrade progress.
+        
+        Args:
+            progress_percentage: Progress value from 0 to 100
+            bar_length: Total length of the progress bar in characters
+        
+        Returns:
+            str: Formatted progress bar string like "[=========>          ] 45%"
+        """
+        if progress_percentage is None or progress_percentage < 0:
+            progress_percentage = 0
+        elif progress_percentage > 100:
+            progress_percentage = 100
+        
+        filled_length = int(bar_length * progress_percentage / 100)
+        
+        if filled_length == bar_length:
+            # Complete: all filled
+            bar = '=' * bar_length
+        elif filled_length == 0:
+            # Just started: all empty
+            bar = ' ' * bar_length
+        else:
+            # In progress: filled portion + arrow + empty portion
+            bar = '=' * (filled_length - 1) + '>' + ' ' * (bar_length - filled_length)
+        
+        return f"[{bar}] {progress_percentage:3d}%"
 
 
 # Backward compatibility wrapper - will be removed in future version
@@ -34147,35 +34178,10 @@ class FirmwareManager:
         return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
-def create_progress_bar(progress_percentage, bar_length=20):
-    """
-    Create an ASCII progress bar visualization for upgrade progress.
-    
-    Args:
-        progress_percentage (int): Progress value from 0 to 100
-        bar_length (int): Total length of the progress bar in characters
-    
-    Returns:
-        str: Formatted progress bar string like "[=========>          ] 45%"
-    """
-    if progress_percentage is None or progress_percentage < 0:
-        progress_percentage = 0
-    elif progress_percentage > 100:
-        progress_percentage = 100
-    
-    filled_length = int(bar_length * progress_percentage / 100)
-    
-    if filled_length == bar_length:
-        # Complete: all filled
-        bar = '=' * bar_length
-    elif filled_length == 0:
-        # Just started: all empty
-        bar = ' ' * bar_length
-    else:
-        # In progress: filled portion + arrow + empty portion
-        bar = '=' * (filled_length - 1) + '>' + ' ' * (bar_length - filled_length)
-    
-    return f"[{bar}] {progress_percentage:3d}%"
+# Backward compatibility wrapper - will be removed in future version
+def create_progress_bar(progress_percentage: int, bar_length: int = 20) -> str:
+    """Legacy function - use DisplayUtils.create_progress_bar() instead."""
+    return DisplayUtils.create_progress_bar(progress_percentage, bar_length)
 
 
 def check_firmware_upgrade_status_direct():
