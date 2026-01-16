@@ -17276,7 +17276,14 @@ class InteractiveDisplayUtils:
         """
         Prompts the user to select a site and displays its device inventory.
         """
-        interactive_display_site_inventory()
+        logging.info("Prompting user to select a site for device inventory view...")
+        print("Select a Site to View Device Inventory:")
+        site_id = prompt_select_site_id_from_csv()
+        if site_id:
+            logging.info(f"User selected site_id: {site_id} for inventory display.")
+            show_site_device_inventory(site_id)
+        else:
+            logging.warning("No site selected or invalid input provided for site selection.")
     
     @staticmethod
     def device_stats(site_id=None, device_id=None):
@@ -17287,77 +17294,42 @@ class InteractiveDisplayUtils:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        interactive_display_device_stats(site_id, device_id)
+        logging.info("Prompting user to select a device for detailed statistics view...")
+        interactive_fetch_device_data_to_csv(
+            fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
+            filename="DeviceStats.csv",
+            description="Fetching detailed stats",
+            site_id=site_id,
+            device_id=device_id
+        )
+        logging.info("Completed device_stats execution.")
     
     @staticmethod
     def device_tests():
         """
         Prompts user to select a gateway device and displays its synthetic test stats.
         """
-        interactive_display_device_tests()
+        logging.info("Prompting user to select a gateway device for synthetic test stats view...")
+        interactive_fetch_device_data_to_csv(
+            fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
+            filename="DeviceTestResults.csv",
+            description="Fetching synthetic test stats",
+            device_type="gateway"
+        )
+        logging.info("Completed device_tests execution.")
     
     @staticmethod
     def device_config():
         """
         Prompts user to select a device and displays its configuration details.
         """
-        interactive_display_device_config()
-
-
-# Backward compatibility - original interactive function definitions follow
-def interactive_display_site_inventory():
-    """
-    Prompts the user to select a site and displays its device inventory.
-    """
-    logging.info("Prompting user to select a site for device inventory view...")
-    print("Select a Site to View Device Inventory:")
-    site_id = prompt_select_site_id_from_csv()
-    if site_id:
-        logging.info(f"User selected site_id: {site_id} for inventory display.")
-        show_site_device_inventory(site_id)
-    else:
-        logging.warning("No site selected or invalid input provided for site selection.")
-
-def interactive_display_device_stats(site_id=None, device_id=None):
-    """
-    Fetches and displays detailed statistics for a specific device (by site_id/device_id if provided, else prompts user).
-    """
-    logging.info("Prompting user to select a device for detailed statistics view...")
-    interactive_fetch_device_data_to_csv(
-        fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
-        filename="DeviceStats.csv",
-        description="Fetching detailed stats",
-        site_id=site_id,
-        device_id=device_id
-    )
-    logging.info("Completed interactive_display_device_stats execution.")
-
-def interactive_display_device_tests():
-    """
-    Prompts user to select a gateway device and displays its synthetic test stats.
-    """
-    logging.info("Prompting user to select a gateway device for synthetic test stats view...")
-    # Call the interactive_fetch_device_data_to_csv helper with the appropriate Mist API function
-    interactive_fetch_device_data_to_csv(
-        fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
-        filename="DeviceTestResults.csv",
-        description="Fetching synthetic test stats",
-        device_type="gateway"
-    )
-    logging.info("Completed interactive_display_device_tests execution.")
-
-def interactive_display_device_config():
-    """
-    Prompts user to select a device and displays its configuration details.
-    """
-    logging.info("Prompting user to select a device for configuration details view...")  # Log start
-    # Call the interactive_fetch_device_data_to_csv helper with the appropriate Mist API function
-    interactive_fetch_device_data_to_csv(
-        fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
-        filename="DeviceConfig.csv",
-        description="Fetching device configuration"
-    )
-    logging.info("Completed interactive_display_device_config execution.")  # Log completion
+        logging.info("Prompting user to select a device for configuration details view...")
+        interactive_fetch_device_data_to_csv(
+            fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
+            filename="DeviceConfig.csv",
+            description="Fetching device configuration"
+        )
+        logging.info("Completed device_config execution.")
 
 def export_all_devices_to_csv():
     """
@@ -18837,334 +18809,312 @@ class TroubleshootUtils:
         Troubleshoot client connectivity issues using Marvis AI.
         Uses guided client selection instead of manual MAC address entry.
         """
-        troubleshoot_client_connectivity()
+        print("\n  Client Connectivity Troubleshooting")
+        print("=" * 50)
+        
+        # Use guided client selection
+        client_mac, client_type, site_id = prompt_client_selection()
+        if not client_mac:
+            print(" No client selected. Returning to main menu.")
+            return
+        
+        org_id = get_cached_or_prompted_org_id()
+        
+        try:
+            print(f"! Running Marvis AI analysis for client {client_mac}...")
+            print(f"   Client Type: {client_type}")
+            if site_id:
+                print(f"   Site ID: {site_id}")
+            
+            logging.info(f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}")
+            
+            # Prepare parameters for troubleshoot call
+            params = {"mac": client_mac}
+            if site_id:
+                params["site_id"] = site_id
+                
+            # Add client type parameter for proper troubleshooting context
+            if client_type in ["wired", "wireless"]:
+                params["type"] = client_type
+                logging.debug(f"MARVIS DEBUG: Added type parameter: {client_type}")
+            
+            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with params: {params}")
+            
+            # Call Marvis troubleshoot endpoint
+            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
+            
+            if response.data:
+                print(" Marvis AI analysis completed!")
+                print(f"! Analysis results available.")
+                
+                # Save results to CSV with optimized formatting
+                data = format_marvis_data_for_csv(response.data, "client")
+                
+                filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
+                DataExporter.save_data_to_output(data, filename)
+                print(f"! Results saved to {filename}")
+                
+                # Display summary
+                if isinstance(response.data, dict):
+                    if 'results' in response.data:
+                        print("\n  Marvis Analysis Summary:")
+                        for result in response.data.get('results', []):
+                            print(f"  !? {result.get('description', 'Analysis result')}")
+                            if result.get('action'):
+                                print(f"    Recommended Action: {result['action']}")
+                    elif 'insights' in response.data:
+                        print("\n  Marvis Insights:")
+                        insights = response.data.get('insights', [])
+                        for insight in insights:
+                            print(f"  !? {insight.get('description', insight)}")
+                    else:
+                        print(f"\n  Analysis Data: {len(data)} items processed")
+            else:
+                print(" No specific connectivity issues found for this client.")
+                print(" This could indicate the client is functioning normally.")
+                
+        except Exception as e:
+            logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
+            print(f"! Failed to troubleshoot client: {e}")
+            print(" This may indicate:")
+            print("   - Marvis (VNA) is not enabled for your organization")
+            print("   - The client is not currently active or found")
+            print("   - Insufficient permissions for Marvis troubleshooting")
+            print("   - API connectivity issues")
     
     @staticmethod
     def device_performance():
         """
         Troubleshoot device performance issues using Marvis AI.
-        Uses guided device selection for targeted analysis.
+        Uses guided site and device selection workflow.
         """
-        troubleshoot_device_performance()
+        logging.debug("MARVIS DEBUG: Entering device_performance()")
+        print("\n  Device Performance Troubleshooting")
+        print("=" * 50)
+        
+        # Get site selection first
+        site_id = prompt_site_selection()
+        if not site_id:
+            print(" No site selected.")
+            logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
+            return
+        
+        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
+        
+        # Get device selection
+        device_id = prompt_device_selection(site_id)
+        if not device_id:
+            print(" No device selected.")
+            logging.debug("MARVIS DEBUG: No device selected")
+            return
+        
+        logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
+        org_id = get_cached_or_prompted_org_id()
+        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
+        
+        try:
+            # Get device MAC address from device ID
+            print(f"! Looking up device details...")
+            logging.debug(f"MARVIS DEBUG: About to get device details for device_id: {device_id} in site: {site_id}")
+            
+            device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            logging.debug(f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}")
+            
+            if not device_response.data:
+                print(" Could not retrieve device details.")
+                logging.debug("MARVIS DEBUG: Device response data is None")
+                return
+                
+            logging.debug(f"MARVIS DEBUG: Device data keys: {list(device_response.data.keys()) if isinstance(device_response.data, dict) else 'not a dict'}")
+            
+            device_mac = device_response.data.get('mac')
+            device_name = device_response.data.get('name', 'Unknown Device')
+            
+            logging.debug(f"MARVIS DEBUG: Device MAC: {device_mac}")
+            logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
+            
+            if not device_mac:
+                print(" Could not determine device MAC address.")
+                logging.debug("MARVIS DEBUG: Device MAC is None or empty")
+                return
+            
+            print(f"! Running Marvis AI performance analysis...")
+            print(f"   Device: {device_name} ({device_mac})")
+            print(f"   Site ID: {site_id}")
+            
+            logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
+            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
+            
+            # Call Marvis troubleshoot endpoint for device using MAC address
+            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
+                apisession, org_id, 
+                mac=device_mac, 
+                site_id=site_id
+            )
+            
+            logging.debug(f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}")
+            logging.debug(f"MARVIS DEBUG: Device response data type: {type(response.data)}")
+            logging.debug(f"MARVIS DEBUG: Device response data is None: {response.data is None}")
+            
+            if response.data:
+                logging.debug(f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
+                logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
+                
+                print(" Marvis AI device analysis completed!")
+                
+                # Save results to CSV with optimized formatting
+                data = format_marvis_data_for_csv(response.data, "device")
+                logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
+                
+                filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
+                DataExporter.save_data_to_output(data, filename)
+                print(f"! Results saved to {filename}")
+                
+                # Display summary if available
+                if isinstance(response.data, dict):
+                    if 'results' in response.data:
+                        results = response.data.get('results', [])
+                        logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
+                        print("\n  Device Performance Analysis:")
+                        for result in results:
+                            print(f"  !? {result.get('description', 'Analysis result')}")
+                            if result.get('action'):
+                                print(f"    Recommended Action: {result['action']}")
+                    elif 'insights' in response.data:
+                        print("\n  Marvis Device Insights:")
+                        insights = response.data.get('insights', [])
+                        logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
+                        for insight in insights:
+                            print(f"  !? {insight.get('description', insight)}")
+                    else:
+                        logging.debug("MARVIS DEBUG: No results or insights in device response")
+                        print(f"\n  Analysis Data: {len(data)} items processed")
+                
+            else:
+                logging.debug("MARVIS DEBUG: Device response data is None or empty")
+                print(" No performance issues detected for this device.")
+                print(" This could indicate the device is operating within normal parameters.")
+                
+        except Exception as e:
+            logging.error(f"MARVIS DEBUG: Exception in device_performance: {e}")
+            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
+            logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
+            print(f"! Failed to troubleshoot device: {e}")
+            print(" This may indicate:")
+            print("   - The device is not found or not supported by Marvis")
+            print("   - Marvis (VNA) is not enabled for your organization")
+            print("   - Insufficient permissions for device troubleshooting")
+        
+        logging.debug("MARVIS DEBUG: Exiting device_performance()")
     
     @staticmethod
     def network_connectivity():
         """
-        Troubleshoot network connectivity issues using Marvis AI.
-        Analyzes network-wide connectivity patterns at the site level.
+        Troubleshoot general network connectivity issues using Marvis AI.
+        Provides site-level network analysis and insights.
         """
-        troubleshoot_network_connectivity()
-
-
-# Backward compatibility - original troubleshoot function definitions follow
-def troubleshoot_client_connectivity():
-    """
-    Troubleshoot client connectivity issues using Marvis AI.
-    Uses guided client selection instead of manual MAC address entry.
-    """
-    print("\n  Client Connectivity Troubleshooting")
-    print("=" * 50)
-    
-    # Use guided client selection
-    client_mac, client_type, site_id = prompt_client_selection()
-    if not client_mac:
-        print(" No client selected. Returning to main menu.")
-        return
-    
-    org_id = get_cached_or_prompted_org_id()
-    
-    try:
-        print(f"! Running Marvis AI analysis for client {client_mac}...")
-        print(f"   Client Type: {client_type}")
-        if site_id:
+        logging.debug("MARVIS DEBUG: Entering network_connectivity()")
+        print("\n  Network Connectivity Troubleshooting")
+        print("=" * 50)
+        
+        # Get site selection
+        site_id = prompt_site_selection()
+        if not site_id:
+            print(" No site selected.")
+            logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
+            return
+        
+        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
+        org_id = get_cached_or_prompted_org_id()
+        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
+        
+        try:
+            print(f"! Running Marvis AI network analysis...")
+            print(f"   Analyzing site-level connectivity")
             print(f"   Site ID: {site_id}")
-        
-        logging.info(f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}")
-        
-        # Prepare parameters for troubleshoot call
-        params = {"mac": client_mac}
-        if site_id:
-            params["site_id"] = site_id
             
-        # Add client type parameter for proper troubleshooting context
-        if client_type in ["wired", "wireless"]:
-            params["type"] = client_type
-            logging.debug(f"MARVIS DEBUG: Added type parameter: {client_type}")
-        
-        logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with params: {params}")
-        
-        # Call Marvis troubleshoot endpoint
-        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
-        
-        if response.data:
-            print(" Marvis AI analysis completed!")
-            print(f"! Analysis results available.")
+            logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
+            logging.debug(f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}")
             
-            # Save results to CSV with optimized formatting
-            data = format_marvis_data_for_csv(response.data, "client")
+            # Call Marvis troubleshoot endpoint for site
+            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
+                apisession, org_id, 
+                site_id=site_id
+            )
             
-            filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
-            DataExporter.save_data_to_output(data, filename)
-            print(f"! Results saved to {filename}")
+            logging.debug(f"MARVIS DEBUG: API response received. Status: {response.status if hasattr(response, 'status') else 'unknown'}")
+            logging.debug(f"MARVIS DEBUG: Response data type: {type(response.data)}")
+            logging.debug(f"MARVIS DEBUG: Response data is None: {response.data is None}")
             
-            # Display summary
-            if isinstance(response.data, dict):
-                if 'results' in response.data:
-                    print("\n  Marvis Analysis Summary:")
-                    for result in response.data.get('results', []):
-                        print(f"  !? {result.get('description', 'Analysis result')}")
-                        if result.get('action'):
-                            print(f"    Recommended Action: {result['action']}")
-                elif 'insights' in response.data:
-                    print("\n  Marvis Insights:")
-                    insights = response.data.get('insights', [])
-                    for insight in insights:
-                        print(f"  !? {insight.get('description', insight)}")
+            if response.data:
+                logging.debug(f"MARVIS DEBUG: Response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
+                logging.debug(f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}")
+                logging.debug(f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}")
+                
+                print(" Marvis AI network analysis completed!")
+                
+                # Save results to CSV with optimized formatting
+                logging.debug("MARVIS DEBUG: About to format data for CSV")
+                data = format_marvis_data_for_csv(response.data, "network")
+                logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
+                logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
+                
+                filename = f"MarvisInsights_Network_{site_id}.csv"
+                DataExporter.save_data_to_output(data, filename)
+                print(f"! Results saved to {filename}")
+                logging.debug(f"MARVIS DEBUG: Saved data to {filename}")
+                
+                # Display summary if available
+                if isinstance(response.data, dict):
+                    logging.debug("MARVIS DEBUG: Response data is a dict, checking for results/insights")
+                    if 'results' in response.data:
+                        results = response.data.get('results', [])
+                        logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
+                        print("\n  Network Connectivity Analysis:")
+                        for idx, result in enumerate(results):
+                            logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
+                            description = result.get('description', 'Analysis result') if isinstance(result, dict) else str(result)
+                            print(f"  !? {description}")
+                            if isinstance(result, dict) and result.get('action'):
+                                print(f"    Recommended Action: {result['action']}")
+                    elif 'insights' in response.data:
+                        insights = response.data.get('insights', [])
+                        logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
+                        print("\n  Marvis Network Insights:")
+                        for idx, insight in enumerate(insights):
+                            logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
+                            description = insight.get('description', insight) if isinstance(insight, dict) else str(insight)
+                            print(f"  !? {description}")
+                    else:
+                        logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
+                        logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
+                        print(f"\n  Analysis Data: {len(data)} items processed")
+                        if response.data:
+                            print(f"! Raw response keys: {list(response.data.keys())}")
+                            # Show some raw data for debugging
+                            for key, value in list(response.data.items())[:5]:
+                                print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
                 else:
-                    print(f"\n  Analysis Data: {len(data)} items processed")
-        else:
-            print(" No specific connectivity issues found for this client.")
-            print(" This could indicate the client is functioning normally.")
-            
-    except Exception as e:
-        logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
-        print(f"! Failed to troubleshoot client: {e}")
-        print(" This may indicate:")
-        print("   - Marvis (VNA) is not enabled for your organization")
-        print("   - The client is not currently active or found")
-        print("   - Insufficient permissions for Marvis troubleshooting")
-        print("   - API connectivity issues")
-
-def troubleshoot_device_performance():
-    """
-    Troubleshoot device performance issues using Marvis AI.
-    Uses guided site and device selection workflow.
-    """
-    logging.debug("MARVIS DEBUG: Entering troubleshoot_device_performance()")
-    print("\n  Device Performance Troubleshooting")
-    print("=" * 50)
-    
-    # Get site selection first
-    site_id = prompt_site_selection()
-    if not site_id:
-        print(" No site selected.")
-        logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
-        return
-    
-    logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-    
-    # Get device selection
-    device_id = prompt_device_selection(site_id)
-    if not device_id:
-        print(" No device selected.")
-        logging.debug("MARVIS DEBUG: No device selected")
-        return
-    
-    logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
-    org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-    
-    try:
-        # Get device MAC address from device ID
-        print(f"! Looking up device details...")
-        logging.debug(f"MARVIS DEBUG: About to get device details for device_id: {device_id} in site: {site_id}")
-        
-        device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-        logging.debug(f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}")
-        
-        if not device_response.data:
-            print(" Could not retrieve device details.")
-            logging.debug("MARVIS DEBUG: Device response data is None")
-            return
-            
-        logging.debug(f"MARVIS DEBUG: Device data keys: {list(device_response.data.keys()) if isinstance(device_response.data, dict) else 'not a dict'}")
-        
-        device_mac = device_response.data.get('mac')
-        device_name = device_response.data.get('name', 'Unknown Device')
-        
-        logging.debug(f"MARVIS DEBUG: Device MAC: {device_mac}")
-        logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
-        
-        if not device_mac:
-            print(" Could not determine device MAC address.")
-            logging.debug("MARVIS DEBUG: Device MAC is None or empty")
-            return
-        
-        print(f"! Running Marvis AI performance analysis...")
-        print(f"   Device: {device_name} ({device_mac})")
-        print(f"   Site ID: {site_id}")
-        
-        logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
-        logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
-        
-        # Call Marvis troubleshoot endpoint for device using MAC address
-        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
-            apisession, org_id, 
-            mac=device_mac, 
-            site_id=site_id
-        )
-        
-        logging.debug(f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}")
-        logging.debug(f"MARVIS DEBUG: Device response data type: {type(response.data)}")
-        logging.debug(f"MARVIS DEBUG: Device response data is None: {response.data is None}")
-        
-        if response.data:
-            logging.debug(f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
-            logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
-            
-            print(" Marvis AI device analysis completed!")
-            
-            # Save results to CSV with optimized formatting
-            data = format_marvis_data_for_csv(response.data, "device")
-            logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
-            
-            filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
-            DataExporter.save_data_to_output(data, filename)
-            print(f"! Results saved to {filename}")
-            
-            # Display summary if available
-            if isinstance(response.data, dict):
-                if 'results' in response.data:
-                    results = response.data.get('results', [])
-                    logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
-                    print("\n  Device Performance Analysis:")
-                    for result in results:
-                        print(f"  !? {result.get('description', 'Analysis result')}")
-                        if result.get('action'):
-                            print(f"    Recommended Action: {result['action']}")
-                elif 'insights' in response.data:
-                    print("\n  Marvis Device Insights:")
-                    insights = response.data.get('insights', [])
-                    logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
-                    for insight in insights:
-                        print(f"  !? {insight.get('description', insight)}")
-                else:
-                    logging.debug("MARVIS DEBUG: No results or insights in device response")
-                    print(f"\n  Analysis Data: {len(data)} items processed")
-            
-        else:
-            logging.debug("MARVIS DEBUG: Device response data is None or empty")
-            print(" No performance issues detected for this device.")
-            print(" This could indicate the device is operating within normal parameters.")
-            
-    except Exception as e:
-        logging.error(f"MARVIS DEBUG: Exception in troubleshoot_device_performance: {e}")
-        logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-        logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
-        print(f"! Failed to troubleshoot device: {e}")
-        print(" This may indicate:")
-        print("   - The device is not found or not supported by Marvis")
-        print("   - Marvis (VNA) is not enabled for your organization")
-        print("   - Insufficient permissions for device troubleshooting")
-    
-    logging.debug("MARVIS DEBUG: Exiting troubleshoot_device_performance()")
-
-def troubleshoot_network_connectivity():
-    """
-    Troubleshoot general network connectivity issues using Marvis AI.
-    Provides site-level network analysis and insights.
-    """
-    logging.debug("MARVIS DEBUG: Entering troubleshoot_network_connectivity()")
-    print("\n  Network Connectivity Troubleshooting")
-    print("=" * 50)
-    
-    # Get site selection
-    site_id = prompt_site_selection()
-    if not site_id:
-        print(" No site selected.")
-        logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
-        return
-    
-    logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-    org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-    
-    try:
-        print(f"! Running Marvis AI network analysis...")
-        print(f"   Analyzing site-level connectivity")
-        print(f"   Site ID: {site_id}")
-        
-        logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
-        logging.debug(f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}")
-        
-        # Call Marvis troubleshoot endpoint for site
-        response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
-            apisession, org_id, 
-            site_id=site_id
-        )
-        
-        logging.debug(f"MARVIS DEBUG: API response received. Status: {response.status if hasattr(response, 'status') else 'unknown'}")
-        logging.debug(f"MARVIS DEBUG: Response data type: {type(response.data)}")
-        logging.debug(f"MARVIS DEBUG: Response data is None: {response.data is None}")
-        
-        if response.data:
-            logging.debug(f"MARVIS DEBUG: Response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}")
-            logging.debug(f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}")
-            logging.debug(f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}")
-            
-            print(" Marvis AI network analysis completed!")
-            
-            # Save results to CSV with optimized formatting
-            logging.debug("MARVIS DEBUG: About to format data for CSV")
-            data = format_marvis_data_for_csv(response.data, "network")
-            logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
-            logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
-            
-            filename = f"MarvisInsights_Network_{site_id}.csv"
-            DataExporter.save_data_to_output(data, filename)
-            print(f"! Results saved to {filename}")
-            logging.debug(f"MARVIS DEBUG: Saved data to {filename}")
-            
-            # Display summary if available
-            if isinstance(response.data, dict):
-                logging.debug("MARVIS DEBUG: Response data is a dict, checking for results/insights")
-                if 'results' in response.data:
-                    results = response.data.get('results', [])
-                    logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
-                    print("\n  Network Connectivity Analysis:")
-                    for idx, result in enumerate(results):
-                        logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
-                        description = result.get('description', 'Analysis result') if isinstance(result, dict) else str(result)
-                        print(f"  !? {description}")
-                        if isinstance(result, dict) and result.get('action'):
-                            print(f"    Recommended Action: {result['action']}")
-                elif 'insights' in response.data:
-                    insights = response.data.get('insights', [])
-                    logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
-                    print("\n  Marvis Network Insights:")
-                    for idx, insight in enumerate(insights):
-                        logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
-                        description = insight.get('description', insight) if isinstance(insight, dict) else str(insight)
-                        print(f"  !? {description}")
-                else:
-                    logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
-                    logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
-                    print(f"\n  Analysis Data: {len(data)} items processed")
-                    if response.data:
-                        print(f"! Raw response keys: {list(response.data.keys())}")
-                        # Show some raw data for debugging
-                        for key, value in list(response.data.items())[:5]:
-                            print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+                    logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
+                    print(f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
+                
             else:
-                logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
-                print(f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
-            
-        else:
-            logging.debug("MARVIS DEBUG: Response data is None or empty")
-            print(" No network connectivity issues detected for this site.")
-            print(" This indicates the network is operating within normal parameters.")
-            
-    except Exception as e:
-        logging.error(f"MARVIS DEBUG: Exception in troubleshoot_network_connectivity: {e}")
-        logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-        logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
-        print(f"! Failed to troubleshoot network: {e}")
-        print(" This may indicate:")
-        print("   - Marvis (VNA) is not enabled for your organization")
-        print("   - The site has no devices or insufficient data for analysis")
-        print("   - Insufficient permissions for network troubleshooting")
-    
-    logging.debug("MARVIS DEBUG: Exiting troubleshoot_network_connectivity()")
+                logging.debug("MARVIS DEBUG: Response data is None or empty")
+                print(" No network connectivity issues detected for this site.")
+                print(" This indicates the network is operating within normal parameters.")
+                
+        except Exception as e:
+            logging.error(f"MARVIS DEBUG: Exception in network_connectivity: {e}")
+            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
+            logging.error(f"MARVIS DEBUG: Exception traceback: ", exc_info=True)
+            print(f"! Failed to troubleshoot network: {e}")
+            print(" This may indicate:")
+            print("   - Marvis (VNA) is not enabled for your organization")
+            print("   - The site has no devices or insufficient data for analysis")
+            print("   - Insufficient permissions for network troubleshooting")
+        
+        logging.debug("MARVIS DEBUG: Exiting network_connectivity()")
+
 
 def view_marvis_insights():
     """
