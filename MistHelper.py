@@ -6266,44 +6266,57 @@ class ValidationUtils:
         return True
 
 
-# Note: FilePathUtils.get_csv_path() and FilePathUtils.create_csv_template() 
-# are the canonical methods - see FilePathUtils class above
-
-def get_cached_or_prompted_org_id() -> str:
+# ============================================================================
+# CONFIGURATION UTILITIES CLASS
+# ============================================================================
+class ConfigUtils:
     """
-    Get organization ID from various sources in order of preference:
-    1. Global variable
-    2. Environment variable
-    3. .env file
-    4. Interactive prompt
+    Centralized configuration utilities.
+    Handles org_id retrieval, credentials, and configuration management.
     """
-    global org_id
-    # 1. Check global variable
-    if org_id:
-        logging.info(f"! Using org_id from global variable: {org_id}")
-        return org_id
-    # 2. Check environment variable (set by dotenv or OS)
-    org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
-    if org_id_env:
-        org_id = org_id_env
-        logging.info(f"! Loaded org_id from environment: {org_id}")
-        return org_id
-    # 3. Fallback: Try to load from .env manually (rarely needed)
-    try:
-        with open(".env", "r") as f:
-            for line in f:
-                if line.strip().startswith("org_id="):
-                    org_id = line.strip().split("=", 1)[1].strip().strip('"')
+    
+    @staticmethod
+    def get_cached_or_prompted_org_id() -> str:
+        """
+        Get organization ID from various sources in order of preference:
+        1. Global variable
+        2. Environment variable
+        3. .env file
+        4. Interactive prompt
+        """
+        global org_id
+        # 1. Check global variable
         if org_id:
-            logging.info(f"! Loaded org_id from .env: {org_id}")
+            logging.info(f"! Using org_id from global variable: {org_id}")
             return org_id
-    except FileNotFoundError:
-        logging.warning("! .env file not found.")
-    # 4. Prompt if still not set
-    logging.info("* No org_id found in .env or CLI. Prompting user...")
-    org_id_list = mistapi.cli.select_org(apisession)
-    org_id = org_id_list[0]
-    return org_id
+        # 2. Check environment variable (set by dotenv or OS)
+        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
+        if org_id_env:
+            org_id = org_id_env
+            logging.info(f"! Loaded org_id from environment: {org_id}")
+            return org_id
+        # 3. Fallback: Try to load from .env manually (rarely needed)
+        try:
+            with open(".env", "r") as env_file:
+                for line in env_file:
+                    if line.strip().startswith("org_id="):
+                        org_id = line.strip().split("=", 1)[1].strip().strip('"')
+            if org_id:
+                logging.info(f"! Loaded org_id from .env: {org_id}")
+                return org_id
+        except FileNotFoundError:
+            logging.warning("! .env file not found.")
+        # 4. Prompt if still not set
+        logging.info("* No org_id found in .env or CLI. Prompting user...")
+        org_id_list = mistapi.cli.select_org(apisession)
+        org_id = org_id_list[0]
+        return org_id
+
+
+# Backward compatibility wrapper - will be removed in future version
+def get_cached_or_prompted_org_id() -> str:
+    """Legacy function - use ConfigUtils.get_cached_or_prompted_org_id() instead."""
+    return ConfigUtils.get_cached_or_prompted_org_id()
 
 
 # ============================================================================
