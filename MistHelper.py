@@ -9902,17 +9902,50 @@ class SiteExportUtils:
     @staticmethod
     def system_events():
         """Export system events for a site to SiteSystemEvents.csv."""
-        export_site_system_events_to_csv()
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("site system events export", hours)
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
+            data_type="system events",
+            sort_key="timestamp",
+            duration=f"{hours}h"
+        )
     
     @staticmethod
     def fast_roam_events():
         """Export fast roam events for a site to SiteFastRoamEvents.csv."""
-        export_site_fast_roam_events_to_csv()
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("site fast roam events export", hours)
+        export_site_specific_data(
+            api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
+            data_type="fast roam events",
+            sort_key="timestamp",
+            duration=f"{hours}h"
+        )
     
     @staticmethod
     def wifi_clients(site_id=None):
         """Export WiFi clients for a site to SiteWifiClients.csv."""
         export_site_wifi_clients_to_csv(site_id)
+    
+    @staticmethod
+    def settings():
+        """Export configuration settings for all sites to AllSiteConfigs.csv."""
+        print("Site Configuration Settings:")
+        logging.info("Starting export of all site configuration settings...")
+        current_org_id = get_cached_or_prompted_org_id()
+        logging.debug(f"Using org_id: {current_org_id} for site settings export.")
+        data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)
+        if data:
+            logging.info(f"Fetched settings for {len(data)} sites. Flattening and sanitizing data...")
+            data = DataProcessingUtils.flatten_nested_fields(data)
+            data = DataProcessingUtils.escape_multiline(data)
+            DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")
+            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
+            logging.info(" Site configs saved to AllSiteConfigs.csv")
+        else:
+            logging.warning(" No site configs found.")
+            print("! No site configurations found.")
 
 
 def export_open_org_alarms_to_csv():
@@ -16797,30 +16830,6 @@ def continuous_data_collection_loop():
     
     print(" Continuous data collection loop ended.")
 
-# === Site-Level Functions ===
-
-def export_site_system_events_to_csv():
-    """Export system events for a specific site to SiteSystemEvents.csv."""
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("site system events export", hours)
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
-        data_type="system events",
-        sort_key="timestamp",
-        duration=f"{hours}h"
-    )
-
-def export_site_fast_roam_events_to_csv():
-    """Export fast roam events for a specific site to SiteFastRoamEvents.csv."""
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("site fast roam events export", hours)
-    export_site_specific_data(
-        api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
-        data_type="fast roam events",
-        sort_key="timestamp",
-        duration=f"{hours}h"
-    )
-
 
 # ============================================================================
 # INTERACTIVE DISPLAY UTILITIES CLASS
@@ -16940,32 +16949,6 @@ def fetch_all_site_settings_from_api(apisession, org_id, limit=1000):
     logging.info(f"Fetched settings for {len(all_configs)} sites.")
     return all_configs
 
-def export_site_settings_to_csv():
-    """
-    Fetches and exports configuration settings for all sites in the organization to AllSiteConfigs.csv.
-    Adds detailed logging at each step.
-    """
-    print("Site Configuration Settings:")
-    logging.info("Starting export of all site configuration settings...")  # Log start
-    org_id = get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id} for site settings export.")
-
-    # Fetch all site settings using the helper function
-    data = APIFetchUtils.all_site_settings(apisession, org_id, limit=1000)
-    if data:
-        logging.info(f"Fetched settings for {len(data)} sites. Flattening and sanitizing data...")
-        # Flatten nested fields for CSV compatibility
-        data = DataProcessingUtils.flatten_nested_fields(data)
-        # Escape multiline strings for CSV compatibility
-        data = DataProcessingUtils.escape_multiline(data)
-        # Write the processed data to a CSV file
-        DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")
-        print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
-        logging.info(" Site configs saved to AllSiteConfigs.csv")
-    else:
-        logging.warning(" No site configs found.")
-        print("! No site configurations found.")
-
 
 # ============================================================================
 # GATEWAY EXPORT UTILITIES CLASS
@@ -17051,7 +17034,20 @@ class GatewayExportUtils:
     @staticmethod
     def templates():
         """Exports gateway templates."""
-        export_gateway_templates_to_csv()
+        print("Gateway Templates:")
+        logging.info("Exporting gateway templates for the organization...")
+        current_org_id = get_cached_or_prompted_org_id()
+        response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
+        templates = getattr(response, "data", [])
+        if not templates:
+            logging.warning("No gateway templates found for this organization.")
+            print("No gateway templates found for this organization.")
+            return
+        templates = DataProcessingUtils.flatten_nested_fields(templates)
+        templates = DataProcessingUtils.escape_multiline(templates)
+        DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")
+        print(f"! {len(templates)} gateway templates exported to OrgGatewayTemplates.csv")
+        logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
     
     @staticmethod
     def with_wan_overrides(fast=False):
@@ -19438,7 +19434,7 @@ def show_route_via_websocket():
 def _export_gateway_templates_simple():
     """
     Simple gateway template export using fetch_and_display_api_data helper.
-    Note: Use export_gateway_templates_to_csv() for full functionality.
+    Note: Use GatewayExportUtils.templates() for full functionality.
     
     template_lookup = {t["id"]: t.get("name", "Unknown") for t in templates if "id" in t}
     Fetches and exports all gateway templates in the organization to OrgGatewayTemplates.csv.
@@ -19478,7 +19474,7 @@ def export_gateway_management_ips_to_csv(fast=False):
     check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
     
     print("  2. Ensuring gateway templates are current...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     print("  3. Ensuring gateway device data with connection status is current...")
     check_and_generate_csv("GatewaysWithSiteInfo.csv", export_gateways_with_site_info_to_csv)
@@ -22673,27 +22669,6 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         if counters.auto_corrections > 0:
             print(f"   {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
 
-def export_gateway_templates_to_csv():
-    """
-    Fetches all gateway templates for the organization and exports them to OrgGatewayTemplates.csv.
-    """
-    print("Gateway Templates:")
-    logging.info("Exporting gateway templates for the organization...")
-    org_id = get_cached_or_prompted_org_id()
-    # Fetch gateway templates using the Mist API
-    response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id)
-    templates = getattr(response, "data", [])
-    if not templates:
-        logging.warning("No gateway templates found for this organization.")
-        print("No gateway templates found for this organization.")
-        return
-    # Flatten and sanitize for CSV
-    templates = DataProcessingUtils.flatten_nested_fields(templates)
-    templates = DataProcessingUtils.escape_multiline(templates)
-    DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")
-    print(f"! {len(templates)} gateway templates exported to OrgGatewayTemplates.csv")
-    logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
-
 def export_gateways_with_wan_overrides_to_csv(fast=False):
     """
     Generates a CSV report of gateways with ports that are overridden from their template configuration.
@@ -22720,7 +22695,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
     # Ensure required CSVs are fresh
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
     check_and_generate_csv("SiteList_ListAPI.csv", export_all_sites_list_to_csv)
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
 
     # Load data
     with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
@@ -23056,7 +23031,7 @@ def set_wan2_interface_site_variable():
     print("\n  Preparing site and gateway configuration data...")
     check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
     check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     # Step 2: Load site data
     site_list_path = get_csv_file_path("SiteList.csv")
@@ -23567,7 +23542,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     
     # Step 1: Ensure required data is fresh
     print("\n  Loading gateway template data...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
     
     # Load templates
@@ -24834,7 +24809,7 @@ def reboot_devices_by_gateway_template_list():
     # Step 2: Ensure required CSVs are fresh
     check_and_generate_csv("OrgDevices.csv", export_all_devices_to_csv)
     check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=True))
 
     # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
@@ -33035,7 +33010,7 @@ class FirmwareManager:
         
         # Step 1: Ensure required CSVs are fresh
         print("\n  Preparing template and site data...")
-        check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
         check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
         
         # Step 2: Load gateway templates and build template-to-sites mapping
@@ -33089,7 +33064,7 @@ class FirmwareManager:
         print("  Preparing template and site data...")
         
         # Generate required CSV files using existing export functions
-        check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
         check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
         
         logging.debug("Template CSV files ensured fresh")
@@ -43019,7 +42994,7 @@ def clone_gateway_templates_by_state_and_country():
     
     # Step 2: Load and display available gateway templates
     print("\n  Step 2: Loading gateway templates...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", export_gateway_templates_to_csv)
+    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
     with open(templates_path, encoding="utf-8") as f:
@@ -43357,7 +43332,7 @@ menu_actions = {
     "23": (lambda: (export_current_guest_users_to_csv(), export_historical_guest_users_to_csv()),"Export all current guest users and last 7 days of historical guests to CSV"),
     "24": (export_switch_vc_stats_to_csv, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
     "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
-    "26": (export_gateway_templates_to_csv, "Export gateway templates from the organization"),
+    "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
     "27": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
     "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
