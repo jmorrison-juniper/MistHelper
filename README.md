@@ -550,6 +550,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.19.30",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "ValidationUtils: Removed 2 wrapper functions, updated call sites to use class methods directly"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.19.15",
       "date": "2026-01-16",
       "changes": {

@@ -6195,16 +6195,6 @@ class ValidationUtils:
         return True
 
 
-# Backwards compatibility wrappers - delegate to ValidationUtils class
-def validate_site_id(site_id: Optional[str], function_name: str = "unknown") -> bool:
-    """Backwards compatibility wrapper - use ValidationUtils.validate_site_id() instead."""
-    return ValidationUtils.validate_site_id(site_id, function_name)
-
-
-def validate_device_id(device_id: Optional[str], function_name: str = "unknown") -> bool:
-    """Backwards compatibility wrapper - use ValidationUtils.validate_device_id() instead."""
-    return ValidationUtils.validate_device_id(device_id, function_name)
-
 def create_missing_csv_template(filename: str, headers: Optional[List[str]] = None, sample_data: Optional[List[List[str]]] = None) -> str:
     """
     Creates a basic CSV file placeholder in the correct location.
@@ -17586,8 +17576,8 @@ def export_gateway_synthetic_tests_to_csv(fast=False):
         for attempt in range(max_retries + 1):
             try:
                 # Validate inputs before making API calls
-                validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
-                validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
+                ValidationUtils.validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
+                ValidationUtils.validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
                 
                 # Use semaphore to limit concurrent connections if provided
                 if connection_semaphore:
@@ -17841,7 +17831,7 @@ def export_gateway_test_results_by_site_to_csv(fast: bool = False):
     def fetch_site_tests(site_id, connection_semaphore):
         """Worker to fetch all synthetic test results for one site (with optional semaphore)."""
         try:
-            validate_site_id(site_id, "export_gateway_test_results_by_site_to_csv")
+            ValidationUtils.validate_site_id(site_id, "export_gateway_test_results_by_site_to_csv")
             if connection_semaphore:
                 with connection_semaphore:
                     response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
@@ -17957,8 +17947,8 @@ def export_gateway_device_stats_to_csv(fast=False):
         for attempt in range(max_retries + 1):
             try:
                 # Validate inputs before making API calls
-                validate_site_id(site_id, "export_gateway_device_stats_to_csv")
-                validate_device_id(device_id, "export_gateway_device_stats_to_csv")
+                ValidationUtils.validate_site_id(site_id, "export_gateway_device_stats_to_csv")
+                ValidationUtils.validate_device_id(device_id, "export_gateway_device_stats_to_csv")
                 
                 # Use semaphore to limit concurrent connections if provided
                 if connection_semaphore:
