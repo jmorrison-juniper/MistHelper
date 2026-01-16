@@ -550,6 +550,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.16.21.00",
+      "date": "2026-01-16",
+      "changes": {
+        "refactoring": [
+          "InteractiveDisplayUtils: Moved 4 function implementations into class methods, deleted standalone functions",
+          "TroubleshootUtils: Moved 3 function implementations into class methods, deleted standalone functions",
+          "Reduced standalone function count from 238 to 234"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.20.30",
       "date": "2026-01-16",
       "changes": {

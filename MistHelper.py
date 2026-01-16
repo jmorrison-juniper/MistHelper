@@ -7982,7 +7982,49 @@ class PromptUtils:
         Returns:
             str: The selected site ID or None if no selection made
         """
-        return prompt_select_site_id_from_csv(csv_file)
+        # Ensure the site list CSV is fresh or generate it if missing/stale
+        check_and_generate_csv(csv_file, export_all_sites_to_csv)
+
+        # Get the full path to the CSV file in the data directory
+        csv_file_path = get_csv_file_path(csv_file)
+        
+        # Load the site list from CSV
+        with open(csv_file_path, mode='r', encoding='utf-8') as file:
+            reader = list(csv.DictReader(file))
+            index_to_site = {i: row for i, row in enumerate(reader)}
+            name_to_site = {row["name"]: row for row in reader if "name" in row}
+
+        # Display available sites to the user
+        print("\nAvailable Sites:")
+        for idx, row in index_to_site.items():
+            print(f"[{idx}] {row.get('name', 'Unnamed')}")
+
+        user_input = input("\nEnter site index or name: ").strip()
+        logging.debug(f"User input for site selection: {user_input}")
+
+        # Try index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_site:
+                site_id = index_to_site[idx].get("id")
+                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
+                logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                return site_id
+            else:
+                print(" Invalid index.")
+                logging.warning(f"Invalid site index entered: {idx}")
+                return None
+
+        # Try name selection
+        if user_input in name_to_site:
+            site_id = name_to_site[user_input].get("id")
+            print(f"! Selected site: {user_input} (ID: {site_id})")
+            logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            return site_id
+
+        print(" Site not found by name or index.")
+        logging.warning(f"Site not found by name or index: {user_input}")
+        return None
     
     @staticmethod
     def select_site() -> Optional[str]:
@@ -7993,7 +8035,7 @@ class PromptUtils:
         Returns:
             str: The selected site ID or None if no selection made
         """
-        return prompt_select_site_id_from_csv()
+        return PromptUtils.select_site_id_from_csv()
     
     @staticmethod
     def select_device(site_id: str, device_type: str = "all") -> Optional[str]:
@@ -8222,61 +8264,12 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     # Log the table output for reference (debug mode only)
     logging.debug("\n" + table.get_string())
 
-def prompt_select_site_id_from_csv(csv_file: str = "SiteList.csv") -> Optional[str]:
-    """
-    Prompts the user to select a site by index or name from SiteList.csv.
-    Returns the corresponding site ID.
-    """
-    # Ensure the site list CSV is fresh or generate it if missing/stale
-    check_and_generate_csv(csv_file, export_all_sites_to_csv)
-
-    # Get the full path to the CSV file in the data directory
-    csv_file_path = get_csv_file_path(csv_file)
-    
-    # Load the site list from CSV
-    with open(csv_file_path, mode='r', encoding='utf-8') as file:
-        reader = list(csv.DictReader(file))
-        index_to_site = {i: row for i, row in enumerate(reader)}
-        name_to_site = {row["name"]: row for row in reader if "name" in row}
-
-    # Display available sites to the user
-    print("\nAvailable Sites:")
-    for idx, row in index_to_site.items():
-        print(f"[{idx}] {row.get('name', 'Unnamed')}")
-
-    user_input = input("\nEnter site index or name: ").strip()
-    logging.debug(f"User input for site selection: {user_input}")
-
-    # Try index selection
-    if user_input.isdigit():
-        idx = int(user_input)
-        if idx in index_to_site:
-            site_id = index_to_site[idx].get("id")
-            print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-            logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
-            return site_id
-        else:
-            print(" Invalid index.")
-            logging.warning(f"Invalid site index entered: {idx}")
-            return None
-
-    # Try name selection
-    if user_input in name_to_site:
-        site_id = name_to_site[user_input].get("id")
-        print(f"! Selected site: {user_input} (ID: {site_id})")
-        logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
-        return site_id
-
-    print(" Site not found by name or index.")
-    logging.warning(f"Site not found by name or index: {user_input}")
-    return None
-
 def prompt_and_log_site_selection() -> Optional[str]:
     """
     Prompts the user to select a site from the CSV list and logs the selection.
     """
     logging.info("Prompting user to select a site from SiteList.csv...")
-    site_id = prompt_select_site_id_from_csv()
+    site_id = PromptUtils.select_site_id_from_csv()
     if site_id:
         logging.info(f"! Selected site ID: {site_id}")
         # You can store or use the selected site_id as needed here
@@ -8285,26 +8278,6 @@ def prompt_and_log_site_selection() -> Optional[str]:
     
     # CRITICAL: Return the site_id so callers can use it
     return site_id
-
-def prompt_site_selection() -> Optional[str]:
-    """
-    Prompts the user to select a site and returns the site_id.
-    Uses the existing CSV-based site selection functionality.
-    """
-    return prompt_select_site_id_from_csv()
-
-def prompt_device_selection(site_id: str, device_type: str = "all") -> Optional[str]:
-    """
-    Prompts the user to select a device from the specified site and returns the device_id.
-    
-    Args:
-        site_id (str): The site ID to filter devices by
-        device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
-    
-    Returns:
-        str: The selected device ID or None if no selection made
-    """
-    return prompt_select_device_id_from_inventory(site_id, device_type)
 
 def prompt_select_ap_mac_from_site(site_id: str) -> Optional[str]:
     """
@@ -9134,7 +9107,7 @@ def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs
     logging.info(f"Starting export of site {data_type}...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -9867,7 +9840,7 @@ def ping_device_websocket():
     
     try:
         # Interactive site and device selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -10117,7 +10090,7 @@ def show_mac_table_websocket():
     
     try:
         # Interactive site selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -10338,7 +10311,7 @@ def arp_device_websocket():
     
     try:
         # Interactive site and device selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -10687,7 +10660,7 @@ def service_ping_device_websocket():
     
     try:
         # Interactive site and device selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -12318,7 +12291,7 @@ def show_forwarding_table_websocket():
     
     try:
         # Interactive site selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -12647,7 +12620,7 @@ def show_routing_table_websocket():
     
     try:
         # Interactive site selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -12974,7 +12947,7 @@ def show_ssr_routes_dedicated():
     
     try:
         # Interactive site selection
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return
@@ -13729,13 +13702,13 @@ def export_site_device_virtual_chassis_to_csv():
     logging.info("Starting export of site device virtual chassis information...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
     
     # Get device selection (filtered for switches)
-    device_id = prompt_device_selection(site_id, device_type="switch")
+    device_id = PromptUtils.select_device(site_id, device_type="switch")
     if not device_id:
         logging.error("No switch device selected. Exiting.")
         return
@@ -13858,7 +13831,7 @@ def export_site_clients_to_csv():
     logging.info("Starting export of site client statistics...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -13896,7 +13869,7 @@ def export_site_devices_to_csv():
     logging.info("Starting export of site device list...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -13934,7 +13907,7 @@ def export_site_device_stats_to_csv():
     logging.info("Starting export of site device statistics...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -14290,7 +14263,7 @@ def export_site_insight_metrics_to_csv():
     logging.info("Starting export of site insight metrics...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -14369,7 +14342,7 @@ def export_site_client_insights_to_csv():
     export_const_insight_metrics_to_csv()
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
@@ -14495,13 +14468,13 @@ def export_site_device_insights_to_csv():
     export_const_insight_metrics_to_csv()
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         logging.error("No site selected. Exiting.")
         return
     
     # Get device selection
-    device_id = prompt_device_selection(site_id)
+    device_id = PromptUtils.select_device(site_id)
     if not device_id:
         logging.error("No device selected. Exiting.")
         return
@@ -17278,7 +17251,7 @@ class InteractiveDisplayUtils:
         """
         logging.info("Prompting user to select a site for device inventory view...")
         print("Select a Site to View Device Inventory:")
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if site_id:
             logging.info(f"User selected site_id: {site_id} for inventory display.")
             show_site_device_inventory(site_id)
@@ -18580,7 +18553,7 @@ def prompt_client_selection(site_id=None):
     if not site_id:
         scope_choice = input("Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ").strip().lower()
         if scope_choice == 's':
-            site_id = prompt_site_selection()
+            site_id = PromptUtils.select_site()
             if not site_id:
                 print(" No site selected.")
                 return None, None, None
@@ -18893,7 +18866,7 @@ class TroubleshootUtils:
         print("=" * 50)
         
         # Get site selection first
-        site_id = prompt_site_selection()
+        site_id = PromptUtils.select_site()
         if not site_id:
             print(" No site selected.")
             logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
@@ -18902,7 +18875,7 @@ class TroubleshootUtils:
         logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
         
         # Get device selection
-        device_id = prompt_device_selection(site_id)
+        device_id = PromptUtils.select_device(site_id)
         if not device_id:
             print(" No device selected.")
             logging.debug("MARVIS DEBUG: No device selected")
@@ -19018,7 +18991,7 @@ class TroubleshootUtils:
         print("=" * 50)
         
         # Get site selection
-        site_id = prompt_site_selection()
+        site_id = PromptUtils.select_site()
         if not site_id:
             print(" No site selected.")
             logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
@@ -19362,7 +19335,7 @@ def prompt_select_site_and_device_ids(site_id=None, device_id=None):
     Returns site_id and device_id, either from arguments or via interactive prompts.
     """
     if not site_id:
-        site_id = prompt_select_site_id_from_csv()
+        site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print(" No site selected.")
             return None, None
@@ -24687,7 +24660,7 @@ def convert_virtual_chassis_to_virtual_mac():
     print("=" * 60)
     
     # First, prompt for site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         print(" No site selected.")
         return
@@ -25125,7 +25098,7 @@ def export_site_wifi_clients_to_csv(site_id=None):
     
     # Get site_id if not provided
     if not site_id:
-        site_id = prompt_select_site_id_from_csv("SiteList.csv")
+        site_id = PromptUtils.select_site_id_from_csv("SiteList.csv")
         if not site_id:
             logging.error(" No site selected.")
             print(" No site selected.")
@@ -26404,7 +26377,7 @@ class MapsManager:
         
         try:
             # Prompt for site selection
-            site_id = prompt_site_selection()
+            site_id = PromptUtils.select_site()
             if not site_id:
                 print("\n! No site selected")
                 return
@@ -33275,7 +33248,7 @@ class FirmwareManager:
         if scope_choice == '2' and site_filter is None:
             # Get specific site selection
             logging.debug("User selected specific site mode")
-            site_filter = prompt_site_selection()
+            site_filter = PromptUtils.select_site()
             if not site_filter:
                 print(" No site selected. Exiting.")
                 logging.warning("No site selected in specific site mode")
@@ -34780,7 +34753,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     if scope_choice == '2' and site_filter is None:
         # Get specific site selection
         logging.debug("User selected specific site mode")
-        site_filter = prompt_site_selection()
+        site_filter = PromptUtils.select_site()
         if not site_filter:
             print(" No site selected. Exiting.")
             logging.warning("No site selected in specific site mode")
@@ -35836,7 +35809,7 @@ def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None
             logging.info(f"{bulk_upgrade_file} not found, proceeding with single site selection")
         
         # Single site selection (existing behavior)
-        site_id = prompt_site_selection()
+        site_id = PromptUtils.select_site()
         if not site_id:
             logging.error("No site selected. Exiting.")
             print(" No site selected. Exiting.")
@@ -39519,7 +39492,7 @@ def export_site_anomaly_metrics_to_csv():
     logging.info("Starting export of site anomaly events...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         print("! No site selected. Exiting.")
         return
@@ -39623,7 +39596,7 @@ def export_site_device_anomaly_to_csv():
     logging.info("Starting export of site device anomaly events...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         print("! No site selected. Exiting.")
         return
@@ -39637,7 +39610,7 @@ def export_site_device_anomaly_to_csv():
         site_name = site_id
     
     # Get device selection
-    device_selection = prompt_device_selection(site_id)
+    device_selection = PromptUtils.select_device(site_id)
     if not device_selection:
         print("! No device selected. Exiting.")
         return
@@ -39732,7 +39705,7 @@ def export_site_client_anomaly_to_csv():
     logging.info("Starting export of site client anomaly events...")
     
     # Get site selection
-    site_id = prompt_site_selection()
+    site_id = PromptUtils.select_site()
     if not site_id:
         print("! No site selected. Exiting.")
         return
