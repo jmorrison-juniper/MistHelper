@@ -8933,136 +8933,17 @@ def _expand_port_range_string(port_range_string: str) -> list:
 
 def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
     """
-    Generic function to export site-specific data to CSV.
-    
-    Args:
-        api_call: The mistapi function to call
-        data_type: Description of the data type (e.g., "port stats", "clients")
-        sort_key: Field to sort results by
-        **api_kwargs: Additional arguments to pass to the API call
-    
-    Returns:
-        None
+    Backward compatibility wrapper for SiteExportUtils.export_data().
+    Delegates to the class method which contains the actual implementation.
     """
-    logging.info(f"Starting export of site {data_type}...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for display
-    try:
-        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, get_cached_or_prompted_org_id())
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except Exception as e:
-        logging.error(f"Error getting site name: {e}")
-        site_name = site_id
-    
-    logging.info(f"Exporting {data_type} for site: {site_name}")
-    
-    # Create filename from data_type
-    safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-    safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-    filename = f"Site{safe_data_type}_{safe_site_name}.csv"
-    
-    # For site-specific API calls, we need to use a custom approach since
-    # fetch_and_display_api_data expects org_id as the second parameter
-    try:
-        logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
-        
-        # Try to determine if the API function supports 'limit' parameter
-        # Use introspection to check function signature
-        try:
-            sig = inspect.signature(api_call)
-            supports_limit = 'limit' in sig.parameters
-        except Exception:
-            # If introspection fails, assume limit is supported (safer default for most APIs)
-            supports_limit = True
-        
-        # Call API with or without limit parameter based on support
-        if supports_limit:
-            response = api_call(apisession, site_id, limit=1000, **api_kwargs)
-        else:
-            logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
-            response = api_call(apisession, site_id, **api_kwargs)
-        
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        if rawdata is None:
-            logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
-            return
-
-        logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
-
-        # Sort data if a sort key is provided
-        if sort_key:
-            rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
-
-        # Flatten nested fields for CSV compatibility
-        data = DataProcessingUtils.flatten_nested_fields(rawdata)
-        
-        # Escape multiline strings for CSV
-        data = DataProcessingUtils.escape_multiline(data)
-
-        # Write processed data to output
-        DataExporter.save_data_to_output(data, filename)
-        
-        # Determine the full file path for console output (matches CSV writer logic)
-        if not os.path.dirname(filename):
-            full_file_path = os.path.join("data", filename)
-        else:
-            full_file_path = filename
-            
-        print(f"! {len(data)} records exported to {full_file_path}")
-        logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
-
-        # Display the data in a table (only in debug mode, otherwise just log summary)
-        if is_debug_mode():
-            fields = DataProcessingUtils.get_unique_keys(data)
-            table = PrettyTable()
-            table.field_names = fields
-            table.valign = "t"
-            for item in tqdm(data, desc="Processing", unit="record"):
-                row = [item.get(field, "") for field in table.field_names]
-                table.add_row(row)
-            print(table)
-            logging.debug("Site data displayed in table format (debug mode).")
-        else:
-            logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
-        
-    except Exception as e:
-        logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
-        raise
+    return SiteExportUtils.export_data(api_call, data_type, sort_key, **api_kwargs)
 
 def export_org_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
     """
-    Generic function to export organization-specific data to CSV.
-    
-    Args:
-        api_call: The mistapi function to call
-        data_type: Description of the data type (e.g., "licenses", "templates")
-        sort_key: Field to sort results by
-        **api_kwargs: Additional arguments to pass to the API call
-    
-    Returns:
-        None
+    Backward compatibility wrapper for OrgExportUtils.export_data().
+    Delegates to the class method which contains the actual implementation.
     """
-    logging.info(f"Starting export of organization {data_type}...")
-    
-    # Create filename from data_type
-    safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-    filename = f"Org{safe_data_type}.csv"
-    
-    fetch_and_display_api_data(
-        title=f"Organization {data_type.title()}:",
-        api_call=api_call,
-        filename=filename,
-        sort_key=sort_key,
-        limit=1000,
-        **api_kwargs
-    )
+    return OrgExportUtils.export_data(api_call, data_type, sort_key, **api_kwargs)
 
 
 # ============================================================================
@@ -9085,8 +8966,24 @@ class OrgExportUtils:
             data_type: Description of the data type (e.g., "licenses", "templates")
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments to pass to the API call
+        
+        Returns:
+            None
         """
-        export_org_specific_data(api_call, data_type, sort_key, **api_kwargs)
+        logging.info(f"Starting export of organization {data_type}...")
+        
+        # Create filename from data_type
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
+        filename = f"Org{safe_data_type}.csv"
+        
+        fetch_and_display_api_data(
+            title=f"Organization {data_type.title()}:",
+            api_call=api_call,
+            filename=filename,
+            sort_key=sort_key,
+            limit=1000,
+            **api_kwargs
+        )
     
     @staticmethod
     def wireless_clients():
@@ -10958,8 +10855,101 @@ class SiteExportUtils:
             data_type: Description of the data type (e.g., "port stats", "clients")
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments to pass to the API call
+        
+        Returns:
+            None
         """
-        export_site_specific_data(api_call, data_type, sort_key, **api_kwargs)
+        logging.info(f"Starting export of site {data_type}...")
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        
+        # Get site name for display
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, get_cached_or_prompted_org_id())
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception as e:
+            logging.error(f"Error getting site name: {e}")
+            site_name = site_id
+        
+        logging.info(f"Exporting {data_type} for site: {site_name}")
+        
+        # Create filename from data_type
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
+        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
+        filename = f"Site{safe_data_type}_{safe_site_name}.csv"
+        
+        # For site-specific API calls, we need to use a custom approach since
+        # fetch_and_display_api_data expects org_id as the second parameter
+        try:
+            logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
+            
+            # Try to determine if the API function supports 'limit' parameter
+            # Use introspection to check function signature
+            try:
+                sig = inspect.signature(api_call)
+                supports_limit = 'limit' in sig.parameters
+            except Exception:
+                # If introspection fails, assume limit is supported (safer default for most APIs)
+                supports_limit = True
+            
+            # Call API with or without limit parameter based on support
+            if supports_limit:
+                response = api_call(apisession, site_id, limit=1000, **api_kwargs)
+            else:
+                logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
+                response = api_call(apisession, site_id, **api_kwargs)
+            
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            if rawdata is None:
+                logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
+                return
+
+            logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
+
+            # Sort data if a sort key is provided
+            if sort_key:
+                rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
+
+            # Flatten nested fields for CSV compatibility
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            
+            # Escape multiline strings for CSV
+            data = DataProcessingUtils.escape_multiline(data)
+
+            # Write processed data to output
+            DataExporter.save_data_to_output(data, filename)
+            
+            # Determine the full file path for console output (matches CSV writer logic)
+            if not os.path.dirname(filename):
+                full_file_path = os.path.join("data", filename)
+            else:
+                full_file_path = filename
+                
+            print(f"! {len(data)} records exported to {full_file_path}")
+            logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
+
+            # Display the data in a table (only in debug mode, otherwise just log summary)
+            if is_debug_mode():
+                fields = DataProcessingUtils.get_unique_keys(data)
+                table = PrettyTable()
+                table.field_names = fields
+                table.valign = "t"
+                for item in tqdm(data, desc="Processing", unit="record"):
+                    row = [item.get(field, "") for field in table.field_names]
+                    table.add_row(row)
+                print(table)
+                logging.debug("Site data displayed in table format (debug mode).")
+            else:
+                logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
+            
+        except Exception as e:
+            logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
+            raise
     
     @staticmethod
     def port_stats():
