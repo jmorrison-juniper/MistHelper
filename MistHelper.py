@@ -9254,19 +9254,231 @@ class OrgExportUtils:
         logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
     
     @staticmethod
-    def sle_metrics():
-        """Export SLE (Service Level Experience) metrics to OrgSleMetrics.csv."""
-        export_org_sle_metrics_to_csv()
-    
-    @staticmethod
     def sites_sle_summary():
-        """Export SLE summary across all sites to OrgSitesSLESummary.csv."""
-        export_org_sites_sle_summary_to_csv()
+        """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
+        print("Export Organization Sites SLE Summary:")
+        logging.info("Starting export of sites SLE summary...")
+        org_id = get_cached_or_prompted_org_id()
+        
+        # SLE types to export
+        sle_types = ["wifi", "wired", "wan"]
+        all_sites_sle_data = []
+        
+        for sle_type in sle_types:
+            try:
+                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_type, duration="7d", limit=1000)
+                sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
+                
+                for site_data in sites_sle_data:
+                    # Add SLE type identifier to the data
+                    site_data['sle_type'] = sle_type
+                    all_sites_sle_data.append(site_data)
+                
+                logging.debug(f"Retrieved SLE data for {len(sites_sle_data)} sites with SLE type: {sle_type}")
+            except Exception as exception:
+                logging.warning(f"Failed to get sites SLE data for type {sle_type}: {exception}")
+                continue
+        
+        if all_sites_sle_data:
+            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")
+            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
+            logging.info(f"Exported {len(processed)} sites SLE summary to OrgSitesSLESummary.csv")
+        else:
+            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
+            logging.warning("No sites SLE data available for organization")
+            DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")
     
     @staticmethod
     def insight_metrics():
-        """Export organization insight metrics to OrgInsightMetrics.csv."""
-        export_org_insight_metrics_to_csv()
+        """Export organization-wide insight metrics to normalized CSV files."""
+        print("Export Organization Insight Metrics (Normalized):")
+        logging.info("Starting export of organization insight metrics with normalized structure...")
+        
+        # First, refresh the available metrics from the API
+        print("! Refreshing available insight metrics from Mist API...")
+        export_const_insight_metrics_to_csv()
+        
+        # Get all metrics that support "org" scope
+        org_metrics = get_insight_metrics_by_scope("org")
+        
+        if not org_metrics:
+            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
+            logging.error("No org-scope metrics found in const insight metrics")
+            # Create empty normalized files
+            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+            DataExporter.save_data_to_output([], "OrgSitesData.csv")
+            return
+        
+        org_id = get_cached_or_prompted_org_id()
+        
+        # Initialize normalized data collections
+        all_summary_data = []
+        all_time_series_data = []
+        all_results_data = []
+        all_sites_data = []
+        
+        all_insight_data = []
+        metrics_retrieved = 0
+        metrics_failed = 0
+        
+        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")
+        print("! Processing each metric individually with proper error handling...")
+        
+        try:
+            # Iterate through each org-scoped metric and retrieve it individually
+            for metric in org_metrics:
+                try:
+                    logging.debug(f"Attempting to retrieve org insight metric: {metric}")
+                    
+                    # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
+                    if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
+                        # These metrics require site-level SLE data analysis
+                        sle_categories = ["wifi", "wan", "wired"]
+                        
+                        for sle_category in sle_categories:
+                            try:
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                                    apisession, 
+                                    org_id, 
+                                    sle=sle_category,
+                                    duration="7d",
+                                    limit=1000
+                                )
+                                sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
+                                
+                                if sites_data:
+                                    # Create an aggregated insight result from sites data
+                                    insight_result = {
+                                        'metric_type': f"{metric}_{sle_category}",
+                                        'org_id': org_id,
+                                        'sle_category': sle_category,
+                                        'data_source': 'sites_sle_analysis',
+                                        'total_sites': len(sites_data),
+                                        'sites_data': sites_data,
+                                        'original_metric': metric
+                                    }
+                                    
+                                    all_insight_data.append(insight_result)
+                                    metrics_retrieved += 1
+                                    logging.debug(f"Successfully retrieved sites data for insight metric: {metric} with SLE: {sle_category} ({len(sites_data)} sites)")
+                                else:
+                                    logging.debug(f"No sites data available for insight metric: {metric} with SLE: {sle_category}")
+                            except Exception as sites_error:
+                                logging.debug(f"Failed to get sites data for insight metric '{metric}' with SLE '{sle_category}': {sites_error}")
+                                continue
+                    else:
+                        # For other metrics, use getOrgSle directly
+                        response = mistapi.api.v1.orgs.insights.getOrgSle(
+                            apisession, 
+                            org_id, 
+                            metric,
+                            duration="7d"
+                        )
+                        insight_data = getattr(response, 'data', response) or {}
+                        
+                        if insight_data:
+                            # Add metric type identifier to each data point
+                            insight_data['metric_type'] = metric
+                            insight_data['org_id'] = org_id
+                            all_insight_data.append(insight_data)
+                            metrics_retrieved += 1
+                            logging.debug(f"Successfully retrieved org insight data for metric: {metric}")
+                        else:
+                            logging.debug(f"No data available for org metric: {metric}")
+                            metrics_failed += 1
+                        
+                except Exception as metric_error:
+                    metrics_failed += 1
+                    logging.debug(f"Failed to get org insight data for metric '{metric}': {metric_error}")
+                    # Continue with next metric instead of failing entirely
+                    continue
+            
+            # Also try getOrgSitesSle for sites summary data 
+            try:
+                logging.debug("Attempting to retrieve org sites SLE summary")
+                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)
+                sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
+                if sites_data:
+                    for item in sites_data:
+                        item['metric_type'] = 'org_sites_sle_summary'
+                        item['org_id'] = org_id
+                        all_insight_data.append(item)
+                    metrics_retrieved += 1
+                    logging.debug(f"Successfully retrieved org sites SLE data for {len(sites_data)} sites")
+            except Exception as sites_error:
+                metrics_failed += 1
+                logging.debug(f"Failed to get org sites SLE summary: {sites_error}")
+            
+            # Report results
+            print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
+            logging.info(f"Org insight metrics: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
+            
+            if all_insight_data:
+                print("! Parsing metrics into normalized data structures...")
+                
+                # Parse each metric into normalized structures
+                for metric_data in all_insight_data:
+                    normalized = parse_insight_metric_to_normalized_data(metric_data, org_id)
+                    all_summary_data.extend(normalized['summary'])
+                    all_time_series_data.extend(normalized['time_series'])
+                    all_results_data.extend(normalized['results'])
+                    all_sites_data.extend(normalized['sites_data'])
+                
+                # Export to separate CSV files
+                print("! Exporting to normalized CSV files...")
+                
+                # Summary data
+                processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)
+                DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")
+                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
+                
+                # Time series data
+                processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)
+                DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")
+                print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
+                
+                # Results data
+                processed_results = DataProcessingUtils.escape_multiline(all_results_data)
+                DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")
+                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
+                
+                # Sites data
+                processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)
+                DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")
+                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
+                
+                print(f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files")
+                logging.info(f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files")
+                
+                # Also save a legacy combined file for compatibility
+                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+                processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)
+                DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")
+                print(f"  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
+                
+            else:
+                print(f"! 0 organization insight metrics exported (no data available)")
+                logging.warning("No org insight data available - all metrics failed or returned empty")
+                # Create empty normalized files
+                DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+                DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+                DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+                DataExporter.save_data_to_output([], "OrgSitesData.csv")
+                DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
+                
+        except Exception as exception:
+            print(f"! Error exporting organization insight metrics: {exception}")
+            logging.error(f"Failed to export org insight metrics: {exception}")
+            # Create empty normalized files in case of error
+            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
+            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
+            DataExporter.save_data_to_output([], "OrgSitesData.csv")
+            DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
     
     @staticmethod
     def rogue_clients():
@@ -10629,6 +10841,157 @@ class OrgExportUtils:
                 duration=f"{hours}h",
                 limit=1000
             )
+    
+    @staticmethod
+    def sle_metrics():
+        """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
+        print("Export Organization SLE Metrics:")
+        logging.info("Starting export of organization SLE metrics...")
+        org_id = get_cached_or_prompted_org_id()
+        
+        # Use the actual SLE service categories supported by the Mist platform
+        sle_categories = [
+            "wifi",               # WiFi/wireless SLE metrics
+            "wan",                # WAN connectivity SLE metrics
+            "wired",              # Wired network SLE metrics
+        ]
+        
+        # Specialized SLE aggregation metrics
+        org_sle_specialized_metrics = [
+            "summary",            # Org summary SLE data
+            "sites-sle",          # Sites SLE aggregation
+            "worst-sites-by-sle", # Worst performing sites SLE analysis
+        ]
+        
+        all_sle_data = []
+        metrics_retrieved = 0
+        metrics_failed = 0
+        
+        print(f"! Retrieving organization SLE data using {len(sle_categories)} service categories...")
+        print(f"! Also attempting {len(org_sle_specialized_metrics)} specialized SLE aggregation metrics...")
+        
+        try:
+            # First, try using the specialized SLE aggregation metrics with getOrgSle
+            for metric in org_sle_specialized_metrics:
+                try:
+                    logging.debug(f"Attempting to retrieve specialized SLE metric: {metric}")
+                    
+                    # For metrics that analyze sites by SLE, use getOrgSitesSle
+                    if "worst-sites" in metric or "sites-sle" in metric:
+                        for sle_category in sle_categories:
+                            try:
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                                    apisession, 
+                                    org_id, 
+                                    sle=sle_category,
+                                    duration="7d",
+                                    limit=1000
+                                )
+                                sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
+                                
+                                if sites_sle_data:
+                                    aggregated_result = {
+                                        'sle_metric_type': f"{metric}_{sle_category}",
+                                        'org_id': org_id,
+                                        'sle_category': sle_category,
+                                        'data_source': 'org_sites_sle_aggregated',
+                                        'total_sites': len(sites_sle_data),
+                                        'sites_analyzed': sites_sle_data,
+                                        'metric_name': metric
+                                    }
+                                    
+                                    if "worst-sites" in metric:
+                                        aggregated_result['analysis_type'] = 'worst_sites_identification'
+                                    
+                                    all_sle_data.append(aggregated_result)
+                                    metrics_retrieved += 1
+                                    logging.debug(f"Successfully retrieved sites SLE data for metric analysis: {metric} with SLE: {sle_category} ({len(sites_sle_data)} sites)")
+                                else:
+                                    logging.debug(f"No sites SLE data available for metric: {metric} with SLE: {sle_category}")
+                            except Exception as sites_error:
+                                logging.debug(f"Failed to get sites SLE data for metric '{metric}' with SLE '{sle_category}': {sites_error}")
+                                continue
+                    else:
+                        response = mistapi.api.v1.orgs.insights.getOrgSle(
+                            apisession, 
+                            org_id, 
+                            metric,
+                            duration="7d"
+                        )
+                        sle_data = getattr(response, 'data', response) or {}
+                        
+                        if sle_data:
+                            sle_data['sle_metric_type'] = metric
+                            sle_data['org_id'] = org_id
+                            sle_data['data_source'] = 'org_sle_specialized'
+                            all_sle_data.append(sle_data)
+                            metrics_retrieved += 1
+                            logging.debug(f"Successfully retrieved specialized SLE data for metric: {metric}")
+                        else:
+                            logging.debug(f"No data available for specialized SLE metric: {metric}")
+                            metrics_failed += 1
+                        
+                except Exception as metric_error:
+                    metrics_failed += 1
+                    logging.debug(f"Failed to get specialized SLE data for metric '{metric}': {metric_error}")
+                    continue
+            
+            # Second, get aggregated SLE data for each service category
+            for sle_category in sle_categories:
+                try:
+                    logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
+                    response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                        apisession, 
+                        org_id, 
+                        sle=sle_category, 
+                        duration="7d", 
+                        limit=1000
+                    )
+                    sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
+                    
+                    if sites_sle_data:
+                        org_aggregated = {
+                            'sle_category': sle_category,
+                            'org_id': org_id,
+                            'data_source': 'org_aggregated_from_sites',
+                            'total_sites': len(sites_sle_data),
+                            'sites_data': sites_sle_data
+                        }
+                        
+                        if sites_sle_data:
+                            org_aggregated['summary_calculated'] = True
+                            
+                        all_sle_data.append(org_aggregated)
+                        metrics_retrieved += 1
+                        logging.debug(f"Successfully aggregated SLE data for {len(sites_sle_data)} sites in category: {sle_category}")
+                    else:
+                        logging.debug(f"No sites SLE data available for category: {sle_category}")
+                        metrics_failed += 1
+                        
+                except Exception as category_error:
+                    metrics_failed += 1
+                    logging.debug(f"Failed to get SLE data for category '{sle_category}': {category_error}")
+                    continue
+            
+            # Report results
+            print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
+            logging.info(f"Org SLE data: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
+            
+            if all_sle_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_sle_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, "OrgSLEMetrics.csv")
+                print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")
+                logging.info(f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv")
+            else:
+                print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")
+                logging.warning("No org SLE data available - all sources failed or returned empty")
+                DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")
+                
+        except Exception as exception:
+            print(f"! Error exporting organization SLE metrics: {exception}")
+            logging.error(f"Failed to export org SLE metrics: {exception}")
+            DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")
 
 
 # ============================================================================
@@ -10787,18 +11150,307 @@ class SiteExportUtils:
     
     @staticmethod
     def insight_metrics():
-        """Export insight metrics for a site to SiteInsightMetrics.csv."""
-        export_site_insight_metrics_to_csv()
+        """Export general insight metrics for a selected site to SiteInsightMetrics_[SiteName].csv."""
+        print("Export Site Insight Metrics:")
+        logging.info("Starting export of site insight metrics...")
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        
+        # Get site name for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
+        filename = f"SiteInsightMetrics_{sanitized_site_name}.csv"
+        
+        # First, refresh the available metrics from the API
+        print("! Refreshing available insight metrics from Mist API...")
+        export_const_insight_metrics_to_csv()
+        
+        # Get all metrics that support "site" scope
+        site_metrics = get_insight_metrics_by_scope("site")
+        
+        if not site_metrics:
+            print("! No metrics found for site scope. Check ConstInsightMetrics.csv file.")
+            logging.error("No site-scope metrics found in const insight metrics")
+            DataExporter.save_data_to_output([], filename)
+            return
+        
+        all_insight_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(site_metrics)} different site insight metrics...")
+        
+        try:
+            for metric in site_metrics:
+                try:
+                    response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)
+                    insight_data = getattr(response, 'data', response) or {}
+                    
+                    if insight_data:
+                        # Add metric type identifier to each data point
+                        insight_data['metric_type'] = metric
+                        insight_data['site_id'] = site_id
+                        insight_data['site_name'] = site_name
+                        all_insight_data.append(insight_data)
+                        metrics_retrieved += 1
+                        logging.debug(f"Retrieved site insight data for metric: {metric}")
+                    else:
+                        logging.debug(f"No data available for metric: {metric}")
+                except Exception as exception:
+                    logging.debug(f"Failed to get site insight data for metric {metric}: {exception}")
+                    continue
+            
+            if all_insight_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} site insight metrics exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} site insight metrics for {site_name} to {filename}")
+            else:
+                print(f"! 0 insight metrics exported to {filename} (no data available)")
+                logging.warning(f"No insight data available for site {site_name}")
+                DataExporter.save_data_to_output([], filename)
+        except Exception as exception:
+            print(f"! Error exporting site insight metrics: {exception}")
+            logging.error(f"Failed to export site insight metrics for {site_name}: {exception}")
+            DataExporter.save_data_to_output([], filename)
     
     @staticmethod
     def client_insights():
-        """Export client insights for a site to SiteClientInsights.csv."""
-        export_site_client_insights_to_csv()
+        """Export client-specific insight metrics for a selected site to SiteClientInsights_[SiteName].csv."""
+        print("Export Site Client Insights:")
+        logging.info("Starting export of site client insights...")
+        
+        # First, refresh the available metrics from the API
+        print("! Refreshing available insight metrics from Mist API...")
+        export_const_insight_metrics_to_csv()
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        
+        # Get site name for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
+        
+        # Get available clients for the site to help user selection
+        clients = []
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []
+            
+            if clients:
+                print(f"\n! Found {len(clients)} clients at site {site_name}")
+                print("Recent clients (showing first 5):")
+                for index, client in enumerate(clients[:5]):
+                    mac = client.get('mac', 'Unknown')
+                    hostname = client.get('hostname', 'Unknown')
+                    last_seen = client.get('last_seen', 'Unknown')
+                    print(f"  [{index}] MAC: {mac}, Hostname: {hostname}, Last seen: {last_seen}")
+            else:
+                print(f"! No clients found at site {site_name}")
+        except Exception as exception:
+            logging.warning(f"Could not retrieve client list: {exception}")
+        
+        # Prompt for client MAC address
+        print("\nEnter client MAC address or index number (or press Enter to skip):")
+        client_input = input("Client MAC/Index: ").strip()
+        
+        if not client_input:
+            print("! No client input provided. Skipping client insights export.")
+            return
+        
+        # Check if input is a numeric index
+        client_mac = None
+        if client_input.isdigit():
+            try:
+                index = int(client_input)
+                if 0 <= index < len(clients):
+                    client_mac = clients[index].get('mac', '')
+                    print(f"! Selected client by index: {client_mac}")
+                else:
+                    print(f"! Invalid index {index}. Must be between 0 and {len(clients)-1}")
+                    return
+            except (ValueError, IndexError):
+                print(f"! Invalid index: {client_input}")
+                return
+        else:
+            # Treat as MAC address
+            client_mac = client_input
+        
+        if not client_mac:
+            print("! Could not determine client MAC address.")
+            return
+        
+        filename = f"SiteClientInsights_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
+        
+        # Get all metrics that support "client" scope
+        client_metrics = get_insight_metrics_by_scope("client")
+        
+        if not client_metrics:
+            print("! No metrics found for client scope. Check ConstInsightMetrics.csv file.")
+            logging.error("No client-scope metrics found in const insight metrics")
+            DataExporter.save_data_to_output([], filename)
+            return
+        
+        all_client_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {client_mac}...")
+        
+        try:
+            for metric in client_metrics:
+                try:
+                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(apisession, site_id, client_mac, metric)
+                    client_insight_data = getattr(response, 'data', response) or {}
+                    
+                    if client_insight_data:
+                        # Add metric type identifier to each data point
+                        client_insight_data['metric_type'] = metric
+                        client_insight_data['site_id'] = site_id
+                        client_insight_data['site_name'] = site_name
+                        client_insight_data['client_mac'] = client_mac
+                        all_client_data.append(client_insight_data)
+                        metrics_retrieved += 1
+                        logging.debug(f"Retrieved client insight data for metric: {metric}")
+                    else:
+                        logging.debug(f"No data available for client metric: {metric}")
+                except Exception as metric_error:
+                    logging.debug(f"Failed to get client insight data for metric {metric}: {metric_error}")
+                    continue
+            
+            if all_client_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_client_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}")
+            else:
+                print(f"! 0 client insights exported to {filename} (no data available)")
+                logging.warning(f"No client insight data available for {client_mac} at {site_name}")
+                DataExporter.save_data_to_output([], filename)
+        except Exception as exception:
+            print(f"! Error exporting client insights: {exception}")
+            logging.error(f"Failed to export client insights for {client_mac} at {site_name}: {exception}")
+            DataExporter.save_data_to_output([], filename)
     
     @staticmethod
     def device_insights():
-        """Export device insights for a site to SiteDeviceInsights.csv."""
-        export_site_device_insights_to_csv()
+        """Export device-specific insight metrics for a selected site to SiteDeviceInsights_[SiteName].csv."""
+        print("Export Site Device Insights:")
+        logging.info("Starting export of site device insights...")
+        
+        # First, refresh the available metrics from the API
+        print("! Refreshing available insight metrics from Mist API...")
+        export_const_insight_metrics_to_csv()
+        
+        # Get site selection
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+        
+        # Get device selection
+        device_id = PromptUtils.select_device(site_id)
+        if not device_id:
+            logging.error("No device selected. Exiting.")
+            return
+        
+        # Get site and device names for filename
+        try:
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception:
+            site_name = site_id
+        
+        try:
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+            devices = mistapi.get_all(response=response, mist_session=apisession)
+            device = next((dev for dev in devices if dev["id"] == device_id), None)
+            device_name = device["name"] if device else device_id
+            device_mac = device["mac"] if device else None
+        except Exception:
+            device_name = device_id
+            device_mac = None
+        
+        if not device_mac:
+            print(f"! Error: Could not find MAC address for device {device_name}")
+            logging.error(f"Could not find MAC address for device {device_id}")
+            return
+        
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
+        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name or device_id)
+        filename = f"SiteDeviceInsights_{sanitized_site_name}_{sanitized_device_name}.csv"
+        
+        # Get all metrics that support "device" scope
+        device_metrics = get_insight_metrics_by_scope("device")
+        
+        if not device_metrics:
+            print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
+            logging.error("No device-scope metrics found in const insight metrics")
+            DataExporter.save_data_to_output([], filename)
+            return
+        
+        all_device_data = []
+        metrics_retrieved = 0
+        
+        print(f"! Retrieving {len(device_metrics)} different device insight metrics for {device_name}...")
+        
+        try:
+            for metric in device_metrics:
+                try:
+                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(apisession, site_id, metric, device_mac)
+                    device_insight_data = getattr(response, 'data', response) or {}
+                    
+                    if device_insight_data:
+                        # Add metric type identifier to each data point
+                        device_insight_data['metric_type'] = metric
+                        device_insight_data['site_id'] = site_id
+                        device_insight_data['site_name'] = site_name
+                        device_insight_data['device_id'] = device_id
+                        device_insight_data['device_name'] = device_name
+                        device_insight_data['device_mac'] = device_mac
+                        all_device_data.append(device_insight_data)
+                        metrics_retrieved += 1
+                        logging.debug(f"Retrieved device insight data for metric: {metric}")
+                    else:
+                        logging.debug(f"No data available for device metric: {metric}")
+                except Exception as metric_error:
+                    logging.debug(f"Failed to get device insight data for metric {metric}: {metric_error}")
+                    continue
+            
+            if all_device_data:
+                processed = DataProcessingUtils.flatten_nested_fields(all_device_data)
+                processed = DataProcessingUtils.escape_multiline(processed)
+                DataExporter.save_data_to_output(processed, filename)
+                print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
+                logging.info(f"Exported {metrics_retrieved} device insight metrics for {device_name} at {site_name} to {filename}")
+            else:
+                print(f"! 0 device insights exported to {filename} (no data available)")
+                logging.warning(f"No device insight data available for {device_name} at {site_name}")
+                DataExporter.save_data_to_output([], filename)
+        except Exception as exception:
+            print(f"! Error exporting device insights: {exception}")
+            logging.error(f"Failed to export device insights for {device_name} at {site_name}: {exception}")
+            DataExporter.save_data_to_output([], filename)
     
     @staticmethod
     def wlans():
@@ -14593,504 +15245,6 @@ def _validate_ping_target(target):
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
 # ==============================
 
-def export_org_sle_metrics_to_csv():
-    """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
-    print("Export Organization SLE Metrics:")
-    logging.info("Starting export of organization SLE metrics...")
-    org_id = get_cached_or_prompted_org_id()
-    
-    # Use the actual SLE service categories supported by the Mist platform
-    # These are the core service level experience domains
-    sle_categories = [
-        "wifi",               # WiFi/wireless SLE metrics - CONFIRMED WORKING
-        "wan",                # WAN connectivity SLE metrics - CONFIRMED WORKING  
-        "wired",              # Wired network SLE metrics - CONFIRMED WORKING
-    ]
-    
-    # Try to get organization-level SLE data using specialized SLE metrics
-    # Based on what actually worked in option 83, try SLE-specific aggregation metrics
-    org_sle_specialized_metrics = [
-        "summary",            # Org summary SLE data - from const insights
-        "sites-sle",          # Sites SLE aggregation - from const insights  
-        "worst-sites-by-sle", # Worst performing sites SLE analysis
-    ]
-    
-    all_sle_data = []
-    metrics_retrieved = 0
-    metrics_failed = 0
-    
-    print(f"! Retrieving organization SLE data using {len(sle_categories)} service categories...")
-    print(f"! Also attempting {len(org_sle_specialized_metrics)} specialized SLE aggregation metrics...")
-    
-    try:
-        # First, try using the specialized SLE aggregation metrics with getOrgSle
-        for metric in org_sle_specialized_metrics:
-            try:
-                logging.debug(f"Attempting to retrieve specialized SLE metric: {metric}")
-                
-                # For metrics that analyze sites by SLE, use getOrgSitesSle instead of getOrgSle
-                if "worst-sites" in metric or "sites-sle" in metric:
-                    # These metrics require site-level SLE data analysis
-                    for sle_category in sle_categories:
-                        try:
-                            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                apisession, 
-                                org_id, 
-                                sle=sle_category,
-                                duration="7d",
-                                limit=1000
-                            )
-                            sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                            
-                            if sites_sle_data:
-                                # Create an aggregated metric result from sites data
-                                aggregated_result = {
-                                    'sle_metric_type': f"{metric}_{sle_category}",
-                                    'org_id': org_id,
-                                    'sle_category': sle_category,
-                                    'data_source': 'org_sites_sle_aggregated',
-                                    'total_sites': len(sites_sle_data),
-                                    'sites_analyzed': sites_sle_data,
-                                    'metric_name': metric
-                                }
-                                
-                                # For worst-sites metrics, we could add analysis here
-                                if "worst-sites" in metric:
-                                    aggregated_result['analysis_type'] = 'worst_sites_identification'
-                                
-                                all_sle_data.append(aggregated_result)
-                                metrics_retrieved += 1
-                                logging.debug(f"Successfully retrieved sites SLE data for metric analysis: {metric} with SLE: {sle_category} ({len(sites_sle_data)} sites)")
-                            else:
-                                logging.debug(f"No sites SLE data available for metric: {metric} with SLE: {sle_category}")
-                        except Exception as sites_error:
-                            logging.debug(f"Failed to get sites SLE data for metric '{metric}' with SLE '{sle_category}': {sites_error}")
-                            continue
-                else:
-                    # For other metrics, call getOrgSle directly
-                    response = mistapi.api.v1.orgs.insights.getOrgSle(
-                        apisession, 
-                        org_id, 
-                        metric,
-                        duration="7d"
-                    )
-                    sle_data = getattr(response, 'data', response) or {}
-                    
-                    if sle_data:
-                        sle_data['sle_metric_type'] = metric
-                        sle_data['org_id'] = org_id
-                        sle_data['data_source'] = 'org_sle_specialized'
-                        all_sle_data.append(sle_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Successfully retrieved specialized SLE data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for specialized SLE metric: {metric}")
-                        metrics_failed += 1
-                    
-            except Exception as metric_error:
-                metrics_failed += 1
-                logging.debug(f"Failed to get specialized SLE data for metric '{metric}': {metric_error}")
-                continue
-        
-        # Second, get aggregated SLE data for each service category using getOrgSitesSle 
-        # but process it as organization-wide aggregated data
-        for sle_category in sle_categories:
-            try:
-                logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                    apisession, 
-                    org_id, 
-                    sle=sle_category, 
-                    duration="7d", 
-                    limit=1000
-                )
-                sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                
-                if sites_sle_data:
-                    # Create an organization-level aggregation from sites data
-                    org_aggregated = {
-                        'sle_category': sle_category,
-                        'org_id': org_id,
-                        'data_source': 'org_aggregated_from_sites',
-                        'total_sites': len(sites_sle_data),
-                        'sites_data': sites_sle_data  # Include detailed sites for analysis
-                    }
-                    
-                    # Calculate organization-level aggregations if possible
-                    if sites_sle_data:
-                        # Add summary statistics
-                        org_aggregated['summary_calculated'] = True
-                        
-                    all_sle_data.append(org_aggregated)
-                    metrics_retrieved += 1
-                    logging.debug(f"Successfully aggregated SLE data for {len(sites_sle_data)} sites in category: {sle_category}")
-                else:
-                    logging.debug(f"No sites SLE data available for category: {sle_category}")
-                    metrics_failed += 1
-                    
-            except Exception as category_error:
-                metrics_failed += 1
-                logging.debug(f"Failed to get SLE data for category '{sle_category}': {category_error}")
-                continue
-        
-        # Report results
-        print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
-        logging.info(f"Org SLE data: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
-        
-        if all_sle_data:
-            # Flatten and process the data for CSV export
-            processed = DataProcessingUtils.flatten_nested_fields(all_sle_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, "OrgSLEMetrics.csv")
-            print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")
-            logging.info(f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv")
-        else:
-            print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")
-            logging.warning("No org SLE data available - all sources failed or returned empty")
-            DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")
-            
-    except Exception as e:
-        print(f"! Error exporting organization SLE metrics: {e}")
-        logging.error(f"Failed to export org SLE metrics: {e}")
-        DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")
-
-def export_org_sites_sle_summary_to_csv():
-    """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
-    print("Export Organization Sites SLE Summary:")
-    logging.info("Starting export of sites SLE summary...")
-    org_id = get_cached_or_prompted_org_id()
-    
-    # SLE types to export
-    sle_types = ["wifi", "wired", "wan"]
-    all_sites_sle_data = []
-    
-    for sle_type in sle_types:
-        try:
-            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_type, duration="7d", limit=1000)
-            sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-            
-            for site_data in sites_sle_data:
-                # Add SLE type identifier to the data
-                site_data['sle_type'] = sle_type
-                all_sites_sle_data.append(site_data)
-            
-            logging.debug(f"Retrieved SLE data for {len(sites_sle_data)} sites with SLE type: {sle_type}")
-        except Exception as e:
-            logging.warning(f"Failed to get sites SLE data for type {sle_type}: {e}")
-            continue
-    
-    if all_sites_sle_data:
-        processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
-        processed = DataProcessingUtils.escape_multiline(processed)
-        DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")
-        print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
-        logging.info(f"Exported {len(processed)} sites SLE summary to OrgSitesSLESummary.csv")
-    else:
-        print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
-        logging.warning("No sites SLE data available for organization")
-        DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")
-
-def export_site_insight_metrics_to_csv():
-    """Export general insight metrics for a selected site to SiteInsightMetrics_[SiteName].csv."""
-    print("Export Site Insight Metrics:")
-    logging.info("Starting export of site insight metrics...")
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-    filename = f"SiteInsightMetrics_{sanitized_site_name}.csv"
-    
-    # First, refresh the available metrics from the API
-    print("! Refreshing available insight metrics from Mist API...")
-    export_const_insight_metrics_to_csv()
-    
-    # Get all metrics that support "site" scope
-    site_metrics = get_insight_metrics_by_scope("site")
-    
-    if not site_metrics:
-        print("! No metrics found for site scope. Check ConstInsightMetrics.csv file.")
-        logging.error("No site-scope metrics found in const insight metrics")
-        DataExporter.save_data_to_output([], filename)
-        return
-    
-    all_insight_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(site_metrics)} different site insight metrics...")
-    
-    try:
-        for metric in site_metrics:
-            try:
-                response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)
-                insight_data = getattr(response, 'data', response) or {}
-                
-                if insight_data:
-                    # Add metric type identifier to each data point
-                    insight_data['metric_type'] = metric
-                    insight_data['site_id'] = site_id
-                    insight_data['site_name'] = site_name
-                    all_insight_data.append(insight_data)
-                    metrics_retrieved += 1
-                    logging.debug(f"Retrieved site insight data for metric: {metric}")
-                else:
-                    logging.debug(f"No data available for metric: {metric}")
-            except Exception as e:
-                logging.debug(f"Failed to get site insight data for metric {metric}: {e}")
-                continue
-        
-        if all_insight_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_insight_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} site insight metrics exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} site insight metrics for {site_name} to {filename}")
-        else:
-            print(f"! 0 insight metrics exported to {filename} (no data available)")
-            logging.warning(f"No insight data available for site {site_name}")
-            DataExporter.save_data_to_output([], filename)
-    except Exception as e:
-        print(f"! Error exporting site insight metrics: {e}")
-        logging.error(f"Failed to export site insight metrics for {site_name}: {e}")
-        DataExporter.save_data_to_output([], filename)
-
-def export_site_client_insights_to_csv():
-    """Export client-specific insight metrics for a selected site to SiteClientInsights_[SiteName].csv."""
-    print("Export Site Client Insights:")
-    logging.info("Starting export of site client insights...")
-    
-    # First, refresh the available metrics from the API
-    print("! Refreshing available insight metrics from Mist API...")
-    export_const_insight_metrics_to_csv()
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get site name for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-    
-    # Get available clients for the site to help user selection
-    try:
-        response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)
-        clients = mistapi.get_all(response=response, mist_session=apisession) or []
-        
-        if clients:
-            print(f"\n! Found {len(clients)} clients at site {site_name}")
-            print("Recent clients (showing first 5):")
-            for i, client in enumerate(clients[:5]):
-                mac = client.get('mac', 'Unknown')
-                hostname = client.get('hostname', 'Unknown')
-                last_seen = client.get('last_seen', 'Unknown')
-                print(f"  [{i}] MAC: {mac}, Hostname: {hostname}, Last seen: {last_seen}")
-        else:
-            print(f"! No clients found at site {site_name}")
-    except Exception as e:
-        logging.warning(f"Could not retrieve client list: {e}")
-        clients = []
-    
-    # Prompt for client MAC address
-    print("\nEnter client MAC address or index number (or press Enter to skip):")
-    client_input = input("Client MAC/Index: ").strip()
-    
-    if not client_input:
-        print("! No client input provided. Skipping client insights export.")
-        return
-    
-    # Check if input is a numeric index
-    client_mac = None
-    if client_input.isdigit():
-        try:
-            index = int(client_input)
-            if 0 <= index < len(clients):
-                client_mac = clients[index].get('mac', '')
-                print(f"! Selected client by index: {client_mac}")
-            else:
-                print(f"! Invalid index {index}. Must be between 0 and {len(clients)-1}")
-                return
-        except (ValueError, IndexError):
-            print(f"! Invalid index: {client_input}")
-            return
-    else:
-        # Treat as MAC address
-        client_mac = client_input
-    
-    if not client_mac:
-        print("! Could not determine client MAC address.")
-        return
-    
-    filename = f"SiteClientInsights_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
-    
-    # Get all metrics that support "client" scope
-    client_metrics = get_insight_metrics_by_scope("client")
-    
-    if not client_metrics:
-        print("! No metrics found for client scope. Check ConstInsightMetrics.csv file.")
-        logging.error("No client-scope metrics found in const insight metrics")
-        DataExporter.save_data_to_output([], filename)
-        return
-    
-    all_client_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(client_metrics)} different client insight metrics for {client_mac}...")
-    
-    try:
-        for metric in client_metrics:
-            try:
-                response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(apisession, site_id, client_mac, metric)
-                client_insight_data = getattr(response, 'data', response) or {}
-                
-                if client_insight_data:
-                    # Add metric type identifier to each data point
-                    client_insight_data['metric_type'] = metric
-                    client_insight_data['site_id'] = site_id
-                    client_insight_data['site_name'] = site_name
-                    client_insight_data['client_mac'] = client_mac
-                    all_client_data.append(client_insight_data)
-                    metrics_retrieved += 1
-                    logging.debug(f"Retrieved client insight data for metric: {metric}")
-                else:
-                    logging.debug(f"No data available for client metric: {metric}")
-            except Exception as e:
-                logging.debug(f"Failed to get client insight data for metric {metric}: {e}")
-                continue
-        
-        if all_client_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_client_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}")
-        else:
-            print(f"! 0 client insights exported to {filename} (no data available)")
-            logging.warning(f"No client insight data available for {client_mac} at {site_name}")
-            DataExporter.save_data_to_output([], filename)
-    except Exception as e:
-        print(f"! Error exporting client insights: {e}")
-        logging.error(f"Failed to export client insights for {client_mac} at {site_name}: {e}")
-        DataExporter.save_data_to_output([], filename)
-
-def export_site_device_insights_to_csv():
-    """Export device-specific insight metrics for a selected site to SiteDeviceInsights_[SiteName].csv."""
-    print("Export Site Device Insights:")
-    logging.info("Starting export of site device insights...")
-    
-    # First, refresh the available metrics from the API
-    print("! Refreshing available insight metrics from Mist API...")
-    export_const_insight_metrics_to_csv()
-    
-    # Get site selection
-    site_id = PromptUtils.select_site()
-    if not site_id:
-        logging.error("No site selected. Exiting.")
-        return
-    
-    # Get device selection
-    device_id = PromptUtils.select_device(site_id)
-    if not device_id:
-        logging.error("No device selected. Exiting.")
-        return
-    
-    # Get site and device names for filename
-    try:
-        response = mistapi.api.v1.sites.listSites(apisession, site_id)
-        sites = mistapi.get_all(response=response, mist_session=apisession)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-    except:
-        site_name = site_id
-    
-    try:
-        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-        devices = mistapi.get_all(response=response, mist_session=apisession)
-        device = next((dev for dev in devices if dev["id"] == device_id), None)
-        device_name = device["name"] if device else device_id
-        device_mac = device["mac"] if device else None
-    except:
-        device_name = device_id
-        device_mac = None
-    
-    if not device_mac:
-        print(f"! Error: Could not find MAC address for device {device_name}")
-        logging.error(f"Could not find MAC address for device {device_id}")
-        return
-    
-    sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-    sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name or device_id)
-    filename = f"SiteDeviceInsights_{sanitized_site_name}_{sanitized_device_name}.csv"
-    
-    # Get all metrics that support "device" scope
-    device_metrics = get_insight_metrics_by_scope("device")
-    
-    if not device_metrics:
-        print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
-        logging.error("No device-scope metrics found in const insight metrics")
-        DataExporter.save_data_to_output([], filename)
-        return
-    
-    all_device_data = []
-    metrics_retrieved = 0
-    
-    print(f"! Retrieving {len(device_metrics)} different device insight metrics for {device_name}...")
-    
-    try:
-        for metric in device_metrics:
-            try:
-                response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(apisession, site_id, metric, device_mac)
-                device_insight_data = getattr(response, 'data', response) or {}
-                
-                if device_insight_data:
-                    # Add metric type identifier to each data point
-                    device_insight_data['metric_type'] = metric
-                    device_insight_data['site_id'] = site_id
-                    device_insight_data['site_name'] = site_name
-                    device_insight_data['device_id'] = device_id
-                    device_insight_data['device_name'] = device_name
-                    device_insight_data['device_mac'] = device_mac
-                    all_device_data.append(device_insight_data)
-                    metrics_retrieved += 1
-                    logging.debug(f"Retrieved device insight data for metric: {metric}")
-                else:
-                    logging.debug(f"No data available for device metric: {metric}")
-            except Exception as e:
-                logging.debug(f"Failed to get device insight data for metric {metric}: {e}")
-                continue
-        
-        if all_device_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_device_data)
-            processed = DataProcessingUtils.escape_multiline(processed)
-            DataExporter.save_data_to_output(processed, filename)
-            print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
-            logging.info(f"Exported {metrics_retrieved} device insight metrics for {device_name} at {site_name} to {filename}")
-        else:
-            print(f"! 0 device insights exported to {filename} (no data available)")
-            logging.warning(f"No device insight data available for {device_name} at {site_name}")
-            DataExporter.save_data_to_output([], filename)
-    except Exception as e:
-        print(f"! Error exporting device insights: {e}")
-        logging.error(f"Failed to export device insights for {device_name} at {site_name}: {e}")
-        DataExporter.save_data_to_output([], filename)
-
 def export_all_const_definitions_to_csv():
     """Export all available const definitions from the Mist API to individual CSV files.
     
@@ -15868,196 +16022,6 @@ def parse_insight_metric_to_normalized_data(metric_data, org_id):
         logging.debug(f"Failed metric data structure: {metric_data}")
     
     return normalized_data
-
-
-def export_org_insight_metrics_to_csv():
-    """Export organization-wide insight metrics to normalized CSV files."""
-    print("Export Organization Insight Metrics (Normalized):")
-    logging.info("Starting export of organization insight metrics with normalized structure...")
-    
-    # First, refresh the available metrics from the API
-    print("! Refreshing available insight metrics from Mist API...")
-    export_const_insight_metrics_to_csv()
-    
-    # Get all metrics that support "org" scope
-    org_metrics = get_insight_metrics_by_scope("org")
-    
-    if not org_metrics:
-        print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
-        logging.error("No org-scope metrics found in const insight metrics")
-        # Create empty normalized files
-        DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
-        DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
-        DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
-        DataExporter.save_data_to_output([], "OrgSitesData.csv")
-        return
-    
-    org_id = get_cached_or_prompted_org_id()
-    
-    # Initialize normalized data collections
-    all_summary_data = []
-    all_time_series_data = []
-    all_results_data = []
-    all_sites_data = []
-    
-    all_insight_data = []
-    metrics_retrieved = 0
-    metrics_failed = 0
-    
-    print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")
-    print("! Processing each metric individually with proper error handling...")
-    
-    try:
-        # Iterate through each org-scoped metric and retrieve it individually
-        for metric in org_metrics:
-            try:
-                logging.debug(f"Attempting to retrieve org insight metric: {metric}")
-                
-                # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
-                if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
-                    # These metrics require site-level SLE data analysis
-                    sle_categories = ["wifi", "wan", "wired"]
-                    
-                    for sle_category in sle_categories:
-                        try:
-                            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                apisession, 
-                                org_id, 
-                                sle=sle_category,
-                                duration="7d",
-                                limit=1000
-                            )
-                            sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                            
-                            if sites_data:
-                                # Create an aggregated insight result from sites data
-                                insight_result = {
-                                    'metric_type': f"{metric}_{sle_category}",
-                                    'org_id': org_id,
-                                    'sle_category': sle_category,
-                                    'data_source': 'sites_sle_analysis',
-                                    'total_sites': len(sites_data),
-                                    'sites_data': sites_data,
-                                    'original_metric': metric
-                                }
-                                
-                                all_insight_data.append(insight_result)
-                                metrics_retrieved += 1
-                                logging.debug(f"Successfully retrieved sites data for insight metric: {metric} with SLE: {sle_category} ({len(sites_data)} sites)")
-                            else:
-                                logging.debug(f"No sites data available for insight metric: {metric} with SLE: {sle_category}")
-                        except Exception as sites_error:
-                            logging.debug(f"Failed to get sites data for insight metric '{metric}' with SLE '{sle_category}': {sites_error}")
-                            continue
-                else:
-                    # For other metrics, use getOrgSle directly
-                    response = mistapi.api.v1.orgs.insights.getOrgSle(
-                        apisession, 
-                        org_id, 
-                        metric,
-                        duration="7d"
-                    )
-                    insight_data = getattr(response, 'data', response) or {}
-                    
-                    if insight_data:
-                        # Add metric type identifier to each data point
-                        insight_data['metric_type'] = metric
-                        insight_data['org_id'] = org_id
-                        all_insight_data.append(insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Successfully retrieved org insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for org metric: {metric}")
-                        metrics_failed += 1
-                    
-            except Exception as metric_error:
-                metrics_failed += 1
-                logging.debug(f"Failed to get org insight data for metric '{metric}': {metric_error}")
-                # Continue with next metric instead of failing entirely
-                continue
-        
-        # Also try getOrgSitesSle for sites summary data 
-        try:
-            logging.debug("Attempting to retrieve org sites SLE summary")
-            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)
-            sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-            if sites_data:
-                for item in sites_data:
-                    item['metric_type'] = 'org_sites_sle_summary'
-                    item['org_id'] = org_id
-                    all_insight_data.append(item)
-                metrics_retrieved += 1
-                logging.debug(f"Successfully retrieved org sites SLE data for {len(sites_data)} sites")
-        except Exception as sites_error:
-            metrics_failed += 1
-            logging.debug(f"Failed to get org sites SLE summary: {sites_error}")
-        
-        # Report results
-        print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
-        logging.info(f"Org insight metrics: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
-        
-        if all_insight_data:
-            print("! Parsing metrics into normalized data structures...")
-            
-            # Parse each metric into normalized structures
-            for metric_data in all_insight_data:
-                normalized = parse_insight_metric_to_normalized_data(metric_data, org_id)
-                all_summary_data.extend(normalized['summary'])
-                all_time_series_data.extend(normalized['time_series'])
-                all_results_data.extend(normalized['results'])
-                all_sites_data.extend(normalized['sites_data'])
-            
-            # Export to separate CSV files
-            print("! Exporting to normalized CSV files...")
-            
-            # Summary data
-            processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)
-            DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")
-            print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
-            
-            # Time series data
-            processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)
-            DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")
-            print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
-            
-            # Results data
-            processed_results = DataProcessingUtils.escape_multiline(all_results_data)
-            DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")
-            print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
-            
-            # Sites data
-            processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)
-            DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")
-            print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
-            
-            print(f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files")
-            logging.info(f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files")
-            
-            # Also save a legacy combined file for compatibility
-            processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
-            processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)
-            DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")
-            print(f"  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
-            
-        else:
-            print(f"! 0 organization insight metrics exported (no data available)")
-            logging.warning("No org insight data available - all metrics failed or returned empty")
-            # Create empty normalized files
-            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
-            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
-            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
-            DataExporter.save_data_to_output([], "OrgSitesData.csv")
-            DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
-            
-    except Exception as e:
-        print(f"! Error exporting organization insight metrics: {e}")
-        logging.error(f"Failed to export org insight metrics: {e}")
-        # Create empty normalized files in case of error
-        DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")
-        DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")
-        DataExporter.save_data_to_output([], "OrgMetricsResults.csv")
-        DataExporter.save_data_to_output([], "OrgSitesData.csv")
-        DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")
 
 
 def create_test_sites_from_csv():
@@ -17377,14 +17341,113 @@ class GatewayExportUtils:
         export_gateway_synthetic_tests_to_csv(fast)
     
     @staticmethod
-    def test_results_by_site(fast=False):
-        """
-        Exports gateway test results organized by site.
-        
+    def test_results_by_site(fast: bool = False):
+        """Export all synthetic test results (including speed tests) for all sites with gateways.
+
+        When fast=True:
+          * Uses cached inventory + site list CSVs (generates them if missing) to derive site IDs quickly.
+          * Processes sites concurrently using the shared connection pool helper.
+          * Skips per-site adaptive rate limiting delays (relies on pool throttling instead).
+
         Args:
-            fast (bool): If True, enables concurrent processing
+            fast (bool): Enable cached data usage + concurrent site processing.
         """
-        export_gateway_test_results_by_site_to_csv(fast)
+        print("Gateway Synthetic Test Results:")
+        logging.info("[INFO] Searching all test results (including speed tests) for sites with gateways...")
+        if fast:
+            logging.info(" Fast mode enabled: Using cached inventory/site data and concurrent site processing")
+
+        org_id = get_cached_or_prompted_org_id()
+
+        # Fast path: derive site IDs from cached CSVs to avoid full inventory refetch if possible
+        site_ids = []
+        if fast:
+            try:
+                # Ensure cached CSVs present
+                check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+                inventory_path = get_csv_file_path("OrgInventory.csv")
+                with open(inventory_path, mode="r", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    # Filter out None/empty site_ids and only include gateways
+                    site_ids = sorted([str(row.get("site_id")) for row in reader 
+                                     if row.get("type") == "gateway" and row.get("site_id") and str(row.get("site_id")).strip()])
+                    # Remove duplicates while preserving order
+                    site_ids = list(dict.fromkeys(site_ids))
+                logging.info(f"! Fast mode: Loaded {len(site_ids)} site_ids with gateways from cached inventory")
+            except Exception as exception:
+                logging.warning(f"! Fast mode site derivation failed, falling back to API discovery: {exception}")
+                site_ids = []  # Force fallback
+
+        if not site_ids:
+            site_ids = get_site_ids_with_gateway_devices(apisession, org_id)
+
+        if not site_ids:
+            logging.warning(" No sites with gateways found.")
+            return
+
+        all_results = []
+
+        def fetch_site_tests(site_id, connection_semaphore):
+            """Worker to fetch all synthetic test results for one site (with optional semaphore)."""
+            try:
+                ValidationUtils.validate_site_id(site_id, "GatewayExportUtils.test_results_by_site")
+                if connection_semaphore:
+                    with connection_semaphore:
+                        response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
+                else:
+                    response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
+                if not hasattr(response, "data"):
+                    logging.warning(f"! No data attribute in response for site {site_id}")
+                    return []
+                results = response.data.get("results", []) if isinstance(response.data, dict) else []
+                for result in results:
+                    result["site_id"] = site_id
+                logging.info(f"[{site_id}] Retrieved {len(results)} test results.")
+                return results
+            except Exception as exception:
+                logging.warning(f"! Failed to fetch test results for site {site_id}: {exception}")
+                return []
+
+        if fast:
+            start_time = time.time()
+            # Use generic connection pool executor (treat each site as a work item)
+            def worker(site_id, connection_semaphore):
+                return fetch_site_tests(site_id, connection_semaphore)
+
+            successful_results, failed_sites = execute_with_connection_pool_management(
+                work_items=site_ids,
+                worker_function=worker,
+                batch_description="sites"
+            )
+            # successful_results is a list of lists (each site's results); flatten
+            flattened_results = []
+            for site_list in successful_results:
+                if isinstance(site_list, list):
+                    flattened_results.extend(site_list)
+            all_results = flattened_results
+            duration = time.time() - start_time
+            logging.info(f" FAST MODE SUMMARY (site synthetic tests): ok_sites={len(successful_results)} fail_sites={len(failed_sites)} total_sites={len(site_ids)} records={len(all_results)} elapsed={duration:.2f}s")
+        else:
+            smoothed = None
+            for site_id in tqdm(site_ids, desc="Sites", unit="site"):
+                results = fetch_site_tests(site_id, connection_semaphore=None)
+                if results:
+                    all_results.extend(results)
+                smoothed, delay = get_rate_limited_delay(smoothed)
+                time.sleep(delay)
+
+        if all_results:
+            filename = "AllGatewayTestResults.csv"
+            flattened = DataProcessingUtils.flatten_nested_fields(all_results)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
+            DataExporter.save_data_to_output(sanitized, filename)
+            print(f"! {len(all_results)} gateway test results exported to {filename}")
+            logging.info(f"! All test results saved to {filename} ({len(all_results)} records).")
+            if fast:
+                logging.info(f"! API Optimization: Saved site-level repeat lookups by using cached inventory for site derivation")
+        else:
+            logging.warning(" No test results found. CSV not created.")
+            print("! No gateway test results found. CSV not created.")
     
     @staticmethod
     def device_stats(fast=False):
@@ -17408,8 +17471,125 @@ class GatewayExportUtils:
     
     @staticmethod
     def wan_port_conflicts():
-        """Exports gateways with WAN port conflicts."""
-        export_gateways_with_wan_port_conflicts_to_csv()
+        """
+        Checks if AllGatewayDeviceStats.csv exists and is fresh. If not, generates it.
+        Then exports a filtered CSV showing gateways that have IP address conflicts WITHIN the same device:
+        - Same IP address assigned to multiple WAN ports (0/0/0, 0/0/1, 0/0/2)
+        
+        Note: Next hop gateway conflicts are not checked since this data is not available in the CSV.
+        """
+        logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
+        
+        # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
+        stats_file = "AllGatewayDeviceStats.csv"
+        
+        check_and_generate_csv(stats_file, lambda: export_gateway_device_stats_to_csv(fast=True))
+        
+        # Load the gateway device stats using CSV reader
+        stats_path = get_csv_file_path(stats_file)
+        try:
+            gateway_data = []
+            with open(stats_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                gateway_data = list(reader)
+            
+            logging.info(f"! Loaded {len(gateway_data)} gateway device records for analysis")
+        except Exception as exception:
+            logging.error(f"! Failed to load {stats_file}: {exception}")
+            print(f"! Failed to load {stats_file}: {exception}")
+            return
+        
+        # Define WAN port columns to analyze
+        wan_ports = ['0/0/0', '0/0/1', '0/0/2'] 
+        ip_columns = [f'if_stat_ge-{port}_ips' for port in wan_ports]
+        
+        # Find gateways with internal WAN port IP conflicts
+        logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
+        
+        conflicts_found = []
+        
+        for index, row in enumerate(gateway_data):
+            device_name = row.get('device_name', row.get('name', f"Device_{index}"))
+            site_name = row.get('site_name', 'Unknown Site')
+            
+            # Collect IP addresses for this device's WAN ports
+            device_ips = {}  # {ip: [port1, port2, ...]}
+            
+            # Collect IP addresses from WAN ports
+            for col in ip_columns:
+                if col in row and row[col] and str(row[col]).strip():
+                    ip_value = str(row[col]).strip()
+                    if ip_value not in ['', 'nan', 'None', 'null']:
+                        port = col.replace('if_stat_ge-', '').replace('_ips', '')
+                        
+                        if ip_value not in device_ips:
+                            device_ips[ip_value] = []
+                        device_ips[ip_value].append(port)
+            
+            # Check for IP conflicts within this gateway (same IP on multiple ports)
+            ip_conflicts = []
+            for ip_address, ports in device_ips.items():
+                if len(ports) > 1:
+                    ip_conflicts.append({
+                        'type': 'IP Address Conflict',
+                        'value': ip_address,
+                        'ports': ports,
+                        'port_count': len(ports)
+                    })
+                    logging.warning(f"! IP conflict in {device_name}: {ip_address} assigned to ports {', '.join(ports)}")
+            
+            # If this gateway has IP conflicts, add simplified records for each conflicted port
+            if ip_conflicts:
+                # Add records for IP conflicts - one line per conflicted port
+                for conflict in ip_conflicts:
+                    for port in conflict['ports']:
+                        conflicts_found.append({
+                            'device_name': device_name,
+                            'site_name': site_name,
+                            'port_name': f"ge-{port}",
+                            'port_ip': conflict['value'],
+                            'conflict_type': 'IP Address Conflict',
+                            'conflict_with_ports': ', '.join([p for p in conflict['ports'] if p != port])
+                        })
+        
+        # Export results
+        if conflicts_found:
+            output_file = "GatewayWANPortConflicts.csv"
+            
+            # Sort by device name and port name
+            conflicts_found.sort(key=lambda x: (x.get('device_name', ''), x.get('port_name', '')))
+            
+            # Save to CSV using existing helper
+            DataExporter.save_data_to_output(conflicts_found, output_file)
+            
+            logging.info(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
+            print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
+            
+            # Display summary
+            unique_gateways = set()
+            ip_conflict_ports = len(conflicts_found)
+            
+            for record in conflicts_found:
+                unique_gateways.add(record.get('device_name', 'Unknown'))
+            
+            logging.info(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
+            print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
+            
+            # Show sample of conflicted ports
+            print(f"\n  Sample WAN Port IP Conflicts Found:")
+            for sample_index, record in enumerate(conflicts_found[:10], 1):
+                print(f"{sample_index:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
+                print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
+                print(f"    Conflicts with port(s): {record.get('conflict_with_ports', 'Unknown')}")
+                print()
+            
+            if len(conflicts_found) > 10:
+                print(f"... and {len(conflicts_found) - 10} more conflicted ports")
+            
+        else:
+            logging.info(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+            print(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
+            print(" This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
     
     @staticmethod
     def with_site_info():
@@ -17717,115 +17897,6 @@ def get_site_ids_with_gateway_devices(apisession, org_id):
 
     return list(gateway_sites)
 
-def export_gateway_test_results_by_site_to_csv(fast: bool = False):
-    """Export all synthetic test results (including speed tests) for all sites with gateways.
-
-    When fast=True:
-      * Uses cached inventory + site list CSVs (generates them if missing) to derive site IDs quickly.
-      * Processes sites concurrently using the shared connection pool helper.
-      * Skips per-site adaptive rate limiting delays (relies on pool throttling instead).
-
-    Args:
-        fast (bool): Enable cached data usage + concurrent site processing.
-    """
-    print("Gateway Synthetic Test Results:")
-    logging.info("[INFO] Searching all test results (including speed tests) for sites with gateways...")
-    if fast:
-        logging.info(" Fast mode enabled: Using cached inventory/site data and concurrent site processing")
-
-    org_id = get_cached_or_prompted_org_id()
-
-    # Fast path: derive site IDs from cached CSVs to avoid full inventory refetch if possible
-    site_ids = []
-    if fast:
-        try:
-            # Ensure cached CSVs present
-            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-            inventory_path = get_csv_file_path("OrgInventory.csv")
-            with open(inventory_path, mode="r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                # Filter out None/empty site_ids and only include gateways
-                site_ids = sorted([str(row.get("site_id")) for row in reader 
-                                 if row.get("type") == "gateway" and row.get("site_id") and str(row.get("site_id")).strip()])
-                # Remove duplicates while preserving order
-                site_ids = list(dict.fromkeys(site_ids))
-            logging.info(f"! Fast mode: Loaded {len(site_ids)} site_ids with gateways from cached inventory")
-        except Exception as e:
-            logging.warning(f"! Fast mode site derivation failed, falling back to API discovery: {e}")
-            site_ids = []  # Force fallback
-
-    if not site_ids:
-        site_ids = get_site_ids_with_gateway_devices(apisession, org_id)
-
-    if not site_ids:
-        logging.warning(" No sites with gateways found.")
-        return
-
-    all_results = []
-
-    def fetch_site_tests(site_id, connection_semaphore):
-        """Worker to fetch all synthetic test results for one site (with optional semaphore)."""
-        try:
-            ValidationUtils.validate_site_id(site_id, "export_gateway_test_results_by_site_to_csv")
-            if connection_semaphore:
-                with connection_semaphore:
-                    response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
-            else:
-                response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
-            if not hasattr(response, "data"):
-                logging.warning(f"! No data attribute in response for site {site_id}")
-                return []
-            results = response.data.get("results", []) if isinstance(response.data, dict) else []
-            for result in results:
-                result["site_id"] = site_id
-            logging.info(f"[{site_id}] Retrieved {len(results)} test results.")
-            return results
-        except Exception as e:
-            logging.warning(f"! Failed to fetch test results for site {site_id}: {e}")
-            return []
-
-    if fast:
-        start_time = time.time()
-        # Use generic connection pool executor (treat each site as a work item)
-        # Reuse execute_with_connection_pool_management pattern by adapting worker signature
-        def worker(site_id, connection_semaphore):
-            return fetch_site_tests(site_id, connection_semaphore)
-
-        successful_results, failed_sites = execute_with_connection_pool_management(
-            work_items=site_ids,
-            worker_function=worker,
-            batch_description="sites"
-        )
-        # successful_results is a list of lists (each site's results); flatten
-        flattened_results = []
-        for site_list in successful_results:
-            if isinstance(site_list, list):
-                flattened_results.extend(site_list)
-        all_results = flattened_results
-        duration = time.time() - start_time
-        logging.info(f" FAST MODE SUMMARY (site synthetic tests): ok_sites={len(successful_results)} fail_sites={len(failed_sites)} total_sites={len(site_ids)} records={len(all_results)} elapsed={duration:.2f}s")
-    else:
-        smoothed = None
-        for site_id in tqdm(site_ids, desc="Sites", unit="site"):
-            results = fetch_site_tests(site_id, connection_semaphore=None)
-            if results:
-                all_results.extend(results)
-            smoothed, delay = get_rate_limited_delay(smoothed)
-            time.sleep(delay)
-
-    if all_results:
-        filename = "AllGatewayTestResults.csv"
-        flattened = DataProcessingUtils.flatten_nested_fields(all_results)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        DataExporter.save_data_to_output(sanitized, filename)
-        print(f"! {len(all_results)} gateway test results exported to {filename}")
-        logging.info(f"! All test results saved to {filename} ({len(all_results)} records).")
-        if fast:
-            logging.info(f"! API Optimization: Saved site-level repeat lookups by using cached inventory for site derivation")
-    else:
-        logging.warning(" No test results found. CSV not created.")
-        print("! No gateway test results found. CSV not created.")
-
 def export_gateway_device_stats_to_csv_with_freshness_check(fast=False):
     """
     Wrapper function that checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
@@ -17988,127 +18059,6 @@ def export_gateway_device_stats_to_csv(fast=False):
     else:
         logging.warning(" No gateway device statistics found. CSV not created.")
 
-def export_gateways_with_wan_port_conflicts_to_csv():
-    """
-    Checks if AllGatewayDeviceStats.csv exists and is fresh. If not, generates it.
-    Then exports a filtered CSV showing gateways that have IP address conflicts WITHIN the same device:
-    - Same IP address assigned to multiple WAN ports (0/0/0, 0/0/1, 0/0/2)
-    
-    Note: Next hop gateway conflicts are not checked since this data is not available in the CSV.
-    """
-    logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
-    
-    # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
-    stats_file = "AllGatewayDeviceStats.csv"
-    
-    check_and_generate_csv(stats_file, lambda: export_gateway_device_stats_to_csv(fast=True))
-    
-    # Load the gateway device stats using CSV reader
-    stats_path = get_csv_file_path(stats_file)
-    try:
-        gateway_data = []
-        with open(stats_path, 'r', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            gateway_data = list(reader)
-        
-        logging.info(f"! Loaded {len(gateway_data)} gateway device records for analysis")
-    except Exception as e:
-        logging.error(f"! Failed to load {stats_file}: {e}")
-        print(f"! Failed to load {stats_file}: {e}")
-        return
-    
-    # Define WAN port columns to analyze
-    wan_ports = ['0/0/0', '0/0/1', '0/0/2'] 
-    ip_columns = [f'if_stat_ge-{port}_ips' for port in wan_ports]
-    
-    # Find gateways with internal WAN port IP conflicts
-    logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
-    
-    conflicts_found = []
-    
-    for i, row in enumerate(gateway_data):
-        device_name = row.get('device_name', row.get('name', f"Device_{i}"))
-        site_name = row.get('site_name', 'Unknown Site')
-        
-        # Collect IP addresses for this device's WAN ports
-        device_ips = {}  # {ip: [port1, port2, ...]}
-        
-        # Collect IP addresses from WAN ports
-        for col in ip_columns:
-            if col in row and row[col] and str(row[col]).strip():
-                ip_value = str(row[col]).strip()
-                if ip_value not in ['', 'nan', 'None', 'null']:
-                    port = col.replace('if_stat_ge-', '').replace('_ips', '')
-                    
-                    if ip_value not in device_ips:
-                        device_ips[ip_value] = []
-                    device_ips[ip_value].append(port)
-        
-        # Check for IP conflicts within this gateway (same IP on multiple ports)
-        ip_conflicts = []
-        for ip, ports in device_ips.items():
-            if len(ports) > 1:
-                ip_conflicts.append({
-                    'type': 'IP Address Conflict',
-                    'value': ip,
-                    'ports': ports,
-                    'port_count': len(ports)
-                })
-                logging.warning(f"! IP conflict in {device_name}: {ip} assigned to ports {', '.join(ports)}")
-        
-        # If this gateway has IP conflicts, add simplified records for each conflicted port
-        if ip_conflicts:
-            # Add records for IP conflicts - one line per conflicted port
-            for conflict in ip_conflicts:
-                for port in conflict['ports']:
-                    conflicts_found.append({
-                        'device_name': device_name,
-                        'site_name': site_name,
-                        'port_name': f"ge-{port}",
-                        'port_ip': conflict['value'],
-                        'conflict_type': 'IP Address Conflict',
-                        'conflict_with_ports': ', '.join([p for p in conflict['ports'] if p != port])
-                    })
-    
-    # Export results
-    if conflicts_found:
-        output_file = "GatewayWANPortConflicts.csv"
-        
-        # Sort by device name and port name
-        conflicts_found.sort(key=lambda x: (x.get('device_name', ''), x.get('port_name', '')))
-        
-        # Save to CSV using existing helper
-        DataExporter.save_data_to_output(conflicts_found, output_file)
-        
-        logging.info(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
-        print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
-        
-        # Display summary
-        unique_gateways = set()
-        ip_conflict_ports = len(conflicts_found)
-        
-        for record in conflicts_found:
-            unique_gateways.add(record.get('device_name', 'Unknown'))
-        
-        logging.info(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
-        print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
-        
-        # Show sample of conflicted ports
-        print(f"\n  Sample WAN Port IP Conflicts Found:")
-        for i, record in enumerate(conflicts_found[:10], 1):
-            print(f"{i:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
-            print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
-            print(f"    Conflicts with port(s): {record.get('conflict_with_ports', 'Unknown')}")
-            print()
-        
-        if len(conflicts_found) > 10:
-            print(f"... and {len(conflicts_found) - 10} more conflicted ports")
-        
-    else:
-        logging.info(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-        print(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-        print(" This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
-
 def generate_support_package():
     logging.info("Generating support package for each site...")
 
@@ -18120,7 +18070,7 @@ def generate_support_package():
         ("OrgDevices.csv", OrgExportUtils.devices),
         ("OrgDeviceStats.csv", OrgExportUtils.device_stats),
         ("OrgDevicePortStats.csv", OrgExportUtils.device_port_stats),
-        ("AllGatewayTestResults.csv", export_gateway_test_results_by_site_to_csv),
+        ("AllGatewayTestResults.csv", GatewayExportUtils.test_results_by_site),
     ]
 
     # Ensure all required files are fresh or regenerate them
@@ -43262,7 +43212,7 @@ menu_actions = {
     "16": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
     "17": (OrgExportUtils.devices, "Export a list of all devices in the organization"),
     "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
-    "19": (export_gateway_test_results_by_site_to_csv, "Export all synthetic test results (including speed tests) for gateways"),
+    "19": (GatewayExportUtils.test_results_by_site, "Export all synthetic test results (including speed tests) for gateways"),
 
     # > Location-Enriched Exports
     "20": (OrgExportUtils.sites_with_location, "Export a list of sites with location and timezone info"),
@@ -43369,20 +43319,20 @@ menu_actions = {
     "93": (convert_virtual_chassis_by_site_list, " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
     "94": (check_virtual_chassis_conversion_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
     "95": (lambda fast=False: export_gateway_device_stats_to_csv_with_freshness_check(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
-    "96": (export_gateways_with_wan_port_conflicts_to_csv, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
+    "96": (GatewayExportUtils.wan_port_conflicts, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
     "97": (ssh_runner_interactive, "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH"),
     "98": (ssh_runner_by_gateway_template, "SSH Runner - Target gateways by template name (online gateways with management IPs only)"),
 
     # ==============================
     # INSIGHTS API OPERATIONS - Organization & Site Analytics
     # ==============================
-    "66": (export_org_sle_metrics_to_csv, "Export Organization SLE Metrics (Service Level Experience)"),
-    "67": (export_org_sites_sle_summary_to_csv, "Export SLE summary metrics for all sites in the organization"),
+    "66": (OrgExportUtils.sle_metrics, "Export Organization SLE Metrics (Service Level Experience)"),
+    "67": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
     "68": (export_site_insight_metrics_to_csv, "Export general insight metrics for a selected site"),
     "69": (export_site_client_insights_to_csv, "Export client-specific insight metrics for a selected site"),
     "81": (export_site_device_insights_to_csv, "Export device-specific insight metrics for a selected site"),
     "82": (export_all_const_definitions_to_csv, "Export all available const definitions from the Mist API (comprehensive endpoint coverage)"),
-    "83": (export_org_insight_metrics_to_csv, "Export Organization Insight Metrics (comprehensive operational insights)"),
+    "83": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
     "84": (export_site_anomaly_metrics_to_csv, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
     "85": (export_site_device_anomaly_to_csv, "Export Site Device Anomaly Events (device-specific anomaly detection)"),
     "86": (export_site_client_anomaly_to_csv, "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"),
@@ -46529,7 +46479,7 @@ def main():
             "get_gateway_devices_with_sites",
             "export_gateway_device_stats_to_csv_with_freshness_check",
             "export_gateway_device_stats_to_csv",
-            "export_gateway_test_results_by_site_to_csv",
+            "GatewayExportUtils.test_results_by_site",
             "OrgExportUtils.devices_with_site_info",
             "export_gateway_device_configs_to_csv",
             "fetch_gateway_device_configs_from_api",
@@ -46897,6 +46847,10 @@ if __name__ == "__main__":
     finally:
         logging.info("=== MistHelper application ending ===")
 #hi
+
+
+
+
 
 
 
