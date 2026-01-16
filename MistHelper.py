@@ -17334,11 +17334,152 @@ class GatewayExportUtils:
     def synthetic_tests(fast=False):
         """
         Collects and exports synthetic test stats for all gateways in the organization.
+        Optimized to use cached inventory data and concurrent processing when fast=True.
         
         Args:
             fast (bool): If True, enables concurrent processing and uses cached inventory data
+                        to minimize API calls.
         """
-        export_gateway_synthetic_tests_to_csv(fast)
+        # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
+        logging.debug(f"[DEBUG] GatewayExportUtils.synthetic_tests invoked with fast={fast}")
+        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
+        if fast:
+            logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
+        
+        org_id = get_cached_or_prompted_org_id()
+        gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
+        all_stats = []
+
+        if not gateway_devices:
+            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")
+            return
+
+        def fetch_synthetic_test_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
+            """
+            Fetch synthetic test stats for a single gateway device with retry logic and connection pool management.
+            
+            Args:
+                device_info: Tuple of (site_id, device_id, device_name, site_name)
+                max_retries: Maximum number of retry attempts (uses env var if None)
+                retry_delay: Base delay between retries (uses env var if None)
+                connection_semaphore: Semaphore to limit concurrent connections (optional)
+            """
+            # Use environment variables as defaults if not provided
+            if max_retries is None:
+                max_retries = FAST_MODE_MAX_RETRIES
+            if retry_delay is None:
+                retry_delay = FAST_MODE_RETRY_DELAY
+                
+            site_id, device_id, device_name, site_name = device_info
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    # Validate inputs before making API calls
+                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")
+                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")
+                    
+                    # Use semaphore to limit concurrent connections if provided
+                    if connection_semaphore:
+                        with connection_semaphore:
+                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
+                    else:
+                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
+                    
+                    stats["site_id"] = site_id
+                    stats["site_name"] = site_name
+                    stats["device_id"] = device_id
+                    stats["device_name"] = device_name
+                    
+                    if attempt > 0:
+                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                    else:
+                        logging.info(f"! Collected synthetic test stats for device {device_name} at site {site_name}")
+                    return stats
+                    
+                except Exception as exception:
+                    if attempt < max_retries:
+                        # Fast mode: reduced backoff delay for quicker retries
+                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)
+                        logging.warning(f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {exception}")
+                        logging.info(f"! Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
+                        time.sleep(backoff_delay)
+                    else:
+                        logging.error(f"! Final attempt failed for device {device_id} at site {site_id}: {exception}")
+                        return None
+            
+            return None
+
+        if fast:
+            # Concurrent processing mode with connection-aware threading + summary instrumentation
+            start_time = time.time()
+
+            # Define worker function for the connection pool helper
+            def fetch_device_stats(device_info, connection_semaphore):
+                """Worker function that fetches synthetic test stats for a single device."""
+                return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)
+
+            # Define retry function for failed devices
+            def retry_failed_devices(failed_devices, connection_semaphore):
+                retry_results = []
+                still_failed = []
+                retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
+                if retry_threads <= 0:
+                    logging.warning(" FAST MODE: No available threads for retry; skipping retries")
+                    return [], failed_devices
+                with ThreadPoolExecutor(max_workers=retry_threads) as executor:
+                    retry_futures = {
+                        executor.submit(fetch_synthetic_test_stats_with_retry, device_info, max_retries=FAST_MODE_RETRY_MAX_RETRIES, connection_semaphore=connection_semaphore): device_info
+                        for device_info in failed_devices
+                    }
+                    for future in tqdm(as_completed(retry_futures), total=len(retry_futures), desc="Retrying Failed", unit="device"):
+                        device_info = retry_futures[future]
+                        try:
+                            result = future.result()
+                            if result:
+                                retry_results.append(result)
+                                logging.info(f" FAST RETRY OK: {device_info[2]}")
+                            else:
+                                still_failed.append(device_info)
+                                logging.error(f" FAST RETRY FAIL: {device_info[2]}")
+                        except Exception as exception:
+                            still_failed.append(device_info)
+                            logging.error(f" FAST RETRY EXC: {device_info[2]} -> {exception}")
+                return retry_results, still_failed
+
+            successful_results, failed_devices = execute_with_connection_pool_management(
+                work_items=gateway_devices,
+                worker_function=fetch_device_stats,
+                batch_description="devices",
+                retry_function=retry_failed_devices
+            )
+
+            duration = time.time() - start_time
+            all_stats.extend(successful_results)
+            logging.info(f" FAST MODE SUMMARY (synthetic tests): ok={len(successful_results)} fail={len(failed_devices)} total={len(gateway_devices)} elapsed={duration:.2f}s")
+        else:
+            # Sequential processing with rate limiting (original behavior)
+            smoothed = None
+            for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):
+                result = fetch_synthetic_test_stats_with_retry(device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES)
+                if result:
+                    all_stats.append(result)
+                
+                # Apply rate limiting only in non-fast mode
+                smoothed, delay = get_rate_limited_delay(smoothed)
+                logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
+                time.sleep(delay)
+
+        if all_stats:
+            filename = "AllGatewaySyntheticTests.csv"
+            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
+            DataExporter.save_data_to_output(sanitized, filename)
+            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
+            logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
+            logging.info(f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory")
+        else:
+            logging.warning(" No synthetic test results found. CSV not created.")
+            print("! No synthetic test results found. CSV not created.")
     
     @staticmethod
     def test_results_by_site(fast: bool = False):
@@ -17599,23 +17740,200 @@ class GatewayExportUtils:
     @staticmethod
     def management_ips(fast=False):
         """
-        Exports gateway management IPs.
+        Exports gateway management overlay IPs grouped by gateway template association.
+        Creates a single CSV with gateway info, management IPs, status, and template names.
+        
+        This function:
+        1. Gets current device inventory (calls existing function)
+        2. Gets gateway template mappings (calls existing function) 
+        3. Gets gateway configurations with management IPs (calls existing function)
+        4. Outputs CSV with: Gateway Name, Gateway Template, Management IP, Online Status, Site Name
         
         Args:
-            fast (bool): If True, enables concurrent processing
+            fast (bool): Enable fast mode for API calls
         """
-        export_gateway_management_ips_to_csv(fast)
+        logging.info("Starting export of gateway management overlay IPs...")
+        print("Gateway Management IP Export:")
+        print("Collecting data from inventory, templates, and configurations...")
+        
+        org_id = get_cached_or_prompted_org_id()
+        
+        # Ensure required CSVs are fresh by calling existing functions
+        print("  1. Ensuring site list with template mappings is current...")
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        
+        print("  2. Ensuring gateway templates are current...")
+        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        
+        print("  3. Ensuring gateway device data with connection status is current...")
+        check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgExportUtils.gateways_with_site_info)
+        
+        print("  4. Ensuring gateway configurations with management IPs are current...")
+        check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
+        
+        print("  5. Processing and correlating data...")
+        
+        # Load required data
+        try:
+            # Load sites with gateway template associations
+            with open(get_csv_file_path("SiteList.csv"), encoding="utf-8") as csvfile:
+                sites = list(csv.DictReader(csvfile))
+            
+            # Load gateway templates for name lookups
+            with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
+                templates = list(csv.DictReader(csvfile))
+            
+            # Load gateway device data with connection status
+            with open(get_csv_file_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
+                gateway_devices = list(csv.DictReader(csvfile))
+            
+            # Load gateway configurations with management IPs
+            with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
+                gateway_configs = list(csv.DictReader(csvfile))
+                
+        except FileNotFoundError as exception:
+            logging.error(f"Required CSV file not found: {exception}")
+            print(f"! Error: Required CSV file not found: {exception}")
+            return
+        
+        # Create lookup dictionaries
+        site_lookup = {site.get("id"): site for site in sites}
+        template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
+        
+        # Create device lookup for connection status by device name
+        device_lookup = {dev.get("name"): dev for dev in gateway_devices}
+        
+        # Create management IP lookup by device name
+        mgmt_ip_lookup = {config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") 
+                          for config in gateway_configs}
+        
+        # Process gateway devices and correlate with template and management IP data
+        results = []
+        gateways_processed = 0
+        gateways_with_mgmt_ip = 0
+        
+        for device in gateway_devices:
+            gateway_name = device.get("name", "Unknown Gateway")
+            site_id = device.get("site_id", "")
+            site_name = device.get("site_name", "Unknown Site")
+            connected_status = device.get("connected", "")
+            
+            # Get management IP from configs
+            mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")
+            
+            # Determine connection status - simple online/offline based on connected field
+            connected_val = str(connected_status).strip().lower()
+            
+            if connected_val in ['true', '1', 'yes']:
+                status = "Online"
+            elif connected_val in ['false', '0', 'no']:
+                status = "Offline"
+            else:
+                # Empty or unknown connection status
+                status = "Unknown"
+            
+            # Get template information
+            site_info = site_lookup.get(site_id, {})
+            template_id = site_info.get("gatewaytemplate_id", "")
+            template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
+            
+            # Prepare result row
+            result_row = {
+                "gateway_name": gateway_name,
+                "management_ip": mgmt_ip if mgmt_ip else "Not Configured",
+                "status": status,
+                "site_name": site_name,
+                "gateway_template": template_name,
+                "template_id": template_id if template_id else "None"
+            }
+            
+            results.append(result_row)
+            gateways_processed += 1
+            
+            if mgmt_ip:
+                gateways_with_mgmt_ip += 1
+                logging.debug(f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})")
+            else:
+                logging.debug(f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})")
+        
+        # Sort results by template name, then gateway name
+        results.sort(key=lambda row: (row["gateway_template"], row["gateway_name"]))
+        
+        # Create the final CSV with requested columns
+        final_results = [
+            {
+                "Gateway Name": row["gateway_name"],
+                "Gateway Template": row["gateway_template"],
+                "Management IP": row["management_ip"],
+                "Online Status": row["status"],
+                "Site Name": row["site_name"]
+            }
+            for row in results
+        ]
+        
+        # Write CSV file
+        DataExporter.save_data_to_output(final_results, "GatewayManagementIPs.csv")
+        
+        # Summary output
+        print(f"! Gateway management IP export completed:")
+        print(f"  - Total gateways processed: {gateways_processed}")
+        print(f"  - Gateways with management IPs: {gateways_with_mgmt_ip}")
+        print(f"  - Gateways without management IPs: {gateways_processed - gateways_with_mgmt_ip}")
+        print(f"  - Output CSV: GatewayManagementIPs.csv")
+        
+        logging.info(f"Gateway management IP export completed. {gateways_processed} gateways processed, {gateways_with_mgmt_ip} with management IPs.")
     
     @staticmethod
     def device_configs(debug=False, fast=False):
         """
-        Exports gateway device configurations.
+        Fetches and exports configuration details for all gateway devices across all sites in the organization
+        to AllSiteGatewayConfigs.csv. Also generates a filtered CSV with selected fields and port info.
         
         Args:
-            debug (bool): If True, enables debug logging
+            debug (bool): If True, enables debug logging with sample output
             fast (bool): If True, enables concurrent processing
         """
-        export_gateway_device_configs_to_csv(debug, fast)
+        logging.info("Starting export of all gateway device configurations...")
+        org_id = get_cached_or_prompted_org_id()
+        data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)
+        if not data:
+            logging.warning(" No device configs found.")
+            return
+
+        # Flatten and sanitize the data
+        flattened = DataProcessingUtils.flatten_nested_fields(data)
+        sanitized = DataProcessingUtils.escape_multiline(flattened)
+
+        # Write full dataset to CSV
+        DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
+        logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
+
+        # Identify port config columns (excluding _vpn_paths_)
+        base_columns = ["mac", "name"]
+        port_columns = [
+            col for col in sanitized[0].keys()
+            if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col
+        ]
+        columns_to_keep = base_columns + port_columns
+
+        # Filter rows where any port column has non-empty value
+        filtered_rows = [
+            {col: row.get(col, "") for col in columns_to_keep}
+            for row in sanitized
+            if any(row.get(col) not in [None, "", "null"] for col in port_columns)
+        ]
+
+        # Write filtered dataset to CSV
+        if not filtered_rows:
+            logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
+            filtered_csv_path = get_csv_file_path("FilteredGatewayPortConfigs.csv")
+            with open(filtered_csv_path, "w", newline="", encoding="utf-8") as csvfile:
+                csvfile.write("No matching data found.\n")
+        else:
+            if debug:
+                logging.debug(f"Sample filtered row: {filtered_rows[0]}")
+            DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")
+            logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
     
     @staticmethod
     def templates():
@@ -17638,164 +17956,333 @@ class GatewayExportUtils:
     @staticmethod
     def with_wan_overrides(fast=False):
         """
-        Exports gateways with WAN overrides.
+        Generates a CSV report of gateways with ports that are overridden from their template configuration.
+        This helps identify outliers that need to be corrected back to template compliance.
+        
+        Report includes for OVERRIDDEN ports only:
+        - Gateway Router Device Name  
+        - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2, {{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}
+        - Port status (up/down)
+        - Port admin status (disabled/enabled)
+        - Port gateway IP address
+        - Port IP address
+        - Port netmask
+        - Port config type (DHCP or STATIC)
+        - Port name/number
+        - Whether port is overridden from template (always "Yes" for filtered results)
+        
+        Searches 6 total ports: 3 hardcoded (ge-0/0/0, ge-0/0/1, ge-0/0/2) + 3 variable-based 
+        ({{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}) for comprehensive coverage.
         
         Args:
             fast (bool): If True, enables concurrent processing
         """
-        export_gateways_with_wan_overrides_to_csv(fast)
+        print("Gateway Ports Overridden from Template (Compliance Outliers):")
+        logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
 
+        # Ensure required CSVs are fresh
+        check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
+        check_and_generate_csv("SiteList_ListAPI.csv", OrgExportUtils.sites_list_api)
+        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
 
-# Backward compatibility - original gateway function definitions follow
-def export_gateway_synthetic_tests_to_csv(fast=False):
-    """
-    Collects and exports synthetic test stats for all gateways in the organization.
-    Optimized to use cached inventory data and concurrent processing when fast=True.
-    
-    Args:
-        fast (bool): If True, enables concurrent processing and uses cached inventory data
-                    to minimize API calls.
-    """
-    # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-    logging.debug(f"[DEBUG] export_gateway_synthetic_tests_to_csv invoked with fast={fast}")
-    logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
-    if fast:
-        logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
-    
-    org_id = get_cached_or_prompted_org_id()
-    gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
-    all_stats = []
+        # Load data
+        with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
+            configs = list(csv.DictReader(csvfile))
+        with open(get_csv_file_path("SiteList_ListAPI.csv"), encoding="utf-8") as csvfile:
+            sites = list(csv.DictReader(csvfile))
+        with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
+            templates = list(csv.DictReader(csvfile))
 
-    if not gateway_devices:
-        logging.warning("[WARN] No gateway devices found. Exiting export_gateway_synthetic_tests_to_csv.")
-        return
-
-    def fetch_synthetic_test_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
-        """
-        Fetch synthetic test stats for a single gateway device with retry logic and connection pool management.
+        # Create lookups for site and template names
+        site_lookup = {site.get("id"): site.get("name", "Unknown Site") for site in sites}
+        # Create site to gateway template ID mapping from SiteList
+        site_to_template_id = {site.get("id"): site.get("gatewaytemplate_id", "") for site in sites}
+        template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
         
-        Args:
-            device_info: Tuple of (site_id, device_id, device_name, site_name)
-            max_retries: Maximum number of retry attempts (uses env var if None)
-            retry_delay: Base delay between retries (uses env var if None)
-            connection_semaphore: Semaphore to limit concurrent connections (optional)
-        """
-        # Use environment variables as defaults if not provided
-        if max_retries is None:
-            max_retries = FAST_MODE_MAX_RETRIES
-        if retry_delay is None:
-            retry_delay = FAST_MODE_RETRY_DELAY
+        # Debug template lookup
+        logging.debug(f"[DEBUG] Created template lookup with {len(template_lookup)} templates")
+        for template_id, template_name in list(template_lookup.items())[:3]:  # Show first 3 for debugging
+            logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
+
+        overridden_port_info = []
+        # Target ports: original 3 hardcoded ports + 3 variable-based ports (6 total)
+        target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
+
+        # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
+        logging.info(" First pass: Identifying devices with port overrides...")
+        devices_with_overrides = {}  # device_id -> (device_info, overridden_port_names)
+        
+        for row in configs:
+            device_name = row.get("name", "").strip()
+            site_id = row.get("site_id", "").strip()
+            device_id = row.get("id", "").strip()
+            site_name = site_lookup.get(site_id, "Unknown Site")
+            # Get template ID from site-level gateway template assignment
+            template_id = site_to_template_id.get(site_id, "")
+            template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
             
-        site_id, device_id, device_name, site_name = device_info
-        
-        for attempt in range(max_retries + 1):
-            try:
-                # Validate inputs before making API calls
-                ValidationUtils.validate_site_id(site_id, "export_gateway_synthetic_tests_to_csv")
-                ValidationUtils.validate_device_id(device_id, "export_gateway_synthetic_tests_to_csv")
-                
-                # Use semaphore to limit concurrent connections if provided
-                if connection_semaphore:
-                    with connection_semaphore:
-                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
+            # Debug template lookup for this device
+            if template_id:
+                if template_id in template_lookup:
+                    logging.debug(f"[DEBUG] Device {device_name}: site_id='{site_id}' -> template_id='{template_id}' -> template_name='{template_name}'")
                 else:
-                    stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
-                
-                stats["site_id"] = site_id
-                stats["site_name"] = site_name
-                stats["device_id"] = device_id
-                stats["device_name"] = device_name
-                
-                if attempt > 0:
-                    logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
-                else:
-                    logging.info(f"! Collected synthetic test stats for device {device_name} at site {site_name}")
-                return stats
-                
-            except Exception as e:
-                if attempt < max_retries:
-                    # Fast mode: reduced backoff delay for quicker retries
-                    backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER ** attempt)  # Configurable backoff
-                    logging.warning(f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {e}")
-                    logging.info(f"! Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
-                    time.sleep(backoff_delay)
-                else:
-                    logging.error(f"! Final attempt failed for device {device_id} at site {site_id}: {e}")
-                    return None
-        
-        return None
+                    logging.warning(f"[WARN] Device {device_name}: Template ID '{template_id}' not found in gateway templates (orphaned assignment)")
+                    template_name = f"Missing Template ({template_id[:8]}...)"
+            else:
+                logging.debug(f"[DEBUG] Device {device_name}: No gatewaytemplate_id found for site {site_id}")
+            
+            if not device_name or not site_id or not device_id:
+                continue
 
-    if fast:
-        # Concurrent processing mode with connection-aware threading + summary instrumentation
-        start_time = time.time()
-
-        # Define worker function for the connection pool helper
-        def fetch_device_stats(device_info, connection_semaphore):
-            """Worker function that fetches synthetic test stats for a single device."""
-            return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)
-
-        # Define retry function for failed devices (unchanged logic, clearer logging prefix FAST)
-        def retry_failed_devices(failed_devices, connection_semaphore):
-            retry_results = []
-            still_failed = []
-            retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
-            if retry_threads <= 0:
-                logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                return [], failed_devices
-            with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                retry_futures = {
-                    executor.submit(fetch_synthetic_test_stats_with_retry, device_info, max_retries=FAST_MODE_RETRY_MAX_RETRIES, connection_semaphore=connection_semaphore): device_info
-                    for device_info in failed_devices
+            # Check each target port for overrides using CSV data only
+            device_overridden_ports = []
+            for port_name in target_ports:
+                # Check if port is overridden from template by looking for port_config fields in the CSV
+                # Need to check for both base port (port_config_{port}_*) and subinterfaces (port_config_{port}.*) 
+                # to catch configurations like {{wan2_interface}}.70 or ge-0/0/1.100
+                port_config_fields = [col for col in row if 
+                    col.startswith(f"port_config_{port_name}_") or 
+                    col.startswith(f"port_config_{port_name}.")]
+                
+                # Check for non-empty values (excluding vpn_paths which are template-inherited)
+                override_fields = []
+                for field in port_config_fields:
+                    value = row.get(field, "").strip().lower()
+                    if value not in ["", "null", "none"] and "_vpn_paths_" not in field:
+                        override_fields.append(f"{field}={value}")
+                
+                is_overridden = len(override_fields) > 0
+                if is_overridden:
+                    device_overridden_ports.append(port_name)
+            
+            # If this device has any overridden ports, mark it for API calls
+            if device_overridden_ports:
+                devices_with_overrides[device_id] = {
+                    "device_name": device_name,
+                    "site_id": site_id,
+                    "site_name": site_name,
+                    "template_id": template_id,
+                    "template_name": template_name,
+                    "row_data": row,
+                    "overridden_ports": device_overridden_ports
                 }
-                for future in tqdm(as_completed(retry_futures), total=len(retry_futures), desc="Retrying Failed", unit="device"):
-                    device_info = retry_futures[future]
-                    try:
-                        result = future.result()
-                        if result:
-                            retry_results.append(result)
-                            logging.info(f" FAST RETRY OK: {device_info[2]}")
-                        else:
-                            still_failed.append(device_info)
-                            logging.error(f" FAST RETRY FAIL: {device_info[2]}")
-                    except Exception as e:
-                        still_failed.append(device_info)
-                        logging.error(f" FAST RETRY EXC: {device_info[2]} -> {e}")
-            return retry_results, still_failed
 
-        successful_results, failed_devices = execute_with_connection_pool_management(
-            work_items=gateway_devices,
-            worker_function=fetch_device_stats,
-            batch_description="devices",
-            retry_function=retry_failed_devices
-        )
+        logging.info(f"! Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices")
+        
+        if not devices_with_overrides:
+            logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
+            # Still create empty CSV file with proper headers
+            output_file = "GatewayOverriddenPorts.csv"
+            fieldnames = [
+                "gateway_device_name", "site_name", "template_name", "port_name", "recommended_variable",
+                "port_description", "port_status", "port_admin_status", "port_gateway_ip", "port_ip_address",
+                "port_netmask", "port_config_type", "port_usage", "overridden_from_template",
+                "device_id", "site_id", "template_id"
+            ]
+            output_path = get_csv_file_path(output_file)
+            with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+            print(f"! Gateway override report written to {output_file}")
+            print(" No template overrides found - all gateways are compliant with their assigned templates!")
+            return
 
-        duration = time.time() - start_time
-        all_stats.extend(successful_results)
-        logging.info(f" FAST MODE SUMMARY (synthetic tests): ok={len(successful_results)} fail={len(failed_devices)} total={len(gateway_devices)} elapsed={duration:.2f}s")
-    else:
-        # Sequential processing with rate limiting (original behavior)
-        smoothed = None
-        for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):
-            result = fetch_synthetic_test_stats_with_retry(device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES)
-            if result:
-                all_stats.append(result)
+        # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
+        logging.info(f"! Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides...")
+        
+        if fast and len(devices_with_overrides) > 5:  # Use connection pool management for fast mode with 5+ devices
+            logging.info(" Using fast mode with connection pool management for device data fetching...")
             
-            # Apply rate limiting only in non-fast mode
-            smoothed, delay = get_rate_limited_delay(smoothed)
-            logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
-            time.sleep(delay)
+            # Define worker function for fetching device configs and stats
+            def fetch_device_data(device_info, connection_semaphore):
+                """Worker function that fetches config and stats for a single device."""
+                device_id_inner = device_info[0]
+                device_data = device_info[1]
+                device_name_inner = device_data["device_name"]
+                site_id_inner = device_data["site_id"]
+                
+                # Acquire connection semaphore before making API calls
+                with connection_semaphore:
+                    port_configs = {}
+                    interface_stats = {}
+                    
+                    # Fetch live device info from getSiteDevice API for current config
+                    try:
+                        resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id_inner, device_id_inner)
+                        device_config_data = getattr(resp, "data", {})
+                        port_configs = device_config_data.get("port_config", {})
+                    except Exception as exception:
+                        logging.warning(f"[WARN] Could not fetch device config for {device_name_inner} ({device_id_inner}): {exception}")
+                        port_configs = {}
 
-    if all_stats:
-        filename = "AllGatewaySyntheticTests.csv"
-        flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        DataExporter.save_data_to_output(sanitized, filename)
-        print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
-        logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
-        logging.info(f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory")
-    else:
-        logging.warning(" No synthetic test results found. CSV not created.")
-        print("! No synthetic test results found. CSV not created.")
+                    # Fetch live device stats for current port status 
+                    try:
+                        stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id_inner, device_id_inner)
+                        stats_data = getattr(stats_resp, "data", {})
+                        interface_stats = stats_data.get("if_stat", {})
+                    except Exception as exception:
+                        # Handle 403 Forbidden and other errors gracefully
+                        if "403" in str(exception) or "Forbidden" in str(exception):
+                            logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name_inner} ({device_id_inner}): 403 Forbidden")
+                        else:
+                            logging.warning(f"[WARN] Could not fetch device stats for {device_name_inner} ({device_id_inner}): {exception}")
+                        interface_stats = {}
+
+                    return (device_id_inner, port_configs, interface_stats)
+            
+            # Prepare work items for the helper
+            work_items = list(devices_with_overrides.items())
+            
+            # Use the reusable connection pool management helper
+            successful_results, failed_devices = execute_with_connection_pool_management(
+                work_items=work_items,
+                worker_function=fetch_device_data,
+                batch_description="override devices",
+                retry_function=None  # No retry for this use case
+            )
+            
+            # Build device_data_cache from successful results
+            device_data_cache = {}
+            for device_id_result, port_configs, interface_stats in successful_results:
+                device_data_cache[device_id_result] = (port_configs, interface_stats)
+            
+            # Handle failed devices (fallback to empty configs)
+            for failed_item in failed_devices:
+                device_id_failed = failed_item[0]
+                device_data_cache[device_id_failed] = ({}, {})
+            
+            logging.info(f"! Fast mode: Fetched data for {len(successful_results)}/{len(work_items)} devices with connection pool protection")
+            
+        else:
+            # Regular sequential processing for non-fast mode or small datasets
+            device_data_cache = {}  # device_id -> (port_configs, interface_stats)
+            
+            for device_id, device_info in devices_with_overrides.items():
+                device_name = device_info["device_name"]
+                site_id = device_info["site_id"]
+                
+                # Fetch live device info from getSiteDevice API for current config
+                try:
+                    resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+                    device_data = getattr(resp, "data", {})
+                    port_configs = device_data.get("port_config", {})
+                except Exception as exception:
+                    logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}")
+                    port_configs = {}
+
+                # Fetch live device stats for current port status 
+                try:
+                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+                    stats_data = getattr(stats_resp, "data", {})
+                    interface_stats = stats_data.get("if_stat", {})
+                except Exception as exception:
+                    # Handle 403 Forbidden and other errors gracefully
+                    if "403" in str(exception) or "Forbidden" in str(exception):
+                        logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
+                    else:
+                        logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {exception}")
+                    interface_stats = {}
+
+                device_data_cache[device_id] = (port_configs, interface_stats)
+
+        # Third pass: Process only the overridden ports with their stats
+        logging.info(" Third pass: Processing overridden ports with live data...")
+        for device_id, device_info in devices_with_overrides.items():
+            device_name = device_info["device_name"]
+            site_id = device_info["site_id"]
+            site_name = device_info["site_name"]
+            template_id = device_info["template_id"]
+            template_name = device_info["template_name"]
+            row = device_info["row_data"]
+            overridden_ports = device_info["overridden_ports"]
+            
+            port_configs, interface_stats = device_data_cache.get(device_id, ({}, {}))
+
+            # Process each overridden port
+            for port_name in overridden_ports:
+                port_config = port_configs.get(port_name, {})
+                interface_stat = interface_stats.get(port_name, {})
+                
+                # Get port config fields from CSV for override details
+                port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
+                
+                # Extract port configuration details
+                ip_config = port_config.get("ip_config", {})
+                usage = port_config.get("usage", "")
+                description = port_config.get("description", "")
+                disabled = port_config.get("disabled", False)
+                
+                # Extract IP configuration details
+                port_ip = ip_config.get("ip", "")
+                netmask = ip_config.get("netmask", "")
+                gateway_ip = ip_config.get("gateway", "")
+                config_type = ip_config.get("type", "")
+                
+                # Convert config type to human readable
+                if config_type == "dhcp":
+                    config_type_display = "DHCP"
+                elif config_type == "static":
+                    config_type_display = "STATIC"
+                else:
+                    config_type_display = config_type.upper() if config_type else "UNKNOWN"
+                
+                # Extract port status from interface stats
+                port_status = "down"
+                if interface_stat:
+                    # Check the "up" field from if_stat which is the actual port status
+                    if interface_stat.get("up", False):
+                        port_status = "up"
+                
+                # Admin status
+                admin_status = "disabled" if disabled else "enabled"
+                
+                # Create detailed port entry for overridden port
+                port_entry = {
+                    "gateway_device_name": device_name,
+                    "site_name": site_name,
+                    "template_name": template_name,
+                    "port_name": port_name,
+                    "port_description": description,
+                    "port_status": port_status,
+                    "port_admin_status": admin_status,
+                    "port_gateway_ip": gateway_ip,
+                    "port_ip_address": port_ip,
+                    "port_netmask": netmask,
+                    "port_config_type": config_type_display,
+                    "port_usage": usage,
+                    "overridden_from_template": "Yes",
+                    "device_id": device_id,
+                    "site_id": site_id,
+                    "template_id": template_id
+                }
+                
+                # Add the overridden port to our results
+                overridden_port_info.append(port_entry)
+
+        # Write to CSV with only overridden port information
+        output_file = "GatewayOverriddenPorts.csv"
+        DataExporter.save_data_to_output(overridden_port_info, output_file)
+
+        # Calculate summary statistics
+        total_gateways_processed = len(configs)
+        devices_with_overrides_count = len(devices_with_overrides) if 'devices_with_overrides' in locals() else 0
+        if overridden_port_info:
+            gateways_with_overrides = len(set(entry["device_id"] for entry in overridden_port_info))
+        else:
+            gateways_with_overrides = 0
+        total_overridden_ports = len(overridden_port_info)
+
+        logging.info(f"! Gateway override report written to {output_file} with {total_overridden_ports} overridden ports from {gateways_with_overrides} gateway devices.")
+        logging.info(f"! API Optimization: Made device config/stats calls for only {devices_with_overrides_count} devices instead of all {total_gateways_processed} devices")
+        print(f"! Gateway override report written to {output_file}")
+        print(f"! Found {total_overridden_ports} overridden ports across {gateways_with_overrides} of {total_gateways_processed} gateway devices")
+        print(f"! API Optimization: Only fetched live data for {devices_with_overrides_count} devices with overrides (saved {total_gateways_processed - devices_with_overrides_count} unnecessary API calls)")
+        print(f"! Target ports analyzed: {', '.join(target_ports)}")
+        print(f"! These are outliers that may need correction to match template configuration")
+        
+        if total_overridden_ports == 0:
+            print(" No template overrides found - all gateways are compliant with their assigned templates!")
+
 
 def get_gateway_devices_with_sites(apisession, org_id, fast=False):
     """
@@ -19448,151 +19935,6 @@ def _export_gateway_templates_simple():
     )
     logging.info(" Gateway templates exported to OrgGatewayTemplates.csv.")
 
-def export_gateway_management_ips_to_csv(fast=False):
-    """
-    Exports gateway management overlay IPs grouped by gateway template association.
-    Creates a single CSV with gateway info, management IPs, status, and template names.
-    
-    This function:
-    1. Gets current device inventory (calls existing function)
-    2. Gets gateway template mappings (calls existing function) 
-    3. Gets gateway configurations with management IPs (calls existing function)
-    4. Outputs CSV with: Gateway Name, Gateway Template, Management IP, Online Status, Site Name
-    
-    Args:
-        fast (bool): Enable fast mode for API calls
-    """
-    logging.info("Starting export of gateway management overlay IPs...")
-    print("Gateway Management IP Export:")
-    print("Collecting data from inventory, templates, and configurations...")
-    
-    org_id = get_cached_or_prompted_org_id()
-    
-    # Ensure required CSVs are fresh by calling existing functions
-    print("  1. Ensuring site list with template mappings is current...")
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-    
-    print("  2. Ensuring gateway templates are current...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-    
-    print("  3. Ensuring gateway device data with connection status is current...")
-    check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgExportUtils.gateways_with_site_info)
-    
-    print("  4. Ensuring gateway configurations with management IPs are current...")
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
-    
-    print("  5. Processing and correlating data...")
-    
-    # Load required data
-    try:
-        # Load sites with gateway template associations
-        with open(get_csv_file_path("SiteList.csv"), encoding="utf-8") as f:
-            sites = list(csv.DictReader(f))
-        
-        # Load gateway templates for name lookups
-        with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as f:
-            templates = list(csv.DictReader(f))
-        
-        # Load gateway device data with connection status
-        with open(get_csv_file_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as f:
-            gateway_devices = list(csv.DictReader(f))
-        
-        # Load gateway configurations with management IPs
-        with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
-            gateway_configs = list(csv.DictReader(f))
-            
-    except FileNotFoundError as e:
-        logging.error(f"Required CSV file not found: {e}")
-        print(f"! Error: Required CSV file not found: {e}")
-        return
-    
-    # Create lookup dictionaries
-    site_lookup = {site.get("id"): site for site in sites}
-    template_lookup = {t.get("id"): t.get("name", "Unknown Template") for t in templates}
-    
-    # Create device lookup for connection status by device name
-    device_lookup = {dev.get("name"): dev for dev in gateway_devices}
-    
-    # Create management IP lookup by device name
-    mgmt_ip_lookup = {config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") 
-                      for config in gateway_configs}
-    
-    # Process gateway devices and correlate with template and management IP data
-    results = []
-    gateways_processed = 0
-    gateways_with_mgmt_ip = 0
-    
-    for device in gateway_devices:
-        gateway_name = device.get("name", "Unknown Gateway")
-        site_id = device.get("site_id", "")
-        site_name = device.get("site_name", "Unknown Site")
-        connected_status = device.get("connected", "")
-        
-        # Get management IP from configs
-        mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")
-        
-        # Determine connection status - simple online/offline based on connected field
-        connected_val = str(connected_status).strip().lower()
-        
-        if connected_val in ['true', '1', 'yes']:
-            status = "Online"
-        elif connected_val in ['false', '0', 'no']:
-            status = "Offline"
-        else:
-            # Empty or unknown connection status
-            status = "Unknown"
-        
-        # Get template information
-        site_info = site_lookup.get(site_id, {})
-        template_id = site_info.get("gatewaytemplate_id", "")
-        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
-        
-        # Prepare result row
-        result_row = {
-            "gateway_name": gateway_name,
-            "management_ip": mgmt_ip if mgmt_ip else "Not Configured",
-            "status": status,
-            "site_name": site_name,
-            "gateway_template": template_name,
-            "template_id": template_id if template_id else "None"
-        }
-        
-        results.append(result_row)
-        gateways_processed += 1
-        
-        if mgmt_ip:
-            gateways_with_mgmt_ip += 1
-            logging.debug(f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})")
-        else:
-            logging.debug(f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})")
-    
-    # Sort results by template name, then gateway name
-    results.sort(key=lambda x: (x["gateway_template"], x["gateway_name"]))
-    
-    # Create the final CSV with requested columns
-    final_results = [
-        {
-            "Gateway Name": row["gateway_name"],
-            "Gateway Template": row["gateway_template"],
-            "Management IP": row["management_ip"],
-            "Online Status": row["status"],
-            "Site Name": row["site_name"]
-        }
-        for row in results
-    ]
-    
-    # Write CSV file
-    DataExporter.save_data_to_output(final_results, "GatewayManagementIPs.csv")
-    
-    # Summary output
-    print(f"! Gateway management IP export completed:")
-    print(f"  - Total gateways processed: {gateways_processed}")
-    print(f"  - Gateways with management IPs: {gateways_with_mgmt_ip}")
-    print(f"  - Gateways without management IPs: {gateways_processed - gateways_with_mgmt_ip}")
-    print(f"  - Output CSV: GatewayManagementIPs.csv")
-    
-    logging.info(f"Gateway management IP export completed. {gateways_processed} gateways processed, {gateways_with_mgmt_ip} with management IPs.")
-
 def ssh_runner_by_gateway_template(fast=False):
     """
     SSH runner that targets gateways by template name and online status.
@@ -19894,56 +20236,9 @@ def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="de
     except OSError as e:
         logging.error(f"File I/O: OS error writing delay metrics to {filename}: {e}")
         logging.debug(f"EXIT: append_delay_metrics_log - OS error")
-    except Exception as e:
-        logging.error(f"File I/O: Failed to write delay metrics to {filename}: {e}")
+    except Exception as exception:
+        logging.error(f"File I/O: Failed to write delay metrics to {filename}: {exception}")
         logging.debug(f"EXIT: append_delay_metrics_log - error")
-
-def export_gateway_device_configs_to_csv(debug=False, fast=False):
-    """
-    Fetches and exports configuration details for all gateway devices across all sites in the organization
-    to AllSiteGatewayConfigs.csv. Also generates a filtered CSV with selected fields and port info.
-    """
-    logging.info("Starting export of all gateway device configurations...")
-    org_id = get_cached_or_prompted_org_id()
-    data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)
-    if not data:
-        logging.warning(" No device configs found.")
-        return
-
-    # Flatten and sanitize the data
-    flattened = DataProcessingUtils.flatten_nested_fields(data)
-    sanitized = DataProcessingUtils.escape_multiline(flattened)
-
-    # Write full dataset to CSV
-    DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
-    logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
-
-    # Identify port config columns (excluding _vpn_paths_)
-    base_columns = ["mac", "name"]
-    port_columns = [
-        col for col in sanitized[0].keys()
-        if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col
-    ]
-    columns_to_keep = base_columns + port_columns
-
-    # Filter rows where any port column has non-empty value
-    filtered_rows = [
-        {col: row.get(col, "") for col in columns_to_keep}
-        for row in sanitized
-        if any(row.get(col) not in [None, "", "null"] for col in port_columns)
-    ]
-
-    # Write filtered dataset to CSV
-    if not filtered_rows:
-        logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
-        filtered_csv_path = get_csv_file_path("FilteredGatewayPortConfigs.csv")
-        with open(filtered_csv_path, "w", newline="", encoding="utf-8") as f:
-            f.write("No matching data found.\n")
-    else:
-        if debug:
-            logging.debug(f"Sample filtered row: {filtered_rows[0]}")
-        DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")
-        logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
 
 def fetch_gateway_device_configs_from_api(apisession, org_id, fast=False, max_workers=None):
     """
@@ -22558,332 +22853,6 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         if counters.auto_corrections > 0:
             print(f"   {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
 
-def export_gateways_with_wan_overrides_to_csv(fast=False):
-    """
-    Generates a CSV report of gateways with ports that are overridden from their template configuration.
-    This helps identify outliers that need to be corrected back to template compliance.
-    
-    Report includes for OVERRIDDEN ports only:
-    - Gateway Router Device Name  
-    - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2, {{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}
-    - Port status (up/down)
-    - Port admin status (disabled/enabled)
-    - Port gateway IP address
-    - Port IP address
-    - Port netmask
-    - Port config type (DHCP or STATIC)
-    - Port name/number
-    - Whether port is overridden from template (always "Yes" for filtered results)
-    
-    Searches 6 total ports: 3 hardcoded (ge-0/0/0, ge-0/0/1, ge-0/0/2) + 3 variable-based 
-    ({{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}) for comprehensive coverage.
-    """
-    print("Gateway Ports Overridden from Template (Compliance Outliers):")
-    logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
-
-    # Ensure required CSVs are fresh
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
-    check_and_generate_csv("SiteList_ListAPI.csv", OrgExportUtils.sites_list_api)
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-
-    # Load data
-    with open(get_csv_file_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as f:
-        configs = list(csv.DictReader(f))
-    with open(get_csv_file_path("SiteList_ListAPI.csv"), encoding="utf-8") as f:
-        sites = list(csv.DictReader(f))
-    with open(get_csv_file_path("OrgGatewayTemplates.csv"), encoding="utf-8") as f:
-        templates = list(csv.DictReader(f))
-
-    # Create lookups for site and template names
-    site_lookup = {site.get("id"): site.get("name", "Unknown Site") for site in sites}
-    # Create site to gateway template ID mapping from SiteList
-    site_to_template_id = {site.get("id"): site.get("gatewaytemplate_id", "") for site in sites}
-    template_lookup = {t.get("id"): t.get("name", "Unknown Template") for t in templates}
-    
-    # Debug template lookup
-    logging.debug(f"[DEBUG] Created template lookup with {len(template_lookup)} templates")
-    for template_id, template_name in list(template_lookup.items())[:3]:  # Show first 3 for debugging
-        logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
-
-    overridden_port_info = []
-    # Target ports: original 3 hardcoded ports + 3 variable-based ports (6 total)
-    target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
-
-    # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
-    logging.info(" First pass: Identifying devices with port overrides...")
-    devices_with_overrides = {}  # device_id -> (device_info, overridden_port_names)
-    
-    for row in configs:
-        device_name = row.get("name", "").strip()
-        site_id = row.get("site_id", "").strip()
-        device_id = row.get("id", "").strip()
-        site_name = site_lookup.get(site_id, "Unknown Site")
-        # Get template ID from site-level gateway template assignment
-        template_id = site_to_template_id.get(site_id, "")
-        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
-        
-        # Debug template lookup for this device
-        if template_id:
-            if template_id in template_lookup:
-                logging.debug(f"[DEBUG] Device {device_name}: site_id='{site_id}' -> template_id='{template_id}' -> template_name='{template_name}'")
-            else:
-                logging.warning(f"[WARN] Device {device_name}: Template ID '{template_id}' not found in gateway templates (orphaned assignment)")
-                template_name = f"Missing Template ({template_id[:8]}...)"
-        else:
-            logging.debug(f"[DEBUG] Device {device_name}: No gatewaytemplate_id found for site {site_id}")
-        
-        if not device_name or not site_id or not device_id:
-            continue
-
-        # Check each target port for overrides using CSV data only
-        device_overridden_ports = []
-        for port_name in target_ports:
-            # Check if port is overridden from template by looking for port_config fields in the CSV
-            # Need to check for both base port (port_config_{port}_*) and subinterfaces (port_config_{port}.*) 
-            # to catch configurations like {{wan2_interface}}.70 or ge-0/0/1.100
-            port_config_fields = [col for col in row if 
-                col.startswith(f"port_config_{port_name}_") or 
-                col.startswith(f"port_config_{port_name}.")]
-            
-            # Check for non-empty values (excluding vpn_paths which are template-inherited)
-            override_fields = []
-            for field in port_config_fields:
-                value = row.get(field, "").strip().lower()
-                if value not in ["", "null", "none"] and "_vpn_paths_" not in field:
-                    override_fields.append(f"{field}={value}")
-            
-            is_overridden = len(override_fields) > 0
-            if is_overridden:
-                device_overridden_ports.append(port_name)
-        
-        # If this device has any overridden ports, mark it for API calls
-        if device_overridden_ports:
-            devices_with_overrides[device_id] = {
-                "device_name": device_name,
-                "site_id": site_id,
-                "site_name": site_name,
-                "template_id": template_id,
-                "template_name": template_name,
-                "row_data": row,
-                "overridden_ports": device_overridden_ports
-            }
-
-    logging.info(f"! Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices")
-    
-    if not devices_with_overrides:
-        logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
-        # Still create empty CSV file with proper headers
-        output_file = "GatewayOverriddenPorts.csv"
-        fieldnames = [
-            "gateway_device_name", "site_name", "template_name", "port_name", "recommended_variable",
-            "port_description", "port_status", "port_admin_status", "port_gateway_ip", "port_ip_address",
-            "port_netmask", "port_config_type", "port_usage", "overridden_from_template",
-            "device_id", "site_id", "template_id"
-        ]
-        output_path = get_csv_file_path(output_file)
-        with open(output_path, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-        print(f"! Gateway override report written to {output_file}")
-        print(" No template overrides found - all gateways are compliant with their assigned templates!")
-        return
-
-    # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
-    logging.info(f"! Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides...")
-    
-    if fast and len(devices_with_overrides) > 5:  # Use connection pool management for fast mode with 5+ devices
-        logging.info(" Using fast mode with connection pool management for device data fetching...")
-        
-        # Define worker function for fetching device configs and stats
-        def fetch_device_data(device_info, connection_semaphore):
-            """Worker function that fetches config and stats for a single device."""
-            device_id = device_info[0]
-            device_data = device_info[1]
-            device_name = device_data["device_name"]
-            site_id = device_data["site_id"]
-            
-            # Acquire connection semaphore before making API calls
-            with connection_semaphore:
-                port_configs = {}
-                interface_stats = {}
-                
-                # Fetch live device info from getSiteDevice API for current config
-                try:
-                    resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-                    device_config_data = getattr(resp, "data", {})
-                    port_configs = device_config_data.get("port_config", {})
-                except Exception as e:
-                    logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
-                    port_configs = {}
-
-                # Fetch live device stats for current port status 
-                try:
-                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-                    stats_data = getattr(stats_resp, "data", {})
-                    interface_stats = stats_data.get("if_stat", {})
-                except Exception as e:
-                    # Handle 403 Forbidden and other errors gracefully
-                    if "403" in str(e) or "Forbidden" in str(e):
-                        logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
-                    else:
-                        logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
-                    interface_stats = {}
-
-                return (device_id, port_configs, interface_stats)
-        
-        # Prepare work items for the helper
-        work_items = list(devices_with_overrides.items())
-        
-        # Use the reusable connection pool management helper
-        successful_results, failed_devices = execute_with_connection_pool_management(
-            work_items=work_items,
-            worker_function=fetch_device_data,
-            batch_description="override devices",
-            retry_function=None  # No retry for this use case
-        )
-        
-        # Build device_data_cache from successful results
-        device_data_cache = {}
-        for device_id, port_configs, interface_stats in successful_results:
-            device_data_cache[device_id] = (port_configs, interface_stats)
-        
-        # Handle failed devices (fallback to empty configs)
-        for failed_item in failed_devices:
-            device_id = failed_item[0]
-            device_data_cache[device_id] = ({}, {})
-        
-        logging.info(f"! Fast mode: Fetched data for {len(successful_results)}/{len(work_items)} devices with connection pool protection")
-        
-    else:
-        # Regular sequential processing for non-fast mode or small datasets
-        device_data_cache = {}  # device_id -> (port_configs, interface_stats)
-        
-        for device_id, device_info in devices_with_overrides.items():
-            device_name = device_info["device_name"]
-            site_id = device_info["site_id"]
-            
-            # Fetch live device info from getSiteDevice API for current config
-            try:
-                resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-                device_data = getattr(resp, "data", {})
-                port_configs = device_data.get("port_config", {})
-            except Exception as e:
-                logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {e}")
-                port_configs = {}
-
-            # Fetch live device stats for current port status 
-            try:
-                stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-                stats_data = getattr(stats_resp, "data", {})
-                interface_stats = stats_data.get("if_stat", {})
-            except Exception as e:
-                # Handle 403 Forbidden and other errors gracefully
-                if "403" in str(e) or "Forbidden" in str(e):
-                    logging.warning(f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden")
-                else:
-                    logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {e}")
-                interface_stats = {}
-
-            device_data_cache[device_id] = (port_configs, interface_stats)
-
-    # Third pass: Process only the overridden ports with their stats
-    logging.info(" Third pass: Processing overridden ports with live data...")
-    for device_id, device_info in devices_with_overrides.items():
-        device_name = device_info["device_name"]
-        site_id = device_info["site_id"]
-        site_name = device_info["site_name"]
-        template_id = device_info["template_id"]
-        template_name = device_info["template_name"]
-        row = device_info["row_data"]
-        overridden_ports = device_info["overridden_ports"]
-        
-        port_configs, interface_stats = device_data_cache.get(device_id, ({}, {}))
-
-        # Process each overridden port
-        for port_name in overridden_ports:
-            port_config = port_configs.get(port_name, {})
-            interface_stat = interface_stats.get(port_name, {})
-            
-            # Get port config fields from CSV for override details
-            port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
-            
-            # Extract port configuration details
-            ip_config = port_config.get("ip_config", {})
-            usage = port_config.get("usage", "")
-            description = port_config.get("description", "")
-            disabled = port_config.get("disabled", False)
-            
-            # Extract IP configuration details
-            port_ip = ip_config.get("ip", "")
-            netmask = ip_config.get("netmask", "")
-            gateway_ip = ip_config.get("gateway", "")
-            config_type = ip_config.get("type", "")
-            
-            # Convert config type to human readable
-            if config_type == "dhcp":
-                config_type_display = "DHCP"
-            elif config_type == "static":
-                config_type_display = "STATIC"
-            else:
-                config_type_display = config_type.upper() if config_type else "UNKNOWN"
-            
-            # Extract port status from interface stats
-            port_status = "down"
-            if interface_stat:
-                # Check the "up" field from if_stat which is the actual port status
-                if interface_stat.get("up", False):
-                    port_status = "up"
-            
-            # Admin status
-            admin_status = "disabled" if disabled else "enabled"
-            
-            # Create detailed port entry for overridden port
-            port_entry = {
-                "gateway_device_name": device_name,
-                "site_name": site_name,
-                "template_name": template_name,
-                "port_name": port_name,
-                "port_description": description,
-                "port_status": port_status,
-                "port_admin_status": admin_status,
-                "port_gateway_ip": gateway_ip,
-                "port_ip_address": port_ip,
-                "port_netmask": netmask,
-                "port_config_type": config_type_display,
-                "port_usage": usage,
-                "overridden_from_template": "Yes",
-                "device_id": device_id,
-                "site_id": site_id,
-                "template_id": template_id
-            }
-            
-            # Add the overridden port to our results
-            overridden_port_info.append(port_entry)
-
-    # Write to CSV with only overridden port information
-    output_file = "GatewayOverriddenPorts.csv"
-    DataExporter.save_data_to_output(overridden_port_info, output_file)
-
-    # Calculate summary statistics
-    total_gateways_processed = len(configs)
-    devices_with_overrides_count = len(devices_with_overrides) if 'devices_with_overrides' in locals() else 0
-    if overridden_port_info:
-        gateways_with_overrides = len(set(entry["device_id"] for entry in overridden_port_info))
-    else:
-        gateways_with_overrides = 0
-    total_overridden_ports = len(overridden_port_info)
-
-    logging.info(f"! Gateway override report written to {output_file} with {total_overridden_ports} overridden ports from {gateways_with_overrides} gateway devices.")
-    logging.info(f"! API Optimization: Made device config/stats calls for only {devices_with_overrides_count} devices instead of all {total_gateways_processed} devices")
-    print(f"! Gateway override report written to {output_file}")
-    print(f"! Found {total_overridden_ports} overridden ports across {gateways_with_overrides} of {total_gateways_processed} gateway devices")
-    print(f"! API Optimization: Only fetched live data for {devices_with_overrides_count} devices with overrides (saved {total_gateways_processed - devices_with_overrides_count} unnecessary API calls)")
-    print(f"! Target ports analyzed: {', '.join(target_ports)}")
-    print(f"! These are outliers that may need correction to match template configuration")
-    
-    if total_overridden_ports == 0:
-        print(" No template overrides found - all gateways are compliant with their assigned templates!")
-
 def set_wan2_interface_site_variable():
     """
     Menu #103: Set WAN2 Interface Site Variable
@@ -22919,7 +22888,7 @@ def set_wan2_interface_site_variable():
     # Step 1: Ensure required CSVs are fresh
     print("\n  Preparing site and gateway configuration data...")
     check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", GatewayExportUtils.device_configs)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     # Step 2: Load site data
@@ -24699,7 +24668,7 @@ def reboot_devices_by_gateway_template_list():
     check_and_generate_csv("OrgDevices.csv", OrgExportUtils.devices)
     check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=True))
+    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=True))
 
     # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
     template_name_to_id = {}
@@ -43209,7 +43178,7 @@ menu_actions = {
 
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
-    "16": (export_gateway_synthetic_tests_to_csv, "Export synthetic test results for all gateways"),
+    "16": (GatewayExportUtils.synthetic_tests, "Export synthetic test results for all gateways"),
     "17": (OrgExportUtils.devices, "Export a list of all devices in the organization"),
     "18": (export_site_settings_to_csv, "Export configuration settings for all sites"),
     "19": (GatewayExportUtils.test_results_by_site, "Export all synthetic test results (including speed tests) for gateways"),
@@ -43223,7 +43192,7 @@ menu_actions = {
     "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
     "27": (OrgExportUtils.sites_list_api, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
-    "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
+    "28": (lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
     # Site-Specific Data Exports
     "29": (SiteExportUtils.port_stats, "Export port statistics for a selected site"),
@@ -43286,7 +43255,7 @@ menu_actions = {
     # Work In Progress Features (Read-Only)
     "63": (OrgExportUtils.device_events_52w, "WIP Export all org device events from the last 52 weeks"),
     "64": (lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
-    "65": (export_gateway_device_configs_to_csv, "WIP Export configuration details for all gateway devices across all sites"),
+    "65": (GatewayExportUtils.device_configs, "WIP Export configuration details for all gateway devices across all sites"),
     
     
     # ==============================
