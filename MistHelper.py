@@ -6195,40 +6195,6 @@ def create_missing_csv_template(filename: str, headers: Optional[List[str]] = No
         logging.error(f"Failed to create template file {filename}: {e}")
         raise
 
-def safe_api_call(api_function: Any, *args: Any, **kwargs: Any) -> Tuple[bool, Any, str]:
-    """
-    Safely calls an API function and handles common error conditions.
-    
-    Args:
-        api_function: The API function to call
-        *args: Arguments to pass to the API function
-        **kwargs: Keyword arguments to pass to the API function
-    
-    Returns:
-        tuple: (success: bool, data: any, error: Optional[str])
-    """
-    try:
-        response = api_function(*args, **kwargs)
-        
-        if not hasattr(response, 'data'):
-            return False, None, "Response has no data attribute"
-        
-        if response.data is None:
-            return False, None, "Response data is None"
-        
-        return True, response.data, ""
-        
-    except Exception as e:
-        error_str = str(e)
-        if "404" in error_str:
-            return False, None, f"Endpoint not found (404): {error_str}"
-        elif "403" in error_str:
-            return False, None, f"Access denied (403): {error_str}"
-        elif "429" in error_str:
-            return False, None, f"Rate limited (429): {error_str}"
-        else:
-            return False, None, f"API error: {error_str}"
-
 # Note: get_csv_file_path function is defined above in the file - do not duplicate
 
 def get_cached_or_prompted_org_id() -> str:
