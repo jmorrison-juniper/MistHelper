@@ -9147,12 +9147,20 @@ class OrgExportUtils:
     @staticmethod
     def wireless_clients():
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
-        export_org_wireless_clients_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients,
+            data_type="wireless clients",
+            sort_key="mac"
+        )
     
     @staticmethod
     def wired_clients():
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
-        export_org_wired_clients_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients,
+            data_type="wired clients",
+            sort_key="mac"
+        )
     
     @staticmethod
     def security_events():
@@ -9192,47 +9200,93 @@ class OrgExportUtils:
     @staticmethod
     def psks():
         """Export organization PSKs to OrgPsks.csv."""
-        export_org_psks_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.psks.listOrgPsks,
+            data_type="psks",
+            sort_key="name"
+        )
     
     @staticmethod
     def webhooks():
         """Export organization webhooks to OrgWebhooks.csv."""
-        export_org_webhooks_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks,
+            data_type="webhooks",
+            sort_key="name"
+        )
     
     @staticmethod
     def wlans():
         """Export organization WLANs to OrgWlans.csv."""
-        export_org_wlans_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.wlans.listOrgWlans,
+            data_type="wlans",
+            sort_key="ssid"
+        )
     
     @staticmethod
     def api_tokens():
         """Export organization API tokens to OrgApiTokens.csv."""
-        export_org_api_tokens_to_csv()
+        logging.info("Starting export of organization api tokens...")
+        fetch_and_display_api_data(
+            title="Organization Api Tokens:",
+            api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
+            filename="OrgApiTokens.csv",
+            sort_key="name"
+        )
     
     @staticmethod
     def admins():
         """Export organization admins to OrgAdmins.csv."""
-        export_org_admins_to_csv()
+        logging.info("Starting export of organization admins...")
+        fetch_and_display_api_data(
+            title="Organization Admins:",
+            api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
+            filename="OrgAdmins.csv",
+            sort_key="name"
+        )
     
     @staticmethod
     def sso():
         """Export organization SSO configuration to OrgSso.csv."""
-        export_org_sso_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.ssos.listOrgSsos,
+            data_type="sso",
+            sort_key="name"
+        )
     
     @staticmethod
     def usage():
         """Export organization usage data to OrgUsage.csv."""
-        export_org_usage_to_csv()
+        logging.info("Starting export of organization license usage...")
+        fetch_and_display_api_data(
+            title="Organization License Usage:",
+            api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
+            filename="OrgUsage",
+            sort_key="site_id"
+        )
+        logging.info(" License usage data exported to OrgUsage")
+        print(" License usage data exported to OrgUsage")
     
     @staticmethod
     def msp():
         """Export MSP data to OrgMsp.csv."""
-        export_org_msp_to_csv()
+        logging.warning(" MSP data is available only at MSP level, not organization level")
+        print(" MSP data is available only at MSP level, not organization level")
+        print(" To access MSP data, use the Mist API MSP endpoints directly:")
+        print("   - GET /api/v1/msps (list MSPs)")
+        print("   - GET /api/v1/msps/{msp_id} (get MSP details)")
+        print("   - GET /api/v1/msps/{msp_id}/orgs (list organizations under MSP)")
+        print("   This organization-level export is not applicable for MSP data.")
     
     @staticmethod
     def mx_edges():
         """Export MX Edge data to OrgMxEdges.csv."""
-        export_org_mx_edges_to_csv()
+        export_org_specific_data(
+            api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges,
+            data_type="mx edges",
+            sort_key="name"
+        )
     
     @staticmethod
     def network_templates():
@@ -13832,21 +13886,6 @@ def export_site_device_stats_to_csv():
         logging.error(f"Error fetching device stats for site {site_name}: {e}")
         print(f"! Error fetching device statistics: {e}")
 
-def export_org_wireless_clients_to_csv():
-    """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients,
-        data_type="wireless clients",
-        sort_key="mac"
-    )
-
-def export_org_wired_clients_to_csv():
-    """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients,
-        data_type="wired clients",
-        sort_key="mac"
-    )
 
 def export_org_security_events_to_csv():
     """Export security policies (OrgSecurityPolicies.csv), security intelligence profiles (OrgSecIntelProfiles.csv), and site rogue data (OrgRogueData.csv)."""
@@ -15582,99 +15621,6 @@ def export_org_licenses_to_csv():
             pass
         raise
 
-def export_org_psks_to_csv():
-    """Export PSK (Pre-Shared Key) information for the organization to OrgPsks.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.psks.listOrgPsks,
-        data_type="psks",
-        sort_key="name"
-    )
-
-def export_org_webhooks_to_csv():
-    """Export webhook configuration for the organization to OrgWebhooks.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks,
-        data_type="webhooks",
-        sort_key="name"
-    )
-
-def export_org_wlans_to_csv():
-    """Export WLAN configuration for the organization to OrgWlans.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.wlans.listOrgWlans,
-        data_type="wlans",
-        sort_key="ssid"
-    )
-
-def export_org_api_tokens_to_csv():
-    """Export API token information for the organization to OrgApiTokens.csv."""
-    logging.info("Starting export of organization api tokens...")
-    
-    # Create filename from data_type
-    filename = "OrgApiTokens.csv"
-    
-    fetch_and_display_api_data(
-        title="Organization Api Tokens:",
-        api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
-        filename=filename,
-        sort_key="name"
-        # Note: no limit parameter as this function doesn't accept it
-    )
-
-def export_org_admins_to_csv():
-    """Export administrator information for the organization to OrgAdmins.csv."""
-    logging.info("Starting export of organization admins...")
-    
-    # Create filename from data_type  
-    filename = "OrgAdmins.csv"
-    
-    fetch_and_display_api_data(
-        title="Organization Admins:",
-        api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
-        filename=filename,
-        sort_key="name"
-        # Note: no limit parameter as this function doesn't accept it
-    )
-
-def export_org_sso_to_csv():
-    """Export SSO (Single Sign-On) information for the organization to OrgSso.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.ssos.listOrgSsos,
-        data_type="sso",
-        sort_key="name"
-    )
-
-def export_org_usage_to_csv():
-    """Export license usage information for the organization to OrgUsage.csv."""
-    logging.info("Starting export of organization license usage...")
-    
-    fetch_and_display_api_data(
-        title="Organization License Usage:",
-        api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
-        filename="OrgUsage",
-        sort_key="site_id"
-    )
-    
-    logging.info(" License usage data exported to OrgUsage")
-    print(" License usage data exported to OrgUsage")
-
-def export_org_msp_to_csv():
-    """Export MSP (Managed Service Provider) information for the organization to OrgMsp.csv."""
-    logging.warning(" MSP data is available only at MSP level, not organization level")
-    print(" MSP data is available only at MSP level, not organization level")
-    print(" To access MSP data, use the Mist API MSP endpoints directly:")
-    print("   - GET /api/v1/msps (list MSPs)")
-    print("   - GET /api/v1/msps/{msp_id} (get MSP details)")
-    print("   - GET /api/v1/msps/{msp_id}/orgs (list organizations under MSP)")
-    print("   This organization-level export is not applicable for MSP data.")
-
-def export_org_mx_edges_to_csv():
-    """Export MX Edge information for the organization to OrgMxEdges.csv."""
-    export_org_specific_data(
-        api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges,
-        data_type="mx edges",
-        sort_key="name"
-    )
 
 def create_test_sites_from_csv():
     """
@@ -43685,8 +43631,8 @@ menu_actions = {
     "39": (export_org_switch_templates_to_csv, "Export switch template information for the organization"),
     
     # Organization Statistics & Analytics  
-    "40": (export_org_wireless_clients_to_csv, "Export wireless client statistics for the organization"),
-    "41": (export_org_wired_clients_to_csv, "Export wired client statistics for the organization"),
+    "40": (OrgExportUtils.wireless_clients, "Export wireless client statistics for the organization"),
+    "41": (OrgExportUtils.wired_clients, "Export wired client statistics for the organization"),
     
     # Security & Monitoring
     "42": (export_org_security_events_to_csv, "Export security events for the organization"),
@@ -43695,9 +43641,9 @@ menu_actions = {
     
     # Configuration & Management (Read-Only)
     "45": (export_org_licenses_to_csv, "Export license information for the organization"),
-    "46": (export_org_psks_to_csv, "Export PSK (Pre-Shared Key) information for the organization"),
-    "47": (export_org_webhooks_to_csv, "Export webhook configuration for the organization"),
-    "48": (export_org_wlans_to_csv, "Export WLAN configuration for the organization"),
+    "46": (OrgExportUtils.psks, "Export PSK (Pre-Shared Key) information for the organization"),
+    "47": (OrgExportUtils.webhooks, "Export webhook configuration for the organization"),
+    "48": (OrgExportUtils.wlans, "Export WLAN configuration for the organization"),
     "49": (export_site_wlans_to_csv, "Export WLAN configuration for a selected site"),
     "50": (export_site_beacons_to_csv, "Export beacon information for a selected site"),
     "51": (export_site_maps_to_csv, "Export map information for a selected site"),
@@ -43715,12 +43661,12 @@ menu_actions = {
     "102": (manage_wlan_radius_auth_timers, "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
     # Organization Management (Read-Only)
-    "54": (export_org_api_tokens_to_csv, "Export API token information for the organization"),
-    "55": (export_org_admins_to_csv, "Export administrator information for the organization"),
-    "56": (export_org_msp_to_csv, "Export MSP (Managed Service Provider) information for the organization"),
-    "57": (export_org_sso_to_csv, "Export SSO (Single Sign-On) information for the organization"),
-    "58": (export_org_usage_to_csv, "Export license usage information for the organization"),
-    "59": (export_org_mx_edges_to_csv, "Export MX Edge information for the organization"),
+    "54": (OrgExportUtils.api_tokens, "Export API token information for the organization"),
+    "55": (OrgExportUtils.admins, "Export administrator information for the organization"),
+    "56": (OrgExportUtils.msp, "Export MSP (Managed Service Provider) information for the organization"),
+    "57": (OrgExportUtils.sso, "Export SSO (Single Sign-On) information for the organization"),
+    "58": (OrgExportUtils.usage, "Export license usage information for the organization"),
+    "59": (OrgExportUtils.mx_edges, "Export MX Edge information for the organization"),
     
     # Status & Monitoring
     "60": (check_firmware_upgrade_status_direct, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),

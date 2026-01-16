@@ -550,6 +550,40 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.09.22.15",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "PromptUtils: Added select_site_and_device_ids method with full implementation",
+          "Updated 5 call sites in PacketCaptureManager to use PromptUtils.select_site_and_device_ids",
+          "Deleted standalone prompt_select_site_and_device_ids function",
+          "Reduced standalone function count from 224 to 223"
+        ]
+      }
+    },
+    {
+      "version": "25.07.09.22.08",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "PromptUtils: Moved select_ports_from_device full implementation into class (~300 lines)",
+          "Deleted standalone prompt_select_ports_from_device function",
+          "Method handles port selection with profile/description display, range expansion, and 6-port API limit"
+        ]
+      }
+    },
+    {
+      "version": "25.07.09.22.00",
+      "date": "2025-07-09",
+      "changes": {
+        "refactoring": [
+          "PromptUtils: Moved select_ap_mac, select_client_mac, select_gateway_mac, select_switch_mac implementations into class",
+          "Deleted 4 standalone prompt_select_*_mac functions",
+          "Fixed select_device_id_from_inventory infinite recursion bug - replaced wrapper call with full implementation"
+        ]
+      }
+    },
+    {
       "version": "26.01.16.21.30",
       "date": "2026-01-16",
       "changes": {
