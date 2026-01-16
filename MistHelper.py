@@ -9058,77 +9058,97 @@ def show_site_device_inventory(site_id, device_type="all", csv_filename="SiteInv
     # Log the table output for reference (debug mode only)
     logging.debug("\n" + table.get_string())
 
-def get_all_ap_macs_from_site(site_id: str) -> list:
+
+# ============================================================================
+# DEVICE UTILITIES CLASS
+# ============================================================================
+class DeviceUtils:
     """
-    Fetch all AP MAC addresses from a site.
-    
-    Args:
-        site_id (str): The site ID to fetch APs from
-    
-    Returns:
-        list: List of AP MAC addresses, or empty list if error/none found
+    Centralized device-related utilities.
+    Handles device lookups, port parsing, MAC address operations, etc.
     """
-    logging.debug(f"Fetching all AP MACs for site: {site_id}")
     
-    try:
-        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
-        if not rawdata:
-            logging.warning(f"No APs found for site_id: {site_id}")
+    @staticmethod
+    def get_all_ap_macs_from_site(site_id: str) -> List[str]:
+        """
+        Fetch all AP MAC addresses from a site.
+        
+        Args:
+            site_id (str): The site ID to fetch APs from
+        
+        Returns:
+            list: List of AP MAC addresses, or empty list if error/none found
+        """
+        logging.debug(f"Fetching all AP MACs for site: {site_id}")
+        
+        try:
+            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+            if not rawdata:
+                logging.warning(f"No APs found for site_id: {site_id}")
+                return []
+            
+            ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
+            logging.info(f"Found {len(ap_macs)} AP MACs at site")
+            return ap_macs
+            
+        except Exception as error:
+            logging.error(f"Exception in DeviceUtils.get_all_ap_macs_from_site: {error}", exc_info=True)
             return []
+    
+    @staticmethod
+    def expand_port_range_string(port_range_string: str) -> List[str]:
+        """
+        Expands a port range string from device config into individual port names.
         
-        ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
-        logging.info(f"Found {len(ap_macs)} AP MACs at site")
-        return ap_macs
+        Examples:
+            "ge-0/0/0" -> ["ge-0/0/0"]
+            "ge-0/0/0-2" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
+            "ge-0/0/0-2, ge-0/1/2-3" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "ge-0/1/2", "ge-0/1/3"]
+            "mge-0/2/0, xe-0/1/0-3" -> ["mge-0/2/0", "xe-0/1/0", "xe-0/1/1", "xe-0/1/2", "xe-0/1/3"]
         
-    except Exception as error:
-        logging.error(f"Exception in get_all_ap_macs_from_site: {error}", exc_info=True)
-        return []
-
-def _expand_port_range_string(port_range_string: str) -> list:
-    """
-    Expands a port range string from device config into individual port names.
-    
-    Examples:
-        "ge-0/0/0" -> ["ge-0/0/0"]
-        "ge-0/0/0-2" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2"]
-        "ge-0/0/0-2, ge-0/1/2-3" -> ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "ge-0/1/2", "ge-0/1/3"]
-        "mge-0/2/0, xe-0/1/0-3" -> ["mge-0/2/0", "xe-0/1/0", "xe-0/1/1", "xe-0/1/2", "xe-0/1/3"]
-    
-    Args:
-        port_range_string (str): Port name or range specification from port_config
-    
-    Returns:
-        list: List of individual port names
-    """
-    import re
-    expanded_ports = []
-    
-    # Split by comma to handle multiple ranges
-    port_parts = [part.strip() for part in port_range_string.split(',')]
-    
-    for port_part in port_parts:
-        # Check if this is a range (e.g., "ge-0/0/0-2")
-        if '-' in port_part:
-            # Try to match pattern like "ge-0/0/0-2"
-            match = re.match(r'^(.+/)(\d+)-(\d+)$', port_part)
-            if match:
-                prefix = match.group(1)  # e.g., "ge-0/0/"
-                start_num = int(match.group(2))  # e.g., 0
-                end_num = int(match.group(3))    # e.g., 2
-                
-                # Expand the range
-                for port_num in range(start_num, end_num + 1):
-                    expanded_ports.append(f"{prefix}{port_num}")
+        Args:
+            port_range_string (str): Port name or range specification from port_config
+        
+        Returns:
+            list: List of individual port names
+        """
+        expanded_ports = []
+        
+        # Split by comma to handle multiple ranges
+        port_parts = [part.strip() for part in port_range_string.split(',')]
+        
+        for port_part in port_parts:
+            # Check if this is a range (e.g., "ge-0/0/0-2")
+            if '-' in port_part:
+                # Try to match pattern like "ge-0/0/0-2"
+                match = re.match(r'^(.+/)(\d+)-(\d+)$', port_part)
+                if match:
+                    prefix = match.group(1)  # e.g., "ge-0/0/"
+                    start_num = int(match.group(2))  # e.g., 0
+                    end_num = int(match.group(3))    # e.g., 2
+                    
+                    # Expand the range
+                    for port_num in range(start_num, end_num + 1):
+                        expanded_ports.append(f"{prefix}{port_num}")
+                else:
+                    # Couldn't parse as range, treat as single port
+                    expanded_ports.append(port_part)
             else:
-                # Couldn't parse as range, treat as single port
+                # Single port name
                 expanded_ports.append(port_part)
-        else:
-            # Single port name
-            expanded_ports.append(port_part)
-    
-    return expanded_ports
+        
+        return expanded_ports
 
 
+# Backward compatibility wrappers - will be removed in future version
+def get_all_ap_macs_from_site(site_id: str) -> List[str]:
+    """Legacy function - use DeviceUtils.get_all_ap_macs_from_site() instead."""
+    return DeviceUtils.get_all_ap_macs_from_site(site_id)
+
+
+def _expand_port_range_string(port_range_string: str) -> List[str]:
+    """Legacy function - use DeviceUtils.expand_port_range_string() instead."""
+    return DeviceUtils.expand_port_range_string(port_range_string)
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
