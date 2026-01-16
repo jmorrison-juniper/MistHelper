@@ -21327,6 +21327,122 @@ class AddressUtils:
                     return True, skip_reason
         
         return False, ""
+    
+    @staticmethod
+    def compare_with_threshold(mist_address, comparison_address, threshold, debug=False):
+        """
+        Enhanced address comparison with robust parsing and similarity metrics.
+        
+        Args:
+            mist_address (dict): Dictionary with keys: address, city, state, zip, country
+            comparison_address (dict): Dictionary with keys: address, city, state, zip, country  
+            threshold (float): Minimum similarity percentage required to be considered a match
+            debug (bool): Enable debug logging
+            
+        Returns:
+            dict: {
+                'overall_similarity': float,
+                'is_match': bool,
+                'field_similarities': {address, city, state, zip},
+                'failed_fields': list,
+                'parse_status': dict
+            }
+        """
+        # Field weights for overall similarity calculation
+        field_weights = {
+            'address': 0.4,    # Street address is most important
+            'city': 0.3,       # City is very important
+            'state': 0.2,      # State is important
+            'zip': 0.1         # Zip is least weighted since we already have zip comparison
+        }
+        
+        field_similarities = {}
+        failed_fields = []
+        parse_status = {
+            'mist_parseable': True,
+            'comparison_parseable': True,
+            'mist_reason': 'valid',
+            'comparison_reason': 'valid'
+        }
+        
+        if debug:
+            logging.debug(f"ENHANCED_COMPARE: Mist address: {mist_address}")
+            logging.debug(f"ENHANCED_COMPARE: Comparison address: {comparison_address}")
+        
+        # Check for unparseable addresses
+        for field in field_weights.keys():
+            mist_value = mist_address.get(field, "")
+            comp_value = comparison_address.get(field, "")
+            
+            # Check if either address appears to be unparseable
+            if str(mist_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+                parse_status['mist_parseable'] = False
+                parse_status['mist_reason'] = 'unknown_address'
+            
+            if str(comp_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
+                parse_status['comparison_parseable'] = False
+                parse_status['comparison_reason'] = 'unknown_address'
+        
+        # If either address is unparseable, return early with low similarity
+        if not parse_status['mist_parseable'] or not parse_status['comparison_parseable']:
+            if debug:
+                logging.debug(f"ENHANCED_COMPARE: Unparseable address detected: {parse_status}")
+            
+            return {
+                'overall_similarity': 0.0,
+                'is_match': False,
+                'field_similarities': {field: 0.0 for field in field_weights.keys()},
+                'failed_fields': list(field_weights.keys()),
+                'parse_status': parse_status
+            }
+        
+        # Compare address fields using enhanced similarity
+        for field, weight in field_weights.items():
+            mist_value = str(mist_address.get(field, "")).strip()
+            comp_value = str(comparison_address.get(field, "")).strip()
+            
+            if field == 'zip':
+                # Use normalized zip comparison
+                mist_norm = AddressUtils.normalize_zip(mist_value)
+                comp_norm = AddressUtils.normalize_zip(comp_value)
+                similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
+            elif field == 'state':
+                # Use normalized state comparison (handles abbreviations vs full names)
+                mist_norm = AddressUtils.normalize_state(mist_value)
+                comp_norm = AddressUtils.normalize_state(comp_value)
+                similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
+            else:
+                # Use enhanced string similarity for address and city fields
+                similarity = AddressUtils.calculate_similarity(mist_value, comp_value)
+            
+            field_similarities[field] = similarity
+            
+            # Use a more forgiving threshold for individual fields (75% of the overall threshold)
+            field_threshold = threshold * 0.75
+            if similarity < field_threshold:
+                failed_fields.append(field)
+            
+            if debug:
+                logging.debug(f"ENHANCED_COMPARE: {field} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)")
+        
+        # Calculate weighted overall similarity
+        overall_similarity = sum(field_similarities[field] * field_weights[field] 
+                               for field in field_weights.keys())
+        
+        is_match = overall_similarity >= threshold
+        
+        result = {
+            'overall_similarity': overall_similarity,
+            'is_match': is_match,
+            'field_similarities': field_similarities,
+            'failed_fields': failed_fields,
+            'parse_status': parse_status
+        }
+        
+        if debug:
+            logging.debug(f"ENHANCED_COMPARE: Result: {result}")
+        
+        return result
 
 
 # Backward compatibility - delegate to AddressUtils class methods
@@ -21930,123 +22046,18 @@ def check_address_should_skip(comparison_address, skip_addresses, debug=False):
 
 def enhanced_compare_addresses_with_threshold(mist_address, comparison_address, threshold, debug=False):
     """
-    Enhanced address comparison with robust parsing and better similarity metrics.
+    Backward compatibility shim - delegates to AddressUtils.compare_with_threshold().
     
     Args:
-        mist_address (dict): Dictionary with keys: address, city, state, zip, country
-        comparison_address (dict): Dictionary with keys: address, city, state, zip, country  
-        threshold (float): Minimum similarity percentage required to be considered a match
+        mist_address (dict): Dictionary with address keys
+        comparison_address (dict): Dictionary with address keys  
+        threshold (float): Minimum similarity percentage for match
         debug (bool): Enable debug logging
         
     Returns:
-        dict: {
-            'overall_similarity': float,
-            'is_match': bool,
-            'field_similarities': {
-                'address': float,
-                'city': float, 
-                'state': float,
-                'zip': float
-            },
-            'failed_fields': list,
-            'parse_status': dict  # New: parsing status for both addresses
-        }
+        dict: Comparison result with similarity scores
     """
-    # Field weights for overall similarity calculation
-    field_weights = {
-        'address': 0.4,    # Street address is most important
-        'city': 0.3,       # City is very important
-        'state': 0.2,      # State is important
-        'zip': 0.1         # Zip is least weighted since we already have zip comparison
-    }
-    
-    field_similarities = {}
-    failed_fields = []
-    parse_status = {
-        'mist_parseable': True,
-        'comparison_parseable': True,
-        'mist_reason': 'valid',
-        'comparison_reason': 'valid'
-    }
-    
-    if debug:
-        logging.debug(f"ENHANCED_COMPARE: Mist address: {mist_address}")
-        logging.debug(f"ENHANCED_COMPARE: Comparison address: {comparison_address}")
-    
-    # Check for unparseable addresses
-    for field in field_weights.keys():
-        mist_value = mist_address.get(field, "")
-        comp_value = comparison_address.get(field, "")
-        
-        # Check if either address appears to be unparseable
-        if str(mist_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
-            parse_status['mist_parseable'] = False
-            parse_status['mist_reason'] = 'unknown_address'
-        
-        if str(comp_value).strip().lower() in ['unknown', 'n/a', 'na', 'none', 'null', '']:
-            parse_status['comparison_parseable'] = False
-            parse_status['comparison_reason'] = 'unknown_address'
-    
-    # If either address is unparseable, return early with low similarity
-    if not parse_status['mist_parseable'] or not parse_status['comparison_parseable']:
-        if debug:
-            logging.debug(f"ENHANCED_COMPARE: Unparseable address detected: {parse_status}")
-        
-        return {
-            'overall_similarity': 0.0,
-            'is_match': False,
-            'field_similarities': {field: 0.0 for field in field_weights.keys()},
-            'failed_fields': list(field_weights.keys()),
-            'parse_status': parse_status
-        }
-    
-    # Compare address fields using enhanced similarity
-    for field, weight in field_weights.items():
-        mist_value = str(mist_address.get(field, "")).strip()
-        comp_value = str(comparison_address.get(field, "")).strip()
-        
-        if field == 'zip':
-            # Use normalized zip comparison
-            mist_norm = normalize_zip_code(mist_value)
-            comp_norm = normalize_zip_code(comp_value)
-            similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
-        elif field == 'state':
-            # Use normalized state comparison (handles abbreviations vs full names)
-            mist_norm = normalize_state_name(mist_value)
-            comp_norm = normalize_state_name(comp_value)
-            similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
-        else:
-            # Use enhanced string similarity for address and city fields
-            similarity = calculate_string_similarity(mist_value, comp_value)
-        
-        field_similarities[field] = similarity
-        
-        # Use a more forgiving threshold for individual fields (75% of the overall threshold)
-        field_threshold = threshold * 0.75
-        if similarity < field_threshold:
-            failed_fields.append(field)
-        
-        if debug:
-            logging.debug(f"ENHANCED_COMPARE: {field} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)")
-    
-    # Calculate weighted overall similarity
-    overall_similarity = sum(field_similarities[field] * field_weights[field] 
-                           for field in field_weights.keys())
-    
-    is_match = overall_similarity >= threshold
-    
-    result = {
-        'overall_similarity': overall_similarity,
-        'is_match': is_match,
-        'field_similarities': field_similarities,
-        'failed_fields': failed_fields,
-        'parse_status': parse_status
-    }
-    
-    if debug:
-        logging.debug(f"ENHANCED_COMPARE: Result: {result}")
-    
-    return result
+    return AddressUtils.compare_with_threshold(mist_address, comparison_address, threshold, debug)
 
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
