@@ -550,6 +550,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.10.07.25",
+      "date": "2025-07-10",
+      "changes": {
+        "refactoring": [
+          "AddressUtils: Added parse_components, enhanced_parse, check_should_skip, compare_with_threshold implementations",
+          "Deleted 10 unused backward-compat shims (parse_address_components, enhanced_usaddress_parse, etc.)",
+          "Deleted dead code compare_addresses_with_threshold (only enhanced version was used)",
+          "Updated callers to use AddressUtils class methods directly",
+          "Reduced standalone function count from 131 to 121"
+        ]
+      }
+    },
+    {
       "version": "25.07.10.05.30",
       "date": "2025-07-10",
       "changes": {
