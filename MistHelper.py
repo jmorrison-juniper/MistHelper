@@ -1917,7 +1917,7 @@ FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))
 FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8"))
 FAST_MODE_USE_CONNECTION_AWARE_THREADING = os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
 
-# Global configuration for output format (CSV or SQLite)
+# Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
 OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
 DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
@@ -2155,7 +2155,7 @@ def initialize_mist_session():
 # ============================================================================
 # ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
 # ============================================================================
-# This configuration determines how each API endpoint's data should be stored in SQLite
+# This configuration determines how each API endpoint's data should be stored in Redis/SQLite
 # with proper primary keys to eliminate artificial api_id fields and enable efficient queries
 ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     # Type 1: Natural primary key using API id field (for entity APIs)
@@ -6927,365 +6927,324 @@ class DataProcessingUtils:
         return data
 
 
-def format_marvis_data_for_csv(api_response_data, analysis_type="generic"):
+class MarvisDataUtils:
     """
-    Optimized formatter for Marvis API responses to create readable CSV files.
-    
-    Args:
-        api_response_data: Raw API response data from Marvis troubleshoot calls
-        analysis_type: Type of analysis ("client", "device", "network", "sites")
-    
-    Returns:
-        List of dictionaries optimized for CSV readability
+    Utilities for processing Marvis AI API responses.
+    Centralizes Marvis-specific data formatting for CSV export.
+    All methods are static to avoid unnecessary object instantiation.
     """
-    try:
-        # Handle different response structures
-        if not api_response_data:
-            logging.warning("Empty Marvis API response received")
-            return []
+    
+    @staticmethod
+    def format_for_csv(api_response_data, analysis_type="generic"):
+        """
+        Optimized formatter for Marvis API responses to create readable CSV files.
         
-        # Ensure we have a list to work with
-        if not isinstance(api_response_data, list):
-            data_list = [api_response_data]
-        else:
-            data_list = api_response_data
+        Args:
+            api_response_data: Raw API response data from Marvis troubleshoot calls
+            analysis_type: Type of analysis ("client", "device", "network", "sites")
         
-        formatted_data = []
-        
-        for item in data_list:
-            if not isinstance(item, dict):
-                logging.warning(f"Unexpected data type in Marvis response: {type(item)}")
-                continue
+        Returns:
+            List of dictionaries optimized for CSV readability
+        """
+        try:
+            # Handle different response structures
+            if not api_response_data:
+                logging.warning("Empty Marvis API response received")
+                return []
             
-            # Handle organization sites SLE data specially for readability
-            if analysis_type == "sites" and "results" in item and isinstance(item["results"], list):
-                logging.info(f"Processing organization sites SLE data with {len(item['results'])} sites")
-                
-                # Create one row per site instead of flattening all sites into one massive row
-                for idx, site_data in enumerate(item["results"]):
-                    site_row = {}
-                    
-                    # Add metadata from parent response
-                    for meta_key in ["start", "end", "limit", "page", "total"]:
-                        if meta_key in item:
-                            site_row[meta_key] = item[meta_key]
-                    
-                    # Add site index for reference
-                    site_row["site_index"] = idx
-                    
-                    # Add site data with clean column names
-                    if isinstance(site_data, dict):
-                        for key, value in site_data.items():
-                            # Use clean column names instead of results_X_key format
-                            clean_key = key.replace("-", "_")  # Replace hyphens for CSV compatibility
-                            site_row[clean_key] = value
-                    
-                    formatted_data.append(site_row)
-                
-                logging.info(f"Converted {len(item['results'])} sites into {len(formatted_data)} readable rows")
-                
+            # Ensure we have a list to work with
+            if not isinstance(api_response_data, list):
+                data_list = [api_response_data]
             else:
-                # Handle single troubleshoot results (client, device, network)
-                formatted_row = {}
-                
-                # Add top-level metadata
-                for key, value in item.items():
-                    if key == "results" and isinstance(value, list):
-                        # Handle results array - flatten each result with cleaner naming
-                        for idx, result in enumerate(value):
-                            if isinstance(result, dict):
-                                for result_key, result_value in result.items():
-                                    # Use clean column names: result_0_category instead of results_0_category
-                                    clean_key = f"result_{idx}_{result_key.replace('-', '_')}"
-                                    formatted_row[clean_key] = result_value
-                            else:
-                                formatted_row[f"result_{idx}"] = str(result)
-                    elif isinstance(value, dict):
-                        # Flatten nested dicts with clean naming
-                        for nested_key, nested_value in value.items():
-                            clean_key = f"{key}_{nested_key}".replace("-", "_")
-                            formatted_row[clean_key] = nested_value
-                    elif isinstance(value, list):
-                        # Join lists as comma-separated values
-                        formatted_row[key] = ",".join(map(str, value))
-                    else:
-                        # Direct assignment for simple values
-                        formatted_row[key] = value
-                
-                if formatted_row:  # Only add if we have data
-                    formatted_data.append(formatted_row)
-        
-        # Apply final CSV-friendly formatting
-        formatted_data = DataProcessingUtils.escape_multiline(formatted_data)
-        
-        logging.info(f"Marvis data formatting complete: {len(formatted_data)} rows for {analysis_type} analysis")
-        return formatted_data
-        
-    except Exception as e:
-        logging.error(f"Error formatting Marvis data for CSV: {e}")
-        # Fall back to old method if new formatting fails
-        logging.info("Falling back to legacy flattening method")
-        fallback_data = [api_response_data] if not isinstance(api_response_data, list) else api_response_data
-        fallback_data = DataProcessingUtils.flatten_nested_fields(fallback_data)
-        fallback_data = DataProcessingUtils.escape_multiline(fallback_data)
-        return fallback_data
-
-
-def write_dict_list_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
-    """
-    Writes a list of dictionaries to a CSV file.
-    - Escapes multiline strings for CSV compatibility.
-    - Determines all unique fields for the CSV header.
-    - Writes each row, filling missing fields with empty strings.
-    - Uses data directory for container persistence.
-    """
-    logging.debug(f"ENTRY: write_dict_list_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
-    
-    if not data:
-        logging.warning(f"No data provided to write to {csv_file}")
-        logging.debug(f"EXIT: write_dict_list_to_csv - no data to write")
-        return
-        
-    # Ensure data directory exists and construct proper file path
-    data_dir = "data"
-    os.makedirs(data_dir, exist_ok=True)
-    
-    # If csv_file doesn't already include a path, place it in the data directory
-    if not os.path.dirname(csv_file):
-        csv_file_path = os.path.join(data_dir, csv_file)
-    else:
-        csv_file_path = csv_file
-        
-    logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
-    data = DataProcessingUtils.escape_multiline(data)
-    fields = DataProcessingUtils.get_unique_keys(data)
-    logging.debug(f"CSV fields determined: {fields}")
-
-    try:
-        logging.debug(f"File I/O: Attempting to open {csv_file_path} for writing")
-        with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
-            writer = csv.DictWriter(file, fieldnames=fields)
-            writer.writeheader()
-            logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file_path}")
+                data_list = api_response_data
             
-            for idx, row in enumerate(data):
-                writer.writerow({field: row.get(field, "") for field in fields})
-                if idx < 3:  # Log the first few rows for debugging
-                    logging.debug(f"Row {idx} written: {row}")
+            formatted_data = []
+            
+            for item in data_list:
+                if not isinstance(item, dict):
+                    logging.warning(f"Unexpected data type in Marvis response: {type(item)}")
+                    continue
+                
+                # Handle organization sites SLE data specially for readability
+                if analysis_type == "sites" and "results" in item and isinstance(item["results"], list):
+                    logging.info(f"Processing organization sites SLE data with {len(item['results'])} sites")
                     
-        logging.info(f"File I/O: Successfully wrote {len(data)} rows to {csv_file_path}")
-        logging.debug(f"EXIT: write_dict_list_to_csv - success")
+                    # Create one row per site instead of flattening all sites into one massive row
+                    for idx, site_data in enumerate(item["results"]):
+                        site_row = {}
+                        
+                        # Add metadata from parent response
+                        for meta_key in ["start", "end", "limit", "page", "total"]:
+                            if meta_key in item:
+                                site_row[meta_key] = item[meta_key]
+                        
+                        # Add site index for reference
+                        site_row["site_index"] = idx
+                        
+                        # Add site data with clean column names
+                        if isinstance(site_data, dict):
+                            for key, value in site_data.items():
+                                # Use clean column names instead of results_X_key format
+                                clean_key = key.replace("-", "_")  # Replace hyphens for CSV compatibility
+                                site_row[clean_key] = value
+                        
+                        formatted_data.append(site_row)
+                    
+                    logging.info(f"Converted {len(item['results'])} sites into {len(formatted_data)} readable rows")
+                    
+                else:
+                    # Handle single troubleshoot results (client, device, network)
+                    formatted_row = {}
+                    
+                    # Add top-level metadata
+                    for key, value in item.items():
+                        if key == "results" and isinstance(value, list):
+                            # Handle results array - flatten each result with cleaner naming
+                            for idx, result in enumerate(value):
+                                if isinstance(result, dict):
+                                    for result_key, result_value in result.items():
+                                        # Use clean column names: result_0_category instead of results_0_category
+                                        clean_key = f"result_{idx}_{result_key.replace('-', '_')}"
+                                        formatted_row[clean_key] = result_value
+                                else:
+                                    formatted_row[f"result_{idx}"] = str(result)
+                        elif isinstance(value, dict):
+                            # Flatten nested dicts with clean naming
+                            for nested_key, nested_value in value.items():
+                                clean_key = f"{key}_{nested_key}".replace("-", "_")
+                                formatted_row[clean_key] = nested_value
+                        elif isinstance(value, list):
+                            # Join lists as comma-separated values
+                            formatted_row[key] = ",".join(map(str, value))
+                        else:
+                            # Direct assignment for simple values
+                            formatted_row[key] = value
+                    
+                    if formatted_row:  # Only add if we have data
+                        formatted_data.append(formatted_row)
+            
+            # Apply final CSV-friendly formatting
+            formatted_data = DataProcessingUtils.escape_multiline(formatted_data)
+            
+            logging.info(f"Marvis data formatting complete: {len(formatted_data)} rows for {analysis_type} analysis")
+            return formatted_data
+            
+        except Exception as error:
+            logging.error(f"Error formatting Marvis data for CSV: {error}")
+            # Fall back to old method if new formatting fails
+            logging.info("Falling back to legacy flattening method")
+            fallback_data = [api_response_data] if not isinstance(api_response_data, list) else api_response_data
+            fallback_data = DataProcessingUtils.flatten_nested_fields(fallback_data)
+            fallback_data = DataProcessingUtils.escape_multiline(fallback_data)
+            return fallback_data
+
+
+class DatabaseSchemaUtils:
+    """
+    Centralized database schema utilities for SQLite operations.
+    Groups all schema-related functions per the 5-Item Rule class organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def determine_api_function_name_from_context() -> str:
+        """
+        Attempts to determine the API function name from the current call stack.
+        This helps identify which endpoint strategy to use for table schema.
         
-    except PermissionError as e:
-        logging.error(f"File I/O: Permission denied when writing to {csv_file_path}: {e}")
-        print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
-        logging.debug(f"EXIT: write_dict_list_to_csv - permission error")
-        raise
-    except OSError as e:
-        logging.error(f"File I/O: OS error when writing to {csv_file_path}: {e}")
-        logging.debug(f"EXIT: write_dict_list_to_csv - OS error")
-        raise
-    except Exception as e:
-        logging.error(f"File I/O: Unexpected error when writing to {csv_file}: {e}")
-        logging.debug(f"EXIT: write_dict_list_to_csv - unexpected error")
-        raise
-
-
-def determine_api_function_name_from_context() -> str:
-    """
-    Attempts to determine the API function name from the current call stack.
-    This helps identify which endpoint strategy to use for table schema.
+        Returns:
+            str: The API function name if found, else 'unknown'
+        """
+        # Look through the call stack for known API function patterns
+        frame = inspect.currentframe()
+        try:
+            while frame:
+                function_name = frame.f_code.co_name
+                # Check if this looks like an API function name
+                if any(pattern in function_name for pattern in [
+                    'getOrg', 'listOrg', 'searchOrg', 'getSite', 'listSite', 'searchSite'
+                ]):
+                    logging.debug(f"Detected API function name from stack: {function_name}")
+                    return function_name
+                frame = frame.f_back
+        except Exception as error:
+            logging.debug(f"Error determining API function name: {error}")
+        finally:
+            del frame
+        
+        return 'unknown'
     
-    Returns:
-        str: The API function name if found, else 'unknown'
-    """
-    
-    # Look through the call stack for known API function patterns
-    frame = inspect.currentframe()
-    try:
-        while frame:
-            function_name = frame.f_code.co_name
-            # Check if this looks like an API function name
-            if any(pattern in function_name for pattern in [
-                'getOrg', 'listOrg', 'searchOrg', 'getSite', 'listSite', 'searchSite'
-            ]):
-                logging.debug(f"Detected API function name from stack: {function_name}")
-                return function_name
-            frame = frame.f_back
-    except Exception as e:
-        logging.debug(f"Error determining API function name: {e}")
-    finally:
-        del frame
-    
-    return 'unknown'
-
-def get_endpoint_strategy(api_function_name: str, data_fields: List[str]) -> Dict[str, Any]:
-    """
-    Determines the appropriate database schema strategy for an API endpoint.
-    
-    Args:
-        api_function_name (str): Name of the API function being called
-        data_fields (list): List of field names in the data
-    
-    Returns:
-        dict: Strategy configuration including primary key, indexes, etc.
-    """
-    # First check if we have a specific strategy for this endpoint
-    if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
-        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
-        logging.debug(f"Using configured strategy for {api_function_name}: {strategy['type']}")
+    @staticmethod
+    def get_endpoint_strategy(api_function_name: str, data_fields: List[str]) -> Dict[str, Any]:
+        """
+        Determines the appropriate database schema strategy for an API endpoint.
+        
+        Args:
+            api_function_name (str): Name of the API function being called
+            data_fields (list): List of field names in the data
+        
+        Returns:
+            dict: Strategy configuration including primary key, indexes, etc.
+        """
+        # First check if we have a specific strategy for this endpoint
+        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
+            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
+            logging.debug(f"Using configured strategy for {api_function_name}: {strategy['type']}")
+            return strategy
+        
+        # If no specific strategy, use intelligent defaults based on data structure
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES['default'].copy()
+        
+        # Enhance default strategy based on available fields
+        if 'id' in data_fields:
+            # If data has an 'id' field, use it as unique constraint
+            strategy['unique_constraints'] = ['id']
+            strategy['indexes'] = ['id']
+            logging.debug(f"Enhanced default strategy for {api_function_name}: adding unique constraint on 'id'")
+        
+        # Add common indexes for frequently queried fields
+        common_index_fields = ['org_id', 'site_id', 'device_id', 'timestamp', 'mac', 'serial']
+        for field in common_index_fields:
+            if field in data_fields and field not in strategy['indexes']:
+                strategy['indexes'].append(field)
+        
+        logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
         return strategy
     
-    # If no specific strategy, use intelligent defaults based on data structure
-    strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES['default'].copy()
-    
-    # Enhance default strategy based on available fields
-    if 'id' in data_fields:
-        # If data has an 'id' field, use it as unique constraint
-        strategy['unique_constraints'] = ['id']
-        strategy['indexes'] = ['id']
-        logging.debug(f"Enhanced default strategy for {api_function_name}: adding unique constraint on 'id'")
-    
-    # Add common indexes for frequently queried fields
-    common_index_fields = ['org_id', 'site_id', 'device_id', 'timestamp', 'mac', 'serial']
-    for field in common_index_fields:
-        if field in data_fields and field not in strategy['indexes']:
-            strategy['indexes'].append(field)
-    
-    logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
-    return strategy
-
-def build_create_table_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> str:
-    """
-    Builds the CREATE TABLE SQL statement based on the endpoint strategy.
-    
-    Args:
-        table_name (str): Name of the table to create
-        fields (list): List of field names from the data
-        strategy (dict): Strategy configuration for this endpoint
-    
-    Returns:
-        str: Complete CREATE TABLE SQL statement
-    """
-    timestamp = datetime.now(timezone.utc).isoformat()
-    
-    # Sanitize table name
-    safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
-    if not safe_table_name or safe_table_name[0].isdigit():
-        safe_table_name = f"table_{safe_table_name}"
-    
-    # Start building SQL
-    if strategy['type'] == 'natural_pk':
-        # Use API id field(s) as primary key
-        pk_fields = strategy['primary_key']
-        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+    @staticmethod
+    def build_create_table_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> str:
+        """
+        Builds the CREATE TABLE SQL statement based on the endpoint strategy.
         
-        # Add all fields, with primary key fields getting special treatment
-        field_definitions = []
-        for field in fields:
-            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            if field in pk_fields:
-                field_definitions.append(f"{safe_field} TEXT NOT NULL")
-            else:
-                field_definitions.append(f"{safe_field} TEXT")
+        Args:
+            table_name (str): Name of the table to create
+            fields (list): List of field names from the data
+            strategy (dict): Strategy configuration for this endpoint
         
-        # Add metadata fields
-        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+        Returns:
+            str: Complete CREATE TABLE SQL statement
+        """
+        timestamp = datetime.now(timezone.utc).isoformat()
         
-        sql_parts.append(", ".join(field_definitions))
+        # Sanitize table name
+        safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+        if not safe_table_name or safe_table_name[0].isdigit():
+            safe_table_name = f"table_{safe_table_name}"
         
-        # Add primary key constraint
-        pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"
-        sql_parts.append(f", {pk_constraint}")
-        
-        sql_parts.append(")")
-        create_sql = "".join(sql_parts)
-        
-    elif strategy['type'] == 'composite_pk':
-        # Use composite primary key
-        pk_fields = strategy['primary_key']
-        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
-        
-        field_definitions = []
-        for field in fields:
-            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            if field in pk_fields:
-                field_definitions.append(f"{safe_field} TEXT NOT NULL")
-            else:
-                field_definitions.append(f"{safe_field} TEXT")
-        
-        # Add metadata fields
-        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
-        
-        sql_parts.append(", ".join(field_definitions))
-        
-        # Add composite primary key constraint
-        available_pk_fields = [f for f in pk_fields if f in fields]
-        if available_pk_fields:
-            pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"
-            sql_parts.append(f", {pk_constraint}")
-        
-        sql_parts.append(")")
-        create_sql = "".join(sql_parts)
-        
-    else:  # auto_increment_with_unique
-        # Use auto-increment primary key with unique constraints
-        sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
-        
-        field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]
-        
-        for field in fields:
-            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            field_definitions.append(f"{safe_field} TEXT")
-        
-        # Add metadata fields
-        field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-        field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
-        
-        sql_parts.append(", ".join(field_definitions))
-        
-        # Add unique constraints if specified
-        unique_fields = [f for f in strategy['unique_constraints'] if f in fields]
-        if unique_fields:
-            for field in unique_fields:
+        # Start building SQL
+        if strategy['type'] == 'natural_pk':
+            # Use API id field(s) as primary key
+            pk_fields = strategy['primary_key']
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            
+            # Add all fields, with primary key fields getting special treatment
+            field_definitions = []
+            for field in fields:
                 safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-                sql_parts.append(f", UNIQUE({safe_field})")
+                if field in pk_fields:
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+                else:
+                    field_definitions.append(f"{safe_field} TEXT")
+            
+            # Add metadata fields
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            
+            sql_parts.append(", ".join(field_definitions))
+            
+            # Add primary key constraint
+            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"
+            sql_parts.append(f", {pk_constraint}")
+            
+            sql_parts.append(")")
+            create_sql = "".join(sql_parts)
+            
+        elif strategy['type'] == 'composite_pk':
+            # Use composite primary key
+            pk_fields = strategy['primary_key']
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            
+            field_definitions = []
+            for field in fields:
+                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                if field in pk_fields:
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+                else:
+                    field_definitions.append(f"{safe_field} TEXT")
+            
+            # Add metadata fields
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            
+            sql_parts.append(", ".join(field_definitions))
+            
+            # Add composite primary key constraint
+            available_pk_fields = [f for f in pk_fields if f in fields]
+            if available_pk_fields:
+                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"
+                sql_parts.append(f", {pk_constraint}")
+            
+            sql_parts.append(")")
+            create_sql = "".join(sql_parts)
+            
+        else:  # auto_increment_with_unique
+            # Use auto-increment primary key with unique constraints
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            
+            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]
+            
+            for field in fields:
+                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                field_definitions.append(f"{safe_field} TEXT")
+            
+            # Add metadata fields
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            
+            sql_parts.append(", ".join(field_definitions))
+            
+            # Add unique constraints if specified
+            unique_fields = [f for f in strategy['unique_constraints'] if f in fields]
+            if unique_fields:
+                for field in unique_fields:
+                    safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                    sql_parts.append(f", UNIQUE({safe_field})")
+            
+            sql_parts.append(")")
+            create_sql = "".join(sql_parts)
         
-        sql_parts.append(")")
-        create_sql = "".join(sql_parts)
+        logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
+        return create_sql
     
-    logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
-    return create_sql
+    @staticmethod
+    def build_indexes_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> List[str]:
+        """
+        Builds CREATE INDEX SQL statements for the specified strategy.
+        
+        Args:
+            table_name (str): Name of the table
+            fields (list): Available fields in the data
+            strategy (dict): Strategy configuration
+        
+        Returns:
+            list: List of CREATE INDEX SQL statements
+        """
+        safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+        if not safe_table_name or safe_table_name[0].isdigit():
+            safe_table_name = f"table_{safe_table_name}"
+        
+        index_sqls = []
+        
+        # Create indexes for fields specified in strategy
+        for field in strategy.get('indexes', []):
+            if field in fields:
+                safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
+                index_name = f"idx_{safe_table_name}_{safe_field}"
+                index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
+                index_sqls.append(index_sql)
+        
+        return index_sqls
 
-def build_indexes_sql(table_name: str, fields: List[str], strategy: Dict[str, Any]) -> List[str]:
-    """
-    Builds CREATE INDEX SQL statements for the specified strategy.
-    
-    Args:
-        table_name (str): Name of the table
-        fields (list): Available fields in the data
-        strategy (dict): Strategy configuration
-    
-    Returns:
-        list: List of CREATE INDEX SQL statements
-    """
-    safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
-    if not safe_table_name or safe_table_name[0].isdigit():
-        safe_table_name = f"table_{safe_table_name}"
-    
-    index_sqls = []
-    
-    # Create indexes for fields specified in strategy
-    for field in strategy.get('indexes', []):
-        if field in fields:
-            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            index_name = f"idx_{safe_table_name}_{safe_field}"
-            index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
-            index_sqls.append(index_sql)
-    
-    return index_sqls
 
 def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any]], table_name: str, api_function_name: Optional[str] = None) -> bool:
     """
@@ -7324,7 +7283,7 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
     
     # Determine API function name if not provided
     if not api_function_name:
-        api_function_name = determine_api_function_name_from_context()
+        api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
         
     logging.debug(f"Processing {len(data)} rows for table {table_name} using API function {api_function_name} at {timestamp}")
     
@@ -7356,7 +7315,7 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
             logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no fields")
             return False
         
-        strategy = get_endpoint_strategy(api_function_name, fields)
+        strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_function_name, fields)
         logging.info(f"Using hybrid SQLite strategy '{strategy['type']}' for table {table_name}: {strategy['description']}")
         logging.debug(f"Database fields determined: {fields} at {timestamp}")
         logging.debug(f"Endpoint {api_function_name} mapped to {strategy['type']} strategy - eliminates need for artificial api_id fields")
@@ -7369,19 +7328,19 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
     # Database operations with comprehensive error handling
     connection = None
     try:
-        # Connect to SQLite database
+        # Connect to Redis/SQLite database
         logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {timestamp}")
         connection = sqlite3.connect(DATABASE_PATH)
         cursor = connection.cursor()
         logging.info(f"Successfully connected to database: {DATABASE_PATH} at {timestamp}")
         
         # Create table with strategy-appropriate schema
-        create_table_sql = build_create_table_sql(table_name, fields, strategy)
+        create_table_sql = DatabaseSchemaUtils.build_create_table_sql(table_name, fields, strategy)
         cursor.execute(create_table_sql)
         logging.debug(f"Table {table_name} created/verified with hybrid {strategy['type']} schema - using natural business keys from API")
         
         # Create indexes for performance
-        index_sqls = build_indexes_sql(table_name, fields, strategy)
+        index_sqls = DatabaseSchemaUtils.build_indexes_sql(table_name, fields, strategy)
         for index_sql in index_sqls:
             cursor.execute(index_sql)
         if index_sqls:
@@ -7496,14 +7455,14 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
 
 def write_data_with_format_selection(data: List[Dict[str, Any]], filename_or_table: str, format_override: Optional[str] = None, api_function_name: Optional[str] = None) -> bool:
     """
-    Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
+    Writes data to either CSV or Redis/SQLite database based on global OUTPUT_FORMAT or override.
     Follows NASA/JPL coding standards with comprehensive logging.
     
     Args:
         data (list): List of dictionaries containing the data to write
         filename_or_table (str): CSV filename or database table name
-        format_override (str): Optional override for output format ("csv" or "sqlite")
-        api_function_name (str, optional): Name of the API function for SQLite strategy selection
+        format_override (str): Optional override for output format ("csv" or "Redis/SQLite")
+        api_function_name (str, optional): Name of the API function for Redis/SQLite strategy selection
     
     Returns:
         bool: True if successful, False otherwise
@@ -7530,10 +7489,10 @@ def write_data_with_format_selection(data: List[Dict[str, Any]], filename_or_tab
             # Ensure CSV files have .csv extension
             csv_filename = filename_or_table if filename_or_table.endswith('.csv') else f"{filename_or_table}.csv"
             logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename} at {timestamp}")
-            write_dict_list_to_csv(data, csv_filename)
+            DataExporter.write_to_csv(data, csv_filename)
             logging.debug(f"EXIT: write_data_with_format_selection - CSV success")
             return True
-        else:  # sqlite
+        else:  # Redis/SQLite
             # Convert filename to table name (remove .csv extension if present)
             table_name = filename_or_table
             if table_name.endswith('.csv'):
@@ -7552,21 +7511,81 @@ def write_data_with_format_selection(data: List[Dict[str, Any]], filename_or_tab
 
 class DataExporter:
     """
-    Handles data export operations for CSV and SQLite output formats.
+    Handles data export operations for CSV and Redis/SQLite output formats.
     Centralizes all data saving logic that was previously scattered across functions.
     Uses static methods to avoid unnecessary object instantiation.
     """
     
     @staticmethod
+    def write_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
+        """
+        Writes a list of dictionaries to a CSV file.
+        - Escapes multiline strings for CSV compatibility.
+        - Determines all unique fields for the CSV header.
+        - Writes each row, filling missing fields with empty strings.
+        - Uses data directory for container persistence.
+        """
+        logging.debug(f"ENTRY: DataExporter.write_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
+        
+        if not data:
+            logging.warning(f"No data provided to write to {csv_file}")
+            logging.debug(f"EXIT: DataExporter.write_to_csv - no data to write")
+            return
+            
+        # Ensure data directory exists and construct proper file path
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # If csv_file doesn't already include a path, place it in the data directory
+        if not os.path.dirname(csv_file):
+            csv_file_path = os.path.join(data_dir, csv_file)
+        else:
+            csv_file_path = csv_file
+            
+        logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
+        escaped_data = DataProcessingUtils.escape_multiline(data)
+        fields = DataProcessingUtils.get_unique_keys(escaped_data)
+        logging.debug(f"CSV fields determined: {fields}")
+        
+        try:
+            logging.debug(f"File I/O: Attempting to open {csv_file_path} for writing")
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as file_handle:
+                writer = csv.DictWriter(file_handle, fieldnames=fields)
+                writer.writeheader()
+                logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file_path}")
+                
+                for idx, row in enumerate(escaped_data):
+                    writer.writerow({field: row.get(field, "") for field in fields})
+                    if idx < 3:  # Log the first few rows for debugging
+                        logging.debug(f"Row {idx} written: {row}")
+                        
+            logging.info(f"File I/O: Successfully wrote {len(escaped_data)} rows to {csv_file_path}")
+            logging.debug(f"EXIT: DataExporter.write_to_csv - success")
+            
+        except PermissionError as perm_error:
+            logging.error(f"File I/O: Permission denied when writing to {csv_file_path}: {perm_error}")
+            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
+            logging.debug(f"EXIT: DataExporter.write_to_csv - permission error")
+            raise
+        except OSError as os_error:
+            logging.error(f"File I/O: OS error when writing to {csv_file_path}: {os_error}")
+            logging.debug(f"EXIT: DataExporter.write_to_csv - OS error")
+            raise
+        except Exception as unexpected_error:
+            logging.error(f"File I/O: Unexpected error when writing to {csv_file}: {unexpected_error}")
+            logging.debug(f"EXIT: DataExporter.write_to_csv - unexpected error")
+            raise
+    
+    @staticmethod
     def save_data_to_output(data, filename, api_function_name=None):
         """
-        Save data to the specified format (CSV or SQLite).
+        Save data to the specified format (CSV or Redis/SQLite).
         This replaces the save_data_to_output function with identical signature.
         
         Args:
             data (list): List of dictionaries containing the data to write
             filename (str): CSV filename or database table name  
-            api_function_name (str, optional): Name of the API function for SQLite strategy selection
+            api_function_name (str, optional): Name of the API function for Redis/SQLite strategy selection
             
         Returns:
             bool: True if successful, False otherwise
@@ -7646,7 +7665,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
         # Call the API and get all paginated results
         logging.debug(f"Making API call: {api_call.__name__} with kwargs: {kwargs}")
         response = api_call(apisession, org_id, **kwargs)
-        smoothed, delay = get_rate_limited_delay(smoothed)
+        smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed)
         logging.debug(f"Applying rate limit delay: {delay:.2f}s")
         time.sleep(delay)
         
@@ -8950,20 +8969,6 @@ def _expand_port_range_string(port_range_string: str) -> list:
     
     return expanded_ports
 
-def export_site_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
-    """
-    Backward compatibility wrapper for SiteExportUtils.export_data().
-    Delegates to the class method which contains the actual implementation.
-    """
-    return SiteExportUtils.export_data(api_call, data_type, sort_key, **api_kwargs)
-
-def export_org_specific_data(api_call, data_type, sort_key="name", **api_kwargs):
-    """
-    Backward compatibility wrapper for OrgExportUtils.export_data().
-    Delegates to the class method which contains the actual implementation.
-    """
-    return OrgExportUtils.export_data(api_call, data_type, sort_key, **api_kwargs)
-
 
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
@@ -9007,7 +9012,7 @@ class OrgExportUtils:
     @staticmethod
     def wireless_clients():
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients,
             data_type="wireless clients",
             sort_key="mac"
@@ -9016,7 +9021,7 @@ class OrgExportUtils:
     @staticmethod
     def wired_clients():
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients,
             data_type="wired clients",
             sort_key="mac"
@@ -9462,7 +9467,7 @@ class OrgExportUtils:
     @staticmethod
     def psks():
         """Export organization PSKs to OrgPsks.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.psks.listOrgPsks,
             data_type="psks",
             sort_key="name"
@@ -9471,7 +9476,7 @@ class OrgExportUtils:
     @staticmethod
     def webhooks():
         """Export organization webhooks to OrgWebhooks.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks,
             data_type="webhooks",
             sort_key="name"
@@ -9480,7 +9485,7 @@ class OrgExportUtils:
     @staticmethod
     def wlans():
         """Export organization WLANs to OrgWlans.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.wlans.listOrgWlans,
             data_type="wlans",
             sort_key="ssid"
@@ -9511,7 +9516,7 @@ class OrgExportUtils:
     @staticmethod
     def sso():
         """Export organization SSO configuration to OrgSso.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.ssos.listOrgSsos,
             data_type="sso",
             sort_key="name"
@@ -9544,7 +9549,7 @@ class OrgExportUtils:
     @staticmethod
     def mx_edges():
         """Export MX Edge data to OrgMxEdges.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges,
             data_type="mx edges",
             sort_key="name"
@@ -9553,7 +9558,7 @@ class OrgExportUtils:
     @staticmethod
     def network_templates():
         """Export network templates to OrgNetworkTemplates.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
             data_type="network templates",
             sort_key="name"
@@ -9562,7 +9567,7 @@ class OrgExportUtils:
     @staticmethod
     def rf_templates():
         """Export RF templates to OrgRfTemplates.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
             data_type="rf templates",
             sort_key="name"
@@ -9627,7 +9632,7 @@ class OrgExportUtils:
     @staticmethod
     def nac_clients():
         """Export NAC clients to OrgNacClients.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients,
             data_type="nac clients",
             sort_key="mac"
@@ -9636,7 +9641,7 @@ class OrgExportUtils:
     @staticmethod
     def nac_tags():
         """Export NAC tags to OrgNacTags.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags,
             data_type="nac tags",
             sort_key="name"
@@ -9645,7 +9650,7 @@ class OrgExportUtils:
     @staticmethod
     def nac_portals():
         """Export NAC portals to OrgNacPortals.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals,
             data_type="nac portals",
             sort_key="name"
@@ -9654,7 +9659,7 @@ class OrgExportUtils:
     @staticmethod
     def nac_rules():
         """Export NAC rules to OrgNacRules.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules,
             data_type="nac rules",
             sort_key="name"
@@ -9665,7 +9670,7 @@ class OrgExportUtils:
         """Export NAC events to OrgNacEvents.csv."""
         hours = get_dynamic_lookback_hours(24, 1)
         log_dynamic_lookback("org NAC events export", hours)
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
             data_type="nac events",
             sort_key="timestamp",
@@ -9675,7 +9680,7 @@ class OrgExportUtils:
     @staticmethod
     def assets():
         """Export organization assets to OrgAssets.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.stats.searchOrgAssets,
             data_type="assets",
             sort_key="name"
@@ -9684,7 +9689,7 @@ class OrgExportUtils:
     @staticmethod
     def bgp_peers():
         """Export BGP peer data to OrgBgpPeers.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers,
             data_type="bgp peers",
             sort_key="peer_ip"
@@ -9693,7 +9698,7 @@ class OrgExportUtils:
     @staticmethod
     def tunnel_stats():
         """Export tunnel statistics to OrgTunnelStats.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels,
             data_type="tunnel stats",
             sort_key="name"
@@ -9702,7 +9707,7 @@ class OrgExportUtils:
     @staticmethod
     def site_stats():
         """Export site statistics to OrgSiteStats.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats,
             data_type="site stats",
             sort_key="name"
@@ -9711,7 +9716,7 @@ class OrgExportUtils:
     @staticmethod
     def mxedge_stats():
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats,
             data_type="mx edge stats",
             sort_key="name"
@@ -9720,7 +9725,7 @@ class OrgExportUtils:
     @staticmethod
     def alarm_templates():
         """Export alarm templates to OrgAlarmTemplates.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
             data_type="alarm templates",
             sort_key="name"
@@ -9729,7 +9734,7 @@ class OrgExportUtils:
     @staticmethod
     def security_intel_profiles():
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
             data_type="security intel profiles",
             sort_key="name"
@@ -9738,7 +9743,7 @@ class OrgExportUtils:
     @staticmethod
     def invites():
         """Export organization invites to OrgInvites.csv."""
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.invites.listOrgInvites,
             data_type="invites",
             sort_key="email"
@@ -9749,7 +9754,7 @@ class OrgExportUtils:
         """Export organization events to OrgEvents.csv."""
         hours = get_dynamic_lookback_hours(24, 1)
         log_dynamic_lookback("org events export", hours)
-        export_org_specific_data(
+        OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
             data_type="events",
             sort_key="timestamp",
@@ -10973,7 +10978,7 @@ class SiteExportUtils:
     @staticmethod
     def port_stats():
         """Export port statistics for a site to SitePortStats.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts,
             data_type="port stats",
             sort_key="mac"
@@ -11408,7 +11413,7 @@ class SiteExportUtils:
     @staticmethod
     def wlans():
         """Export WLANs for a site to SiteWlans.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.wlans.listSiteWlans,
             data_type="wlans",
             sort_key="ssid"
@@ -11417,7 +11422,7 @@ class SiteExportUtils:
     @staticmethod
     def beacons():
         """Export beacons for a site to SiteBeacons.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons,
             data_type="beacons",
             sort_key="name"
@@ -11426,7 +11431,7 @@ class SiteExportUtils:
     @staticmethod
     def maps():
         """Export maps for a site to SiteMaps.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.maps.listSiteMaps,
             data_type="maps",
             sort_key="name"
@@ -11435,7 +11440,7 @@ class SiteExportUtils:
     @staticmethod
     def zones():
         """Export zones for a site to SiteZones.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.zones.listSiteZones,
             data_type="zones",
             sort_key="name"
@@ -11444,7 +11449,7 @@ class SiteExportUtils:
     @staticmethod
     def insights():
         """Export insights for a site to SiteInsights.csv."""
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics,
             data_type="sle_metrics_insights",
             sort_key="name"
@@ -11455,7 +11460,7 @@ class SiteExportUtils:
         """Export system events for a site to SiteSystemEvents.csv."""
         hours = get_dynamic_lookback_hours(24, 1)
         log_dynamic_lookback("site system events export", hours)
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
             data_type="system events",
             sort_key="timestamp",
@@ -11467,7 +11472,7 @@ class SiteExportUtils:
         """Export fast roam events for a site to SiteFastRoamEvents.csv."""
         hours = get_dynamic_lookback_hours(24, 1)
         log_dynamic_lookback("site fast roam events export", hours)
-        export_site_specific_data(
+        SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
             data_type="fast roam events",
             sort_key="timestamp",
@@ -17822,7 +17827,7 @@ class GatewayExportUtils:
                     all_stats.append(result)
                 
                 # Apply rate limiting only in non-fast mode
-                smoothed, delay = get_rate_limited_delay(smoothed)
+                smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed)
                 logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
                 time.sleep(delay)
 
@@ -17931,7 +17936,7 @@ class GatewayExportUtils:
                 results = fetch_site_tests(site_id, connection_semaphore=None)
                 if results:
                     all_results.extend(results)
-                smoothed, delay = get_rate_limited_delay(smoothed)
+                smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed)
                 time.sleep(delay)
 
         if all_results:
@@ -19349,7 +19354,7 @@ class TroubleshootUtils:
                 print(f"! Analysis results available.")
                 
                 # Save results to CSV with optimized formatting
-                data = format_marvis_data_for_csv(response.data, "client")
+                data = MarvisDataUtils.format_for_csv(response.data, "client")
                 
                 filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
                 DataExporter.save_data_to_output(data, filename)
@@ -19464,7 +19469,7 @@ class TroubleshootUtils:
                 print(" Marvis AI device analysis completed!")
                 
                 # Save results to CSV with optimized formatting
-                data = format_marvis_data_for_csv(response.data, "device")
+                data = MarvisDataUtils.format_for_csv(response.data, "device")
                 logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
                 
                 filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
@@ -19556,7 +19561,7 @@ class TroubleshootUtils:
                 
                 # Save results to CSV with optimized formatting
                 logging.debug("MARVIS DEBUG: About to format data for CSV")
-                data = format_marvis_data_for_csv(response.data, "network")
+                data = MarvisDataUtils.format_for_csv(response.data, "network")
                 logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
                 logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
                 
@@ -19683,7 +19688,7 @@ def view_marvis_insights():
                                 # Save insights to CSV with optimized formatting
                                 if "Sites SLE" in endpoint_name:
                                     # Use optimized formatting for Sites SLE data
-                                    formatted_insights = format_marvis_data_for_csv(response.data, "sites")
+                                    formatted_insights = MarvisDataUtils.format_for_csv(response.data, "sites")
                                 else:
                                     # Use legacy formatting for other insight types
                                     formatted_insights = DataProcessingUtils.flatten_nested_fields(insights_data)
@@ -20115,110 +20120,13 @@ def loop_refresh_core_datasets(delay=None, debug=False):
             if delay is not None:
                 actual_delay = delay
             else:
-                smoothed, actual_delay = get_rate_limited_delay(smoothed)
+                smoothed, actual_delay = RateLimitingUtils.get_rate_limited_delay(smoothed)
 
             logging.info(f"! Sleeping for {actual_delay:.2f} seconds...")
             time.sleep(actual_delay)
 
     except KeyboardInterrupt:
         logging.info(" Loop interrupted by user (Ctrl+C). Exiting gracefully.")
-
-def load_pid_tuning_data():
-    """Load PID tuning data from file with comprehensive logging."""
-    logging.debug(f"ENTRY: load_pid_tuning_data()")
-    
-    if os.path.exists(tuning_data_file):
-        try:
-            logging.debug(f"File I/O: Attempting to read PID tuning data from {tuning_data_file}")
-            with open(tuning_data_file, 'r') as f:
-                data = json.load(f)
-            
-            # Validate and clean error history
-            if "error" in data and isinstance(data["error"], list):
-                cleaned_errors = []
-                for err in data["error"]:
-                    if isinstance(err, (int, float)) and not (math.isnan(err) or math.isinf(err)):
-                        cleaned_errors.append(float(err))
-                data["error"] = cleaned_errors
-            else:
-                data["error"] = []
-                
-            logging.debug(f"File I/O: Successfully loaded PID tuning data from {tuning_data_file}")
-            logging.debug(f"EXIT: load_pid_tuning_data - loaded from file")
-            return data
-        except json.JSONDecodeError as e:
-            logging.error(f"File I/O: Failed to parse JSON in {tuning_data_file}: {e}. Using defaults.")
-        except OSError as e:
-            logging.error(f"File I/O: OS error reading {tuning_data_file}: {e}. Using defaults.")
-        except Exception as e:
-            logging.error(f"File I/O: Unexpected error reading {tuning_data_file}: {e}. Using defaults.")
-    else:
-        logging.debug(f"File I/O: {tuning_data_file} does not exist, using defaults")
-        
-    logging.debug(f"EXIT: load_pid_tuning_data - using defaults")
-    return {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}
-
-def save_pid_tuning_data(data):
-    """Save PID tuning data to file with comprehensive logging."""
-    logging.debug(f"ENTRY: save_pid_tuning_data(data_keys={list(data.keys()) if data else []})")
-    
-    try:
-        logging.debug(f"File I/O: Attempting to write PID tuning data to {tuning_data_file}")
-        with open(tuning_data_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        logging.debug(f"File I/O: Successfully wrote PID tuning data to {tuning_data_file}")
-        logging.debug(f"EXIT: save_pid_tuning_data - success")
-    except OSError as e:
-        logging.error(f"File I/O: OS error writing to {tuning_data_file}: {e}")
-        logging.debug(f"EXIT: save_pid_tuning_data - OS error")
-        raise
-    except Exception as e:
-        logging.error(f"File I/O: Unexpected error writing to {tuning_data_file}: {e}")
-        logging.debug(f"EXIT: save_pid_tuning_data - unexpected error")
-        raise
-
-def adjust_gains(data):
-    """
-    Adjusts PID gains based on the trend of recent errors.
-    If error is increasing (positive trend), increase gains.
-    If error is decreasing (negative trend), decrease gains.
-    """
-    recent_errors = data["error"][-10:]
-    if not recent_errors:
-        return
-
-    error_trend = sum(recent_errors) / len(recent_errors)
-
-    if error_trend > 0:
-        data["k_p"] *= 1.05
-        data["k_i"] *= 1.05
-    elif error_trend < 0:
-        data["k_p"] *= 0.95
-        data["k_i"] *= 0.95
-
-    # Clamp gains to prevent runaway values
-    data["k_p"] = min(max(data["k_p"], 1e-6), 1.0)
-    data["k_i"] = min(max(data["k_i"], 1e-8), 0.01)
-
-def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
-    """
-    Computes a dynamic smoothing factor alpha based on the standard deviation of recent errors.
-    """
-    if len(errors) < 2:
-        return 0.3  # default fallback
-    
-    try:
-        # Ensure errors is a list of numbers and convert to numpy array safely
-        recent_errors = errors[-10:]
-        # Convert to float64 explicitly to avoid type conversion issues
-        error_array = np.array(recent_errors, dtype=np.float64)
-        std_dev = np.std(error_array)
-        normalized = min(std_dev / 50, 1.0)  # adjust divisor to control sensitivity
-        alpha = min_alpha + (max_alpha - min_alpha) * normalized
-        return round(alpha, 3)
-    except Exception as e:
-        logging.warning(f"Failed to compute dynamic alpha: {e}. Using fallback value.")
-        return 0.3
 
 def ssh_runner_by_gateway_template(fast=False):
     """
@@ -20382,223 +20290,337 @@ def ssh_runner_by_gateway_template(fast=False):
         print(f"! Error during SSH execution: {e}")
         logging.error(f"SSH runner by template error: {e}", exc_info=True)
 
-def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100):
+
+# ============================================================================
+# RATE LIMITING UTILITIES CLASS
+# ============================================================================
+class RateLimitingUtils:
     """
-    Appends delay metrics, API cache, and tuning data to a JSON file.
-    Each call writes a new line with a timestamped entry.
-    Maintains only the last max_entries (default 100) to prevent unlimited file growth.
+    Centralized rate limiting utilities using PID control.
+    Groups all rate limiting, delay calculation, and metrics logging functions.
+    All methods are static to avoid unnecessary object instantiation.
+    Consolidates previously standalone functions for 5-item rule compliance.
     """
-    logging.debug(f"ENTRY: append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
     
-    # SECURITY: File path is forced into data/ directory unless caller provides an explicit path.
-    # This prevents creating arbitrary files in the application root (permission errors in container) or unsafe paths.
-    if filename == "delay_metrics.json":
+    @staticmethod
+    def load_pid_tuning_data():
+        """Load PID tuning data from file with comprehensive logging."""
+        logging.debug(f"ENTRY: RateLimitingUtils.load_pid_tuning_data()")
+        
+        if os.path.exists(tuning_data_file):
+            try:
+                logging.debug(f"File I/O: Attempting to read PID tuning data from {tuning_data_file}")
+                with open(tuning_data_file, 'r') as file_handle:
+                    data = json.load(file_handle)
+                
+                # Validate and clean error history
+                if "error" in data and isinstance(data["error"], list):
+                    cleaned_errors = []
+                    for error_value in data["error"]:
+                        if isinstance(error_value, (int, float)) and not (math.isnan(error_value) or math.isinf(error_value)):
+                            cleaned_errors.append(float(error_value))
+                    data["error"] = cleaned_errors
+                else:
+                    data["error"] = []
+                    
+                logging.debug(f"File I/O: Successfully loaded PID tuning data from {tuning_data_file}")
+                logging.debug(f"EXIT: RateLimitingUtils.load_pid_tuning_data - loaded from file")
+                return data
+            except json.JSONDecodeError as json_error:
+                logging.error(f"File I/O: Failed to parse JSON in {tuning_data_file}: {json_error}. Using defaults.")
+            except OSError as os_error:
+                logging.error(f"File I/O: OS error reading {tuning_data_file}: {os_error}. Using defaults.")
+            except Exception as unexpected_error:
+                logging.error(f"File I/O: Unexpected error reading {tuning_data_file}: {unexpected_error}. Using defaults.")
+        else:
+            logging.debug(f"File I/O: {tuning_data_file} does not exist, using defaults")
+            
+        logging.debug(f"EXIT: RateLimitingUtils.load_pid_tuning_data - using defaults")
+        return {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}
+    
+    @staticmethod
+    def save_pid_tuning_data(data):
+        """Save PID tuning data to file with comprehensive logging."""
+        logging.debug(f"ENTRY: RateLimitingUtils.save_pid_tuning_data(data_keys={list(data.keys()) if data else []})")
+        
         try:
-            data_directory = "data"
-            os.makedirs(data_directory, exist_ok=True)
-            filename = os.path.join(data_directory, filename)
-        except Exception as directory_creation_error:
-            logging.error(f"File I/O: Failed to ensure data directory for delay metrics file: {directory_creation_error}")
-            # Fall back to original filename; subsequent write may fail but we continue safely.
-
-    log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "delay_metrics": delay_metrics,
-        "api_cache": api_cache,
-        "tuning_data": tuning_data
-    }
+            logging.debug(f"File I/O: Attempting to write PID tuning data to {tuning_data_file}")
+            with open(tuning_data_file, 'w') as file_handle:
+                json.dump(data, file_handle, indent=2)
+            logging.debug(f"File I/O: Successfully wrote PID tuning data to {tuning_data_file}")
+            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - success")
+        except OSError as os_error:
+            logging.error(f"File I/O: OS error writing to {tuning_data_file}: {os_error}")
+            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - OS error")
+            raise
+        except Exception as unexpected_error:
+            logging.error(f"File I/O: Unexpected error writing to {tuning_data_file}: {unexpected_error}")
+            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - unexpected error")
+            raise
     
-    try:
-        # Read existing entries if file exists
-        existing_entries = []
-        if os.path.exists(filename):
-            try:
-                with open(filename, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            existing_entries.append(json.loads(line))
-                logging.debug(f"File I/O: Loaded {len(existing_entries)} existing entries from {filename}")
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning(f"File I/O: Failed to read existing entries from {filename}: {e}. Starting fresh.")
-                existing_entries = []
+    @staticmethod
+    def adjust_gains(data):
+        """
+        Adjusts PID gains based on the trend of recent errors.
+        If error is increasing (positive trend), increase gains.
+        If error is decreasing (negative trend), decrease gains.
+        """
+        recent_errors = data["error"][-10:]
+        if not recent_errors:
+            return
         
-        # Add new entry and keep only the last max_entries
-        existing_entries.append(log_entry)
-        if len(existing_entries) > max_entries:
-            existing_entries = existing_entries[-max_entries:]
-            logging.debug(f"File I/O: Trimmed to last {max_entries} entries")
+        error_trend = sum(recent_errors) / len(recent_errors)
         
-        # Write all entries back to file
-        logging.debug(f"File I/O: Writing {len(existing_entries)} entries to {filename}")
-        with open(filename, "w", encoding="utf-8") as f:
-            for entry in existing_entries:
-                json.dump(entry, f)
-                f.write("\n")
+        if error_trend > 0:
+            data["k_p"] *= 1.05
+            data["k_i"] *= 1.05
+        elif error_trend < 0:
+            data["k_p"] *= 0.95
+            data["k_i"] *= 0.95
         
-        logging.debug(f"File I/O: Successfully updated delay metrics in {filename}")
-        logging.debug(f"EXIT: append_delay_metrics_log - success")
-    except OSError as e:
-        logging.error(f"File I/O: OS error writing delay metrics to {filename}: {e}")
-        logging.debug(f"EXIT: append_delay_metrics_log - OS error")
-    except Exception as exception:
-        logging.error(f"File I/O: Failed to write delay metrics to {filename}: {exception}")
-        logging.debug(f"EXIT: append_delay_metrics_log - error")
-
-
-def get_rate_limited_delay(smoothed_delay=None):
-    """
-    Calculates an appropriate delay for API rate limiting using PID control.
-    Includes comprehensive logging for tuning and backoff mechanisms.
-    """
-    logging.debug(f"ENTRY: get_rate_limited_delay(smoothed_delay={smoothed_delay})")
+        # Clamp gains to prevent runaway values
+        data["k_p"] = min(max(data["k_p"], 1e-6), 1.0)
+        data["k_i"] = min(max(data["k_i"], 1e-8), 0.01)
     
-    global _api_usage_cache
-    tuning_data = load_pid_tuning_data()
-    logging.debug(f"Loaded PID tuning data: k_p={tuning_data.get('k_p')}, k_i={tuning_data.get('k_i')}, integral={tuning_data.get('integral')}")
-
-    # Reset gains if out of bounds
-    if tuning_data["k_p"] < 1e-6 or tuning_data["k_i"] < 1e-8 or tuning_data["k_p"] > 1.0 or tuning_data["k_i"] > 0.01:
-        logging.warning(f"PID gains out of bounds, resetting: k_p={tuning_data['k_p']}, k_i={tuning_data['k_i']}")
-        tuning_data["k_p"] = 0.1
-        tuning_data["k_i"] = 0.001
-
-    k_p = float(tuning_data["k_p"])
-    k_i = float(tuning_data["k_i"])
-    delay_integral = float(tuning_data.get("integral", 0.0))
-    error_history = tuning_data.get("error", [])
-
-    try:
-        now = datetime.now(timezone.utc)
-        current_time = time.time()
-        elapsed = current_time - _api_usage_cache["last_updated"]
-        previous_elapsed = float(_api_usage_cache.get("previous_elapsed", elapsed))
-
-        # Hybrid refresh trigger: every 60s, every 100 requests, or top of the hour
-        refresh_needed = (
-            not _api_usage_cache["initialized"]
-            or _api_usage_cache["perceived_requests"] >= 100
-            or elapsed > 60
-            or (now.minute == 0 and now.second < 5)
-        )
+    @staticmethod
+    def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
+        """
+        Computes a dynamic smoothing factor alpha based on the standard deviation of recent errors.
+        """
+        if len(errors) < 2:
+            return 0.3  # default fallback
         
-        if refresh_needed:
-            logging.debug(f"Refreshing API usage cache - elapsed: {elapsed:.1f}s, perceived_requests: {_api_usage_cache['perceived_requests']}")
+        try:
+            # Ensure errors is a list of numbers and convert to numpy array safely
+            recent_errors = errors[-10:]
+            # Convert to float64 explicitly to avoid type conversion issues
+            error_array = np.array(recent_errors, dtype=np.float64)
+            standard_deviation = np.std(error_array)
+            normalized = min(standard_deviation / 50, 1.0)  # adjust divisor to control sensitivity
+            alpha = min_alpha + (max_alpha - min_alpha) * normalized
+            return round(alpha, 3)
+        except Exception as alpha_error:
+            logging.warning(f"Failed to compute dynamic alpha: {alpha_error}. Using fallback value.")
+            return 0.3
+    
+    @staticmethod
+    def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100):
+        """
+        Appends delay metrics, API cache, and tuning data to a JSON file.
+        Each call writes a new line with a timestamped entry.
+        Maintains only the last max_entries (default 100) to prevent unlimited file growth.
+        """
+        logging.debug(f"ENTRY: RateLimitingUtils.append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
+        
+        # SECURITY: File path is forced into data/ directory unless caller provides an explicit path.
+        # This prevents creating arbitrary files in the application root (permission errors in container) or unsafe paths.
+        if filename == "delay_metrics.json":
             try:
-                usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data
-                _api_usage_cache["used"] = usage.get("requests", 0)
-                _api_usage_cache["limit"] = usage.get("request_limit", 5000)
-                _api_usage_cache["last_updated"] = current_time
-                _api_usage_cache["perceived_requests"] = 0
-                _api_usage_cache["initialized"] = True
-                logging.debug(f"API usage refreshed: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
-            except Exception as api_e:
-                logging.warning(f"Failed to refresh API usage data: {api_e}. Using cached values.")
-        else:
-            estimated_growth = round((_api_usage_cache["limit"] / 3600) * elapsed)
-            _api_usage_cache["used"] += estimated_growth
-            _api_usage_cache["last_updated"] = current_time
-            _api_usage_cache["perceived_requests"] += 1
-            logging.debug(f"Using estimated API usage: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
-
-        used = min(_api_usage_cache["used"], _api_usage_cache["limit"])
-        limit = _api_usage_cache["limit"]
-
-        seconds_elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
-        seconds_remaining = max(3600 - seconds_elapsed, 1)
-        ideal_used = (seconds_elapsed / 3600) * limit
-        error = used - ideal_used
-
-        # Detect hour boundary and decay integral
-        if seconds_elapsed < previous_elapsed:
-            logging.info(" Hour boundary crossed. Resetting integral.")
-            logging.debug(f"Before reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
-            delay_integral *= 0.5
-            logging.debug(f"After reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
-
-        _api_usage_cache["previous_elapsed"] = seconds_elapsed
-
-        remaining_requests = max(limit - used, 1)
-        base_delay = min(seconds_remaining / remaining_requests, 10)
-
-        unsat_delay = base_delay + k_p * error + k_i * delay_integral
-        sat_delay = max(min(unsat_delay, 10), 0.01)
-
-        # Log backoff calculation details
-        if sat_delay > 2.0:
-            logging.warning(f"High delay calculated: {sat_delay:.3f}s (base: {base_delay:.3f}s, error: {error:.1f}, used: {used}/{limit})")
-        elif sat_delay > 1.0:
-            logging.info(f"Moderate delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
-        else:
-            logging.debug(f"Normal delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
-
-        # Adaptive back_calc_gain
-        back_calc_gain = min(max(abs(sat_delay - unsat_delay) / 10, 0.01), 0.5)
-
-        # Decaying integral update
-        decay_factor = 0.98
-        delay_integral = delay_integral * decay_factor + back_calc_gain * (sat_delay - unsat_delay)
-        delay_integral = max(min(delay_integral, 1000), -1000)
-
-        # Ensure error is a valid number before adding to history
-        if isinstance(error, (int, float)) and not (math.isnan(error) or math.isinf(error)):
-            error_history.append(float(error))
-        else:
-            logging.warning(f"Invalid error value: {error}. Skipping addition to error history.")
+                data_directory = "data"
+                os.makedirs(data_directory, exist_ok=True)
+                filename = os.path.join(data_directory, filename)
+            except Exception as directory_creation_error:
+                logging.error(f"File I/O: Failed to ensure data directory for delay metrics file: {directory_creation_error}")
+                # Fall back to original filename; subsequent write may fail but we continue safely.
         
-        # Clean error_history before computing alpha to ensure all values are numeric
-        cleaned_error_history = []
-        for err in error_history:
-            try:
-                # Try to convert to float
-                if err is not None:
-                    float_val = float(err)
-                    # Check if it's a valid finite number
-                    if not (math.isnan(float_val) or math.isinf(float_val)):
-                        cleaned_error_history.append(float_val)
-            except (ValueError, TypeError):
-                # Skip values that can't be converted to float
-                continue
-        
-        logging.debug(f"About to call compute_dynamic_alpha with cleaned_error_history={cleaned_error_history} (length: {len(cleaned_error_history)})")
-        alpha = compute_dynamic_alpha(cleaned_error_history)
-        logging.debug(f"compute_dynamic_alpha returned: {alpha} (type: {type(alpha)})")
-        
-        # Defensive type checking - ensure alpha is a valid float
-        if not isinstance(alpha, (int, float)) or math.isnan(alpha) or math.isinf(alpha):
-            logging.warning(f"Invalid alpha value: {alpha} (type: {type(alpha)}). Using fallback 0.3")
-            alpha = 0.3
-
-        smoothed_delay = sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
-        delay_in_seconds = max(smoothed_delay, 0.01)
-
-        logging.info(f"Rate limiting: sleeping for {delay_in_seconds:.3f} seconds")
-
-        # Save updated tuning data using cleaned error history
-        tuning_data["error"] = cleaned_error_history[-20:]  # Use cleaned history and keep only last 20 entries
-        tuning_data["integral"] = delay_integral
-        tuning_data["back_calc_gain"] = back_calc_gain
-        adjust_gains(tuning_data)
-        save_pid_tuning_data(tuning_data)
-
-        delay_metrics = {
-            "used": used,
-            "limit": limit,
-            "error": error,
-            "base_delay": base_delay,
-            "unsat_delay": unsat_delay,
-            "final_delay": delay_in_seconds,
-            "alpha": alpha
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "delay_metrics": delay_metrics,
+            "api_cache": api_cache,
+            "tuning_data": tuning_data
         }
-        append_delay_metrics_log(delay_metrics, _api_usage_cache, tuning_data)
-
-        logging.debug(f"EXIT: get_rate_limited_delay - delay: {delay_in_seconds:.3f}s")
-        return smoothed_delay, delay_in_seconds
-
-    except Exception as e:
-        logging.error(f"Failed to calculate dynamic delay: {e}. Using default 500ms fallback delay.")
-        logging.debug(f"EXIT: get_rate_limited_delay - error fallback")
-        return smoothed_delay, 0.5
+        
+        try:
+            # Read existing entries if file exists
+            existing_entries = []
+            if os.path.exists(filename):
+                try:
+                    with open(filename, "r", encoding="utf-8") as file_handle:
+                        for line in file_handle:
+                            line = line.strip()
+                            if line:
+                                existing_entries.append(json.loads(line))
+                    logging.debug(f"File I/O: Loaded {len(existing_entries)} existing entries from {filename}")
+                except (json.JSONDecodeError, OSError) as read_error:
+                    logging.warning(f"File I/O: Failed to read existing entries from {filename}: {read_error}. Starting fresh.")
+                    existing_entries = []
+            
+            # Add new entry and keep only the last max_entries
+            existing_entries.append(log_entry)
+            if len(existing_entries) > max_entries:
+                existing_entries = existing_entries[-max_entries:]
+                logging.debug(f"File I/O: Trimmed to last {max_entries} entries")
+            
+            # Write all entries back to file
+            logging.debug(f"File I/O: Writing {len(existing_entries)} entries to {filename}")
+            with open(filename, "w", encoding="utf-8") as file_handle:
+                for entry in existing_entries:
+                    json.dump(entry, file_handle)
+                    file_handle.write("\n")
+            
+            logging.debug(f"File I/O: Successfully updated delay metrics in {filename}")
+            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - success")
+        except OSError as os_error:
+            logging.error(f"File I/O: OS error writing delay metrics to {filename}: {os_error}")
+            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - OS error")
+        except Exception as unexpected_error:
+            logging.error(f"File I/O: Failed to write delay metrics to {filename}: {unexpected_error}")
+            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - error")
+    
+    @staticmethod
+    def get_rate_limited_delay(smoothed_delay=None):
+        """
+        Calculates an appropriate delay for API rate limiting using PID control.
+        Includes comprehensive logging for tuning and backoff mechanisms.
+        """
+        logging.debug(f"ENTRY: RateLimitingUtils.get_rate_limited_delay(smoothed_delay={smoothed_delay})")
+        
+        global _api_usage_cache
+        tuning_data = RateLimitingUtils.load_pid_tuning_data()
+        logging.debug(f"Loaded PID tuning data: k_p={tuning_data.get('k_p')}, k_i={tuning_data.get('k_i')}, integral={tuning_data.get('integral')}")
+        
+        # Reset gains if out of bounds
+        if tuning_data["k_p"] < 1e-6 or tuning_data["k_i"] < 1e-8 or tuning_data["k_p"] > 1.0 or tuning_data["k_i"] > 0.01:
+            logging.warning(f"PID gains out of bounds, resetting: k_p={tuning_data['k_p']}, k_i={tuning_data['k_i']}")
+            tuning_data["k_p"] = 0.1
+            tuning_data["k_i"] = 0.001
+        
+        k_p = float(tuning_data["k_p"])
+        k_i = float(tuning_data["k_i"])
+        delay_integral = float(tuning_data.get("integral", 0.0))
+        error_history = tuning_data.get("error", [])
+        
+        try:
+            now = datetime.now(timezone.utc)
+            current_time = time.time()
+            elapsed = current_time - _api_usage_cache["last_updated"]
+            previous_elapsed = float(_api_usage_cache.get("previous_elapsed", elapsed))
+            
+            # Hybrid refresh trigger: every 60s, every 100 requests, or top of the hour
+            refresh_needed = (
+                not _api_usage_cache["initialized"]
+                or _api_usage_cache["perceived_requests"] >= 100
+                or elapsed > 60
+                or (now.minute == 0 and now.second < 5)
+            )
+            
+            if refresh_needed:
+                logging.debug(f"Refreshing API usage cache - elapsed: {elapsed:.1f}s, perceived_requests: {_api_usage_cache['perceived_requests']}")
+                try:
+                    usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data
+                    _api_usage_cache["used"] = usage.get("requests", 0)
+                    _api_usage_cache["limit"] = usage.get("request_limit", 5000)
+                    _api_usage_cache["last_updated"] = current_time
+                    _api_usage_cache["perceived_requests"] = 0
+                    _api_usage_cache["initialized"] = True
+                    logging.debug(f"API usage refreshed: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
+                except Exception as api_error:
+                    logging.warning(f"Failed to refresh API usage data: {api_error}. Using cached values.")
+            else:
+                estimated_growth = round((_api_usage_cache["limit"] / 3600) * elapsed)
+                _api_usage_cache["used"] += estimated_growth
+                _api_usage_cache["last_updated"] = current_time
+                _api_usage_cache["perceived_requests"] += 1
+                logging.debug(f"Using estimated API usage: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
+            
+            used = min(_api_usage_cache["used"], _api_usage_cache["limit"])
+            limit = _api_usage_cache["limit"]
+            
+            seconds_elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
+            seconds_remaining = max(3600 - seconds_elapsed, 1)
+            ideal_used = (seconds_elapsed / 3600) * limit
+            error = used - ideal_used
+            
+            # Detect hour boundary and decay integral
+            if seconds_elapsed < previous_elapsed:
+                logging.info(" Hour boundary crossed. Resetting integral.")
+                logging.debug(f"Before reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
+                delay_integral *= 0.5
+                logging.debug(f"After reset: delay_integral={delay_integral} (type: {type(delay_integral)})")
+            
+            _api_usage_cache["previous_elapsed"] = seconds_elapsed
+            
+            remaining_requests = max(limit - used, 1)
+            base_delay = min(seconds_remaining / remaining_requests, 10)
+            
+            unsat_delay = base_delay + k_p * error + k_i * delay_integral
+            sat_delay = max(min(unsat_delay, 10), 0.01)
+            
+            # Log backoff calculation details
+            if sat_delay > 2.0:
+                logging.warning(f"High delay calculated: {sat_delay:.3f}s (base: {base_delay:.3f}s, error: {error:.1f}, used: {used}/{limit})")
+            elif sat_delay > 1.0:
+                logging.info(f"Moderate delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
+            else:
+                logging.debug(f"Normal delay calculated: {sat_delay:.3f}s (used: {used}/{limit})")
+            
+            # Adaptive back_calc_gain
+            back_calc_gain = min(max(abs(sat_delay - unsat_delay) / 10, 0.01), 0.5)
+            
+            # Decaying integral update
+            decay_factor = 0.98
+            delay_integral = delay_integral * decay_factor + back_calc_gain * (sat_delay - unsat_delay)
+            delay_integral = max(min(delay_integral, 1000), -1000)
+            
+            # Ensure error is a valid number before adding to history
+            if isinstance(error, (int, float)) and not (math.isnan(error) or math.isinf(error)):
+                error_history.append(float(error))
+            else:
+                logging.warning(f"Invalid error value: {error}. Skipping addition to error history.")
+            
+            # Clean error_history before computing alpha to ensure all values are numeric
+            cleaned_error_history = []
+            for error_value in error_history:
+                try:
+                    # Try to convert to float
+                    if error_value is not None:
+                        float_val = float(error_value)
+                        # Check if it's a valid finite number
+                        if not (math.isnan(float_val) or math.isinf(float_val)):
+                            cleaned_error_history.append(float_val)
+                except (ValueError, TypeError):
+                    # Skip values that can't be converted to float
+                    continue
+            
+            logging.debug(f"About to call compute_dynamic_alpha with cleaned_error_history={cleaned_error_history} (length: {len(cleaned_error_history)})")
+            alpha = RateLimitingUtils.compute_dynamic_alpha(cleaned_error_history)
+            logging.debug(f"compute_dynamic_alpha returned: {alpha} (type: {type(alpha)})")
+            
+            # Defensive type checking - ensure alpha is a valid float
+            if not isinstance(alpha, (int, float)) or math.isnan(alpha) or math.isinf(alpha):
+                logging.warning(f"Invalid alpha value: {alpha} (type: {type(alpha)}). Using fallback 0.3")
+                alpha = 0.3
+            
+            smoothed_delay = sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
+            delay_in_seconds = max(smoothed_delay, 0.01)
+            
+            logging.info(f"Rate limiting: sleeping for {delay_in_seconds:.3f} seconds")
+            
+            # Save updated tuning data using cleaned error history
+            tuning_data["error"] = cleaned_error_history[-20:]  # Use cleaned history and keep only last 20 entries
+            tuning_data["integral"] = delay_integral
+            tuning_data["back_calc_gain"] = back_calc_gain
+            RateLimitingUtils.adjust_gains(tuning_data)
+            RateLimitingUtils.save_pid_tuning_data(tuning_data)
+            
+            delay_metrics = {
+                "used": used,
+                "limit": limit,
+                "error": error,
+                "base_delay": base_delay,
+                "unsat_delay": unsat_delay,
+                "final_delay": delay_in_seconds,
+                "alpha": alpha
+            }
+            RateLimitingUtils.append_delay_metrics_log(delay_metrics, _api_usage_cache, tuning_data)
+            
+            logging.debug(f"EXIT: RateLimitingUtils.get_rate_limited_delay - delay: {delay_in_seconds:.3f}s")
+            return smoothed_delay, delay_in_seconds
+        
+        except Exception as rate_error:
+            logging.error(f"Failed to calculate dynamic delay: {rate_error}. Using default 500ms fallback delay.")
+            logging.debug(f"EXIT: RateLimitingUtils.get_rate_limited_delay - error fallback")
+            return smoothed_delay, 0.5
 
 
 # ============================================================================
@@ -21205,11 +21227,6 @@ class AddressUtils:
         
         return result
 
-
-# Backward compatibility - delegate to AddressUtils class methods
-def normalize_zip_code(zip_code):
-    """Backward compatibility wrapper - delegates to AddressUtils.normalize_zip()."""
-    return AddressUtils.normalize_zip(zip_code)
 
 def validate_addresses_with_nominatim(
     mist_address: dict,
@@ -22101,7 +22118,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
         zip_code = row.get(zip_field, "").strip()
         if serial:
             # Normalize zip code for comparison
-            normalized_zip = normalize_zip_code(zip_code)
+            normalized_zip = AddressUtils.normalize_zip(zip_code)
             comparison_serials[serial] = normalized_zip
             # Store full address info for diff report
             comparison_address_lookup[serial] = {
@@ -22496,7 +22513,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                     "City": mist_address['city'],
                     "State": mist_address['state'],
                     "Current Zip Code": mist_address['zip'],
-                    "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
+                    "Current Zip Normalized": AddressUtils.normalize_zip(mist_address['zip']),
                     "Comparison Zip Code": comparison_address['zip'],
                     "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
                     "Mismatch Type": mismatch_type,
@@ -22530,12 +22547,12 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                     "Mist_City": mist_address['city'],
                     "Mist_State": mist_address['state'],
                     "Mist_Zip_Code": mist_address['zip'],
-                    "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
+                    "Mist_Zip_Normalized": AddressUtils.normalize_zip(mist_address['zip']),
                     "Comparison_Address": comparison_address['address'],
                     "Comparison_City": comparison_address['city'],
                     "Comparison_State": comparison_address['state'],
                     "Comparison_Zip_Code": comparison_address['zip'],
-                    "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
+                    "Comparison_Zip_Normalized": AddressUtils.normalize_zip(comparison_address['zip']),
                     "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
                     "Mismatch Type": mismatch_type,
                     "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
@@ -22684,7 +22701,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                         "City": mist_address['city'],
                         "State": mist_address['state'],
                         "Current Zip Code": mist_address['zip'],
-                        "Current Zip Normalized": normalize_zip_code(mist_address['zip']),
+                        "Current Zip Normalized": AddressUtils.normalize_zip(mist_address['zip']),
                         "Comparison Zip Code": comparison_address['zip'],
                         "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
                         "Mismatch Type": mismatch_type,
@@ -22714,12 +22731,12 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                         "Mist_City": mist_address['city'],
                         "Mist_State": mist_address['state'],
                         "Mist_Zip_Code": mist_address['zip'],
-                        "Mist_Zip_Normalized": normalize_zip_code(mist_address['zip']),
+                        "Mist_Zip_Normalized": AddressUtils.normalize_zip(mist_address['zip']),
                         "Comparison_Address": comparison_address['address'],
                         "Comparison_City": comparison_address['city'],
                         "Comparison_State": comparison_address['state'],
                         "Comparison_Zip_Code": comparison_address['zip'],
-                        "Comparison_Zip_Normalized": normalize_zip_code(comparison_address['zip']),
+                        "Comparison_Zip_Normalized": AddressUtils.normalize_zip(comparison_address['zip']),
                         "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
                         "Mismatch Type": mismatch_type,
                         "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
@@ -25228,7 +25245,7 @@ class MapsManager:
             print("  S. Select different site")
             print("\nMap Inventory & Export:")
             print("  1. List maps for current site")
-            print("  2. Export maps for current site to CSV/SQLite")
+            print("  2. Export maps for current site to CSV/Redis/SQLite")
             print("  3. View detailed map information")
             print("\nMap Creation & Modification:")
             print("  4. Create new site map")
@@ -25244,7 +25261,7 @@ class MapsManager:
             print("  11. Set AP/device location manually")
             print("\nBulk Operations (All Sites):")
             print("  20. List all site maps across organization")
-            print("  21. Export all site maps to CSV/SQLite")
+            print("  21. Export all site maps to CSV/Redis/SQLite")
             print("  22. Export maps with image metadata")
             print("  23. Download all org map images")
             print("  24. Backup all maps (metadata + images)")
@@ -26900,7 +26917,7 @@ class MapsManager:
             
             print(f"{'-' * 80}")
             
-            # Export to CSV/SQLite
+            # Export to CSV/Redis/SQLite
             filename = "MapsWithoutImages_Report"
             write_data_with_format_selection(
                 maps_without_images,
