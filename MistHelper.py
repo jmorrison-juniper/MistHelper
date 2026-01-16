@@ -2482,6 +2482,74 @@ class CacheUtils:
             logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
             logging.debug(f"EXIT: check_and_generate_csv - generation failed")
             return False
+    
+    @staticmethod
+    def load_csv_grouped_by_key(filename: str, key: str) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Loads CSV data into a dictionary keyed by the specified column.
+        Each key maps to a list of rows (as dictionaries) that share the same key value.
+        
+        Args:
+            filename: Name of the CSV file to load
+            key: Column name to use as the grouping key
+        
+        Returns:
+            dict: Dictionary where keys are unique values from the key column,
+                  and values are lists of row dictionaries
+        """
+        logging.info(f"Loading CSV file '{filename}' into dictionary keyed by '{key}'...")
+        csv_file_path = FilePathUtils.get_csv_path(filename)
+        with open(csv_file_path, mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            data_dict: Dict[str, List[Dict[str, Any]]] = {}
+            row_count = 0
+            for row in reader:
+                data_key = row.get(key)
+                if data_key is None:
+                    logging.warning(f"Row missing key '{key}': {row}")
+                    continue
+                if data_key not in data_dict:
+                    data_dict[data_key] = []
+                data_dict[data_key].append(row)
+                row_count += 1
+            logging.info(f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'.")
+        return data_dict
+    
+    @staticmethod
+    def write_support_data_to_csv(data: Dict[str, List[Dict[str, Any]]], filename: str) -> None:
+        """
+        Writes the support package data (a dict of lists of dicts) to a CSV file.
+        Each section in 'data' is a list of dictionaries. All unique keys across all sections are used as CSV columns.
+        
+        Args:
+            data: Dictionary where keys are section names and values are lists of row dictionaries
+            filename: Name of the output CSV file
+        """
+        logging.debug(f"Preparing to write support package to {filename}...")
+
+        fieldnames: set = set()
+        # Collect all unique field names from all sections
+        for section_name, section in data.items():
+            logging.debug(f"Processing section '{section_name}' with {len(section)} rows.")
+            for row in section:
+                fieldnames.update(row.keys())
+        fieldnames_sorted = sorted(fieldnames)
+
+        logging.debug(f"Final CSV fieldnames: {fieldnames_sorted}")
+
+        # SECURITY: Use proper file path handling to ensure files go to data/ directory
+        csv_file_path = FilePathUtils.get_csv_path(filename)
+        with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)
+            writer.writeheader()
+            row_count = 0
+            for section_name, section in data.items():
+                for row in section:
+                    writer.writerow(row)
+                    row_count += 1
+            logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
+
+        logging.info(f"Support package written to {csv_file_path}")
 
 
 # Backward compatibility wrapper - will be removed in future version
@@ -19139,60 +19207,17 @@ def generate_support_package():
     logging.info(" Support packages generated for applicable sites.")
     logging.info(" Support packages generated for all sites!")
 
-def load_csv_grouped_by_key(filename, key):
-    """
-    Loads CSV data into a dictionary keyed by the specified column.
-    Each key maps to a list of rows (as dictionaries) that share the same key value.
-    Adds logging for file loading and key distribution.
-    """
-    logging.info(f"Loading CSV file '{filename}' into dictionary keyed by '{key}'...")
-    csv_file_path = FilePathUtils.get_csv_path(filename)
-    with open(csv_file_path, mode='r', encoding='utf-8') as file:
-        reader = csv.DictReader(file)  # Create a CSV reader
-        data_dict = {}  # Initialize an empty dictionary
-        row_count = 0
-        for row in reader:
-            data_key = row.get(key)  # Get the value to use as the key
-            if data_key is None:
-                logging.warning(f"Row missing key '{key}': {row}")
-                continue
-            if data_key not in data_dict:
-                data_dict[data_key] = []  # Initialize a list for this key
-            data_dict[data_key].append(row)  # Add the row to the dictionary
-            row_count += 1
-        logging.info(f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'.")
-    return data_dict  # Return the dictionary
 
-def write_support_data_to_csv(data, filename):
-    """
-    Writes the support package data (a dict of lists of dicts) to a CSV file.
-    Each section in 'data' is a list of dictionaries. All unique keys across all sections are used as CSV columns.
-    """
-    logging.debug(f"Preparing to write support package to {filename}...")
+# Backward compatibility wrappers - will be removed in future version
+def load_csv_grouped_by_key(filename: str, key: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Legacy function - use CacheUtils.load_csv_grouped_by_key() instead."""
+    return CacheUtils.load_csv_grouped_by_key(filename, key)
 
-    fieldnames = set()  # Initialize a set to collect all field names
-    # Collect all unique field names from all sections
-    for section_name, section in data.items():
-        logging.debug(f"Processing section '{section_name}' with {len(section)} rows.")
-        for row in section:
-            fieldnames.update(row.keys())  # Add all keys to the fieldnames set
-    fieldnames = sorted(fieldnames)  # Sort the fieldnames for consistent column order
 
-    logging.debug(f"Final CSV fieldnames: {fieldnames}")
+def write_support_data_to_csv(data: Dict[str, List[Dict[str, Any]]], filename: str) -> None:
+    """Legacy function - use CacheUtils.write_support_data_to_csv() instead."""
+    CacheUtils.write_support_data_to_csv(data, filename)
 
-    # SECURITY: Use proper file path handling to ensure files go to data/ directory
-    csv_file_path = FilePathUtils.get_csv_path(filename)
-    with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)  # Create a CSV writer
-        writer.writeheader()  # Write the header row
-        row_count = 0
-        for section_name, section in data.items():
-            for row in section:
-                writer.writerow(row)  # Write each row to the CSV file
-                row_count += 1
-        logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
-
-    logging.info(f"Support package written to {csv_file_path}")  # Log completion of the file write
 
 def poll_marvis_actions():
     """
