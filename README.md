@@ -550,6 +550,27 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "25.07.10.08.00",
+      "date": "2025-07-10",
+      "changes": {
+        "dead-code-removal": [
+          "show_vlans, show_dhcp_security_binding - unused WebSocket shell functions",
+          "check_firmware_upgrade_status - deprecated wrapper (updated caller to use _direct)",
+          "_export_gateway_templates_simple - unused gateway template export",
+          "show_route_via_websocket - unused WebSocket shell function",
+          "safe_api_call - unused API wrapper function",
+          "get_import_status - unused import debugging function",
+          "save_data_to_output - unused shim (all callers use DataExporter directly)",
+          "prepare_data_and_write_csv - unused data processing function",
+          "ssh_runner_main - unused entry point (use EnhancedSSHRunner directly)"
+        ],
+        "refactoring": [
+          "Reduced standalone function count from 121 to 109",
+          "Total dead code removed: 12 functions (~250 lines)"
+        ]
+      }
+    },
+    {
       "version": "25.07.10.07.25",
       "date": "2025-07-10",
       "changes": {
