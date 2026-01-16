@@ -20293,46 +20293,6 @@ def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
         logging.warning(f"Failed to compute dynamic alpha: {e}. Using fallback value.")
         return 0.3
 
-def show_route_via_websocket():
-    """
-    Launches a shell session, runs 'show route 0.0.0.0 | display json | no-more',
-    and saves the output to ws.log.
-    """
-    logging.info("Launching shell to run 'show route 0.0.0.0'...")
-    site_id, device_id = PromptUtils.select_site_and_device_ids()
-    if not site_id or not device_id:
-        return
-
-    shell_url = create_shell_session(site_id, device_id)
-    if not shell_url:
-        logging.error(" Could not create shell session.")
-        return
-
-    try:
-        ws = websocket.create_connection(shell_url)
-        print(" Connected to shell session.")
-        time.sleep(1)
-        command = "show route 0.0.0.0 | display json | no-more\n"
-        ws.send_binary(bytearray(map(ord, f"\00{command}")))
-
-        output_lines = []
-        while True:
-            data = ws.recv()
-            if isinstance(data, bytes):
-                data = data.decode("utf-8", errors="ignore")
-            output_lines.append(data)
-            print(data, end="")
-            if "DONE!" in data or "mist@" in data:
-                break
-        ws.close()
-
-        with open("ws.log", "w", encoding="utf-8") as f:
-            f.write("".join(output_lines))
-        print(" WebSocket output saved to ws.log")
-
-    except Exception as e:
-        print(f"! Error during shell session: {e}")
-
 def ssh_runner_by_gateway_template(fast=False):
     """
     SSH runner that targets gateways by template name and online status.
