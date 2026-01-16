@@ -8049,7 +8049,7 @@ class PromptUtils:
             str: The selected site ID or None if no selection made
         """
         # Ensure the site list CSV is fresh or generate it if missing/stale
-        check_and_generate_csv(csv_file, export_all_sites_to_csv)
+        check_and_generate_csv(csv_file, OrgExportUtils.sites)
 
         # Get the full path to the CSV file in the data directory
         csv_file_path = get_csv_file_path(csv_file)
@@ -9205,7 +9205,7 @@ class OrgExportUtils:
             logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
             DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")
         logging.info("Fetching rogue APs and clients from all sites via insights...")
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_aps = []
         all_rogue_clients = []
         try:
@@ -9272,7 +9272,7 @@ class OrgExportUtils:
     def rogue_clients():
         """Export rogue clients to OrgRogueClients.csv."""
         logging.info("Starting export of rogue clients from all sites...")
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_clients = []
         try:
             site_list_path = get_csv_file_path("SiteList.csv")
@@ -9314,7 +9314,7 @@ class OrgExportUtils:
     def rogue_aps():
         """Export rogue APs to OrgRogueAps.csv."""
         logging.info("Starting export of rogue APs from all sites...")
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_aps = []
         try:
             site_list_path = get_csv_file_path("SiteList.csv")
@@ -9683,6 +9683,210 @@ class OrgExportUtils:
             sort_key="timestamp",
             duration=f"{hours}h"
         )
+    
+    @staticmethod
+    def sites():
+        """
+        Fetches and exports the list of all sites in the organization.
+        Output format determined by global OUTPUT_FORMAT setting.
+        Uses fetch_and_display_api_data to handle API call and output writing.
+        """
+        logging.info("Starting export of organization site list...")
+        fetch_and_display_api_data(
+            title="Site List:",
+            api_call=mistapi.api.v1.orgs.sites.listOrgSites,
+            filename="SiteList",
+            sort_key="name",
+            limit=1000
+        )
+        output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
+        logging.info(f"Completed site list export and wrote results to {output_desc}.")
+    
+    @staticmethod
+    def sites_list_api():
+        """
+        Uses the 'list' sites API endpoint (not 'search') to export all sites to SiteList_ListAPI.csv,
+        but only if the file does not already exist.
+        """
+        output_file = "SiteList_ListAPI.csv"
+        if os.path.exists(output_file):
+            logging.info(f"! Using cached {output_file} (already exists)")
+            print(f"! Using cached {output_file} (already exists)")
+            return
+        logging.info("Fetching all sites using the 'list' sites API endpoint...")
+        print("Fetching all sites using the 'list' sites API endpoint...")
+        org_id = get_cached_or_prompted_org_id()
+        sites = fetch_all_sites_with_limit(org_id)
+        if not sites:
+            logging.warning(" No sites returned from API.")
+            print(" No sites returned from API.")
+            return
+        sites = DataProcessingUtils.flatten_nested_fields(sites)
+        sites = DataProcessingUtils.escape_multiline(sites)
+        DataExporter.save_data_to_output(sites, output_file)
+        logging.info(f"! Sites exported to {output_file}")
+        print(f"! Sites exported to {output_file}")
+    
+    @staticmethod
+    def inventory():
+        """
+        Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
+        Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+        """
+        logging.info("Starting export of organization device inventory...")
+        fetch_and_display_api_data(
+            title="Org Inventory:",
+            api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
+            filename="OrgInventory.csv",
+            sort_key="model",
+            limit=1000
+        )
+        logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
+    
+    @staticmethod
+    def device_stats(fast: bool = False):
+        """Export statistics for all devices in the organization to OrgDeviceStats.csv.
+
+        Fast Mode Behavior:
+            - If fast is True and a fresh CSV (mtime < CSV_FRESHNESS_MINUTES) exists, skip API call.
+            - Falls back to normal fetch otherwise.
+        SECURITY: Read-only operation; safe to cache.
+        """
+        output_file = "OrgDeviceStats.csv"
+        if fast and os.path.exists(output_file):
+            try:
+                mtime = os.path.getmtime(output_file)
+                age_minutes = (time.time() - mtime) / 60.0
+                if age_minutes < CSV_FRESHNESS_MINUTES:
+                    logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
+                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                    return
+            except Exception as e:
+                logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
+        logging.info("Starting export of organization device statistics...")
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("org device statistics export", hours)
+        fetch_and_display_api_data(
+            title="Org Device Stats:",
+            api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
+            filename=output_file,
+            sort_key="type",
+            type="all",
+            duration=f"{hours}h",
+            limit=1000
+        )
+    
+    @staticmethod
+    def alarms():
+        """
+        Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
+        """
+        logging.debug("ENTRY: OrgExportUtils.alarms()")
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("open org alarms export", hours)
+        logging.info(f"Starting search for all open org alarms in the past {hours} hours...")
+        try:
+            fetch_and_display_api_data(
+                title="Search all Org Alarms:",
+                api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
+                filename="OrgAlarms.csv",
+                limit=1000,
+                duration=f"{hours}h",
+                status="open"
+            )
+            logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
+            logging.debug("EXIT: OrgExportUtils.alarms - success")
+        except Exception as e:
+            logging.error(f"Failed to export open org alarms: {e}")
+            logging.debug("EXIT: OrgExportUtils.alarms - error")
+            raise
+    
+    @staticmethod
+    def device_events():
+        """
+        Export all device events from the past 24 hours to OrgDeviceEvents.csv.
+        """
+        logging.info("Search Org Device Events:")
+        org_id = get_cached_or_prompted_org_id()
+        hours = get_dynamic_lookback_hours(24, 1)
+        log_dynamic_lookback("recent device events export", hours)
+        duration_param = f"{hours}h"
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession,
+            org_id,
+            device_type="all",
+            limit=1000,
+            duration=duration_param
+        )
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        events = rawdata
+        logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
+        DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")
+        logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
+        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
+        if events:
+            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
+    
+    @staticmethod
+    def device_events_52w():
+        """
+        Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
+        Fetches all data into memory, then writes to CSV in one operation.
+        """
+        logging.info("Exporting all org device events from the last 52 weeks...")
+        org_id = get_cached_or_prompted_org_id()
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession, org_id, device_type="all", limit=1000, duration="52w"
+        )
+        events = mistapi.get_all(response=response, mist_session=apisession)
+        logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
+        events = DataProcessingUtils.flatten_nested_fields(events)
+        events = DataProcessingUtils.escape_multiline(events)
+        DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
+        logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+    
+    @staticmethod
+    def audit_logs(full_history=False, duration=None):
+        """
+        Export organization audit logs to OrgAuditLogs.csv.
+        Fetches all pages using mistapi.get_all.
+        If full_history is True, pulls all audit logs (start=0).
+        If False, pulls only the last 24 hours.
+        If duration is provided, uses it as the duration parameter.
+        """
+        logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
+        logging.info("Starting export of organization audit logs...")
+        try:
+            org_id = get_cached_or_prompted_org_id()
+            kwargs = {"limit": 1000}
+            if duration:
+                kwargs["duration"] = duration
+                logging.info(f"Exporting audit logs for duration: {duration}")
+            elif not full_history:
+                hours = get_dynamic_lookback_hours(24, 1)
+                log_dynamic_lookback("audit logs export", hours)
+                kwargs["duration"] = f"{hours}h"
+                logging.info(f"Exporting only last {hours} hours of audit logs (duration={hours}h).")
+            else:
+                kwargs["start"] = 0
+                logging.info("Exporting full audit log history (start=0).")
+            logging.debug(f"Making API call with parameters: {kwargs}")
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            if not rawdata:
+                logging.warning(" No audit logs returned from API.")
+                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")
+                return
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            data = DataProcessingUtils.escape_multiline(data)
+            DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")
+            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
+            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
+            logging.debug("EXIT: OrgExportUtils.audit_logs - success")
+        except Exception as e:
+            logging.error(f"Failed to export audit logs: {e}")
+            logging.debug("EXIT: OrgExportUtils.audit_logs - error")
+            raise
 
 
 # ============================================================================
@@ -9946,141 +10150,6 @@ class SiteExportUtils:
         else:
             logging.warning(" No site configs found.")
             print("! No site configurations found.")
-
-
-def export_open_org_alarms_to_csv():
-    """
-    Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
-    """
-    logging.debug("ENTRY: export_open_org_alarms_to_csv()")
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("open org alarms export", hours)
-    logging.info(f"Starting search for all open org alarms in the past {hours} hours...")
-    
-    try:
-        fetch_and_display_api_data(
-            title="Search all Org Alarms:",
-            api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
-            filename="OrgAlarms.csv",
-            limit=1000,
-            duration=f"{hours}h",
-            status="open"
-        )
-        logging.info("Completed export_open_org_alarms_to_csv and wrote results to OrgAlarms.csv.")
-        logging.debug("EXIT: export_open_org_alarms_to_csv - success")
-    except Exception as e:
-        logging.error(f"Failed to export open org alarms: {e}")
-        logging.debug("EXIT: export_open_org_alarms_to_csv - error")
-        raise
-
-def export_recent_device_events_to_csv():
-    """
-    Export all device events from the past 24 hours to OrgDeviceEvents.csv.
-    """
-    logging.info("Search Org Device Events:")
-    org_id = get_cached_or_prompted_org_id()
-    # Dynamic lookback window (24h normal / 1h test by default)
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("recent device events export", hours)
-    # Use explicit duration parameter rather than start/end to avoid mistapi defaulting to duration=1d
-    # If we provided only start/end previously, the library still appended duration=1d in the request.
-    # Explicitly passing duration ensures correct reduced window in test mode.
-    duration_param = f"{hours}h"
-    response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        apisession,
-        org_id,
-        device_type="all",
-        limit=1000,
-        duration=duration_param
-    )
-    # Retrieve all paginated results
-    rawdata = mistapi.get_all(response=response, mist_session=apisession)
-    events = rawdata
-    logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
-    # Write the events to a CSV file
-    DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")
-    logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
-    print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
-    # Optionally log the first few events for debugging
-    if events:
-        logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
-
-def export_all_org_device_events_52w_to_csv():
-    """
-    Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
-    Fetches all data into memory, then writes to CSV in one operation.
-    """
-    logging.info("Exporting all org device events from the last 52 weeks...")
-    org_id = get_cached_or_prompted_org_id()
-    # Use Mist API to search for device events in the last 52 weeks
-    # Use duration=52w, do NOT use last_by
-    response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        apisession, org_id, device_type="all", limit=1000, duration="52w"
-    )
-    # Retrieve all paginated results into memory
-    events = mistapi.get_all(response=response, mist_session=apisession)
-    logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
-    # Flatten and sanitize for CSV
-    events = DataProcessingUtils.flatten_nested_fields(events)
-    events = DataProcessingUtils.escape_multiline(events)
-    # Write all data to CSV in one operation
-    DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
-    logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
-
-def export_audit_logs_to_csv(full_history=False, duration=None):
-    """
-    Export organization audit logs to OrgAuditLogs.csv.
-    Fetches all pages using mistapi.get_all.
-    If full_history is True, pulls all audit logs (start=0).
-    If False, pulls only the last 24 hours.
-    If duration is provided, uses it as the duration parameter.
-    """
-    logging.debug(f"ENTRY: export_audit_logs_to_csv(full_history={full_history}, duration={duration})")
-    logging.info("Starting export of organization audit logs...")
-    
-    try:
-        org_id = get_cached_or_prompted_org_id()
-
-        # Always include limit=1000 to reduce number of API calls
-        kwargs = {"limit": 1000}
-
-        if duration:
-            # Caller explicitly provided duration; honor it.
-            kwargs["duration"] = duration
-            logging.info(f"Exporting audit logs for duration: {duration}")
-        elif not full_history:
-            # Use dynamic hour window and pass duration directly to avoid mistapi auto-appending duration=1d
-            hours = get_dynamic_lookback_hours(24, 1)
-            log_dynamic_lookback("audit logs export", hours)
-            # Note: mistapi expects duration as string for some endpoints, cast to Any to satisfy type checker
-            kwargs["duration"] = f"{hours}h"  # type: ignore[assignment]
-            logging.info(f"Exporting only last {hours} hours of audit logs (duration={hours}h).")
-        else:
-            kwargs["start"] = 0
-            logging.info("Exporting full audit log history (start=0).")
-
-        # Call the API and fetch all pages
-        logging.debug(f"Making API call with parameters: {kwargs}")
-        response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-
-        if not rawdata:
-            logging.warning(" No audit logs returned from API.")
-            logging.debug("EXIT: export_audit_logs_to_csv - no data")
-            return
-
-        # Flatten and sanitize for CSV
-        data = DataProcessingUtils.flatten_nested_fields(rawdata)
-        data = DataProcessingUtils.escape_multiline(data)
-        DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")
-        print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
-        logging.info("Completed export_audit_logs_to_csv and wrote results to OrgAuditLogs.csv.")
-        logging.debug("EXIT: export_audit_logs_to_csv - success")
-        
-    except Exception as e:
-        logging.error(f"Failed to export audit logs: {e}")
-        logging.debug("EXIT: export_audit_logs_to_csv - error")
-        raise
 
 
 # ============================================================================
@@ -13778,96 +13847,6 @@ def _validate_ping_target(target):
     return False
 
 
-def export_all_sites_to_csv():
-    """
-    Fetches and exports the list of all sites in the organization.
-    Output format determined by global OUTPUT_FORMAT setting.
-    Uses fetch_and_display_api_data to handle API call and output writing.
-    """
-    logging.info("Starting export of organization site list...")
-    fetch_and_display_api_data(
-        title="Site List:",
-        api_call=mistapi.api.v1.orgs.sites.listOrgSites,
-        filename="SiteList",  # Format-agnostic filename (no extension)
-        sort_key="name",  # or "site_id" if preferred
-        limit=1000
-    )
-    output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
-    logging.info(f"Completed export_all_sites and wrote results to {output_desc}.")
-
-def export_all_sites_list_to_csv():
-    """
-    Uses the 'list' sites API endpoint (not 'search') to export all sites to SiteList_ListAPI.csv,
-    but only if the file does not already exist.
-    """
-    output_file = "SiteList_ListAPI.csv"
-    if os.path.exists(output_file):
-        logging.info(f"! Using cached {output_file} (already exists)")
-        print(f"! Using cached {output_file} (already exists)")
-        return
-
-    logging.info("Fetching all sites using the 'list' sites API endpoint...")
-    print("Fetching all sites using the 'list' sites API endpoint...")
-    org_id = get_cached_or_prompted_org_id()
-    sites = fetch_all_sites_with_limit(org_id)
-    if not sites:
-        logging.warning(" No sites returned from API.")
-        print(" No sites returned from API.")
-        return
-    # Flatten and sanitize for CSV
-    sites = DataProcessingUtils.flatten_nested_fields(sites)
-    sites = DataProcessingUtils.escape_multiline(sites)
-    DataExporter.save_data_to_output(sites, output_file)
-    logging.info(f"! Sites exported to {output_file}")
-    print(f"! Sites exported to {output_file}")
-
-def export_device_inventory_to_csv():
-    """
-    Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
-    Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
-    """
-    logging.info("Starting export of organization device inventory...")
-    fetch_and_display_api_data(
-        title="Org Inventory:",
-        api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
-        filename="OrgInventory.csv",
-        sort_key="model",
-        limit=1000
-    )
-    logging.info("Completed export_device_inventory_to_csv and wrote results to OrgInventory.csv.")
-
-def export_device_stats_to_csv(fast: bool = False):
-    """Export statistics for all devices in the organization to `OrgDeviceStats.csv`.
-
-    Fast Mode Behavior:
-        - If `fast` is True and a fresh CSV (mtime < CSV_FRESHNESS_MINUTES) exists, skip API call (cache hit).
-        - Falls back to normal fetch otherwise (no change to data semantics).
-    SECURITY: Read-only operation; safe to cache.
-    """
-    output_file = "OrgDeviceStats.csv"
-    if fast and os.path.exists(output_file):
-        try:
-            mtime = os.path.getmtime(output_file)
-            age_minutes = (time.time() - mtime) / 60.0
-            if age_minutes < CSV_FRESHNESS_MINUTES:
-                logging.info(f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch.")
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                return
-        except Exception as e:  # pragma: no cover - defensive
-            logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
-    logging.info("Starting export of organization device statistics...")
-    hours = get_dynamic_lookback_hours(24, 1)
-    log_dynamic_lookback("org device statistics export", hours)
-    fetch_and_display_api_data(
-        title="Org Device Stats:",
-        api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
-        filename=output_file,
-        sort_key="type",
-        type="all",
-        duration=f"{hours}h",
-        limit=1000
-    )
-
 def export_device_port_stats_to_csv(fast: bool = False):
     """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
 
@@ -13907,7 +13886,7 @@ def export_device_port_stats_to_csv(fast: bool = False):
         
         # Get all sites (use cached CSV if available)
         try:
-            check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
             site_list_path = get_csv_file_path("SiteList.csv")
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -16788,17 +16767,17 @@ def continuous_data_collection_loop():
             try:
                 # 1. Site list
                 print("  Collecting site list...")
-                export_all_sites_to_csv()
+                OrgExportUtils.sites()
                 time.sleep(0.75)  # Rate limiting
                 
                 # 2. Organization inventory
                 print("  Collecting organization inventory...")
-                export_device_inventory_to_csv()
+                OrgExportUtils.inventory()
                 time.sleep(0.75)
                 
                 # 3. Organization device stats
                 print("  Collecting organization device stats...")
-                export_device_stats_to_csv()
+                OrgExportUtils.device_stats()
                 time.sleep(0.75)
                 
                 # 4. Organization device port stats
@@ -17230,8 +17209,8 @@ def get_gateway_devices_with_sites(apisession, org_id, fast=False):
         # Use cached data approach
         try:
             # Ensure required CSV files exist using caching
-            check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
-            check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
             
             # Load inventory from cached CSV
             gateway_devices = []
@@ -17334,7 +17313,7 @@ def export_gateway_test_results_by_site_to_csv(fast: bool = False):
     if fast:
         try:
             # Ensure cached CSVs present
-            check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
             inventory_path = get_csv_file_path("OrgInventory.csv")
             with open(inventory_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -17828,8 +17807,8 @@ def export_devices_with_site_info_to_csv(fast=False):
     # Ensure required CSV files are available, using caching where possible
     if fast:
         # Use cached data when fast mode is enabled
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
-        check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
         
         # Load from cached CSV files instead of making API calls
         site_lookup = {}
@@ -17950,11 +17929,11 @@ def generate_support_package():
 
     # List of required CSV files and their generation functions
     required_files = [
-        ("OrgAlarms.csv", export_open_org_alarms_to_csv),
-        ("OrgDeviceEvents.csv", export_recent_device_events_to_csv),
-        ("SiteList.csv", export_all_sites_to_csv),
+        ("OrgAlarms.csv", OrgExportUtils.alarms),
+        ("OrgDeviceEvents.csv", OrgExportUtils.device_events),
+        ("SiteList.csv", OrgExportUtils.sites),
         ("OrgDevices.csv", export_all_devices_to_csv),
-        ("OrgDeviceStats.csv", export_device_stats_to_csv),
+        ("OrgDeviceStats.csv", OrgExportUtils.device_stats),
         ("OrgDevicePortStats.csv", export_device_port_stats_to_csv),
         ("AllGatewayTestResults.csv", export_gateway_test_results_by_site_to_csv),
     ]
@@ -17965,7 +17944,7 @@ def generate_support_package():
         check_and_generate_csv(filename, func)  # freshness_minutes now comes from .env
 
     # Ensure SiteList.csv is generated before loading
-    check_and_generate_csv('SiteList.csv', export_all_sites_to_csv)
+    check_and_generate_csv('SiteList.csv', OrgExportUtils.sites)
 
     # Load the pulled data into dictionaries
     logging.debug("Loading CSV data into dictionaries for support package assembly...")
@@ -18856,7 +18835,7 @@ def export_switch_vc_stats_to_csv():
     logging.info("Exporting all switch virtual chassis stats...")
 
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
 
     # Load OrgInventory.csv and filter for switches that are virtual chassis (`vc_mac` present and not empty)
     inventory_path = get_csv_file_path("OrgInventory.csv")
@@ -19275,9 +19254,9 @@ def loop_refresh_core_datasets(delay=None, debug=False):
                 logging.info(" Stop signal detected (stop_loop.txt). Exiting loop.")
                 break
 
-            export_all_sites_to_csv()
-            export_device_inventory_to_csv()
-            export_device_stats_to_csv()
+            OrgExportUtils.sites()
+            OrgExportUtils.inventory()
+            OrgExportUtils.device_stats()
             export_device_port_stats_to_csv()
             export_vpn_peer_stats_to_csv()
             logging.info(" All datasets refreshed.")
@@ -19471,7 +19450,7 @@ def export_gateway_management_ips_to_csv(fast=False):
     
     # Ensure required CSVs are fresh by calling existing functions
     print("  1. Ensuring site list with template mappings is current...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     print("  2. Ensuring gateway templates are current...")
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
@@ -22694,7 +22673,7 @@ def export_gateways_with_wan_overrides_to_csv(fast=False):
 
     # Ensure required CSVs are fresh
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=fast))
-    check_and_generate_csv("SiteList_ListAPI.csv", export_all_sites_list_to_csv)
+    check_and_generate_csv("SiteList_ListAPI.csv", OrgExportUtils.sites_list_api)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
 
     # Load data
@@ -23029,7 +23008,7 @@ def set_wan2_interface_site_variable():
     
     # Step 1: Ensure required CSVs are fresh
     print("\n  Preparing site and gateway configuration data...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     check_and_generate_csv("AllSiteGatewayConfigs.csv", export_gateway_device_configs_to_csv)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
@@ -23543,7 +23522,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     # Step 1: Ensure required data is fresh
     print("\n  Loading gateway template data...")
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     # Load templates
     templates_path = get_csv_file_path("OrgGatewayTemplates.csv")
@@ -24223,7 +24202,7 @@ def convert_virtual_chassis_to_virtual_mac():
     print(f"\n  Selected Site: {site_name} ({site_id})")
     
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
 
     # Load OrgInventory.csv and filter for switches at the selected site with a non-empty id 
     inventory_path = get_csv_file_path("OrgInventory.csv")
@@ -24357,8 +24336,8 @@ def convert_virtual_chassis_by_site_list():
         print(f"  [{idx+1}] {site_name}")
 
     # Ensure required CSVs are fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
 
     # Load site list to get site IDs
     site_name_to_id = {}
@@ -24508,7 +24487,7 @@ def check_virtual_chassis_conversion_status():
     logging.info("Starting virtual chassis conversion status check...")
     
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", export_device_inventory_to_csv)
+    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
     
     # Load inventory and filter for switches with vc_mac (virtual chassis switches)
     switches_with_vc_mac = []
@@ -24535,7 +24514,7 @@ def check_virtual_chassis_conversion_status():
     # Load site information for display
     site_id_to_name = {}
     try:
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         site_list_path = get_csv_file_path("SiteList.csv")
         with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -24639,7 +24618,7 @@ def export_site_wifi_clients_to_csv(site_id=None):
     logging.info("Starting export of site WiFi clients...")
     
     # Ensure required CSVs are fresh
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     # Get site_id if not provided
     if not site_id:
@@ -24808,7 +24787,7 @@ def reboot_devices_by_gateway_template_list():
 
     # Step 2: Ensure required CSVs are fresh
     check_and_generate_csv("OrgDevices.csv", export_all_devices_to_csv)
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: export_gateway_device_configs_to_csv(fast=True))
 
@@ -33011,7 +32990,7 @@ class FirmwareManager:
         # Step 1: Ensure required CSVs are fresh
         print("\n  Preparing template and site data...")
         check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         # Step 2: Load gateway templates and build template-to-sites mapping
         template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
@@ -33065,7 +33044,7 @@ class FirmwareManager:
         
         # Generate required CSV files using existing export functions
         check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         logging.debug("Template CSV files ensured fresh")
     
@@ -42850,7 +42829,7 @@ def clone_gateway_templates_by_state_and_country():
     
     # Step 1: Load site data with state and country information
     print("\n  Step 1: Loading site data...")
-    check_and_generate_csv("SiteList.csv", export_all_sites_to_csv)
+    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     sites_path = get_csv_file_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
@@ -43296,9 +43275,9 @@ menu_actions = {
     # ==============================
     
     # > Setup & Core Logs
-    "1": (export_open_org_alarms_to_csv, "Export all organization alarms from the past day"),
-    "2": (export_recent_device_events_to_csv, "Export all device events from the past 24 hours"),
-    "3": (lambda: export_audit_logs_to_csv(full_history=False), "Export audit logs for the organization (last 24 hours)"),
+    "1": (OrgExportUtils.alarms, "Export all organization alarms from the past day"),
+    "2": (OrgExportUtils.device_events, "Export all device events from the past 24 hours"),
+    "3": (lambda: OrgExportUtils.audit_logs(full_history=False), "Export audit logs for the organization (last 24 hours)"),
     "4": (lambda fast=False: export_gateway_management_ips_to_csv(fast=fast), "Export gateway management overlay IPs grouped by template association"),
     
     # > WebSocket Device Commands
@@ -43312,9 +43291,9 @@ menu_actions = {
     "10": (lambda: PacketCaptureManager(apisession, get_cached_or_prompted_org_id()).start_org_packet_capture(), "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only"),
 
     # Organization-Level Exports
-    "11": (export_all_sites_to_csv, "Export a list of all sites in the organization"),
-    "12": (export_device_inventory_to_csv, "Export the full inventory of devices in the organization"),
-    "13": (export_device_stats_to_csv, "Export statistics for all devices in the organization"),
+    "11": (OrgExportUtils.sites, "Export a list of all sites in the organization"),
+    "12": (OrgExportUtils.inventory, "Export the full inventory of devices in the organization"),
+    "13": (OrgExportUtils.device_stats, "Export statistics for all devices in the organization"),
     "14": (export_device_port_stats_to_csv, "Export port-level statistics for switches and gateways"),
     "15": (export_vpn_peer_stats_to_csv, "Export VPN peer path statistics for the organization"),
 
@@ -43333,7 +43312,7 @@ menu_actions = {
     "24": (export_switch_vc_stats_to_csv, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
     "25": (export_combined_inventory_with_site_info, "Export combined inventory with site and address info by calendar week"),
     "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
-    "27": (export_all_sites_list_to_csv, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
+    "27": (OrgExportUtils.sites_list_api, "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"),
     "28": (lambda fast=False: export_gateways_with_wan_overrides_to_csv(fast=fast), "Find gateway ports overridden from template (outliers for compliance correction)"),
     
     # Site-Specific Data Exports
@@ -43395,8 +43374,8 @@ menu_actions = {
     "62": (poll_marvis_actions, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
     # Work In Progress Features (Read-Only)
-    "63": (export_all_org_device_events_52w_to_csv, "WIP Export all org device events from the last 52 weeks"),
-    "64": (lambda: export_audit_logs_to_csv(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
+    "63": (OrgExportUtils.device_events_52w, "WIP Export all org device events from the last 52 weeks"),
+    "64": (lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
     "65": (export_gateway_device_configs_to_csv, "WIP Export configuration details for all gateway devices across all sites"),
     
     
@@ -46597,7 +46576,7 @@ def main():
             "compare_inventory_with_csv",
             "export_gateways_with_wan_overrides_to_csv",
             # Newly added fast-capable stats exporters:
-            "export_device_stats_to_csv",
+            "OrgExportUtils.device_stats",
             "export_device_port_stats_to_csv",
             "export_vpn_peer_stats_to_csv",
         ]
@@ -46958,6 +46937,14 @@ if __name__ == "__main__":
     finally:
         logging.info("=== MistHelper application ending ===")
 #hi
+
+
+
+
+
+
+
+
 
 
 
