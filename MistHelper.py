@@ -7632,18 +7632,6 @@ class DataExporter:
             return 0
 
 
-def save_data_to_output(data: List[Dict[str, Any]], filename: str, api_function_name: Optional[str] = None) -> bool:
-    """
-    Wrapper function to replace write_dict_list_to_csv calls.
-    Routes to appropriate output format based on global OUTPUT_FORMAT setting.
-    
-    Args:
-        data (list): List of dictionaries containing the data to write
-        filename (str): CSV filename or database table name
-        api_function_name (str, optional): Name of the API function for SQLite strategy selection
-    """
-    return DataExporter.save_data_to_output(data, filename, api_function_name)
-
 def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display_fields=None, **kwargs):
     """
     Fetches data using the provided API call, processes it (flattening, sorting, escaping),
