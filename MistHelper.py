@@ -9206,6 +9206,42 @@ class DeviceUtils:
                 expanded_ports.append(port_part)
         
         return expanded_ports
+    
+    @staticmethod
+    def get_device_identifier(device: Dict[str, Any], warn_on_missing: bool = False) -> str:
+        """
+        Get the best available identifier for a device with fallback logic.
+        
+        Args:
+            device: Device record dictionary
+            warn_on_missing: Whether to log a warning on first missing name
+            
+        Returns:
+            str: Device identifier (name, serial, or device_id)
+        """
+        # Try name first
+        name = device.get("name", "").strip()
+        if name:
+            return name
+        
+        # Fall back to serial
+        serial = device.get("serial", "").strip()
+        if serial:
+            if warn_on_missing:
+                logging.warning(f"Device {serial} missing name field, using serial as identifier")
+            return serial
+        
+        # Fall back to device_id
+        device_id = device.get("id", "").strip()
+        if device_id:
+            if warn_on_missing:
+                logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
+            return device_id
+        
+        # Last resort
+        if warn_on_missing:
+            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
+        return "UNKNOWN"
 
 
 # Backward compatibility wrappers - will be removed in future version
@@ -9217,6 +9253,8 @@ def get_all_ap_macs_from_site(site_id: str) -> List[str]:
 def _expand_port_range_string(port_range_string: str) -> List[str]:
     """Legacy function - use DeviceUtils.expand_port_range_string() instead."""
     return DeviceUtils.expand_port_range_string(port_range_string)
+
+
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
@@ -22072,40 +22110,12 @@ def create_address_parse_failures_csv(parse_failures, filename="AddressParseFail
         logging.error(f"Failed to create address parse failures CSV: {e}")
         print(f"! Failed to create address parse failures CSV: {e}")
 
-def get_device_identifier(device, warn_on_missing=False):
-    """
-    Get the best available identifier for a device with fallback logic.
-    
-    Args:
-        device (dict): Device record
-        warn_on_missing (bool): Whether to log a warning on first missing name
-        
-    Returns:
-        str: Device identifier (name, serial, or device_id)
-    """
-    # Try name first
-    name = device.get("name", "").strip()
-    if name:
-        return name
-    
-    # Fall back to serial
-    serial = device.get("serial", "").strip()
-    if serial:
-        if warn_on_missing:
-            logging.warning(f"Device {serial} missing name field, using serial as identifier")
-        return serial
-    
-    # Fall back to device_id
-    device_id = device.get("id", "").strip()
-    if device_id:
-        if warn_on_missing:
-            logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
-        return device_id
-    
-    # Last resort
-    if warn_on_missing:
-        logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
-    return "UNKNOWN"
+
+# Backward compatibility wrapper - will be removed in future version
+def get_device_identifier(device: Dict[str, Any], warn_on_missing: bool = False) -> str:
+    """Legacy function - use DeviceUtils.get_device_identifier() instead."""
+    return DeviceUtils.get_device_identifier(device, warn_on_missing)
+
 
 def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=True):
     """
