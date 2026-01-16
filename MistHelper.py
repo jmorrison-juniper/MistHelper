@@ -1825,16 +1825,6 @@ class TimeUtils:
             logging.debug(f"Using standard lookback window of {hours}h for {context}")
 
 
-# Backward compatibility wrappers - will be removed in future version
-def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
-    """Legacy function - use TimeUtils.get_dynamic_lookback_hours() instead."""
-    return TimeUtils.get_dynamic_lookback_hours(default_hours, test_hours)
-
-
-def log_dynamic_lookback(context: str, hours: int) -> None:
-    """Legacy function - use TimeUtils.log_dynamic_lookback() instead."""
-    TimeUtils.log_dynamic_lookback(context, hours)
-
 # ============================================================================
 # IMPORT STATUS AND INPUT UTILITIES CLASS
 # ============================================================================
@@ -1919,16 +1909,6 @@ class InputUtils:
             logging.info(f"KeyboardInterrupt encountered during {context}")
             return None
 
-
-# Backward compatibility wrappers - will be removed in future version
-def ensure_tqdm_available() -> bool:
-    """Legacy function - use InputUtils.ensure_tqdm_available() instead."""
-    return InputUtils.ensure_tqdm_available()
-
-
-def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> Optional[str]:
-    """Legacy function - use InputUtils.safe_input() instead."""
-    return InputUtils.safe_input(prompt, default_value, allow_empty, context)
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -2440,7 +2420,7 @@ class CacheUtils:
         Returns:
             bool: True if file exists and is fresh or was generated successfully
         """
-        logging.debug(f"ENTRY: check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})")
+        logging.debug(f"ENTRY: CacheUtils.check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})")
         
         if freshness_minutes is None:
             freshness_minutes = CSV_FRESHNESS_MINUTES
@@ -2587,12 +2567,6 @@ class CacheUtils:
             print(f"! Failed to create address parse failures CSV: {e}")
 
 
-# Backward compatibility wrapper - will be removed in future version
-def check_and_generate_csv(file_name: str, generate_function: Callable, freshness_minutes: Optional[int] = None) -> bool:
-    """Legacy function - use CacheUtils.check_and_generate_csv() instead."""
-    return CacheUtils.check_and_generate_csv(file_name, generate_function, freshness_minutes)
-
-
 # ============================================================================
 # DISPLAY UTILITIES CLASS
 # ============================================================================
@@ -2667,11 +2641,6 @@ class DisplayUtils:
         return f"[{bar}] {progress_percentage:3d}%"
 
 
-# Backward compatibility wrapper - will be removed in future version
-def display_dict_list_as_pretty_table(data: List[Dict[str, Any]], fields: Optional[List[str]] = None, sortby: Optional[str] = None) -> None:
-    """Legacy function - use DisplayUtils.dict_list_as_pretty_table() instead."""
-    DisplayUtils.dict_list_as_pretty_table(data, fields, sortby)
-
 def interactive_fetch_device_data_to_csv(
     fetch_function=None,
     filename=None,
@@ -2729,7 +2698,7 @@ def interactive_fetch_device_data_to_csv(
     DataExporter.save_data_to_output(stats, filename)
 
     # Display the data in a table
-    display_dict_list_as_pretty_table(stats)
+    DisplayUtils.dict_list_as_pretty_table(stats)
 
 
 # ============================================================================
@@ -3531,7 +3500,7 @@ class PacketCaptureManager:
             org_id (str, optional): Organization ID for operations
         """
         self.mist_session = mist_session
-        self.org_id = org_id or get_cached_or_prompted_org_id()
+        self.org_id = org_id or ConfigUtils.get_cached_or_prompted_org_id()
         self.websocket_manager = None
         logging.debug(f"PacketCaptureManager initialized for org_id: {self.org_id}")
     
@@ -3638,7 +3607,7 @@ class PacketCaptureManager:
         
         print("=" * 80)
         
-        choice = safe_input("\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter")
+        choice = InputUtils.safe_input("\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter")
         
         expressions = {
             # Basic filters
@@ -3705,7 +3674,7 @@ class PacketCaptureManager:
         elif choice == "40":
             print("\nEnter custom tcpdump expression:")
             print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")
-            custom_expr = safe_input("Expression: ", context="tcpdump_custom", allow_empty=True)
+            custom_expr = InputUtils.safe_input("Expression: ", context="tcpdump_custom", allow_empty=True)
             if custom_expr:
                 print(f"\n! Filter applied: {custom_expr}")
                 return custom_expr
@@ -3730,7 +3699,7 @@ class PacketCaptureManager:
         print("\nCapture format:")
         print("  1. PCAP file - downloadable (default, recommended)")
         print("  2. Stream to Mist Cloud (WebSocket real-time)")
-        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
+        format_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="format")
         return "pcap" if format_choice == "1" else "stream"
     
     def start_site_packet_capture(self):
@@ -3754,7 +3723,7 @@ class PacketCaptureManager:
         print("  0. Cancel")
         print("=" * 80)
         
-        choice = safe_input("\nEnter your choice: ", context="site_capture_menu")
+        choice = InputUtils.safe_input("\nEnter your choice: ", context="site_capture_menu")
         
         if choice == "1":
             self._start_site_client_capture_wireless()
@@ -3795,7 +3764,7 @@ class PacketCaptureManager:
         print("\nClient selection:")
         print("  1. Select from connected clients")
         print("  2. Manually enter MAC address")
-        client_choice = safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
+        client_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
         
         client_mac = None
         if client_choice == "1":
@@ -3804,7 +3773,7 @@ class PacketCaptureManager:
                 print("\n! No client selected")
                 return
         else:
-            client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+            client_mac = InputUtils.safe_input("\nEnter client MAC address: ", context="client_mac")
         
         if not self.validate_mac_address(client_mac):
             print(f"\n! Invalid MAC address format: {client_mac}")
@@ -3816,7 +3785,7 @@ class PacketCaptureManager:
         print("  1. Select AP from list")
         print("  2. Enter MAC manually")
         print("  3. Skip (capture from any AP)")
-        ap_choice = safe_input("Enter choice (default 3): ", default_value="3", context="ap_filter")
+        ap_choice = InputUtils.safe_input("Enter choice (default 3): ", default_value="3", context="ap_filter")
         
         ap_mac = None
         if ap_choice == "1":
@@ -3824,14 +3793,14 @@ class PacketCaptureManager:
             if ap_mac:
                 ap_mac = self.normalize_mac_address(ap_mac)
         elif ap_choice == "2":
-            ap_mac = safe_input("Enter AP MAC address: ", context="ap_mac")
+            ap_mac = InputUtils.safe_input("Enter AP MAC address: ", context="ap_mac")
             if not self.validate_mac_address(ap_mac):
                 print(f"\n! Invalid AP MAC address format: {ap_mac}")
                 return
             ap_mac = self.normalize_mac_address(ap_mac)
         
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -3844,7 +3813,7 @@ class PacketCaptureManager:
             return
         
         # Number of packets
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -3856,7 +3825,7 @@ class PacketCaptureManager:
             return
         
         # Max packet length
-        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 1300, max 2048): ", 
+        max_pkt_len_str = InputUtils.safe_input("Enter max packet length in bytes (default 1300, max 2048): ", 
                                     default_value="1300", context="max_pkt_len")
         try:
             max_pkt_len = int(max_pkt_len_str)
@@ -3868,7 +3837,7 @@ class PacketCaptureManager:
             return
         
         # Multicast option
-        includes_mcast_input = safe_input("Include multicast traffic? (y/n, default n): ", 
+        includes_mcast_input = InputUtils.safe_input("Include multicast traffic? (y/n, default n): ", 
                                          default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == 'y'
         
@@ -3882,7 +3851,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -3925,7 +3894,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         # Start capture via API
         if enable_loop:
@@ -3950,7 +3919,7 @@ class PacketCaptureManager:
         print("\nClient selection:")
         print("  1. Select from connected clients")
         print("  2. Manually enter MAC address")
-        client_choice = safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
+        client_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
         
         client_mac = None
         if client_choice == "1":
@@ -3959,7 +3928,7 @@ class PacketCaptureManager:
                 print("\n! No client selected")
                 return
         else:
-            client_mac = safe_input("\nEnter client MAC address: ", context="client_mac")
+            client_mac = InputUtils.safe_input("\nEnter client MAC address: ", context="client_mac")
         
         if not self.validate_mac_address(client_mac):
             print(f"\n! Invalid MAC address format: {client_mac}")
@@ -3967,7 +3936,7 @@ class PacketCaptureManager:
         client_mac = self.normalize_mac_address(client_mac)
         
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -3979,7 +3948,7 @@ class PacketCaptureManager:
             print(f"\n! Invalid duration: {duration_str}")
             return
         
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -3991,7 +3960,7 @@ class PacketCaptureManager:
             return
         
         # Multicast option
-        includes_mcast_input = safe_input("Include multicast traffic? (y/n, default n): ", 
+        includes_mcast_input = InputUtils.safe_input("Include multicast traffic? (y/n, default n): ", 
                                          default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == 'y'
         
@@ -4005,7 +3974,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -4040,7 +4009,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -4092,7 +4061,7 @@ class PacketCaptureManager:
             logging.debug(f"User selected specific ports: {port_list}")
         
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -4104,7 +4073,7 @@ class PacketCaptureManager:
             print(f"\n! Invalid duration: {duration_str}")
             return
         
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -4125,7 +4094,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -4170,7 +4139,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -4222,7 +4191,7 @@ class PacketCaptureManager:
             logging.debug(f"User selected specific ports: {port_list}")
         
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -4234,7 +4203,7 @@ class PacketCaptureManager:
             print(f"\n! Invalid duration: {duration_str}")
             return
         
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -4255,7 +4224,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -4300,7 +4269,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -4322,11 +4291,11 @@ class PacketCaptureManager:
         print("Note: To capture ongoing traffic from already-connected clients, use Client Capture (Wireless) instead.")
         
         # Optional SSID filter
-        ssid = safe_input("\nEnter SSID to monitor (optional, press Enter for all): ", 
+        ssid = InputUtils.safe_input("\nEnter SSID to monitor (optional, press Enter for all): ", 
                          context="ssid", allow_empty=True)
         
         # Duration (Mist API enforces minimum 60 seconds for new_assoc captures)
-        duration_str = safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -4345,7 +4314,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -4373,7 +4342,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -4418,7 +4387,7 @@ class PacketCaptureManager:
         print("  1. 2.4 GHz")
         print("  2. 5 GHz (default)")
         print("  3. 6 GHz")
-        band_choice = safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
+        band_choice = InputUtils.safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
         
         # Support both menu numbers (1,2,3) and actual band values (24, 5, 6)
         band_map = {
@@ -4431,12 +4400,12 @@ class PacketCaptureManager:
         # Channel
         logging.debug("Prompting for channel")
         if band == "24":
-            channel_str = safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
+            channel_str = InputUtils.safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
         elif band == "5":
-            channel_str = safe_input("Enter channel (36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, default 36): ", 
+            channel_str = InputUtils.safe_input("Enter channel (36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, default 36): ", 
                                     default_value="36", context="channel")
         else:  # band == "6"
-            channel_str = safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
+            channel_str = InputUtils.safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
         
         try:
             channel = int(channel_str)
@@ -4455,7 +4424,7 @@ class PacketCaptureManager:
             print("  3. 80 MHz")
         if band == "6":
             print("  4. 160 MHz")
-        bw_choice = safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
+        bw_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
         bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
         bandwidth = bw_map.get(bw_choice, "20")
         logging.debug(f"Bandwidth selected: {bandwidth} MHz (choice: {bw_choice})")
@@ -4468,7 +4437,7 @@ class PacketCaptureManager:
         
         # Duration
         logging.debug("Prompting for duration")
-        duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -4484,7 +4453,7 @@ class PacketCaptureManager:
         
         # Number of packets
         logging.debug("Prompting for packet count")
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -4505,7 +4474,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = safe_input("Enable continuous loop mode? (y/n, default n): ", 
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", 
                               default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == 'y'
         
@@ -4540,7 +4509,7 @@ class PacketCaptureManager:
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         logging.debug("Waiting for user confirmation")
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         # Check for existing captures on this AP
         print(f"\n> Checking for existing captures on AP {ap_mac}...")
@@ -4562,7 +4531,7 @@ class PacketCaptureManager:
                     print(f"  Mist only allows one capture per AP at a time")
                     print(f"  The new capture may fail with 'Recording already in progress'")
                     
-                    proceed = safe_input("\nContinue anyway? (y/n, default n): ", 
+                    proceed = InputUtils.safe_input("\nContinue anyway? (y/n, default n): ", 
                                        default_value="n", context="capture_conflict_confirmation").lower()
                     if proceed != 'y':
                         print("\n* Capture cancelled by user")
@@ -4588,7 +4557,7 @@ class PacketCaptureManager:
         logging.info(f"Starting multi-AP scan capture for site: {site_id}")
         
         # Get all AP MACs from site
-        ap_macs = get_all_ap_macs_from_site(site_id)
+        ap_macs = DeviceUtils.get_all_ap_macs_from_site(site_id)
         if not ap_macs:
             print("\n! No APs found at site")
             return
@@ -4623,18 +4592,18 @@ class PacketCaptureManager:
         print("  1. 2.4 GHz")
         print("  2. 5 GHz (default)")
         print("  3. 6 GHz")
-        band_choice = safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
+        band_choice = InputUtils.safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
         
         band_map = {"1": "24", "2": "5", "3": "6", "24": "24", "5": "5", "6": "6"}
         band = band_map.get(band_choice, "5")
         
         # Channel
         if band == "24":
-            channel_str = safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
+            channel_str = InputUtils.safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
         elif band == "5":
-            channel_str = safe_input("Enter channel (36-144, default 36): ", default_value="36", context="channel")
+            channel_str = InputUtils.safe_input("Enter channel (36-144, default 36): ", default_value="36", context="channel")
         else:  # band == "6"
-            channel_str = safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
+            channel_str = InputUtils.safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
         
         try:
             channel = int(channel_str)
@@ -4650,12 +4619,12 @@ class PacketCaptureManager:
             print("  3. 80 MHz")
         if band == "6":
             print("  4. 160 MHz")
-        bw_choice = safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
+        bw_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
         bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
         bandwidth = bw_map.get(bw_choice, "20")
         
         # Duration
-        duration_str = safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, min 60, max 86400): ", 
                                  default_value="60", context="duration")
         try:
             duration = int(duration_str)
@@ -4667,7 +4636,7 @@ class PacketCaptureManager:
             return
         
         # Number of packets
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -4695,7 +4664,7 @@ class PacketCaptureManager:
         print(f"  Format: {capture_format}")
         print("=" * 80)
         
-        confirmation = safe_input(f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ", 
+        confirmation = InputUtils.safe_input(f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ", 
                                  context="confirmation", allow_empty=True)
         
         # Build single payload with aps dictionary for all APs
@@ -5258,7 +5227,7 @@ class PacketCaptureManager:
         print()
         print("  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures")
         try:
-            selection_input = safe_input(
+            selection_input = InputUtils.safe_input(
                 f"Select MxEdge index [0-{len(mxedges)-1}]: ",
                 context="mxedge_selection"
             ).strip()
@@ -5363,7 +5332,7 @@ class PacketCaptureManager:
                 continue
             
             try:
-                port_input = safe_input(
+                port_input = InputUtils.safe_input(
                     f"\n  {mxedge_name} - Select a single port index [0-{len(port_list)-1}]: ",
                     context=f"port_selection_{mxedge_id}"
                 ).strip()
@@ -5397,7 +5366,7 @@ class PacketCaptureManager:
         tcpdump_expr = self._get_tcpdump_expression_selection()
         
         # Duration
-        duration_str = safe_input("\nEnter capture duration in seconds (default 30, max 86400): ", 
+        duration_str = InputUtils.safe_input("\nEnter capture duration in seconds (default 30, max 86400): ", 
                                  default_value="30", context="duration")
         try:
             duration = int(duration_str)
@@ -5409,7 +5378,7 @@ class PacketCaptureManager:
             return
         
         # Number of packets
-        num_packets_str = safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000, 0 for unlimited): ", 
                                     default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
@@ -5421,7 +5390,7 @@ class PacketCaptureManager:
             return
         
         # Max packet length
-        max_pkt_len_str = safe_input("Enter max packet length in bytes (default 128, max 2048): ", 
+        max_pkt_len_str = InputUtils.safe_input("Enter max packet length in bytes (default 128, max 2048): ", 
                                     default_value="128", context="max_pkt_len")
         try:
             max_pkt_len = int(max_pkt_len_str)
@@ -5436,16 +5405,16 @@ class PacketCaptureManager:
         print("\nCapture format:")
         print("  1. Stream to Mist Cloud (default)")
         print("  2. TZSP stream to remote host (Wireshark)")
-        format_choice = safe_input("Enter choice (default 1): ", default_value="1", context="format")
+        format_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="format")
         
         if format_choice == "2":
             # TZSP configuration
-            tzsp_host = safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
+            tzsp_host = InputUtils.safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
             if not tzsp_host:
                 print("\n! TZSP host required")
                 return
             
-            tzsp_port_str = safe_input("Enter TZSP port (default 37008): ", 
+            tzsp_port_str = InputUtils.safe_input("Enter TZSP port (default 37008): ", 
                                       default_value="37008", context="tzsp_port")
             try:
                 tzsp_port = int(tzsp_port_str)
@@ -5517,7 +5486,7 @@ class PacketCaptureManager:
         print("=" * 80)
         
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
         
         # Execute org capture
         self._execute_org_capture(payload)
@@ -6388,12 +6357,6 @@ class EnvironmentUtils:
         return is_debug_mode()
 
 
-# Backward compatibility wrapper - will be removed in future version
-def is_running_in_container() -> bool:
-    """Legacy function - use EnvironmentUtils.is_running_in_container() instead."""
-    return EnvironmentUtils.is_running_in_container()
-
-
 # ============================================================================
 # VALIDATION UTILITIES CLASS
 # ============================================================================
@@ -6537,12 +6500,6 @@ class ConfigUtils:
         return org_id
 
 
-# Backward compatibility wrapper - will be removed in future version
-def get_cached_or_prompted_org_id() -> str:
-    """Legacy function - use ConfigUtils.get_cached_or_prompted_org_id() instead."""
-    return ConfigUtils.get_cached_or_prompted_org_id()
-
-
 # ============================================================================
 # API FETCH UTILITIES CLASS
 # ============================================================================
@@ -6590,7 +6547,7 @@ class APIFetchUtils:
         SECURITY: Read-only operation fetching configuration data only.
         """
         try:
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             logging.info(f"Fetching organization services for org_id: {org_id}")
             
             # Call the Mist API to get organization services
@@ -6635,7 +6592,7 @@ class APIFetchUtils:
         SECURITY: Read-only operation fetching configuration data only.
         """
         try:
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             logging.info(f"Fetching organization networks for tenant information from org_id: {org_id}")
             
             # Call the Mist API to get organization networks which contain tenant definitions
@@ -6749,7 +6706,7 @@ class APIFetchUtils:
             tenant_names = set()  # Use set to avoid duplicates
             
             # Fetch organization service policies
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             logging.info(f"Fetching organization service policies for tenant information from org_id: {org_id}")
             
             try:
@@ -6855,7 +6812,7 @@ class APIFetchUtils:
             tenant_names = set()  # Use set to avoid duplicates
             
             # Fetch organization gateway templates
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             logging.info(f"Fetching organization gateway templates for tenant information from org_id: {org_id}")
             
             try:
@@ -7992,7 +7949,7 @@ def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display
     
     logging.info(f"Starting data fetch: {title}")
     print(title)
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
     smoothed = None
 
@@ -8367,7 +8324,7 @@ class PromptUtils:
             str: The selected site ID or None if no selection made
         """
         # Ensure the site list CSV is fresh or generate it if missing/stale
-        check_and_generate_csv(csv_file, OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv(csv_file, OrgExportUtils.sites)
 
         # Get the full path to the CSV file in the data directory
         csv_file_path = FilePathUtils.get_csv_path(csv_file)
@@ -8499,7 +8456,7 @@ class PromptUtils:
             print("\nSpecial options:")
             print("  'all' - Select all APs (launches simultaneous captures)")
             
-            user_input = safe_input("\nEnter the index number of the AP or 'all': ", context="ap_selection").strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the AP or 'all': ", context="ap_selection").strip()
             logging.debug(f"User input for AP selection: {user_input}")
             
             # Check for 'all' option
@@ -8616,12 +8573,12 @@ class PromptUtils:
             print("  - Enter 'm' to manually type MAC address")
             print("  - Enter 'c' to cancel")
             
-            user_input = safe_input("\nEnter your choice: ", context="client_selection").strip()
+            user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
             logging.debug(f"User input for client selection: {user_input}")
             
             # Check for manual entry
             if user_input.lower() == 'm':
-                manual_mac = safe_input("Enter client MAC address: ", context="manual_mac")
+                manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
                 logging.info(f"User chose manual MAC entry: {manual_mac}")
                 return manual_mac
             
@@ -8700,7 +8657,7 @@ class PromptUtils:
             print("=" * 80)
             print(table)
             
-            user_input = safe_input("\nEnter the index number of the gateway: ", context="gateway_selection").strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the gateway: ", context="gateway_selection").strip()
             logging.debug(f"User input for gateway selection: {user_input}")
             
             # Validate index selection
@@ -8772,7 +8729,7 @@ class PromptUtils:
             print("=" * 80)
             print(table)
             
-            user_input = safe_input("\nEnter the index number of the switch: ", context="switch_selection").strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the switch: ", context="switch_selection").strip()
             logging.debug(f"User input for switch selection: {user_input}")
             
             # Validate index selection
@@ -8908,7 +8865,7 @@ class PromptUtils:
             if port_config:
                 logging.info(f"Building port_to_config mapping from {len(port_config)} port_config entries")
                 for port_range_key, cfg in port_config.items():
-                    expanded_ports = _expand_port_range_string(port_range_key)
+                    expanded_ports = DeviceUtils.expand_port_range_string(port_range_key)
                     logging.debug(f"Port config key '{port_range_key}' expands to {len(expanded_ports)} ports")
                     for individual_port in expanded_ports:
                         port_to_config[individual_port] = cfg
@@ -8925,7 +8882,7 @@ class PromptUtils:
                         logging.info(f"Found {len(port_config)} configured port entries in device config")
                         port_stat = {}
                         for port_range_key, port_cfg in port_config.items():
-                            expanded_ports = _expand_port_range_string(port_range_key)
+                            expanded_ports = DeviceUtils.expand_port_range_string(port_range_key)
                             logging.debug(f"Expanded port range '{port_range_key}' to {len(expanded_ports)} ports")
                             
                             for individual_port in expanded_ports:
@@ -9065,7 +9022,7 @@ class PromptUtils:
                 print("  - Press Enter with no input to capture on ALL ports (NOT AVAILABLE - exceeds 6 port limit)")
             print("  - Enter 'c' to cancel")
             
-            user_input = safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
+            user_input = InputUtils.safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
             logging.debug(f"User input for port selection: {user_input}")
             
             if user_input.lower() == 'c':
@@ -9353,17 +9310,6 @@ class DeviceUtils:
         return "UNKNOWN"
 
 
-# Backward compatibility wrappers - will be removed in future version
-def get_all_ap_macs_from_site(site_id: str) -> List[str]:
-    """Legacy function - use DeviceUtils.get_all_ap_macs_from_site() instead."""
-    return DeviceUtils.get_all_ap_macs_from_site(site_id)
-
-
-def _expand_port_range_string(port_range_string: str) -> List[str]:
-    """Legacy function - use DeviceUtils.expand_port_range_string() instead."""
-    return DeviceUtils.expand_port_range_string(port_range_string)
-
-
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
@@ -9426,7 +9372,7 @@ class OrgExportUtils:
         """Export security policies, intelligence profiles, and rogue data."""
         print("Export Organization Security Data:")
         logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
-        current_org_id = get_cached_or_prompted_org_id()
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         policies = []
         try:
             logging.info("Fetching organization security policies (secpolicies)...")
@@ -9464,7 +9410,7 @@ class OrgExportUtils:
             logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
             DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")
         logging.info("Fetching rogue APs and clients from all sites via insights...")
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_aps = []
         all_rogue_clients = []
         try:
@@ -9517,7 +9463,7 @@ class OrgExportUtils:
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
         print("Export Organization Sites SLE Summary:")
         logging.info("Starting export of sites SLE summary...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         # SLE types to export
         sle_types = ["wifi", "wired", "wan"]
@@ -9572,7 +9518,7 @@ class OrgExportUtils:
             DataExporter.save_data_to_output([], "OrgSitesData.csv")
             return
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         # Initialize normalized data collections
         all_summary_data = []
@@ -9743,7 +9689,7 @@ class OrgExportUtils:
     def rogue_clients():
         """Export rogue clients to OrgRogueClients.csv."""
         logging.info("Starting export of rogue clients from all sites...")
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_clients = []
         try:
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
@@ -9785,7 +9731,7 @@ class OrgExportUtils:
     def rogue_aps():
         """Export rogue APs to OrgRogueAps.csv."""
         logging.info("Starting export of rogue APs from all sites...")
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         all_rogue_aps = []
         try:
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
@@ -9828,7 +9774,7 @@ class OrgExportUtils:
         """Export organization licenses to OrgLicenses.csv."""
         logging.info("Starting export of organization licenses (canonical endpoint)...")
         filename = "OrgLicenses.csv"
-        current_org_id = get_cached_or_prompted_org_id()
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         try:
             list_func = getattr(mistapi.api.v1.orgs.licenses, 'listOrgLicenses', None)
             if list_func is None:
@@ -9972,7 +9918,7 @@ class OrgExportUtils:
         """Export AP templates to OrgApTemplates.csv."""
         print("Export Organization AP Templates:")
         logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         filename = "OrgApTemplates.csv"
         try:
             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=1000)
@@ -10000,7 +9946,7 @@ class OrgExportUtils:
         """Export switch templates to OrgSwitchTemplates.csv."""
         print("Export Organization Switch Templates:")
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         filename = "OrgSwitchTemplates.csv"
         try:
             response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
@@ -10062,8 +10008,8 @@ class OrgExportUtils:
     @staticmethod
     def nac_events():
         """Export NAC events to OrgNacEvents.csv."""
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("org NAC events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org NAC events export", hours)
         OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
             data_type="nac events",
@@ -10146,8 +10092,8 @@ class OrgExportUtils:
     @staticmethod
     def events():
         """Export organization events to OrgEvents.csv."""
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("org events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org events export", hours)
         OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
             data_type="events",
@@ -10186,7 +10132,7 @@ class OrgExportUtils:
             return
         logging.info("Fetching all sites using the 'list' sites API endpoint...")
         print("Fetching all sites using the 'list' sites API endpoint...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         sites = fetch_all_sites_with_limit(org_id)
         if not sites:
             logging.warning(" No sites returned from API.")
@@ -10235,8 +10181,8 @@ class OrgExportUtils:
             except Exception as e:
                 logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
         logging.info("Starting export of organization device statistics...")
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("org device statistics export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org device statistics export", hours)
         fetch_and_display_api_data(
             title="Org Device Stats:",
             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
@@ -10253,8 +10199,8 @@ class OrgExportUtils:
         Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
         """
         logging.debug("ENTRY: OrgExportUtils.alarms()")
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("open org alarms export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("open org alarms export", hours)
         logging.info(f"Starting search for all open org alarms in the past {hours} hours...")
         try:
             fetch_and_display_api_data(
@@ -10278,9 +10224,9 @@ class OrgExportUtils:
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
         logging.info("Search Org Device Events:")
-        org_id = get_cached_or_prompted_org_id()
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("recent device events export", hours)
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("recent device events export", hours)
         duration_param = f"{hours}h"
         response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
             apisession,
@@ -10305,7 +10251,7 @@ class OrgExportUtils:
         Fetches all data into memory, then writes to CSV in one operation.
         """
         logging.info("Exporting all org device events from the last 52 weeks...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
             apisession, org_id, device_type="all", limit=1000, duration="52w"
         )
@@ -10328,14 +10274,14 @@ class OrgExportUtils:
         logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
         logging.info("Starting export of organization audit logs...")
         try:
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             kwargs = {"limit": 1000}
             if duration:
                 kwargs["duration"] = duration
                 logging.info(f"Exporting audit logs for duration: {duration}")
             elif not full_history:
-                hours = get_dynamic_lookback_hours(24, 1)
-                log_dynamic_lookback("audit logs export", hours)
+                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+                TimeUtils.log_dynamic_lookback("audit logs export", hours)
                 kwargs["duration"] = f"{hours}h"
                 logging.info(f"Exporting only last {hours} hours of audit logs (duration={hours}h).")
             else:
@@ -10424,7 +10370,7 @@ class OrgExportUtils:
         """
         print("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"Using org_id: {org_id} for current guest export.")
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
         guests = mistapi.get_all(response=response, mist_session=apisession)
@@ -10441,7 +10387,7 @@ class OrgExportUtils:
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
         logging.info("Exporting all guest users from the last 7 days...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         end_time = int(time.time())
         start_time = end_time - 7 * 24 * 3600
         logging.debug(f"Fetching guest authorizations from {start_time} to {end_time} (epoch seconds).")
@@ -10463,7 +10409,7 @@ class OrgExportUtils:
         """
         print("Switch Virtual Chassis Statistics:")
         logging.info("Exporting all switch virtual chassis stats...")
-        check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+        CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
         inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
         with open(inventory_path, mode="r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
@@ -10541,8 +10487,8 @@ class OrgExportUtils:
             except Exception as e:
                 logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
         logging.info("Starting export of organization VPN peer path statistics...")
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("org vpn peer path statistics export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)
         fetch_and_display_api_data(
             title="Org VPN Peer Stats:",
             api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
@@ -10559,7 +10505,7 @@ class OrgExportUtils:
         """
         print("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"Using org_id: {org_id} for site location export.")
         sites = fetch_all_sites_with_limit(org_id)
         logging.info(f"Fetched {len(sites)} sites from the organization.")
@@ -10695,13 +10641,13 @@ class OrgExportUtils:
         if fast:
             logging.info(" Fast mode enabled for devices with site info export")
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
         # Ensure required CSV files are available, using caching where possible
         if fast:
             # Use cached data when fast mode is enabled
-            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+            CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
             
             # Load from cached CSV files instead of making API calls
             site_lookup = {}
@@ -10825,7 +10771,7 @@ class OrgExportUtils:
         """
         print("Gateways with Site and Address Info:")
         logging.info("Fetching Gateways with Site Info...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
         # Fetch site list and build a lookup dictionary for site info
         sites = fetch_all_sites_with_limit(org_id)
@@ -10930,19 +10876,19 @@ class OrgExportUtils:
                 logging.debug(f"Fast mode freshness check failed for {output_file}: {exception}")
         
         logging.info("Starting export of organization device port statistics...")
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("org device port statistics export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org device port statistics export", hours)
         
         if fast:
             # Fast mode: Parallelize by site for better performance
             logging.info("* Fast mode: Parallelizing port stats retrieval across sites")
             
             # Get org_id for API calls
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
             
             # Get all sites (use cached CSV if available)
             try:
-                check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+                CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
                 site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
                 with open(site_list_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
@@ -11106,7 +11052,7 @@ class OrgExportUtils:
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         # Use the actual SLE service categories supported by the Mist platform
         sle_categories = [
@@ -11287,7 +11233,7 @@ class SiteExportUtils:
         
         # Get site name for display
         try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, get_cached_or_prompted_org_id())
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
             sites = mistapi.get_all(response=response, mist_session=apisession)
             site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
         except Exception as e:
@@ -11852,8 +11798,8 @@ class SiteExportUtils:
     @staticmethod
     def system_events():
         """Export system events for a site to SiteSystemEvents.csv."""
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("site system events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("site system events export", hours)
         SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
             data_type="system events",
@@ -11864,8 +11810,8 @@ class SiteExportUtils:
     @staticmethod
     def fast_roam_events():
         """Export fast roam events for a site to SiteFastRoamEvents.csv."""
-        hours = get_dynamic_lookback_hours(24, 1)
-        log_dynamic_lookback("site fast roam events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("site fast roam events export", hours)
         SiteExportUtils.export_data(
             api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
             data_type="fast roam events",
@@ -11890,7 +11836,7 @@ class SiteExportUtils:
         logging.info("Starting export of site WiFi clients...")
         
         # Ensure required CSVs are fresh
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         # Get site_id if not provided
         if not site_id:
@@ -12035,7 +11981,7 @@ class SiteExportUtils:
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
         print("Site Configuration Settings:")
         logging.info("Starting export of all site configuration settings...")
-        current_org_id = get_cached_or_prompted_org_id()
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"Using org_id: {current_org_id} for site settings export.")
         data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)
         if data:
@@ -12455,7 +12401,7 @@ class WebSocketCommands:
             target_host = target_input if target_input else "8.8.8.8"
                 
             # Validate target host
-            if not _validate_ping_target(target_host):
+            if not ValidationUtils.validate_ping_target(target_host):
                 print(f"! Invalid ping target: {target_host}")
                 return
             
@@ -15999,12 +15945,6 @@ def show_ssr_routes_dedicated():
         logging.debug("EXIT: show_ssr_routes_dedicated")
 
 
-# Backward compatibility wrapper - will be removed in future version
-def _validate_ping_target(target: str) -> bool:
-    """Legacy function - use ValidationUtils.validate_ping_target() instead."""
-    return ValidationUtils.validate_ping_target(target)
-
-
 # ==============================
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
 # ==============================
@@ -16834,7 +16774,7 @@ def create_test_sites_from_csv():
     print("========================================\n")
     
     # Safety confirmation
-    confirmation = safe_input(
+    confirmation = InputUtils.safe_input(
         "Type 'CREATE' (uppercase) to proceed with site creation: ",
         context="site creation confirmation"
     )
@@ -16848,7 +16788,7 @@ def create_test_sites_from_csv():
     logging.info("Starting creation of test sites from CSV...")
     
     # Get organization ID
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     if not org_id:
         logging.error("No organization ID provided - cannot create sites")
         print(" ERROR: No organization ID provided")
@@ -17021,7 +16961,7 @@ def create_country_rf_templates_and_assign():
         print(" ERROR: Mist API session not initialized")
         return
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     if not org_id:
         logging.warning("No org_id provided - operation cancelled")
         print(" No organization ID provided. Exiting.")
@@ -17149,7 +17089,7 @@ def create_country_rf_templates_and_assign():
         print("   2. UPDATE - Update existing templates with new settings (DESTRUCTIVE)")
         
         while True:
-            choice = safe_input("\n  Enter choice (1 or 2): ", context="template_update_mode").strip()
+            choice = InputUtils.safe_input("\n  Enter choice (1 or 2): ", context="template_update_mode").strip()
             if choice == "1":
                 update_mode = "skip"
                 print("  Using existing templates without changes.")
@@ -17184,7 +17124,7 @@ def create_country_rf_templates_and_assign():
     print("  - OVERRIDE any existing RF template assignments")
     print("  " + "!" * 66)
     
-    confirmation = safe_input("\n  Type 'CREATE' to proceed: ", context="create_country_rf_templates")
+    confirmation = InputUtils.safe_input("\n  Type 'CREATE' to proceed: ", context="create_country_rf_templates")
     
     if confirmation != "CREATE":
         print(" Operation cancelled.")
@@ -17474,7 +17414,7 @@ def create_ap_model_device_profiles():
     print(" CREATE AP MODEL DEVICE PROFILES")
     print("=" * 70)
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 1: Scan all devices for unique AP models
     print("\n  Step 1: Scanning organization for AP device models...")
@@ -17589,7 +17529,7 @@ def create_ap_model_device_profiles():
     print("  All settings will be set to inherit/auto")
     print("  " + "!" * 66)
     
-    confirmation = safe_input("\n  Type 'CREATE' to proceed: ", context="create_ap_model_profiles")
+    confirmation = InputUtils.safe_input("\n  Type 'CREATE' to proceed: ", context="create_ap_model_profiles")
     
     if confirmation != "CREATE":
         print(" Operation cancelled.")
@@ -17689,7 +17629,7 @@ def assign_aps_to_matching_device_profiles():
     print(" ASSIGN APS TO MATCHING DEVICE PROFILES")
     print("=" * 70)
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 1: Get all AP inventory
     print("\n  Step 1: Fetching AP inventory from organization...")
@@ -17812,7 +17752,7 @@ def assign_aps_to_matching_device_profiles():
     print(f"  APs without matching profiles will be SKIPPED: {len(aps_without_profile)}")
     print("  " + "!" * 66)
     
-    confirmation = safe_input("\n  Type 'ASSIGN' to proceed: ", context="assign_aps_to_profiles")
+    confirmation = InputUtils.safe_input("\n  Type 'ASSIGN' to proceed: ", context="assign_aps_to_profiles")
     
     if confirmation != "ASSIGN":
         print(" Operation cancelled.")
@@ -18076,7 +18016,7 @@ class GatewayExportUtils:
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
         all_stats = []
 
@@ -18228,14 +18168,14 @@ class GatewayExportUtils:
         if fast:
             logging.info(" Fast mode enabled: Using cached inventory/site data and concurrent site processing")
 
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
         # Fast path: derive site IDs from cached CSVs to avoid full inventory refetch if possible
         site_ids = []
         if fast:
             try:
                 # Ensure cached CSVs present
-                check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+                CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
                 inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
                 with open(inventory_path, mode="r", encoding="utf-8") as file:
                     reader = csv.DictReader(file)
@@ -18335,7 +18275,7 @@ class GatewayExportUtils:
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing")
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         gateway_devices = get_gateway_devices_with_sites(apisession, org_id, fast=fast)
         all_stats = []
 
@@ -18483,7 +18423,7 @@ class GatewayExportUtils:
         output_file = "AllGatewayDeviceStats.csv"
         
         # Check if file exists and is fresh
-        if check_and_generate_csv(output_file, lambda: GatewayExportUtils.device_stats(fast=fast)):
+        if CacheUtils.check_and_generate_csv(output_file, lambda: GatewayExportUtils.device_stats(fast=fast)):
             logging.info(f"! {output_file} already exists and is fresh - using cached data")
         else:
             logging.info(f"! {output_file} was generated or refreshed")
@@ -18502,7 +18442,7 @@ class GatewayExportUtils:
         # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
         stats_file = "AllGatewayDeviceStats.csv"
         
-        check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
+        CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
         
         # Load the gateway device stats using CSV reader
         stats_path = FilePathUtils.get_csv_path(stats_file)
@@ -18634,20 +18574,20 @@ class GatewayExportUtils:
         print("Gateway Management IP Export:")
         print("Collecting data from inventory, templates, and configurations...")
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         # Ensure required CSVs are fresh by calling existing functions
         print("  1. Ensuring site list with template mappings is current...")
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         print("  2. Ensuring gateway templates are current...")
-        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
         
         print("  3. Ensuring gateway device data with connection status is current...")
-        check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgExportUtils.gateways_with_site_info)
+        CacheUtils.check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgExportUtils.gateways_with_site_info)
         
         print("  4. Ensuring gateway configurations with management IPs are current...")
-        check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
+        CacheUtils.check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
         
         print("  5. Processing and correlating data...")
         
@@ -18772,7 +18712,7 @@ class GatewayExportUtils:
             fast (bool): If True, enables concurrent processing
         """
         logging.info("Starting export of all gateway device configurations...")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)
         if not data:
             logging.warning(" No device configs found.")
@@ -18818,7 +18758,7 @@ class GatewayExportUtils:
         """Exports gateway templates."""
         print("Gateway Templates:")
         logging.info("Exporting gateway templates for the organization...")
-        current_org_id = get_cached_or_prompted_org_id()
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
         templates = getattr(response, "data", [])
         if not templates:
@@ -18859,9 +18799,9 @@ class GatewayExportUtils:
         logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
 
         # Ensure required CSVs are fresh
-        check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
-        check_and_generate_csv("SiteList_ListAPI.csv", OrgExportUtils.sites_list_api)
-        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=fast))
+        CacheUtils.check_and_generate_csv("SiteList_ListAPI.csv", OrgExportUtils.sites_list_api)
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
 
         # Load data
         with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
@@ -19181,8 +19121,8 @@ def get_gateway_devices_with_sites(apisession, org_id, fast=False):
         # Use cached data approach
         try:
             # Ensure required CSV files exist using caching
-            check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-            check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+            CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
             
             # Load inventory from cached CSV
             gateway_devices = []
@@ -19279,25 +19219,25 @@ def generate_support_package():
     # Ensure all required files are fresh or regenerate them
     for filename, func in required_files:
         logging.debug(f"Checking freshness of {filename}...")
-        check_and_generate_csv(filename, func)  # freshness_minutes now comes from .env
+        CacheUtils.check_and_generate_csv(filename, func)  # freshness_minutes now comes from .env
 
     # Ensure SiteList.csv is generated before loading
-    check_and_generate_csv('SiteList.csv', OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv('SiteList.csv', OrgExportUtils.sites)
 
     # Load the pulled data into dictionaries
     logging.debug("Loading CSV data into dictionaries for support package assembly...")
-    site_data = load_csv_grouped_by_key('SiteList.csv', 'id')
-    alarms_data = load_csv_grouped_by_key('OrgAlarms.csv', 'site_id')
-    events_data = load_csv_grouped_by_key('OrgDeviceEvents.csv', 'site_id')
-    devices_data = load_csv_grouped_by_key('OrgDevices.csv', 'name')
-    device_stats_data = load_csv_grouped_by_key('OrgDeviceStats.csv', 'site_id')
-    port_stats_data = load_csv_grouped_by_key('OrgDevicePortStats.csv', 'site_id')
+    site_data = CacheUtils.load_csv_grouped_by_key('SiteList.csv', 'id')
+    alarms_data = CacheUtils.load_csv_grouped_by_key('OrgAlarms.csv', 'site_id')
+    events_data = CacheUtils.load_csv_grouped_by_key('OrgDeviceEvents.csv', 'site_id')
+    devices_data = CacheUtils.load_csv_grouped_by_key('OrgDevices.csv', 'name')
+    device_stats_data = CacheUtils.load_csv_grouped_by_key('OrgDeviceStats.csv', 'site_id')
+    port_stats_data = CacheUtils.load_csv_grouped_by_key('OrgDevicePortStats.csv', 'site_id')
 
     # Load speedtest data if available
     gateway_test_results_path = FilePathUtils.get_csv_path('AllGatewayTestResults.csv')
     if os.path.exists(gateway_test_results_path):
         logging.debug("Loading AllGatewayTestResults.csv for speedtest data...")
-        speedtest_data = load_csv_grouped_by_key('AllGatewayTestResults.csv', 'site_id')
+        speedtest_data = CacheUtils.load_csv_grouped_by_key('AllGatewayTestResults.csv', 'site_id')
     else:
         logging.warning(" AllGatewayTestResults.csv not found. Skipping speedtest data.")
         speedtest_data = {}
@@ -19322,22 +19262,11 @@ def generate_support_package():
 
         support_package_filename = f"SupportPackage_{site_id}.csv"
         logging.debug(f"Writing support package to {support_package_filename}...")
-        write_support_data_to_csv(support_data, support_package_filename)
+        CacheUtils.write_support_data_to_csv(support_data, support_package_filename)
         logging.info(f"Support package written for site {site_id}.")
 
     logging.info(" Support packages generated for applicable sites.")
     logging.info(" Support packages generated for all sites!")
-
-
-# Backward compatibility wrappers - will be removed in future version
-def load_csv_grouped_by_key(filename: str, key: str) -> Dict[str, List[Dict[str, Any]]]:
-    """Legacy function - use CacheUtils.load_csv_grouped_by_key() instead."""
-    return CacheUtils.load_csv_grouped_by_key(filename, key)
-
-
-def write_support_data_to_csv(data: Dict[str, List[Dict[str, Any]]], filename: str) -> None:
-    """Legacy function - use CacheUtils.write_support_data_to_csv() instead."""
-    CacheUtils.write_support_data_to_csv(data, filename)
 
 
 def poll_marvis_actions():
@@ -19357,7 +19286,7 @@ def poll_marvis_actions():
     print("=" * 65)
     print()
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     logging.debug(f"MARVIS DEBUG: Using org_id: {org_id} for Marvis troubleshooting")
     logging.debug(f"MARVIS DEBUG: Session state - authenticated: {apisession is not None}")
 
@@ -19416,7 +19345,7 @@ def prompt_client_selection(site_id=None):
                 print(" No site selected.")
                 return None, None, None
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     try:
         all_clients = []
@@ -19649,7 +19578,7 @@ class TroubleshootUtils:
             print(" No client selected. Returning to main menu.")
             return
         
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         try:
             print(f"! Running Marvis AI analysis for client {client_mac}...")
@@ -19740,7 +19669,7 @@ class TroubleshootUtils:
             return
         
         logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
         
         try:
@@ -19856,7 +19785,7 @@ class TroubleshootUtils:
             return
         
         logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
         
         try:
@@ -19955,7 +19884,7 @@ def view_marvis_insights():
     print("\n  Marvis (VNA) Insights & Capabilities")
     print("=" * 50)
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     try:
         print(" Checking Marvis availability and organizational insights...")
@@ -20426,7 +20355,7 @@ def loop_refresh_core_datasets(delay=None, debug=False):
     """
     logging.info(" Starting continuous data refresh loop...")
     smoothed = None  # Initialize smoothed delay tracker
-    get_cached_or_prompted_org_id()  # Ensure org_id is loaded from .env if not already
+    ConfigUtils.get_cached_or_prompted_org_id()  # Ensure org_id is loaded from .env if not already
 
     try:
         while True:
@@ -20473,7 +20402,7 @@ def ssh_runner_by_gateway_template(fast=False):
     
     # Step 1: Ensure gateway management IP data is current
     print("  1. Ensuring gateway management IP data is current...")
-    check_and_generate_csv("GatewayManagementIPs.csv", lambda: export_gateway_management_ips_to_csv(fast=fast))
+    CacheUtils.check_and_generate_csv("GatewayManagementIPs.csv", lambda: export_gateway_management_ips_to_csv(fast=fast))
     
     # Step 2: Read the gateway data
     try:
@@ -22159,17 +22088,6 @@ class AddressComparisonCounters:
             logging.info(f"Parse failure breakdown: {self.parse_failure_reasons}")
         logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
 
-# Backward compatibility wrapper - will be removed in future version
-def create_address_parse_failures_csv(parse_failures: List[Dict[str, Any]], filename: str = "AddressParseFailures.csv") -> None:
-    """Legacy function - use CacheUtils.create_address_parse_failures_csv() instead."""
-    return CacheUtils.create_address_parse_failures_csv(parse_failures, filename)
-
-
-# Backward compatibility wrapper - will be removed in future version
-def get_device_identifier(device: Dict[str, Any], warn_on_missing: bool = False) -> str:
-    """Legacy function - use DeviceUtils.get_device_identifier() instead."""
-    return DeviceUtils.get_device_identifier(device, warn_on_missing)
-
 
 def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=True):
     """
@@ -22234,7 +22152,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
             logging.debug("Address validation disabled")
     
     # Use efficient caching instead of always regenerating fresh data
-    check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: OrgExportUtils.devices_with_site_info(fast=fast))
+    CacheUtils.check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: OrgExportUtils.devices_with_site_info(fast=fast))
 
     # Load the enriched device + site info
     devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
@@ -22531,7 +22449,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     
     for device in tqdm(site_configs, desc="Step 1: Parsing Addresses", unit="device"):
         device_serial = device.get("serial", "").strip()
-        device_identifier = get_device_identifier(device, warn_on_missing=not first_missing_name_warned)
+        device_identifier = DeviceUtils.get_device_identifier(device, warn_on_missing=not first_missing_name_warned)
         
         if not first_missing_name_warned and device_identifier != device.get("name", "").strip():
             first_missing_name_warned = True
@@ -23033,7 +22951,7 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
     
     # Create parse failures artifact if there were any
     if parse_failures:
-        create_address_parse_failures_csv(parse_failures)
+        CacheUtils.create_address_parse_failures_csv(parse_failures)
     
     # Enhanced results display
     print(f"\n  Data Integrity Analysis Results:")
@@ -23149,13 +23067,13 @@ def set_wan2_interface_site_variable():
     
     logging.info("Menu #103: Set WAN2 Interface Site Variable operation started")
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 1: Ensure required CSVs are fresh
     print("\n  Preparing site and gateway configuration data...")
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", GatewayExportUtils.device_configs)
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+    CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv("AllSiteGatewayConfigs.csv", GatewayExportUtils.device_configs)
+    CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     # Step 2: Load site data
     site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
@@ -23662,12 +23580,12 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     
     logging.warning("Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started")
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 1: Ensure required data is fresh
     print("\n  Loading gateway template data...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+    CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     # Load templates
     templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
@@ -24337,7 +24255,7 @@ def convert_virtual_chassis_to_virtual_mac():
     # Get site name for display
     site_name = "Unknown Site"
     try:
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         site_response = mistapi.api.v1.sites.getSite(apisession, site_id)
         if site_response.data:
             site_name = site_response.data.get('name', site_id)
@@ -24347,7 +24265,7 @@ def convert_virtual_chassis_to_virtual_mac():
     print(f"\n  Selected Site: {site_name} ({site_id})")
     
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+    CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
 
     # Load OrgInventory.csv and filter for switches at the selected site with a non-empty id 
     inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
@@ -24405,7 +24323,7 @@ def convert_virtual_chassis_to_virtual_mac():
     print(f"MAC: {selected.get('mac', '')}")
     print(f"This operation cannot be undone!")
     
-    confirm = safe_input("\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation")
+    confirm = InputUtils.safe_input("\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation")
     if confirm is None or confirm != "CONVERT":
         print(" Operation cancelled.")
         return
@@ -24481,8 +24399,8 @@ def convert_virtual_chassis_by_site_list():
         print(f"  [{idx+1}] {site_name}")
 
     # Ensure required CSVs are fresh
-    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+    CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
 
     # Load site list to get site IDs
     site_name_to_id = {}
@@ -24632,7 +24550,7 @@ def check_virtual_chassis_conversion_status():
     logging.info("Starting virtual chassis conversion status check...")
     
     # Ensure OrgInventory.csv is fresh
-    check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
+    CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgExportUtils.inventory)
     
     # Load inventory and filter for switches with vc_mac (virtual chassis switches)
     switches_with_vc_mac = []
@@ -24659,7 +24577,7 @@ def check_virtual_chassis_conversion_status():
     # Load site information for display
     site_id_to_name = {}
     try:
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
         with open(site_list_path, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -24775,10 +24693,10 @@ def reboot_devices_by_gateway_template_list():
         return
 
     # Step 2: Ensure required CSVs are fresh
-    check_and_generate_csv("OrgDevices.csv", OrgExportUtils.devices)
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-    check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=True))
+    CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgExportUtils.devices)
+    CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+    CacheUtils.check_and_generate_csv("AllSiteGatewayConfigs.csv", lambda: GatewayExportUtils.device_configs(fast=True))
 
     # Step 3: Load template name to ID mapping from OrgGatewayTemplates.csv
     template_name_to_id = {}
@@ -32305,12 +32223,12 @@ class MapsManager:
                 return no_update, updated_refresh_times
         
         # Determine host binding - use 0.0.0.0 in containers for external access
-        dash_host = '0.0.0.0' if is_running_in_container() else '127.0.0.1'
+        dash_host = '0.0.0.0' if EnvironmentUtils.is_running_in_container() else '127.0.0.1'
         # Use port 8050 by default (matches container EXPOSE and compose.yml)
         dash_port = int(os.getenv('DASH_PORT', '8050'))
         
         print("\nStarting Dash server...")
-        if is_running_in_container():
+        if EnvironmentUtils.is_running_in_container():
             print(f"! Map viewer available at http://<container-ip>:{dash_port}")
             print(f"! Access from host: http://localhost:{dash_port} (if port is mapped)")
         else:
@@ -32320,7 +32238,7 @@ class MapsManager:
         logging.info(f"Starting Dash server on http://{dash_host}:{dash_port}")
         
         # Open browser automatically (skip in container - no display)
-        if not is_running_in_container():
+        if not EnvironmentUtils.is_running_in_container():
             import webbrowser
             import threading
             import time
@@ -32939,7 +32857,7 @@ class FirmwareManager:
                 print("  " + "-" * 86)
                 
                 for upgrade in active_upgrades:
-                    progress_bar = create_progress_bar(upgrade['progress'], bar_length=15)
+                    progress_bar = DisplayUtils.create_progress_bar(upgrade['progress'], bar_length=15)
                     print(f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
                           f"{upgrade['status']:<12} {progress_bar}")
                 
@@ -32978,8 +32896,8 @@ class FirmwareManager:
         
         # Step 1: Ensure required CSVs are fresh
         print("\n  Preparing template and site data...")
-        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         # Step 2: Load gateway templates and build template-to-sites mapping
         template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
@@ -33032,8 +32950,8 @@ class FirmwareManager:
         print("  Preparing template and site data...")
         
         # Generate required CSV files using existing export functions
-        check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
         
         logging.debug("Template CSV files ensured fresh")
     
@@ -33813,7 +33731,7 @@ class FirmwareManager:
         print("- Monitor upgrade progress closely")
         
         print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
-        confirmation = safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
+        confirmation = InputUtils.safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
         
         if confirmation is None or confirmation != "UPGRADE":
             print("-> Operation cancelled - incorrect confirmation")
@@ -34178,19 +34096,13 @@ class FirmwareManager:
         return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
-# Backward compatibility wrapper - will be removed in future version
-def create_progress_bar(progress_percentage: int, bar_length: int = 20) -> str:
-    """Legacy function - use DisplayUtils.create_progress_bar() instead."""
-    return DisplayUtils.create_progress_bar(progress_percentage, bar_length)
-
-
 def check_firmware_upgrade_status_direct():
     """
     Direct firmware status check using FirmwareManager.
     Avoids the deprecated wrapper chain that causes double prompting.
     """
     logging.info("Starting firmware status check using FirmwareManager directly")
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     firmware_manager = FirmwareManager(apisession, org_id)
     return firmware_manager.check_firmware_upgrade_status()
@@ -34202,7 +34114,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     """
     logging.info("Starting firmware upgrade status check...")
     logging.debug("check_firmware_upgrade_status_impl() initiated")
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     logging.debug(f"Using org_id: {org_id}")
     
     # Scope selection is now handled by FirmwareManager.check_firmware_upgrade_status()
@@ -34456,7 +34368,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
                 # Show as complete in CSV even though API status says inprogress
                 progress_display = "[===============] 100% (Complete - Stale)"
             elif fw_status in ('inprogress', 'upgrading', 'downloading') and fw_progress is not None:
-                progress_display = create_progress_bar(fw_progress, bar_length=15)
+                progress_display = DisplayUtils.create_progress_bar(fw_progress, bar_length=15)
             elif fw_status in ('upgraded', 'success'):
                 progress_display = "[===============] 100% (Complete)"
             elif fw_status == 'failed':
@@ -34490,7 +34402,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     # Calculate and display average progress for in-progress upgrades
     if firmware_status_summary['progress_count'] > 0:
         avg_progress = firmware_status_summary['progress_total'] / firmware_status_summary['progress_count']
-        progress_bar = create_progress_bar(int(avg_progress))
+        progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))
         print(f"   X  Average upgrade progress: {progress_bar}")
     
     print(f"   X  Upgrades completed: {firmware_status_summary['upgrade_completed']}")
@@ -34550,7 +34462,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
             device_name_short = device['device_name'][:24] if device['device_name'] else 'Unnamed'
             device_type_short = device['device_type'][:7] if device['device_type'] else 'Unknown'
             site_name_short = device['site_name'][:19] if device['site_name'] else 'Unknown'
-            progress_bar = create_progress_bar(device['progress'], bar_length=15)
+            progress_bar = DisplayUtils.create_progress_bar(device['progress'], bar_length=15)
             
             print(f"  {device_name_short:<25} {device_type_short:<8} {site_name_short:<20} {progress_bar}")
         
@@ -35117,7 +35029,7 @@ def bulk_upgrade_ap_firmware_by_site():
     6. Scheduling and failure threshold controls
     7. Comprehensive safety measures and audit logging
     """
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     firmware_manager = FirmwareManager(apisession, org_id)
     return firmware_manager.execute_firmware_upgrade_with_mode_selection()
 
@@ -35135,7 +35047,7 @@ def bulk_upgrade_switch_firmware_by_site():
     6. Scheduling and failure threshold controls optimized for switches
     7. Comprehensive safety measures and audit logging for production networks
     """
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     firmware_manager = FirmwareManager(apisession, org_id)
     return firmware_manager.execute_switch_firmware_upgrade_with_mode_selection()
 
@@ -38165,7 +38077,7 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
     print("- Monitor upgrade progress closely")
     
     print(f"\nTo proceed with switch firmware upgrade, type: UPGRADE SWITCHES")
-    confirmation = safe_input("Confirmation: ", "", True, "switch firmware upgrade confirmation")
+    confirmation = InputUtils.safe_input("Confirmation: ", "", True, "switch firmware upgrade confirmation")
     
     if confirmation is None or confirmation != "UPGRADE SWITCHES":
         print("-> Operation cancelled - incorrect confirmation")
@@ -38623,7 +38535,7 @@ def get_potential_anomaly_metrics():
     print("- Monitor upgrade progress closely")
     
     print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
-    confirmation = safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
+    confirmation = InputUtils.safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
     
     if confirmation is None or confirmation != "UPGRADE":
         print("-> Operation cancelled - incorrect confirmation")
@@ -38974,7 +38886,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         print("\n[!] No site selected. Exiting.")
         return
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     if not org_id:
         logging.error("Could not determine organization ID")
         print("\n[!] Unable to determine organization ID. Exiting.")
@@ -39263,7 +39175,7 @@ def manage_wlan_radius_auth_timers(debug=False):
     
     # Step 7: Prompt for WLAN selection
     try:
-        selection_input = safe_input(
+        selection_input = InputUtils.safe_input(
             f"Select WLAN to modify (1-{len(all_radius_wlans)}) or 'q' to quit: ",
             context="wlan_selection"
         ).strip().lower()
@@ -39301,7 +39213,7 @@ def manage_wlan_radius_auth_timers(debug=False):
     
     try:
         # Timeout
-        timeout_input = safe_input(
+        timeout_input = InputUtils.safe_input(
             f"auth_servers_timeout (1-30) [{selected_wlan.get('auth_servers_timeout', 5)}]: ",
             default_value=str(selected_wlan.get('auth_servers_timeout', 5)),
             context="timeout_input"
@@ -39312,7 +39224,7 @@ def manage_wlan_radius_auth_timers(debug=False):
             new_timeout = selected_wlan.get('auth_servers_timeout', 5)
         
         # Retries
-        retries_input = safe_input(
+        retries_input = InputUtils.safe_input(
             f"auth_servers_retries (0-10) [{selected_wlan.get('auth_servers_retries', 2)}]: ",
             default_value=str(selected_wlan.get('auth_servers_retries', 2)),
             context="retries_input"
@@ -39323,7 +39235,7 @@ def manage_wlan_radius_auth_timers(debug=False):
             new_retries = selected_wlan.get('auth_servers_retries', 2)
         
         # Selection mode
-        selection_input = safe_input(
+        selection_input = InputUtils.safe_input(
             f"auth_server_selection (ordered/unordered) [{selected_wlan.get('auth_server_selection', 'ordered')}]: ",
             default_value=selected_wlan.get('auth_server_selection', 'ordered'),
             context="selection_input"
@@ -39331,7 +39243,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         new_selection = selection_input if selection_input in ['ordered', 'unordered'] else selected_wlan.get('auth_server_selection', 'ordered')
         
         # Fast timers
-        fast_input = safe_input(
+        fast_input = InputUtils.safe_input(
             f"fast_dot1x_timers (true/false) [{str(selected_wlan.get('fast_dot1x_timers', False)).lower()}]: ",
             default_value=str(selected_wlan.get('fast_dot1x_timers', False)).lower(),
             context="fast_timers_input"
@@ -39444,7 +39356,7 @@ def manage_wlan_radius_auth_timers(debug=False):
         print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
     
     print(f"")
-    confirmation = safe_input(
+    confirmation = InputUtils.safe_input(
         "Type 'APPLY' to apply these changes: ",
         context="confirmation"
     ).strip()
@@ -41789,7 +41701,7 @@ def extract_gateway_template_configuration():
     logging.info("Menu #105: Starting gateway template configuration extraction")
     
     # Step 1: Get organization ID
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 2: Fetch all gateway templates
     print("\n  Fetching gateway templates...")
@@ -41828,7 +41740,7 @@ def extract_gateway_template_configuration():
     # Step 4: Get user selection
     print()
     try:
-        user_input = safe_input(
+        user_input = InputUtils.safe_input(
             f"Enter template index to extract [0-{len(templates_sorted)-1}]: ",
             context="menu_105_template_selection"
         ).strip()
@@ -41991,7 +41903,7 @@ def apply_gateway_template_configuration():
     logging.info("Menu #106: Starting gateway template configuration application")
     
     # Step 1: Get organization ID
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 2: Find available extraction JSON files in data/ directory
     data_dir = "data"
@@ -42055,7 +41967,7 @@ def apply_gateway_template_configuration():
     # Step 4: Get user selection for source configuration
     print()
     try:
-        config_input = safe_input(
+        config_input = InputUtils.safe_input(
             f"Enter configuration file index to use [0-{len(extraction_files)-1}]: ",
             context="menu_106_config_selection"
         ).strip()
@@ -42145,7 +42057,7 @@ def apply_gateway_template_configuration():
     print()
     print("  Enter destination template index (or comma-separated list for multiple)")
     try:
-        dest_input = safe_input(
+        dest_input = InputUtils.safe_input(
             f"Destination template(s) [0-{len(templates)-1}]: ",
             context="menu_106_destination_selection"
         ).strip()
@@ -42212,7 +42124,7 @@ def apply_gateway_template_configuration():
     print(f"  {'=' * 70}")
     
     try:
-        confirmation = safe_input("\n  Confirmation: ", context="menu_106_confirmation").strip()
+        confirmation = InputUtils.safe_input("\n  Confirmation: ", context="menu_106_confirmation").strip()
     except (EOFError, KeyboardInterrupt):
         print("\n  Operation cancelled.")
         logging.info("Menu #106: User cancelled at confirmation")
@@ -42391,11 +42303,11 @@ def clone_gateway_templates_by_state_and_country():
     
     logging.warning("Menu #111 DESTRUCTIVE: Clone Gateway Templates by State/Country operation started")
     
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Step 1: Load site data with state and country information
     print("\n  Step 1: Loading site data...")
-    check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+    CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
     
     sites_path = FilePathUtils.get_csv_path("SiteList.csv")
     with open(sites_path, encoding="utf-8") as f:
@@ -42539,7 +42451,7 @@ def clone_gateway_templates_by_state_and_country():
     
     # Step 2: Load and display available gateway templates
     print("\n  Step 2: Loading gateway templates...")
-    check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+    CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
     
     templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
     with open(templates_path, encoding="utf-8") as f:
@@ -42853,8 +42765,8 @@ menu_actions = {
     "8": (WebSocketCommands.show_ssr_routes, "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)"),
 
     # > Packet Capture Operations
-    "9": (lambda: PacketCaptureManager(apisession, get_cached_or_prompted_org_id()).start_site_packet_capture(), "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming"),
-    "10": (lambda: PacketCaptureManager(apisession, get_cached_or_prompted_org_id()).start_org_packet_capture(), "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only"),
+    "9": (lambda: PacketCaptureManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).start_site_packet_capture(), "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming"),
+    "10": (lambda: PacketCaptureManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).start_org_packet_capture(), "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only"),
 
     # Organization-Level Exports
     "11": (OrgExportUtils.sites, "Export a list of all sites in the organization"),
@@ -43010,7 +42922,7 @@ menu_actions = {
     # ==============================
     # SSR FIRMWARE OPERATIONS
     # ==============================
-    "100": (lambda: FirmwareManager(apisession, get_cached_or_prompted_org_id()).execute_ssr_firmware_upgrade_with_mode_selection(), " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
+    "100": (lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_ssr_firmware_upgrade_with_mode_selection(), " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"),
     
     # ==============================
     # TERMINAL USER INTERFACE MODE
@@ -43041,7 +42953,7 @@ def _run_maps_manager_external():
     """
     try:
         from maps_manager import MapsManager as ExternalMapsManager
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
         maps_mgr = ExternalMapsManager(apisession, org_id)
         maps_mgr.run_interactive_menu()
     except ImportError as e:
@@ -43297,7 +43209,7 @@ def run_systematic_test():
     
     global org_id
     if not org_id:
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     for i, option in enumerate(safe_options, 1):
         func, description = menu_actions[option]
@@ -43483,7 +43395,7 @@ def run_interactive_test():
     
     global org_id
     if not org_id:
-        org_id = get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
     
     # Get first available site_id for testing
     test_site_id = None
@@ -46084,7 +45996,7 @@ def main():
         logging.debug("Deferred imports already initialized, skipping duplicate initialization")
     
     # Ensure tqdm is properly available
-    ensure_tqdm_available()
+    InputUtils.ensure_tqdm_available()
     
     # --- CLI Argument Parsing ---
     parser = argparse.ArgumentParser(description="MistHelper CLI Interface")
@@ -46293,7 +46205,7 @@ def main():
             org_id = args.org
             logging.info(f"Using org_id from CLI argument: {org_id}")
         else:
-            org_id = get_cached_or_prompted_org_id()
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
         site_id = None
         if args.site:
@@ -46353,11 +46265,11 @@ def main():
     logging.info("No CLI arguments detected, running in interactive menu mode.")
     
     # Initialize org_id for interactive mode
-    org_id = get_cached_or_prompted_org_id()
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()
     logging.info(f"Organization ID initialized for interactive mode: {org_id}")
     
     # Check if running in container for different behavior
-    container_mode = is_running_in_container()
+    container_mode = EnvironmentUtils.is_running_in_container()
     if container_mode:
         logging.info("Container mode detected - enabling continuous menu loop")
         print("[CONTAINER MODE] MistHelper will return to menu after each operation")
