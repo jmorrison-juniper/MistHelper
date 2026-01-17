@@ -23580,12 +23580,6 @@ class WAN2MigrationManager:
             print(f"  Overrides may be for description, usage, or other non-critical fields")
 
 
-def set_wan2_interface_site_variable():
-    """Menu #103: Set WAN2 Interface Site Variable - delegates to WAN2MigrationManager."""
-    manager = WAN2MigrationManager()
-    manager.set_site_variable()
-
-
 def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = False):
     """
     Menu #104: Update Gateway Templates for WAN2 Variable Migration (DESTRUCTIVE - Bidirectional)
@@ -41112,7 +41106,7 @@ menu_actions = {
     # ==============================
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
-    "103": (set_wan2_interface_site_variable, "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
+    "103": (lambda: WAN2MigrationManager().set_site_variable(), "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"),
     "104": (lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run), " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"),
     "105": (GatewayTemplateConfigManager.extract, "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"),
     "106": (GatewayTemplateConfigManager.apply, " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"),

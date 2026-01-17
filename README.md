@@ -550,6 +550,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.19.30",
+      "date": "2026-01-17",
+      "changes": {
+        "dead-code-removal": [
+          "set_wan2_interface_site_variable wrapper function removed"
+        ],
+        "refactoring": [
+          "Menu #103 now calls WAN2MigrationManager().set_site_variable() directly via lambda",
+          "NO WRAPPERS: eliminated delegating wrapper function"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.19.15",
       "date": "2026-01-17",
       "changes": {
