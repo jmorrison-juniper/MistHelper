@@ -16211,561 +16211,674 @@ class RoutingUtils:
 # INSIGHTS API FUNCTIONS - Organization & Site Analytics
 # ==============================
 
-def export_all_const_definitions_to_csv():
-    """Export all available const definitions from the Mist API to individual CSV files.
+
+@dataclass
+class EndpointConfig:
+    """Configuration for a discovered const endpoint."""
+    endpoint_name: str
+    module: object
+    function_name: str
+    filename: str
+    description: str
+    modname: str
+    special_handling: str = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
+
+
+class ConstDefinitionsExporter:
+    """
+    Exports all available const definitions from the Mist API to individual CSV files.
     
     Implements fully dynamic discovery and smart caching:
-    - Automatically discovers all available const endpoints from mistapi library using introspection
-    - Dynamically inspects each const module to find the correct function names
+    - Automatically discovers all available const endpoints from mistapi library
+    - Dynamically inspects each const module to find correct function names
     - Checks if each Const{EndpointName}.csv exists and is fresh (< 24 hours old)
     - If fresh file exists, skips API call for that endpoint
-    - If file is missing or stale (>= 24 hours old), fetches fresh data from API
-    - Creates comprehensive const definition files for all available endpoints
+    - If file is missing or stale, fetches fresh data from API
+    
+    Usage:
+        exporter = ConstDefinitionsExporter(apisession)
+        exporter.export_all()
     """
-    import os
-    import time
-    import importlib
-    import inspect
-    import pkgutil
-    from datetime import datetime, timedelta
     
-    print("Export All Available Const Definitions (Dynamic Discovery):")
-    logging.info("Starting comprehensive dynamic export of all const definitions...")
+    CACHE_MAX_AGE_HOURS = 24
+    FALLBACK_GATEWAY_MODELS = ['SRX300', 'SRX320', 'SRX320-POE', 'SRX340', 'SRX345', 'SRX380']
+    FALLBACK_COUNTRIES = ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'JP', 'CN', 'IN', 'BR']
+    FALLBACK_CHANNEL_COUNTRIES = ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'JP']
     
-    cache_max_age_hours = 24  # Consider file stale after 24 hours
+    def __init__(self, api_session):
+        """Initialize exporter with API session and counters."""
+        self.api_session = api_session
+        self.discovered_endpoints: dict[str, EndpointConfig] = {}
+        self.endpoints_processed = 0
+        self.endpoints_skipped_fresh = 0
+        self.endpoints_updated = 0
+        self.endpoints_failed = 0
     
-    try:
-        # Dynamically discover all const modules in mistapi.api.v1.const
-        import mistapi.api.v1.const as const_package
+    def export_all(self) -> None:
+        """Main entry point: discover and export all const definitions."""
+        print("Export All Available Const Definitions (Dynamic Discovery):")
+        logging.info("Starting comprehensive dynamic export of all const definitions...")
         
-        discovered_endpoints = {}
+        try:
+            self._discover_endpoints()
+            if not self.discovered_endpoints:
+                print("! No const endpoints discovered from mistapi library")
+                logging.error("Dynamic discovery found no const endpoints")
+                return
+            
+            self._process_all_endpoints()
+            self._print_summary()
+            
+        except Exception as error:
+            print(f"! Critical error during dynamic const discovery: {error}")
+            logging.error(f"Critical error during dynamic const discovery: {error}")
+    
+    def _discover_endpoints(self) -> None:
+        """Discover all const modules in mistapi.api.v1.const package."""
+        import pkgutil
+        import mistapi.api.v1.const as const_package
         
         print("! Dynamically discovering const endpoints from mistapi library...")
         logging.info("Starting dynamic discovery of const endpoints")
         
-        # Walk through all submodules in the const package
         for importer, modname, ispkg in pkgutil.iter_modules(const_package.__path__, const_package.__name__ + "."):
-            if not ispkg:  # Only process non-package modules
-                try:
-                    # Extract just the endpoint name (last part after the dots)
-                    endpoint_name = modname.split('.')[-1]
-                    
-                    # Skip if this looks like a private module
-                    if endpoint_name.startswith('_'):
-                        continue
-                    
-                    print(f"  ! Inspecting const module: {endpoint_name}")
-                    
-                    # Import the module dynamically
-                    module = importlib.import_module(modname)
-                    
-                    # Find all callable functions in the module that look like API calls
-                    functions = []
-                    for name, obj in inspect.getmembers(module):
-                        if inspect.isfunction(obj) and not name.startswith('_'):
-                            # Check if function takes a mist_session parameter (API call signature)
-                            sig = inspect.signature(obj)
-                            param_names = list(sig.parameters.keys())
-                            if ('mist_session' in param_names or 'apisession' in param_names) and len(param_names) >= 1:
-                                functions.append(name)
-                                logging.debug(f"Found potential API function in {endpoint_name}: {name}{sig}")
-                    
-                    if functions:
-                        # For const endpoints, we typically want the "list" function
-                        # Priority order: list*, get*, then first available
-                        api_function = None
-                        for func_name in functions:
-                            if func_name.lower().startswith('list'):
-                                api_function = func_name
-                                break
-                        
-                        if not api_function:
-                            for func_name in functions:
-                                if func_name.lower().startswith('get'):
-                                    api_function = func_name
-                                    break
-                        
-                        if not api_function and functions:
-                            api_function = functions[0]  # Use first available function
-                        
-                        if api_function:
-                            # Create filename based on endpoint name with proper title casing
-                            # Convert snake_case to TitleCase properly
-                            parts = endpoint_name.split('_')
-                            title_name = ''.join(word.capitalize() for word in parts)
-                            filename = f"Const{title_name}.csv"
-                            description = f"{endpoint_name.replace('_', ' ').title()} Definitions"
-                            
-                            # Check if this function requires additional parameters beyond mist_session
-                            sig = inspect.signature(getattr(module, api_function))
-                            required_params = [p for p in sig.parameters.values() 
-                                             if p.default == inspect.Parameter.empty and p.name not in ['mist_session', 'apisession']]
-                            
-                            # Also check for optional params that we know need special handling
-                            optional_params = [p.name for p in sig.parameters.values() 
-                                              if p.default != inspect.Parameter.empty and p.name not in ['mist_session', 'apisession']]
-                            
-                            # Special case: ap_channels has optional country_code but needs it for useful data
-                            if endpoint_name == 'ap_channels' and 'country_code' in optional_params:
-                                print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
-                                print(f"    ! Will call for all available countries -> {filename}")
-                                discovered_endpoints[endpoint_name] = {
-                                    'module': module,
-                                    'function': api_function,
-                                    'filename': filename,
-                                    'description': description,
-                                    'modname': modname,
-                                    'special_handling': 'all_countries_channels'
-                                }
-                            elif required_params:
-                                # Handle special cases that need additional parameters
-                                param_names = [p.name for p in required_params]
-                                
-                                if endpoint_name == 'default_gateway_config' and 'model' in param_names:
-                                    # Special handling for gateway config - call for all models
-                                    print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")
-                                    print(f"    ! Will call for all available gateway models -> {filename}")
-                                    discovered_endpoints[endpoint_name] = {
-                                        'module': module,
-                                        'function': api_function,
-                                        'filename': filename,
-                                        'description': description,
-                                        'modname': modname,
-                                        'special_handling': 'all_models'
-                                    }
-                                elif endpoint_name == 'states' and 'country_code' in param_names:
-                                    # Special handling for states - call for all countries
-                                    print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")
-                                    print(f"    ! Will call for all available countries -> {filename}")
-                                    discovered_endpoints[endpoint_name] = {
-                                        'module': module,
-                                        'function': api_function,
-                                        'filename': filename,
-                                        'description': description,
-                                        'modname': modname,
-                                        'special_handling': 'all_countries'
-                                    }
-                                else:
-                                    # Skip functions that require other additional parameters we can't provide
-                                    print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
-                                    logging.info(f"Skipping {endpoint_name}.{api_function}() - requires parameters: {param_names}")
-                                    continue
-                            else:
-                                # Standard endpoint with no extra parameters required
-                                discovered_endpoints[endpoint_name] = {
-                                    'module': module,
-                                    'function': api_function,
-                                    'filename': filename,
-                                    'description': description,
-                                    'modname': modname,
-                                    'special_handling': None
-                                }
-                            
-                            print(f"    ! Found API function: {api_function}() -> {filename}")
-                            logging.debug(f"Discovered {endpoint_name}: {api_function}() -> {filename}")
-                        else:
-                            print(f"    ! No suitable API functions found in {endpoint_name}")
-                            logging.warning(f"No API functions with mist_session parameter found in {endpoint_name}")
-                    else:
-                        print(f"    ! No API functions found in {endpoint_name}")
-                        logging.warning(f"No functions found in {endpoint_name}")
-                        
-                except Exception as e:
-                    # Use modname since endpoint_name may not be assigned yet
-                    module_display_name = modname.split('.')[-1] if modname else 'unknown'
-                    print(f"    ! Error inspecting {module_display_name}: {e}")
-                    logging.error(f"Error inspecting const module {module_display_name}: {e}")
-                    continue
+            if ispkg:
+                continue
+            self._inspect_module(modname)
         
-        if not discovered_endpoints:
-            print("! No const endpoints discovered from mistapi library")
-            logging.error("Dynamic discovery found no const endpoints")
+        print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
+        logging.info(f"Dynamic discovery completed: {len(self.discovered_endpoints)} endpoints found")
+    
+    def _inspect_module(self, modname: str) -> None:
+        """Inspect a single const module for API functions."""
+        import importlib
+        
+        endpoint_name = modname.split('.')[-1]
+        if endpoint_name.startswith('_'):
             return
         
-        print(f"! Successfully discovered {len(discovered_endpoints)} const endpoints dynamically")
-        logging.info(f"Dynamic discovery completed: {len(discovered_endpoints)} endpoints found")
+        print(f"  ! Inspecting const module: {endpoint_name}")
         
-        endpoints_processed = 0
-        endpoints_skipped_fresh = 0
-        endpoints_updated = 0
-        endpoints_failed = 0
+        try:
+            module = importlib.import_module(modname)
+            functions = self._find_api_functions(module, endpoint_name)
+            
+            if not functions:
+                print(f"    ! No API functions found in {endpoint_name}")
+                logging.warning(f"No functions found in {endpoint_name}")
+                return
+            
+            api_function = self._select_best_function(functions)
+            if api_function:
+                self._register_endpoint(endpoint_name, module, api_function, modname)
+            else:
+                print(f"    ! No suitable API functions found in {endpoint_name}")
+                logging.warning(f"No API functions with mist_session parameter found in {endpoint_name}")
+                
+        except Exception as error:
+            module_display_name = modname.split('.')[-1] if modname else 'unknown'
+            print(f"    ! Error inspecting {module_display_name}: {error}")
+            logging.error(f"Error inspecting const module {module_display_name}: {error}")
+    
+    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:
+        """Find all callable API functions in a module."""
+        import inspect
         
-        # Process each discovered const endpoint individually
-        for endpoint_name, endpoint_config in discovered_endpoints.items():
+        functions = []
+        for name, obj in inspect.getmembers(module):
+            if not inspect.isfunction(obj) or name.startswith('_'):
+                continue
+            
+            sig = inspect.signature(obj)
+            param_names = list(sig.parameters.keys())
+            has_session_param = 'mist_session' in param_names or 'apisession' in param_names
+            
+            if has_session_param and len(param_names) >= 1:
+                functions.append(name)
+                logging.debug(f"Found potential API function in {endpoint_name}: {name}{sig}")
+        
+        return functions
+    
+    def _select_best_function(self, functions: list[str]) -> str:
+        """Select the best API function from a list (prefer list*, then get*)."""
+        for func_name in functions:
+            if func_name.lower().startswith('list'):
+                return func_name
+        
+        for func_name in functions:
+            if func_name.lower().startswith('get'):
+                return func_name
+        
+        return functions[0] if functions else None
+    
+    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
+        """Register an endpoint after analyzing its parameters."""
+        import inspect
+        
+        filename = self._build_filename(endpoint_name)
+        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"
+        
+        sig = inspect.signature(getattr(module, api_function))
+        required_params = self._get_required_params(sig)
+        optional_params = self._get_optional_params(sig)
+        
+        special_handling = self._determine_special_handling(
+            endpoint_name, api_function, required_params, optional_params, filename
+        )
+        
+        if special_handling == 'skip':
+            return
+        
+        config = EndpointConfig(
+            endpoint_name=endpoint_name,
+            module=module,
+            function_name=api_function,
+            filename=filename,
+            description=description,
+            modname=modname,
+            special_handling=special_handling
+        )
+        self.discovered_endpoints[endpoint_name] = config
+        
+        print(f"    ! Found API function: {api_function}() -> {filename}")
+        logging.debug(f"Discovered {endpoint_name}: {api_function}() -> {filename}")
+    
+    def _build_filename(self, endpoint_name: str) -> str:
+        """Convert endpoint_name to ConstTitleCase.csv filename."""
+        parts = endpoint_name.split('_')
+        title_name = ''.join(word.capitalize() for word in parts)
+        return f"Const{title_name}.csv"
+    
+    def _get_required_params(self, sig) -> list:
+        """Extract required parameters from function signature."""
+        import inspect
+        return [p for p in sig.parameters.values() 
+                if p.default == inspect.Parameter.empty 
+                and p.name not in ['mist_session', 'apisession']]
+    
+    def _get_optional_params(self, sig) -> list[str]:
+        """Extract optional parameter names from function signature."""
+        import inspect
+        return [p.name for p in sig.parameters.values() 
+                if p.default != inspect.Parameter.empty 
+                and p.name not in ['mist_session', 'apisession']]
+    
+    def _determine_special_handling(self, endpoint_name: str, api_function: str, 
+                                    required_params: list, optional_params: list[str],
+                                    filename: str) -> str:
+        """Determine special handling type for endpoint."""
+        if endpoint_name == 'ap_channels' and 'country_code' in optional_params:
+            print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
+            print(f"    ! Will call for all available countries -> {filename}")
+            return 'all_countries_channels'
+        
+        if not required_params:
+            return None
+        
+        param_names = [p.name for p in required_params]
+        
+        if endpoint_name == 'default_gateway_config' and 'model' in param_names:
+            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")
+            print(f"    ! Will call for all available gateway models -> {filename}")
+            return 'all_models'
+        
+        if endpoint_name == 'states' and 'country_code' in param_names:
+            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")
+            print(f"    ! Will call for all available countries -> {filename}")
+            return 'all_countries'
+        
+        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
+        logging.info(f"Skipping {endpoint_name}.{api_function}() - requires parameters: {param_names}")
+        return 'skip'
+    
+    def _process_all_endpoints(self) -> None:
+        """Process each discovered endpoint."""
+        for endpoint_name, config in self.discovered_endpoints.items():
+            self._process_single_endpoint(config)
+    
+    def _process_single_endpoint(self, config: EndpointConfig) -> None:
+        """Process a single endpoint with cache checking and data export."""
+        print(f"\n! Processing {config.description} ({config.endpoint_name})...")
+        
+        try:
+            if self._is_file_fresh(config):
+                self.endpoints_skipped_fresh += 1
+                self.endpoints_processed += 1
+                return
+            
+            self._fetch_and_export_endpoint(config)
+            self.endpoints_processed += 1
+            
+        except Exception as error:
+            print(f"! Critical error processing {config.endpoint_name}: {error}")
+            logging.error(f"Critical error processing {config.endpoint_name}: {error}")
+            self.endpoints_failed += 1
+            self.endpoints_processed += 1
+    
+    def _is_file_fresh(self, config: EndpointConfig) -> bool:
+        """Check if cached file exists and is fresh enough to use."""
+        import os
+        import time
+        from datetime import datetime
+        
+        file_path = os.path.join('data', config.filename)
+        if not os.path.exists(file_path):
+            print(f"  ! {config.filename} not found - fetching fresh data from API...")
+            logging.info(f"{config.filename} not found, fetching from API")
+            return False
+        
+        try:
+            file_mtime = os.path.getmtime(file_path)
+            file_age_hours = (time.time() - file_mtime) / 3600
+            file_timestamp = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            
+            if file_age_hours < self.CACHE_MAX_AGE_HOURS:
+                print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+                print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
+                logging.info(f"Using cached {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                return True
+            else:
+                print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+                print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
+                logging.info(f"Refreshing stale {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                return False
+                
+        except Exception as error:
+            print(f"  ! Error checking file timestamp: {error}")
+            logging.warning(f"Could not check {config.endpoint_name} file timestamp, will fetch fresh data: {error}")
+            return False
+    
+    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:
+        """Fetch data from API and export to file."""
+        print(f"  ! Requesting fresh {config.description.lower()} from Mist API using {config.function_name}()...")
+        
+        try:
+            const_data = self._fetch_endpoint_data(config)
+            self._export_data(config, const_data)
+        except Exception as error:
+            print(f"  ! Error exporting {config.description.lower()}: {error}")
+            logging.error(f"Failed to export {config.description.lower()} from {config.endpoint_name}: {error}")
+            DataExporter.save_data_to_output([], config.filename)
+            self.endpoints_failed += 1
+    
+    def _fetch_endpoint_data(self, config: EndpointConfig):
+        """Fetch data based on special handling type."""
+        if config.special_handling == 'all_models':
+            return self._fetch_all_gateway_models(config)
+        elif config.special_handling == 'all_countries':
+            return self._fetch_all_country_states(config)
+        elif config.special_handling == 'all_countries_channels':
+            return self._fetch_all_country_channels(config)
+        else:
+            return self._fetch_standard_endpoint(config)
+    
+    def _fetch_standard_endpoint(self, config: EndpointConfig):
+        """Fetch data from a standard endpoint with no special parameters."""
+        api_function = getattr(config.module, config.function_name)
+        response = api_function(self.api_session)
+        return getattr(response, 'data', response) or {}
+    
+    def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:
+        """Fetch gateway configs for all available models."""
+        import importlib
+        
+        print(f"  ! Special handling: Calling {config.function_name}() for all available gateway models...")
+        
+        gateway_models = self._get_gateway_models_list()
+        all_configs = []
+        successful = 0
+        failed = 0
+        
+        for model in gateway_models:
             try:
-                filename = endpoint_config['filename']
-                description = endpoint_config['description']
-                module = endpoint_config['module']
-                function_name = endpoint_config['function']
+                api_function = getattr(config.module, config.function_name)
+                response = api_function(self.api_session, model=model)
+                model_data = getattr(response, 'data', response) or {}
                 
-                print(f"\n! Processing {description} ({endpoint_name})...")
+                if model_data:
+                    records = self._normalize_model_data(model, model_data)
+                    all_configs.extend(records)
+                    successful += 1
+            except Exception as error:
+                logging.warning(f"Failed to get gateway config for model {model}: {error}")
+                failed += 1
+        
+        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")
+        return all_configs
+    
+    def _get_gateway_models_list(self) -> list[str]:
+        """Get list of gateway models from device_models endpoint."""
+        import importlib
+        
+        try:
+            device_models_module = importlib.import_module('mistapi.api.v1.const.device_models')
+            device_models_function = getattr(device_models_module, 'listDeviceModels')
+            response = device_models_function(self.api_session)
+            device_models_data = getattr(response, 'data', response) or {}
+            
+            gateway_models = self._extract_gateway_models(device_models_data)
+            
+            if gateway_models:
+                print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
+                return gateway_models
                 
-                # Check if file exists and determine its freshness
-                file_path = os.path.join('data', filename)
-                file_exists = os.path.exists(file_path)
-                file_is_fresh = False
+        except Exception as error:
+            logging.warning(f"Failed to get gateway models list: {error}")
+        
+        print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
+        return self.FALLBACK_GATEWAY_MODELS
+    
+    def _extract_gateway_models(self, device_models_data) -> list[str]:
+        """Extract gateway model names from device models data."""
+        gateway_models = []
+        
+        if isinstance(device_models_data, dict):
+            for model_name, model_details in device_models_data.items():
+                if isinstance(model_details, dict):
+                    model_type = model_details.get('type', '').lower()
+                    if model_type == 'gateway':
+                        gateway_models.append(model_name)
+        elif isinstance(device_models_data, list):
+            for model_item in device_models_data:
+                if isinstance(model_item, dict):
+                    model_name = model_item.get('model', model_item.get('name', ''))
+                    model_type = model_item.get('type', '').lower()
+                    if model_name and model_type == 'gateway':
+                        gateway_models.append(model_name)
+        
+        return gateway_models
+    
+    def _normalize_model_data(self, model: str, model_data) -> list[dict]:
+        """Normalize model data into list of records with model identifier."""
+        records = []
+        
+        if isinstance(model_data, dict):
+            record = {'model': model}
+            record.update(model_data)
+            records.append(record)
+        elif isinstance(model_data, list):
+            for item in model_data:
+                if isinstance(item, dict):
+                    item['model'] = model
+            records.extend(model_data)
+        else:
+            records.append({'model': model, 'config': str(model_data)})
+        
+        return records
+    
+    def _fetch_all_country_states(self, config: EndpointConfig) -> list:
+        """Fetch states for all available countries."""
+        print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
+        
+        country_codes = self._get_country_codes_list()
+        all_states = []
+        successful = 0
+        failed = 0
+        
+        for country_code in country_codes:
+            try:
+                api_function = getattr(config.module, config.function_name)
+                response = api_function(self.api_session, country_code=country_code)
+                country_data = getattr(response, 'data', response) or {}
                 
-                if file_exists:
-                    try:
-                        file_mtime = os.path.getmtime(file_path)
-                        file_age_hours = (time.time() - file_mtime) / 3600
-                        file_is_fresh = file_age_hours < cache_max_age_hours
-                        
-                        file_timestamp = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                        if file_is_fresh:
-                            print(f"  ! Found fresh {filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
-                            print(f"  ! Skipping API call - using cached data (cache valid for {cache_max_age_hours}h)")
-                            logging.info(f"Using cached {endpoint_name} file (age: {file_age_hours:.1f}h)")
-                            endpoints_skipped_fresh += 1
-                            endpoints_processed += 1
-                            continue  # Skip to next endpoint - file is fresh enough
-                        else:
-                            print(f"  ! Found stale {filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
-                            print(f"  ! File is older than {cache_max_age_hours}h threshold - fetching fresh data from API...")
-                            logging.info(f"Refreshing stale {endpoint_name} file (age: {file_age_hours:.1f}h)")
-                    except Exception as e:
-                        print(f"  ! Error checking file timestamp: {e}")
-                        logging.warning(f"Could not check {endpoint_name} file timestamp, will fetch fresh data: {e}")
-                        file_is_fresh = False
+                if country_data:
+                    records = self._normalize_states_data(country_code, country_data)
+                    all_states.extend(records)
+                    successful += 1
+            except Exception as error:
+                logging.warning(f"Failed to get states for country {country_code}: {error}")
+                failed += 1
+        
+        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")
+        return all_states
+    
+    def _get_country_codes_list(self) -> list[str]:
+        """Get list of valid country codes from countries endpoint."""
+        import importlib
+        
+        try:
+            countries_module = importlib.import_module('mistapi.api.v1.const.countries')
+            countries_function = getattr(countries_module, 'listCountryCodes')
+            response = countries_function(self.api_session)
+            countries_data = getattr(response, 'data', response) or {}
+            
+            country_codes = self._extract_country_codes(countries_data)
+            
+            if country_codes:
+                original_count = len(country_codes)
+                country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
+                if len(country_codes) < original_count:
+                    logging.debug(f"Filtered out {original_count - len(country_codes)} invalid country codes")
+                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
+                return country_codes
+                
+        except Exception as error:
+            logging.warning(f"Failed to get countries list: {error}")
+        
+        print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
+        return self.FALLBACK_COUNTRIES
+    
+    def _extract_country_codes(self, countries_data) -> list[str]:
+        """Extract country codes from countries data."""
+        if isinstance(countries_data, dict):
+            return list(countries_data.keys())
+        elif isinstance(countries_data, list):
+            codes = []
+            for item in countries_data:
+                if isinstance(item, dict):
+                    code = item.get('code') or item.get('alpha2') or item.get('name', '')[:2].upper()
+                    if code:
+                        codes.append(code)
+            return codes
+        return []
+    
+    def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:
+        """Normalize states data into list of records with country identifier."""
+        records = []
+        
+        if isinstance(country_data, dict):
+            for state_code, state_data in country_data.items():
+                if isinstance(state_data, dict):
+                    record = {'country_code': country_code, 'state_code': state_code}
+                    record.update(state_data)
+                    records.append(record)
                 else:
-                    print(f"  ! {filename} not found - fetching fresh data from API...")
-                    logging.info(f"{filename} not found, fetching from API")
-                
-                # Only reach this point if file is missing or stale - fetch fresh data
-                try:
-                    print(f"  ! Requesting fresh {description.lower()} from Mist API using {function_name}()...")
-                    
-                    # Handle special endpoints that require additional parameters
-                    special_handling = endpoint_config.get('special_handling')
-                    
-                    if special_handling == 'all_models':
-                        # Handle default_gateway_config - call for all available gateway models
-                        print(f"  ! Special handling: Calling {function_name}() for all available gateway models...")
-                        
-                        # First get the list of gateway models from device_models
-                        try:
-                            device_models_module = importlib.import_module('mistapi.api.v1.const.device_models')
-                            device_models_function = getattr(device_models_module, 'listDeviceModels')
-                            models_response = device_models_function(apisession)
-                            device_models_data = getattr(models_response, 'data', models_response) or {}
-                            
-                            # Filter for gateway models only (NOT switches)
-                            gateway_models = []
-                            if isinstance(device_models_data, dict):
-                                # Handle dictionary format
-                                for model_name, model_details in device_models_data.items():
-                                    if isinstance(model_details, dict):
-                                        model_type = model_details.get('type', '').lower()
-                                        if model_type == 'gateway':
-                                            gateway_models.append(model_name)
-                            elif isinstance(device_models_data, list):
-                                # Handle list format
-                                for model_item in device_models_data:
-                                    if isinstance(model_item, dict):
-                                        model_name = model_item.get('model', model_item.get('name', ''))
-                                        model_type = model_item.get('type', '').lower()
-                                        if model_name and model_type == 'gateway':
-                                            gateway_models.append(model_name)
-                                        
-                            if not gateway_models:
-                                # Fallback to common gateway models only (not switches)
-                                gateway_models = ['SRX300', 'SRX320', 'SRX320-POE', 'SRX340', 'SRX345', 'SRX380']
-                                print(f"    ! Using fallback gateway models: {len(gateway_models)} models")
-                            else:
-                                print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
-                            
-                            # Call the function for each gateway model
-                            all_gateway_configs = []
-                            successful_models = 0
-                            failed_models = 0
-                            
-                            for model in gateway_models:
-                                try:
-                                    api_function = getattr(module, function_name)
-                                    model_response = api_function(apisession, model=model)
-                                    model_data = getattr(model_response, 'data', model_response) or {}
-                                    
-                                    if model_data:
-                                        # Add model identifier to each record
-                                        if isinstance(model_data, dict):
-                                            model_record = {'model': model}
-                                            model_record.update(model_data)
-                                            all_gateway_configs.append(model_record)
-                                        elif isinstance(model_data, list):
-                                            for item in model_data:
-                                                if isinstance(item, dict):
-                                                    item['model'] = model
-                                                all_gateway_configs.extend(model_data)
-                                        else:
-                                            all_gateway_configs.append({'model': model, 'config': str(model_data)})
-                                        successful_models += 1
-                                except Exception as model_error:
-                                    logging.warning(f"Failed to get gateway config for model {model}: {model_error}")
-                                    failed_models += 1
-                                    continue
-                            
-                            const_data = all_gateway_configs
-                            print(f"    ! Successfully retrieved configs for {successful_models} models, {failed_models} failed")
-                            
-                        except Exception as e:
-                            print(f"    ! Error getting gateway models list: {e}")
-                            logging.error(f"Failed to get gateway models for {endpoint_name}: {e}")
-                            const_data = {}
-                            
-                    elif special_handling == 'all_countries':
-                        # Handle states - call for all available countries
-                        print(f"  ! Special handling: Calling {function_name}() for all available countries...")
-                        
-                        # First get the list of countries
-                        try:
-                            countries_module = importlib.import_module('mistapi.api.v1.const.countries')
-                            countries_function = getattr(countries_module, 'listCountryCodes')
-                            countries_response = countries_function(apisession)
-                            countries_data = getattr(countries_response, 'data', countries_response) or {}
-                            
-                            # Extract country codes
-                            country_codes = []
-                            if isinstance(countries_data, dict):
-                                country_codes = list(countries_data.keys())
-                            elif isinstance(countries_data, list):
-                                for item in countries_data:
-                                    if isinstance(item, dict) and 'code' in item:
-                                        country_codes.append(item['code'])
-                                    elif isinstance(item, dict) and 'name' in item:
-                                        # Extract code from name or use first 2 chars
-                                        code = item.get('alpha2', item.get('code', item['name'][:2].upper()))
-                                        country_codes.append(code)
-                            
-                            if not country_codes:
-                                # Fallback to major countries if we can't get the full list
-                                country_codes = ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'JP', 'CN', 'IN', 'BR']
-                                print(f"    ! Using fallback country codes: {len(country_codes)} countries")
-                            else:
-                                # Filter out invalid country codes (like '__' which means 'Any Country')
-                                original_count = len(country_codes)
-                                country_codes = [code for code in country_codes if code and len(code) == 2 and code.isalpha()]
-                                if len(country_codes) < original_count:
-                                    filtered_count = original_count - len(country_codes)
-                                    logging.debug(f"Filtered out {filtered_count} invalid country codes")
-                                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
-                            
-                            # Call the function for each country
-                            all_states = []
-                            successful_countries = 0
-                            failed_countries = 0
-                            
-                            for country_code in country_codes:
-                                try:
-                                    api_function = getattr(module, function_name)
-                                    country_response = api_function(apisession, country_code=country_code)
-                                    country_data = getattr(country_response, 'data', country_response) or {}
-                                    
-                                    if country_data:
-                                        # Add country identifier to each record
-                                        if isinstance(country_data, dict):
-                                            for state_code, state_data in country_data.items():
-                                                if isinstance(state_data, dict):
-                                                    state_record = {'country_code': country_code, 'state_code': state_code}
-                                                    state_record.update(state_data)
-                                                    all_states.append(state_record)
-                                                else:
-                                                    all_states.append({
-                                                        'country_code': country_code, 
-                                                        'state_code': state_code, 
-                                                        'state_name': str(state_data)
-                                                    })
-                                        elif isinstance(country_data, list):
-                                            for item in country_data:
-                                                if isinstance(item, dict):
-                                                    item['country_code'] = country_code
-                                                all_states.extend(country_data)
-                                        successful_countries += 1
-                                except Exception as country_error:
-                                    logging.warning(f"Failed to get states for country {country_code}: {country_error}")
-                                    failed_countries += 1
-                                    continue
-                            
-                            const_data = all_states
-                            print(f"    ! Successfully retrieved states for {successful_countries} countries, {failed_countries} failed")
-                            
-                        except Exception as e:
-                            print(f"    ! Error getting countries list: {e}")
-                            logging.error(f"Failed to get countries for {endpoint_name}: {e}")
-                            const_data = {}
-                            
-                    elif special_handling == 'all_countries_channels':
-                        # Handle ap_channels - call for all available countries
-                        print(f"  ! Special handling: Calling {function_name}() for all available countries...")
-                        
-                        try:
-                            countries_module = importlib.import_module('mistapi.api.v1.const.countries')
-                            countries_function = getattr(countries_module, 'listCountryCodes')
-                            countries_response = countries_function(apisession)
-                            countries_data = getattr(countries_response, 'data', countries_response) or {}
-                            
-                            # Extract country codes
-                            country_codes = []
-                            if isinstance(countries_data, dict):
-                                country_codes = list(countries_data.keys())
-                            elif isinstance(countries_data, list):
-                                for item in countries_data:
-                                    if isinstance(item, dict) and 'alpha2' in item:
-                                        country_codes.append(item['alpha2'])
-                                    elif isinstance(item, dict) and 'code' in item:
-                                        country_codes.append(item['code'])
-                            
-                            if not country_codes:
-                                # Fallback to major countries
-                                country_codes = ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'JP']
-                                print(f"    ! Using fallback country codes: {len(country_codes)} countries")
-                            else:
-                                # Filter out invalid country codes
-                                original_count = len(country_codes)
-                                country_codes = [code for code in country_codes if code and len(code) == 2 and code.isalpha()]
-                                if len(country_codes) < original_count:
-                                    filtered_count = original_count - len(country_codes)
-                                    logging.debug(f"Filtered out {filtered_count} invalid country codes for ap_channels")
-                                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
-                            
-                            # Call the function for each country
-                            all_channels = []
-                            successful_countries = 0
-                            failed_countries = 0
-                            
-                            for country_code in country_codes:
-                                try:
-                                    api_function = getattr(module, function_name)
-                                    country_response = api_function(apisession, country_code=country_code)
-                                    country_data = getattr(country_response, 'data', country_response) or {}
-                                    
-                                    if country_data:
-                                        # Add country identifier to each record
-                                        if isinstance(country_data, dict):
-                                            channel_record = {'country_code': country_code}
-                                            channel_record.update(country_data)
-                                            all_channels.append(channel_record)
-                                        elif isinstance(country_data, list):
-                                            for item in country_data:
-                                                if isinstance(item, dict):
-                                                    item['country_code'] = country_code
-                                            all_channels.extend(country_data)
-                                        successful_countries += 1
-                                except Exception as country_error:
-                                    logging.debug(f"Failed to get AP channels for country {country_code}: {country_error}")
-                                    failed_countries += 1
-                                    continue
-                            
-                            const_data = all_channels
-                            print(f"    ! Successfully retrieved AP channels for {successful_countries} countries, {failed_countries} failed")
-                            
-                        except Exception as e:
-                            print(f"    ! Error getting countries list for AP channels: {e}")
-                            logging.error(f"Failed to get countries for {endpoint_name}: {e}")
-                            const_data = {}
-                    else:
-                        # Standard endpoint - call normally
-                        api_function = getattr(module, function_name)
-                        response = api_function(apisession)
-                        const_data = getattr(response, 'data', response) or {}
-                    
-                    if const_data:
-                        # Handle different data structures returned by different endpoints
-                        if isinstance(const_data, dict):
-                            # Convert dictionary to list of records for CSV processing
-                            if endpoint_name == 'insight_metrics':
-                                # Special handling for insight metrics with complex nested structure
-                                data_list = []
-                                for metric_name, metric_details in const_data.items():
-                                    # Flatten the metric details into a single row
-                                    metric_row = {
-                                        'metric_name': metric_name,
-                                        'description': metric_details.get('description', ''),
-                                        'type': metric_details.get('type', ''),
-                                        'unit': metric_details.get('unit', ''),
-                                        'scopes': ', '.join(metric_details.get('scopes', [])),
-                                        'report_scopes': ', '.join(metric_details.get('report_scopes', [])),
-                                    }
-                                    
-                                    # Add interval information if available
-                                    intervals = metric_details.get('intervals', {})
-                                    if intervals:
-                                        interval_info = []
-                                        for interval_name, interval_data in intervals.items():
-                                            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s, max_age:{interval_data.get('max_age', 'N/A')}s)"
-                                            interval_info.append(interval_str)
-                                        metric_row['intervals'] = '; '.join(interval_info)
-                                    else:
-                                        metric_row['intervals'] = ''
-                                    
-                                    # Add report interval information if available
-                                    report_intervals = metric_details.get('report_intervals', {})
-                                    if report_intervals:
-                                        report_interval_info = []
-                                        for interval_name, interval_data in report_intervals.items():
-                                            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"
-                                            report_interval_info.append(interval_str)
-                                        metric_row['report_intervals'] = '; '.join(report_interval_info)
-                                    else:
-                                        metric_row['report_intervals'] = ''
-                                    
-                                    data_list.append(metric_row)
-                            else:
-                                # Standard dictionary to list conversion for other endpoints
-                                data_list = []
-                                for key, value in const_data.items():
-                                    if isinstance(value, dict):
-                                        # Flatten nested dictionary
-                                        row = {'name': key}
-                                        row.update(value)
-                                        data_list.append(row)
-                                    else:
-                                        # Simple key-value pair
-                                        data_list.append({'name': key, 'value': str(value)})
-                        elif isinstance(const_data, list):
-                            # Data is already a list - use directly
-                            data_list = const_data
-                        else:
-                            # Single item, convert to list
-                            data_list = [const_data] if const_data else []
-                        
-                        # Process and save the data
-                        processed = DataProcessingUtils.escape_multiline(data_list)
-                        DataExporter.save_data_to_output(processed, filename)
-                        print(f"  ! {len(processed)} {description.lower()} exported to {filename}")
-                        logging.info(f"Exported {len(processed)} fresh {description.lower()} to {filename}")
-                        endpoints_updated += 1
-                    else:
-                        print(f"  ! 0 {description.lower()} exported to {filename} (no data available)")
-                        logging.warning(f"No {description.lower()} data available from {endpoint_name} endpoint")
-                        DataExporter.save_data_to_output([], filename)
-                        endpoints_updated += 1
-                        
-                except Exception as e:
-                    print(f"  ! Error exporting {description.lower()}: {e}")
-                    logging.error(f"Failed to export {description.lower()} from {endpoint_name}: {e}")
-                    DataExporter.save_data_to_output([], filename)
-                    endpoints_failed += 1
-                    
-                endpoints_processed += 1
-                
-            except Exception as e:
-                print(f"! Critical error processing {endpoint_name}: {e}")
-                logging.error(f"Critical error processing {endpoint_name}: {e}")
-                endpoints_failed += 1
-                endpoints_processed += 1
+                    records.append({
+                        'country_code': country_code,
+                        'state_code': state_code,
+                        'state_name': str(state_data)
+                    })
+        elif isinstance(country_data, list):
+            for item in country_data:
+                if isinstance(item, dict):
+                    item['country_code'] = country_code
+            records.extend(country_data)
         
-        # Summary report
+        return records
+    
+    def _fetch_all_country_channels(self, config: EndpointConfig) -> list:
+        """Fetch AP channels for all available countries."""
+        print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
+        
+        country_codes = self._get_channel_country_codes()
+        all_channels = []
+        successful = 0
+        failed = 0
+        
+        for country_code in country_codes:
+            try:
+                api_function = getattr(config.module, config.function_name)
+                response = api_function(self.api_session, country_code=country_code)
+                country_data = getattr(response, 'data', response) or {}
+                
+                if country_data:
+                    records = self._normalize_channels_data(country_code, country_data)
+                    all_channels.extend(records)
+                    successful += 1
+            except Exception as error:
+                logging.debug(f"Failed to get AP channels for country {country_code}: {error}")
+                failed += 1
+        
+        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")
+        return all_channels
+    
+    def _get_channel_country_codes(self) -> list[str]:
+        """Get list of country codes for AP channel lookup."""
+        import importlib
+        
+        try:
+            countries_module = importlib.import_module('mistapi.api.v1.const.countries')
+            countries_function = getattr(countries_module, 'listCountryCodes')
+            response = countries_function(self.api_session)
+            countries_data = getattr(response, 'data', response) or {}
+            
+            country_codes = self._extract_channel_country_codes(countries_data)
+            
+            if country_codes:
+                original_count = len(country_codes)
+                country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
+                if len(country_codes) < original_count:
+                    logging.debug(f"Filtered out {original_count - len(country_codes)} invalid country codes for ap_channels")
+                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
+                return country_codes
+                
+        except Exception as error:
+            logging.warning(f"Failed to get countries list for AP channels: {error}")
+        
+        print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
+        return self.FALLBACK_CHANNEL_COUNTRIES
+    
+    def _extract_channel_country_codes(self, countries_data) -> list[str]:
+        """Extract country codes from countries data for channel lookup."""
+        if isinstance(countries_data, dict):
+            return list(countries_data.keys())
+        elif isinstance(countries_data, list):
+            codes = []
+            for item in countries_data:
+                if isinstance(item, dict):
+                    code = item.get('alpha2') or item.get('code')
+                    if code:
+                        codes.append(code)
+            return codes
+        return []
+    
+    def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:
+        """Normalize channels data into list of records with country identifier."""
+        records = []
+        
+        if isinstance(country_data, dict):
+            record = {'country_code': country_code}
+            record.update(country_data)
+            records.append(record)
+        elif isinstance(country_data, list):
+            for item in country_data:
+                if isinstance(item, dict):
+                    item['country_code'] = country_code
+            records.extend(country_data)
+        
+        return records
+    
+    def _export_data(self, config: EndpointConfig, const_data) -> None:
+        """Convert data to list format and export to file."""
+        if not const_data:
+            print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
+            logging.warning(f"No {config.description.lower()} data available from {config.endpoint_name} endpoint")
+            DataExporter.save_data_to_output([], config.filename)
+            self.endpoints_updated += 1
+            return
+        
+        data_list = self._convert_to_list(config.endpoint_name, const_data)
+        processed = DataProcessingUtils.escape_multiline(data_list)
+        DataExporter.save_data_to_output(processed, config.filename)
+        
+        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
+        logging.info(f"Exported {len(processed)} fresh {config.description.lower()} to {config.filename}")
+        self.endpoints_updated += 1
+    
+    def _convert_to_list(self, endpoint_name: str, const_data) -> list:
+        """Convert various data formats to list of records for CSV."""
+        if isinstance(const_data, list):
+            return const_data
+        
+        if not isinstance(const_data, dict):
+            return [const_data] if const_data else []
+        
+        if endpoint_name == 'insight_metrics':
+            return self._convert_insight_metrics(const_data)
+        
+        return self._convert_standard_dict(const_data)
+    
+    def _convert_insight_metrics(self, const_data: dict) -> list[dict]:
+        """Convert insight metrics nested structure to flat list."""
+        data_list = []
+        
+        for metric_name, metric_details in const_data.items():
+            metric_row = {
+                'metric_name': metric_name,
+                'description': metric_details.get('description', ''),
+                'type': metric_details.get('type', ''),
+                'unit': metric_details.get('unit', ''),
+                'scopes': ', '.join(metric_details.get('scopes', [])),
+                'report_scopes': ', '.join(metric_details.get('report_scopes', [])),
+                'intervals': self._format_intervals(metric_details.get('intervals', {})),
+                'report_intervals': self._format_report_intervals(metric_details.get('report_intervals', {}))
+            }
+            data_list.append(metric_row)
+        
+        return data_list
+    
+    def _format_intervals(self, intervals: dict) -> str:
+        """Format intervals dictionary to string representation."""
+        if not intervals:
+            return ''
+        
+        interval_info = []
+        for interval_name, interval_data in intervals.items():
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s, max_age:{interval_data.get('max_age', 'N/A')}s)"
+            interval_info.append(interval_str)
+        
+        return '; '.join(interval_info)
+    
+    def _format_report_intervals(self, report_intervals: dict) -> str:
+        """Format report intervals dictionary to string representation."""
+        if not report_intervals:
+            return ''
+        
+        report_interval_info = []
+        for interval_name, interval_data in report_intervals.items():
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"
+            report_interval_info.append(interval_str)
+        
+        return '; '.join(report_interval_info)
+    
+    def _convert_standard_dict(self, const_data: dict) -> list[dict]:
+        """Convert standard dictionary to list of records."""
+        data_list = []
+        
+        for key, value in const_data.items():
+            if isinstance(value, dict):
+                row = {'name': key}
+                row.update(value)
+                data_list.append(row)
+            else:
+                data_list.append({'name': key, 'value': str(value)})
+        
+        return data_list
+    
+    def _print_summary(self) -> None:
+        """Print export summary statistics."""
         print(f"\n! Dynamic Const Export Summary:")
-        print(f"  ! Total endpoints discovered: {len(discovered_endpoints)}")
-        print(f"  ! Total endpoints processed: {endpoints_processed}")
-        print(f"  ! Fresh files skipped: {endpoints_skipped_fresh}")
-        print(f"  ! Files updated/created: {endpoints_updated}")
-        print(f"  ! Failed endpoints: {endpoints_failed}")
-        logging.info(f"Dynamic const export completed: {len(discovered_endpoints)} discovered, {endpoints_processed} processed, {endpoints_skipped_fresh} skipped (fresh), {endpoints_updated} updated, {endpoints_failed} failed")
+        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")
+        print(f"  ! Total endpoints processed: {self.endpoints_processed}")
+        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")
+        print(f"  ! Files updated/created: {self.endpoints_updated}")
+        print(f"  ! Failed endpoints: {self.endpoints_failed}")
         
-    except Exception as e:
-        print(f"! Critical error during dynamic const discovery: {e}")
-        logging.error(f"Critical error during dynamic const discovery: {e}")
+        logging.info(
+            f"Dynamic const export completed: {len(self.discovered_endpoints)} discovered, "
+            f"{self.endpoints_processed} processed, {self.endpoints_skipped_fresh} skipped (fresh), "
+            f"{self.endpoints_updated} updated, {self.endpoints_failed} failed"
+        )
 
 
 # ============================================================================
@@ -16784,15 +16897,15 @@ class InsightMetricsUtils:
         """
         Legacy function maintained for backward compatibility.
         
-        Calls the comprehensive export_all_const_definitions_to_csv() function
-        and provides specific feedback about insight metrics.
+        Uses the ConstDefinitionsExporter class for comprehensive const export.
         """
         print("Export Available Insight Metrics (Legacy Mode):")
         print("! Note: This function now uses the dynamic comprehensive const export system")
         print("! For best results, consider using Menu 82: Export All Const Definitions")
-        logging.info("Legacy const insight metrics export called - using dynamic comprehensive system")
+        logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
         
-        export_all_const_definitions_to_csv()
+        exporter = ConstDefinitionsExporter(apisession)
+        exporter.export_all()
         
         insight_metrics_file = os.path.join('data', 'ConstInsightMetrics.csv')
         if os.path.exists(insight_metrics_file):
@@ -41256,7 +41369,7 @@ menu_actions = {
     "68": (SiteExportUtils.insight_metrics, "Export general insight metrics for a selected site"),
     "69": (SiteExportUtils.client_insights, "Export client-specific insight metrics for a selected site"),
     "81": (SiteExportUtils.device_insights, "Export device-specific insight metrics for a selected site"),
-    "82": (export_all_const_definitions_to_csv, "Export all available const definitions from the Mist API (comprehensive endpoint coverage)"),
+    "82": (lambda: ConstDefinitionsExporter(apisession).export_all(), "Export all available const definitions from the Mist API (comprehensive endpoint coverage)"),
     "83": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
     "84": (SiteExportUtils.anomaly_events, "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"),
     "85": (SiteExportUtils.device_anomaly_events, "Export Site Device Anomaly Events (device-specific anomaly detection)"),

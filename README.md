@@ -550,6 +550,36 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.21.30",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "ConstDefinitionsExporter: Dynamic Mist API const endpoint discovery and export",
+          "EndpointConfig: Dataclass for discovered endpoint configuration"
+        ],
+        "refactoring": [
+          "537-line export_all_const_definitions_to_csv function refactored into ConstDefinitionsExporter class",
+          "33 helper methods, all under 25 lines per agents.md rules",
+          "Core: export_all(), _discover_endpoints(), _process_all_endpoints(), _print_summary()",
+          "Discovery: _inspect_module(), _find_api_functions(), _select_best_function(), _register_endpoint()",
+          "Configuration: _build_filename(), _get_required_params(), _get_optional_params(), _determine_special_handling()",
+          "Caching: _is_file_fresh()",
+          "Fetching: _fetch_endpoint_data(), _fetch_standard_endpoint(), _fetch_all_gateway_models(), _fetch_all_country_states(), _fetch_all_country_channels()",
+          "Model handling: _get_gateway_models_list(), _extract_gateway_models(), _normalize_model_data()",
+          "Country handling: _get_country_codes_list(), _extract_country_codes(), _normalize_states_data()",
+          "Channel handling: _get_channel_country_codes(), _extract_channel_country_codes(), _normalize_channels_data()",
+          "Export: _export_data(), _convert_to_list(), _convert_insight_metrics(), _format_intervals(), _format_report_intervals(), _convert_standard_dict()"
+        ],
+        "dead_code_removal": [
+          "export_all_const_definitions_to_csv standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Menu #82 now uses lambda: ConstDefinitionsExporter(apisession).export_all()",
+          "NO WRAPPERS: InsightMetricsUtils.export_legacy() instantiates class directly"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.20.45",
       "date": "2026-01-17",
       "changes": {
