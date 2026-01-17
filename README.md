@@ -550,6 +550,20 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.19.15",
+      "date": "2026-01-17",
+      "changes": {
+        "refactoring": [
+          "NEW CLASS: WAN2MigrationManager for Menu #103 (set_wan2_interface_site_variable)",
+          "489-line standalone function refactored into 33 helper methods",
+          "All methods under 25 lines per agents.md rules",
+          "Main entry: WAN2MigrationManager.set_site_variable()",
+          "Helper method groups: data loading, site selection, override detection, API updates, reporting",
+          "NO WRAPPERS: functionality now lives in WAN2MigrationManager class"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.18.30",
       "date": "2026-01-17",
       "changes": {
