@@ -550,6 +550,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.17.53",
+      "date": "2026-01-17",
+      "changes": {
+        "dead-code-removal": [
+          "bulk_upgrade_ap_firmware_by_site_impl - wrapper removed (use BulkAPFirmwareUpgrader class directly)",
+          "get_auto_upgrade_time_settings - dead code (never called)"
+        ],
+        "refactoring": [
+          "FirmwareManager._execute_bulk_upgrade now instantiates BulkAPFirmwareUpgrader directly",
+          "BulkAPFirmwareUpgrader.execute() logging updated to reflect class name",
+          "NO WRAPPERS: eliminated wrapper function chain per agents.md rules"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.17.24",
       "date": "2026-01-17",
       "changes": {

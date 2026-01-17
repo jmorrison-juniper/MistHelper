@@ -34238,8 +34238,9 @@ class FirmwareManager:
             apisession = original_apisession
     
     def _execute_bulk_upgrade(self, sites_to_upgrade_override):
-        """Execute the bulk firmware upgrade with existing implementation."""
-        return bulk_upgrade_ap_firmware_by_site_impl(self.org_id, sites_to_upgrade_override)
+        """Execute the bulk firmware upgrade using BulkAPFirmwareUpgrader class."""
+        upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override)
+        return upgrader.execute()
     
     def _execute_status_check(self, scope_choice, site_filter):
         """Execute the firmware status check with the existing implementation."""
@@ -36013,75 +36014,7 @@ def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
     logging.info("Firmware upgrade status check completed successfully")
 
 
-def get_auto_upgrade_time_settings():
-    """
-    Helper function to get auto-upgrade time scheduling settings from user input.
-    Returns a dictionary with time_of_day and optionally day_of_week settings.
-    """
-    time_settings = {}
-    
-    # Time of day configuration
-    while True:
-        try:
-            print(f"   Enter upgrade time (24-hour format, e.g., 02:00, 14:30):")
-            time_input = input("   Time of day (default=02:00): ").strip() or "02:00"
-            
-            # Validate time format
-            try:
-                # Try to parse the time to validate format
-                datetime.strptime(time_input, "%H:%M")
-                time_settings["time_of_day"] = time_input
-                print(f"   Upgrade time set to: {time_input}")
-                break
-            except ValueError:
-                print(f"   Invalid time format. Please use HH:MM (24-hour format)")
-                
-        except KeyboardInterrupt:
-            print("\n   Time configuration cancelled")
-            time_settings["time_of_day"] = "02:00"  # Default fallback
-            break
-    
-    # Day of week configuration
-    print(f"\n   Select upgrade schedule:")
-    print(f"      [1] Every day (recommended for most environments)")
-    print(f"      [2] Specific day of week")
-    
-    try:
-        schedule_choice = input("   Select option (1-2, default=1): ").strip() or "1"
-        
-        if schedule_choice == "2":
-            # Specific day selection
-            days = {
-                "1": ("sun", "Sunday"),
-                "2": ("mon", "Monday"), 
-                "3": ("tue", "Tuesday"),
-                "4": ("wed", "Wednesday"),
-                "5": ("thu", "Thursday"),
-                "6": ("fri", "Friday"),
-                "7": ("sat", "Saturday")
-            }
-            
-            print(f"   Select day of week:")
-            for key, (day_value, day_name) in days.items():
-                print(f"      [{key}] {day_name}")
-            
-            day_choice = input("   Select day (1-7): ").strip()
-            if day_choice in days:
-                day_value, day_name = days[day_choice]
-                time_settings["day_of_week"] = day_value
-                print(f"   Upgrade day set to: {day_name}")
-            else:
-                print(f"   Invalid selection, defaulting to every day")
-                # Don't set day_of_week (None means every day)
-        else:
-            # Every day (don't set day_of_week)
-            print(f"   Upgrade schedule: Every day at {time_settings.get('time_of_day', '02:00')}")
-            
-    except KeyboardInterrupt:
-        print("\n   Schedule configuration cancelled, defaulting to every day")
-    
-    return time_settings
-
+# NOTE: get_auto_upgrade_time_settings removed - dead code (never called)
 
 # NOTE: The standalone functions bulk_upgrade_ap_firmware_by_site() and
 # bulk_upgrade_switch_firmware_by_site() have been refactored. Menu entries
@@ -36133,7 +36066,7 @@ class BulkAPFirmwareUpgrader:
     def execute(self) -> None:
         """Execute the bulk AP firmware upgrade workflow."""
         logging.info("Starting advanced bulk AP firmware upgrade by site...")
-        logging.debug("bulk_upgrade_ap_firmware_by_site_impl() initiated")
+        logging.debug("BulkAPFirmwareUpgrader.execute() initiated")
         logging.debug(f"Using org_id: {self.org_id}")
         
         try:
@@ -37022,16 +36955,7 @@ class BulkAPFirmwareUpgrader:
             print(f"! Failed to write results: {e}")
 
 
-def bulk_upgrade_ap_firmware_by_site_impl(org_id, sites_to_upgrade_override=None):
-    """
-    Implementation function for bulk AP firmware upgrade.
-    
-    Args:
-        org_id: Organization ID
-        sites_to_upgrade_override: Optional list of site dicts for template-based upgrades
-    """
-    upgrader = BulkAPFirmwareUpgrader(org_id, sites_to_upgrade_override)
-    upgrader.execute()
+# NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
 
 
 # SWITCH FIRMWARE UPGRADE IMPLEMENTATION FUNCTION
