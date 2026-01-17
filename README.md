@@ -550,6 +550,30 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.20.45",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "NominatimValidator: Address validation against OpenStreetMap geocoding API"
+        ],
+        "refactoring": [
+          "425-line validate_addresses_with_nominatim function refactored into NominatimValidator class",
+          "21 helper methods, all under 25 lines per agents.md rules",
+          "Configuration via __init__ with AddressValidationConfig (reduces 10+ params to 1)",
+          "Main entry: NominatimValidator(config).validate(mist_address, comparison_address)",
+          "Helper groups: geocoding (_build_address_string, _make_api_request, _calculate_confidence)",
+          "Helper groups: tiebreaking (_check_duplicate_status, _apply_confidence_comparison, _apply_org_name_tiebreaker)",
+          "Helper groups: recommendation (_determine_recommendation, _determine_both_valid_recommendation)"
+        ],
+        "dead_code_removal": [
+          "validate_addresses_with_nominatim standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Address comparison caller now instantiates NominatimValidator directly"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.19.30",
       "date": "2026-01-17",
       "changes": {

@@ -21535,431 +21535,505 @@ class AddressUtils:
         return 'uncertain'
 
 
-def validate_addresses_with_nominatim(
-    mist_address: dict,
-    comparison_address: dict,
-    config: Optional[AddressValidationConfig] = None,
-    timeout: int = 5,
-    debug: bool = False,
-    skip_ssl_verify: bool = False,
-    org_name: Optional[str] = None,
-    mist_duplicates: Optional[Dict] = None,
-    ref_duplicates: Optional[Dict] = None,
-    site_name: Optional[str] = None
-):
+# ============================================================================
+# NOMINATIM ADDRESS VALIDATOR CLASS
+# ============================================================================
+class NominatimValidator:
     """
-    Validate both address sets against Nominatim (OpenStreetMap) geocoding API
-    to determine which is more accurate/complete.
+    Validates addresses against Nominatim (OpenStreetMap) geocoding API.
     
-    Args:
-        mist_address (dict): Mist address data
-        comparison_address (dict): Comparison CSV address data
-        config (AddressValidationConfig): Configuration object (preferred over individual params)
-        timeout (int): HTTP request timeout in seconds (deprecated, use config)
-        debug (bool): Enable detailed debug logging (deprecated, use config)
-        skip_ssl_verify (bool): Skip SSL verification (deprecated, use config)
-        org_name (str): Organization name for intelligent tiebreaking (deprecated, use config)
-        mist_duplicates (dict): Dictionary of duplicate Mist addresses (deprecated, use config)
-        ref_duplicates (dict): Dictionary of duplicate reference addresses (deprecated, use config)
-        site_name (str): Current site name being processed (deprecated, use config)
+    Compares two address sets (Mist vs reference) and recommends which is more accurate.
+    Handles rate limiting, retries, confidence scoring, and intelligent tiebreaking.
+    
+    Usage:
+        validator = NominatimValidator(config)
+        result = validator.validate(mist_address, comparison_address)
+    """
+    
+    # Nominatim API configuration
+    NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+    USER_AGENT = "MistHelper/1.0 (address validation)"
+    RATE_LIMIT_DELAY = 1.1  # Respect Nominatim 1 req/sec limit
+    MAX_RETRIES = 2
+    RETRY_DELAY = 2
+    
+    # Place type quality scores
+    HIGH_QUALITY_TYPES = ['house', 'building', 'commercial', 'office', 'retail', 'shop']
+    MEDIUM_QUALITY_TYPES = ['residential', 'industrial', 'public']
+    QUALITY_CLASSES = ['building', 'place', 'amenity']
+    
+    def __init__(self, config: Optional[AddressValidationConfig] = None):
+        """Initialize validator with optional config object."""
+        self.timeout = config.timeout if config else 5
+        self.debug = config.debug if config else False
+        self.skip_ssl_verify = config.skip_ssl_verify if config else False
+        self.org_name = config.org_name if config else None
+        self.site_name = config.site_name if config else None
+        self.mist_duplicates = config.mist_duplicates if config else None
+        self.ref_duplicates = config.ref_duplicates if config else None
         
-    Returns:
-        dict: {
-            'mist_validation': {'valid': bool, 'confidence': float, 'lat': float, 'lon': float},
-            'comparison_validation': {'valid': bool, 'confidence': float, 'lat': float, 'lon': float},
-            'recommendation': str  # 'mist', 'comparison', or 'uncertain'
+        self._suppress_ssl_warnings_if_needed()
+    
+    def _suppress_ssl_warnings_if_needed(self):
+        """Suppress SSL warnings when verification is disabled."""
+        if self.skip_ssl_verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            if self.debug:
+                logging.warning("SSL certificate verification disabled - urllib3 warnings suppressed")
+    
+    def _log_entry(self, mist_address: dict, comparison_address: dict):
+        """Log entry point with input parameters."""
+        if self.debug:
+            logging.debug("ENTRY: NominatimValidator.validate()")
+            logging.debug(f"  mist_address: {mist_address}")
+            logging.debug(f"  comparison_address: {comparison_address}")
+            logging.debug(f"  timeout: {self.timeout}")
+            logging.debug(f"  skip_ssl_verify: {self.skip_ssl_verify}")
+    
+    def _build_address_string(self, address_dict: dict) -> tuple:
+        """
+        Build address string from dictionary components.
+        
+        Returns:
+            tuple: (address_string, address_parts_list) or (None, []) if empty
+        """
+        address_parts = []
+        if address_dict.get('address'):
+            address_parts.append(address_dict['address'])
+        if address_dict.get('city'):
+            address_parts.append(address_dict['city'])
+        if address_dict.get('state'):
+            address_parts.append(address_dict['state'])
+        if address_dict.get('zip'):
+            address_parts.append(address_dict['zip'])
+        
+        if not address_parts:
+            return None, []
+        
+        return ', '.join(address_parts), address_parts
+    
+    def _create_empty_result(self, error: str) -> dict:
+        """Create standardized empty/error result."""
+        return {
+            'valid': False,
+            'confidence': 0.0,
+            'lat': None,
+            'lon': None,
+            'error': error
         }
-    """
-    # Support both config object and individual parameters (backwards compatibility)
-    if config is not None:
-        timeout = config.timeout
-        debug = config.debug
-        skip_ssl_verify = config.skip_ssl_verify
-        org_name = config.org_name
-        site_name = config.site_name
-        mist_duplicates = config.mist_duplicates
-        ref_duplicates = config.ref_duplicates
     
-    # Suppress SSL warnings if skip_ssl_verify is enabled
-    if skip_ssl_verify:
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        if debug:
-            logging.warning("SSL certificate verification disabled - urllib3 warnings suppressed")
-    
-    if debug:
-        logging.debug("ENTRY: validate_addresses_with_nominatim()")
-        logging.debug(f"  mist_address: {mist_address}")
-        logging.debug(f"  comparison_address: {comparison_address}")
-        logging.debug(f"  timeout: {timeout}")
-        logging.debug(f"  skip_ssl_verify: {skip_ssl_verify}")
-    
-    def geocode_address(address_dict, address_source="unknown"):
-        """Geocode a single address using Nominatim"""
-        try:
-            # Build address string
-            address_parts = []
-            if address_dict.get('address'):
-                address_parts.append(address_dict['address'])
-            if address_dict.get('city'):
-                address_parts.append(address_dict['city'])
-            if address_dict.get('state'):
-                address_parts.append(address_dict['state'])
-            if address_dict.get('zip'):
-                address_parts.append(address_dict['zip'])
-                
-            if not address_parts:
-                if debug:
-                    logging.debug(f"GEOCODE [{address_source}]: No address parts available")
-                return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': 'Empty address'}
-            
-            address_string = ', '.join(address_parts)
-            if debug:
-                logging.debug(f"GEOCODE [{address_source}]: Built address string: '{address_string}'")
-            
-            # Nominatim API call (respect 1 req/sec limit)
-            url = "https://nominatim.openstreetmap.org/search"
-            params = {
-                'format': 'json',
-                'q': address_string,
-                'limit': 1,
-                'addressdetails': 1
-            }
-            headers = {
-                'User-Agent': 'MistHelper/1.0 (address validation)'
-            }
-            
-            if debug:
-                logging.debug(f"GEOCODE [{address_source}]: Making API request to {url}")
-                logging.debug(f"GEOCODE [{address_source}]: Request params: {params}")
-                logging.debug(f"GEOCODE [{address_source}]: Request headers: {headers}")
-                if skip_ssl_verify:
-                    logging.warning(f"GEOCODE [{address_source}]: SSL certificate verification DISABLED for this request")
-            
-            # Configure SSL verification based on parameter
-            verify_ssl = not skip_ssl_verify
-            if skip_ssl_verify and debug:
-                logging.debug(f"GEOCODE [{address_source}]: SSL verification bypassed (verify={verify_ssl})")
-            
-            # Retry logic for timeout errors
-            max_retries = 2
-            retry_delay = 2  # seconds
-            response = None  # Initialize before try block to fix possibly unbound warning
-            
-            for attempt in range(max_retries + 1):
-                try:
-                    # Increase timeout for better reliability
-                    actual_timeout = timeout + (attempt * 5)  # Increase timeout on retries
-                    if debug and attempt > 0:
-                        logging.debug(f"GEOCODE [{address_source}]: Retry attempt {attempt} with timeout {actual_timeout}s")
-                    
-                    response = requests.get(url, params=params, headers=headers, timeout=actual_timeout, verify=verify_ssl)
-                    
-                    if debug:
-                        logging.debug(f"GEOCODE [{address_source}]: Response status: {response.status_code}")
-                        logging.debug(f"GEOCODE [{address_source}]: Response headers: {dict(response.headers)}")
-                        logging.debug(f"GEOCODE [{address_source}]: Response content length: {len(response.content)} bytes")
-                    
-                    # If we get here, the request succeeded, break out of retry loop
-                    break
-                    
-                except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as timeout_error:
-                    if attempt < max_retries:
-                        if debug:
-                            logging.debug(f"GEOCODE [{address_source}]: Timeout on attempt {attempt + 1}, retrying in {retry_delay}s...")
-                        time.sleep(retry_delay)
-                        continue
-                    else:
-                        # Final retry failed, raise the timeout error
-                        if debug:
-                            logging.debug(f"GEOCODE [{address_source}]: All retry attempts failed due to timeout")
-                        raise timeout_error
-                except Exception as e:
-                    # Non-timeout errors should not be retried
-                    raise e
-            
-            # Ensure response is valid before accessing attributes
-            if response is None:
-                return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': 'No response received'}
-            
-            if response.status_code == 200:
-                results = response.json()
-                if debug:
-                    logging.debug(f"GEOCODE [{address_source}]: Response JSON: {results}")
-                
-                if results:
-                    result = results[0]
-                    
-                    # Calculate confidence from multiple Nominatim fields
-                    confidence = 0.0
-                    importance = float(result.get('importance', 0.0))
-                    
-                    if debug:
-                        logging.debug(f"GEOCODE [{address_source}]: Raw importance from Nominatim: {importance}")
-                        logging.debug(f"GEOCODE [{address_source}]: Available result fields: {list(result.keys())}")
-                    
-                    # Use importance if available and meaningful, otherwise calculate from match quality
-                    if importance > 0.01:  # Only use importance if it's above a minimal threshold
-                        confidence = min(1.0, importance * 2.0)  # Scale importance up as it's often small
-                        if debug:
-                            logging.debug(f"GEOCODE [{address_source}]: Using scaled importance: {confidence:.3f}")
-                    else:
-                        # Calculate confidence based on address components matched and result quality
-                        display_name = result.get('display_name', '').lower()
-                        address_string_lower = address_string.lower()
-                        
-                        if debug:
-                            logging.debug(f"GEOCODE [{address_source}]: Calculating custom confidence")
-                            logging.debug(f"GEOCODE [{address_source}]: Address string: '{address_string_lower}'")
-                            logging.debug(f"GEOCODE [{address_source}]: Display name: '{display_name}'")
-                        
-                        # Count matching components with partial matching
-                        match_score = 0.0
-                        total_components = len(address_parts)
-                        
-                        for part in address_parts:
-                            part_clean = part.lower().strip()
-                            if len(part_clean) > 2:  # Only check meaningful parts
-                                # Full match gets full point
-                                if part_clean in display_name:
-                                    match_score += 1.0
-                                    if debug:
-                                        logging.debug(f"GEOCODE [{address_source}]: Full match for '{part_clean}'")
-                                # Partial match gets partial point
-                                elif any(word in display_name for word in part_clean.split() if len(word) > 2):
-                                    match_score += 0.5
-                                    if debug:
-                                        logging.debug(f"GEOCODE [{address_source}]: Partial match for '{part_clean}'")
-                        
-                        # Base confidence from component matching
-                        component_conf = match_score / total_components if total_components > 0 else 0.0
-                        
-                        # Quality indicators from Nominatim result
-                        quality_boost = 0.0
-                        
-                        # Place type quality boost
-                        place_type = result.get('type', '').lower()
-                        place_class = result.get('class', '').lower()
-                        
-                        if place_type in ['house', 'building', 'commercial', 'office', 'retail', 'shop']:
-                            quality_boost += 0.3
-                        elif place_type in ['residential', 'industrial', 'public']:
-                            quality_boost += 0.2
-                        elif place_class in ['building', 'place', 'amenity']:
-                            quality_boost += 0.1
-                            
-                        # Address detail quality (more specific = higher confidence)
-                        if result.get('address', {}):
-                            address_details = result.get('address', {})
-                            detail_count = len([v for v in address_details.values() if v])
-                            if detail_count >= 5:  # Street, city, state, postcode, country
-                                quality_boost += 0.2
-                            elif detail_count >= 3:
-                                quality_boost += 0.1
-                        
-                        # Combine component matching with quality indicators
-                        confidence = min(1.0, component_conf + quality_boost)
-                        
-                        if debug:
-                            logging.debug(f"GEOCODE [{address_source}]: Component confidence: {component_conf:.3f}")
-                            logging.debug(f"GEOCODE [{address_source}]: Quality boost: {quality_boost:.3f}")
-                            logging.debug(f"GEOCODE [{address_source}]: Place type: '{place_type}', Class: '{place_class}'")
-                            logging.debug(f"GEOCODE [{address_source}]: Final confidence: {confidence:.3f}")
-                    
-                    geocode_result = {
-                        'valid': True,
-                        'confidence': confidence,
-                        'lat': float(result['lat']),
-                        'lon': float(result['lon']),
-                        'display_name': result.get('display_name', ''),
-                        'place_type': result.get('type', ''),
-                        'place_class': result.get('class', ''),
-                        'address_details': result.get('address', {}),
-                        'error': None
-                    }
-                    if debug:
-                        logging.debug(f"GEOCODE [{address_source}]: SUCCESS - confidence: {confidence:.3f}, lat: {result['lat']}, lon: {result['lon']}")
-                        logging.debug(f"GEOCODE [{address_source}]: Display name: {result.get('display_name', '')}")
-                        logging.debug(f"GEOCODE [{address_source}]: Place type: {result.get('type', '')}")
-                    return geocode_result
-                else:
-                    if debug:
-                        logging.debug(f"GEOCODE [{address_source}]: No results found in API response")
-                    return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': 'No results found'}
-            else:
-                if debug:
-                    logging.debug(f"GEOCODE [{address_source}]: HTTP error {response.status_code}")
-                    logging.debug(f"GEOCODE [{address_source}]: Response content: {response.content[:200]}...")
-                return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': f'HTTP {response.status_code}'}
-                
-        except Exception as e:
-            if debug:
-                logging.debug(f"GEOCODE [{address_source}]: Exception occurred: {str(e)}")
-                logging.debug(f"GEOCODE [{address_source}]: Full traceback: {traceback.format_exc()}")
-            return {'valid': False, 'confidence': 0.0, 'lat': None, 'lon': None, 'error': str(e)}
-    
-    # Validate both addresses (with rate limiting)
-    if debug:
-        logging.debug("Starting mist address validation...")
-    mist_result = geocode_address(mist_address, "MIST")
-    
-    if debug:
-        logging.debug("Applying rate limiting delay (1.1 seconds)...")
-    time.sleep(1.1)  # Respect Nominatim 1 req/sec limit
-    
-    if debug:
-        logging.debug("Starting comparison address validation...")
-    comparison_result = geocode_address(comparison_address, "COMPARISON")
-    
-    if debug:
-        logging.debug(f"Mist validation result: {mist_result}")
-        logging.debug(f"Comparison validation result: {comparison_result}")
-    
-    # Determine recommendation based on validation results
-    recommendation = 'uncertain'
-    recommendation_reason = "Unknown"
-    
-    if mist_result['valid'] and not comparison_result['valid']:
-        recommendation = 'mist'
-        recommendation_reason = f"Only Mist address is valid (confidence: {mist_result['confidence']:.3f})"
-        if debug:
-            logging.debug("Recommendation: MIST (only mist address is valid)")
-    elif comparison_result['valid'] and not mist_result['valid']:
-        recommendation = 'comparison'
-        recommendation_reason = f"Only reference address is valid (confidence: {comparison_result['confidence']:.3f})"
-        if debug:
-            logging.debug("Recommendation: COMPARISON (only comparison address is valid)")
-    elif mist_result['valid'] and comparison_result['valid']:
-        # Both addresses are valid - need intelligent tiebreaker logic
-        if debug:
-            logging.debug("TIEBREAKER: Both addresses validated successfully, applying tiebreaker logic")
+    def _make_api_request(self, address_string: str, source: str) -> Optional[requests.Response]:
+        """
+        Make Nominatim API request with retry logic.
         
-        # Check for duplicate address disqualification first
+        Returns:
+            Response object or None if all retries failed
+        """
+        params = {'format': 'json', 'q': address_string, 'limit': 1, 'addressdetails': 1}
+        headers = {'User-Agent': self.USER_AGENT}
+        verify_ssl = not self.skip_ssl_verify
+        
+        if self.debug:
+            logging.debug(f"GEOCODE [{source}]: Making API request to {self.NOMINATIM_URL}")
+            logging.debug(f"GEOCODE [{source}]: Request params: {params}")
+        
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                actual_timeout = self.timeout + (attempt * 5)
+                if self.debug and attempt > 0:
+                    logging.debug(f"GEOCODE [{source}]: Retry attempt {attempt} with timeout {actual_timeout}s")
+                
+                response = requests.get(
+                    self.NOMINATIM_URL, params=params, headers=headers,
+                    timeout=actual_timeout, verify=verify_ssl
+                )
+                
+                if self.debug:
+                    logging.debug(f"GEOCODE [{source}]: Response status: {response.status_code}")
+                
+                return response
+                
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout):
+                if attempt < self.MAX_RETRIES:
+                    if self.debug:
+                        logging.debug(f"GEOCODE [{source}]: Timeout, retrying in {self.RETRY_DELAY}s...")
+                    time.sleep(self.RETRY_DELAY)
+                else:
+                    if self.debug:
+                        logging.debug(f"GEOCODE [{source}]: All retry attempts failed")
+                    return None
+            except Exception as exception:
+                if self.debug:
+                    logging.debug(f"GEOCODE [{source}]: Exception: {exception}")
+                return None
+        
+        return None
+    
+    def _calculate_component_match_score(self, address_parts: list, display_name: str, source: str) -> float:
+        """Calculate match score based on address component matching."""
+        match_score = 0.0
+        total_components = len(address_parts)
+        display_name_lower = display_name.lower()
+        
+        for part in address_parts:
+            part_clean = part.lower().strip()
+            if len(part_clean) <= 2:
+                continue
+            
+            if part_clean in display_name_lower:
+                match_score += 1.0
+                if self.debug:
+                    logging.debug(f"GEOCODE [{source}]: Full match for '{part_clean}'")
+            elif any(word in display_name_lower for word in part_clean.split() if len(word) > 2):
+                match_score += 0.5
+                if self.debug:
+                    logging.debug(f"GEOCODE [{source}]: Partial match for '{part_clean}'")
+        
+        return match_score / total_components if total_components > 0 else 0.0
+    
+    def _calculate_quality_boost(self, result: dict, source: str) -> float:
+        """Calculate quality boost from place type and address details."""
+        quality_boost = 0.0
+        place_type = result.get('type', '').lower()
+        place_class = result.get('class', '').lower()
+        
+        if place_type in self.HIGH_QUALITY_TYPES:
+            quality_boost += 0.3
+        elif place_type in self.MEDIUM_QUALITY_TYPES:
+            quality_boost += 0.2
+        elif place_class in self.QUALITY_CLASSES:
+            quality_boost += 0.1
+        
+        address_details = result.get('address', {})
+        if address_details:
+            detail_count = len([v for v in address_details.values() if v])
+            if detail_count >= 5:
+                quality_boost += 0.2
+            elif detail_count >= 3:
+                quality_boost += 0.1
+        
+        if self.debug:
+            logging.debug(f"GEOCODE [{source}]: Quality boost: {quality_boost:.3f}")
+        
+        return quality_boost
+    
+    def _calculate_confidence(self, result: dict, address_parts: list, source: str) -> float:
+        """Calculate overall confidence score for geocode result."""
+        importance = float(result.get('importance', 0.0))
+        
+        if importance > 0.01:
+            confidence = min(1.0, importance * 2.0)
+            if self.debug:
+                logging.debug(f"GEOCODE [{source}]: Using scaled importance: {confidence:.3f}")
+            return confidence
+        
+        display_name = result.get('display_name', '')
+        component_conf = self._calculate_component_match_score(address_parts, display_name, source)
+        quality_boost = self._calculate_quality_boost(result, source)
+        confidence = min(1.0, component_conf + quality_boost)
+        
+        if self.debug:
+            logging.debug(f"GEOCODE [{source}]: Component confidence: {component_conf:.3f}, Final: {confidence:.3f}")
+        
+        return confidence
+    
+    def _parse_geocode_response(self, response: requests.Response, address_parts: list, source: str) -> dict:
+        """Parse successful geocode response into result dictionary."""
+        if response.status_code != 200:
+            if self.debug:
+                logging.debug(f"GEOCODE [{source}]: HTTP error {response.status_code}")
+            return self._create_empty_result(f'HTTP {response.status_code}')
+        
+        results = response.json()
+        if self.debug:
+            logging.debug(f"GEOCODE [{source}]: Response JSON: {results}")
+        
+        if not results:
+            if self.debug:
+                logging.debug(f"GEOCODE [{source}]: No results found")
+            return self._create_empty_result('No results found')
+        
+        result = results[0]
+        confidence = self._calculate_confidence(result, address_parts, source)
+        
+        geocode_result = {
+            'valid': True,
+            'confidence': confidence,
+            'lat': float(result['lat']),
+            'lon': float(result['lon']),
+            'display_name': result.get('display_name', ''),
+            'place_type': result.get('type', ''),
+            'place_class': result.get('class', ''),
+            'address_details': result.get('address', {}),
+            'error': None
+        }
+        
+        if self.debug:
+            logging.debug(f"GEOCODE [{source}]: SUCCESS - confidence: {confidence:.3f}")
+        
+        return geocode_result
+    
+    def _geocode_address(self, address_dict: dict, source: str) -> dict:
+        """
+        Geocode a single address using Nominatim API.
+        
+        Args:
+            address_dict: Address with keys: address, city, state, zip
+            source: Label for logging (e.g., "MIST", "COMPARISON")
+            
+        Returns:
+            dict with valid, confidence, lat, lon, error fields
+        """
+        try:
+            address_string, address_parts = self._build_address_string(address_dict)
+            
+            if not address_string:
+                if self.debug:
+                    logging.debug(f"GEOCODE [{source}]: No address parts available")
+                return self._create_empty_result('Empty address')
+            
+            if self.debug:
+                logging.debug(f"GEOCODE [{source}]: Built address string: '{address_string}'")
+            
+            response = self._make_api_request(address_string, source)
+            if response is None:
+                return self._create_empty_result('No response received')
+            
+            return self._parse_geocode_response(response, address_parts, source)
+            
+        except Exception as exception:
+            if self.debug:
+                logging.debug(f"GEOCODE [{source}]: Exception: {exception}")
+                logging.debug(f"GEOCODE [{source}]: Traceback: {traceback.format_exc()}")
+            return self._create_empty_result(str(exception))
+    
+    def _create_address_key(self, address_dict: dict) -> str:
+        """Create normalized key for duplicate detection."""
+        return (
+            f"{address_dict.get('address', '').lower()}|"
+            f"{address_dict.get('city', '').lower()}|"
+            f"{address_dict.get('state', '').lower()}|"
+            f"{address_dict.get('zip', '')}"
+        )
+    
+    def _check_duplicate_status(self, mist_address: dict, comparison_address: dict) -> tuple:
+        """
+        Check if addresses are duplicates (shared between multiple sites).
+        
+        Returns:
+            tuple: (mist_is_duplicate, ref_is_duplicate)
+        """
         mist_is_duplicate = False
         ref_is_duplicate = False
         
-        if mist_duplicates and site_name:
-            # Create address key for Mist address
-            mist_addr_key = f"{mist_address['address'].lower()}|{mist_address['city'].lower()}|{mist_address['state'].lower()}|{mist_address['zip']}"
-            mist_is_duplicate = mist_addr_key in mist_duplicates
-            if debug and mist_is_duplicate:
-                logging.debug(f"TIEBREAKER: Mist address is duplicate - shared by sites: {mist_duplicates[mist_addr_key]}")
+        if self.mist_duplicates and self.site_name:
+            mist_addr_key = self._create_address_key(mist_address)
+            mist_is_duplicate = mist_addr_key in self.mist_duplicates
+            if self.debug and mist_is_duplicate:
+                logging.debug(f"TIEBREAKER: Mist address is duplicate")
         
-        if ref_duplicates and site_name:
-            # Create address key for reference address
-            ref_addr_key = f"{comparison_address['address'].lower()}|{comparison_address['city'].lower()}|{comparison_address['state'].lower()}|{comparison_address['zip']}"
-            ref_is_duplicate = ref_addr_key in ref_duplicates
-            if debug and ref_is_duplicate:
-                logging.debug(f"TIEBREAKER: Reference address is duplicate - shared by sites: {ref_duplicates[ref_addr_key]}")
+        if self.ref_duplicates and self.site_name:
+            ref_addr_key = self._create_address_key(comparison_address)
+            ref_is_duplicate = ref_addr_key in self.ref_duplicates
+            if self.debug and ref_is_duplicate:
+                logging.debug(f"TIEBREAKER: Reference address is duplicate")
         
-        # Apply duplicate disqualification logic
-        if mist_is_duplicate and ref_is_duplicate:
-            recommendation = 'uncertain' 
-            recommendation_reason = "  Both addresses are duplicates (shared between multiple sites) - manual review required"
-            if debug:
-                logging.debug("TIEBREAKER: Both addresses are duplicates - flagging as uncertain")
-        elif mist_is_duplicate and not ref_is_duplicate:
-            recommendation = 'comparison'
-            recommendation_reason = "Mist address is duplicate (shared between sites), using reference address"
-            if debug:
-                logging.debug("TIEBREAKER: Mist address is duplicate, recommending reference")
-        elif ref_is_duplicate and not mist_is_duplicate:
-            recommendation = 'mist'
-            recommendation_reason = "Reference address is duplicate (shared between sites), using Mist address"
-            if debug:
-                logging.debug("TIEBREAKER: Reference address is duplicate, recommending Mist")
-        else:
-            # No duplicates detected, proceed with standard tiebreaker logic
-            # Both valid - compare confidence scores
-            if mist_result['confidence'] > comparison_result['confidence'] * 1.1:  # 10% threshold
-                recommendation = 'mist'
-                recommendation_reason = f"Mist address has higher confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
-                if debug:
-                    logging.debug(f"Recommendation: MIST (higher confidence: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
-            elif comparison_result['confidence'] > mist_result['confidence'] * 1.1:
-                recommendation = 'comparison'
-                recommendation_reason = f"Reference address has higher confidence ({comparison_result['confidence']:.3f} vs {mist_result['confidence']:.3f})"
-                if debug:
-                    logging.debug(f"Recommendation: COMPARISON (higher confidence: {comparison_result['confidence']:.3f} vs {mist_result['confidence']:.3f})")
-            else:
-                # Confidence scores are too close - use intelligent tiebreaker
-                recommendation = 'uncertain'
-                recommendation_reason = f"Both addresses have similar confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
-                
-                if org_name and debug:
-                    logging.debug(f"Both addresses valid with similar confidence - applying organization name tiebreaker with org: '{org_name}'")
-                
-                # Intelligent tiebreaker using organization name and business context
-                if org_name:
-                    # Normalize organization name for comparison
-                    normalized_org = NameNormalizationUtils.normalize_business_name(org_name)
-                    
-                    # Extract business names from validated address display names
-                    mist_display = mist_result.get('display_name', '').lower()
-                    comp_display = comparison_result.get('display_name', '').lower()
-                    
-                    # Calculate organization name similarity with each address
-                    mist_org_similarity = NameNormalizationUtils.calculate_org_name_similarity(normalized_org, mist_display)
-                    comp_org_similarity = NameNormalizationUtils.calculate_org_name_similarity(normalized_org, comp_display)
-                    
-                    if debug:
-                        logging.debug(f"Organization name similarity scores: Mist={mist_org_similarity:.3f}, Comparison={comp_org_similarity:.3f}")
-                    
-                    # If there's a clear winner based on organization name similarity
-                    if mist_org_similarity > comp_org_similarity + 0.1:  # 10% threshold
-                        recommendation = 'mist'
-                        recommendation_reason = f"Mist address better matches organization '{org_name}' (similarity: {mist_org_similarity:.3f} vs {comp_org_similarity:.3f})"
-                        if debug:
-                            logging.debug(f"Recommendation: MIST (organization name match: {mist_org_similarity:.3f} vs {comp_org_similarity:.3f})")
-                    elif comp_org_similarity > mist_org_similarity + 0.1:
-                        recommendation = 'comparison'
-                        recommendation_reason = f"Reference address better matches organization '{org_name}' (similarity: {comp_org_similarity:.3f} vs {mist_org_similarity:.3f})"
-                        if debug:
-                            logging.debug(f"Recommendation: COMPARISON (organization name match: {comp_org_similarity:.3f} vs {mist_org_similarity:.3f})")
-                    else:
-                        # Still too close - apply business context rules
-                        business_recommendation = AddressUtils.apply_business_context_rules(mist_result, comparison_result, debug)
-                        if business_recommendation == 'mist':
-                            recommendation = 'mist'
-                            recommendation_reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
-                        elif business_recommendation == 'comparison':
-                            recommendation = 'comparison'
-                            recommendation_reason = f"Reference address appears more business-appropriate (type: {comparison_result.get('place_type', 'unknown')})"
-                        else:
-                            recommendation = 'uncertain'
-                            recommendation_reason = f"All tiebreakers inconclusive - similar confidence ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
-                            if debug:
-                                logging.debug(f"Recommendation: UNCERTAIN (all tiebreakers inconclusive - confidence: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
-                else:
-                    # No org name available - apply business context rules only
-                    business_recommendation = AddressUtils.apply_business_context_rules(mist_result, comparison_result, debug)
-                    if business_recommendation == 'mist':
-                        recommendation = 'mist'
-                        recommendation_reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
-                    elif business_recommendation == 'comparison':
-                        recommendation = 'comparison'
-                        recommendation_reason = f"Reference address appears more business-appropriate (type: {comparison_result.get('place_type', 'unknown')})"
-                    else:
-                        recommendation = 'uncertain'
-                        recommendation_reason = f"Confidence scores too close and no clear business preference ({mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})"
-                        if debug:
-                            logging.debug(f"Recommendation: UNCERTAIN (confidence scores too close: {mist_result['confidence']:.3f} vs {comparison_result['confidence']:.3f})")
-    else:
-        recommendation = 'uncertain'
-        recommendation_reason = "Both addresses failed validation"
-        if debug:
+        return mist_is_duplicate, ref_is_duplicate
+    
+    def _apply_duplicate_rules(self, mist_is_dup: bool, ref_is_dup: bool) -> tuple:
+        """
+        Apply duplicate disqualification rules.
+        
+        Returns:
+            tuple: (recommendation, reason) or (None, None) if no duplicates
+        """
+        if mist_is_dup and ref_is_dup:
+            return 'uncertain', "Both addresses are duplicates - manual review required"
+        elif mist_is_dup:
+            return 'comparison', "Mist address is duplicate, using reference address"
+        elif ref_is_dup:
+            return 'mist', "Reference address is duplicate, using Mist address"
+        return None, None
+    
+    def _apply_confidence_comparison(self, mist_conf: float, comp_conf: float) -> tuple:
+        """
+        Compare confidence scores with 10% threshold.
+        
+        Returns:
+            tuple: (recommendation, reason) or (None, None) if too close
+        """
+        if mist_conf > comp_conf * 1.1:
+            reason = f"Mist address has higher confidence ({mist_conf:.3f} vs {comp_conf:.3f})"
+            return 'mist', reason
+        elif comp_conf > mist_conf * 1.1:
+            reason = f"Reference address has higher confidence ({comp_conf:.3f} vs {mist_conf:.3f})"
+            return 'comparison', reason
+        return None, None
+    
+    def _apply_org_name_tiebreaker(self, mist_result: dict, comp_result: dict) -> tuple:
+        """
+        Apply organization name similarity tiebreaker.
+        
+        Returns:
+            tuple: (recommendation, reason) or (None, None) if inconclusive
+        """
+        if not self.org_name:
+            return None, None
+        
+        normalized_org = NameNormalizationUtils.normalize_business_name(self.org_name)
+        mist_display = mist_result.get('display_name', '').lower()
+        comp_display = comp_result.get('display_name', '').lower()
+        
+        mist_sim = NameNormalizationUtils.calculate_org_name_similarity(normalized_org, mist_display)
+        comp_sim = NameNormalizationUtils.calculate_org_name_similarity(normalized_org, comp_display)
+        
+        if self.debug:
+            logging.debug(f"Org name similarity: Mist={mist_sim:.3f}, Comparison={comp_sim:.3f}")
+        
+        if mist_sim > comp_sim + 0.1:
+            reason = f"Mist address better matches organization '{self.org_name}'"
+            return 'mist', reason
+        elif comp_sim > mist_sim + 0.1:
+            reason = f"Reference address better matches organization '{self.org_name}'"
+            return 'comparison', reason
+        
+        return None, None
+    
+    def _apply_business_context_tiebreaker(self, mist_result: dict, comp_result: dict) -> tuple:
+        """
+        Apply business context rules as final tiebreaker.
+        
+        Returns:
+            tuple: (recommendation, reason)
+        """
+        business_rec = AddressUtils.apply_business_context_rules(mist_result, comp_result, self.debug)
+        
+        if business_rec == 'mist':
+            reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
+            return 'mist', reason
+        elif business_rec == 'comparison':
+            reason = f"Reference address appears more business-appropriate (type: {comp_result.get('place_type', 'unknown')})"
+            return 'comparison', reason
+        
+        mist_conf = mist_result['confidence']
+        comp_conf = comp_result['confidence']
+        reason = f"All tiebreakers inconclusive - similar confidence ({mist_conf:.3f} vs {comp_conf:.3f})"
+        return 'uncertain', reason
+    
+    def _determine_both_valid_recommendation(self, mist_result: dict, comp_result: dict,
+                                              mist_address: dict, comparison_address: dict) -> tuple:
+        """
+        Determine recommendation when both addresses are valid.
+        
+        Returns:
+            tuple: (recommendation, reason)
+        """
+        if self.debug:
+            logging.debug("TIEBREAKER: Both addresses validated successfully")
+        
+        # Check duplicates first
+        mist_is_dup, ref_is_dup = self._check_duplicate_status(mist_address, comparison_address)
+        rec, reason = self._apply_duplicate_rules(mist_is_dup, ref_is_dup)
+        if rec:
+            return rec, reason
+        
+        # Compare confidence scores
+        rec, reason = self._apply_confidence_comparison(mist_result['confidence'], comp_result['confidence'])
+        if rec:
+            return rec, reason
+        
+        # Org name tiebreaker
+        rec, reason = self._apply_org_name_tiebreaker(mist_result, comp_result)
+        if rec:
+            return rec, reason
+        
+        # Business context as final tiebreaker
+        return self._apply_business_context_tiebreaker(mist_result, comp_result)
+    
+    def _determine_recommendation(self, mist_result: dict, comp_result: dict,
+                                   mist_address: dict, comparison_address: dict) -> tuple:
+        """
+        Determine final recommendation based on validation results.
+        
+        Returns:
+            tuple: (recommendation, reason)
+        """
+        mist_valid = mist_result['valid']
+        comp_valid = comp_result['valid']
+        
+        if mist_valid and not comp_valid:
+            reason = f"Only Mist address is valid (confidence: {mist_result['confidence']:.3f})"
+            if self.debug:
+                logging.debug("Recommendation: MIST (only mist address is valid)")
+            return 'mist', reason
+        
+        if comp_valid and not mist_valid:
+            reason = f"Only reference address is valid (confidence: {comp_result['confidence']:.3f})"
+            if self.debug:
+                logging.debug("Recommendation: COMPARISON (only comparison is valid)")
+            return 'comparison', reason
+        
+        if mist_valid and comp_valid:
+            return self._determine_both_valid_recommendation(
+                mist_result, comp_result, mist_address, comparison_address
+            )
+        
+        if self.debug:
             logging.debug("Recommendation: UNCERTAIN (both addresses failed validation)")
+        return 'uncertain', "Both addresses failed validation"
     
-    final_result = {
-        'mist_validation': mist_result,
-        'comparison_validation': comparison_result,
-        'recommendation': recommendation,
-        'recommendation_reason': recommendation_reason
-    }
-    
-    if debug:
-        logging.debug(f"EXIT: validate_addresses_with_nominatim() - returning: {final_result}")
-    
-    return final_result
+    def validate(self, mist_address: dict, comparison_address: dict) -> dict:
+        """
+        Validate both address sets against Nominatim API.
+        
+        Args:
+            mist_address: Mist address dict with address, city, state, zip
+            comparison_address: Reference address dict
+            
+        Returns:
+            dict: {
+                'mist_validation': validation result,
+                'comparison_validation': validation result,
+                'recommendation': 'mist' | 'comparison' | 'uncertain',
+                'recommendation_reason': explanation string
+            }
+        """
+        self._log_entry(mist_address, comparison_address)
+        
+        # Geocode both addresses with rate limiting
+        if self.debug:
+            logging.debug("Starting mist address validation...")
+        mist_result = self._geocode_address(mist_address, "MIST")
+        
+        if self.debug:
+            logging.debug(f"Applying rate limiting delay ({self.RATE_LIMIT_DELAY}s)...")
+        time.sleep(self.RATE_LIMIT_DELAY)
+        
+        if self.debug:
+            logging.debug("Starting comparison address validation...")
+        comp_result = self._geocode_address(comparison_address, "COMPARISON")
+        
+        if self.debug:
+            logging.debug(f"Mist validation result: {mist_result}")
+            logging.debug(f"Comparison validation result: {comp_result}")
+        
+        # Determine recommendation
+        recommendation, reason = self._determine_recommendation(
+            mist_result, comp_result, mist_address, comparison_address
+        )
+        
+        final_result = {
+            'mist_validation': mist_result,
+            'comparison_validation': comp_result,
+            'recommendation': recommendation,
+            'recommendation_reason': reason
+        }
+        
+        if self.debug:
+            logging.debug(f"EXIT: NominatimValidator.validate() - returning: {final_result}")
+        
+        return final_result
+
 
 class NameNormalizationUtils:
     """General name & token normalization helpers (business, org, and generic strings).
@@ -22827,10 +22901,18 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist address: {mist_addr_str}")
                 logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison address: {comp_addr_str}")
                 
-                validation_result = validate_addresses_with_nominatim(
-                    mist_address, comparison_address, config=None, timeout=ADDRESS_VALIDATION_TIMEOUT, debug=debug, skip_ssl_verify=skip_ssl_verify, org_name=org_name,
-                    mist_duplicates=mist_duplicates, ref_duplicates=ref_duplicates, site_name=device.get("site_name", "")
+                # Create config for NominatimValidator
+                validator_config = AddressValidationConfig(
+                    timeout=ADDRESS_VALIDATION_TIMEOUT,
+                    debug=debug,
+                    skip_ssl_verify=skip_ssl_verify,
+                    org_name=org_name,
+                    site_name=device.get("site_name", ""),
+                    mist_duplicates=mist_duplicates,
+                    ref_duplicates=ref_duplicates
                 )
+                validator = NominatimValidator(validator_config)
+                validation_result = validator.validate(mist_address, comparison_address)
                 
                 # Format results for display
                 mist_status = " Valid" if validation_result['mist_validation']['valid'] else " Invalid"
