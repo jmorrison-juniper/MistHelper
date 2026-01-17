@@ -550,6 +550,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.17.24",
+      "date": "2026-01-17",
+      "changes": {
+        "dead-code-removal": [
+          "loop_refresh_core_datasets - duplicate of DataCollectionManager.continuous_loop",
+          "listen_for_command_output - legacy wrapper (use ARPCommandManager._listen_for_output)",
+          "WebSocketListenerConfig dataclass - unused config class"
+        ],
+        "refactoring": [
+          "Updated menu 75 to use DataCollectionManager.continuous_loop directly",
+          "Added NOTE comments at removal sites for code archaeology"
+        ]
+      }
+    },
+    {
       "version": "25.07.10.08.00",
       "date": "2025-07-10",
       "changes": {
