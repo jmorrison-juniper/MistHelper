@@ -131,7 +131,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 1. **API Discovery**: Check `mistapi.api.v1.orgs.*` or `mistapi.api.v1.sites.*`
 2. **Primary Key Strategy**: Add to `ENDPOINT_PRIMARY_KEY_STRATEGIES` with appropriate type (see Database Strategy section)
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
-4. **Dual Output**: Call `write_data_with_format_selection(data, filename, api_function_name=...)`
+4. **Dual Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
 6. **Version Changelog**: Update README with `version YY.MM.DD.HH.MM` format (UTC timestamp)
 7. **Git Workflow**: Execute full deployment pipeline (see below)

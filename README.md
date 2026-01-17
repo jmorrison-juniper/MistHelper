@@ -550,6 +550,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.18.30",
+      "date": "2026-01-17",
+      "changes": {
+        "refactoring": [
+          "write_data_with_format_selection standalone function moved into DataExporter class",
+          "New method: DataExporter.write_with_format_selection() - main entry point",
+          "Helper methods: _validate_write_inputs(), _write_csv_format(), _write_sqlite_format()",
+          "All callers updated to use DataExporter.write_with_format_selection()",
+          "NO WRAPPERS: function now lives in appropriate class per agents.md rules"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.17.53",
       "date": "2026-01-17",
       "changes": {

@@ -6000,7 +6000,7 @@ class PacketCaptureManager:
                 **capture_data
             }
             
-            write_data_with_format_selection(
+            DataExporter.write_with_format_selection(
                 [export_data],
                 filename,
                 api_function_name='startSitePacketCapture' if scope == 'site' else 'startOrgPacketCapture'
@@ -7730,68 +7730,68 @@ def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any
                 logging.error(f"Failed to close database connection: {e} at {timestamp}")
 
 
-def write_data_with_format_selection(data: List[Dict[str, Any]], filename_or_table: str, format_override: Optional[str] = None, api_function_name: Optional[str] = None) -> bool:
-    """
-    Writes data to either CSV or Redis/SQLite database based on global OUTPUT_FORMAT or override.
-    Follows NASA/JPL coding standards with comprehensive logging.
-    
-    Args:
-        data (list): List of dictionaries containing the data to write
-        filename_or_table (str): CSV filename or database table name
-        format_override (str): Optional override for output format ("csv" or "Redis/SQLite")
-        api_function_name (str, optional): Name of the API function for Redis/SQLite strategy selection
-    
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    timestamp = datetime.now(timezone.utc).isoformat()
-    logging.debug(f"ENTRY: write_data_with_format_selection(data_rows={len(data) if data else 0}, filename_or_table={filename_or_table}, format_override={format_override}, api_function_name={api_function_name}) at {timestamp}")
-    
-    # Determine output format (format_override takes precedence over global setting)
-    output_format = format_override if format_override else OUTPUT_FORMAT
-    
-    # Input validation
-    if not data:
-        logging.warning(f"No data provided for output to {filename_or_table} at {timestamp}")
-        logging.debug(f"EXIT: write_data_with_format_selection - no data")
-        return False
-        
-    if output_format not in ["csv", "sqlite"]:
-        logging.error(f"Invalid output format: {output_format}. Must be 'csv' or 'sqlite' at {timestamp}")
-        logging.debug(f"EXIT: write_data_with_format_selection - invalid format")
-        return False
-    
-    try:
-        if output_format == "csv":
-            # Ensure CSV files have .csv extension
-            csv_filename = filename_or_table if filename_or_table.endswith('.csv') else f"{filename_or_table}.csv"
-            logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename} at {timestamp}")
-            DataExporter.write_to_csv(data, csv_filename)
-            logging.debug(f"EXIT: write_data_with_format_selection - CSV success")
-            return True
-        else:  # Redis/SQLite
-            # Convert filename to table name (remove .csv extension if present)
-            table_name = filename_or_table
-            if table_name.endswith('.csv'):
-                table_name = table_name[:-4]  # Remove .csv extension
-            
-            logging.info(f"Writing {len(data)} rows to SQLite table: {table_name} using API function {api_function_name} at {timestamp}")
-            result = write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=api_function_name)
-            logging.debug(f"EXIT: write_data_with_format_selection - SQLite {'success' if result else 'failed'}")
-            return result
-            
-    except Exception as e:
-        logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {e} at {timestamp}")
-        logging.debug(f"EXIT: write_data_with_format_selection - exception")
-        return False
-
-
 class DataExporter:
     """
     Handles data export operations for CSV and Redis/SQLite output formats.
     Centralizes all data saving logic that was previously scattered across functions.
     Uses static methods to avoid unnecessary object instantiation.
     """
+    
+    @staticmethod
+    def write_with_format_selection(data: List[Dict[str, Any]], filename_or_table: str, format_override: Optional[str] = None, api_function_name: Optional[str] = None) -> bool:
+        """
+        Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
+        
+        Args:
+            data: List of dictionaries containing the data to write
+            filename_or_table: CSV filename or database table name
+            format_override: Optional override for output format ("csv" or "sqlite")
+            api_function_name: Name of the API function for SQLite strategy selection
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        output_format = format_override if format_override else OUTPUT_FORMAT
+        
+        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
+            return False
+        
+        try:
+            if output_format == "csv":
+                return DataExporter._write_csv_format(data, filename_or_table)
+            else:
+                return DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
+        except Exception as error:
+            logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {error}")
+            return False
+    
+    @staticmethod
+    def _validate_write_inputs(data: List[Dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
+        """Validate inputs for write operation. Returns True if valid."""
+        if not data:
+            logging.warning(f"No data provided for output to {filename_or_table}")
+            return False
+        
+        if output_format not in ["csv", "sqlite"]:
+            logging.error(f"Invalid output format: {output_format}. Must be 'csv' or 'sqlite'")
+            return False
+        
+        return True
+    
+    @staticmethod
+    def _write_csv_format(data: List[Dict[str, Any]], filename_or_table: str) -> bool:
+        """Write data to CSV format. Returns True on success."""
+        csv_filename = filename_or_table if filename_or_table.endswith('.csv') else f"{filename_or_table}.csv"
+        logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename}")
+        DataExporter.write_to_csv(data, csv_filename)
+        return True
+    
+    @staticmethod
+    def _write_sqlite_format(data: List[Dict[str, Any]], filename_or_table: str, api_function_name: Optional[str]) -> bool:
+        """Write data to SQLite format. Returns True on success."""
+        table_name = filename_or_table[:-4] if filename_or_table.endswith('.csv') else filename_or_table
+        logging.info(f"Writing {len(data)} rows to SQLite table: {table_name}")
+        return write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=api_function_name)
     
     @staticmethod
     def write_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:
@@ -7856,18 +7856,18 @@ class DataExporter:
     @staticmethod
     def save_data_to_output(data, filename, api_function_name=None):
         """
-        Save data to the specified format (CSV or Redis/SQLite).
-        This replaces the save_data_to_output function with identical signature.
+        Save data to the specified format (CSV or SQLite).
+        Convenience method with identical signature for backward compatibility.
         
         Args:
-            data (list): List of dictionaries containing the data to write
-            filename (str): CSV filename or database table name  
-            api_function_name (str, optional): Name of the API function for Redis/SQLite strategy selection
+            data: List of dictionaries containing the data to write
+            filename: CSV filename or database table name  
+            api_function_name: Name of the API function for SQLite strategy selection
             
         Returns:
             bool: True if successful, False otherwise
         """
-        return write_data_with_format_selection(data, filename, api_function_name=api_function_name)
+        return DataExporter.write_with_format_selection(data, filename, api_function_name=api_function_name)
     
     @staticmethod
     def export_with_processing(data, filename, sort_key=None, api_function_name=None):
@@ -27379,7 +27379,7 @@ class MapsManager:
             # Write to dual output format
             safe_site_name = EnhancedSSHRunner.sanitize_filename(site_name or "unknown_site")
             filename = f"SiteMaps_{safe_site_name}"
-            write_data_with_format_selection(
+            DataExporter.write_with_format_selection(
                 maps_data,
                 filename,
                 api_function_name='listSiteMaps'
@@ -27435,7 +27435,7 @@ class MapsManager:
             
             # Write to dual output format
             filename = "SiteMaps_Export"
-            write_data_with_format_selection(
+            DataExporter.write_with_format_selection(
                 all_maps_data,
                 filename,
                 api_function_name='listSiteMaps'
@@ -27490,7 +27490,7 @@ class MapsManager:
                 return
             
             filename = "SiteMaps_WithImages"
-            write_data_with_format_selection(
+            DataExporter.write_with_format_selection(
                 maps_with_images,
                 filename,
                 api_function_name='listSiteMaps'
@@ -28169,9 +28169,9 @@ class MapsManager:
             
             print(f"{'-' * 80}")
             
-            # Export to CSV/Redis/SQLite
+            # Export to CSV/SQLite
             filename = "MapsWithoutImages_Report"
-            write_data_with_format_selection(
+            DataExporter.write_with_format_selection(
                 maps_without_images,
                 filename,
                 api_function_name='listSiteMaps'
@@ -28543,7 +28543,7 @@ class MapsManager:
                     devices_data.append(flattened)
                 
                 filename = f"MapDevices_{EnhancedSSHRunner.sanitize_filename(site_name or 'unknown_site')}"
-                write_data_with_format_selection(
+                DataExporter.write_with_format_selection(
                     devices_data,
                     filename,
                     api_function_name='listSiteDevices'
