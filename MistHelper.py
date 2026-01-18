@@ -35544,16 +35544,7 @@ class FirmwareManager:
         return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
-def check_firmware_upgrade_status_direct():
-    """
-    Direct firmware status check using FirmwareManager.
-    Avoids the deprecated wrapper chain that causes double prompting.
-    """
-    logging.info("Starting firmware status check using FirmwareManager directly")
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()
-    
-    firmware_manager = FirmwareManager(apisession, org_id)
-    return firmware_manager.check_firmware_upgrade_status()
+# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly
 
 
 class FirmwareUpgradeStatusChecker:
@@ -37307,7 +37298,8 @@ class BulkAPFirmwareUpgrader:
         try:
             check = input(f"\n Check upgrade status now? (y/n): ").strip().lower()
             if check in ['y', 'yes']:
-                check_firmware_upgrade_status_direct()
+                org_id = ConfigUtils.get_cached_or_prompted_org_id()
+                FirmwareManager(apisession, org_id).check_firmware_upgrade_status()
         except (EOFError, KeyboardInterrupt):
             pass
     
@@ -41014,7 +41006,7 @@ menu_actions = {
     "59": (OrgExportUtils.mx_edges, "Export MX Edge information for the organization"),
     
     # Status & Monitoring
-    "60": (check_firmware_upgrade_status_direct, "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
+    "60": (lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).check_firmware_upgrade_status(), "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
     "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: compare_inventory_with_csv(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
     "62": (TroubleshootUtils.launch_interactive, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
