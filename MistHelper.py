@@ -12467,7 +12467,7 @@ class SiteExportUtils:
         
         # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
         print("! Discovering potential anomaly metrics from Mist API definitions...")
-        potential_metrics = get_potential_anomaly_metrics()
+        potential_metrics = AnomalyMetricsDiscovery.discover()
         
         # Extract just the metric names for API calls
         site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]
@@ -38110,588 +38110,90 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
 # ============================================================================
 
 
-def get_potential_anomaly_metrics():
+class AnomalyMetricsDiscovery:
     """
-    Dynamically build a list of potential site-scoped anomaly metrics based on 
-    ConstInsightMetrics.csv (if available) or fallback to known working metrics.
+    Discovers and prioritizes site-scoped anomaly metrics from ConstInsightMetrics.csv.
+    
+    Provides fallback metrics when CSV is unavailable. Used for AI/ML anomaly analysis.
     """
-    try:
-        anomaly_metrics_path = FilePathUtils.get_csv_path("ConstInsightMetrics.csv")
+    
+    # Priority keywords for anomaly-related metrics
+    PRIORITY_KEYWORDS = [
+        'roam', 'availability', 'capacity', 'coverage', 'client',
+        'throughput', 'latency', 'band', 'ap-', 'switch-'
+    ]
+    
+    # Fallback metrics when CSV unavailable
+    FALLBACK_METRICS = [
+        {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
+        {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
+        {"metric_name": "ap-availability", "description": "AP availability anomalies", "priority": True}
+    ]
+    
+    @classmethod
+    def discover(cls) -> List[Dict[str, Any]]:
+        """
+        Discover potential anomaly metrics from ConstInsightMetrics.csv.
         
-        if not os.path.exists(anomaly_metrics_path):
-            logging.warning("ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11).")
-            # Return fallback metrics
-            return [
-                {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
-                {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
-                {"metric_name": "ap-availability", "description": "AP availability anomalies", "priority": True}
-            ]
-        
+        Returns:
+            List of metric dictionaries with metric_name, description, and priority.
+        """
+        try:
+            metrics_path = FilePathUtils.get_csv_path("ConstInsightMetrics.csv")
+            
+            if not os.path.exists(metrics_path):
+                return cls._handle_missing_csv()
+            
+            return cls._parse_metrics_csv(metrics_path)
+            
+        except Exception as exception:
+            logging.error(f"Error reading ConstInsightMetrics.csv: {str(exception)}")
+            return cls.FALLBACK_METRICS.copy()
+    
+    @classmethod
+    def _handle_missing_csv(cls) -> List[Dict[str, Any]]:
+        """Handle case when ConstInsightMetrics.csv is not found."""
+        logging.warning(
+            "ConstInsightMetrics.csv not found. "
+            "Please export organization constants first (menu option 11)."
+        )
+        return cls.FALLBACK_METRICS.copy()
+    
+    @classmethod
+    def _parse_metrics_csv(cls, csv_path: str) -> List[Dict[str, Any]]:
+        """Parse metrics CSV and extract site-scoped anomaly metrics."""
         potential_metrics = []
         
-        # Read and parse insight metrics CSV
-        with open(anomaly_metrics_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        with open(csv_path, 'r', encoding='utf-8') as csv_file:
+            reader = csv.DictReader(csv_file)
             for row in reader:
-                metric_key = row.get('key', '').strip().lower()
-                metric_name = row.get('name', '').strip()
-                metric_scope = row.get('scope', '').strip().lower()
-                
-                # Filter for site-scoped metrics that might have anomaly data
-                if metric_scope == 'site' and metric_key:
-                    # Prioritize known anomaly-related metrics
-                    is_priority = any(keyword in metric_key for keyword in [
-                        'roam', 'availability', 'capacity', 'coverage', 'client',
-                        'throughput', 'latency', 'band', 'ap-', 'switch-'
-                    ])
-                    
-                    potential_metrics.append({
-                        "metric_name": metric_key,
-                        "description": metric_name if metric_name else f"Anomaly events for {metric_key}",
-                        "priority": is_priority
-                    })
+                metric = cls._process_csv_row(row)
+                if metric:
+                    potential_metrics.append(metric)
         
-        # Sort by priority (known working metrics first)
-        potential_metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-        
-        logging.info(f"Found {len(potential_metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
-        return potential_metrics
-        
-    except Exception as e:
-        logging.error(f"Error reading ConstInsightMetrics.csv: {str(e)}")
-        # Return fallback metrics if CSV parsing fails
-        return [
-            {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
-            {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
-            {"metric_name": "ap-availability", "description": "AP availability anomalies", "priority": True}
-        ]
-
-
-# The following section was corrupted during refactoring - removing orphaned content
-        print("X  No sites selected")
-        return {"error": "No sites selected"}
-
-    # SSR firmware upgrade parameter selection
-    print(f"\n{'='*60}")
-    print("SSR FIRMWARE UPGRADE PARAMETER CONFIGURATION")
-    print(f"{'='*60}")
+        return cls._sort_by_priority(potential_metrics)
     
-    # Strategy selection (conservative defaults for SSR routing infrastructure)
-    print("\nUpgrade Strategy Options (optimized for routing infrastructure):")
-    print("1. serial      - Upgrade SSRs one by one (safest for routing infrastructure)")  
-    print("2. big_bang    - Upgrade all SSRs simultaneously (higher risk)")
+    @classmethod
+    def _process_csv_row(cls, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        """Process a single CSV row and return metric dict if site-scoped."""
+        metric_key = row.get('key', '').strip().lower()
+        metric_name = row.get('name', '').strip()
+        metric_scope = row.get('scope', '').strip().lower()
+        
+        if metric_scope != 'site' or not metric_key:
+            return None
+        
+        is_priority = any(keyword in metric_key for keyword in cls.PRIORITY_KEYWORDS)
+        description = metric_name if metric_name else f"Anomaly events for {metric_key}"
+        
+        return {"metric_name": metric_key, "description": description, "priority": is_priority}
     
-    while True:
-        strategy_choice = input("\nSelect upgrade strategy (1-2, recommend 1): ").strip()
-        if strategy_choice == '1':
-            upgrade_strategy = 'serial'
-            break
-        elif strategy_choice == '2':
-            upgrade_strategy = 'big_bang'
-            print("!? WARNING: big_bang strategy will upgrade all SSRs simultaneously")
-            print("   This may cause widespread WAN connectivity disruption")
-            break
-        else:
-            print("X  Please enter 1 or 2")
-    
-    print(f"-> Selected strategy: {upgrade_strategy}")
-    
-    # Reboot timing selection (SSR-specific parameter)
-    print("\nReboot Timing Options:")
-    print("1. Automatic - Reboot immediately after firmware download (recommended)")
-    print("2. Manual    - Download firmware only, manual reboot required later")
-    
-    while True:
-        reboot_choice = input("\nReboot timing? (1-2): ").strip()
-        if reboot_choice == '1':
-            auto_reboot = True
-            break
-        elif reboot_choice == '2':
-            auto_reboot = False
-            print("!? WARNING: SSRs require manual reboot to activate new firmware")
-            print("   New firmware will not be operational until manual reboot")
-            break
-        else:
-            print("X  Please enter 1 or 2")
-    
-    print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
-    
-    # Channel selection for firmware versions  
-    print("\nFirmware Channel Options:")
-    print("1. stable - Production-ready releases (recommended)")
-    print("2. beta   - Pre-release versions for testing")
-    print("3. alpha  - Development versions (not recommended for production)")
-    
-    while True:
-        channel_choice = input("\nSelect firmware channel (1-3): ").strip()
-        if channel_choice == '1':
-            firmware_channel = 'stable'
-            break
-        elif channel_choice == '2':
-            firmware_channel = 'beta'
-            break
-        elif channel_choice == '3':
-            firmware_channel = 'alpha'
-            print("!? WARNING: alpha channel contains development versions")
-            print("   Not recommended for production environments")
-            break
-        else:
-            print("X  Please enter 1, 2, or 3")
-    
-    print(f"-> Firmware channel: {firmware_channel}")
-
-    # SSR-specific firmware version selection
-    print(f"\n{'='*60}")
-    print("SSR FIRMWARE VERSION SELECTION")
-    print(f"{'='*60}")
-    
-    # Get available firmware versions for SSRs (Session Smart Routers)
-    print("\n-> Discovering available SSR firmware versions...")
-    try:
-        # Use the SSR-specific API to get available firmware versions
-        versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
-            apisession, org_id, channel=firmware_channel
-        )
-        
-        if versions_response.status_code != 200:
-            print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
-            logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
-            return {"error": "Failed to retrieve SSR firmware versions"}
-        
-        available_versions = []
-        if hasattr(versions_response, 'data') and versions_response.data:
-            for version_obj in versions_response.data:
-                if isinstance(version_obj, dict):
-                    version = version_obj.get('version')
-                    package = version_obj.get('package', 'SSR')
-                    is_default = version_obj.get('default', False)
-                    if version:
-                        available_versions.append({
-                            'version': version,
-                            'package': package,
-                            'default': is_default
-                        })
-                elif isinstance(version_obj, str):
-                    # Handle case where API returns just version strings
-                    available_versions.append({
-                        'version': version_obj,
-                        'package': 'SSR',
-                        'default': False
-                    })
-        
-        if not available_versions:
-            print(f"X  No SSR firmware versions available for {firmware_channel} channel")
-            print("   Please check with Juniper support for available SSR firmware versions")
-            print("   Or try a different firmware channel (stable/beta/alpha)")
-            return {"error": f"No SSR firmware versions available for {firmware_channel} channel"}
-        
-        print(f"!? Found {len(available_versions)} available SSR firmware versions")
-        print(f"  Channel: {firmware_channel}")
-        
-        # Get SSR inventory to show current firmware versions  
-        print("\n-> Checking current SSR devices...")
-        ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-            apisession, org_id, type="gateway"
-        )
-        
-        current_firmware_versions = set()
-        ssr_models_found = set()
-        ssr_count = 0
-        
-        if ssrs_response.status_code == 200:
-            # Filter for Session Smart Router models specifically
-            all_gateways = ssrs_response.data
-            for gateway in all_gateways:
-                gateway_model = gateway.get('model', '')
-                gateway_type = gateway.get('type', '')
-                
-                # Check if this is an SSR by model or type
-                if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
-                    ssr_count += 1
-                    if gateway.get('version'):
-                        current_firmware_versions.add(gateway.get('version'))
-                    if gateway.get('model'):
-                        ssr_models_found.add(gateway.get('model'))
-        
-        if ssr_count > 0:
-            print(f"!? Found {ssr_count} SSR device(s) in organization")
-            if ssr_models_found:
-                print(f"  Models: {', '.join(sorted(ssr_models_found))}")
-            if current_firmware_versions:
-                print(f"  Current versions: {', '.join(sorted(current_firmware_versions))}")
-        
-        # Present firmware version options
-        print(f"\n{'='*50}")
-        print("AVAILABLE SSR FIRMWARE VERSIONS")
-        print(f"{'='*50}")
-        
-        for i, version_info in enumerate(available_versions, 1):
-            version = version_info['version']
-            package = version_info['package']
-            is_default = version_info['default']
-            
-            default_marker = " (default)" if is_default else ""
-            print(f"{i:2d}. {version} [{package}]{default_marker}")
-        
-        # Allow user to select firmware version
-        while True:
-            try:
-                choice = input(f"\nSelect firmware version (1-{len(available_versions)}): ").strip()
-                if not choice:
-                    print("X  Please enter a selection")
-                    continue
-                    
-                version_index = int(choice) - 1
-                if 0 <= version_index < len(available_versions):
-                    selected_version = available_versions[version_index]
-                    target_version = selected_version['version']
-                    break
-                else:
-                    print(f"X  Please enter a number between 1 and {len(available_versions)}")
-            except ValueError:
-                print("X  Please enter a valid number")
-        
-        print(f"-> Selected firmware version: {target_version}")
-        
-    except Exception as e:
-        print(f"X  Error during SSR firmware discovery: {str(e)}")
-        logger.error(f"SSR firmware discovery failed: {str(e)}")
-        return {"error": f"SSR firmware discovery error: {str(e)}"}
-
-    # Configuration summary and confirmation
-    print(f"\n{'='*60}")
-    print("SSR UPGRADE CONFIGURATION SUMMARY")
-    print(f"{'='*60}")
-    print(f"Organization: {org_name}")
-    print(f"Sites to upgrade: {len(selected_sites)}")
-    print(f"Target firmware: {target_version}")
-    print(f"Firmware channel: {firmware_channel}")
-    print(f"Upgrade strategy: {upgrade_strategy}")
-    print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
-    
-    print(f"\n!? CRITICAL ROUTING INFRASTRUCTURE WARNING !?")
-    print("SSR firmware upgrades will cause WAN connectivity disruption!")
-    print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
-    print("- Branch offices may lose connectivity")
-    print("- Plan extended maintenance windows")
-    print("- Verify backup connectivity paths")
-    print("- Coordinate with network operations team")
-    print("- Monitor upgrade progress closely")
-    
-    print(f"\nTo proceed with SSR firmware upgrade, type: UPGRADE")
-    confirmation = InputUtils.safe_input("Confirmation: ", "", True, "SSR firmware upgrade confirmation")
-    
-    if confirmation is None or confirmation != "UPGRADE":
-        print("-> Operation cancelled - incorrect confirmation")
-        logger.info("SSR firmware upgrade cancelled by user")
-        return {"cancelled": True}
-
-    # Execute upgrade operation
-    print(f"\n{'='*60}")
-    print("EXECUTING SSR FIRMWARE UPGRADE")
-    print(f"{'='*60}")
-    
-    # Initialize results tracking
-    upgrade_results = {
-        'operation_id': f"ssr_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        'target_version': target_version,
-        'strategy': upgrade_strategy,
-        'channel': firmware_channel,
-        'reboot': auto_reboot,
-        'sites_processed': 0,
-        'ssrs_upgraded': 0,
-        'errors': [],
-        'start_time': datetime.now().isoformat(),
-        'site_results': []
-    }
-    
-    logger.info(f"Starting SSR firmware upgrade operation: {upgrade_results['operation_id']}")
-    
-    # Define SSR model patterns for device filtering
-    ssr_models = ['SSR', '128T']  # Patterns to identify SSR devices
-    
-    # Get org-level SSR inventory for validation
-    print("-> Validating SSR devices from organization inventory...")
-    org_ssr_inventory = {}
-    try:
-        ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-            apisession, org_id, type="gateway"
-        )
-        if ssrs_response.status_code == 200:
-            for gateway in ssrs_response.data:
-                gateway_id = gateway.get('id')
-                gateway_model = gateway.get('model', '')
-                gateway_type = gateway.get('type', '')
-                
-                # Check if this is an SSR by model or type
-                if gateway_type == 'ssr' or 'SSR' in gateway_model or '128T' in gateway_model:
-                    org_ssr_inventory[gateway_id] = {
-                        'model': gateway_model,
-                        'type': gateway_type,
-                        'version': gateway.get('version', ''),
-                        'site_id': gateway.get('site_id', '')
-                    }
-            print(f"!? Found {len(org_ssr_inventory)} SSR device(s) in organization inventory")
-        else:
-            logger.error(f"Failed to get org inventory: {ssrs_response.status_code}")
-            print("X  Failed to validate SSR inventory")
-    except Exception as e:
-        logger.error(f"Error getting org SSR inventory: {e}")
-        print(f"X  Error validating SSR inventory: {e}")
-    
-    try:
-        # Process each site for SSR upgrades
-        for site_index, site in enumerate(selected_sites, 1):
-            site_id = site.get('id')
-            site_name = site.get('name', 'Unknown')
-            
-            print(f"\n[{site_index}/{len(selected_sites)}] Processing site: {site_name}")
-            logger.info(f"Processing site {site_index}/{len(selected_sites)}: {site_name} (ID: {site_id})")
-            
-            site_result = {
-                'site_id': site_id,
-                'site_name': site_name,
-                'ssrs_found': 0,
-                'upgrade_initiated': False,
-                'error': None
-            }
-            
-            try:
-                # Get SSRs at this site
-                print(f"  -> Discovering SSRs at {site_name}...")
-                site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    apisession, site_id, type='gateway'
-                )
-                
-                if site_devices_response.status_code != 200:
-                    error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
-                    print(f"  X  {error_msg}")
-                    site_result['error'] = error_msg
-                    upgrade_results['errors'].append(error_msg)
-                    continue
-                
-                site_devices = site_devices_response.data
-                
-                # Filter for SSRs at this site
-                site_ssrs = []
-                for device in site_devices:
-                    device_model = device.get('model', '')
-                    device_type = device.get('type', '')
-                    device_id = device.get('id', '')
-                    
-                    # Debug: Log device details
-                    logger.debug(f"Device {device_id}: model='{device_model}', type='{device_type}'")
-                    
-                    # Check if this is an SSR
-                    if (device_type == 'gateway' and 
-                        (any(ssr_pattern in device_model for ssr_pattern in ssr_models) or 'SSR' in device_model)):
-                        site_ssrs.append(device)
-                        logger.info(f"Identified SSR device: {device_id} (model: {device_model}, type: {device_type})")
-                        print(f"    -> Identified SSR: {device_model} ({device_id})")
-                    else:
-                        logger.debug(f"Skipping non-SSR device: {device_id} (model: {device_model}, type: {device_type})")
-                
-                site_result['ssrs_found'] = len(site_ssrs)
-                
-                if not site_ssrs:
-                    print(f"  -> No SSRs found at {site_name}, skipping")
-                    logger.info(f"No SSRs found at site {site_name}")
-                    upgrade_results['sites_processed'] += 1
-                    upgrade_results['site_results'].append(site_result)
-                    continue
-                
-                print(f"  !? Found {len(site_ssrs)} SSR(s) at {site_name}")
-                
-                # Initiate firmware upgrade for SSRs at this site
-                ssr_device_ids = [ssr['id'] for ssr in site_ssrs]
-                
-                # Validate device IDs against org SSR inventory and check firmware versions
-                validated_device_ids = []
-                skipped_device_ids = []
-                for device_id in ssr_device_ids:
-                    if device_id in org_ssr_inventory:
-                        ssr_info = org_ssr_inventory[device_id]
-                        current_version = ssr_info.get('version', '')
-                        
-                        # Check if device is already at target version
-                        if current_version == target_version:
-                            logger.info(f"Device {device_id} already at target version {target_version} - skipping")
-                            print(f"    -> Device {device_id} already at version {target_version} - skipping")
-                            skipped_device_ids.append(device_id)
-                        else:
-                            # Check for potential firmware downgrade
-                            if self._is_firmware_downgrade(current_version, target_version):
-                                logger.warning(f"Device {device_id} downgrade detected: {current_version} -> {target_version} - skipping")
-                                print(f"    ! Downgrade detected: {ssr_info['model']} ({current_version} -> {target_version}) - skipping")
-                                skipped_device_ids.append(device_id)
-                            else:
-                                validated_device_ids.append(device_id)
-                                logger.info(f"Validated SSR device: {device_id} (model: {ssr_info['model']}, current: {current_version} -> target: {target_version})")
-                                print(f"    -> Upgrade needed: {ssr_info['model']} ({current_version} -> {target_version})")
-                    else:
-                        logger.warning(f"Device {device_id} not found in org SSR inventory - skipping")
-                        print(f"    !? Device {device_id} not in SSR inventory - skipping")
-                        skipped_device_ids.append(device_id)
-                
-                if not validated_device_ids:
-                    if skipped_device_ids:
-                        reason = "already at target version or not in SSR inventory"
-                        logger.info(f"All devices at {site_name} skipped: {reason}")
-                        print(f"  -> All devices at {site_name} skipped ({reason})")
-                    else:
-                        logger.warning(f"No validated SSR devices found at {site_name}")
-                        print(f"  -> No validated SSR devices at {site_name}, skipping")
-                    upgrade_results['sites_processed'] += 1
-                    upgrade_results['site_results'].append(site_result)
-                    continue
-                
-                print(f"  -> Initiating firmware upgrade for {len(validated_device_ids)} SSR(s) needing upgrade...")
-                if skipped_device_ids:
-                    print(f"  -> Skipped {len(skipped_device_ids)} device(s) (already at target version or other issues)")
-                logger.info(f"Initiating SSR firmware upgrade at {site_name} for validated devices: {validated_device_ids}")
-                
-                # Use Mist API to upgrade SSR firmware
-                # SECURITY: SSR upgrades use org-level API with specific parameters
-                upgrade_body = {
-                    'device_ids': validated_device_ids,
-                    'channel': firmware_channel,
-                    'version': target_version,
-                    'strategy': upgrade_strategy
-                }
-                
-                # Add reboot timing if auto-reboot enabled
-                if auto_reboot:
-                    # For auto-reboot, don't set reboot_at (use default timing)
-                    # The default is start_time, which enables reboot after download
-                    pass  # Let API use default reboot timing
-                else:
-                    # Disable reboot if auto_reboot is False
-                    upgrade_body['reboot_at'] = -1
-                
-                # Debug: Log the upgrade request body
-                logger.info(f"SSR upgrade request body: {upgrade_body}")
-                print(f"  -> Request body: channel='{firmware_channel}', version='{target_version}', strategy='{upgrade_strategy}'")
-                print(f"  -> Device IDs: {validated_device_ids}")
-                
-                # Execute the SSR-specific upgrade API call
-                upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(
-                    apisession, 
-                    org_id,
-                    body=upgrade_body
-                )
-                
-                if upgrade_response.status_code in [200, 202]:
-                    print(f"  !? Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
-                    site_result['upgrade_initiated'] = True
-                    upgrade_results['ssrs_upgraded'] += len(validated_device_ids)
-                    logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
-                else:
-                    # Log response details for debugging
-                    try:
-                        # Try multiple ways to get response content
-                        if hasattr(upgrade_response, 'data') and upgrade_response.data:
-                            response_text = str(upgrade_response.data)
-                        elif hasattr(upgrade_response, 'text') and upgrade_response.text:
-                            response_text = upgrade_response.text
-                        elif hasattr(upgrade_response, 'content') and upgrade_response.content:
-                            response_text = upgrade_response.content.decode('utf-8')
-                        else:
-                            response_text = f"Status: {upgrade_response.status_code}, Headers: {dict(upgrade_response.headers) if hasattr(upgrade_response, 'headers') else 'None'}"
-                        
-                        # Check for specific error types
-                        if 'already at the requested fw version' in response_text.lower():
-                            # This is informational, not a real error
-                            logger.info(f"SSR upgrade skipped at {site_name}: devices already at target version")
-                            print(f"  - SSRs at {site_name} already at target version {target_version}")
-                            site_result['upgrade_initiated'] = False
-                            site_result['skip_reason'] = 'already_at_version'
-                            # Don't count this as an error
-                        elif 'downgrade fw version not allowed' in response_text.lower():
-                            # This is a validation error, not a system error
-                            logger.warning(f"SSR downgrade rejected at {site_name}: API prevents firmware downgrades")
-                            print(f"  ! Firmware downgrade not allowed at {site_name} - API validation failed")
-                            site_result['upgrade_initiated'] = False
-                            site_result['skip_reason'] = 'downgrade_not_allowed'
-                            # Don't count this as a critical error
-                        else:
-                            logger.error(f"SSR upgrade API error response: {response_text}")
-                            print(f"  -> API Response: {response_text}")
-                            
-                            error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                            print(f"  X  {error_msg}")
-                            site_result['error'] = error_msg
-                            upgrade_results['errors'].append(error_msg)
-                            logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
-                            
-                    except Exception as e:
-                        logger.error(f"Could not read response details: {e}")
-                        print(f"  -> Could not read response: {e}")
-                        
-                        error_msg = f"Upgrade initiation failed for {site_name}: {upgrade_response.status_code}"
-                        print(f"  X  {error_msg}")
-                        site_result['error'] = error_msg
-                        upgrade_results['errors'].append(error_msg)
-                        logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
-                
-            except Exception as site_error:
-                error_msg = f"Error processing site {site_name}: {str(site_error)}"
-                print(f"  X  {error_msg}")
-                site_result['error'] = error_msg
-                upgrade_results['errors'].append(error_msg)
-                logger.error(f"Site processing error for {site_name}: {str(site_error)}")
-            
-            upgrade_results['sites_processed'] += 1
-            upgrade_results['site_results'].append(site_result)
-        
-        # Operation completion
-        upgrade_results['end_time'] = datetime.now().isoformat()
-        
-        print(f"\n{'='*60}")
-        print("SSR FIRMWARE UPGRADE OPERATION COMPLETED")
-        print(f"{'='*60}")
-        print(f"Operation ID: {upgrade_results['operation_id']}")
-        print(f"Sites processed: {upgrade_results['sites_processed']}")
-        print(f"SSRs upgraded: {upgrade_results['ssrs_upgraded']}")
-        print(f"Errors encountered: {len(upgrade_results['errors'])}")
-        
-        if upgrade_results['errors']:
-            print(f"\nErrors:")
-            for error in upgrade_results['errors']:
-                print(f"  - {error}")
-        
-        print(f"\nSSR upgrade operations have been initiated.")
-        print(f"Monitor progress through Mist dashboard or API.")
-        print(f"Check individual SSR status for completion and connectivity.")
-        print(f"Verify SD-WAN tunnel re-establishment after reboots.")
-        
-        logger.info(f"SSR firmware upgrade operation completed: {upgrade_results['operation_id']}")
-        return upgrade_results
-        
-    except Exception as e:
-        error_msg = f"Critical error in SSR firmware upgrade: {str(e)}"
-        print(f"\nX  {error_msg}")
-        logger.error(error_msg)
-        
-        upgrade_results['end_time'] = datetime.now().isoformat()
-        upgrade_results['error'] = str(e)
-        
-        return upgrade_results
-
-
-# ============================================================================
-# ANOMALY EXPORT SECTION - Site Anomaly Events for AI/ML Analysis
-# ============================================================================
-
-
-# Removed duplicate function definition - proper implementation exists above
-
-
-# Removed duplicate placeholder function - proper implementation below
-
-
-# Removed duplicate function definition - using the proper one below
-
-# Removed duplicate function definition - proper implementation exists at line 23437
+    @classmethod
+    def _sort_by_priority(cls, metrics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Sort metrics with priority items first, then alphabetically."""
+        metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
+        logging.info(f"Found {len(metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
+        return metrics
 
 
 # ============================================================================

@@ -550,6 +550,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.23.15",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "AnomalyMetricsDiscovery: Site-scoped anomaly metrics discovery from ConstInsightMetrics.csv"
+        ],
+        "refactoring": [
+          "55-line get_potential_anomaly_metrics function refactored into AnomalyMetricsDiscovery class",
+          "6 class elements organized by responsibility:",
+          "Constants: PRIORITY_KEYWORDS (anomaly-related keywords), FALLBACK_METRICS (default metrics)",
+          "Discovery: discover() - main entry point with error handling",
+          "Handlers: _handle_missing_csv(), _parse_metrics_csv(), _process_csv_row(), _sort_by_priority()"
+        ],
+        "dead_code_removal": [
+          "get_potential_anomaly_metrics standalone function removed",
+          "~500 lines of orphaned/corrupted SSR firmware code removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: SiteExporters.anomaly_events() now uses AnomalyMetricsDiscovery.discover()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.23.00",
       "date": "2026-01-17",
       "changes": {
