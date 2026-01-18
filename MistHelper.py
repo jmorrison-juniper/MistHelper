@@ -50,51 +50,103 @@ _early_log_dir = "data"
 os.makedirs(_early_log_dir, exist_ok=True)
 _early_log_path = os.path.join(_early_log_dir, "script.log")
 
-# Check for data directory write permissions early (critical for container deployments)
-# The container runs as non-root 'misthelper' user, so mounted volumes must be writable
-def _check_data_directory_permissions():
-    """Check if data directory is writable and provide actionable guidance if not."""
-    test_file = os.path.join(_early_log_dir, ".write_test")
-    try:
-        # Try to create and remove a test file
-        with open(test_file, 'w') as f:
-            f.write("test")
-        os.remove(test_file)
-        return True
-    except PermissionError:
-        # Detect if running in container for more specific guidance
-        in_container = os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv')
+
+# ============================================================================
+# DATA DIRECTORY PERMISSION CHECKER
+# ============================================================================
+# Critical for container deployments - runs as non-root 'misthelper' user
+
+
+class DataDirectoryChecker:
+    """
+    Check data directory write permissions and provide actionable guidance.
+    
+    This class runs very early during module initialization (before logging),
+    so it uses print() for output rather than logging.
+    
+    Usage:
+        DataDirectoryChecker(_early_log_dir).check()
+    """
+    
+    def __init__(self, data_dir: str):
+        """Initialize with the data directory path to check."""
+        self.data_dir = data_dir
+        self.test_file = os.path.join(data_dir, ".write_test")
+    
+    def check(self) -> bool:
+        """
+        Check if data directory is writable.
         
+        Returns:
+            True if writable, exits program if not writable due to permissions.
+        """
+        try:
+            return self._test_write_permission()
+        except PermissionError:
+            self._handle_permission_error()
+        except Exception:
+            return True  # Non-permission error, let it proceed and fail naturally
+    
+    def _test_write_permission(self) -> bool:
+        """Create and remove a test file to verify write access."""
+        with open(self.test_file, 'w') as file_handle:
+            file_handle.write("test")
+        os.remove(self.test_file)
+        return True
+    
+    def _handle_permission_error(self) -> None:
+        """Print error message with context-specific guidance and exit."""
+        in_container = self._is_running_in_container()
+        
+        self._print_error_header()
+        
+        if in_container:
+            self._print_container_guidance()
+        else:
+            self._print_local_guidance()
+        
+        self._print_error_footer()
+        sys.exit(1)
+    
+    def _is_running_in_container(self) -> bool:
+        """Detect if running inside a container environment."""
+        return os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv')
+    
+    def _print_error_header(self) -> None:
+        """Print the error header with path information."""
         print("\n" + "=" * 70)
         print("ERROR: Data directory is not writable!")
         print("=" * 70)
-        print(f"\nPath: {os.path.abspath(_early_log_dir)}")
+        print(f"\nPath: {os.path.abspath(self.data_dir)}")
         print("\nMistHelper cannot write logs or data to the data/ directory.")
-        
-        if in_container:
-            print("\n[CONTAINER DETECTED]")
-            print("The container runs as non-root user 'misthelper' for security.")
-            print("The mounted data/ directory must have write permissions.")
-            print("\nTo fix this, run the following on your HOST machine:")
-            print("\n    chmod -R 777 data/")
-            print("\nThen restart the container:")
-            print("    podman stop misthelper && podman rm misthelper")
-            print("    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\")
-            print("        -v \"${PWD}/data:/app/data:rw\" -v \"${PWD}/.env:/app/.env:ro\" \\")
-            print("        ghcr.io/jmorrison-juniper/misthelper:latest")
-        else:
-            print("\nTo fix this, ensure the data/ directory is writable:")
-            print("\n    chmod -R 755 data/")
-            print("    # Or if you own the directory:")
-            print("    chown -R $(whoami) data/")
-        
+    
+    def _print_container_guidance(self) -> None:
+        """Print guidance specific to container deployments."""
+        print("\n[CONTAINER DETECTED]")
+        print("The container runs as non-root user 'misthelper' for security.")
+        print("The mounted data/ directory must have write permissions.")
+        print("\nTo fix this, run the following on your HOST machine:")
+        print("\n    chmod -R 777 data/")
+        print("\nThen restart the container:")
+        print("    podman stop misthelper && podman rm misthelper")
+        print("    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\")
+        print("        -v \"${PWD}/data:/app/data:rw\" -v \"${PWD}/.env:/app/.env:ro\" \\")
+        print("        ghcr.io/jmorrison-juniper/misthelper:latest")
+    
+    def _print_local_guidance(self) -> None:
+        """Print guidance for local (non-container) environments."""
+        print("\nTo fix this, ensure the data/ directory is writable:")
+        print("\n    chmod -R 755 data/")
+        print("    # Or if you own the directory:")
+        print("    chown -R $(whoami) data/")
+    
+    def _print_error_footer(self) -> None:
+        """Print the closing separator line."""
         print("\n" + "=" * 70)
-        sys.exit(1)
-    except Exception as e:
-        # Non-permission error, let it proceed and fail naturally
-        return True
 
-_check_data_directory_permissions()
+
+# Run data directory check immediately (NO WRAPPER - direct class instantiation)
+DataDirectoryChecker(_early_log_dir).check()
 
 # Get log levels from environment (same as GlobalImportManager._setup_logging)
 _early_console_level = int(os.environ.get('CONSOLE_LOG_LEVEL', logging.INFO))

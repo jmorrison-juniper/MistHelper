@@ -550,6 +550,27 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.21.45",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "DataDirectoryChecker: Early permission check for data directory writability"
+        ],
+        "refactoring": [
+          "45-line _check_data_directory_permissions function refactored into DataDirectoryChecker class",
+          "8 methods: __init__, check(), _test_write_permission(), _handle_permission_error()",
+          "Helper methods: _is_running_in_container(), _print_error_header(), _print_container_guidance()",
+          "Helper methods: _print_local_guidance(), _print_error_footer()"
+        ],
+        "dead_code_removal": [
+          "_check_data_directory_permissions standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Module-level call now uses DataDirectoryChecker(_early_log_dir).check()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.21.30",
       "date": "2026-01-17",
       "changes": {
