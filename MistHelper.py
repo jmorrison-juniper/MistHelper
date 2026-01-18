@@ -35555,843 +35555,881 @@ def check_firmware_upgrade_status_direct():
     firmware_manager = FirmwareManager(apisession, org_id)
     return firmware_manager.check_firmware_upgrade_status()
 
-def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
+
+class FirmwareUpgradeStatusChecker:
     """
-    Implementation function for firmware upgrade status checking.
-    This contains the actual logic from the original function.
+    Comprehensive firmware upgrade status monitoring and reporting.
+    
+    Analyzes device firmware status across organization or specific sites,
+    tracks active upgrade operations, and exports detailed status reports.
+    
+    Features:
+    - Device firmware status analysis (in-progress, completed, failed)
+    - Active upgrade operation discovery (SSR, AP, Switch)
+    - Stale upgrade detection (100% but not marked complete)
+    - Progress visualization and distribution analysis
+    - CSV export for detailed analysis
+    
+    Usage:
+        FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
     """
-    logging.info("Starting firmware upgrade status check...")
-    logging.debug("check_firmware_upgrade_status_impl() initiated")
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id}")
     
-    # Scope selection is now handled by FirmwareManager.check_firmware_upgrade_status()
-    # This function receives the validated scope_choice and site_filter parameters
+    # Stale upgrade threshold (hours) - upgrades at 100% older than this are treated as complete
+    STALE_UPGRADE_HOURS = 1
     
-    if scope_choice == '2' and site_filter is None:
-        # Get specific site selection
-        logging.debug("User selected specific site mode")
-        site_filter = PromptUtils.select_site()
-        if not site_filter:
-            print(" No site selected. Exiting.")
-            logging.warning("No site selected in specific site mode")
-            return
-        logging.debug(f"Selected site filter: {site_filter}")
-    
-    # Step 2: Fetch device statistics to get current firmware status
-    print(f"\n  Fetching device statistics...")
-    logging.debug(f"Fetching device statistics with scope: {scope_choice}, site_filter: {site_filter}")
-    all_device_stats = []
-    upgrade_results = []
-    
-    try:
-        if site_filter:
-            # Single site mode
-            print(f"   Fetching stats for selected site...")
-            logging.debug(f"Fetching stats for single site: {site_filter}")
-            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                apisession, 
-                site_filter,
-                type="all",
-                limit=1000
-            )
-            site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
-            all_device_stats.extend(site_stats)
-            
-            print(f"   Retrieved stats for {len(site_stats)} devices at selected site")
-            logging.info(f"Retrieved stats for {len(site_stats)} devices at site {site_filter}")
-        else:
-            # Organization-wide mode
-            print(f"   Fetching organization-wide device statistics...")
-            logging.debug(f"Fetching organization-wide stats for org: {org_id}")
-            # Request all standard fields plus fwupdate field for firmware upgrade status
-            # Using fields=* to get all available fields including fwupdate
-            stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
-                apisession, 
-                org_id,
-                type="all",
-                fields="*",
-                limit=1000
-            )
-            org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
-            all_device_stats.extend(org_stats)
-            
-            print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")
-            logging.info(f"Retrieved stats for {len(org_stats)} devices organization-wide")
-            
-    except Exception as e:
-        print(f"! Failed to fetch device statistics: {e}")
-        logging.error(f"Failed to fetch device statistics: {e}")
-        return
-    
-    if not all_device_stats:
-        print(" No device statistics found.")
-        return
-    
-    # Step 3: Process device firmware status
-    print(f"\n  Analyzing firmware status for {len(all_device_stats)} devices...")
-    
-    firmware_status_summary = {
-        'total_devices': 0,
-        'devices_with_fwupdate': 0,
-        'upgrade_in_progress': 0,
-        'upgrade_failed': 0,
-        'upgrade_completed': 0,
-        'upgrade_unknown': 0,
-        'devices_by_status': {},
-        'devices_by_version': {},
-        'devices_by_model': {},
-        'progress_total': 0,
-        'progress_count': 0,
-        'devices_upgrading': []
+    # Device type display names
+    DEVICE_TYPE_NAMES = {
+        'ap': 'Access Points',
+        'switch': 'Switches',
+        'gateway': 'Gateways/SSRs',
+        'ssr': 'Session Smart Routers'
     }
     
-    # Get site information for enrichment
-    print(f"   Fetching site information for device enrichment...")
-    try:
-        all_sites = APIFetchUtils.all_sites_with_limit(org_id)
-        site_lookup = {site.get('id'): site.get('name', 'Unknown') for site in all_sites}
-    except Exception as e:
-        logging.warning(f"Failed to fetch site information: {e}")
-        site_lookup = {}
-    
-    for device_stats in all_device_stats:
-        device_id = device_stats.get('id', 'Unknown')
-        device_name = device_stats.get('name', 'Unnamed')
-        device_mac = device_stats.get('mac', 'Unknown')
-        device_model = device_stats.get('model', 'Unknown')
-        device_type = device_stats.get('type', 'Unknown')
-        device_version = device_stats.get('version', 'Unknown')
-        site_id = device_stats.get('site_id', 'Unknown')
-        site_name = site_lookup.get(site_id, 'Unknown Site')
-        last_seen = device_stats.get('last_seen', 0)
+    def __init__(self, scope_choice: Optional[str] = None, site_filter: Optional[str] = None):
+        """
+        Initialize the status checker.
         
-        # Process fwupdate status
-        fwupdate = device_stats.get('fwupdate', {})
-        if fwupdate:
-            firmware_status_summary['devices_with_fwupdate'] += 1
-            
-            fw_status = fwupdate.get('status', 'unknown')
-            fw_progress = fwupdate.get('progress', 0)
-            fw_timestamp = fwupdate.get('timestamp', 0)
-            fw_status_id = fwupdate.get('status_id', 0)
-            fw_will_retry = fwupdate.get('will_retry', False)
-            
-            # Categorize by status
-            # Note: API documentation says inprogress/failed/upgraded but actual responses 
-            # may return success/upgrading/downloading/failed due to device type differences
-            if fw_status in ('inprogress', 'upgrading', 'downloading'):
-                # Check if this is a stale completed upgrade (100% complete but status not updated)
-                is_stale_upgrade = False
-                if fw_progress == 100 and fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
-                    try:
-                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
-                        if upgrade_age_hours > 1:  # More than 1 hour old at 100%
-                            is_stale_upgrade = True
-                            logging.debug(f"Device {device_name} shows 100% complete {upgrade_age_hours:.1f}h ago but still marked '{fw_status}' - treating as completed")
-                    except (ValueError, OSError, TypeError) as e:
-                        logging.debug(f"Could not calculate upgrade age for {device_name}: {e}")
-                
-                if is_stale_upgrade:
-                    # Treat as completed rather than in-progress
-                    firmware_status_summary['upgrade_completed'] += 1
-                else:
-                    firmware_status_summary['upgrade_in_progress'] += 1
-                    # Track progress statistics for in-progress upgrades
-                    if fw_progress is not None and isinstance(fw_progress, (int, float)):
-                        firmware_status_summary['progress_total'] += fw_progress
-                        firmware_status_summary['progress_count'] += 1
-                        
-                    # Track device details for progress display (only truly active upgrades)
-                    firmware_status_summary['devices_upgrading'].append({
-                        'device_name': device_name,
-                        'device_mac': device_mac,
-                        'device_type': device_type,
-                        'device_model': device_model,
-                        'site_name': site_name,
-                        'current_version': device_version,
-                        'progress': fw_progress if fw_progress is not None else 0,
-                        'fw_time_str': None,  # Will be set below
-                        'fw_timestamp': fw_timestamp  # Store for later filtering
-                    })
-            elif fw_status == 'failed':
-                firmware_status_summary['upgrade_failed'] += 1
-            elif fw_status in ('upgraded', 'success'):
-                firmware_status_summary['upgrade_completed'] += 1
+        Args:
+            scope_choice: '2' for specific site, '3' for active only, '4' for failed only
+            site_filter: Site ID filter (required if scope_choice='2')
+        """
+        self.scope_choice = scope_choice
+        self.site_filter = site_filter
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        self.all_device_stats: List[Dict[str, Any]] = []
+        self.upgrade_results: List[Dict[str, Any]] = []
+        self.active_upgrades: List[Dict[str, Any]] = []
+        self.site_lookup: Dict[str, str] = {}
+        self.summary = self._create_empty_summary()
+    
+    def _create_empty_summary(self) -> Dict[str, Any]:
+        """Create empty firmware status summary structure."""
+        return {
+            'total_devices': 0,
+            'devices_with_fwupdate': 0,
+            'upgrade_in_progress': 0,
+            'upgrade_failed': 0,
+            'upgrade_completed': 0,
+            'upgrade_unknown': 0,
+            'devices_by_status': {},
+            'devices_by_version': {},
+            'devices_by_model': {},
+            'devices_by_type': {},
+            'progress_total': 0,
+            'progress_count': 0,
+            'devices_upgrading': []
+        }
+    
+    def check(self) -> None:
+        """Main entry point - execute firmware upgrade status check."""
+        logging.info("Starting firmware upgrade status check...")
+        logging.debug(f"Scope: {self.scope_choice}, Site filter: {self.site_filter}")
+        
+        if not self._resolve_site_filter():
+            return
+        
+        if not self._fetch_device_stats():
+            return
+        
+        self._fetch_site_lookup()
+        self._process_all_devices()
+        self._display_summary()
+        self._display_upgrading_devices()
+        self._check_active_operations()
+        self._export_results()
+        self._display_recommendations()
+        
+        logging.info("Firmware upgrade status check completed successfully")
+    
+    def _resolve_site_filter(self) -> bool:
+        """Resolve site filter if specific site mode selected."""
+        if self.scope_choice == '2' and self.site_filter is None:
+            logging.debug("User selected specific site mode")
+            self.site_filter = PromptUtils.select_site()
+            if not self.site_filter:
+                print(" No site selected. Exiting.")
+                logging.warning("No site selected in specific site mode")
+                return False
+            logging.debug(f"Selected site filter: {self.site_filter}")
+        return True
+    
+    def _fetch_device_stats(self) -> bool:
+        """Fetch device statistics from API."""
+        print(f"\n  Fetching device statistics...")
+        logging.debug(f"Scope: {self.scope_choice}, site_filter: {self.site_filter}")
+        
+        try:
+            if self.site_filter:
+                return self._fetch_site_stats()
             else:
-                firmware_status_summary['upgrade_unknown'] += 1
-            
-            # Track status distribution
-            if fw_status not in firmware_status_summary['devices_by_status']:
-                firmware_status_summary['devices_by_status'][fw_status] = 0
-            firmware_status_summary['devices_by_status'][fw_status] += 1
-            
-            # Format timestamps for display
-            fw_time_str = "Unknown"
-            if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
-                try:
-                    fw_time_str = datetime.fromtimestamp(fw_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                except (ValueError, OSError, TypeError) as e:
-                    logging.debug(f"Invalid firmware timestamp {fw_timestamp}: {e}")
-                    fw_time_str = f"Invalid timestamp: {fw_timestamp}"
-            
-            # Update timestamp in devices_upgrading if device was added
-            if fw_status in ('inprogress', 'upgrading', 'downloading') and firmware_status_summary['devices_upgrading']:
-                firmware_status_summary['devices_upgrading'][-1]['fw_time_str'] = fw_time_str
-            
-            last_seen_str = "Unknown"
-            if last_seen and isinstance(last_seen, (int, float)) and last_seen > 0:
-                try:
-                    last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
-                except (ValueError, OSError, TypeError) as e:
-                    logging.debug(f"Invalid last_seen timestamp {last_seen}: {e}")
-                    last_seen_str = f"Invalid timestamp: {last_seen}"
+                return self._fetch_org_stats()
+        except Exception as exception:
+            print(f"! Failed to fetch device statistics: {exception}")
+            logging.error(f"Failed to fetch device statistics: {exception}")
+            return False
+    
+    def _fetch_site_stats(self) -> bool:
+        """Fetch device stats for a single site."""
+        print(f"   Fetching stats for selected site...")
+        stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+            apisession, self.site_filter, type="all", limit=1000
+        )
+        site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+        self.all_device_stats.extend(site_stats)
+        
+        print(f"   Retrieved stats for {len(site_stats)} devices at selected site")
+        logging.info(f"Retrieved stats for {len(site_stats)} devices at site {self.site_filter}")
+        return len(self.all_device_stats) > 0 or self._handle_empty_stats()
+    
+    def _fetch_org_stats(self) -> bool:
+        """Fetch device stats organization-wide."""
+        print(f"   Fetching organization-wide device statistics...")
+        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+            apisession, self.org_id, type="all", fields="*", limit=1000
+        )
+        org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+        self.all_device_stats.extend(org_stats)
+        
+        print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")
+        logging.info(f"Retrieved stats for {len(org_stats)} devices organization-wide")
+        return len(self.all_device_stats) > 0 or self._handle_empty_stats()
+    
+    def _handle_empty_stats(self) -> bool:
+        """Handle case when no device statistics found."""
+        print(" No device statistics found.")
+        return False
+    
+    def _fetch_site_lookup(self) -> None:
+        """Fetch site information for device enrichment."""
+        print(f"   Fetching site information for device enrichment...")
+        try:
+            all_sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            for site in all_sites:
+                site_id = site.get('id')
+                site_name = site.get('name', 'Unknown')
+                if site_id:
+                    self.site_lookup[site_id] = site_name
+        except Exception as exception:
+            logging.warning(f"Failed to fetch site information: {exception}")
+            self.site_lookup.clear()
+    
+    def _process_all_devices(self) -> None:
+        """Process firmware status for all devices."""
+        print(f"\n  Analyzing firmware status for {len(self.all_device_stats)} devices...")
+        
+        for device_stats in self.all_device_stats:
+            device_info = self._extract_device_info(device_stats)
+            fw_info = self._process_fwupdate(device_stats, device_info)
+            self._update_summary_counters(device_info, fw_info)
+            self._maybe_add_to_results(device_info, fw_info)
+    
+    def _extract_device_info(self, device_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract device information from stats."""
+        site_id = device_stats.get('site_id', 'Unknown')
+        return {
+            'device_id': device_stats.get('id', 'Unknown'),
+            'device_name': device_stats.get('name', 'Unnamed'),
+            'device_mac': device_stats.get('mac', 'Unknown'),
+            'device_model': device_stats.get('model', 'Unknown'),
+            'device_type': device_stats.get('type', 'Unknown'),
+            'device_version': device_stats.get('version', 'Unknown'),
+            'site_id': site_id,
+            'site_name': self.site_lookup.get(site_id, 'Unknown Site'),
+            'last_seen': device_stats.get('last_seen', 0)
+        }
+    
+    def _process_fwupdate(self, device_stats: Dict[str, Any], device_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Process fwupdate field from device stats."""
+        fwupdate = device_stats.get('fwupdate', {})
+        
+        if not fwupdate:
+            return self._create_no_upgrade_info(device_info['last_seen'])
+        
+        self.summary['devices_with_fwupdate'] += 1
+        return self._parse_fwupdate_data(fwupdate, device_info)
+    
+    def _create_no_upgrade_info(self, last_seen: Any) -> Dict[str, Any]:
+        """Create default firmware info when no upgrade data exists."""
+        return {
+            'fw_status': 'no_upgrade_info',
+            'fw_progress': 0,
+            'fw_timestamp': 0,
+            'fw_status_id': 0,
+            'fw_will_retry': False,
+            'fw_time_str': 'N/A',
+            'last_seen_str': self._format_timestamp(last_seen)
+        }
+    
+    def _parse_fwupdate_data(self, fwupdate: Dict[str, Any], device_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse fwupdate dictionary into structured info."""
+        fw_status = fwupdate.get('status', 'unknown')
+        fw_progress = fwupdate.get('progress', 0)
+        fw_timestamp = fwupdate.get('timestamp', 0)
+        
+        fw_info = {
+            'fw_status': fw_status,
+            'fw_progress': fw_progress,
+            'fw_timestamp': fw_timestamp,
+            'fw_status_id': fwupdate.get('status_id', 0),
+            'fw_will_retry': fwupdate.get('will_retry', False),
+            'fw_time_str': self._format_timestamp(fw_timestamp),
+            'last_seen_str': self._format_timestamp(device_info['last_seen'])
+        }
+        
+        self._categorize_status(fw_status, fw_progress, fw_timestamp, device_info)
+        self._track_status_distribution(fw_status)
+        
+        return fw_info
+    
+    def _categorize_status(self, fw_status: str, fw_progress: Any, fw_timestamp: Any, device_info: Dict[str, Any]) -> None:
+        """Categorize device upgrade status and update summary."""
+        if fw_status in ('inprogress', 'upgrading', 'downloading'):
+            if self._is_stale_upgrade(fw_progress, fw_timestamp):
+                self.summary['upgrade_completed'] += 1
+            else:
+                self._track_active_upgrade(fw_progress, fw_timestamp, device_info)
+        elif fw_status == 'failed':
+            self.summary['upgrade_failed'] += 1
+        elif fw_status in ('upgraded', 'success'):
+            self.summary['upgrade_completed'] += 1
         else:
-            fw_status = "no_upgrade_info"
-            fw_progress = 0
-            fw_timestamp = 0
-            fw_status_id = 0
-            fw_will_retry = False
-            fw_time_str = "N/A"
-            last_seen_str = "Unknown"
-            if last_seen and isinstance(last_seen, (int, float)) and last_seen > 0:
-                try:
-                    last_seen_str = datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d %H:%M:%S')
-                except (ValueError, OSError, TypeError) as e:
-                    logging.debug(f"Invalid last_seen timestamp {last_seen}: {e}")
-                    last_seen_str = f"Invalid timestamp: {last_seen}"
+            self.summary['upgrade_unknown'] += 1
+    
+    def _is_stale_upgrade(self, fw_progress: Any, fw_timestamp: Any) -> bool:
+        """Check if upgrade at 100% is stale (older than threshold)."""
+        if fw_progress != 100:
+            return False
+        if not fw_timestamp or not isinstance(fw_timestamp, (int, float)) or fw_timestamp <= 0:
+            return False
         
-        # Track version distribution
-        if device_version not in firmware_status_summary['devices_by_version']:
-            firmware_status_summary['devices_by_version'][device_version] = 0
-        firmware_status_summary['devices_by_version'][device_version] += 1
+        try:
+            upgrade_age_hours = (time.time() - fw_timestamp) / 3600
+            return upgrade_age_hours > self.STALE_UPGRADE_HOURS
+        except (ValueError, OSError, TypeError):
+            return False
+    
+    def _track_active_upgrade(self, fw_progress: Any, fw_timestamp: Any, device_info: Dict[str, Any]) -> None:
+        """Track an actively upgrading device."""
+        self.summary['upgrade_in_progress'] += 1
         
-        # Track model distribution
-        if device_model not in firmware_status_summary['devices_by_model']:
-            firmware_status_summary['devices_by_model'][device_model] = 0
-        firmware_status_summary['devices_by_model'][device_model] += 1
+        if fw_progress is not None and isinstance(fw_progress, (int, float)):
+            self.summary['progress_total'] += fw_progress
+            self.summary['progress_count'] += 1
         
-        # Track device type distribution
-        if 'devices_by_type' not in firmware_status_summary:
-            firmware_status_summary['devices_by_type'] = {}
-        if device_type not in firmware_status_summary['devices_by_type']:
-            firmware_status_summary['devices_by_type'][device_type] = 0
-        firmware_status_summary['devices_by_type'][device_type] += 1
+        self.summary['devices_upgrading'].append({
+            'device_name': device_info['device_name'],
+            'device_mac': device_info['device_mac'],
+            'device_type': device_info['device_type'],
+            'device_model': device_info['device_model'],
+            'site_name': device_info['site_name'],
+            'current_version': device_info['device_version'],
+            'progress': fw_progress if fw_progress is not None else 0,
+            'fw_timestamp': fw_timestamp
+        })
+    
+    def _track_status_distribution(self, fw_status: str) -> None:
+        """Track status distribution in summary."""
+        if fw_status not in self.summary['devices_by_status']:
+            self.summary['devices_by_status'][fw_status] = 0
+        self.summary['devices_by_status'][fw_status] += 1
+    
+    def _format_timestamp(self, timestamp: Any) -> str:
+        """Format a Unix timestamp to readable string."""
+        if not timestamp or not isinstance(timestamp, (int, float)) or timestamp <= 0:
+            return "Unknown"
+        try:
+            return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        except (ValueError, OSError, TypeError):
+            return f"Invalid: {timestamp}"
+    
+    def _update_summary_counters(self, device_info: Dict[str, Any], fw_info: Dict[str, Any]) -> None:
+        """Update summary counters for version, model, and type."""
+        version = device_info['device_version']
+        model = device_info['device_model']
+        device_type = device_info['device_type']
         
-        firmware_status_summary['total_devices'] += 1
+        self.summary['devices_by_version'][version] = self.summary['devices_by_version'].get(version, 0) + 1
+        self.summary['devices_by_model'][model] = self.summary['devices_by_model'].get(model, 0) + 1
+        self.summary['devices_by_type'][device_type] = self.summary['devices_by_type'].get(device_type, 0) + 1
+        self.summary['total_devices'] += 1
+    
+    def _maybe_add_to_results(self, device_info: Dict[str, Any], fw_info: Dict[str, Any]) -> None:
+        """Add device to results if it matches scope filter."""
+        if not self._should_include_device(fw_info):
+            return
         
-        # Apply scope filtering
-        include_device = True
-        if scope_choice == '3':  # Active upgrades only - exclude stale completed upgrades
-            is_active_upgrade = fw_status in ('inprogress', 'upgrading', 'downloading')
-            if is_active_upgrade and fw_progress == 100:
-                # Check if it's a stale upgrade
-                if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
-                    try:
-                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
-                        if upgrade_age_hours > 1:
-                            is_active_upgrade = False  # Exclude from active upgrades filter
-                    except (ValueError, OSError, TypeError):
-                        pass
-            include_device = is_active_upgrade
-        elif scope_choice == '4':  # Failed upgrades only
-            include_device = fw_status == 'failed'
+        progress_display = self._create_progress_display(fw_info)
         
-        if include_device:
-            # Create a visual progress display for CSV
-            progress_display = "N/A"
-            
-            # Check if this is a stale completed upgrade (for display purposes)
-            is_stale_display = False
-            if fw_status in ('inprogress', 'upgrading', 'downloading') and fw_progress == 100:
-                if fw_timestamp and isinstance(fw_timestamp, (int, float)) and fw_timestamp > 0:
-                    try:
-                        upgrade_age_hours = (time.time() - fw_timestamp) / 3600
-                        if upgrade_age_hours > 1:
-                            is_stale_display = True
-                    except (ValueError, OSError, TypeError):
-                        pass
-            
-            if is_stale_display:
-                # Show as complete in CSV even though API status says inprogress
-                progress_display = "[===============] 100% (Complete - Stale)"
-            elif fw_status in ('inprogress', 'upgrading', 'downloading') and fw_progress is not None:
-                progress_display = DisplayUtils.create_progress_bar(fw_progress, bar_length=15)
-            elif fw_status in ('upgraded', 'success'):
-                progress_display = "[===============] 100% (Complete)"
-            elif fw_status == 'failed':
-                progress_display = "[!!!!! FAILED !!!!!]"
-            
-            upgrade_results.append({
-                'Site ID': site_id,
-                'Site Name': site_name,
-                'Device ID': device_id,
-                'Device Name': device_name,
-                'Device MAC': device_mac,
-                'Device Model': device_model,
-                'Device Type': device_type,
-                'Current Version': device_version,
-                'Last Seen': last_seen_str,
-                'FW Upgrade Status': fw_status,
-                'FW Progress %': fw_progress,
-                'FW Progress Display': progress_display,
-                'FW Status ID': fw_status_id,
-                'FW Will Retry': fw_will_retry,
-                'FW Timestamp': fw_time_str,
-                'Timestamp': datetime.now(timezone.utc).isoformat()
-            })
+        self.upgrade_results.append({
+            'Site ID': device_info['site_id'],
+            'Site Name': device_info['site_name'],
+            'Device ID': device_info['device_id'],
+            'Device Name': device_info['device_name'],
+            'Device MAC': device_info['device_mac'],
+            'Device Model': device_info['device_model'],
+            'Device Type': device_info['device_type'],
+            'Current Version': device_info['device_version'],
+            'Last Seen': fw_info['last_seen_str'],
+            'FW Upgrade Status': fw_info['fw_status'],
+            'FW Progress %': fw_info['fw_progress'],
+            'FW Progress Display': progress_display,
+            'FW Status ID': fw_info['fw_status_id'],
+            'FW Will Retry': fw_info['fw_will_retry'],
+            'FW Timestamp': fw_info['fw_time_str'],
+            'Timestamp': datetime.now(timezone.utc).isoformat()
+        })
     
-    # Step 4: Display summary statistics
-    print(f"\n  Firmware Status Summary:")
-    print(f"   X  Total devices analyzed: {firmware_status_summary['total_devices']}")
-    print(f"   X  Devices with upgrade info: {firmware_status_summary['devices_with_fwupdate']}")
-    print(f"   X  Upgrades in progress: {firmware_status_summary['upgrade_in_progress']}")
+    def _should_include_device(self, fw_info: Dict[str, Any]) -> bool:
+        """Check if device matches scope filter."""
+        fw_status = fw_info['fw_status']
+        fw_progress = fw_info['fw_progress']
+        fw_timestamp = fw_info['fw_timestamp']
+        
+        if self.scope_choice == '3':  # Active upgrades only
+            is_active = fw_status in ('inprogress', 'upgrading', 'downloading')
+            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):
+                return False
+            return is_active
+        elif self.scope_choice == '4':  # Failed upgrades only
+            return fw_status == 'failed'
+        return True
     
-    # Calculate and display average progress for in-progress upgrades
-    if firmware_status_summary['progress_count'] > 0:
-        avg_progress = firmware_status_summary['progress_total'] / firmware_status_summary['progress_count']
-        progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))
-        print(f"   X  Average upgrade progress: {progress_bar}")
+    def _create_progress_display(self, fw_info: Dict[str, Any]) -> str:
+        """Create visual progress display for CSV."""
+        fw_status = fw_info['fw_status']
+        fw_progress = fw_info['fw_progress']
+        fw_timestamp = fw_info['fw_timestamp']
+        
+        if fw_status in ('inprogress', 'upgrading', 'downloading'):
+            if self._is_stale_upgrade(fw_progress, fw_timestamp):
+                return "[===============] 100% (Complete - Stale)"
+            if fw_progress is not None:
+                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)
+        elif fw_status in ('upgraded', 'success'):
+            return "[===============] 100% (Complete)"
+        elif fw_status == 'failed':
+            return "[!!!!! FAILED !!!!!]"
+        return "N/A"
     
-    print(f"   X  Upgrades completed: {firmware_status_summary['upgrade_completed']}")
-    print(f"   X  Upgrades failed: {firmware_status_summary['upgrade_failed']}")
-    print(f"   X  Unknown status: {firmware_status_summary['upgrade_unknown']}")
+    def _display_summary(self) -> None:
+        """Display firmware status summary."""
+        print(f"\n  Firmware Status Summary:")
+        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")
+        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")
+        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")
+        
+        self._display_average_progress()
+        
+        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")
+        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")
+        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")
+        
+        self._display_status_distribution()
+        self._display_type_distribution()
+        self._display_version_distribution()
+        self._display_model_distribution()
     
-    if firmware_status_summary['devices_by_status']:
-        print(f"\n  Status Distribution:")
-        for status, count in sorted(firmware_status_summary['devices_by_status'].items()):
-            print(f"   X  {status}: {count} devices")
+    def _display_average_progress(self) -> None:
+        """Display average progress for in-progress upgrades."""
+        if self.summary['progress_count'] > 0:
+            avg_progress = self.summary['progress_total'] / self.summary['progress_count']
+            progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))
+            print(f"   X  Average upgrade progress: {progress_bar}")
     
-    print(f"\n  Device Type Distribution:")
-    if 'devices_by_type' in firmware_status_summary and firmware_status_summary['devices_by_type']:
-        sorted_types = sorted(firmware_status_summary['devices_by_type'].items(), 
-                            key=lambda x: x[1], reverse=True)
-        for device_type, count in sorted_types:
-            type_display = {
-                'ap': 'Access Points',
-                'switch': 'Switches', 
-                'gateway': 'Gateways/SSRs',
-                'ssr': 'Session Smart Routers'
-            }.get(device_type, device_type.upper())
-            print(f"   X  {type_display}: {count} devices")
-    else:
-        print(f"   X  No device type information available")
+    def _display_status_distribution(self) -> None:
+        """Display status distribution."""
+        if self.summary['devices_by_status']:
+            print(f"\n  Status Distribution:")
+            for status, count in sorted(self.summary['devices_by_status'].items()):
+                print(f"   X  {status}: {count} devices")
     
-    print(f"\n  Version Distribution:")
-    sorted_versions = sorted(firmware_status_summary['devices_by_version'].items(), 
-                           key=lambda x: x[1], reverse=True)
-    for version, count in sorted_versions[:10]:  # Show top 10 versions
-        print(f"   X  {version}: {count} devices")
-    if len(sorted_versions) > 10:
-        print(f"   ... and {len(sorted_versions) - 10} more versions")
+    def _display_type_distribution(self) -> None:
+        """Display device type distribution."""
+        print(f"\n  Device Type Distribution:")
+        if self.summary['devices_by_type']:
+            sorted_types = sorted(self.summary['devices_by_type'].items(), key=lambda x: x[1], reverse=True)
+            for device_type, count in sorted_types:
+                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())
+                print(f"   X  {type_display}: {count} devices")
+        else:
+            print(f"   X  No device type information available")
     
-    print(f"\n  Model Distribution:")
-    sorted_models = sorted(firmware_status_summary['devices_by_model'].items(), 
-                          key=lambda x: x[1], reverse=True)
-    for model, count in sorted_models[:10]:  # Show top 10 models
-        print(f"   X  {model}: {count} devices")
-    if len(sorted_models) > 10:
-        print(f"   ... and {len(sorted_models) - 10} more models")
+    def _display_version_distribution(self) -> None:
+        """Display version distribution (top 10)."""
+        print(f"\n  Version Distribution:")
+        sorted_versions = sorted(self.summary['devices_by_version'].items(), key=lambda x: x[1], reverse=True)
+        for version, count in sorted_versions[:10]:
+            print(f"   X  {version}: {count} devices")
+        if len(sorted_versions) > 10:
+            print(f"   ... and {len(sorted_versions) - 10} more versions")
     
-    # Step 4b: Display detailed progress for devices currently upgrading
-    if firmware_status_summary['devices_upgrading']:
+    def _display_model_distribution(self) -> None:
+        """Display model distribution (top 10)."""
+        print(f"\n  Model Distribution:")
+        sorted_models = sorted(self.summary['devices_by_model'].items(), key=lambda x: x[1], reverse=True)
+        for model, count in sorted_models[:10]:
+            print(f"   X  {model}: {count} devices")
+        if len(sorted_models) > 10:
+            print(f"   ... and {len(sorted_models) - 10} more models")
+    
+    def _display_upgrading_devices(self) -> None:
+        """Display detailed progress for devices currently upgrading."""
+        if not self.summary['devices_upgrading']:
+            return
+        
         print(f"\n  Devices Currently Upgrading (Real-Time Progress):")
         print(f"  {'='*90}")
         
-        # Sort by progress (highest first) to show devices closest to completion
-        sorted_upgrading = sorted(firmware_status_summary['devices_upgrading'], 
-                                 key=lambda x: x['progress'], reverse=True)
+        sorted_upgrading = sorted(self.summary['devices_upgrading'], key=lambda x: x['progress'], reverse=True)
         
-        # Display header
         print(f"  {'Device Name':<25} {'Type':<8} {'Site':<20} {'Progress':<30}")
         print(f"  {'-'*25} {'-'*8} {'-'*20} {'-'*30}")
         
-        for device in sorted_upgrading[:20]:  # Show top 20 upgrading devices
-            device_name_short = device['device_name'][:24] if device['device_name'] else 'Unnamed'
-            device_type_short = device['device_type'][:7] if device['device_type'] else 'Unknown'
-            site_name_short = device['site_name'][:19] if device['site_name'] else 'Unknown'
-            progress_bar = DisplayUtils.create_progress_bar(device['progress'], bar_length=15)
-            
-            print(f"  {device_name_short:<25} {device_type_short:<8} {site_name_short:<20} {progress_bar}")
+        for device in sorted_upgrading[:20]:
+            self._print_upgrading_device(device)
         
         if len(sorted_upgrading) > 20:
             print(f"  ... and {len(sorted_upgrading) - 20} more devices upgrading")
         
         print(f"  {'='*90}")
-        
-        # Show progress distribution
-        progress_ranges = {
-            '0-25%': 0,
-            '26-50%': 0,
-            '51-75%': 0,
-            '76-99%': 0,
-            '100%': 0
-        }
+        self._display_progress_distribution(sorted_upgrading)
+    
+    def _print_upgrading_device(self, device: Dict[str, Any]) -> None:
+        """Print a single upgrading device row."""
+        name = (device['device_name'] or 'Unnamed')[:24]
+        dtype = (device['device_type'] or 'Unknown')[:7]
+        site = (device['site_name'] or 'Unknown')[:19]
+        progress_bar = DisplayUtils.create_progress_bar(device['progress'], bar_length=15)
+        print(f"  {name:<25} {dtype:<8} {site:<20} {progress_bar}")
+    
+    def _display_progress_distribution(self, sorted_upgrading: List[Dict[str, Any]]) -> None:
+        """Display progress distribution for upgrading devices."""
+        ranges = {'0-25%': 0, '26-50%': 0, '51-75%': 0, '76-99%': 0, '100%': 0}
         
         for device in sorted_upgrading:
             progress = device['progress']
-            if progress == 0 or progress <= 25:
-                progress_ranges['0-25%'] += 1
+            if progress <= 25:
+                ranges['0-25%'] += 1
             elif progress <= 50:
-                progress_ranges['26-50%'] += 1
+                ranges['26-50%'] += 1
             elif progress <= 75:
-                progress_ranges['51-75%'] += 1
+                ranges['51-75%'] += 1
             elif progress < 100:
-                progress_ranges['76-99%'] += 1
+                ranges['76-99%'] += 1
             else:
-                progress_ranges['100%'] += 1
+                ranges['100%'] += 1
         
         print(f"\n  Progress Distribution:")
-        for range_label, count in progress_ranges.items():
+        for range_label, count in ranges.items():
             if count > 0:
                 print(f"   X  {range_label}: {count} device(s)")
     
-    # Step 5: Check for active upgrade operations
-    print(f"\n  Checking for active upgrade operations...")
-    active_upgrades = []
-    
-    # Step 5a: Check for active SSR upgrade operations (org-level)
-    try:
-        print(f"   Checking for active SSR upgrade operations...")
-        ssr_upgrades_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, org_id)
+    def _check_active_operations(self) -> None:
+        """Check for active upgrade operations from various sources."""
+        print(f"\n  Checking for active upgrade operations...")
         
-        if ssr_upgrades_resp.status_code == 200 and hasattr(ssr_upgrades_resp, 'data'):
-            ssr_upgrades = ssr_upgrades_resp.data
-            if ssr_upgrades:
-                print(f"   !? Found {len(ssr_upgrades)} SSR upgrade operation(s)")
-                
-                for ssr_upgrade in ssr_upgrades:
-                    upgrade_id = ssr_upgrade.get('id', 'Unknown')
-                    status = ssr_upgrade.get('status', 'Unknown')
-                    strategy = ssr_upgrade.get('strategy', 'Unknown')
-                    channel = ssr_upgrade.get('channel', 'Unknown')
-                    device_type = ssr_upgrade.get('device_type', 'SSR')
-                    counts = ssr_upgrade.get('counts', {})
-                    versions = ssr_upgrade.get('versions', {})
-                    
-                    # Extract device count and version information
-                    total_devices = sum(counts.values()) if counts else 0
-                    upgrading_count = counts.get('upgrading', 0)
-                    success_count = counts.get('success', 0)
-                    failed_count = counts.get('failed', 0)
-                    queued_count = counts.get('queued', 0)
-                    
-                    # Try to extract version from versions mapping (take first available)
-                    target_versions = list(versions.values()) if versions else []
-                    version_info = f"-> {target_versions[0]}" if target_versions else "Multiple versions"
-                    if len(target_versions) > 1:
-                        version_info = f"Multiple versions ({len(target_versions)} different)"
-                    
-                    # Create status summary
-                    status_parts = []
-                    if upgrading_count > 0:
-                        status_parts.append(f"{upgrading_count} upgrading")
-                    if success_count > 0:
-                        status_parts.append(f"{success_count} completed")
-                    if failed_count > 0:
-                        status_parts.append(f"{failed_count} failed")
-                    if queued_count > 0:
-                        status_parts.append(f"{queued_count} queued")
-                    
-                    status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"
-                    
-                    print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
-                    print(f"         Channel: {channel} | Devices: {total_devices} | {version_info}")
-                    
-                    active_upgrades.append({
-                        'upgrade_id': upgrade_id,
-                        'site_id': 'N/A (Org-level)',
-                        'site_name': 'SSR Upgrade (Org-level)',
-                        'status': status,
-                        'strategy': strategy,
-                        'channel': channel,
-                        'device_type': device_type,
-                        'source': 'ssr_api',
-                        'total_devices': total_devices,
-                        'upgrading': upgrading_count,
-                        'success': success_count,
-                        'failed': failed_count,
-                        'queued': queued_count,
-                        'versions': versions,
-                        'details': ssr_upgrade
-                    })
-            else:
+        self._check_ssr_upgrades()
+        self._check_stored_upgrades()
+        self._check_audit_logs()
+        self._check_device_events()
+        self._check_site_upgrades()
+    
+    def _check_ssr_upgrades(self) -> None:
+        """Check for active SSR upgrade operations."""
+        try:
+            print(f"   Checking for active SSR upgrade operations...")
+            ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)
+            
+            if ssr_resp.status_code != 200 or not hasattr(ssr_resp, 'data'):
+                print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_resp.status_code}")
+                return
+            
+            ssr_upgrades = ssr_resp.data
+            if not ssr_upgrades:
                 print(f"   -> No active SSR upgrade operations found")
-        else:
-            print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_upgrades_resp.status_code}")
+                return
             
-    except Exception as e:
-        print(f"   -> Error checking SSR upgrade operations: {e}")
-        logging.warning(f"Failed to check SSR upgrade operations: {e}")
-    
-    # Step 5b: Check stored upgrade IDs from site-level upgrades (AP/Switch)
-    print(f"   Checking for site-level upgrade operations...")
-    upgrade_tracking_file = "ActiveUpgrades.json"
-    stored_upgrades = []
-    
-    if os.path.exists(upgrade_tracking_file):
-        try:
-            with open(upgrade_tracking_file, 'r', encoding='utf-8') as f:
-                stored_upgrades = json.load(f)
-            
-            if stored_upgrades:
-                # Filter to current org_id
-                org_upgrades = [u for u in stored_upgrades if u.get('org_id') == org_id]
-                if org_upgrades:
-                    print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s) from ActiveUpgrades.json")
-                    
-                    # Check status of each stored upgrade
-                    for upgrade_record in org_upgrades:
-                        upgrade_id = upgrade_record.get('upgrade_id')
-                        site_id = upgrade_record.get('site_id')
-                        site_name = upgrade_record.get('site_name', 'Unknown')
-                        
-                        if upgrade_id and site_id:
-                            try:
-                                # Get specific upgrade details
-                                upgrade_resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(
-                                    apisession, site_id, upgrade_id
-                                )
-                                
-                                if upgrade_resp and hasattr(upgrade_resp, 'data') and upgrade_resp.data:
-                                    upgrade_details = upgrade_resp.data
-                                    status = upgrade_details.get('status', 'Unknown')
-                                    strategy = upgrade_details.get('strategy', 'Unknown')
-                                    target_version = upgrade_details.get('target_version', 'Unknown')
-                                    
-                                    print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {status}")
-                                    
-                                    active_upgrades.append({
-                                        'upgrade_id': upgrade_id,
-                                        'site_id': site_id,
-                                        'site_name': site_name,
-                                        'status': status,
-                                        'strategy': strategy,
-                                        'target_version': target_version,
-                                        'source': 'stored_tracking',
-                                        'details': upgrade_details
-                                    })
-                                else:
-                                    print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active or not found")
-                                    
-                            except Exception as e:
-                                print(f"      Failed to check upgrade {upgrade_id[:8]}... at site '{site_name}': {e}")
-                                logging.warning(f"Failed to check stored upgrade {upgrade_id}: {e}")
-                else:
-                    print(f"   -> No stored upgrades match current organization")
-        except Exception as e:
-            print(f"   -> Failed to read stored upgrade tracking data: {e}")
-            logging.warning(f"Failed to read stored upgrade tracking: {e}")
-    else:
-        print(f"   -> No site-level upgrade tracking file found (checking organization records)")
-    
-    # Step 5c: Check organization audit logs for recent upgrade events
-    # Define time window outside try block so it's available for later steps
-    end_time = int(time.time())
-    start_time = end_time - (24 * 60 * 60)  # 24 hours ago
-    
-    try:
-        print(f"   Checking organization audit logs for recent upgrade events...")
-        
-        # Search for upgrade-related audit events in the last 24 hours
-        audit_resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
-            apisession, 
-            org_id,
-            start=start_time,
-            end=end_time,
-            limit=1000
-        )
-        
-        audit_logs = mistapi.get_all(response=audit_resp, mist_session=apisession)
-        
-        if audit_logs:
-            upgrade_events = []
-            for log_entry in audit_logs:
-                message = log_entry.get('message', '').lower()
-                if any(keyword in message for keyword in ['upgrade', 'firmware', 'version']):
-                    upgrade_events.append(log_entry)
-            
-            if upgrade_events:
-                print(f"   !? Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
+            print(f"   !? Found {len(ssr_upgrades)} SSR upgrade operation(s)")
+            for upgrade in ssr_upgrades:
+                self._process_ssr_upgrade(upgrade)
                 
-                # Show recent upgrade events (most recent first)
-                for event in sorted(upgrade_events, key=lambda x: x.get('timestamp', 0), reverse=True)[:5]:
-                    timestamp = event.get('timestamp', 0)
-                    try:
-                        event_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                    except:
-                        event_time = 'Unknown'
-                    
-                    admin_name = event.get('admin_name', 'System')
-                    message = event.get('message', 'No message')
-                    site_name = event.get('site_name', 'Organization')
-                    
-                    # Clean up the message format for better readability
-                    if 'device[' in message.lower() and '] upgrade' in message.lower():
-                        # Extract device MAC and version from message
-                        import re
-                        device_match = re.search(r'device\[([^\]]+)\]', message, re.IGNORECASE)
-                        version_match = re.search(r'version\s+([^\s]+)', message, re.IGNORECASE)
-                        
-                        device_id = device_match.group(1) if device_match else 'Unknown Device'
-                        version = version_match.group(1) if version_match else 'Unknown Version'
-                        
-                        print(f"      -> {event_time} | {admin_name} | Device {device_id} upgrade to {version}")
-                    else:
-                        print(f"      -> {event_time} | {admin_name} | {site_name}: {message}")
+        except Exception as exception:
+            print(f"   -> Error checking SSR upgrade operations: {exception}")
+            logging.warning(f"Failed to check SSR upgrade operations: {exception}")
+    
+    def _process_ssr_upgrade(self, upgrade: Dict[str, Any]) -> None:
+        """Process a single SSR upgrade record."""
+        upgrade_id = upgrade.get('id', 'Unknown')
+        status = upgrade.get('status', 'Unknown')
+        strategy = upgrade.get('strategy', 'Unknown')
+        counts = upgrade.get('counts', {})
+        versions = upgrade.get('versions', {})
+        
+        total = sum(counts.values()) if counts else 0
+        status_parts = self._build_ssr_status_parts(counts)
+        version_info = self._build_version_info(versions)
+        
+        status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"
+        print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
+        print(f"         Channel: {upgrade.get('channel', 'Unknown')} | Devices: {total} | {version_info}")
+        
+        self.active_upgrades.append({
+            'upgrade_id': upgrade_id,
+            'site_id': 'N/A (Org-level)',
+            'site_name': 'SSR Upgrade (Org-level)',
+            'status': status,
+            'strategy': strategy,
+            'source': 'ssr_api',
+            'total_devices': total,
+            'details': upgrade
+        })
+    
+    def _build_ssr_status_parts(self, counts: Dict[str, int]) -> List[str]:
+        """Build status parts list for SSR upgrade display."""
+        parts = []
+        if counts.get('upgrading', 0) > 0:
+            parts.append(f"{counts['upgrading']} upgrading")
+        if counts.get('success', 0) > 0:
+            parts.append(f"{counts['success']} completed")
+        if counts.get('failed', 0) > 0:
+            parts.append(f"{counts['failed']} failed")
+        if counts.get('queued', 0) > 0:
+            parts.append(f"{counts['queued']} queued")
+        return parts
+    
+    def _build_version_info(self, versions: Dict[str, str]) -> str:
+        """Build version info string from versions mapping."""
+        if not versions:
+            return "Multiple versions"
+        target_versions = list(versions.values())
+        if len(target_versions) == 1:
+            return f"-> {target_versions[0]}"
+        return f"Multiple versions ({len(target_versions)} different)"
+    
+    def _check_stored_upgrades(self) -> None:
+        """Check stored upgrade IDs from ActiveUpgrades.json."""
+        print(f"   Checking for site-level upgrade operations...")
+        upgrade_file = "ActiveUpgrades.json"
+        
+        if not os.path.exists(upgrade_file):
+            print(f"   -> No site-level upgrade tracking file found")
+            return
+        
+        try:
+            with open(upgrade_file, 'r', encoding='utf-8') as f:
+                stored = json.load(f)
+            
+            org_upgrades = [u for u in stored if u.get('org_id') == self.org_id]
+            if not org_upgrades:
+                print(f"   -> No stored upgrades match current organization")
+                return
+            
+            print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s)")
+            for record in org_upgrades:
+                self._check_stored_upgrade(record)
+                
+        except Exception as exception:
+            print(f"   -> Failed to read stored upgrade tracking data: {exception}")
+            logging.warning(f"Failed to read stored upgrade tracking: {exception}")
+    
+    def _check_stored_upgrade(self, record: Dict[str, Any]) -> None:
+        """Check status of a stored upgrade record."""
+        upgrade_id = record.get('upgrade_id')
+        site_id = record.get('site_id')
+        site_name = record.get('site_name', 'Unknown')
+        
+        if not upgrade_id or not site_id:
+            return
+        
+        try:
+            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)
+            
+            if resp and hasattr(resp, 'data') and resp.data:
+                details = resp.data
+                print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}")
+                self.active_upgrades.append({
+                    'upgrade_id': upgrade_id,
+                    'site_id': site_id,
+                    'site_name': site_name,
+                    'status': details.get('status', 'Unknown'),
+                    'source': 'stored_tracking',
+                    'details': details
+                })
             else:
+                print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active")
+                
+        except Exception as exception:
+            print(f"      Failed to check upgrade {upgrade_id[:8]}...: {exception}")
+    
+    def _check_audit_logs(self) -> None:
+        """Check organization audit logs for recent upgrade events."""
+        try:
+            print(f"   Checking organization audit logs for recent upgrade events...")
+            
+            end_time = int(time.time())
+            start_time = end_time - (24 * 60 * 60)
+            
+            resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
+                apisession, self.org_id, start=start_time, end=end_time, limit=1000
+            )
+            logs = mistapi.get_all(response=resp, mist_session=apisession)
+            
+            if not logs:
+                print(f"   -> No audit logs available for the last 24 hours")
+                return
+            
+            upgrade_events = [log for log in logs if self._is_upgrade_event(log)]
+            
+            if not upgrade_events:
                 print(f"   -> No upgrade-related events found in audit logs")
-        else:
-            print(f"   -> No audit logs available for the last 24 hours")
+                return
             
-    except Exception as e:
-        print(f"   -> Error checking audit logs: {e}")
-        logging.warning(f"Failed to search org audit logs for upgrades: {e}")
+            print(f"   !? Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
+            self._display_audit_events(upgrade_events[:5])
+            
+        except Exception as exception:
+            print(f"   -> Error checking audit logs: {exception}")
+            logging.warning(f"Failed to search org audit logs: {exception}")
     
-    # Step 5d: Check organization-level device events for upgrade activity
-    try:
-        print(f"   Checking organization device events for upgrade activity...")
-        
-        # Search for device upgrade events
-        device_events_resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession,
-            org_id,
-            type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED",
-            start=start_time,
-            end=end_time,
-            limit=50
-        )
-        
-        device_events = mistapi.get_all(response=device_events_resp, mist_session=apisession)
-        
-        if device_events:
-            print(f"   !? Found {len(device_events)} device upgrade event(s) in last 24 hours")
-            
-            # Group events by type for cleaner display
-            events_by_type = {}
-            for event in device_events:
-                event_type = event.get('type', 'Unknown')
-                if event_type not in events_by_type:
-                    events_by_type[event_type] = []
-                events_by_type[event_type].append(event)
-            
-            # Display summary by event type
-            for event_type, type_events in events_by_type.items():
-                # Clean up event type names for display
-                type_display = event_type.replace('SYSTEM_UPGRADE_', '').title()
-                print(f"      {type_display}: {len(type_events)} event(s)")
-                
-                # Show most recent events of this type
-                for event in sorted(type_events, key=lambda x: x.get('timestamp', 0), reverse=True)[:3]:
-                    timestamp = event.get('timestamp', 0)
-                    try:
-                        event_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                    except:
-                        event_time = 'Unknown'
-                    
-                    device_name = event.get('device_name', 'Unknown Device')
-                    site_name = event.get('site_name', 'Unknown Site')
-                    
-                    print(f"         -> {event_time} | {device_name} at {site_name}")
-        else:
-            print(f"   -> No device upgrade events found in last 24 hours")
-            
-    except Exception as e:
-        print(f"   -> Error checking device events: {e}")
-        logging.warning(f"Failed to search device upgrade events: {e}")
+    def _is_upgrade_event(self, log_entry: Dict[str, Any]) -> bool:
+        """Check if log entry is upgrade-related."""
+        message = log_entry.get('message', '').lower()
+        return any(kw in message for kw in ['upgrade', 'firmware', 'version'])
     
-    # Step 6: Check individual site upgrade operations
-    if not site_filter:
-        print(f"\n   Checking individual site upgrade operations (first 5 sites)...")
-    sites_to_check = [site_filter] if site_filter else list(site_lookup.keys())
+    def _display_audit_events(self, events: List[Dict[str, Any]]) -> None:
+        """Display recent audit events."""
+        for event in sorted(events, key=lambda x: x.get('timestamp', 0), reverse=True):
+            timestamp = self._format_timestamp(event.get('timestamp', 0))
+            admin = event.get('admin_name', 'System')
+            message = event.get('message', 'No message')
+            site = event.get('site_name', 'Organization')
+            print(f"      -> {timestamp} | {admin} | {site}: {message[:60]}...")
     
-    sites_with_upgrades = 0
-    for site_id in sites_to_check[:5]:  # Limit to first 5 sites for performance
-        site_name = site_lookup.get(site_id, 'Unknown')  # Define outside try for error handler
+    def _check_device_events(self) -> None:
+        """Check organization device events for upgrade activity."""
         try:
-            upgrades_resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
-            site_upgrades = mistapi.get_all(response=upgrades_resp, mist_session=apisession)
+            print(f"   Checking organization device events for upgrade activity...")
             
-            if site_upgrades:
+            end_time = int(time.time())
+            start_time = end_time - (24 * 60 * 60)
+            
+            resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                apisession, self.org_id,
+                type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED",
+                start=start_time, end=end_time, limit=50
+            )
+            events = mistapi.get_all(response=resp, mist_session=apisession)
+            
+            if not events:
+                print(f"   -> No device upgrade events found in last 24 hours")
+                return
+            
+            print(f"   !? Found {len(events)} device upgrade event(s) in last 24 hours")
+            self._display_device_events(events)
+            
+        except Exception as exception:
+            print(f"   -> Error checking device events: {exception}")
+            logging.warning(f"Failed to search device upgrade events: {exception}")
+    
+    def _display_device_events(self, events: List[Dict[str, Any]]) -> None:
+        """Display device events grouped by type."""
+        by_type: Dict[str, List[Dict[str, Any]]] = {}
+        for event in events:
+            event_type = event.get('type', 'Unknown')
+            if event_type not in by_type:
+                by_type[event_type] = []
+            by_type[event_type].append(event)
+        
+        for event_type, type_events in by_type.items():
+            display = event_type.replace('SYSTEM_UPGRADE_', '').title()
+            print(f"      {display}: {len(type_events)} event(s)")
+    
+    def _check_site_upgrades(self) -> None:
+        """Check individual site upgrade operations."""
+        if not self.site_filter:
+            print(f"\n   Checking individual site upgrade operations (first 5 sites)...")
+        
+        sites = [self.site_filter] if self.site_filter else list(self.site_lookup.keys())[:5]
+        sites_with_upgrades = 0
+        
+        for site_id in sites:
+            if self._check_single_site_upgrades(site_id):
                 sites_with_upgrades += 1
-                print(f"   Site '{site_name}': !? {len(site_upgrades)} upgrade operation(s)")
-                
-                for upgrade in site_upgrades:
-                    upgrade_id = upgrade.get('id', 'Unknown')
-                    upgrade_status = upgrade.get('status', 'Unknown')
-                    upgrade_strategy = upgrade.get('strategy', 'Unknown')
-                    target_version = upgrade.get('target_version', 'Unknown')
-                    start_time = upgrade.get('start_time', 0)
-                    enable_p2p = upgrade.get('enable_p2p', False)
-                    counts = upgrade.get('counts', {})
-                    
-                    # Format start time
-                    start_time_str = "Unknown"
-                    if start_time:
-                        try:
-                            start_time_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
-                        except:
-                            start_time_str = str(start_time)
-                    
-                    # Create progress summary
-                    total = counts.get('total', 0)
-                    downloaded = counts.get('downloaded', 0)
-                    rebooted = counts.get('rebooted', 0)
-                    failed = counts.get('failed', 0)
-                    
-                    progress_parts = []
-                    if total > 0:
-                        if downloaded > 0:
-                            progress_parts.append(f"{downloaded}/{total} downloaded")
-                        if rebooted > 0:
-                            progress_parts.append(f"{rebooted}/{total} rebooted")
-                        if failed > 0:
-                            progress_parts.append(f"{failed} failed")
-                    
-                    progress_info = " | ".join(progress_parts) if progress_parts else f"Status: {upgrade_status}"
-                    
-                    print(f"      Upgrade {upgrade_id[:8]}... [{upgrade_strategy}]: {progress_info}")
-                    print(f"         Target: {target_version} | Started: {start_time_str}")
-                    
-                    active_upgrades.append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'upgrade_id': upgrade_id,
-                        'status': upgrade_status,
-                        'strategy': upgrade_strategy,
-                        'target_version': target_version,
-                        'start_time': start_time_str,
-                        'enable_p2p': enable_p2p,
-                        'total_devices': counts.get('total', 0),
-                        'downloaded': counts.get('downloaded', 0),
-                        'download_requested': counts.get('download_requested', 0),
-                        'rebooted': counts.get('rebooted', 0),
-                        'reboot_in_progress': counts.get('reboot_in_progress', 0),
-                        'failed': counts.get('failed', 0),
-                        'skipped': counts.get('skipped', 0),
-                        'source': 'site_lookup',
-                        'timestamp': datetime.now(timezone.utc).isoformat()
-                    })
-            # Don't print anything for sites with no upgrades to reduce noise
-                
-        except Exception as e:
-            print(f"   Site '{site_name}': -> Error checking upgrades: {e}")
-            logging.warning(f"Failed to check upgrades for site {site_id}: {e}")
+        
+        if not self.site_filter:
+            without = len(sites) - sites_with_upgrades
+            if without > 0:
+                print(f"   -> {without} site(s) have no active upgrade operations")
     
-    # Summary message for site-level checks
-    if not site_filter:
-        sites_without_upgrades = min(5, len(sites_to_check)) - sites_with_upgrades
-        if sites_without_upgrades > 0:
-            print(f"   -> {sites_without_upgrades} site(s) have no active upgrade operations")
-    
-    # Step 6: Export results to CSV
-    timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-    if upgrade_results:
-        device_status_file = f"FirmwareUpgradeStatus_{timestamp_suffix}.csv"
-        fieldnames = ['Site ID', 'Site Name', 'Device ID', 'Device Name', 'Device MAC', 
-                     'Device Model', 'Device Type', 'Current Version', 'Last Seen',
-                     'FW Upgrade Status', 'FW Progress %', 'FW Progress Display', 
-                     'FW Status ID', 'FW Will Retry', 'FW Timestamp', 'Timestamp']
+    def _check_single_site_upgrades(self, site_id: str) -> bool:
+        """Check upgrades for a single site. Returns True if upgrades found."""
+        site_name = self.site_lookup.get(site_id, 'Unknown')
         
         try:
-            DataExporter.save_data_to_output(upgrade_results, device_status_file)
-            print(f"\n[SUCCESS] Device firmware status exported to: data/{device_status_file}")
-            print(f"   [DATA] {len(upgrade_results)} device records exported")
-            logging.info(f"Exported {len(upgrade_results)} device firmware status records to data/{device_status_file}")
+            resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
+            upgrades = mistapi.get_all(response=resp, mist_session=apisession)
             
-        except Exception as e:
-            print(f"! Failed to export device status: {e}")
-            logging.error(f"Failed to export device status: {e}")
+            if not upgrades:
+                return False
+            
+            print(f"   Site '{site_name}': !? {len(upgrades)} upgrade operation(s)")
+            for upgrade in upgrades:
+                self._process_site_upgrade(upgrade, site_id, site_name)
+            return True
+            
+        except Exception as exception:
+            print(f"   Site '{site_name}': -> Error checking upgrades: {exception}")
+            logging.warning(f"Failed to check upgrades for site {site_id}: {exception}")
+            return False
     
-    if active_upgrades:
-        upgrade_ops_file = os.path.join("data", f"ActiveUpgradeOperations_{timestamp_suffix}.csv")
-        upgrade_fieldnames = ['site_id', 'site_name', 'upgrade_id', 'status', 'strategy',
-                             'target_version', 'start_time', 'enable_p2p', 'total_devices',
-                             'downloaded', 'download_requested', 'rebooted', 'reboot_in_progress',
-                             'failed', 'skipped', 'source', 'timestamp']
+    def _process_site_upgrade(self, upgrade: Dict[str, Any], site_id: str, site_name: str) -> None:
+        """Process a single site upgrade record."""
+        upgrade_id = upgrade.get('id', 'Unknown')
+        status = upgrade.get('status', 'Unknown')
+        strategy = upgrade.get('strategy', 'Unknown')
+        target = upgrade.get('target_version', 'Unknown')
+        counts = upgrade.get('counts', {})
+        
+        progress_parts = self._build_site_upgrade_progress(counts)
+        progress_info = " | ".join(progress_parts) if progress_parts else f"Status: {status}"
+        
+        print(f"      Upgrade {upgrade_id[:8]}... [{strategy}]: {progress_info}")
+        print(f"         Target: {target} | Started: {self._format_timestamp(upgrade.get('start_time', 0))}")
+        
+        self.active_upgrades.append({
+            'site_id': site_id,
+            'site_name': site_name,
+            'upgrade_id': upgrade_id,
+            'status': status,
+            'strategy': strategy,
+            'target_version': target,
+            'source': 'site_lookup',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            **{k: counts.get(k, 0) for k in ['total', 'downloaded', 'rebooted', 'failed']}
+        })
+    
+    def _build_site_upgrade_progress(self, counts: Dict[str, int]) -> List[str]:
+        """Build progress parts for site upgrade display."""
+        parts = []
+        total = counts.get('total', 0)
+        if total > 0:
+            if counts.get('downloaded', 0) > 0:
+                parts.append(f"{counts['downloaded']}/{total} downloaded")
+            if counts.get('rebooted', 0) > 0:
+                parts.append(f"{counts['rebooted']}/{total} rebooted")
+            if counts.get('failed', 0) > 0:
+                parts.append(f"{counts['failed']} failed")
+        return parts
+    
+    def _export_results(self) -> None:
+        """Export results to CSV files."""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        self._export_device_status(timestamp)
+        self._export_active_operations(timestamp)
+    
+    def _export_device_status(self, timestamp: str) -> None:
+        """Export device firmware status to CSV."""
+        if not self.upgrade_results:
+            return
+        
+        filename = f"FirmwareUpgradeStatus_{timestamp}.csv"
+        try:
+            DataExporter.save_data_to_output(self.upgrade_results, filename)
+            print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
+            print(f"   [DATA] {len(self.upgrade_results)} device records exported")
+            logging.info(f"Exported {len(self.upgrade_results)} device status records")
+        except Exception as exception:
+            print(f"! Failed to export device status: {exception}")
+            logging.error(f"Failed to export device status: {exception}")
+    
+    def _export_active_operations(self, timestamp: str) -> None:
+        """Export active upgrade operations to CSV."""
+        if not self.active_upgrades:
+            return
+        
+        filename = os.path.join("data", f"ActiveUpgradeOperations_{timestamp}.csv")
+        fieldnames = ['site_id', 'site_name', 'upgrade_id', 'status', 'strategy',
+                     'target_version', 'start_time', 'enable_p2p', 'total_devices',
+                     'downloaded', 'download_requested', 'rebooted', 'reboot_in_progress',
+                     'failed', 'skipped', 'source', 'timestamp']
         
         try:
-            # Normalize the active_upgrades data for CSV export
-            mapped_upgrades = []
-            for upgrade in active_upgrades:
-                # Handle both direct field access and details field extraction
-                details = upgrade.get('details', {})
-                counts = details.get('counts', {}) if details else {}
-                
-                # Extract or use existing start_time
-                start_time = upgrade.get('start_time') or details.get('start_time', 0)
-                start_time_str = start_time  # Use as-is if already formatted
-                if isinstance(start_time, (int, float)) and start_time > 0:
-                    try:
-                        start_time_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
-                    except:
-                        start_time_str = str(start_time)
-                elif not start_time_str:
-                    start_time_str = "Unknown"
-                
-                # Extract or use existing enable_p2p
-                enable_p2p = upgrade.get('enable_p2p')
-                if enable_p2p is None and details:
-                    enable_p2p = details.get('enable_p2p', 'Unknown')
-                
-                mapped_upgrade = {
-                    'site_id': upgrade.get('site_id', 'Unknown'),
-                    'site_name': upgrade.get('site_name', 'Unknown'),
-                    'upgrade_id': upgrade.get('upgrade_id', 'Unknown'),
-                    'status': upgrade.get('status', 'Unknown'),
-                    'strategy': upgrade.get('strategy', 'Unknown'),
-                    'target_version': upgrade.get('target_version', 'Unknown'),
-                    'start_time': start_time_str,
-                    'enable_p2p': enable_p2p,
-                    'total_devices': upgrade.get('total_devices') or counts.get('total', 0),
-                    'downloaded': upgrade.get('downloaded') or counts.get('downloaded', 0),
-                    'download_requested': upgrade.get('download_requested') or counts.get('download_requested', 0),
-                    'rebooted': upgrade.get('rebooted') or counts.get('rebooted', 0),
-                    'reboot_in_progress': upgrade.get('reboot_in_progress') or counts.get('reboot_in_progress', 0),
-                    'failed': upgrade.get('failed') or counts.get('failed', 0),
-                    'skipped': upgrade.get('skipped') or counts.get('skipped', 0),
-                    'source': upgrade.get('source', 'unknown'),
-                    'timestamp': upgrade.get('timestamp') or datetime.now(timezone.utc).isoformat()
-                }
-                mapped_upgrades.append(mapped_upgrade)
-            
-            with open(upgrade_ops_file, mode='w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=upgrade_fieldnames)
+            mapped = [self._map_upgrade_for_export(u) for u in self.active_upgrades]
+            with open(filename, mode='w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-                writer.writerows(mapped_upgrades)
+                writer.writerows(mapped)
             
-            print(f"! Active upgrade operations exported to: {upgrade_ops_file}")
-            print(f"   {len(active_upgrades)} upgrade operations exported")
-            logging.info(f"Exported {len(active_upgrades)} active upgrade operations to {upgrade_ops_file}")
-            
-        except Exception as e:
-            print(f"! Failed to export upgrade operations: {e}")
-            logging.error(f"Failed to export upgrade operations: {e}")
+            print(f"! Active upgrade operations exported to: {filename}")
+            print(f"   {len(self.active_upgrades)} upgrade operations exported")
+            logging.info(f"Exported {len(self.active_upgrades)} active upgrade operations")
+        except Exception as exception:
+            print(f"! Failed to export upgrade operations: {exception}")
+            logging.error(f"Failed to export upgrade operations: {exception}")
     
-    # Step 7: Summary and recommendations
-    print(f"\n  Summary and Recommendations:")
+    def _map_upgrade_for_export(self, upgrade: Dict[str, Any]) -> Dict[str, Any]:
+        """Map upgrade record for CSV export."""
+        details = upgrade.get('details', {})
+        counts = details.get('counts', {}) if details else {}
+        
+        start_time = upgrade.get('start_time') or details.get('start_time', 0)
+        if isinstance(start_time, (int, float)) and start_time > 0:
+            start_time = self._format_timestamp(start_time)
+        
+        return {
+            'site_id': upgrade.get('site_id', 'Unknown'),
+            'site_name': upgrade.get('site_name', 'Unknown'),
+            'upgrade_id': upgrade.get('upgrade_id', 'Unknown'),
+            'status': upgrade.get('status', 'Unknown'),
+            'strategy': upgrade.get('strategy', 'Unknown'),
+            'target_version': upgrade.get('target_version', 'Unknown'),
+            'start_time': start_time or 'Unknown',
+            'enable_p2p': upgrade.get('enable_p2p') or details.get('enable_p2p', 'Unknown'),
+            'total_devices': upgrade.get('total_devices') or counts.get('total', 0),
+            'downloaded': upgrade.get('downloaded') or counts.get('downloaded', 0),
+            'download_requested': upgrade.get('download_requested') or counts.get('download_requested', 0),
+            'rebooted': upgrade.get('rebooted') or counts.get('rebooted', 0),
+            'reboot_in_progress': upgrade.get('reboot_in_progress') or counts.get('reboot_in_progress', 0),
+            'failed': upgrade.get('failed') or counts.get('failed', 0),
+            'skipped': upgrade.get('skipped') or counts.get('skipped', 0),
+            'source': upgrade.get('source', 'unknown'),
+            'timestamp': upgrade.get('timestamp') or datetime.now(timezone.utc).isoformat()
+        }
     
-    if firmware_status_summary['upgrade_failed'] > 0:
-        print(f"   {firmware_status_summary['upgrade_failed']} devices have failed upgrades")
-        print(f"   Check failed devices for retry eligibility or manual intervention")
+    def _display_recommendations(self) -> None:
+        """Display summary and recommendations."""
+        print(f"\n  Summary and Recommendations:")
+        
+        if self.summary['upgrade_failed'] > 0:
+            print(f"   {self.summary['upgrade_failed']} devices have failed upgrades")
+            print(f"   Check failed devices for retry eligibility or manual intervention")
+        
+        if self.summary['upgrade_in_progress'] > 0:
+            print(f"   {self.summary['upgrade_in_progress']} devices currently upgrading")
+            print(f"   Monitor progress and avoid disrupting these devices")
+        
+        if len(self.summary['devices_by_version']) > 3:
+            count = len(self.summary['devices_by_version'])
+            print(f"   Multiple firmware versions detected ({count} different versions)")
+            print(f"   Consider standardizing on a consistent firmware version")
+        
+        if self.active_upgrades:
+            print(f"   {len(self.active_upgrades)} active upgrade operations found")
+            print(f"   Monitor upgrade progress in exported CSV files")
+        else:
+            print(f"   No active upgrade operations detected")
+        
+        print(f"\n  Status check complete. Check exported CSV files for detailed analysis.")
+
+
+def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
+    """
+    Legacy implementation function - delegates to FirmwareUpgradeStatusChecker.
     
-    if firmware_status_summary['upgrade_in_progress'] > 0:
-        print(f"   {firmware_status_summary['upgrade_in_progress']} devices currently upgrading")
-        print(f"   Monitor progress and avoid disrupting these devices")
-    
-    if len(firmware_status_summary['devices_by_version']) > 3:
-        print(f"   Multiple firmware versions detected ({len(firmware_status_summary['devices_by_version'])} different versions)")
-        print(f"   Consider standardizing on a consistent firmware version")
-    
-    if active_upgrades:
-        print(f"   {len(active_upgrades)} active upgrade operations found")
-        print(f"   Monitor upgrade progress in exported CSV files")
-    else:
-        print(f"   No active upgrade operations detected")
-    
-    print(f"\n  Status check complete. Check exported CSV files for detailed analysis.")
-    logging.info("Firmware upgrade status check completed successfully")
+    DEPRECATED: Use FirmwareUpgradeStatusChecker(scope_choice, site_filter).check() directly.
+    """
+    FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
 
 
 # NOTE: get_auto_upgrade_time_settings removed - dead code (never called)

@@ -550,6 +550,48 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.18.02.10",
+      "date": "2026-01-18",
+      "changes": {
+        "new_classes": [
+          "FirmwareUpgradeStatusChecker: Comprehensive firmware upgrade status monitoring and reporting"
+        ],
+        "refactoring": [
+          "~850-line check_firmware_upgrade_status_impl function refactored into FirmwareUpgradeStatusChecker class",
+          "52 methods organized by responsibility:",
+          "Core: __init__(), check(), _create_empty_summary()",
+          "Site Resolution: _resolve_site_filter()",
+          "Stats Fetching: _fetch_device_stats(), _fetch_site_stats(), _fetch_org_stats(), _handle_empty_stats()",
+          "Site Lookup: _fetch_site_lookup()",
+          "Device Processing: _process_all_devices(), _extract_device_info(), _process_fwupdate()",
+          "Firmware Info: _create_no_upgrade_info(), _parse_fwupdate_data()",
+          "Status Categorization: _categorize_status(), _is_stale_upgrade(), _track_active_upgrade(), _track_status_distribution()",
+          "Formatting: _format_timestamp()",
+          "Summary Updates: _update_summary_counters(), _maybe_add_to_results()",
+          "Filtering: _should_include_device(), _create_progress_display()",
+          "Display Summary: _display_summary(), _display_average_progress(), _display_status_distribution(), _display_type_distribution(), _display_version_distribution(), _display_model_distribution()",
+          "Display Upgrading: _display_upgrading_devices(), _print_upgrading_device(), _display_progress_distribution()",
+          "Active Operations: _check_active_operations(), _check_ssr_upgrades(), _process_ssr_upgrade(), _build_ssr_status_parts(), _build_version_info()",
+          "Stored Upgrades: _check_stored_upgrades(), _check_stored_upgrade()",
+          "Logs/Events: _check_audit_logs(), _is_upgrade_event(), _display_audit_events(), _check_device_events(), _display_device_events()",
+          "Site Upgrades: _check_site_upgrades(), _check_single_site_upgrades(), _process_site_upgrade(), _build_site_upgrade_progress()",
+          "Export: _export_results(), _export_device_status(), _export_active_operations(), _map_upgrade_for_export()",
+          "Recommendations: _display_recommendations()"
+        ],
+        "dead_code_removal": [
+          "check_firmware_upgrade_status_impl 850-line standalone function replaced with thin delegation wrapper"
+        ],
+        "compliance": [
+          "NO WRAPPERS: FirmwareManager._execute_status_check() still works via thin delegation wrapper",
+          "Direct usage: FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()"
+        ],
+        "constants": [
+          "STALE_UPGRADE_HOURS = 1 (configurable threshold for stale upgrade detection)",
+          "DEVICE_TYPE_NAMES dict for display formatting"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.23.15",
       "date": "2026-01-17",
       "changes": {
