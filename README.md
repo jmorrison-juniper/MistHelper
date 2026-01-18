@@ -579,10 +579,10 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
           "Recommendations: _display_recommendations()"
         ],
         "dead_code_removal": [
-          "check_firmware_upgrade_status_impl 850-line standalone function replaced with thin delegation wrapper"
+          "check_firmware_upgrade_status_impl 850-line standalone function removed entirely"
         ],
         "compliance": [
-          "NO WRAPPERS: FirmwareManager._execute_status_check() still works via thin delegation wrapper",
+          "NO WRAPPERS: FirmwareManager._execute_status_check() now uses FirmwareUpgradeStatusChecker directly",
           "Direct usage: FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()"
         ],
         "constants": [

@@ -34623,14 +34623,14 @@ class FirmwareManager:
         return upgrader.execute()
     
     def _execute_status_check(self, scope_choice, site_filter):
-        """Execute the firmware status check with the existing implementation."""
+        """Execute the firmware status check using FirmwareUpgradeStatusChecker."""
         # Set up the implementation to use this class's session and org_id
         global apisession
         original_apisession = apisession
         apisession = self.apisession
         
         try:
-            return check_firmware_upgrade_status_impl(scope_choice, site_filter)
+            FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
         finally:
             apisession = original_apisession
 
@@ -36423,14 +36423,8 @@ class FirmwareUpgradeStatusChecker:
         print(f"\n  Status check complete. Check exported CSV files for detailed analysis.")
 
 
-def check_firmware_upgrade_status_impl(scope_choice=None, site_filter=None):
-    """
-    Legacy implementation function - delegates to FirmwareUpgradeStatusChecker.
-    
-    DEPRECATED: Use FirmwareUpgradeStatusChecker(scope_choice, site_filter).check() directly.
-    """
-    FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
-
+# NOTE: check_firmware_upgrade_status_impl removed - refactored into FirmwareUpgradeStatusChecker class
+# Usage: FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
 
 # NOTE: get_auto_upgrade_time_settings removed - dead code (never called)
 
