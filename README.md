@@ -550,6 +550,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.22.00",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "TUILauncher: Terminal User Interface launcher for interactive API exploration"
+        ],
+        "refactoring": [
+          "60-line _launch_tui_from_menu function refactored into TUILauncher class",
+          "11 methods: __init__, launch(), _print_welcome(), _ensure_api_session()",
+          "Logging: _suppress_console_logging(), _restore_console_logging()",
+          "TUI execution: _get_debug_mode(), _run_tui()",
+          "Error handling: _handle_keyboard_interrupt(), _handle_fatal_error()",
+          "Exit: _print_exit_message()"
+        ],
+        "dead_code_removal": [
+          "_launch_tui_from_menu standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Menu #101 now uses lambda: TUILauncher().launch()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.21.45",
       "date": "2026-01-17",
       "changes": {
