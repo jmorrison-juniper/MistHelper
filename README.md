@@ -550,6 +550,34 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.22.45",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "WLANRadiusTimerManager: WLAN RADIUS authentication timer configuration manager"
+        ],
+        "refactoring": [
+          "635-line manage_wlan_radius_auth_timers function refactored into WLANRadiusTimerManager class",
+          "50 methods organized by category:",
+          "Init/Entry: __init__, manage(), _enable_debug_if_requested()",
+          "Site Selection: _select_site(), _get_org_id(), _fetch_site_info(), _log_site_info()",
+          "WLAN Fetching: _fetch_all_wlans(), _fetch_site_wlans(), _fetch_site_template_wlans(), _fetch_org_wlans()",
+          "Template Logic: _fetch_wlan_templates(), _determine_assigned_templates(), _is_template_assigned_to_site(), _fetch_and_filter_org_wlans(), _add_org_wlan_metadata()",
+          "Filtering: _uses_radius_auth(), _filter_radius_wlans(), _filter_site_wlans(), _filter_site_template_wlans(), _filter_org_wlans()",
+          "Display: _print_no_wlans_message(), _display_wlans(), _display_single_wlan(), _display_current_config(), _display_behavior_impact(), _display_proposed_changes()",
+          "Prompts: _prompt_wlan_selection(), _prompt_new_values(), _prompt_timeout(), _prompt_retries(), _prompt_selection(), _prompt_fast_timers()",
+          "Behavior Display: _print_radius_config(), _print_timeout_behavior(), _print_failover_behavior(), _print_fast_timer_info(), _print_client_experience(), _print_inheritance_warning()",
+          "Confirmation/Apply: _confirm_changes(), _build_update_payload(), _apply_changes(), _update_site_wlan(), _update_site_template_wlan(), _update_org_wlan(), _print_completion_message()"
+        ],
+        "dead_code_removal": [
+          "manage_wlan_radius_auth_timers standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Menu #102 now uses lambda: WLANRadiusTimerManager().manage()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.22.30",
       "date": "2026-01-17",
       "changes": {

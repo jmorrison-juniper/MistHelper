@@ -38669,7 +38669,7 @@ def get_potential_anomaly_metrics():
 # WLAN RADIUS AUTHENTICATION TIMER MANAGEMENT
 # ============================================================================
 
-def manage_wlan_radius_auth_timers(debug=False):
+class WLANRadiusTimerManager:
     """
     Interactive WLAN RADIUS authentication timer management.
     
@@ -38681,295 +38681,298 @@ def manage_wlan_radius_auth_timers(debug=False):
        auth_server_selection, and fast_dot1x_timers
     5. Push changes to appropriate endpoint (site WLAN or template)
     
-    SECURITY: Modifies WLAN authentication configuration - requires explicit confirmation.
+    SECURITY: Modifies WLAN authentication configuration - requires explicit 'APPLY' confirmation.
     
-    Args:
-        debug (bool): Enable verbose debug output
+    Usage:
+        WLANRadiusTimerManager().manage()
     """
-    logging.info("Starting WLAN RADIUS authentication timer management")
     
-    # Enable debug logging if requested
-    if debug:
-        original_level = logging.getLogger().level
+    def __init__(self, debug: bool = False):
+        """Initialize manager with debug mode setting."""
+        self.debug = debug
+        self.original_log_level = None
+        self.site_id: str = ""
+        self.org_id: str = ""
+        self.site_name: str = ""
+        self.site_info: Dict[str, Any] = {}
+        self.site_template_id: Optional[str] = None
+        self.template_name: Optional[str] = None
+        self.site_wlans: List[Dict[str, Any]] = []
+        self.site_template_wlans: List[Dict[str, Any]] = []
+        self.org_wlans: List[Dict[str, Any]] = []
+        self.wlan_templates: List[Dict[str, Any]] = []
+        self.assigned_template_ids: set = set()
+        self.all_radius_wlans: List[Dict[str, Any]] = []
+        self.selected_wlan: Optional[Dict[str, Any]] = None
+        self.new_timeout: int = 5
+        self.new_retries: int = 2
+        self.new_selection: str = "ordered"
+        self.new_fast: bool = False
+    
+    def manage(self) -> None:
+        """Main entry point - orchestrates the WLAN timer management workflow."""
+        logging.info("Starting WLAN RADIUS authentication timer management")
+        self._enable_debug_if_requested()
+        if not self._select_site():
+            return
+        if not self._get_org_id():
+            return
+        if not self._fetch_site_info():
+            return
+        self._fetch_all_wlans()
+        self._filter_radius_wlans()
+        if not self.all_radius_wlans:
+            self._print_no_wlans_message()
+            return
+        self._display_wlans()
+        if not self._prompt_wlan_selection():
+            return
+        self._display_current_config()
+        if not self._prompt_new_values():
+            return
+        self._display_behavior_impact()
+        self._display_proposed_changes()
+        if not self._confirm_changes():
+            return
+        self._apply_changes()
+        self._print_completion_message()
+    
+    def _enable_debug_if_requested(self) -> None:
+        """Enable debug logging if debug mode is requested."""
+        if not self.debug:
+            return
+        self.original_log_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Debug mode enabled - verbose output active for WLAN template troubleshooting")
     
-    # Step 1: Select site
-    site_id = PromptUtils.select_site_with_logging()
-    if not site_id:
-        logging.warning("No site selected for WLAN management")
-        print("\n[!] No site selected. Exiting.")
-        return
+    def _select_site(self) -> bool:
+        """Prompt user to select a site."""
+        self.site_id = PromptUtils.select_site_with_logging()
+        if not self.site_id:
+            logging.warning("No site selected for WLAN management")
+            print("\n[!] No site selected. Exiting.")
+            return False
+        return True
     
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()
-    if not org_id:
-        logging.error("Could not determine organization ID")
-        print("\n[!] Unable to determine organization ID. Exiting.")
-        return
+    def _get_org_id(self) -> bool:
+        """Get organization ID from cache or prompt."""
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not self.org_id:
+            logging.error("Could not determine organization ID")
+            print("\n[!] Unable to determine organization ID. Exiting.")
+            return False
+        return True
     
-    # Step 2: Fetch site information
-    logging.info(f"Fetching site information for site ID: {site_id}")
-    try:
-        site_response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, site_id)
-        if site_response.status_code != 200:
-            logging.error(f"Failed to fetch site info: HTTP {site_response.status_code}")
-            print(f"\n[!] Failed to fetch site information. Exiting.")
-            return
-        
-        site_info = site_response.data
-        site_name = site_info.get('name', 'Unknown Site')
-        site_template_id = site_info.get('sitetemplate_id')
-        
-        logging.info(f"Site: {site_name}")
-        if site_template_id:
-            logging.info(f"Site Template ID: {site_template_id}")
+    def _fetch_site_info(self) -> bool:
+        """Fetch site information from API."""
+        logging.info(f"Fetching site information for site ID: {self.site_id}")
+        try:
+            response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)
+            if response.status_code != 200:
+                logging.error(f"Failed to fetch site info: HTTP {response.status_code}")
+                print("\n[!] Failed to fetch site information. Exiting.")
+                return False
+            self.site_info = response.data
+            self.site_name = self.site_info.get('name', 'Unknown Site')
+            self.site_template_id = self.site_info.get('sitetemplate_id')
+            self._log_site_info()
+            return True
+        except Exception as error:
+            logging.error(f"Error fetching site info: {error}")
+            print(f"\n[!] Error fetching site information: {error}")
+            return False
+    
+    def _log_site_info(self) -> None:
+        """Log site information details."""
+        logging.info(f"Site: {self.site_name}")
+        if self.site_template_id:
+            logging.info(f"Site Template ID: {self.site_template_id}")
         else:
             logging.info("No site template assigned")
-            
-    except Exception as error:
-        logging.error(f"Error fetching site info: {error}")
-        print(f"\n[!] Error fetching site information: {error}")
-        return
     
-    # Step 3: Fetch site-level WLANs
-    logging.info("Fetching WLANs configured at site level...")
-    site_wlans = []
-    try:
-        site_wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id)
-        if site_wlans_response.status_code == 200:
-            site_wlans = site_wlans_response.data
-            logging.info(f"Found {len(site_wlans)} site-level WLANs")
-        else:
-            logging.warning(f"Failed to fetch site WLANs: HTTP {site_wlans_response.status_code}")
-    except Exception as error:
-        logging.error(f"Error fetching site WLANs: {error}")
+    def _fetch_all_wlans(self) -> None:
+        """Fetch WLANs from all sources (site, template, org)."""
+        self._fetch_site_wlans()
+        self._fetch_site_template_wlans()
+        self._fetch_org_wlans()
     
-    # Step 4: Fetch template-level WLANs if site template is assigned
-    site_template_wlans = []
-    template_name = None
-    if site_template_id:
+    def _fetch_site_wlans(self) -> None:
+        """Fetch WLANs configured at site level."""
+        logging.info("Fetching WLANs configured at site level...")
+        try:
+            response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)
+            if response.status_code == 200:
+                self.site_wlans = response.data
+                logging.info(f"Found {len(self.site_wlans)} site-level WLANs")
+            else:
+                logging.warning(f"Failed to fetch site WLANs: HTTP {response.status_code}")
+        except Exception as error:
+            logging.error(f"Error fetching site WLANs: {error}")
+    
+    def _fetch_site_template_wlans(self) -> None:
+        """Fetch WLANs from site template if assigned."""
+        if not self.site_template_id:
+            return
         logging.info("Fetching WLANs from site template...")
         try:
-            # Get template info first for name
-            template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
-                apisession, org_id, site_template_id
+            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+                apisession, self.org_id, self.site_template_id
             )
-            if template_response.status_code == 200:
-                template_data = template_response.data
-                template_name = template_data.get('name', 'Unknown Template')
-                
-                # Extract WLANs from template
+            if response.status_code == 200:
+                template_data = response.data
+                self.template_name = template_data.get('name', 'Unknown Template')
                 if 'wlans' in template_data and template_data['wlans']:
-                    site_template_wlans = list(template_data['wlans'].values())
-                    logging.info(f"Found {len(site_template_wlans)} site template-level WLANs")
+                    self.site_template_wlans = list(template_data['wlans'].values())
+                    logging.info(f"Found {len(self.site_template_wlans)} site template-level WLANs")
             else:
-                logging.warning(f"Failed to fetch site template: HTTP {template_response.status_code}")
+                logging.warning(f"Failed to fetch site template: HTTP {response.status_code}")
         except Exception as error:
             logging.error(f"Error fetching site template: {error}")
     
-    # Step 5: Fetch org-level WLANs and check if they use templates assigned to this site
-    logging.info("Fetching org-level WLANs to check for template-based configurations...")
-    org_wlans = []
-    assigned_template_ids = set()
-    wlan_templates: list = []  # Initialize outside try block
+    def _fetch_org_wlans(self) -> None:
+        """Fetch org-level WLANs using templates assigned to this site."""
+        logging.info("Fetching org-level WLANs to check for template-based configurations...")
+        try:
+            self._fetch_wlan_templates()
+            self._determine_assigned_templates()
+            self._fetch_and_filter_org_wlans()
+        except Exception as error:
+            logging.error(f"Error fetching org WLANs or templates: {error}")
     
-    try:
-        # First, get all WLAN templates and determine which are assigned to this site
+    def _fetch_wlan_templates(self) -> None:
+        """Fetch all WLAN templates from the organization."""
         logging.debug("Fetching WLAN templates to determine which are assigned to this site")
-        wlan_templates_response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, org_id)
-        if wlan_templates_response.status_code == 200:
-            wlan_templates = wlan_templates_response.data
-            logging.info(f"Found {len(wlan_templates)} org-level WLAN templates")
-            logging.debug(f"Retrieved {len(wlan_templates)} WLAN templates from API")
-            
-            # Determine which templates are assigned to this site
-            for wlan_template in wlan_templates:
-                template_id = wlan_template.get('id')
-                template_name_wlan = wlan_template.get('name', 'Unknown Template')
-                
-                logging.debug(f"Checking WLAN template: {template_name_wlan} (ID: {template_id})")
-                
-                # Check if this WLAN template is applied to our site
-                applies = wlan_template.get('applies', {})
-                assigned_site_ids = applies.get('site_ids', []) if isinstance(applies, dict) else []
-                assigned_sitegroup_ids = applies.get('sitegroup_ids', []) if isinstance(applies, dict) else []
-                assigned_wxtag_ids = applies.get('wxtag_ids', []) if isinstance(applies, dict) else []
-                org_id_apply = applies.get('org_id') if isinstance(applies, dict) else None
-                
-                logging.debug(f"  applies field: {applies}")
-                logging.debug(f"  assigned_site_ids: {assigned_site_ids}")
-                logging.debug(f"  assigned_sitegroup_ids: {assigned_sitegroup_ids}")
-                logging.debug(f"  assigned_wxtag_ids: {assigned_wxtag_ids}")
-                logging.debug(f"  org_id_apply: {org_id_apply}")
-                
-                # Check various application methods
-                is_assigned = False
-                assignment_method = None
-                
-                if org_id_apply:
-                    is_assigned = True
-                    assignment_method = 'Org-wide (all sites)'
-                elif site_id in assigned_site_ids:
-                    is_assigned = True
-                    assignment_method = 'Explicit site assignment'
-                elif assigned_sitegroup_ids:
-                    site_groups = site_info.get('sitegroup_ids', [])
-                    if any(sg in assigned_sitegroup_ids for sg in site_groups):
-                        is_assigned = True
-                        assignment_method = 'Site group assignment'
-                elif assigned_wxtag_ids:
-                    site_tags = site_info.get('wxtag_ids', [])
-                    if any(tag in assigned_wxtag_ids for tag in site_tags):
-                        is_assigned = True
-                        assignment_method = 'WxTag matching'
-                
-                if is_assigned:
-                    assigned_template_ids.add(template_id)
-                    logging.debug(f"  Template {template_name_wlan} IS assigned via: {assignment_method}")
-                else:
-                    logging.debug(f"  Template {template_name_wlan} is NOT assigned to this site")
-            
-            logging.info(f"Found {len(assigned_template_ids)} WLAN templates assigned to this site")
-            logging.debug(f"Assigned template IDs: {assigned_template_ids}")
+        response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)
+        if response.status_code == 200:
+            self.wlan_templates = response.data
+            logging.info(f"Found {len(self.wlan_templates)} org-level WLAN templates")
         else:
-            logging.warning(f"Failed to fetch WLAN templates: HTTP {wlan_templates_response.status_code}")
-        
-        # Now fetch org WLANs and check if they reference assigned templates
-        logging.debug("Fetching org WLANs to find those using assigned templates")
-        org_wlans_response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, org_id)
-        if org_wlans_response.status_code == 200:
-            all_org_wlans = org_wlans_response.data
-            logging.info(f"Found {len(all_org_wlans)} total org WLANs")
-            logging.debug(f"Retrieved {len(all_org_wlans)} org WLANs from API")
-            
-            # Filter to WLANs that use templates assigned to this site
-            for wlan in all_org_wlans:
-                wlan_template_id = wlan.get('template_id')
-                wlan_ssid = wlan.get('ssid', 'Unknown')
-                
-                logging.debug(f"Checking org WLAN: {wlan_ssid} (template_id: {wlan_template_id})")
-                
-                if wlan_template_id and wlan_template_id in assigned_template_ids:
-                    # This WLAN uses a template assigned to this site
-                    wlan['_inheritance_level'] = 'org_wlan_with_template'
-                    wlan['_wlan_template_id'] = wlan_template_id
-                    
-                    # Find template name for reference
-                    template_info = next((t for t in wlan_templates if t.get('id') == wlan_template_id), None)
-                    if template_info:
-                        wlan['_wlan_template_name'] = template_info.get('name', 'Unknown Template')
-                    else:
-                        wlan['_wlan_template_name'] = 'Unknown Template'
-                    
-                    org_wlans.append(wlan)
-                    logging.info(f"Org WLAN '{wlan_ssid}' uses template '{wlan.get('_wlan_template_name')}' assigned to this site")
-                    logging.debug(f"  Added org WLAN: {wlan_ssid}")
-                elif wlan_template_id:
-                    logging.debug(f"  WLAN uses template {wlan_template_id} which is NOT assigned to this site - skipping")
-                else:
-                    logging.debug(f"  WLAN has no template_id - skipping")
-            
-            if org_wlans:
-                logging.info(f"Found {len(org_wlans)} org WLANs using templates assigned to this site")
-            else:
-                logging.info("No org WLANs found using templates assigned to this site")
-        else:
-            logging.warning(f"Failed to fetch org WLANs: HTTP {org_wlans_response.status_code}")
-            
-    except Exception as error:
-        logging.error(f"Error fetching org WLANs or templates: {error}")
+            logging.warning(f"Failed to fetch WLAN templates: HTTP {response.status_code}")
     
-    # Step 6: Filter WLANs to only those using RADIUS or RadSec
-    def uses_radius_auth(wlan):
+    def _determine_assigned_templates(self) -> None:
+        """Determine which templates are assigned to the selected site."""
+        for wlan_template in self.wlan_templates:
+            if self._is_template_assigned_to_site(wlan_template):
+                self.assigned_template_ids.add(wlan_template.get('id'))
+        logging.info(f"Found {len(self.assigned_template_ids)} WLAN templates assigned to this site")
+    
+    def _is_template_assigned_to_site(self, wlan_template: Dict[str, Any]) -> bool:
+        """Check if a WLAN template is assigned to the current site."""
+        applies = wlan_template.get('applies', {})
+        if not isinstance(applies, dict):
+            return False
+        if applies.get('org_id'):
+            return True
+        if self.site_id in applies.get('site_ids', []):
+            return True
+        site_groups = self.site_info.get('sitegroup_ids', [])
+        if any(sg in applies.get('sitegroup_ids', []) for sg in site_groups):
+            return True
+        site_tags = self.site_info.get('wxtag_ids', [])
+        if any(tag in applies.get('wxtag_ids', []) for tag in site_tags):
+            return True
+        return False
+    
+    def _fetch_and_filter_org_wlans(self) -> None:
+        """Fetch org WLANs and filter to those using assigned templates."""
+        response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
+        if response.status_code != 200:
+            logging.warning(f"Failed to fetch org WLANs: HTTP {response.status_code}")
+            return
+        all_org_wlans = response.data
+        logging.info(f"Found {len(all_org_wlans)} total org WLANs")
+        for wlan in all_org_wlans:
+            wlan_template_id = wlan.get('template_id')
+            if wlan_template_id and wlan_template_id in self.assigned_template_ids:
+                self._add_org_wlan_metadata(wlan, wlan_template_id)
+                self.org_wlans.append(wlan)
+        if self.org_wlans:
+            logging.info(f"Found {len(self.org_wlans)} org WLANs using templates assigned to this site")
+    
+    def _add_org_wlan_metadata(self, wlan: Dict[str, Any], template_id: str) -> None:
+        """Add inheritance metadata to an org WLAN."""
+        wlan['_inheritance_level'] = 'org_wlan_with_template'
+        wlan['_wlan_template_id'] = template_id
+        template_info = next((t for t in self.wlan_templates if t.get('id') == template_id), None)
+        wlan['_wlan_template_name'] = template_info.get('name', 'Unknown Template') if template_info else 'Unknown Template'
+    
+    def _uses_radius_auth(self, wlan: Dict[str, Any]) -> bool:
         """Check if WLAN uses RADIUS or RadSec authentication."""
-        ssid = wlan.get('ssid', 'Unknown')
-        
-        # Check for RADIUS servers
         has_auth_servers = bool(wlan.get('auth_servers'))
-        
-        # Check for RadSec configuration
-        has_radsec = False
         radsec_config = wlan.get('radsec', {})
-        if isinstance(radsec_config, dict):
-            has_radsec = radsec_config.get('enabled', False)
-        
-        # Check auth type
+        has_radsec = radsec_config.get('enabled', False) if isinstance(radsec_config, dict) else False
         auth_config = wlan.get('auth', {})
-        if isinstance(auth_config, dict):
-            auth_type = auth_config.get('type', '')
-            uses_eap = auth_type in ['eap', 'eap192']
-        else:
-            uses_eap = False
-            auth_type = 'none'
-        
-        # Debug logging
-        logging.debug(f"WLAN '{ssid}': auth_servers={has_auth_servers}, radsec={has_radsec}, auth_type={auth_type}, uses_eap={uses_eap}")
-        
+        uses_eap = auth_config.get('type', '') in ['eap', 'eap192'] if isinstance(auth_config, dict) else False
         return has_auth_servers or has_radsec or uses_eap
     
-    # Filter site WLANs
-    filtered_site_wlans = []
-    for wlan in site_wlans:
-        if uses_radius_auth(wlan):
-            wlan['_inheritance_level'] = 'site'
-            wlan['_inheritance_source'] = f"Site: {site_name}"
-            filtered_site_wlans.append(wlan)
+    def _filter_radius_wlans(self) -> None:
+        """Filter all WLANs to only those using RADIUS or RadSec."""
+        filtered_site = self._filter_site_wlans()
+        filtered_template = self._filter_site_template_wlans()
+        filtered_org = self._filter_org_wlans()
+        self.all_radius_wlans = filtered_site + filtered_template + filtered_org
     
-    # Filter site template WLANs
-    filtered_site_template_wlans = []
-    for wlan in site_template_wlans:
-        if uses_radius_auth(wlan):
-            wlan['_inheritance_level'] = 'site_template'
-            wlan['_inheritance_source'] = f"Site Template: {template_name}"
-            wlan['_template_id'] = site_template_id
-            filtered_site_template_wlans.append(wlan)
+    def _filter_site_wlans(self) -> List[Dict[str, Any]]:
+        """Filter site WLANs and add inheritance metadata."""
+        filtered = []
+        for wlan in self.site_wlans:
+            if self._uses_radius_auth(wlan):
+                wlan['_inheritance_level'] = 'site'
+                wlan['_inheritance_source'] = f"Site: {self.site_name}"
+                filtered.append(wlan)
+        return filtered
     
-    # Filter org WLANs (those using templates assigned to this site)
-    filtered_org_wlans = []
-    for wlan in org_wlans:
-        if uses_radius_auth(wlan):
-            # Metadata already set during org WLAN fetching
-            template_name_wlan = wlan.get('_wlan_template_name', 'Unknown Template')
-            wlan['_inheritance_source'] = f"Org WLAN using template: {template_name_wlan}"
-            filtered_org_wlans.append(wlan)
+    def _filter_site_template_wlans(self) -> List[Dict[str, Any]]:
+        """Filter site template WLANs and add inheritance metadata."""
+        filtered = []
+        for wlan in self.site_template_wlans:
+            if self._uses_radius_auth(wlan):
+                wlan['_inheritance_level'] = 'site_template'
+                wlan['_inheritance_source'] = f"Site Template: {self.template_name}"
+                wlan['_template_id'] = self.site_template_id
+                filtered.append(wlan)
+        return filtered
     
-    # Combine all filtered WLANs
-    all_radius_wlans = filtered_site_wlans + filtered_site_template_wlans + filtered_org_wlans
+    def _filter_org_wlans(self) -> List[Dict[str, Any]]:
+        """Filter org WLANs and add inheritance metadata."""
+        filtered = []
+        for wlan in self.org_wlans:
+            if self._uses_radius_auth(wlan):
+                template_name_wlan = wlan.get('_wlan_template_name', 'Unknown Template')
+                wlan['_inheritance_source'] = f"Org WLAN using template: {template_name_wlan}"
+                filtered.append(wlan)
+        return filtered
     
-    if not all_radius_wlans:
-        print(f"\n[!] No WLANs using RADIUS or RadSec authentication found at this site.")
-        print(f"[!] Only WLANs with RADIUS auth servers or RadSec configuration are shown.")
+    def _print_no_wlans_message(self) -> None:
+        """Print message when no RADIUS/RadSec WLANs are found."""
+        print("\n[!] No WLANs using RADIUS or RadSec authentication found at this site.")
+        print("[!] Only WLANs with RADIUS auth servers or RadSec configuration are shown.")
         logging.info("No RADIUS/RadSec WLANs found")
-        return
     
-    # Step 6: Display WLANs with current configuration
-    print(f"\n{'='*100}")
-    print(f"RADIUS/RadSec Authenticated WLANs at Site: {site_name}")
-    print(f"{'='*100}\n")
+    def _display_wlans(self) -> None:
+        """Display all RADIUS/RadSec WLANs with current configuration."""
+        print(f"\n{'='*100}")
+        print(f"RADIUS/RadSec Authenticated WLANs at Site: {self.site_name}")
+        print(f"{'='*100}\n")
+        for index, wlan in enumerate(self.all_radius_wlans, start=1):
+            self._display_single_wlan(index, wlan)
+        print(f"{'='*100}\n")
     
-    for index, wlan in enumerate(all_radius_wlans, start=1):
+    def _display_single_wlan(self, index: int, wlan: Dict[str, Any]) -> None:
+        """Display a single WLAN's information."""
         ssid = wlan.get('ssid', 'Unknown SSID')
         wlan_id = wlan.get('id', 'Unknown ID')
         enabled = wlan.get('enabled', False)
         inheritance = wlan.get('_inheritance_level', 'unknown')
         source = wlan.get('_inheritance_source', 'Unknown')
-        
-        # Get current timer values
         timeout = wlan.get('auth_servers_timeout', 5)
         retries = wlan.get('auth_servers_retries', 2)
         selection = wlan.get('auth_server_selection', 'ordered')
         fast_timers = wlan.get('fast_dot1x_timers', False)
-        
-        # Get auth server info
         auth_servers = wlan.get('auth_servers', [])
         server_count = len(auth_servers) if auth_servers else 0
-        
-        # Get RadSec info
-        radsec_enabled = False
         radsec_config = wlan.get('radsec', {})
-        if isinstance(radsec_config, dict):
-            radsec_enabled = radsec_config.get('enabled', False)
-        
+        radsec_enabled = radsec_config.get('enabled', False) if isinstance(radsec_config, dict) else False
         print(f"[{index}] SSID: {ssid}")
         print(f"    ID: {wlan_id}")
         print(f"    Status: {'Enabled' if enabled else 'Disabled'}")
@@ -38986,327 +38989,333 @@ def manage_wlan_radius_auth_timers(debug=False):
         print(f"      - fast_dot1x_timers: {fast_timers}")
         print(f"")
     
-    print(f"{'='*100}\n")
+    def _prompt_wlan_selection(self) -> bool:
+        """Prompt user to select a WLAN to modify."""
+        try:
+            selection_input = InputUtils.safe_input(
+                f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ",
+                context="wlan_selection"
+            ).strip().lower()
+            if selection_input == 'q':
+                print("\n[*] Exiting WLAN management.")
+                return False
+            selected_index = int(selection_input) - 1
+            if selected_index < 0 or selected_index >= len(self.all_radius_wlans):
+                print(f"\n[!] Invalid selection. Must be between 1 and {len(self.all_radius_wlans)}.")
+                return False
+            self.selected_wlan = self.all_radius_wlans[selected_index]
+            return True
+        except ValueError:
+            print(f"\n[!] Invalid input. Please enter a number between 1 and {len(self.all_radius_wlans)}.")
+            return False
     
-    # Step 7: Prompt for WLAN selection
-    try:
-        selection_input = InputUtils.safe_input(
-            f"Select WLAN to modify (1-{len(all_radius_wlans)}) or 'q' to quit: ",
-            context="wlan_selection"
-        ).strip().lower()
-        
-        if selection_input == 'q':
-            print("\n[*] Exiting WLAN management.")
-            return
-        
-        selected_index = int(selection_input) - 1
-        if selected_index < 0 or selected_index >= len(all_radius_wlans):
-            print(f"\n[!] Invalid selection. Must be between 1 and {len(all_radius_wlans)}.")
-            return
-        
-        selected_wlan = all_radius_wlans[selected_index]
-        
-    except ValueError:
-        print(f"\n[!] Invalid input. Please enter a number between 1 and {len(all_radius_wlans)}.")
-        return
+    def _display_current_config(self) -> None:
+        """Display current configuration of selected WLAN."""
+        print(f"\n{'='*100}")
+        print(f"Modifying WLAN: {self.selected_wlan.get('ssid')}")
+        print(f"Inheritance: {self.selected_wlan.get('_inheritance_level').upper()}")
+        print(f"{'='*100}\n")
+        print(f"Current Configuration:")
+        print(f"  auth_servers_timeout: {self.selected_wlan.get('auth_servers_timeout', 5)} seconds")
+        print(f"  auth_servers_retries: {self.selected_wlan.get('auth_servers_retries', 2)}")
+        print(f"  auth_server_selection: {self.selected_wlan.get('auth_server_selection', 'ordered')}")
+        print(f"  fast_dot1x_timers: {self.selected_wlan.get('fast_dot1x_timers', False)}")
+        print(f"")
     
-    # Step 8: Display current configuration and prompt for new values
-    print(f"\n{'='*100}")
-    print(f"Modifying WLAN: {selected_wlan.get('ssid')}")
-    print(f"Inheritance: {selected_wlan.get('_inheritance_level').upper()}")
-    print(f"{'='*100}\n")
+    def _prompt_new_values(self) -> bool:
+        """Prompt user for new timer values."""
+        print(f"Enter new values (press Enter to keep current):\n")
+        try:
+            self._prompt_timeout()
+            self._prompt_retries()
+            self._prompt_selection()
+            self._prompt_fast_timers()
+            return True
+        except ValueError as error:
+            print(f"\n[!] Invalid input: {error}. Exiting.")
+            return False
     
-    print(f"Current Configuration:")
-    print(f"  auth_servers_timeout: {selected_wlan.get('auth_servers_timeout', 5)} seconds")
-    print(f"  auth_servers_retries: {selected_wlan.get('auth_servers_retries', 2)}")
-    print(f"  auth_server_selection: {selected_wlan.get('auth_server_selection', 'ordered')}")
-    print(f"  fast_dot1x_timers: {selected_wlan.get('fast_dot1x_timers', False)}")
-    print(f"")
-    
-    # Prompt for new values (press Enter to keep current)
-    print(f"Enter new values (press Enter to keep current):\n")
-    
-    try:
-        # Timeout
+    def _prompt_timeout(self) -> None:
+        """Prompt for auth_servers_timeout value."""
+        current = self.selected_wlan.get('auth_servers_timeout', 5)
         timeout_input = InputUtils.safe_input(
-            f"auth_servers_timeout (1-30) [{selected_wlan.get('auth_servers_timeout', 5)}]: ",
-            default_value=str(selected_wlan.get('auth_servers_timeout', 5)),
+            f"auth_servers_timeout (1-30) [{current}]: ",
+            default_value=str(current),
             context="timeout_input"
         ).strip()
-        new_timeout = int(timeout_input) if timeout_input else selected_wlan.get('auth_servers_timeout', 5)
-        if new_timeout < 1 or new_timeout > 30:
-            print(f"\n[!] Timeout must be between 1 and 30 seconds. Using current value.")
-            new_timeout = selected_wlan.get('auth_servers_timeout', 5)
-        
-        # Retries
+        self.new_timeout = int(timeout_input) if timeout_input else current
+        if self.new_timeout < 1 or self.new_timeout > 30:
+            print("\n[!] Timeout must be between 1 and 30 seconds. Using current value.")
+            self.new_timeout = current
+    
+    def _prompt_retries(self) -> None:
+        """Prompt for auth_servers_retries value."""
+        current = self.selected_wlan.get('auth_servers_retries', 2)
         retries_input = InputUtils.safe_input(
-            f"auth_servers_retries (0-10) [{selected_wlan.get('auth_servers_retries', 2)}]: ",
-            default_value=str(selected_wlan.get('auth_servers_retries', 2)),
+            f"auth_servers_retries (0-10) [{current}]: ",
+            default_value=str(current),
             context="retries_input"
         ).strip()
-        new_retries = int(retries_input) if retries_input else selected_wlan.get('auth_servers_retries', 2)
-        if new_retries < 0 or new_retries > 10:
-            print(f"\n[!] Retries must be between 0 and 10. Using current value.")
-            new_retries = selected_wlan.get('auth_servers_retries', 2)
-        
-        # Selection mode
+        self.new_retries = int(retries_input) if retries_input else current
+        if self.new_retries < 0 or self.new_retries > 10:
+            print("\n[!] Retries must be between 0 and 10. Using current value.")
+            self.new_retries = current
+    
+    def _prompt_selection(self) -> None:
+        """Prompt for auth_server_selection value."""
+        current = self.selected_wlan.get('auth_server_selection', 'ordered')
         selection_input = InputUtils.safe_input(
-            f"auth_server_selection (ordered/unordered) [{selected_wlan.get('auth_server_selection', 'ordered')}]: ",
-            default_value=selected_wlan.get('auth_server_selection', 'ordered'),
+            f"auth_server_selection (ordered/unordered) [{current}]: ",
+            default_value=current,
             context="selection_input"
         ).strip().lower()
-        new_selection = selection_input if selection_input in ['ordered', 'unordered'] else selected_wlan.get('auth_server_selection', 'ordered')
-        
-        # Fast timers
+        self.new_selection = selection_input if selection_input in ['ordered', 'unordered'] else current
+    
+    def _prompt_fast_timers(self) -> None:
+        """Prompt for fast_dot1x_timers value."""
+        current = self.selected_wlan.get('fast_dot1x_timers', False)
         fast_input = InputUtils.safe_input(
-            f"fast_dot1x_timers (true/false) [{str(selected_wlan.get('fast_dot1x_timers', False)).lower()}]: ",
-            default_value=str(selected_wlan.get('fast_dot1x_timers', False)).lower(),
+            f"fast_dot1x_timers (true/false) [{str(current).lower()}]: ",
+            default_value=str(current).lower(),
             context="fast_timers_input"
         ).strip().lower()
-        new_fast = fast_input == 'true' if fast_input in ['true', 'false'] else selected_wlan.get('fast_dot1x_timers', False)
-        
-    except ValueError as error:
-        print(f"\n[!] Invalid input: {error}. Exiting.")
-        return
+        self.new_fast = fast_input == 'true' if fast_input in ['true', 'false'] else current
     
-    # Step 9: Calculate and display behavior impact
-    print(f"\n{'='*100}")
-    print(f"Calculated Authentication Behavior:")
-    print(f"{'='*100}\n")
+    def _display_behavior_impact(self) -> None:
+        """Display calculated authentication behavior impact."""
+        print(f"\n{'='*100}")
+        print(f"Calculated Authentication Behavior:")
+        print(f"{'='*100}\n")
+        auth_servers = self.selected_wlan.get('auth_servers', [])
+        server_count = len(auth_servers) if auth_servers else 1
+        single_server_max = self.new_timeout * self.new_retries
+        all_servers_max = single_server_max * server_count
+        self._print_radius_config(server_count)
+        self._print_timeout_behavior(single_server_max)
+        self._print_failover_behavior(server_count, all_servers_max)
+        self._print_fast_timer_info()
+        self._print_client_experience(server_count, single_server_max, all_servers_max)
     
-    # Get number of RADIUS servers configured
-    auth_servers = selected_wlan.get('auth_servers', [])
-    server_count = len(auth_servers) if auth_servers else 1  # Assume at least 1 for calculation
+    def _print_radius_config(self, server_count: int) -> None:
+        """Print RADIUS server configuration details."""
+        print(f"RADIUS Server Configuration:")
+        print(f"  - Configured servers: {server_count}")
+        print(f"  - Server selection mode: {self.new_selection}")
+        print(f"")
     
-    # Calculate timing behavior
-    single_server_max_time = new_timeout * new_retries
-    all_servers_max_time = single_server_max_time * server_count
+    def _print_timeout_behavior(self, single_server_max: int) -> None:
+        """Print timeout behavior details."""
+        print(f"Timeout Behavior:")
+        print(f"  - Timeout per attempt: {self.new_timeout} seconds")
+        print(f"  - Retry attempts per server: {self.new_retries}")
+        print(f"  - Maximum time per server: {single_server_max} seconds ({self.new_timeout}s x {self.new_retries} retries)")
+        print(f"")
     
-    print(f"RADIUS Server Configuration:")
-    print(f"  - Configured servers: {server_count}")
-    print(f"  - Server selection mode: {new_selection}")
-    print(f"")
-    
-    print(f"Timeout Behavior:")
-    print(f"  - Timeout per attempt: {new_timeout} seconds")
-    print(f"  - Retry attempts per server: {new_retries}")
-    print(f"  - Maximum time per server: {single_server_max_time} seconds ({new_timeout}s x {new_retries} retries)")
-    print(f"")
-    
-    if server_count > 1:
-        if new_selection == 'ordered':
-            print(f"Failover Behavior (ordered mode):")
-            print(f"  - Primary server: Server #1 (always tries first)")
-            print(f"  - Failover sequence: Server #1 -> Server #2 -> ... -> Server #{server_count}")
-            print(f"  - Returns to Server #1 for next authentication")
-            print(f"  - Maximum time if all servers fail: {all_servers_max_time} seconds")
+    def _print_failover_behavior(self, server_count: int, all_servers_max: int) -> None:
+        """Print failover or single-server behavior details."""
+        if server_count > 1:
+            if self.new_selection == 'ordered':
+                print(f"Failover Behavior (ordered mode):")
+                print(f"  - Primary server: Server #1 (always tries first)")
+                print(f"  - Failover sequence: Server #1 -> Server #2 -> ... -> Server #{server_count}")
+                print(f"  - Returns to Server #1 for next authentication")
+                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")
+            else:
+                print(f"Load Balancing Behavior (unordered mode):")
+                print(f"  - Server selection: Round-robin or random")
+                print(f"  - No server preference")
+                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")
         else:
-            print(f"Load Balancing Behavior (unordered mode):")
-            print(f"  - Server selection: Round-robin or random")
-            print(f"  - No server preference")
-            print(f"  - Maximum time if all servers fail: {all_servers_max_time} seconds")
-    else:
-        print(f"Single Server Behavior:")
-        print(f"  - Maximum authentication failure time: {single_server_max_time} seconds")
-    
-    print(f"")
-    
-    # Always calculate fast dot1x timer values for reference
-    quiet_period = new_timeout / 2
-    transmit_period = new_timeout / 2
-    supplicant_timeout = 10  # Fixed default
-    max_requests = 3  # Fixed default
-    
-    if new_fast:
-        print(f"Fast 802.1X Timers (ENABLED):")
-        print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
-        print(f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
-        print(f"  - retries: {new_retries} (from auth_servers_retries)")
-        print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
-        print(f"  - max-requests: {max_requests} (fixed default)")
+            single_max = self.new_timeout * self.new_retries
+            print(f"Single Server Behavior:")
+            print(f"  - Maximum authentication failure time: {single_max} seconds")
         print(f"")
-        print(f"  Impact: Faster authentication and retry cycles")
-        print(f"  Best for: Modern clients, stable networks, quick roaming")
-    else:
-        print(f"Standard 802.1X Timers (DISABLED):")
-        print(f"  - Current mode: Uses standard 802.1X defaults")
-        print(f"  - quiet-period: ~60 seconds (standard default)")
-        print(f"  - transmit-period: ~30 seconds (standard default)")
-        print(f"")
-        print(f"  If fast_dot1x_timers were enabled, would calculate:")
-        print(f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
-        print(f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
-        print(f"    - retries: {new_retries} (from auth_servers_retries)")
-        print(f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
-        print(f"    - max-requests: {max_requests} (fixed default)")
-        print(f"")
-        print(f"  Impact: Slower but more conservative authentication")
-        print(f"  Best for: Legacy clients, unstable networks, maximum compatibility")
     
-    print(f"")
-    print(f"Expected Client Experience:")
-    print(f"  - Success case: 1-3 seconds (single request/response)")
-    print(f"  - First server timeout: ~{single_server_max_time} seconds")
-    if server_count > 1:
-        print(f"  - All servers fail: ~{all_servers_max_time} seconds")
-    print(f"")
-    
-    # Step 10: Confirm changes
-    print(f"{'='*100}")
-    print(f"Proposed Configuration Changes:")
-    print(f"{'='*100}")
-    print(f"  auth_servers_timeout: {selected_wlan.get('auth_servers_timeout', 5)} -> {new_timeout}")
-    print(f"  auth_servers_retries: {selected_wlan.get('auth_servers_retries', 2)} -> {new_retries}")
-    print(f"  auth_server_selection: {selected_wlan.get('auth_server_selection', 'ordered')} -> {new_selection}")
-    print(f"  fast_dot1x_timers: {selected_wlan.get('fast_dot1x_timers', False)} -> {new_fast}")
-    print(f"")
-    
-    if selected_wlan.get('_inheritance_level') == 'site_template':
-        print(f"[!] WARNING: This WLAN is inherited from site template: {selected_wlan.get('_inheritance_source')}")
-        print(f"[!] Changes will affect ALL sites using this template!")
-    elif selected_wlan.get('_inheritance_level') == 'org_wlan_with_template':
-        print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {selected_wlan.get('_inheritance_source')}")
-        assignment = selected_wlan.get('_org_template_assignment', 'assigned sites')
-        template_name_wlan = selected_wlan.get('_wlan_template_name', 'Unknown')
-        print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
-    
-    print(f"")
-    confirmation = InputUtils.safe_input(
-        "Type 'APPLY' to apply these changes: ",
-        context="confirmation"
-    ).strip()
-    
-    if confirmation != 'APPLY':
-        print("\n[*] Changes cancelled. No modifications made.")
-        logging.info("User cancelled WLAN authentication timer changes")
-        return
-    
-    # Step 11: Build update payload
-    update_payload = {
-        'auth_servers_timeout': new_timeout,
-        'auth_servers_retries': new_retries,
-        'auth_server_selection': new_selection,
-        'fast_dot1x_timers': new_fast
-    }
-    
-    # Step 12: Apply changes to appropriate endpoint
-    try:
-        if selected_wlan.get('_inheritance_level') == 'site':
-            # Update site-level WLAN
-            print(f"\n[*] Updating site-level WLAN...")
-            logging.info(f"Updating site WLAN {selected_wlan.get('id')} with payload: {update_payload}")
-            
-            response = mistapi.api.v1.sites.wlans.updateSiteWlan(
-                apisession,
-                site_id,
-                selected_wlan.get('id'),
-                update_payload
-            )
-            
-            if response.status_code == 200:
-                print(f"[+] Successfully updated WLAN: {selected_wlan.get('ssid')}")
-                logging.info(f"Successfully updated site WLAN {selected_wlan.get('id')}")
-            else:
-                print(f"[!] Failed to update WLAN: HTTP {response.status_code}")
-                logging.error(f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}")
-                
-        elif selected_wlan.get('_inheritance_level') == 'site_template':
-            # Update site template-level WLAN
-            print(f"\n[*] Updating site template-level WLAN...")
-            template_id = selected_wlan.get('_template_id')
-            wlan_id = selected_wlan.get('id')
-            
-            logging.info(f"Updating site template WLAN {wlan_id} in template {template_id} with payload: {update_payload}")
-            
-            # First, get the full template to modify
-            template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
-                apisession, org_id, template_id
-            )
-            
-            if template_response.status_code != 200:
-                print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
-                logging.error(f"Failed to fetch site template for update: HTTP {template_response.status_code}")
-                return
-            
-            template_data = template_response.data
-            
-            # Update the specific WLAN in the template's wlans dictionary
-            if 'wlans' not in template_data or not isinstance(template_data['wlans'], dict):
-                print(f"[!] Site template does not contain wlans data structure")
-                logging.error("Site template missing wlans dictionary")
-                return
-            
-            # Find and update the WLAN
-            wlan_found = False
-            for wlan_key, wlan_data in template_data['wlans'].items():
-                if wlan_data.get('id') == wlan_id:
-                    # Update the WLAN configuration
-                    wlan_data.update(update_payload)
-                    wlan_found = True
-                    break
-            
-            if not wlan_found:
-                print(f"[!] WLAN not found in site template")
-                logging.error(f"WLAN {wlan_id} not found in site template {template_id}")
-                return
-            
-            # Push the updated template back
-            update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
-                apisession,
-                org_id,
-                template_id,
-                template_data
-            )
-            
-            if update_response.status_code == 200:
-                print(f"[+] Successfully updated site template WLAN: {selected_wlan.get('ssid')}")
-                print(f"[+] All sites using this template will inherit these changes")
-                logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
-            else:
-                print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
-                logging.error(f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}")
-        
-        elif selected_wlan.get('_inheritance_level') == 'org_wlan_with_template':
-            # Update org-level WLAN (which references a template)
-            print(f"\n[*] Updating org-level WLAN...")
-            wlan_id = selected_wlan.get('id')
-            
-            if not wlan_id:
-                print(f"[!] Missing WLAN ID - cannot update")
-                logging.error(f"Missing WLAN id for org WLAN update")
-                return
-            
-            logging.info(f"Updating org WLAN {wlan_id} with payload: {update_payload}")
-            
-            # Update the org WLAN directly
-            response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
-                apisession,
-                org_id,
-                wlan_id,
-                update_payload
-            )
-            
-            if response.status_code == 200:
-                print(f"[+] Successfully updated org WLAN: {selected_wlan.get('ssid')}")
-                template_name = selected_wlan.get('_wlan_template_name', 'Unknown')
-                print(f"[+] WLAN uses template '{template_name}' for its base configuration")
-                logging.info(f"Successfully updated org WLAN {wlan_id}")
-            else:
-                print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")
-                logging.error(f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}")
-        
+    def _print_fast_timer_info(self) -> None:
+        """Print fast 802.1X timer information."""
+        quiet_period = self.new_timeout / 2
+        transmit_period = self.new_timeout / 2
+        supplicant_timeout = 10
+        max_requests = 3
+        if self.new_fast:
+            print(f"Fast 802.1X Timers (ENABLED):")
+            print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+            print(f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+            print(f"  - retries: {self.new_retries} (from auth_servers_retries)")
+            print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+            print(f"  - max-requests: {max_requests} (fixed default)")
+            print(f"")
+            print(f"  Impact: Faster authentication and retry cycles")
+            print(f"  Best for: Modern clients, stable networks, quick roaming")
         else:
-            print(f"[!] Unknown inheritance level: {selected_wlan.get('_inheritance_level')}")
-            logging.error(f"Unknown inheritance level for WLAN")
+            print(f"Standard 802.1X Timers (DISABLED):")
+            print(f"  - Current mode: Uses standard 802.1X defaults")
+            print(f"  - quiet-period: ~60 seconds (standard default)")
+            print(f"  - transmit-period: ~30 seconds (standard default)")
+            print(f"")
+            print(f"  If fast_dot1x_timers were enabled, would calculate:")
+            print(f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+            print(f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+            print(f"    - retries: {self.new_retries} (from auth_servers_retries)")
+            print(f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+            print(f"    - max-requests: {max_requests} (fixed default)")
+            print(f"")
+            print(f"  Impact: Slower but more conservative authentication")
+            print(f"  Best for: Legacy clients, unstable networks, maximum compatibility")
+        print(f"")
+    
+    def _print_client_experience(self, server_count: int, single_max: int, all_max: int) -> None:
+        """Print expected client experience information."""
+        print(f"Expected Client Experience:")
+        print(f"  - Success case: 1-3 seconds (single request/response)")
+        print(f"  - First server timeout: ~{single_max} seconds")
+        if server_count > 1:
+            print(f"  - All servers fail: ~{all_max} seconds")
+        print(f"")
+    
+    def _display_proposed_changes(self) -> None:
+        """Display proposed configuration changes with warnings."""
+        print(f"{'='*100}")
+        print(f"Proposed Configuration Changes:")
+        print(f"{'='*100}")
+        print(f"  auth_servers_timeout: {self.selected_wlan.get('auth_servers_timeout', 5)} -> {self.new_timeout}")
+        print(f"  auth_servers_retries: {self.selected_wlan.get('auth_servers_retries', 2)} -> {self.new_retries}")
+        print(f"  auth_server_selection: {self.selected_wlan.get('auth_server_selection', 'ordered')} -> {self.new_selection}")
+        print(f"  fast_dot1x_timers: {self.selected_wlan.get('fast_dot1x_timers', False)} -> {self.new_fast}")
+        print(f"")
+        self._print_inheritance_warning()
+    
+    def _print_inheritance_warning(self) -> None:
+        """Print warning about template inheritance if applicable."""
+        inheritance = self.selected_wlan.get('_inheritance_level')
+        if inheritance == 'site_template':
+            print(f"[!] WARNING: This WLAN is inherited from site template: {self.selected_wlan.get('_inheritance_source')}")
+            print(f"[!] Changes will affect ALL sites using this template!")
+        elif inheritance == 'org_wlan_with_template':
+            print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {self.selected_wlan.get('_inheritance_source')}")
+            assignment = self.selected_wlan.get('_org_template_assignment', 'assigned sites')
+            template_name_wlan = self.selected_wlan.get('_wlan_template_name', 'Unknown')
+            print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
+        print(f"")
+    
+    def _confirm_changes(self) -> bool:
+        """Prompt user for confirmation to apply changes."""
+        confirmation = InputUtils.safe_input(
+            "Type 'APPLY' to apply these changes: ",
+            context="confirmation"
+        ).strip()
+        if confirmation != 'APPLY':
+            print("\n[*] Changes cancelled. No modifications made.")
+            logging.info("User cancelled WLAN authentication timer changes")
+            return False
+        return True
+    
+    def _build_update_payload(self) -> Dict[str, Any]:
+        """Build the update payload for the API call."""
+        return {
+            'auth_servers_timeout': self.new_timeout,
+            'auth_servers_retries': self.new_retries,
+            'auth_server_selection': self.new_selection,
+            'fast_dot1x_timers': self.new_fast
+        }
+    
+    def _apply_changes(self) -> None:
+        """Apply changes to appropriate endpoint based on inheritance."""
+        inheritance = self.selected_wlan.get('_inheritance_level')
+        try:
+            if inheritance == 'site':
+                self._update_site_wlan()
+            elif inheritance == 'site_template':
+                self._update_site_template_wlan()
+            elif inheritance == 'org_wlan_with_template':
+                self._update_org_wlan()
+            else:
+                print(f"[!] Unknown inheritance level: {inheritance}")
+                logging.error(f"Unknown inheritance level for WLAN")
+        except Exception as error:
+            print(f"\n[!] Error applying changes: {error}")
+            logging.error(f"Error applying WLAN authentication timer changes: {error}", exc_info=True)
+    
+    def _update_site_wlan(self) -> None:
+        """Update a site-level WLAN."""
+        print(f"\n[*] Updating site-level WLAN...")
+        payload = self._build_update_payload()
+        logging.info(f"Updating site WLAN {self.selected_wlan.get('id')} with payload: {payload}")
+        response = mistapi.api.v1.sites.wlans.updateSiteWlan(
+            apisession, self.site_id, self.selected_wlan.get('id'), payload
+        )
+        if response.status_code == 200:
+            print(f"[+] Successfully updated WLAN: {self.selected_wlan.get('ssid')}")
+            logging.info(f"Successfully updated site WLAN {self.selected_wlan.get('id')}")
+        else:
+            print(f"[!] Failed to update WLAN: HTTP {response.status_code}")
+            logging.error(f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}")
+    
+    def _update_site_template_wlan(self) -> None:
+        """Update a site template-level WLAN."""
+        print(f"\n[*] Updating site template-level WLAN...")
+        template_id = self.selected_wlan.get('_template_id')
+        wlan_id = self.selected_wlan.get('id')
+        logging.info(f"Updating site template WLAN {wlan_id} in template {template_id}")
+        template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+            apisession, self.org_id, template_id
+        )
+        if template_response.status_code != 200:
+            print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
+            logging.error(f"Failed to fetch site template for update: HTTP {template_response.status_code}")
             return
-            
-    except Exception as error:
-        print(f"\n[!] Error applying changes: {error}")
-        logging.error(f"Error applying WLAN authentication timer changes: {error}", exc_info=True)
-        return
+        template_data = template_response.data
+        if 'wlans' not in template_data or not isinstance(template_data['wlans'], dict):
+            print(f"[!] Site template does not contain wlans data structure")
+            logging.error("Site template missing wlans dictionary")
+            return
+        wlan_found = False
+        for wlan_key, wlan_data in template_data['wlans'].items():
+            if wlan_data.get('id') == wlan_id:
+                wlan_data.update(self._build_update_payload())
+                wlan_found = True
+                break
+        if not wlan_found:
+            print(f"[!] WLAN not found in site template")
+            logging.error(f"WLAN {wlan_id} not found in site template {template_id}")
+            return
+        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
+            apisession, self.org_id, template_id, template_data
+        )
+        if update_response.status_code == 200:
+            print(f"[+] Successfully updated site template WLAN: {self.selected_wlan.get('ssid')}")
+            print(f"[+] All sites using this template will inherit these changes")
+            logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
+        else:
+            print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
+            logging.error(f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}")
     
-    print(f"\n[+] WLAN authentication timer management completed successfully")
-    logging.info("WLAN authentication timer management completed")
+    def _update_org_wlan(self) -> None:
+        """Update an org-level WLAN."""
+        print(f"\n[*] Updating org-level WLAN...")
+        wlan_id = self.selected_wlan.get('id')
+        if not wlan_id:
+            print(f"[!] Missing WLAN ID - cannot update")
+            logging.error(f"Missing WLAN id for org WLAN update")
+            return
+        payload = self._build_update_payload()
+        logging.info(f"Updating org WLAN {wlan_id} with payload: {payload}")
+        response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
+            apisession, self.org_id, wlan_id, payload
+        )
+        if response.status_code == 200:
+            print(f"[+] Successfully updated org WLAN: {self.selected_wlan.get('ssid')}")
+            template_name = self.selected_wlan.get('_wlan_template_name', 'Unknown')
+            print(f"[+] WLAN uses template '{template_name}' for its base configuration")
+            logging.info(f"Successfully updated org WLAN {wlan_id}")
+        else:
+            print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")
+            logging.error(f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}")
+    
+    def _print_completion_message(self) -> None:
+        """Print completion message."""
+        print(f"\n[+] WLAN authentication timer management completed successfully")
+        logging.info("WLAN authentication timer management completed")
 
 
 # ============================================================================
@@ -41414,7 +41423,7 @@ menu_actions = {
     "105": (GatewayTemplateConfigManager.extract, "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"),
     "106": (GatewayTemplateConfigManager.apply, " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"),
     
-    "102": (manage_wlan_radius_auth_timers, "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
+    "102": (lambda: WLANRadiusTimerManager().manage(), "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
     # Organization Management (Read-Only)
     "54": (OrgExportUtils.api_tokens, "Export API token information for the organization"),
