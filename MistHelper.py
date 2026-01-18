@@ -41463,28 +41463,72 @@ menu_actions = {
     # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
-    "112": (lambda: _run_maps_manager_external(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
+    "112": (lambda: MapsManagerLauncher().launch(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
 }
 
-def _run_maps_manager_external():
-    """Launch MapsManager from external maps_manager.py module.
-    
-    This wrapper imports MapsManager from the standalone maps_manager.py file
-    which contains the full interactive map viewer implementation (~7,500 lines).
-    The external module supports standalone execution and MistHelper integration.
+class MapsManagerLauncher:
     """
-    try:
-        from maps_manager import MapsManager as ExternalMapsManager
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        maps_mgr = ExternalMapsManager(apisession, org_id)
-        maps_mgr.run_interactive_menu()
-    except ImportError as e:
-        logging.error(f"Failed to import MapsManager from maps_manager.py: {e}")
+    Launch MapsManager from external maps_manager.py module.
+    
+    The external module contains the full interactive map viewer implementation
+    (~7,500 lines) supporting standalone execution and MistHelper integration.
+    
+    SECURITY: Read-only map viewing with interactive Dash web server
+    
+    Usage:
+        MapsManagerLauncher().launch()
+    """
+    
+    def __init__(self):
+        """Initialize launcher with module reference placeholder."""
+        self.maps_manager = None
+        self.org_id: str = ""
+    
+    def launch(self) -> None:
+        """Main entry point - orchestrates module import and execution."""
+        if not self._import_module():
+            return
+        if not self._get_org_id():
+            return
+        self._run_interactive_menu()
+    
+    def _import_module(self) -> bool:
+        """Import MapsManager from external module with error handling."""
+        try:
+            from maps_manager import MapsManager as ExternalMapsManager
+            self._external_class = ExternalMapsManager
+            return True
+        except ImportError as error:
+            self._handle_import_error(error)
+            return False
+    
+    def _handle_import_error(self, error: ImportError) -> None:
+        """Log and display import failure message."""
+        logging.error(f"Failed to import MapsManager from maps_manager.py: {error}")
         print("\nERROR: Could not load Maps Manager module.")
         print("Ensure maps_manager.py exists in the same directory as MistHelper.py")
-    except Exception as e:
-        logging.error(f"Error running Maps Manager: {e}", exc_info=True)
-        print(f"\nERROR: {e}")
+    
+    def _get_org_id(self) -> bool:
+        """Get organization ID from cache or prompt."""
+        try:
+            self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+            return bool(self.org_id)
+        except Exception as error:
+            self._handle_fatal_error(error)
+            return False
+    
+    def _run_interactive_menu(self) -> None:
+        """Instantiate and run the Maps Manager interactive menu."""
+        try:
+            self.maps_manager = self._external_class(apisession, self.org_id)
+            self.maps_manager.run_interactive_menu()
+        except Exception as error:
+            self._handle_fatal_error(error)
+    
+    def _handle_fatal_error(self, error: Exception) -> None:
+        """Log and display fatal error message."""
+        logging.error(f"Error running Maps Manager: {error}", exc_info=True)
+        print(f"\nERROR: {error}")
 
 class TUILauncher:
     """

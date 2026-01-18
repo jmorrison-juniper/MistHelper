@@ -550,6 +550,28 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.22.15",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "MapsManagerLauncher: External maps module launcher with structured error handling"
+        ],
+        "refactoring": [
+          "20-line _run_maps_manager_external function refactored into MapsManagerLauncher class",
+          "7 methods: __init__, launch(), _import_module(), _handle_import_error()",
+          "Org ID: _get_org_id()",
+          "Execution: _run_interactive_menu()",
+          "Error handling: _handle_fatal_error()"
+        ],
+        "dead_code_removal": [
+          "_run_maps_manager_external standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: Menu #112 now uses lambda: MapsManagerLauncher().launch()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.22.00",
       "date": "2026-01-17",
       "changes": {
