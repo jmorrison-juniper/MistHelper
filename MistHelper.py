@@ -7575,211 +7575,267 @@ class DatabaseSchemaUtils:
         return index_sqls
 
 
-def write_dict_list_to_sqlite_database_inside_container(data: List[Dict[str, Any]], table_name: str, api_function_name: Optional[str] = None) -> bool:
+class SQLiteDatabaseWriter:
     """
-    Writes a list of dictionaries to a SQLite database table using hybrid primary key strategies.
-    This new implementation eliminates artificial api_id fields and uses proper business keys.
+    Write list of dictionaries to SQLite database using hybrid primary key strategies.
+    
+    Eliminates artificial api_id fields and uses proper business keys from Mist API.
     Follows NASA/JPL coding standards with comprehensive logging and error handling.
     
-    Args:
-        data (list): List of dictionaries containing the data to write
-        table_name (str): Name of the database table to write to
-        api_function_name (str, optional): Name of the API function for strategy selection
+    SECURITY: Parameterized queries prevent SQL injection
     
-    Returns:
-        bool: True if successful, False otherwise
+    Usage:
+        SQLiteDatabaseWriter(data, table_name, api_function_name).write()
     """
-    # Entry logging with enhanced input validation
-    timestamp = datetime.now(timezone.utc).isoformat()
-    logging.debug(f"ENTRY: write_dict_list_to_sqlite_database_inside_container(data_rows={len(data) if data else 0}, table_name={table_name}, api_function_name={api_function_name}) at {timestamp}")
     
-    # Input validation - Check if data is provided and is a list
-    if not data:
-        logging.warning(f"No data provided to write to table {table_name} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no data to write")
-        return False
-        
-    if not isinstance(data, list):
-        logging.error(f"Invalid data type: expected list, got {type(data)} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - invalid data type")
-        return False
-        
-    # Input validation - Check table name
-    if not table_name or not isinstance(table_name, str):
-        logging.error(f"Invalid table name: {table_name} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - invalid table name")
-        return False
+    def __init__(self, data: List[Dict[str, Any]], table_name: str, api_function_name: Optional[str] = None):
+        """Initialize writer with data, table name, and optional API function name."""
+        self.data = data
+        self.table_name = table_name
+        self.api_function_name = api_function_name
+        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.processed_data: List[Dict[str, Any]] = []
+        self.fields: List[str] = []
+        self.strategy: Dict[str, Any] = {}
+        self.connection = None
+        self.cursor = None
     
-    # Determine API function name if not provided
-    if not api_function_name:
-        api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
-        
-    logging.debug(f"Processing {len(data)} rows for table {table_name} using API function {api_function_name} at {timestamp}")
+    def write(self) -> bool:
+        """Main entry point - orchestrates the database write operation."""
+        self._log_entry()
+        if not self._validate_inputs():
+            return False
+        self._resolve_api_function_name()
+        if not self._ensure_database_directory():
+            return False
+        if not self._process_data():
+            return False
+        if not self._determine_fields_and_strategy():
+            return False
+        return self._execute_database_operations()
     
-    # Ensure database directory exists
-    db_dir = os.path.dirname(DATABASE_PATH)
-    if db_dir and not os.path.exists(db_dir):
+    def _log_entry(self) -> None:
+        """Log entry point with input parameters."""
+        row_count = len(self.data) if self.data else 0
+        logging.debug(f"ENTRY: SQLiteDatabaseWriter.write(data_rows={row_count}, table_name={self.table_name}, api_function_name={self.api_function_name}) at {self.timestamp}")
+    
+    def _validate_inputs(self) -> bool:
+        """Validate data and table name inputs."""
+        if not self._validate_data():
+            return False
+        return self._validate_table_name()
+    
+    def _validate_data(self) -> bool:
+        """Validate that data is a non-empty list."""
+        if not self.data:
+            logging.warning(f"No data provided to write to table {self.table_name} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")
+            return False
+        if not isinstance(self.data, list):
+            logging.error(f"Invalid data type: expected list, got {type(self.data)} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")
+            return False
+        return True
+    
+    def _validate_table_name(self) -> bool:
+        """Validate that table name is a non-empty string."""
+        if not self.table_name or not isinstance(self.table_name, str):
+            logging.error(f"Invalid table name: {self.table_name} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")
+            return False
+        return True
+    
+    def _resolve_api_function_name(self) -> None:
+        """Determine API function name from context if not provided."""
+        if not self.api_function_name:
+            self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
+        logging.debug(f"Processing {len(self.data)} rows for table {self.table_name} using API function {self.api_function_name} at {self.timestamp}")
+    
+    def _ensure_database_directory(self) -> bool:
+        """Create database directory if it does not exist."""
+        db_dir = os.path.dirname(DATABASE_PATH)
+        if not db_dir or os.path.exists(db_dir):
+            return True
         try:
             os.makedirs(db_dir, exist_ok=True)
-            logging.info(f"Created database directory: {db_dir} at {timestamp}")
-        except OSError as e:
-            logging.error(f"Failed to create database directory {db_dir}: {e} at {timestamp}")
-            logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - directory creation failed")
+            logging.info(f"Created database directory: {db_dir} at {self.timestamp}")
+            return True
+        except OSError as error:
+            logging.error(f"Failed to create database directory {db_dir}: {error} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")
             return False
     
-    # Process data to handle formatting for database storage
-    try:
-        processed_data = DataProcessingUtils.escape_multiline(data)
-        logging.debug(f"Successfully processed data for SQLite compatibility at {timestamp}")
-    except Exception as e:
-        logging.error(f"Failed to process data: {e} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - data processing failed")
-        return False
-    
-    # Get all unique fields and determine strategy
-    try:
-        fields = DataProcessingUtils.get_unique_keys(processed_data)
-        if not fields:
-            logging.error(f"No fields found in data for table {table_name} at {timestamp}")
-            logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - no fields")
+    def _process_data(self) -> bool:
+        """Process data to handle formatting for database storage."""
+        try:
+            self.processed_data = DataProcessingUtils.escape_multiline(self.data)
+            logging.debug(f"Successfully processed data for SQLite compatibility at {self.timestamp}")
+            return True
+        except Exception as error:
+            logging.error(f"Failed to process data: {error} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")
             return False
-        
-        strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_function_name, fields)
-        logging.info(f"Using hybrid SQLite strategy '{strategy['type']}' for table {table_name}: {strategy['description']}")
-        logging.debug(f"Database fields determined: {fields} at {timestamp}")
-        logging.debug(f"Endpoint {api_function_name} mapped to {strategy['type']} strategy - eliminates need for artificial api_id fields")
-        
-    except Exception as e:
-        logging.error(f"Failed to determine fields and strategy: {e} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - field determination failed")
-        return False
     
-    # Database operations with comprehensive error handling
-    connection = None
-    try:
-        # Connect to Redis/SQLite database
-        logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {timestamp}")
-        connection = sqlite3.connect(DATABASE_PATH)
-        cursor = connection.cursor()
-        logging.info(f"Successfully connected to database: {DATABASE_PATH} at {timestamp}")
-        
-        # Create table with strategy-appropriate schema
-        create_table_sql = DatabaseSchemaUtils.build_create_table_sql(table_name, fields, strategy)
-        cursor.execute(create_table_sql)
-        logging.debug(f"Table {table_name} created/verified with hybrid {strategy['type']} schema - using natural business keys from API")
-        
-        # Create indexes for performance
-        index_sqls = DatabaseSchemaUtils.build_indexes_sql(table_name, fields, strategy)
+    def _determine_fields_and_strategy(self) -> bool:
+        """Get all unique fields and determine primary key strategy."""
+        try:
+            self.fields = DataProcessingUtils.get_unique_keys(self.processed_data)
+            if not self.fields:
+                logging.error(f"No fields found in data for table {self.table_name} at {self.timestamp}")
+                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
+                return False
+            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(self.api_function_name, self.fields)
+            self._log_strategy_info()
+            return True
+        except Exception as error:
+            logging.error(f"Failed to determine fields and strategy: {error} at {self.timestamp}")
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")
+            return False
+    
+    def _log_strategy_info(self) -> None:
+        """Log strategy selection details."""
+        logging.info(f"Using hybrid SQLite strategy '{self.strategy['type']}' for table {self.table_name}: {self.strategy['description']}")
+        logging.debug(f"Database fields determined: {self.fields} at {self.timestamp}")
+        logging.debug(f"Endpoint {self.api_function_name} mapped to {self.strategy['type']} strategy - eliminates need for artificial api_id fields")
+    
+    def _execute_database_operations(self) -> bool:
+        """Execute database operations with comprehensive error handling."""
+        try:
+            self._connect_to_database()
+            self._create_table_and_indexes()
+            insert_mode = self._determine_insert_mode()
+            safe_fields = self._prepare_safe_fields()
+            successful_inserts = self._insert_all_rows(insert_mode, safe_fields)
+            self._commit_and_verify(successful_inserts)
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")
+            return True
+        except sqlite3.Error as error:
+            self._handle_sqlite_error(error)
+            return False
+        except Exception as error:
+            self._handle_unexpected_error(error)
+            return False
+        finally:
+            self._close_connection()
+    
+    def _connect_to_database(self) -> None:
+        """Connect to SQLite database."""
+        logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {self.timestamp}")
+        self.connection = sqlite3.connect(DATABASE_PATH)
+        self.cursor = self.connection.cursor()
+        logging.info(f"Successfully connected to database: {DATABASE_PATH} at {self.timestamp}")
+    
+    def _create_table_and_indexes(self) -> None:
+        """Create table with strategy-appropriate schema and indexes."""
+        create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
+        self.cursor.execute(create_table_sql)
+        logging.debug(f"Table {self.table_name} created/verified with hybrid {self.strategy['type']} schema - using natural business keys from API")
+        index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
         for index_sql in index_sqls:
-            cursor.execute(index_sql)
+            self.cursor.execute(index_sql)
         if index_sqls:
-            logging.debug(f"Created {len(index_sqls)} performance indexes for table {table_name} with {strategy['type']} strategy")
-        
-        # Determine insert strategy based on schema type
-        if strategy['type'] in ['natural_pk', 'composite_pk']:
-            # Use REPLACE for natural and composite keys to handle updates gracefully
-            insert_mode = "INSERT OR REPLACE"
-            logging.debug(f"Using REPLACE mode for {strategy['type']} strategy - enables efficient upsert operations with natural keys")
-        else:
-            # Clear table for auto-increment strategy (fallback for unclassified endpoints)
-            cursor.execute(f"DELETE FROM {re.sub(r'[^a-zA-Z0-9_]', '_', table_name)}")
-            insert_mode = "INSERT"
-            logging.debug(f"Cleared existing data and using INSERT mode for auto-increment fallback strategy")
-        
-        # Prepare field mapping
-        safe_fields = []
-        for field in fields:
-            safe_field = re.sub(r'[^a-zA-Z0-9_]', '_', str(field))
-            safe_fields.append(safe_field)
-        
-        # Add metadata fields
-        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])
-        
-        # Insert data rows
-        current_time = datetime.now(timezone.utc).isoformat()
-        successful_inserts = 0
-        
-        for idx, row in enumerate(processed_data):
-            try:
-                # Prepare values for insertion
-                values = []
-                for field in fields:
-                    value = row.get(field, "")
-                    # Convert value to string for TEXT storage
-                    if value is None:
-                        value = ""
-                    else:
-                        value = str(value)
-                    values.append(value)
-                
-                # Add metadata values
-                values.extend([current_time, current_time])
-                
-                # Create parameterized query for safety
-                placeholders = ", ".join(["?"] * len(values))
-                safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
-                if not safe_table_name or safe_table_name[0].isdigit():
-                    safe_table_name = f"table_{safe_table_name}"
-                
-                insert_sql = f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
-                
-                cursor.execute(insert_sql, values)
-                successful_inserts += 1
-                
-                # Log first few rows for debugging
-                if idx < 3:
-                    logging.debug(f"Row {idx} inserted into {table_name} using {insert_mode} at {timestamp}")
-                    
-            except Exception as e:
-                logging.error(f"Failed to insert row {idx} into {table_name}: {e} at {timestamp}")
-                # Continue with other rows rather than failing completely
-                continue
-        
-        # Commit transaction
-        connection.commit()
-        logging.info(f"Successfully wrote {successful_inserts}/{len(processed_data)} rows to table {table_name} in database {DATABASE_PATH} using {strategy['type']} strategy at {timestamp}")
-        
-        # Verify data was written
-        safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', table_name)
+            logging.debug(f"Created {len(index_sqls)} performance indexes for table {self.table_name} with {self.strategy['type']} strategy")
+    
+    def _determine_insert_mode(self) -> str:
+        """Determine insert strategy based on schema type."""
+        if self.strategy['type'] in ['natural_pk', 'composite_pk']:
+            logging.debug(f"Using REPLACE mode for {self.strategy['type']} strategy - enables efficient upsert operations with natural keys")
+            return "INSERT OR REPLACE"
+        safe_table = self._get_safe_table_name()
+        self.cursor.execute(f"DELETE FROM {safe_table}")
+        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")
+        return "INSERT"
+    
+    def _get_safe_table_name(self) -> str:
+        """Get sanitized table name safe for SQL."""
+        safe_table_name = re.sub(r'[^a-zA-Z0-9_]', '_', self.table_name)
         if not safe_table_name or safe_table_name[0].isdigit():
             safe_table_name = f"table_{safe_table_name}"
-        cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")
-        row_count = cursor.fetchone()[0]
-        logging.info(f"Database verification: {row_count} rows confirmed in table {table_name} at {timestamp}")
-        
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - success")
-        return True
-        
-    except sqlite3.Error as e:
-        logging.error(f"SQLite error when writing to {table_name}: {e} at {timestamp}")
-        if connection:
-            try:
-                connection.rollback()
-                logging.debug(f"Transaction rolled back for table {table_name} at {timestamp}")
-            except Exception as rollback_error:
-                logging.error(f"Failed to rollback transaction: {rollback_error} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - SQLite error")
-        return False
-        
-    except Exception as e:
-        logging.error(f"Unexpected error when writing to table {table_name}: {e} at {timestamp}")
-        if connection:
-            try:
-                connection.rollback()
-                logging.debug(f"Transaction rolled back for table {table_name} at {timestamp}")
-            except Exception as rollback_error:
-                logging.error(f"Failed to rollback transaction: {rollback_error} at {timestamp}")
-        logging.debug(f"EXIT: write_dict_list_to_sqlite_database_inside_container - unexpected error")
-        return False
-        
-    finally:
-        # Always close database connection (safety-critical: resource cleanup)
-        if connection:
-            try:
-                connection.close()
-                logging.debug(f"Database connection closed for table {table_name} at {timestamp}")
-            except Exception as e:
-                logging.error(f"Failed to close database connection: {e} at {timestamp}")
+        return safe_table_name
+    
+    def _prepare_safe_fields(self) -> List[str]:
+        """Prepare sanitized field names with metadata columns."""
+        safe_fields = [re.sub(r'[^a-zA-Z0-9_]', '_', str(field)) for field in self.fields]
+        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])
+        return safe_fields
+    
+    def _insert_all_rows(self, insert_mode: str, safe_fields: List[str]) -> int:
+        """Insert all data rows and return count of successful inserts."""
+        current_time = datetime.now(timezone.utc).isoformat()
+        successful_inserts = 0
+        for idx, row in enumerate(self.processed_data):
+            if self._insert_single_row(idx, row, insert_mode, safe_fields, current_time):
+                successful_inserts += 1
+        return successful_inserts
+    
+    def _insert_single_row(self, idx: int, row: Dict[str, Any], insert_mode: str, safe_fields: List[str], current_time: str) -> bool:
+        """Insert a single row into the database."""
+        try:
+            values = self._prepare_row_values(row, current_time)
+            insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
+            self.cursor.execute(insert_sql, values)
+            if idx < 3:
+                logging.debug(f"Row {idx} inserted into {self.table_name} using {insert_mode} at {self.timestamp}")
+            return True
+        except Exception as error:
+            logging.error(f"Failed to insert row {idx} into {self.table_name}: {error} at {self.timestamp}")
+            return False
+    
+    def _prepare_row_values(self, row: Dict[str, Any], current_time: str) -> List[str]:
+        """Prepare values for a single row including metadata."""
+        values = []
+        for field in self.fields:
+            value = row.get(field, "")
+            values.append("" if value is None else str(value))
+        values.extend([current_time, current_time])
+        return values
+    
+    def _build_insert_sql(self, insert_mode: str, safe_fields: List[str], value_count: int) -> str:
+        """Build parameterized INSERT SQL statement."""
+        placeholders = ", ".join(["?"] * value_count)
+        safe_table_name = self._get_safe_table_name()
+        return f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
+    
+    def _commit_and_verify(self, successful_inserts: int) -> None:
+        """Commit transaction and verify row count."""
+        self.connection.commit()
+        logging.info(f"Successfully wrote {successful_inserts}/{len(self.processed_data)} rows to table {self.table_name} in database {DATABASE_PATH} using {self.strategy['type']} strategy at {self.timestamp}")
+        safe_table_name = self._get_safe_table_name()
+        self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")
+        row_count = self.cursor.fetchone()[0]
+        logging.info(f"Database verification: {row_count} rows confirmed in table {self.table_name} at {self.timestamp}")
+    
+    def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
+        """Handle SQLite-specific errors with rollback."""
+        logging.error(f"SQLite error when writing to {self.table_name}: {error} at {self.timestamp}")
+        self._rollback_transaction()
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")
+    
+    def _handle_unexpected_error(self, error: Exception) -> None:
+        """Handle unexpected errors with rollback."""
+        logging.error(f"Unexpected error when writing to table {self.table_name}: {error} at {self.timestamp}")
+        self._rollback_transaction()
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")
+    
+    def _rollback_transaction(self) -> None:
+        """Rollback transaction if connection exists."""
+        if not self.connection:
+            return
+        try:
+            self.connection.rollback()
+            logging.debug(f"Transaction rolled back for table {self.table_name} at {self.timestamp}")
+        except Exception as rollback_error:
+            logging.error(f"Failed to rollback transaction: {rollback_error} at {self.timestamp}")
+    
+    def _close_connection(self) -> None:
+        """Close database connection (safety-critical: resource cleanup)."""
+        if not self.connection:
+            return
+        try:
+            self.connection.close()
+            logging.debug(f"Database connection closed for table {self.table_name} at {self.timestamp}")
+        except Exception as error:
+            logging.error(f"Failed to close database connection: {error} at {self.timestamp}")
 
 
 class DataExporter:
@@ -7843,7 +7899,7 @@ class DataExporter:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith('.csv') else filename_or_table
         logging.info(f"Writing {len(data)} rows to SQLite table: {table_name}")
-        return write_dict_list_to_sqlite_database_inside_container(data, table_name, api_function_name=api_function_name)
+        return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
     
     @staticmethod
     def write_to_csv(data: List[Dict[str, Any]], csv_file: str) -> None:

@@ -550,6 +550,35 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.22.30",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "SQLiteDatabaseWriter: Hybrid primary key SQLite database writer with natural business keys"
+        ],
+        "refactoring": [
+          "200-line write_dict_list_to_sqlite_database_inside_container function refactored into SQLiteDatabaseWriter class",
+          "27 methods organized by responsibility:",
+          "Init: __init__",
+          "Entry: write(), _log_entry()",
+          "Validation: _validate_inputs(), _validate_data(), _validate_table_name()",
+          "Setup: _resolve_api_function_name(), _ensure_database_directory(), _process_data()",
+          "Strategy: _determine_fields_and_strategy(), _log_strategy_info()",
+          "DB Ops: _execute_database_operations(), _connect_to_database(), _create_table_and_indexes()",
+          "Insert: _determine_insert_mode(), _get_safe_table_name(), _prepare_safe_fields()",
+          "Row handling: _insert_all_rows(), _insert_single_row(), _prepare_row_values(), _build_insert_sql()",
+          "Commit: _commit_and_verify()",
+          "Errors: _handle_sqlite_error(), _handle_unexpected_error(), _rollback_transaction(), _close_connection()"
+        ],
+        "dead_code_removal": [
+          "write_dict_list_to_sqlite_database_inside_container standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: DataExporter._write_sqlite_format now uses SQLiteDatabaseWriter(data, table_name, api_function_name).write()"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.22.15",
       "date": "2026-01-17",
       "changes": {
