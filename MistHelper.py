@@ -84,6 +84,7 @@ class DataDirectoryChecker:
             return self._test_write_permission()
         except PermissionError:
             self._handle_permission_error()
+            return False  # Never reached - _handle_permission_error exits
         except Exception:
             return True  # Non-permission error, let it proceed and fail naturally
     
@@ -2667,68 +2668,90 @@ class DisplayUtils:
         return f"[{bar}] {progress_percentage:3d}%"
 
 
-def interactive_fetch_device_data_to_csv(
-    fetch_function=None,
-    filename=None,
-    description=None,
-    device_type="all",
-    site_id=None,
-    device_id=None,
-    config: Optional[DeviceFetchConfig] = None
-):
+class DeviceDataFetcher:
     """
-    Fetches data for a specific device (by site_id/device_id if provided, else prompts user),
-    writes the result to a CSV file, and displays it as a PrettyTable.
+    Interactive device data fetcher for single-device operations.
     
-    Args:
-        fetch_function: API function to call (deprecated, use config)
-        filename: Output filename (deprecated, use config)
-        description: Action description (deprecated, use config)
-        device_type: Device type filter (deprecated, use config)
-        site_id: Site ID (deprecated, use config)
-        device_id: Device ID (deprecated, use config)
-        config: DeviceFetchConfig object (preferred)
+    Fetches data for a specific device (by site_id/device_id or via user prompt),
+    writes the result to CSV, and displays as PrettyTable.
+    
+    SECURITY: Uses authenticated API session for all device queries.
+    
+    Usage:
+        DeviceDataFetcher(fetch_function, filename, description).fetch()
+        DeviceDataFetcher(fetch_function, filename, description, device_type="gateway").fetch()
     """
-    # Support both config object and individual parameters (backwards compatibility)
-    if config is not None:
-        fetch_function = config.fetch_function
-        filename = config.filename
-        description = config.description
-        device_type = config.device_type
-        site_id = config.site_id
-        device_id = config.device_id
     
-    # Validate required parameters
-    if fetch_function is None or filename is None or description is None:
-        raise ValueError("fetch_function, filename, and description are required")
+    def __init__(self, fetch_function: Callable, filename: str, description: str,
+                 device_type: str = "all", site_id: Optional[str] = None,
+                 device_id: Optional[str] = None):
+        """Initialize fetcher with required parameters."""
+        self.fetch_function = fetch_function
+        self.filename = filename
+        self.description = description
+        self.device_type = device_type
+        self.site_id = site_id
+        self.device_id = device_id
     
-    # Use provided site_id or prompt user
-    if not site_id:
-        site_id = PromptUtils.select_site_id_from_csv()
-        if not site_id:
+    @classmethod
+    def from_config(cls, config: "DeviceFetchConfig") -> "DeviceDataFetcher":
+        """Create fetcher from DeviceFetchConfig object."""
+        return cls(
+            fetch_function=config.fetch_function,
+            filename=config.filename,
+            description=config.description,
+            device_type=config.device_type,
+            site_id=config.site_id,
+            device_id=config.device_id
+        )
+    
+    def fetch(self) -> None:
+        """Main entry point - orchestrates the device data fetch workflow."""
+        if not self._resolve_site_id():
             return
-
-    # Use provided device_id or prompt user
-    if not device_id:
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type=device_type)
-        if not device_id:
+        if not self._resolve_device_id():
             return
-
-    # Log the action being performed
-    logging.info(f"{description} for device ID: {device_id}")
-
-    # Fetch data using the provided function
-    stats = fetch_function(apisession, site_id, device_id).data
-
-    # Flatten and sanitize the data
-    stats = DataProcessingUtils.flatten_nested_fields([stats])
-    stats = DataProcessingUtils.escape_multiline(stats)
-
-    # Write the data to a CSV file
-    DataExporter.save_data_to_output(stats, filename)
-
-    # Display the data in a table
-    DisplayUtils.dict_list_as_pretty_table(stats)
+        self._log_action()
+        data = self._fetch_data()
+        if data:
+            self._process_and_output(data)
+    
+    def _resolve_site_id(self) -> bool:
+        """Resolve site ID from parameter or user prompt."""
+        if self.site_id:
+            return True
+        self.site_id = PromptUtils.select_site_id_from_csv()
+        return bool(self.site_id)
+    
+    def _resolve_device_id(self) -> bool:
+        """Resolve device ID from parameter or user prompt."""
+        if self.device_id:
+            return True
+        assert self.site_id is not None, "Site ID must be resolved before device ID"
+        self.device_id = PromptUtils.select_device_id_from_inventory(
+            self.site_id, device_type=self.device_type
+        )
+        return bool(self.device_id)
+    
+    def _log_action(self) -> None:
+        """Log the action being performed."""
+        logging.info(f"{self.description} for device ID: {self.device_id}")
+    
+    def _fetch_data(self) -> Optional[List[Dict[str, Any]]]:
+        """Fetch data using the configured API function."""
+        try:
+            response = self.fetch_function(apisession, self.site_id, self.device_id)
+            return [response.data] if response.data else None
+        except Exception as error:
+            logging.error(f"Failed to fetch device data: {error}")
+            return None
+    
+    def _process_and_output(self, data: List[Dict[str, Any]]) -> None:
+        """Process fetched data and output to CSV and table."""
+        processed = DataProcessingUtils.flatten_nested_fields(data)
+        processed = DataProcessingUtils.escape_multiline(processed)
+        DataExporter.save_data_to_output(processed, self.filename)
+        DisplayUtils.dict_list_as_pretty_table(processed)
 
 
 # ============================================================================
@@ -7597,8 +7620,8 @@ class SQLiteDatabaseWriter:
         self.processed_data: List[Dict[str, Any]] = []
         self.fields: List[str] = []
         self.strategy: Dict[str, Any] = {}
-        self.connection = None
-        self.cursor = None
+        self.connection: Optional[sqlite3.Connection] = None
+        self.cursor: Optional[sqlite3.Cursor] = None
     
     def write(self) -> bool:
         """Main entry point - orchestrates the database write operation."""
@@ -7684,7 +7707,8 @@ class SQLiteDatabaseWriter:
                 logging.error(f"No fields found in data for table {self.table_name} at {self.timestamp}")
                 logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
                 return False
-            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(self.api_function_name, self.fields)
+            api_func_name = self.api_function_name if self.api_function_name else ""
+            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_func_name, self.fields)
             self._log_strategy_info()
             return True
         except Exception as error:
@@ -7727,6 +7751,7 @@ class SQLiteDatabaseWriter:
     
     def _create_table_and_indexes(self) -> None:
         """Create table with strategy-appropriate schema and indexes."""
+        assert self.cursor is not None, "Database cursor not initialized"
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
         self.cursor.execute(create_table_sql)
         logging.debug(f"Table {self.table_name} created/verified with hybrid {self.strategy['type']} schema - using natural business keys from API")
@@ -7738,6 +7763,7 @@ class SQLiteDatabaseWriter:
     
     def _determine_insert_mode(self) -> str:
         """Determine insert strategy based on schema type."""
+        assert self.cursor is not None, "Database cursor not initialized"
         if self.strategy['type'] in ['natural_pk', 'composite_pk']:
             logging.debug(f"Using REPLACE mode for {self.strategy['type']} strategy - enables efficient upsert operations with natural keys")
             return "INSERT OR REPLACE"
@@ -7770,6 +7796,7 @@ class SQLiteDatabaseWriter:
     
     def _insert_single_row(self, idx: int, row: Dict[str, Any], insert_mode: str, safe_fields: List[str], current_time: str) -> bool:
         """Insert a single row into the database."""
+        assert self.cursor is not None, "Database cursor not initialized"
         try:
             values = self._prepare_row_values(row, current_time)
             insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
@@ -7798,6 +7825,8 @@ class SQLiteDatabaseWriter:
     
     def _commit_and_verify(self, successful_inserts: int) -> None:
         """Commit transaction and verify row count."""
+        assert self.connection is not None, "Database connection not initialized"
+        assert self.cursor is not None, "Database cursor not initialized"
         self.connection.commit()
         logging.info(f"Successfully wrote {successful_inserts}/{len(self.processed_data)} rows to table {self.table_name} in database {DATABASE_PATH} using {self.strategy['type']} strategy at {self.timestamp}")
         safe_table_name = self._get_safe_table_name()
@@ -16329,7 +16358,7 @@ class EndpointConfig:
     filename: str
     description: str
     modname: str
-    special_handling: str = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
+    special_handling: Optional[str] = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
 
 
 class ConstDefinitionsExporter:
@@ -16447,7 +16476,7 @@ class ConstDefinitionsExporter:
         
         return functions
     
-    def _select_best_function(self, functions: list[str]) -> str:
+    def _select_best_function(self, functions: list[str]) -> Optional[str]:
         """Select the best API function from a list (prefer list*, then get*)."""
         for func_name in functions:
             if func_name.lower().startswith('list'):
@@ -16513,7 +16542,7 @@ class ConstDefinitionsExporter:
     
     def _determine_special_handling(self, endpoint_name: str, api_function: str, 
                                     required_params: list, optional_params: list[str],
-                                    filename: str) -> str:
+                                    filename: str) -> Optional[str]:
         """Determine special handling type for endpoint."""
         if endpoint_name == 'ap_channels' and 'country_code' in optional_params:
             print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
@@ -17469,13 +17498,13 @@ class InteractiveDisplayUtils:
             device_id: Optional device ID (prompts if not provided)
         """
         logging.info("Prompting user to select a device for detailed statistics view...")
-        interactive_fetch_device_data_to_csv(
+        DeviceDataFetcher(
             fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
             filename="DeviceStats.csv",
             description="Fetching detailed stats",
             site_id=site_id,
             device_id=device_id
-        )
+        ).fetch()
         logging.info("Completed device_stats execution.")
     
     @staticmethod
@@ -17484,12 +17513,12 @@ class InteractiveDisplayUtils:
         Prompts user to select a gateway device and displays its synthetic test stats.
         """
         logging.info("Prompting user to select a gateway device for synthetic test stats view...")
-        interactive_fetch_device_data_to_csv(
+        DeviceDataFetcher(
             fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
             filename="DeviceTestResults.csv",
             description="Fetching synthetic test stats",
             device_type="gateway"
-        )
+        ).fetch()
         logging.info("Completed device_tests execution.")
     
     @staticmethod
@@ -17498,11 +17527,11 @@ class InteractiveDisplayUtils:
         Prompts user to select a device and displays its configuration details.
         """
         logging.info("Prompting user to select a device for configuration details view...")
-        interactive_fetch_device_data_to_csv(
+        DeviceDataFetcher(
             fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
             filename="DeviceConfig.csv",
             description="Fetching device configuration"
-        )
+        ).fetch()
         logging.info("Completed device_config execution.")
 
 
@@ -21843,7 +21872,7 @@ class NominatimValidator:
             'error': error
         }
     
-    def _make_api_request(self, address_string: str, source: str) -> Optional[requests.Response]:
+    def _make_api_request(self, address_string: str, source: str) -> Optional[Any]:
         """
         Make Nominatim API request with retry logic.
         
@@ -21958,7 +21987,7 @@ class NominatimValidator:
         
         return confidence
     
-    def _parse_geocode_response(self, response: requests.Response, address_parts: list, source: str) -> dict:
+    def _parse_geocode_response(self, response: Any, address_parts: list, source: str) -> dict:
         """Parse successful geocode response into result dictionary."""
         if response.status_code != 200:
             if self.debug:
@@ -38691,8 +38720,8 @@ class WLANRadiusTimerManager:
         """Initialize manager with debug mode setting."""
         self.debug = debug
         self.original_log_level = None
-        self.site_id: str = ""
-        self.org_id: str = ""
+        self.site_id: Optional[str] = ""
+        self.org_id: Optional[str] = ""
         self.site_name: str = ""
         self.site_info: Dict[str, Any] = {}
         self.site_template_id: Optional[str] = None
@@ -38708,6 +38737,11 @@ class WLANRadiusTimerManager:
         self.new_retries: int = 2
         self.new_selection: str = "ordered"
         self.new_fast: bool = False
+    
+    def _get_selected_wlan(self) -> Dict[str, Any]:
+        """Get selected WLAN with assertion that it exists."""
+        assert self.selected_wlan is not None, "No WLAN selected"
+        return self.selected_wlan
     
     def manage(self) -> None:
         """Main entry point - orchestrates the WLAN timer management workflow."""
@@ -39011,15 +39045,16 @@ class WLANRadiusTimerManager:
     
     def _display_current_config(self) -> None:
         """Display current configuration of selected WLAN."""
+        wlan = self._get_selected_wlan()
         print(f"\n{'='*100}")
-        print(f"Modifying WLAN: {self.selected_wlan.get('ssid')}")
-        print(f"Inheritance: {self.selected_wlan.get('_inheritance_level').upper()}")
+        print(f"Modifying WLAN: {wlan.get('ssid')}")
+        print(f"Inheritance: {wlan.get('_inheritance_level', 'unknown').upper()}")
         print(f"{'='*100}\n")
         print(f"Current Configuration:")
-        print(f"  auth_servers_timeout: {self.selected_wlan.get('auth_servers_timeout', 5)} seconds")
-        print(f"  auth_servers_retries: {self.selected_wlan.get('auth_servers_retries', 2)}")
-        print(f"  auth_server_selection: {self.selected_wlan.get('auth_server_selection', 'ordered')}")
-        print(f"  fast_dot1x_timers: {self.selected_wlan.get('fast_dot1x_timers', False)}")
+        print(f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} seconds")
+        print(f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)}")
+        print(f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')}")
+        print(f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)}")
         print(f"")
     
     def _prompt_new_values(self) -> bool:
@@ -39037,7 +39072,8 @@ class WLANRadiusTimerManager:
     
     def _prompt_timeout(self) -> None:
         """Prompt for auth_servers_timeout value."""
-        current = self.selected_wlan.get('auth_servers_timeout', 5)
+        wlan = self._get_selected_wlan()
+        current = wlan.get('auth_servers_timeout', 5)
         timeout_input = InputUtils.safe_input(
             f"auth_servers_timeout (1-30) [{current}]: ",
             default_value=str(current),
@@ -39050,7 +39086,8 @@ class WLANRadiusTimerManager:
     
     def _prompt_retries(self) -> None:
         """Prompt for auth_servers_retries value."""
-        current = self.selected_wlan.get('auth_servers_retries', 2)
+        wlan = self._get_selected_wlan()
+        current = wlan.get('auth_servers_retries', 2)
         retries_input = InputUtils.safe_input(
             f"auth_servers_retries (0-10) [{current}]: ",
             default_value=str(current),
@@ -39063,7 +39100,8 @@ class WLANRadiusTimerManager:
     
     def _prompt_selection(self) -> None:
         """Prompt for auth_server_selection value."""
-        current = self.selected_wlan.get('auth_server_selection', 'ordered')
+        wlan = self._get_selected_wlan()
+        current = wlan.get('auth_server_selection', 'ordered')
         selection_input = InputUtils.safe_input(
             f"auth_server_selection (ordered/unordered) [{current}]: ",
             default_value=current,
@@ -39073,7 +39111,8 @@ class WLANRadiusTimerManager:
     
     def _prompt_fast_timers(self) -> None:
         """Prompt for fast_dot1x_timers value."""
-        current = self.selected_wlan.get('fast_dot1x_timers', False)
+        wlan = self._get_selected_wlan()
+        current = wlan.get('fast_dot1x_timers', False)
         fast_input = InputUtils.safe_input(
             f"fast_dot1x_timers (true/false) [{str(current).lower()}]: ",
             default_value=str(current).lower(),
@@ -39083,10 +39122,11 @@ class WLANRadiusTimerManager:
     
     def _display_behavior_impact(self) -> None:
         """Display calculated authentication behavior impact."""
+        wlan = self._get_selected_wlan()
         print(f"\n{'='*100}")
         print(f"Calculated Authentication Behavior:")
         print(f"{'='*100}\n")
-        auth_servers = self.selected_wlan.get('auth_servers', [])
+        auth_servers = wlan.get('auth_servers', [])
         server_count = len(auth_servers) if auth_servers else 1
         single_server_max = self.new_timeout * self.new_retries
         all_servers_max = single_server_max * server_count
@@ -39175,26 +39215,28 @@ class WLANRadiusTimerManager:
     
     def _display_proposed_changes(self) -> None:
         """Display proposed configuration changes with warnings."""
+        wlan = self._get_selected_wlan()
         print(f"{'='*100}")
         print(f"Proposed Configuration Changes:")
         print(f"{'='*100}")
-        print(f"  auth_servers_timeout: {self.selected_wlan.get('auth_servers_timeout', 5)} -> {self.new_timeout}")
-        print(f"  auth_servers_retries: {self.selected_wlan.get('auth_servers_retries', 2)} -> {self.new_retries}")
-        print(f"  auth_server_selection: {self.selected_wlan.get('auth_server_selection', 'ordered')} -> {self.new_selection}")
-        print(f"  fast_dot1x_timers: {self.selected_wlan.get('fast_dot1x_timers', False)} -> {self.new_fast}")
+        print(f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} -> {self.new_timeout}")
+        print(f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)} -> {self.new_retries}")
+        print(f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')} -> {self.new_selection}")
+        print(f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)} -> {self.new_fast}")
         print(f"")
         self._print_inheritance_warning()
     
     def _print_inheritance_warning(self) -> None:
         """Print warning about template inheritance if applicable."""
-        inheritance = self.selected_wlan.get('_inheritance_level')
+        wlan = self._get_selected_wlan()
+        inheritance = wlan.get('_inheritance_level')
         if inheritance == 'site_template':
-            print(f"[!] WARNING: This WLAN is inherited from site template: {self.selected_wlan.get('_inheritance_source')}")
+            print(f"[!] WARNING: This WLAN is inherited from site template: {wlan.get('_inheritance_source')}")
             print(f"[!] Changes will affect ALL sites using this template!")
         elif inheritance == 'org_wlan_with_template':
-            print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {self.selected_wlan.get('_inheritance_source')}")
-            assignment = self.selected_wlan.get('_org_template_assignment', 'assigned sites')
-            template_name_wlan = self.selected_wlan.get('_wlan_template_name', 'Unknown')
+            print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {wlan.get('_inheritance_source')}")
+            assignment = wlan.get('_org_template_assignment', 'assigned sites')
+            template_name_wlan = wlan.get('_wlan_template_name', 'Unknown')
             print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
         print(f"")
     
@@ -39221,7 +39263,8 @@ class WLANRadiusTimerManager:
     
     def _apply_changes(self) -> None:
         """Apply changes to appropriate endpoint based on inheritance."""
-        inheritance = self.selected_wlan.get('_inheritance_level')
+        wlan = self._get_selected_wlan()
+        inheritance = wlan.get('_inheritance_level')
         try:
             if inheritance == 'site':
                 self._update_site_wlan()
@@ -39238,24 +39281,26 @@ class WLANRadiusTimerManager:
     
     def _update_site_wlan(self) -> None:
         """Update a site-level WLAN."""
+        wlan = self._get_selected_wlan()
         print(f"\n[*] Updating site-level WLAN...")
         payload = self._build_update_payload()
-        logging.info(f"Updating site WLAN {self.selected_wlan.get('id')} with payload: {payload}")
+        logging.info(f"Updating site WLAN {wlan.get('id')} with payload: {payload}")
         response = mistapi.api.v1.sites.wlans.updateSiteWlan(
-            apisession, self.site_id, self.selected_wlan.get('id'), payload
+            apisession, self.site_id, wlan.get('id'), payload
         )
         if response.status_code == 200:
-            print(f"[+] Successfully updated WLAN: {self.selected_wlan.get('ssid')}")
-            logging.info(f"Successfully updated site WLAN {self.selected_wlan.get('id')}")
+            print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")
+            logging.info(f"Successfully updated site WLAN {wlan.get('id')}")
         else:
             print(f"[!] Failed to update WLAN: HTTP {response.status_code}")
             logging.error(f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}")
     
     def _update_site_template_wlan(self) -> None:
         """Update a site template-level WLAN."""
+        wlan = self._get_selected_wlan()
         print(f"\n[*] Updating site template-level WLAN...")
-        template_id = self.selected_wlan.get('_template_id')
-        wlan_id = self.selected_wlan.get('id')
+        template_id = wlan.get('_template_id')
+        wlan_id = wlan.get('id')
         logging.info(f"Updating site template WLAN {wlan_id} in template {template_id}")
         template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
             apisession, self.org_id, template_id
@@ -39283,7 +39328,7 @@ class WLANRadiusTimerManager:
             apisession, self.org_id, template_id, template_data
         )
         if update_response.status_code == 200:
-            print(f"[+] Successfully updated site template WLAN: {self.selected_wlan.get('ssid')}")
+            print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")
             print(f"[+] All sites using this template will inherit these changes")
             logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
         else:
@@ -39292,8 +39337,9 @@ class WLANRadiusTimerManager:
     
     def _update_org_wlan(self) -> None:
         """Update an org-level WLAN."""
+        wlan = self._get_selected_wlan()
         print(f"\n[*] Updating org-level WLAN...")
-        wlan_id = self.selected_wlan.get('id')
+        wlan_id = wlan.get('id')
         if not wlan_id:
             print(f"[!] Missing WLAN ID - cannot update")
             logging.error(f"Missing WLAN id for org WLAN update")
@@ -39304,8 +39350,8 @@ class WLANRadiusTimerManager:
             apisession, self.org_id, wlan_id, payload
         )
         if response.status_code == 200:
-            print(f"[+] Successfully updated org WLAN: {self.selected_wlan.get('ssid')}")
-            template_name = self.selected_wlan.get('_wlan_template_name', 'Unknown')
+            print(f"[+] Successfully updated org WLAN: {wlan.get('ssid')}")
+            template_name = wlan.get('_wlan_template_name', 'Unknown')
             print(f"[+] WLAN uses template '{template_name}' for its base configuration")
             logging.info(f"Successfully updated org WLAN {wlan_id}")
         else:

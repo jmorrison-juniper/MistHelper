@@ -550,6 +550,38 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.17.23.00",
+      "date": "2026-01-17",
+      "changes": {
+        "new_classes": [
+          "DeviceDataFetcher: Interactive device data fetcher for single-device operations"
+        ],
+        "refactoring": [
+          "60-line interactive_fetch_device_data_to_csv function refactored into DeviceDataFetcher class",
+          "9 methods organized by responsibility:",
+          "Init: __init__(fetch_function, filename, description, device_type, site_id, device_id)",
+          "Factory: from_config() classmethod for DeviceFetchConfig objects",
+          "Entry: fetch() - main workflow orchestrator",
+          "Resolution: _resolve_site_id(), _resolve_device_id()",
+          "Execution: _log_action(), _fetch_data(), _process_and_output()"
+        ],
+        "dead_code_removal": [
+          "interactive_fetch_device_data_to_csv standalone function removed"
+        ],
+        "compliance": [
+          "NO WRAPPERS: DeviceMenuUtils.device_stats() now uses DeviceDataFetcher(...).fetch()",
+          "NO WRAPPERS: DeviceMenuUtils.device_tests() now uses DeviceDataFetcher(...).fetch()",
+          "NO WRAPPERS: DeviceMenuUtils.device_config() now uses DeviceDataFetcher(...).fetch()"
+        ],
+        "type_safety": [
+          "Fixed 47 Pylance type errors from WLANRadiusTimerManager refactoring",
+          "Added _get_selected_wlan() helper with assertion for type narrowing",
+          "Added Optional types for connection/cursor in SQLiteDatabaseWriter",
+          "Fixed requests.Response type hints to use Any for dynamic imports"
+        ]
+      }
+    },
+    {
       "version": "26.01.17.22.45",
       "date": "2026-01-17",
       "changes": {
