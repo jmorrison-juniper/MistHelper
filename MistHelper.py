@@ -25381,13 +25381,13 @@ class WANProbeDeviceOverrideManager:
     
     def __init__(self):
         """Initialize the WAN Probe Device Override Manager."""
-        self.org_id = None
-        self.templates = []
-        self.sites = []
+        self.org_id: Optional[str] = None
+        self.templates: List[Dict[str, Any]] = []
+        self.sites: List[Dict[str, Any]] = []
         self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
         self.probe_profile = self.DEFAULT_PROBE_PROFILE
-        self.selected_template = None
-        self.template_sites = []
+        self.selected_template: Optional[Dict[str, Any]] = None
+        self.template_sites: List[Dict[str, Any]] = []
     
     @classmethod
     def configure(cls, dry_run: bool = False) -> None:
@@ -25521,8 +25521,10 @@ class WANProbeDeviceOverrideManager:
             idx = int(selection) - 1
             if 0 <= idx < len(template_list):
                 self.selected_template = template_list[idx]
-                print(f"\n  Selected template: {self.selected_template['name']}")
-                logging.info(f"Menu #114: Selected template {self.selected_template['name']}")
+                assert self.selected_template is not None  # Type narrowing for Pylance
+                template_name = self.selected_template["name"]
+                print(f"\n  Selected template: {template_name}")
+                logging.info(f"Menu #114: Selected template {template_name}")
                 return True
             else:
                 print(" Invalid selection.")
@@ -25534,6 +25536,7 @@ class WANProbeDeviceOverrideManager:
     
     def _find_template_sites(self) -> bool:
         """Find all sites using the selected template. Returns True if found."""
+        assert self.selected_template is not None, "Template must be selected before finding sites"
         template_id = self.selected_template["id"]
         template_name = self.selected_template["name"]
         
@@ -25640,6 +25643,7 @@ class WANProbeDeviceOverrideManager:
     
     def _show_preview(self, devices_with_overrides: List[Dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
+        assert self.selected_template is not None, "Template must be selected"
         total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
         
         print(f"\n  Preview of Changes:")
@@ -25691,6 +25695,7 @@ class WANProbeDeviceOverrideManager:
     
     def _update_single_device(self, device: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
         """Update a single device's overridden WAN port probe configuration."""
+        assert self.selected_template is not None, "Template must be selected"
         device_id = device["device_id"]
         device_name = device["device_name"]
         site_id = device["site_id"]
@@ -25776,6 +25781,9 @@ class WANProbeDeviceOverrideManager:
     
     def _generate_report(self, results: List[Dict[str, Any]], dry_run: bool) -> None:
         """Generate and display final report."""
+        assert self.selected_template is not None, "Template must be selected"
+        template_name = self.selected_template["name"]  # Extract once after assertion
+        
         # Prepare report data
         report_data = []
         for result in results:
@@ -25804,7 +25812,7 @@ class WANProbeDeviceOverrideManager:
             print(f"\n  WAN Probe Device Override DRY-RUN Complete!")
             print(f"=" * 70)
             print(f"  >> DRY-RUN MODE: No actual changes were made")
-            print(f"  Template: {self.selected_template['name']}")
+            print(f"  Template: {template_name}")
             print(f"  Devices Analyzed: {len(results)}")
             print(f"  Would Update: {dry_run_count} devices")
             print(f"  WAN Ports: {total_ports}")
@@ -25815,7 +25823,7 @@ class WANProbeDeviceOverrideManager:
             
             print(f"\n  WAN Probe Device Override Complete!")
             print(f"=" * 70)
-            print(f"  Template: {self.selected_template['name']}")
+            print(f"  Template: {template_name}")
             print(f"  Devices Updated: {success_count}")
             print(f"  Devices Failed: {failure_count}")
             print(f"  WAN Ports Configured: {total_ports}")
