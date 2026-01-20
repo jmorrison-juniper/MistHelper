@@ -360,7 +360,9 @@ def _early_dependency_check():
     missing_packages = []
     for package_name, package_spec in all_packages:
         # Handle package name vs import name differences
-        import_name = PACKAGE_IMPORT_MAP.get(package_name, package_name)
+        # Normalize to lowercase for lookup since pip package names are case-insensitive
+        # but PACKAGE_IMPORT_MAP uses lowercase keys (e.g., 'pyyaml' not 'PyYAML')
+        import_name = PACKAGE_IMPORT_MAP.get(package_name.lower(), package_name)
         if not import_name:
             continue  # Skip if no valid import name
         
