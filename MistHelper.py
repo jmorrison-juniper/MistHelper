@@ -25353,6 +25353,488 @@ class WANProbeConfigManager:
 
 
 # ============================================================================
+# WAN PROBE DEVICE OVERRIDE MANAGER CLASS
+# ============================================================================
+class WANProbeDeviceOverrideManager:
+    """
+    Manages WAN probe configuration for device-level port overrides.
+    
+    Menu #114: Configure WAN probe override settings on gateway devices that
+    have device-level port overrides. This complements Menu #113 (template-level)
+    by targeting ONLY ports that have been overridden from their template.
+    
+    Workflow:
+        1. User selects a gateway template
+        2. Find all sites using that template
+        3. Find all gateway devices in those sites
+        4. Identify devices with port-level WAN overrides
+        5. Apply ICMP probe configuration to ONLY overridden WAN ports
+    
+    Default Configuration:
+        - probe IPs: ["192.151.29.254", "18.154.184.32"]
+        - probe_profile: "lte"
+    """
+    
+    # Default probe configuration (same as Menu 113)
+    DEFAULT_PROBE_IPS = ["192.151.29.254", "18.154.184.32"]
+    DEFAULT_PROBE_PROFILE = "lte"
+    
+    def __init__(self):
+        """Initialize the WAN Probe Device Override Manager."""
+        self.org_id = None
+        self.templates = []
+        self.sites = []
+        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
+        self.probe_profile = self.DEFAULT_PROBE_PROFILE
+        self.selected_template = None
+        self.template_sites = []
+    
+    @classmethod
+    def configure(cls, dry_run: bool = False) -> None:
+        """
+        Menu #114: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE)
+        
+        Updates wan_probe_override settings for WAN ports that have device-level
+        overrides from their gateway template.
+        
+        Args:
+            dry_run: If True, show what would change without making modifications
+        """
+        manager = cls()
+        manager._execute(dry_run)
+    
+    def _execute(self, dry_run: bool) -> None:
+        """Main execution flow for device-level WAN probe configuration."""
+        self._display_header(dry_run)
+        
+        if not self._initialize():
+            return
+        
+        if not self._load_data():
+            return
+        
+        if not self._select_template():
+            return
+        
+        if not self._find_template_sites():
+            return
+        
+        devices_with_overrides = self._find_devices_with_overrides()
+        if not devices_with_overrides:
+            return
+        
+        self._show_preview(devices_with_overrides, dry_run)
+        
+        if not dry_run:
+            if not self._confirm_operation(len(devices_with_overrides)):
+                return
+        
+        results = self._apply_changes(devices_with_overrides, dry_run)
+        self._generate_report(results, dry_run)
+    
+    def _display_header(self, dry_run: bool) -> None:
+        """Display operation header with configuration details."""
+        print("\n  DESTRUCTIVE: Configure WAN Probe on Device Port Overrides")
+        print("=" * 70)
+        if dry_run:
+            print("  >> DRY-RUN MODE: No changes will be made to devices")
+            print("  >> This will show what WOULD be changed without modifying anything")
+        else:
+            print("  !? WARNING: This operation modifies gateway device configurations")
+            print("  !? Only device-level overridden WAN ports will be modified")
+        print("=" * 70)
+        print(f"\n  Probe Configuration:")
+        print(f"    Probe IPs: {self.probe_ips}")
+        print(f"    Probe Profile: {self.probe_profile}")
+        print("=" * 70)
+        logging.warning("Menu #114 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started")
+    
+    def _initialize(self) -> bool:
+        """Initialize org_id. Returns True on success."""
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not self.org_id:
+            print(" Failed to get organization ID.")
+            logging.error("Menu #114: Could not obtain org_id")
+            return False
+        return True
+    
+    def _load_data(self) -> bool:
+        """Load gateway templates and site data. Returns True on success."""
+        print("\n  Loading gateway template and site data...")
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        
+        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
+        with open(templates_path, encoding="utf-8") as file_handle:
+            self.templates = list(csv.DictReader(file_handle))
+        
+        if not self.templates:
+            print(" No gateway templates found.")
+            logging.warning("Menu #114: No gateway templates available")
+            return False
+        
+        sites_path = FilePathUtils.get_csv_path("SiteList.csv")
+        with open(sites_path, encoding="utf-8") as file_handle:
+            self.sites = list(csv.DictReader(file_handle))
+        
+        logging.info(f"Loaded {len(self.templates)} gateway templates and {len(self.sites)} sites")
+        return True
+    
+    def _select_template(self) -> bool:
+        """Display templates and get user selection. Returns True if selected."""
+        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
+        
+        # Build site counts per template
+        template_site_counts = {}
+        for site in self.sites:
+            if site.get("name", "").startswith("VRE"):
+                continue
+            template_id = site.get("gatewaytemplate_id", "").strip()
+            if template_id:
+                template_site_counts[template_id] = template_site_counts.get(template_id, 0) + 1
+        
+        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")
+        template_list = []
+        for idx, template in enumerate(templates_sorted, start=1):
+            template_id = template.get("id", "")
+            template_name = template.get("name", "Unnamed Template")
+            site_count = template_site_counts.get(template_id, 0)
+            template_list.append({
+                "id": template_id,
+                "name": template_name,
+                "site_count": site_count
+            })
+            print(f"   [{idx}] {template_name} ({site_count} sites)")
+        
+        print("\n  Template Selection:")
+        print("   Enter a template number to select")
+        print("   Or 'cancel' to abort")
+        
+        selection = input("\n  Selection: ").strip().lower()
+        
+        if selection == "cancel":
+            print(" Operation cancelled.")
+            logging.info("Menu #114 cancelled by user at template selection")
+            return False
+        
+        try:
+            idx = int(selection) - 1
+            if 0 <= idx < len(template_list):
+                self.selected_template = template_list[idx]
+                print(f"\n  Selected template: {self.selected_template['name']}")
+                logging.info(f"Menu #114: Selected template {self.selected_template['name']}")
+                return True
+            else:
+                print(" Invalid selection.")
+                return False
+        except ValueError:
+            print(f" Invalid selection: {selection}")
+            logging.error(f"Menu #114: Invalid template selection: {selection}")
+            return False
+    
+    def _find_template_sites(self) -> bool:
+        """Find all sites using the selected template. Returns True if found."""
+        template_id = self.selected_template["id"]
+        template_name = self.selected_template["name"]
+        
+        self.template_sites = []
+        for site in self.sites:
+            if site.get("name", "").startswith("VRE"):
+                continue
+            if site.get("gatewaytemplate_id", "").strip() == template_id:
+                self.template_sites.append({
+                    "site_id": site.get("id", ""),
+                    "site_name": site.get("name", "Unknown Site")
+                })
+        
+        if not self.template_sites:
+            print(f"\n  No sites found using template '{template_name}'.")
+            logging.warning(f"Menu #114: No sites using template {template_name}")
+            return False
+        
+        print(f"\n  Found {len(self.template_sites)} sites using template '{template_name}'")
+        logging.info(f"Found {len(self.template_sites)} sites using template {template_name}")
+        return True
+    
+    def _find_devices_with_overrides(self) -> List[Dict[str, Any]]:
+        """Find gateway devices with WAN port overrides. Returns list of devices."""
+        print(f"\n  Scanning {len(self.template_sites)} sites for gateway devices with WAN overrides...")
+        
+        devices_with_overrides = []
+        target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", 
+                       "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
+        
+        for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):
+            site_id = site_info["site_id"]
+            site_name = site_info["site_name"]
+            
+            try:
+                # List all gateway devices in site
+                resp = mistapi.api.v1.sites.devices.listSiteDevices(
+                    apisession, site_id, type="gateway", limit=1000
+                )
+                devices = resp.data if hasattr(resp, 'data') else []
+                
+                for device in devices:
+                    if not isinstance(device, dict):
+                        continue
+                    
+                    device_id = device.get("id", "")
+                    device_name = device.get("name", "Unknown Device")
+                    port_config = device.get("port_config", {})
+                    
+                    if not isinstance(port_config, dict) or not port_config:
+                        continue
+                    
+                    # Find WAN ports with overrides
+                    overridden_wan_ports = []
+                    for port_name, port_settings in port_config.items():
+                        if not isinstance(port_settings, dict):
+                            continue
+                        
+                        # Check if this is a WAN port (usage == "wan")
+                        if port_settings.get("usage") != "wan":
+                            continue
+                        
+                        # Check if this port matches our target patterns
+                        is_target = any(
+                            port_name == target or port_name.startswith(f"{target}.")
+                            for target in target_ports
+                        )
+                        
+                        if is_target:
+                            current_probe = port_settings.get("wan_probe_override", {})
+                            current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
+                            current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
+                            
+                            overridden_wan_ports.append({
+                                "port_name": port_name,
+                                "current_ips": current_ips,
+                                "current_profile": current_profile,
+                                "port_settings": port_settings
+                            })
+                    
+                    if overridden_wan_ports:
+                        devices_with_overrides.append({
+                            "device_id": device_id,
+                            "device_name": device_name,
+                            "site_id": site_id,
+                            "site_name": site_name,
+                            "overridden_wan_ports": overridden_wan_ports
+                        })
+            
+            except Exception as error:
+                logging.warning(f"Error scanning site {site_name}: {error}")
+                continue
+        
+        if not devices_with_overrides:
+            print(f"\n  No gateway devices with WAN port overrides found.")
+            print(f"  All devices are using template-level WAN configuration.")
+            logging.info("Menu #114: No devices with WAN port overrides found")
+            return []
+        
+        total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
+        print(f"\n  Found {len(devices_with_overrides)} devices with {total_ports} overridden WAN ports")
+        logging.info(f"Found {len(devices_with_overrides)} devices with {total_ports} overridden WAN ports")
+        return devices_with_overrides
+    
+    def _show_preview(self, devices_with_overrides: List[Dict[str, Any]], dry_run: bool) -> None:
+        """Display preview of changes to be made."""
+        total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
+        
+        print(f"\n  Preview of Changes:")
+        print(f"  Template: {self.selected_template['name']}")
+        print(f"  Devices: {len(devices_with_overrides)}")
+        print(f"  Overridden WAN Ports: {total_ports}")
+        
+        # Show first 5 devices as preview
+        preview_count = min(5, len(devices_with_overrides))
+        print(f"\n  Sample devices (showing {preview_count} of {len(devices_with_overrides)}):")
+        
+        for device in devices_with_overrides[:preview_count]:
+            print(f"\n   Device: {device['device_name']} ({device['site_name']})")
+            for wan_port in device["overridden_wan_ports"]:
+                port = wan_port["port_name"]
+                current_ips = wan_port["current_ips"] or ["(none)"]
+                current_profile = wan_port["current_profile"] or "(none)"
+                print(f"     {port}:")
+                print(f"       Current: ips={current_ips}, profile={current_profile}")
+                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")
+        
+        if len(devices_with_overrides) > preview_count:
+            print(f"\n   ... and {len(devices_with_overrides) - preview_count} more devices")
+    
+    def _confirm_operation(self, device_count: int) -> bool:
+        """Prompt for confirmation. Returns True if confirmed."""
+        print(f"\n  {'=' * 70}")
+        print(f"  !? CRITICAL: This will modify {device_count} gateway devices")
+        print(f"  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
+        print(f"  {'=' * 70}")
+        
+        confirmation = input("\n  Confirmation: ").strip()
+        if confirmation != "APPLY":
+            print(" Operation cancelled.")
+            logging.info("Menu #114 cancelled by user at final confirmation")
+            return False
+        return True
+    
+    def _apply_changes(self, devices_with_overrides: List[Dict[str, Any]], dry_run: bool) -> List[Dict[str, Any]]:
+        """Apply probe configuration changes to devices. Returns results."""
+        print("\n  Applying WAN probe configuration to device overrides...")
+        results = []
+        
+        for device in tqdm(devices_with_overrides, desc="Updating devices", unit="device"):
+            result = self._update_single_device(device, dry_run)
+            results.append(result)
+        
+        return results
+    
+    def _update_single_device(self, device: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
+        """Update a single device's overridden WAN port probe configuration."""
+        device_id = device["device_id"]
+        device_name = device["device_name"]
+        site_id = device["site_id"]
+        site_name = device["site_name"]
+        
+        result = {
+            "device_name": device_name,
+            "device_id": device_id,
+            "site_name": site_name,
+            "site_id": site_id,
+            "template_name": self.selected_template["name"],
+            "ports_updated": [],
+            "status": "",
+            "error": ""
+        }
+        
+        try:
+            # Fetch current device configuration
+            logging.debug(f"Fetching device config for {device_name}")
+            resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+            device_config = resp.data if hasattr(resp, 'data') else {}
+            
+            if not isinstance(device_config, dict):
+                result["status"] = "SKIPPED"
+                result["error"] = "Invalid device config structure"
+                return result
+            
+            port_config = device_config.get("port_config", {})
+            if not isinstance(port_config, dict):
+                result["status"] = "SKIPPED"
+                result["error"] = "No port_config found"
+                return result
+            
+            # Update probe config for each overridden WAN port
+            ports_modified = []
+            for wan_port in device["overridden_wan_ports"]:
+                port_name = wan_port["port_name"]
+                
+                if port_name in port_config:
+                    # Ensure port_config[port_name] is a dict
+                    if not isinstance(port_config[port_name], dict):
+                        port_config[port_name] = {}
+                    
+                    # Set wan_probe_override
+                    port_config[port_name]["wan_probe_override"] = {
+                        "ips": self.probe_ips.copy(),
+                        "probe_profile": self.probe_profile
+                    }
+                    ports_modified.append(port_name)
+                    logging.debug(f"Device {device_name}: Updated {port_name} probe config")
+            
+            if ports_modified:
+                device_config["port_config"] = port_config
+                result["ports_updated"] = ports_modified
+                
+                if dry_run:
+                    result["status"] = "DRY-RUN"
+                    logging.info(f"DRY-RUN: Would update device {device_name} ports: {ports_modified}")
+                else:
+                    logging.debug(f"Updating device {device_name} via API")
+                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+                        apisession, site_id, device_id, body=device_config
+                    )
+                    
+                    if update_resp.status_code == 200:
+                        result["status"] = "SUCCESS"
+                        logging.info(f"Successfully updated device {device_name}")
+                    else:
+                        result["status"] = "FAILED"
+                        result["error"] = f"API returned status {update_resp.status_code}"
+                        logging.error(f"Failed to update device {device_name}: {update_resp.status_code}")
+            else:
+                result["status"] = "SKIPPED"
+                result["error"] = "No matching ports found in current config"
+        
+        except Exception as error:
+            result["status"] = "ERROR"
+            result["error"] = str(error)
+            logging.error(f"Error updating device {device_name}: {error}")
+            logging.error(traceback.format_exc())
+        
+        return result
+    
+    def _generate_report(self, results: List[Dict[str, Any]], dry_run: bool) -> None:
+        """Generate and display final report."""
+        # Prepare report data
+        report_data = []
+        for result in results:
+            report_data.append({
+                "device_name": result["device_name"],
+                "device_id": result["device_id"],
+                "site_name": result["site_name"],
+                "site_id": result["site_id"],
+                "template_name": result["template_name"],
+                "ports_updated": ", ".join(result["ports_updated"]) if result["ports_updated"] else "",
+                "port_count": len(result["ports_updated"]),
+                "status": result["status"],
+                "error": result["error"],
+                "new_probe_ips": ", ".join(self.probe_ips),
+                "new_probe_profile": self.probe_profile
+            })
+        
+        output_file = "GatewayDevice_WAN_Probe_Override_Audit.csv"
+        DataExporter.save_data_to_output(report_data, output_file)
+        
+        # Calculate summary
+        total_ports = sum(len(r["ports_updated"]) for r in results)
+        
+        if dry_run:
+            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
+            print(f"\n  WAN Probe Device Override DRY-RUN Complete!")
+            print(f"=" * 70)
+            print(f"  >> DRY-RUN MODE: No actual changes were made")
+            print(f"  Template: {self.selected_template['name']}")
+            print(f"  Devices Analyzed: {len(results)}")
+            print(f"  Would Update: {dry_run_count} devices")
+            print(f"  WAN Ports: {total_ports}")
+            print(f"\n  >> To apply changes, run without --dry-run flag")
+        else:
+            success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+            failure_count = len(results) - success_count
+            
+            print(f"\n  WAN Probe Device Override Complete!")
+            print(f"=" * 70)
+            print(f"  Template: {self.selected_template['name']}")
+            print(f"  Devices Updated: {success_count}")
+            print(f"  Devices Failed: {failure_count}")
+            print(f"  WAN Ports Configured: {total_ports}")
+            
+            if success_count > 0:
+                print(f"\n  Configuration Applied:")
+                print(f"    Probe IPs: {self.probe_ips}")
+                print(f"    Probe Profile: {self.probe_profile}")
+            
+            if failure_count > 0:
+                print(f"\n  !? {failure_count} devices failed - check audit report")
+        
+        print(f"\n  Report saved to: {output_file}")
+        print(f"=" * 70)
+        
+        logging.warning(f"Menu #114 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} devices updated")
+
+
+# ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
 class VirtualChassisManager:
@@ -41957,6 +42439,7 @@ menu_actions = {
     "110": (SiteConfigManager.assign_aps_to_matching_device_profiles, " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"),
     "111": (GatewayTemplateConfigManager.clone_by_location, " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"),
     "113": (lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run), " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)"),
+    "114": (lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run), " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)"),
     
     # ==============================
     # MAPS MANAGER (External Module)
@@ -42264,6 +42747,7 @@ def run_systematic_test():
         "110": "DESTRUCTIVE: Assigns APs to device profiles - requires uppercase confirmation",
         "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation",
         "113": "DESTRUCTIVE: Configures WAN probe override on templates - requires uppercase confirmation",
+        "114": "DESTRUCTIVE: Configures WAN probe on device port overrides - requires uppercase confirmation",
         
         # Interactive visualization tools
         "112": "Maps Manager - requires interactive Dash web server and browser"
@@ -42487,6 +42971,7 @@ def run_interactive_test():
         "110": "DESTRUCTIVE: Assigns APs to device profiles",
         "111": "DESTRUCTIVE: Clones gateway templates by state/country",
         "113": "DESTRUCTIVE: Configures WAN probe override on templates",
+        "114": "DESTRUCTIVE: Configures WAN probe on device port overrides",
         "90": "DESTRUCTIVE: AP firmware upgrade",
         "91": "DESTRUCTIVE: Device reboot",
         "92": "DESTRUCTIVE: Virtual chassis conversion",
