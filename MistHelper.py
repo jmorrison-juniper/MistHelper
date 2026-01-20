@@ -8048,164 +8048,293 @@ class DataExporter:
             return 0
 
 
-def fetch_and_display_api_data(title, api_call, filename, sort_key=None, display_fields=None, **kwargs):
+class APIDataFetcher:
     """
-    Fetches data using the provided API call, processes it (flattening, sorting, escaping),
-    writes it to a CSV file, and displays it in a PrettyTable. Adds detailed logging.
+    Fetches data from Mist API, processes it, and exports to CSV/SQLite.
     
-    Enhanced Error Handling:
-        - Handles API rate limiting (HTTP 429) by saving partial results
-        - Detects malformed API responses (missing 'results' key) and attempts recovery
-        - Logs detailed response structure for debugging unexpected formats
-        - Always saves partial data before exiting on error (prevents data loss)
-        - Provides user-friendly messages about partial data saves
+    Handles API rate limiting, malformed responses, and provides emergency
+    data saves on errors. Displays results in PrettyTable for logging.
     
     Safety Features:
         - Emergency data saves on any exception
-        - Detailed logging of response structure for troubleshooting
-        - Graceful degradation when API returns unexpected formats
+        - Handles HTTP 429 rate limiting gracefully
+        - Recovers data from malformed API responses
+        - Detailed logging for troubleshooting
     """
-
-    logging.debug(f"ENTRY: fetch_and_display_api_data(title={title}, api_call={api_call.__name__}, filename={filename}, sort_key={sort_key}, display_fields={display_fields}, kwargs={kwargs})")
     
-    logging.info(f"Starting data fetch: {title}")
-    print(title)
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()
-    logging.debug(f"Using org_id: {org_id}")
-    smoothed = None
-
-    rawdata = []
-    try:
-        # Call the API and get all paginated results
-        logging.debug(f"Making API call: {api_call.__name__} with kwargs: {kwargs}")
-        response = api_call(apisession, org_id, **kwargs)
-        smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed)
-        logging.debug(f"Applying rate limit delay: {delay:.2f}s")
-        time.sleep(delay)
+    def __init__(self, title: str, api_call: Any, filename: str,
+                 sort_key: Optional[str] = None, display_fields: Optional[List[str]] = None,
+                 **kwargs):
+        """
+        Initialize the API data fetcher.
         
-        # Log response structure for debugging unexpected formats
-        logging.debug(f"API response type: {type(response)}")
-        if hasattr(response, 'data'):
-            logging.debug(f"Response.data type: {type(response.data)}")
-            if isinstance(response.data, dict):
-                logging.debug(f"Response.data keys: {list(response.data.keys())}")
-            elif isinstance(response.data, list):
-                logging.debug(f"Response.data is list with {len(response.data)} items")
+        Args:
+            title: Display title for the operation
+            api_call: Mist API function to call
+            filename: Output filename (without extension)
+            sort_key: Optional field to sort results by
+            display_fields: Optional list of fields for table display
+            **kwargs: Additional arguments passed to the API call
+        """
+        self.title = title
+        self.api_call = api_call
+        self.filename = filename
+        self.sort_key = sort_key
+        self.display_fields = display_fields
+        self.kwargs = kwargs
+        
+        self.org_id = ""
+        self.rawdata: List[Dict[str, Any]] = []
+        self.smoothed: Optional[float] = None
+    
+    def execute(self) -> None:
+        """Execute the complete API fetch workflow."""
+        self._log_entry()
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
         
         try:
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            logging.debug(f"API call successful, retrieved {len(rawdata) if rawdata else 0} raw records")
-        except KeyError as e:
-            # Handle missing 'results' key or other structure issues
-            logging.error(f"API response structure error - missing key: {e}")
-            logging.error(f"Response details: type={type(response)}, hasattr(data)={hasattr(response, 'data')}")
-            if hasattr(response, 'data'):
-                logging.error(f"Response.data type={type(response.data)}")
-                if isinstance(response.data, dict):
-                    logging.error(f"Available keys: {list(response.data.keys())}")
-                    # Try to extract data from common alternate structures
-                    if 'data' in response.data:
-                        rawdata = response.data.get('data', [])
-                        logging.info(f"Recovered {len(rawdata)} records from response.data['data']")
-                    elif isinstance(response.data, list):
-                        rawdata = response.data
-                        logging.info(f"Recovered {len(rawdata)} records from response.data (list)")
-                elif isinstance(response.data, list):
-                    rawdata = response.data
-                    logging.info(f"Recovered {len(rawdata)} records from response.data (direct list)")
+            self._fetch_api_data()
             
-            # Save whatever we recovered
-            if rawdata:
-                print(f"! API returned unexpected structure. Recovered {len(rawdata)} records.")
-                DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
-                logging.info(f"Recovered data saved to {filename} ({len(rawdata)} rows)")
-            else:
-                print(f"! API response missing expected 'results' key. No data could be recovered.")
-                logging.error(f"Unable to recover any data from malformed response for {title}")
-                logging.debug(f"EXIT: fetch_and_display_api_data - structure error, no recovery")
+            if self.rawdata is None or len(self.rawdata) == 0:
+                logging.warning(f"! No data returned from API for {self.title}. Skipping.")
+                logging.debug("EXIT: APIDataFetcher.execute - no data")
                 return
-                
-        except Exception as e:
-            # Handle other exceptions during data retrieval
-            logging.error(f"Exception occurred during API data retrieval: {e}")
-            logging.error(f"Exception type: {type(e).__name__}")
-            print(f"! Exception occurred during API call: {e}")
             
-            # Check for HTTP 429 (rate limit exceeded)
-            status_code = getattr(getattr(e, "response", None), "status_code", None)
-            if status_code == 429:
-                logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
-                if rawdata:
-                    DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
-                    logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
-                    print(f"* Partial data saved: {len(rawdata)} records written to {filename}")
-                logging.debug(f"EXIT: fetch_and_display_api_data - rate limited")
-                return
-            else:
-                # For any other exception, save partial data before re-raising
-                if rawdata:
-                    try:
-                        DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
-                        logging.info(f"Emergency save: {len(rawdata)} partial records saved to {filename} before error exit")
-                        print(f"* Emergency save: {len(rawdata)} partial records written to {filename}")
-                    except Exception as save_error:
-                        logging.error(f"Failed to save partial data during error handling: {save_error}")
-                logging.debug(f"EXIT: fetch_and_display_api_data - API error")
-                raise
-
-        if rawdata is None:
-            logging.warning(f"! No data returned from API for {title}. Skipping.")
-            logging.debug(f"EXIT: fetch_and_display_api_data - no data")
+            self._export_and_display_data()
+            logging.debug("EXIT: APIDataFetcher.execute - success")
+            
+        except Exception as error:
+            self._handle_outer_exception(error)
+            raise
+    
+    # =========================================================================
+    # INITIALIZATION AND LOGGING METHODS
+    # =========================================================================
+    
+    def _log_entry(self) -> None:
+        """Log entry point with parameters."""
+        api_name = self.api_call.__name__
+        logging.debug(f"ENTRY: APIDataFetcher(title={self.title}, api_call={api_name}, "
+                      f"filename={self.filename}, sort_key={self.sort_key}, kwargs={self.kwargs})")
+        logging.info(f"Starting data fetch: {self.title}")
+        print(self.title)
+    
+    # =========================================================================
+    # API CALL METHODS
+    # =========================================================================
+    
+    def _fetch_api_data(self) -> None:
+        """Make API call and retrieve paginated results."""
+        api_name = self.api_call.__name__
+        logging.debug(f"Making API call: {api_name} with kwargs: {self.kwargs}")
+        
+        response = self.api_call(apisession, self.org_id, **self.kwargs)
+        self._apply_rate_limiting()
+        self._log_response_structure(response)
+        
+        try:
+            self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            record_count = len(self.rawdata) if self.rawdata else 0
+            logging.debug(f"API call successful, retrieved {record_count} raw records")
+        except KeyError as error:
+            self._handle_key_error(response, error)
+        except Exception as error:
+            self._handle_api_exception(error)
+    
+    def _apply_rate_limiting(self) -> None:
+        """Apply rate limiting delay between API calls."""
+        self.smoothed, delay = RateLimitingUtils.get_rate_limited_delay(self.smoothed)
+        logging.debug(f"Applying rate limit delay: {delay:.2f}s")
+        time.sleep(delay)
+    
+    def _log_response_structure(self, response: Any) -> None:
+        """Log API response structure for debugging."""
+        logging.debug(f"API response type: {type(response)}")
+        if not hasattr(response, 'data'):
             return
-
-        logging.info(f"Fetched {len(rawdata)} raw records from API.")
-
-        # Process and export data using DataExporter
-        record_count = DataExporter.export_with_processing(rawdata, filename, sort_key=sort_key, api_function_name=api_call.__name__)
-        print(f"! {len(rawdata)} records exported to {filename}")
         
-        # Get processed data for display (reprocess for table display)
-        data = [entry for entry in rawdata if isinstance(entry, dict)]
-        if sort_key:
-            data = sorted(data, key=lambda x: x.get(sort_key, ""))
-        data = DataProcessingUtils.flatten_nested_fields(data)
-        data = DataProcessingUtils.escape_multiline(data)
+        logging.debug(f"Response.data type: {type(response.data)}")
+        if isinstance(response.data, dict):
+            logging.debug(f"Response.data keys: {list(response.data.keys())}")
+        elif isinstance(response.data, list):
+            logging.debug(f"Response.data is list with {len(response.data)} items")
+    
+    # =========================================================================
+    # ERROR HANDLING METHODS
+    # =========================================================================
+    
+    def _handle_key_error(self, response: Any, error: KeyError) -> None:
+        """Handle missing 'results' key or other structure issues."""
+        logging.error(f"API response structure error - missing key: {error}")
+        self._log_response_error_details(response)
         
-        # Determine all unique fields for table display
+        recovered_data = self._attempt_data_recovery(response)
+        
+        if recovered_data:
+            self.rawdata = recovered_data
+            self._save_recovered_data()
+        else:
+            self._handle_no_recovery()
+    
+    def _log_response_error_details(self, response: Any) -> None:
+        """Log detailed response information during error handling."""
+        has_data = hasattr(response, 'data')
+        logging.error(f"Response details: type={type(response)}, hasattr(data)={has_data}")
+        
+        if has_data:
+            logging.error(f"Response.data type={type(response.data)}")
+            if isinstance(response.data, dict):
+                logging.error(f"Available keys: {list(response.data.keys())}")
+    
+    def _attempt_data_recovery(self, response: Any) -> Optional[List[Dict[str, Any]]]:
+        """Attempt to recover data from alternate response structures."""
+        if not hasattr(response, 'data'):
+            return None
+        
+        if isinstance(response.data, dict):
+            if 'data' in response.data:
+                recovered = response.data.get('data', [])
+                logging.info(f"Recovered {len(recovered)} records from response.data['data']")
+                return recovered
+        
+        if isinstance(response.data, list):
+            logging.info(f"Recovered {len(response.data)} records from response.data (list)")
+            return response.data
+        
+        return None
+    
+    def _save_recovered_data(self) -> None:
+        """Save recovered data and notify user."""
+        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
+        api_name = self.api_call.__name__
+        DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)
+        logging.info(f"Recovered data saved to {self.filename} ({len(self.rawdata)} rows)")
+    
+    def _handle_no_recovery(self) -> None:
+        """Handle case where no data could be recovered."""
+        print("! API response missing expected 'results' key. No data could be recovered.")
+        logging.error(f"Unable to recover any data from malformed response for {self.title}")
+        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")
+    
+    def _handle_api_exception(self, error: Exception) -> None:
+        """Handle exceptions during API data retrieval."""
+        logging.error(f"Exception occurred during API data retrieval: {error}")
+        logging.error(f"Exception type: {type(error).__name__}")
+        print(f"! Exception occurred during API call: {error}")
+        
+        if self._is_rate_limit_error(error):
+            self._handle_rate_limit()
+            return
+        
+        self._emergency_save_and_raise(error)
+    
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """Check if exception is HTTP 429 rate limit error."""
+        status_code = getattr(getattr(error, "response", None), "status_code", None)
+        return status_code == 429
+    
+    def _handle_rate_limit(self) -> None:
+        """Handle HTTP 429 rate limit error."""
+        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
+        
+        if self.rawdata:
+            api_name = self.api_call.__name__
+            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)
+            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
+        
+        logging.debug("EXIT: APIDataFetcher - rate limited")
+    
+    def _emergency_save_and_raise(self, error: Exception) -> None:
+        """Save partial data before re-raising exception."""
+        if self.rawdata:
+            try:
+                api_name = self.api_call.__name__
+                DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)
+                logging.info(f"Emergency save: {len(self.rawdata)} partial records saved before error exit")
+                print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
+            except Exception as save_error:
+                logging.error(f"Failed to save partial data during error handling: {save_error}")
+        
+        logging.debug("EXIT: APIDataFetcher - API error")
+        raise error
+    
+    def _handle_outer_exception(self, error: Exception) -> None:
+        """Handle exceptions at the top level."""
+        logging.error(f"! Error during data fetch for {self.title}: {error}")
+        logging.error(f"Exception type: {type(error).__name__}, Traceback info available in logs")
+        
+        if self.rawdata:
+            self._save_partial_data_on_error(error)
+        else:
+            print("! No data was collected before the error occurred")
+        
+        logging.debug("EXIT: APIDataFetcher - error")
+    
+    def _save_partial_data_on_error(self, error: Exception) -> None:
+        """Save partial data when outer exception occurs."""
+        try:
+            api_name = self.api_call.__name__
+            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)
+            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            
+            print("\n!! PARTIAL DATA SAVED !!")
+            print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
+            print(f"   * Error: {str(error)}")
+            print("   * You can retry the operation later to get remaining data")
+        except Exception as save_error:
+            logging.error(f"Failed to save partial data in outer exception handler: {save_error}")
+            print(f"! Critical: Could not save partial data. Error: {save_error}")
+    
+    # =========================================================================
+    # DATA PROCESSING AND DISPLAY METHODS
+    # =========================================================================
+    
+    def _export_and_display_data(self) -> None:
+        """Export data and display in table format."""
+        logging.info(f"Fetched {len(self.rawdata)} raw records from API.")
+        
+        api_name = self.api_call.__name__
+        DataExporter.export_with_processing(
+            self.rawdata, self.filename, sort_key=self.sort_key, api_function_name=api_name
+        )
+        print(f"! {len(self.rawdata)} records exported to {self.filename}")
+        
+        self._display_table()
+    
+    def _display_table(self) -> None:
+        """Prepare and display data in PrettyTable format."""
+        data = self._prepare_data_for_display()
         fields = DataProcessingUtils.get_unique_keys(data)
         logging.debug(f"Unique fields for table: {fields}")
-
-        # Prepare and display PrettyTable
+        
+        table = self._build_pretty_table(data, fields)
+        logging.debug("\n" + table.get_string())
+    
+    def _prepare_data_for_display(self) -> List[Dict[str, Any]]:
+        """Prepare raw data for table display."""
+        data = [entry for entry in self.rawdata if isinstance(entry, dict)]
+        
+        if self.sort_key:
+            sort_key_str: str = self.sort_key  # Type narrowing
+            data = sorted(data, key=lambda x: x.get(sort_key_str, ""))
+        
+        data = DataProcessingUtils.flatten_nested_fields(data)
+        data = DataProcessingUtils.escape_multiline(data)
+        return data
+    
+    def _build_pretty_table(self, data: List[Dict[str, Any]], fields: List[str]) -> Any:
+        """Build PrettyTable from processed data."""
         table = PrettyTable()
-        table.field_names = display_fields if display_fields else fields
+        table.field_names = self.display_fields if self.display_fields else fields
         table.valign = "t"
+        
         for item in tqdm(data, desc="Processing", unit="record"):
             row = [item.get(field, "") for field in table.field_names]
             table.add_row(row)
-        logging.debug("\n" + table.get_string())
-        logging.debug(f"EXIT: fetch_and_display_api_data - success")
-
-    except Exception as e:
-        logging.error(f"! Error during data fetch for {title}: {e}")
-        logging.error(f"Exception type: {type(e).__name__}, Traceback info available in logs")
         
-        # Always save whatever data was collected so far
-        if rawdata:
-            try:
-                DataExporter.save_data_to_output(rawdata, filename, api_function_name=api_call.__name__)
-                logging.info(f"Partial results saved to {filename} ({len(rawdata)} rows) using {api_call.__name__} strategy.")
-                print(f"\n!! PARTIAL DATA SAVED !!")
-                print(f"   * Despite the error, {len(rawdata)} records were successfully saved to {filename}")
-                print(f"   * Error: {str(e)}")
-                print(f"   * You can retry the operation later to get remaining data")
-            except Exception as save_error:
-                logging.error(f"Failed to save partial data in outer exception handler: {save_error}")
-                print(f"! Critical: Could not save partial data. Error: {save_error}")
-        else:
-            print(f"! No data was collected before the error occurred")
-            
-        logging.debug(f"EXIT: fetch_and_display_api_data - error")
-        raise
+        return table
+
 
 def execute_with_connection_pool_management(work_items: List[Any], worker_function: Any, batch_description: str = "items", retry_function: Optional[Any] = None) -> Tuple[List[Any], List[Any]]:
     """
@@ -9708,14 +9837,14 @@ class OrgExportUtils:
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()
         filename = f"Org{safe_data_type}.csv"
         
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
             sort_key=sort_key,
             limit=1000,
             **api_kwargs
-        )
+        ).execute()
     
     @staticmethod
     def wireless_clients():
@@ -10205,23 +10334,23 @@ class OrgExportUtils:
     def api_tokens():
         """Export organization API tokens to OrgApiTokens.csv."""
         logging.info("Starting export of organization api tokens...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Organization Api Tokens:",
             api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
             filename="OrgApiTokens.csv",
             sort_key="name"
-        )
+        ).execute()
     
     @staticmethod
     def admins():
         """Export organization admins to OrgAdmins.csv."""
         logging.info("Starting export of organization admins...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Organization Admins:",
             api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
             filename="OrgAdmins.csv",
             sort_key="name"
-        )
+        ).execute()
     
     @staticmethod
     def sso():
@@ -10236,12 +10365,12 @@ class OrgExportUtils:
     def usage():
         """Export organization usage data to OrgUsage.csv."""
         logging.info("Starting export of organization license usage...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Organization License Usage:",
             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
             filename="OrgUsage",
             sort_key="site_id"
-        )
+        ).execute()
         logging.info(" License usage data exported to OrgUsage")
         print(" License usage data exported to OrgUsage")
     
@@ -10476,16 +10605,16 @@ class OrgExportUtils:
         """
         Fetches and exports the list of all sites in the organization.
         Output format determined by global OUTPUT_FORMAT setting.
-        Uses fetch_and_display_api_data to handle API call and output writing.
+        Uses APIDataFetcher to handle API call and output writing.
         """
         logging.info("Starting export of organization site list...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Site List:",
             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
             filename="SiteList",
             sort_key="name",
             limit=1000
-        )
+        ).execute()
         output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
         logging.info(f"Completed site list export and wrote results to {output_desc}.")
     
@@ -10518,16 +10647,16 @@ class OrgExportUtils:
     def inventory():
         """
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
-        Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+        Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         logging.info("Starting export of organization device inventory...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
             filename="OrgInventory.csv",
             sort_key="model",
             limit=1000
-        )
+        ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
     
     @staticmethod
@@ -10553,7 +10682,7 @@ class OrgExportUtils:
         logging.info("Starting export of organization device statistics...")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org device statistics export", hours)
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Org Device Stats:",
             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
             filename=output_file,
@@ -10561,7 +10690,7 @@ class OrgExportUtils:
             type="all",
             duration=f"{hours}h",
             limit=1000
-        )
+        ).execute()
     
     @staticmethod
     def alarms():
@@ -10573,14 +10702,14 @@ class OrgExportUtils:
         TimeUtils.log_dynamic_lookback("open org alarms export", hours)
         logging.info(f"Starting search for all open org alarms in the past {hours} hours...")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="Search all Org Alarms:",
                 api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
                 filename="OrgAlarms.csv",
                 limit=1000,
                 duration=f"{hours}h",
                 status="open"
-            )
+            ).execute()
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
             logging.debug("EXIT: OrgExportUtils.alarms - success")
         except Exception as e:
@@ -10682,53 +10811,53 @@ class OrgExportUtils:
         """
         logging.info("Starting export of organization templates...")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="Gateway Templates:",
                 api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
                 filename="OrgGatewayTemplates.csv",
                 sort_key="name",
                 limit=1000
-            )
+            ).execute()
         except Exception as e:
             logging.error(f"Failed to export gateway templates: {e}")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="Network Templates:",
                 api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
                 filename="OrgNetworkTemplates.csv",
                 sort_key="name",
                 limit=1000
-            )
+            ).execute()
         except Exception as e:
             logging.error(f"Failed to export network templates: {e}")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="RF Templates:",
                 api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
                 filename="OrgRfTemplates.csv",
                 sort_key="name",
                 limit=1000
-            )
+            ).execute()
         except Exception as e:
             logging.error(f"Failed to export RF templates: {e}")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="Site Templates:",
                 api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
                 filename="OrgSiteTemplates.csv",
                 sort_key="name",
                 limit=1000
-            )
+            ).execute()
         except Exception as e:
             logging.error(f"Failed to export site templates: {e}")
         try:
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="AP Templates:",
                 api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
                 filename="OrgApTemplates.csv",
                 sort_key="name",
                 limit=1000
-            )
+            ).execute()
         except Exception as e:
             logging.error(f"Failed to export AP templates: {e}")
         logging.info(" Organization templates export completed")
@@ -10825,15 +10954,15 @@ class OrgExportUtils:
     def devices():
         """
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
-        Uses fetch_and_display_api_data to handle API call, CSV writing, and table display.
+        Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         logging.info("Starting export of all organization devices...")
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
             filename="OrgDevices.csv",
             sort_key="type"
-        )
+        ).execute()
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
     
     @staticmethod
@@ -10859,14 +10988,14 @@ class OrgExportUtils:
         logging.info("Starting export of organization VPN peer path statistics...")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)
-        fetch_and_display_api_data(
+        APIDataFetcher(
             title="Org VPN Peer Stats:",
             api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
             filename=output_file,
             sort_key="mac",
             duration=f"{hours}h",
             limit=1000
-        )
+        ).execute()
     
     @staticmethod
     def sites_with_location():
@@ -11409,14 +11538,14 @@ class OrgExportUtils:
                 print("! No port statistics collected. CSV not created.")
         else:
             # Non-fast mode: Original org-level search (serial pagination)
-            fetch_and_display_api_data(
+            APIDataFetcher(
                 title="Org Device Port Stats:",
                 api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
                 filename=output_file,
                 sort_key="mac",
                 duration=f"{hours}h",
                 limit=1000
-            )
+            ).execute()
     
     @staticmethod
     def sle_metrics():
@@ -11676,7 +11805,7 @@ class SiteExportUtils:
         filename = f"Site{safe_data_type}_{safe_site_name}.csv"
         
         # For site-specific API calls, we need to use a custom approach since
-        # fetch_and_display_api_data expects org_id as the second parameter
+        # APIDataFetcher expects org_id as the second parameter
         try:
             logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
             
@@ -22419,489 +22548,549 @@ class AddressComparisonCounters:
         logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
 
 
-def compare_inventory_with_csv(fast=False, address_check=False, debug=False, skip_ssl_verify=True):
+class InventoryCSVComparator:
     """
-    Compares combined inventory data with site info against a user-selected CSV file.
-    Shows items where addresses don't meet the configured similarity threshold.
-    Skips items that aren't in the comparison CSV file.
-    Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy address matching.
+    Compares Mist inventory data with external CSV files for address verification.
     
-    Enhanced with:
-    - Hardened address parsing with defensive error handling
-    - Comprehensive metrics and counters
-    - Parse failure artifact generation
-    - Improved logging and observability
-    - Better handling of "Unknown" addresses
-    - Unicode normalization and fuzzy matching improvements
+    Performs multi-step comparison workflow:
+    1. Load and parse Mist device data with site information
+    2. Select and load comparison CSV with automatic field detection
+    3. Parse and normalize addresses using enhanced parsing
+    4. Detect duplicate addresses between sites
+    5. Filter conflicts through skip list and deduplication
+    6. Optional external validation via Nominatim API
+    7. Generate comprehensive mismatch reports
     
-    Args:
-        fast (bool): If True, enables optimized data generation mode using cached data
-                    and concurrent processing where applicable.
-        address_check (bool): If True, enables external address validation using Nominatim API.
-                             Overrides ENABLE_ADDRESS_VALIDATION setting from .env file.
-        debug (bool): If True, enables detailed debug logging for API requests and responses.
-        skip_ssl_verify (bool): If True, skips SSL certificate verification for external APIs.
+    Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy matching.
     """
-    # Initialize counters for comprehensive tracking
-    counters = AddressComparisonCounters()
-    counters.start_timing()
-    parse_failures = []  # Track parsing failures for artifact generation
-
-    # Load environment variables
-    load_dotenv()
-    END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
-    END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
     
-    # Get configurable address match threshold (default: 75%)
-    ADDRESS_MATCH_THRESHOLD = float(os.getenv("ADDRESS_MATCH_THRESHOLD", "75"))
-
-    print("* Data Integrity Analysis: Comparing Mist vs Comparison CSV addresses...")
-    print(f"* Using address similarity threshold: {ADDRESS_MATCH_THRESHOLD}% (conflicts below this will be flagged)")
-    print(f"* Enhanced features: defensive parsing, Unicode normalization, fuzzy matching")
-    if fast:
-        print("* Fast mode enabled: Using optimized data generation and caching")
-    if debug:
-        print(" Debug mode enabled: Detailed comparison logging active")
-        logging.debug("ENTRY: compare_inventory_with_csv()")
-        logging.debug(f"  Parameters: fast={fast}, address_check={address_check}, debug={debug}")
-        logging.debug(f"  ADDRESS_MATCH_THRESHOLD={ADDRESS_MATCH_THRESHOLD}")
-    
-    # Check if address validation is enabled
-    address_validation_enabled = address_check or os.getenv("ENABLE_ADDRESS_VALIDATION", "false").lower() == "true"
-    
-    if address_validation_enabled:
-        source = "--address-check flag" if address_check else ".env file"
-        print(f"! External address validation enabled via {source}")
-        print(f"   Address conflicts will be validated using Nominatim API")
-        if debug:
-            logging.debug(f"Address validation enabled via {source}")
-    else:
-        print("  External address validation disabled")
-        print("   Use --address-check flag or set ENABLE_ADDRESS_VALIDATION=true in .env to enable intelligent address recommendations")
-        if debug:
-            logging.debug("Address validation disabled")
-    
-    # Use efficient caching instead of always regenerating fresh data
-    CacheUtils.check_and_generate_csv("AllDevicesWithSiteInfo.csv", lambda: OrgExportUtils.devices_with_site_info(fast=fast))
-
-    # Load the enriched device + site info
-    devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
-    with open(devices_with_site_info_path, mode="r", encoding="utf-8") as f:
-        site_configs = list(csv.DictReader(f))
-
-    # Find all CSV files in the data directory
-    data_dir = "data"
-    csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
-    # Remove path prefix and exclude our source file
-    csv_files = [os.path.basename(f) for f in csv_files if os.path.basename(f) != "AllDevicesWithSiteInfo.csv"]
-    
-    if not csv_files:
-        print(" No CSV files found in the data directory for comparison.")
-        print(f"   Please place comparison CSV files in the '{data_dir}' folder.")
-        logging.error("No CSV files found for comparison in data directory.")
-        return
-
-    # Present CSV files to user for selection
-    print("\n  Available CSV files for comparison:")
-    print("=" * 60)
-    for idx, csv_file in enumerate(csv_files):
-        print(f"[{idx}] {csv_file}")
-    
-    try:
-        user_input = input(f"\nEnter the index (0-{len(csv_files)-1}) of the CSV file to compare against: ").strip()
-        selected_index = int(user_input)
+    def __init__(self, fast: bool = False, address_check: bool = False,
+                 debug: bool = False, skip_ssl_verify: bool = True):
+        """
+        Initialize the inventory comparator with configuration options.
         
-        if selected_index < 0 or selected_index >= len(csv_files):
-            print(" Invalid index selected.")
-            logging.error(f"Invalid CSV file index selected: {selected_index}")
+        Args:
+            fast: Enable optimized data generation with caching
+            address_check: Enable external address validation via Nominatim
+            debug: Enable detailed debug logging
+            skip_ssl_verify: Skip SSL verification for external APIs
+        """
+        self.fast = fast
+        self.address_check = address_check
+        self.debug = debug
+        self.skip_ssl_verify = skip_ssl_verify
+        
+        # Configuration loaded from environment
+        self.address_threshold = 75.0
+        self.end_customer_name = ""
+        self.end_customer_account_id = ""
+        self.address_validation_enabled = False
+        
+        # Data containers
+        self.site_configs: List[Dict[str, Any]] = []
+        self.comparison_data: List[Dict[str, Any]] = []
+        self.skip_addresses: List[Dict[str, Any]] = []
+        self.comparison_file = ""
+        
+        # Field mappings from comparison CSV
+        self.serial_field: Optional[str] = None
+        self.zip_field: Optional[str] = None
+        self.address_field: Optional[str] = None
+        self.city_field: Optional[str] = None
+        self.state_field: Optional[str] = None
+        self.country_field: Optional[str] = None
+        
+        # Lookup dictionaries
+        self.comparison_serials: Dict[str, str] = {}
+        self.comparison_address_lookup: Dict[str, Dict[str, str]] = {}
+        
+        # Duplicate detection results
+        self.mist_duplicates: Dict[str, List[str]] = {}
+        self.ref_duplicates: Dict[str, List[str]] = {}
+        
+        # Processing state
+        self.counters = AddressComparisonCounters()
+        self.parse_failures: List[Dict[str, Any]] = []
+        self.all_conflicts: List[Dict[str, Any]] = []
+        self.filtered_conflicts: List[Dict[str, Any]] = []
+        self.mismatched_items: List[Dict[str, Any]] = []
+        self.diff_report_items: List[Dict[str, Any]] = []
+    
+    def execute(self) -> None:
+        """Execute the complete inventory comparison workflow."""
+        self.counters.start_timing()
+        
+        if not self._initialize_config():
             return
-            
-        comparison_file = csv_files[selected_index]
-        print(f"! Selected comparison file: {comparison_file}")
-        logging.info(f"User selected comparison file: {comparison_file}")
         
-    except ValueError:
-        print(" Invalid input. Please enter a numeric index.")
-        logging.error("Invalid numeric input for CSV file selection.")
-        return
-    except KeyboardInterrupt:
-        print("\n Operation cancelled by user.")
-        logging.info("CSV comparison operation cancelled by user.")
-        return
-
-    # Load the comparison CSV file
-    try:
-        comparison_file_path = FilePathUtils.get_csv_path(comparison_file)
-        with open(comparison_file_path, mode="r", encoding="utf-8") as f:
-            comparison_data = list(csv.DictReader(f))
-    except Exception as e:
-        print(f"! Error reading comparison file {comparison_file}: {e}")
-        logging.error(f"Error reading comparison file {comparison_file}: {e}")
-        return
-
-    print(f"! Loaded {len(site_configs)} devices from AllDevicesWithSiteInfo.csv")
-    print(f"! Loaded {len(comparison_data)} records from {comparison_file}")
-
-    # Load the address skip list for automatic corrections
-    skip_addresses = []
-    skip_file_path = FilePathUtils.get_csv_path("AddressSkip.csv")
-    try:
-        with open(skip_file_path, mode="r", encoding="utf-8") as f:
-            skip_data = list(csv.DictReader(f))
-            skip_addresses = skip_data
-        print(f"! Loaded {len(skip_addresses)} skip addresses from AddressSkip.csv")
-        if debug:
-            logging.debug(f"Loaded {len(skip_addresses)} addresses to skip from AddressSkip.csv")
-    except FileNotFoundError:
-        print("  AddressSkip.csv not found - no addresses will be automatically skipped")
-        if debug:
-            logging.debug("AddressSkip.csv not found - continuing without skip list")
-    except Exception as e:
-        print(f"!  Error loading AddressSkip.csv: {e}")
-        logging.warning(f"Error loading AddressSkip.csv: {e}")
-
-    # Create lookup dictionaries for comparison data
-    # Try common field names for serial number and zip code
-    comparison_serials = {}
-    comparison_zip_lookup = {}
-    
-    # Detect field names in comparison CSV
-    if not comparison_data:
-        print(" Comparison CSV file is empty.")
-        return
+        if not self._load_source_data():
+            return
         
-    comparison_headers = comparison_data[0].keys()
-    
-    # Try to find serial number field
-    serial_field = None
-    for header in comparison_headers:
-        if any(term in header.lower() for term in ['serial', 'sn', 'system serial']):
-            serial_field = header
-            break
-    
-    # Try to find zip code field  
-    zip_field = None
-    for header in comparison_headers:
-        if any(term in header.lower() for term in ['zip', 'postal', 'zip code', 'postal code']):
-            zip_field = header
-            break
-
-    # Try to find address fields
-    address_field = None
-    city_field = None
-    state_field = None
-    country_field = None
-    
-    for header in comparison_headers:
-        if any(term in header.lower() for term in ['address', 'street', 'address line']):
-            address_field = header
-        elif any(term in header.lower() for term in ['city']):
-            city_field = header
-        elif any(term in header.lower() for term in ['state']):
-            state_field = header
-        elif any(term in header.lower() for term in ['country']):
-            country_field = header
-
-    if not serial_field:
-        print(" Could not find serial number field in comparison CSV.")
-        print("   Looked for fields containing: 'serial', 'sn', 'system serial'")
-        print(f"   Available fields: {list(comparison_headers)}")
-        logging.error(f"Serial field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
-        return
+        if not self._select_comparison_file():
+            return
         
-    if not zip_field:
-        print(" Could not find zip code field in comparison CSV.")
-        print("   Looked for fields containing: 'zip', 'postal', 'zip code', 'postal code'")
-        print(f"   Available fields: {list(comparison_headers)}")
-        logging.error(f"Zip field not found in {comparison_file}. Available fields: {list(comparison_headers)}")
-        return
-
-    print(f"! Using serial field: '{serial_field}'")
-    print(f"! Using zip field: '{zip_field}'")
-    if address_field:
-        print(f"! Using address field: '{address_field}'")
-    if city_field:
-        print(f"! Using city field: '{city_field}'")
-    if state_field:
-        print(f"! Using state field: '{state_field}'")
-    if country_field:
-        print(f"! Using country field: '{country_field}'")
-
-    # Build lookup dictionaries from comparison data
-    comparison_address_lookup = {}  # serial -> full address info from comparison CSV
-    for row in comparison_data:
-        serial = row.get(serial_field, "").strip()
-        zip_code = row.get(zip_field, "").strip()
-        if serial:
-            # Normalize zip code for comparison
-            normalized_zip = AddressUtils.normalize_zip(zip_code)
-            comparison_serials[serial] = normalized_zip
-            # Store full address info for diff report
-            comparison_address_lookup[serial] = {
-                "Address": row.get(address_field, "") if address_field else "",
-                "City": row.get(city_field, "") if city_field else "",
-                "State": row.get(state_field, "") if state_field else "",
-                "Country": row.get(country_field, "") if country_field else "",
-                "Zip": zip_code
-            }
-
-    print(f"! Built comparison lookup with {len(comparison_serials)} serial numbers")
-    
-    # Show validation count if address validation is enabled
-    if address_validation_enabled:
-        validation_count = len([d for d in site_configs if d.get('serial', '').strip() in comparison_serials])
-        print(f"! Will validate {validation_count} address conflicts using Nominatim API")
-
-    # Duplicate address detection between sites
-    print("\n  Checking for duplicate addresses between sites...")
-    
-    # Get unique address per site for Mist data
-    mist_site_addresses = {}  # site_name -> address_key
-    for device in site_configs:
-        site_name = device.get("site_name", "")
-        if not site_name or site_name in mist_site_addresses:
-            continue  # Skip if already processed this site
-            
-        mist_address = {
-            'address': device.get("street", "").strip(),
-            'city': device.get("city", "").strip(),
-            'state': device.get("state", "").strip(),
-            'zip': device.get("zip_code", "").strip()
-        }
+        if not self._load_comparison_data():
+            return
         
-        # Skip empty addresses
-        if not any([mist_address['address'], mist_address['city'], mist_address['state'], mist_address['zip']]):
-            continue
+        self._load_skip_addresses()
         
-        # Create normalized address key
-        address_key = f"{mist_address['address'].lower()}|{mist_address['city'].lower()}|{mist_address['state'].lower()}|{mist_address['zip']}"
-        mist_site_addresses[site_name] = {
-            'address_key': address_key,
-            'address': mist_address
-        }
-    
-    # Find duplicate addresses between Mist sites
-    mist_address_to_sites = {}  # address_key -> [list of site names]
-    for site_name, addr_data in mist_site_addresses.items():
-        address_key = addr_data['address_key']
-        if address_key not in mist_address_to_sites:
-            mist_address_to_sites[address_key] = []
-        mist_address_to_sites[address_key].append(site_name)
-    
-    mist_duplicates = {addr_key: sites for addr_key, sites in mist_address_to_sites.items() if len(sites) > 1}
-    
-    # Get unique address per site for reference data
-    ref_site_addresses = {}  # site_name -> address_key
-    for device in site_configs:
-        device_serial = device.get("serial", "").strip()
-        site_name = device.get("site_name", "")
+        if not self._detect_csv_fields():
+            return
         
-        if not site_name or site_name in ref_site_addresses or device_serial not in comparison_address_lookup:
-            continue  # Skip if already processed this site or no reference data
-            
-        ref_data = comparison_address_lookup[device_serial]
-        ref_address = {
-            'address': ref_data.get("Address", "").strip(),
-            'city': ref_data.get("City", "").strip(),
-            'state': ref_data.get("State", "").strip(),
-            'zip': ref_data.get("Zip", "").strip()
-        }
+        self._build_lookup_dictionaries()
+        self._detect_duplicate_addresses()
+        self._process_all_devices()
+        self._filter_conflicts()
+        self._process_remaining_conflicts()
+        self._finalize_and_display_results()
+    
+    # =========================================================================
+    # INITIALIZATION METHODS
+    # =========================================================================
+    
+    def _initialize_config(self) -> bool:
+        """Load environment configuration and display header."""
+        load_dotenv()
+        self.end_customer_name = os.getenv("END_CUSTOMER_NAME", "")
+        self.end_customer_account_id = os.getenv("END_CUSTOMER_ACCOUNT_ID", "")
+        self.address_threshold = float(os.getenv("ADDRESS_MATCH_THRESHOLD", "75"))
         
-        # Skip empty addresses
-        if not any([ref_address['address'], ref_address['city'], ref_address['state'], ref_address['zip']]):
-            continue
+        self._print_header()
+        self._determine_validation_mode()
+        return True
+    
+    def _print_header(self) -> None:
+        """Display the operation header with configuration info."""
+        print("* Data Integrity Analysis: Comparing Mist vs Comparison CSV addresses...")
+        print(f"* Using address similarity threshold: {self.address_threshold}%")
+        print("* Enhanced features: defensive parsing, Unicode normalization, fuzzy matching")
         
-        # Create normalized address key
-        address_key = f"{ref_address['address'].lower()}|{ref_address['city'].lower()}|{ref_address['state'].lower()}|{ref_address['zip']}"
-        ref_site_addresses[site_name] = {
-            'address_key': address_key,
-            'address': ref_address
-        }
-    
-    # Find duplicate addresses between reference sites
-    ref_address_to_sites = {}  # address_key -> [list of site names]
-    for site_name, addr_data in ref_site_addresses.items():
-        address_key = addr_data['address_key']
-        if address_key not in ref_address_to_sites:
-            ref_address_to_sites[address_key] = []
-        ref_address_to_sites[address_key].append(site_name)
-    
-    ref_duplicates = {addr_key: sites for addr_key, sites in ref_address_to_sites.items() if len(sites) > 1}
-    
-    # Report results
-    if mist_duplicates:
-        print("    Mist sites sharing the same address:")
-        for addr_key, sites in mist_duplicates.items():
-            # Get the actual address for display
-            sample_site = sites[0]
-            addr = mist_site_addresses[sample_site]['address']
-            print(f"        Address: {addr['address']}, {addr['city']}, {addr['state']} {addr['zip']}")
-            print(f"        Sites ({len(sites)}): {', '.join(sites)}")
-    
-    if ref_duplicates:
-        print("    Reference sites sharing the same address:")
-        for addr_key, sites in ref_duplicates.items():
-            # Get the actual address for display
-            sample_site = sites[0]
-            addr = ref_site_addresses[sample_site]['address']
-            print(f"        Address: {addr['address']}, {addr['city']}, {addr['state']} {addr['zip']}")
-            print(f"        Sites ({len(sites)}): {', '.join(sites)}")
-    
-    # Summary
-    if not mist_duplicates and not ref_duplicates:
-        print("    No duplicate addresses found between sites")
-    else:
-        print(f"     Found {len(mist_duplicates)} Mist address duplications affecting {sum(len(sites) for sites in mist_duplicates.values())} sites")
-        print(f"     Found {len(ref_duplicates)} reference address duplications affecting {sum(len(sites) for sites in ref_duplicates.values())} sites")
-        if debug:
-            logging.info(f"DUPLICATE_CHECK: Found {len(mist_duplicates)} Mist duplicates and {len(ref_duplicates)} reference duplicates between sites")
-
-    # Process device data and find address mismatches using configurable threshold
-    # IMPROVED ORDER OF OPERATIONS:
-    # 1. Fix both addresses first (normalize, parse, clean up)  
-    # 2. Remove duplicates (addresses that are the same after normalization)
-    # 3. Remove addresses in skip file (known problematic addresses)
-    # 4. Then validate remaining conflicts with external API
-    
-    mismatched_items = []
-    diff_report_items = []
-    skipped_count = 0
-    validation_count = 0
-    devices_needing_validation = []  # Will be populated after filtering
-    
-    print(f"\n  Processing {len(site_configs)} total devices with improved order of operations...")
-    print(" Step 1: Parsing and normalizing all addresses...")
-    
-    # Step 1: Process all devices, fix addresses, and identify initial mismatches
-    all_conflicts = []  # Store all conflicts before filtering
-    counters.total_devices = len(site_configs)
-    first_missing_name_warned = False
-    
-    for device in tqdm(site_configs, desc="Step 1: Parsing Addresses", unit="device"):
-        device_serial = device.get("serial", "").strip()
-        device_identifier = DeviceUtils.get_device_identifier(device, warn_on_missing=not first_missing_name_warned)
+        if self.fast:
+            print("* Fast mode enabled: Using optimized data generation and caching")
         
-        if not first_missing_name_warned and device_identifier != device.get("name", "").strip():
-            first_missing_name_warned = True
+        if self.debug:
+            print(" Debug mode enabled: Detailed comparison logging active")
+            logging.debug("ENTRY: InventoryCSVComparator.execute()")
+            logging.debug(f"  Parameters: fast={self.fast}, address_check={self.address_check}")
+            logging.debug(f"  ADDRESS_MATCH_THRESHOLD={self.address_threshold}")
+    
+    def _determine_validation_mode(self) -> None:
+        """Determine if external address validation is enabled."""
+        env_enabled = os.getenv("ENABLE_ADDRESS_VALIDATION", "false").lower() == "true"
+        self.address_validation_enabled = self.address_check or env_enabled
         
-        # Skip if device serial not in comparison file
-        if device_serial not in comparison_serials:
-            counters.devices_skipped += 1
-            if debug:
-                logging.debug(f"DEVICE_SKIP [{device_serial}]: Not found in comparison CSV (available: {len(comparison_serials)} serials)")
-            continue
+        if self.address_validation_enabled:
+            source = "--address-check flag" if self.address_check else ".env file"
+            print(f"! External address validation enabled via {source}")
+            print("   Address conflicts will be validated using Nominatim API")
+            if self.debug:
+                logging.debug(f"Address validation enabled via {source}")
+        else:
+            print("  External address validation disabled")
+            print("   Use --address-check flag or set ENABLE_ADDRESS_VALIDATION=true")
+            if self.debug:
+                logging.debug("Address validation disabled")
+    
+    # =========================================================================
+    # DATA LOADING METHODS
+    # =========================================================================
+    
+    def _load_source_data(self) -> bool:
+        """Load Mist device data with site information."""
+        generator = lambda: OrgExportUtils.devices_with_site_info(fast=self.fast)
+        CacheUtils.check_and_generate_csv("AllDevicesWithSiteInfo.csv", generator)
         
-        counters.devices_enriched += 1
+        devices_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
+        with open(devices_path, mode="r", encoding="utf-8") as file_handle:
+            self.site_configs = list(csv.DictReader(file_handle))
         
-        # Enhanced address parsing with error handling
+        return True
+    
+    def _select_comparison_file(self) -> bool:
+        """Present CSV file selection to user and get selection."""
+        csv_files = self._get_available_csv_files()
+        
+        if not csv_files:
+            print(" No CSV files found in the data directory for comparison.")
+            print("   Please place comparison CSV files in the 'data' folder.")
+            logging.error("No CSV files found for comparison in data directory.")
+            return False
+        
+        self._display_csv_file_list(csv_files)
+        return self._get_user_csv_selection(csv_files)
+    
+    def _get_available_csv_files(self) -> List[str]:
+        """Get list of CSV files available for comparison."""
+        data_dir = "data"
+        csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
+        exclude_file = "AllDevicesWithSiteInfo.csv"
+        return [os.path.basename(f) for f in csv_files if os.path.basename(f) != exclude_file]
+    
+    def _display_csv_file_list(self, csv_files: List[str]) -> None:
+        """Display available CSV files for user selection."""
+        print("\n  Available CSV files for comparison:")
+        print("=" * 60)
+        for idx, csv_file in enumerate(csv_files):
+            print(f"[{idx}] {csv_file}")
+    
+    def _get_user_csv_selection(self, csv_files: List[str]) -> bool:
+        """Get and validate user's CSV file selection."""
         try:
-            # Parse Mist address with enhanced parsing
-            mist_address_raw = device.get("site_address", "").strip()
-            if not mist_address_raw:
-                # Fall back to component parsing if no combined address
-                mist_address = {
-                    'address': device.get("street", "").strip(),
-                    'city': device.get("city", "").strip(),
-                    'state': device.get("state", "").strip(),
-                    'zip': device.get("zip_code", "").strip()
-                }
-            else:
-                # Use enhanced parsing for combined address
-                parsed_mist = AddressUtils.enhanced_parse(mist_address_raw, debug=debug)
-                if not parsed_mist['is_parseable']:
-                    # Document parsing failure
-                    failure_record = {
-                        'site_id': device.get("site_id", ""),
-                        'site_name': device.get("site_name", ""),
-                        'device_id': device.get("id", ""),
-                        'device_serial': device_serial,
-                        'device_name': device_identifier,
-                        'original_address': mist_address_raw,
-                        'parsed_tokens': str(mist_address_raw.split(',')),
-                        'failure_reason': parsed_mist['parse_reason'],
-                        'timestamp': datetime.now(timezone.utc).isoformat()
-                    }
-                    parse_failures.append(failure_record)
-                    counters.increment_parse_failure(parsed_mist['parse_reason'])
-                    
-                    # Fall back to component parsing
-                    mist_address = {
-                        'address': device.get("street", "").strip(),
-                        'city': device.get("city", "").strip(),
-                        'state': device.get("state", "").strip(),
-                        'zip': device.get("zip_code", "").strip()
-                    }
-                else:
-                    mist_address = {
-                        'address': parsed_mist.get('address') or "",
-                        'city': parsed_mist.get('city') or "",
-                        'state': parsed_mist.get('state') or "",
-                        'zip': parsed_mist.get('zip') or ""
-                    }
+            prompt = f"\nEnter the index (0-{len(csv_files)-1}) of the CSV file to compare against: "
+            user_input = input(prompt).strip()
+            selected_index = int(user_input)
             
-            # Parse comparison address
-            comparison_address_data = comparison_address_lookup.get(device_serial, {})
+            if selected_index < 0 or selected_index >= len(csv_files):
+                print(" Invalid index selected.")
+                logging.error(f"Invalid CSV file index selected: {selected_index}")
+                return False
             
-            # Additional safety check: if no comparison data found, skip this device
-            if not comparison_address_data or not any(comparison_address_data.values()):
-                counters.devices_skipped += 1
-                if debug:
-                    logging.debug(f"DEVICE_SKIP [{device_serial}]: No comparison address data found")
+            self.comparison_file = csv_files[selected_index]
+            print(f"! Selected comparison file: {self.comparison_file}")
+            logging.info(f"User selected comparison file: {self.comparison_file}")
+            return True
+            
+        except ValueError:
+            print(" Invalid input. Please enter a numeric index.")
+            logging.error("Invalid numeric input for CSV file selection.")
+            return False
+        except KeyboardInterrupt:
+            print("\n Operation cancelled by user.")
+            logging.info("CSV comparison operation cancelled by user.")
+            return False
+    
+    def _load_comparison_data(self) -> bool:
+        """Load the selected comparison CSV file."""
+        try:
+            comparison_path = FilePathUtils.get_csv_path(self.comparison_file)
+            with open(comparison_path, mode="r", encoding="utf-8") as file_handle:
+                self.comparison_data = list(csv.DictReader(file_handle))
+            
+            print(f"! Loaded {len(self.site_configs)} devices from AllDevicesWithSiteInfo.csv")
+            print(f"! Loaded {len(self.comparison_data)} records from {self.comparison_file}")
+            return True
+            
+        except Exception as error:
+            print(f"! Error reading comparison file {self.comparison_file}: {error}")
+            logging.error(f"Error reading comparison file {self.comparison_file}: {error}")
+            return False
+    
+    def _load_skip_addresses(self) -> None:
+        """Load the address skip list for automatic corrections."""
+        skip_file_path = FilePathUtils.get_csv_path("AddressSkip.csv")
+        try:
+            with open(skip_file_path, mode="r", encoding="utf-8") as file_handle:
+                self.skip_addresses = list(csv.DictReader(file_handle))
+            print(f"! Loaded {len(self.skip_addresses)} skip addresses from AddressSkip.csv")
+            if self.debug:
+                logging.debug(f"Loaded {len(self.skip_addresses)} addresses to skip")
+        except FileNotFoundError:
+            print("  AddressSkip.csv not found - no addresses will be automatically skipped")
+            if self.debug:
+                logging.debug("AddressSkip.csv not found - continuing without skip list")
+        except Exception as error:
+            print(f"!  Error loading AddressSkip.csv: {error}")
+            logging.warning(f"Error loading AddressSkip.csv: {error}")
+    
+    # =========================================================================
+    # FIELD DETECTION METHODS
+    # =========================================================================
+    
+    def _detect_csv_fields(self) -> bool:
+        """Detect and validate required fields in comparison CSV."""
+        if not self.comparison_data:
+            print(" Comparison CSV file is empty.")
+            return False
+        
+        headers = self.comparison_data[0].keys()
+        
+        self._detect_serial_field(headers)
+        self._detect_zip_field(headers)
+        self._detect_address_fields(headers)
+        
+        if not self._validate_required_fields(headers):
+            return False
+        
+        self._print_detected_fields()
+        return True
+    
+    def _detect_serial_field(self, headers) -> None:
+        """Detect the serial number field in comparison CSV."""
+        serial_terms = ['serial', 'sn', 'system serial']
+        for header in headers:
+            if any(term in header.lower() for term in serial_terms):
+                self.serial_field = header
+                break
+    
+    def _detect_zip_field(self, headers) -> None:
+        """Detect the zip code field in comparison CSV."""
+        zip_terms = ['zip', 'postal', 'zip code', 'postal code']
+        for header in headers:
+            if any(term in header.lower() for term in zip_terms):
+                self.zip_field = header
+                break
+    
+    def _detect_address_fields(self, headers) -> None:
+        """Detect address component fields in comparison CSV."""
+        for header in headers:
+            header_lower = header.lower()
+            if any(term in header_lower for term in ['address', 'street', 'address line']):
+                self.address_field = header
+            elif 'city' in header_lower:
+                self.city_field = header
+            elif 'state' in header_lower:
+                self.state_field = header
+            elif 'country' in header_lower:
+                self.country_field = header
+    
+    def _validate_required_fields(self, headers) -> bool:
+        """Validate that required fields were detected."""
+        if not self.serial_field:
+            print(" Could not find serial number field in comparison CSV.")
+            print("   Looked for fields containing: 'serial', 'sn', 'system serial'")
+            print(f"   Available fields: {list(headers)}")
+            logging.error(f"Serial field not found. Available fields: {list(headers)}")
+            return False
+        
+        if not self.zip_field:
+            print(" Could not find zip code field in comparison CSV.")
+            print("   Looked for fields containing: 'zip', 'postal', 'zip code', 'postal code'")
+            print(f"   Available fields: {list(headers)}")
+            logging.error(f"Zip field not found. Available fields: {list(headers)}")
+            return False
+        
+        return True
+    
+    def _print_detected_fields(self) -> None:
+        """Print the detected field mappings."""
+        print(f"! Using serial field: '{self.serial_field}'")
+        print(f"! Using zip field: '{self.zip_field}'")
+        if self.address_field:
+            print(f"! Using address field: '{self.address_field}'")
+        if self.city_field:
+            print(f"! Using city field: '{self.city_field}'")
+        if self.state_field:
+            print(f"! Using state field: '{self.state_field}'")
+        if self.country_field:
+            print(f"! Using country field: '{self.country_field}'")
+    
+    # =========================================================================
+    # LOOKUP BUILDER METHODS
+    # =========================================================================
+    
+    def _build_lookup_dictionaries(self) -> None:
+        """Build lookup dictionaries from comparison data."""
+        for row in self.comparison_data:
+            serial = row.get(self.serial_field, "").strip() if self.serial_field else ""
+            zip_code = row.get(self.zip_field, "").strip() if self.zip_field else ""
+            
+            if serial:
+                normalized_zip = AddressUtils.normalize_zip(zip_code)
+                self.comparison_serials[serial] = normalized_zip
+                self.comparison_address_lookup[serial] = self._extract_address_from_row(row, zip_code)
+        
+        print(f"! Built comparison lookup with {len(self.comparison_serials)} serial numbers")
+        
+        if self.address_validation_enabled:
+            validation_count = self._count_devices_for_validation()
+            print(f"! Will validate {validation_count} address conflicts using Nominatim API")
+    
+    def _extract_address_from_row(self, row: Dict[str, Any], zip_code: str) -> Dict[str, str]:
+        """Extract address components from a comparison CSV row."""
+        return {
+            "Address": row.get(self.address_field, "") if self.address_field else "",
+            "City": row.get(self.city_field, "") if self.city_field else "",
+            "State": row.get(self.state_field, "") if self.state_field else "",
+            "Country": row.get(self.country_field, "") if self.country_field else "",
+            "Zip": zip_code
+        }
+    
+    def _count_devices_for_validation(self) -> int:
+        """Count devices that will need external validation."""
+        count = 0
+        for device in self.site_configs:
+            serial = device.get('serial', '').strip()
+            if serial in self.comparison_serials:
+                count += 1
+        return count
+    
+    # =========================================================================
+    # DUPLICATE DETECTION METHODS
+    # =========================================================================
+    
+    def _detect_duplicate_addresses(self) -> None:
+        """Detect duplicate addresses between sites."""
+        print("\n  Checking for duplicate addresses between sites...")
+        
+        mist_site_addresses = self._build_mist_site_addresses()
+        self.mist_duplicates = self._find_duplicates(mist_site_addresses)
+        
+        ref_site_addresses = self._build_ref_site_addresses()
+        self.ref_duplicates = self._find_duplicates(ref_site_addresses)
+        
+        self._report_duplicates(mist_site_addresses, ref_site_addresses)
+    
+    def _build_mist_site_addresses(self) -> Dict[str, Dict[str, Any]]:
+        """Build address mapping for Mist sites."""
+        site_addresses = {}
+        for device in self.site_configs:
+            site_name = device.get("site_name", "")
+            if not site_name or site_name in site_addresses:
                 continue
             
-            comparison_address_raw = f"{comparison_address_data.get('Address', '')}, {comparison_address_data.get('City', '')}, {comparison_address_data.get('State', '')}, {comparison_address_data.get('Zip', '')}".strip(", ")
-            
-            if comparison_address_raw and comparison_address_raw != "   ":
-                parsed_comp = AddressUtils.enhanced_parse(comparison_address_raw, debug=debug)
-                if not parsed_comp['is_parseable']:
-                    # Document parsing failure for comparison address
-                    failure_record = {
-                        'site_id': 'COMPARISON_CSV',
-                        'site_name': 'COMPARISON_CSV', 
-                        'device_id': device_serial,
-                        'device_serial': device_serial,
-                        'device_name': device_identifier,
-                        'original_address': comparison_address_raw,
-                        'parsed_tokens': str(comparison_address_raw.split(',')),
-                        'failure_reason': parsed_comp['parse_reason'],
-                        'timestamp': datetime.now(timezone.utc).isoformat()
-                    }
-                    parse_failures.append(failure_record)
-                    counters.increment_parse_failure(f"comparison_{parsed_comp['parse_reason']}")
-            
-            comparison_address = {
-                'address': comparison_address_data.get("Address", "").strip(),
-                'city': comparison_address_data.get("City", "").strip(),
-                'state': comparison_address_data.get("State", "").strip(),
-                'zip': comparison_address_data.get("Zip", "").strip()
+            mist_address = {
+                'address': device.get("street", "").strip(),
+                'city': device.get("city", "").strip(),
+                'state': device.get("state", "").strip(),
+                'zip': device.get("zip_code", "").strip()
             }
             
-            # Validate that we have meaningful comparison data
-            if not any([comparison_address['address'], comparison_address['city'], comparison_address['state'], comparison_address['zip']]):
-                counters.devices_skipped += 1
-                if debug:
-                    logging.debug(f"DEVICE_SKIP [{device_serial}]: Empty comparison address data")
+            if not any(mist_address.values()):
                 continue
             
-            if debug:
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Mist address: {mist_address}")
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Comparison address: {comparison_address}")
+            address_key = self._create_address_key(mist_address)
+            site_addresses[site_name] = {'address_key': address_key, 'address': mist_address}
+        
+        return site_addresses
+    
+    def _build_ref_site_addresses(self) -> Dict[str, Dict[str, Any]]:
+        """Build address mapping for reference sites."""
+        site_addresses = {}
+        for device in self.site_configs:
+            device_serial = device.get("serial", "").strip()
+            site_name = device.get("site_name", "")
             
-            # Enhanced address comparison with defensive parsing
-            comparison_result = AddressUtils.compare_with_threshold(
-                mist_address, comparison_address, ADDRESS_MATCH_THRESHOLD, debug=debug
+            if not site_name or site_name in site_addresses:
+                continue
+            if device_serial not in self.comparison_address_lookup:
+                continue
+            
+            ref_data = self.comparison_address_lookup[device_serial]
+            ref_address = {
+                'address': ref_data.get("Address", "").strip(),
+                'city': ref_data.get("City", "").strip(),
+                'state': ref_data.get("State", "").strip(),
+                'zip': ref_data.get("Zip", "").strip()
+            }
+            
+            if not any(ref_address.values()):
+                continue
+            
+            address_key = self._create_address_key(ref_address)
+            site_addresses[site_name] = {'address_key': address_key, 'address': ref_address}
+        
+        return site_addresses
+    
+    def _create_address_key(self, address: Dict[str, str]) -> str:
+        """Create a normalized address key for deduplication."""
+        return (f"{address['address'].lower()}|{address['city'].lower()}|"
+                f"{address['state'].lower()}|{address['zip']}")
+    
+    def _find_duplicates(self, site_addresses: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
+        """Find addresses shared by multiple sites."""
+        address_to_sites: Dict[str, List[str]] = {}
+        for site_name, addr_data in site_addresses.items():
+            address_key = addr_data['address_key']
+            if address_key not in address_to_sites:
+                address_to_sites[address_key] = []
+            address_to_sites[address_key].append(site_name)
+        
+        return {key: sites for key, sites in address_to_sites.items() if len(sites) > 1}
+    
+    def _report_duplicates(self, mist_addresses: Dict[str, Dict[str, Any]],
+                           ref_addresses: Dict[str, Dict[str, Any]]) -> None:
+        """Report duplicate address findings."""
+        if self.mist_duplicates:
+            self._print_duplicate_group("Mist", self.mist_duplicates, mist_addresses)
+        
+        if self.ref_duplicates:
+            self._print_duplicate_group("Reference", self.ref_duplicates, ref_addresses)
+        
+        if not self.mist_duplicates and not self.ref_duplicates:
+            print("    No duplicate addresses found between sites")
+        else:
+            self._print_duplicate_summary()
+    
+    def _print_duplicate_group(self, source: str, duplicates: Dict[str, List[str]],
+                                addresses: Dict[str, Dict[str, Any]]) -> None:
+        """Print a group of duplicate addresses."""
+        print(f"    {source} sites sharing the same address:")
+        for addr_key, sites in duplicates.items():
+            sample_site = sites[0]
+            addr = addresses[sample_site]['address']
+            print(f"        Address: {addr['address']}, {addr['city']}, {addr['state']} {addr['zip']}")
+            print(f"        Sites ({len(sites)}): {', '.join(sites)}")
+    
+    def _print_duplicate_summary(self) -> None:
+        """Print summary of duplicate findings."""
+        mist_count = len(self.mist_duplicates)
+        mist_sites = sum(len(sites) for sites in self.mist_duplicates.values())
+        ref_count = len(self.ref_duplicates)
+        ref_sites = sum(len(sites) for sites in self.ref_duplicates.values())
+        
+        print(f"     Found {mist_count} Mist address duplications affecting {mist_sites} sites")
+        print(f"     Found {ref_count} reference address duplications affecting {ref_sites} sites")
+        
+        if self.debug:
+            logging.info(f"DUPLICATE_CHECK: Found {mist_count} Mist and {ref_count} reference duplicates")
+    
+    # =========================================================================
+    # DEVICE PROCESSING METHODS (Step 1)
+    # =========================================================================
+    
+    def _process_all_devices(self) -> None:
+        """Process all devices to identify address conflicts (Step 1)."""
+        print(f"\n  Processing {len(self.site_configs)} total devices...")
+        print(" Step 1: Parsing and normalizing all addresses...")
+        
+        self.counters.total_devices = len(self.site_configs)
+        first_missing_name_warned = False
+        
+        for device in tqdm(self.site_configs, desc="Step 1: Parsing Addresses", unit="device"):
+            device_serial = device.get("serial", "").strip()
+            device_identifier = DeviceUtils.get_device_identifier(
+                device, warn_on_missing=not first_missing_name_warned
             )
             
-            if debug:
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Enhanced similarity result: {comparison_result}")
+            if not first_missing_name_warned and device_identifier != device.get("name", "").strip():
+                first_missing_name_warned = True
             
-            # Track match/mismatch statistics
+            if device_serial not in self.comparison_serials:
+                self.counters.devices_skipped += 1
+                if self.debug:
+                    logging.debug(f"DEVICE_SKIP [{device_serial}]: Not found in comparison CSV")
+                continue
+            
+            self.counters.devices_enriched += 1
+            self._process_single_device(device, device_serial, device_identifier)
+        
+        conflicts_found = len(self.all_conflicts)
+        analyzed = self.counters.devices_enriched
+        print(f"! Step 1 Complete: Found {conflicts_found} address conflicts from {analyzed} analyzed devices")
+    
+    def _process_single_device(self, device: Dict[str, Any], device_serial: str,
+                                device_identifier: str) -> None:
+        """Process a single device for address comparison."""
+        try:
+            mist_address = self._parse_mist_address(device, device_serial, device_identifier)
+            comparison_address = self._get_comparison_address(device_serial)
+            
+            if not comparison_address:
+                self.counters.devices_skipped += 1
+                return
+            
+            comparison_result = AddressUtils.compare_with_threshold(
+                mist_address, comparison_address, self.address_threshold, debug=self.debug
+            )
+            
+            if self.debug:
+                logging.debug(f"DEVICE_COMPARISON [{device_serial}]: Result: {comparison_result}")
+            
             if comparison_result['is_match']:
-                counters.perfect_matches += 1
+                self.counters.perfect_matches += 1
             else:
-                counters.mismatches_found += 1
-                # Store conflict for further filtering
-                all_conflicts.append({
+                self.counters.mismatches_found += 1
+                self.all_conflicts.append({
                     'device': device,
                     'device_serial': device_serial,
                     'device_identifier': device_identifier,
@@ -22912,468 +23101,590 @@ def compare_inventory_with_csv(fast=False, address_check=False, debug=False, ski
                 
         except Exception as device_error:
             logging.warning(f"! Error processing device {device_serial}: {device_error}")
-            counters.comparison_failures += 1
+            self.counters.comparison_failures += 1
+            self._record_device_parse_failure(device, device_serial, device_identifier, str(device_error))
+    
+    def _parse_mist_address(self, device: Dict[str, Any], device_serial: str,
+                            device_identifier: str) -> Dict[str, str]:
+        """Parse address from Mist device data."""
+        mist_address_raw = device.get("site_address", "").strip()
+        
+        if not mist_address_raw:
+            return self._get_component_address(device)
+        
+        parsed_mist = AddressUtils.enhanced_parse(mist_address_raw, debug=self.debug)
+        
+        if not parsed_mist['is_parseable']:
+            self._record_mist_parse_failure(device, device_serial, device_identifier,
+                                            mist_address_raw, parsed_mist)
+            return self._get_component_address(device)
+        
+        return {
+            'address': parsed_mist.get('address') or "",
+            'city': parsed_mist.get('city') or "",
+            'state': parsed_mist.get('state') or "",
+            'zip': parsed_mist.get('zip') or ""
+        }
+    
+    def _get_component_address(self, device: Dict[str, Any]) -> Dict[str, str]:
+        """Get address from individual component fields."""
+        return {
+            'address': device.get("street", "").strip(),
+            'city': device.get("city", "").strip(),
+            'state': device.get("state", "").strip(),
+            'zip': device.get("zip_code", "").strip()
+        }
+    
+    def _get_comparison_address(self, device_serial: str) -> Optional[Dict[str, str]]:
+        """Get comparison address for a device serial."""
+        comparison_data = self.comparison_address_lookup.get(device_serial, {})
+        
+        if not comparison_data or not any(comparison_data.values()):
+            if self.debug:
+                logging.debug(f"DEVICE_SKIP [{device_serial}]: No comparison address data")
+            return None
+        
+        comparison_address = {
+            'address': comparison_data.get("Address", "").strip(),
+            'city': comparison_data.get("City", "").strip(),
+            'state': comparison_data.get("State", "").strip(),
+            'zip': comparison_data.get("Zip", "").strip()
+        }
+        
+        if not any(comparison_address.values()):
+            if self.debug:
+                logging.debug(f"DEVICE_SKIP [{device_serial}]: Empty comparison address")
+            return None
+        
+        return comparison_address
+    
+    def _record_mist_parse_failure(self, device: Dict[str, Any], device_serial: str,
+                                    device_identifier: str, raw_address: str,
+                                    parsed_result: Dict[str, Any]) -> None:
+        """Record a Mist address parse failure."""
+        failure_record = {
+            'site_id': device.get("site_id", ""),
+            'site_name': device.get("site_name", ""),
+            'device_id': device.get("id", ""),
+            'device_serial': device_serial,
+            'device_name': device_identifier,
+            'original_address': raw_address,
+            'parsed_tokens': str(raw_address.split(',')),
+            'failure_reason': parsed_result['parse_reason'],
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        self.parse_failures.append(failure_record)
+        self.counters.increment_parse_failure(parsed_result['parse_reason'])
+    
+    def _record_device_parse_failure(self, device: Dict[str, Any], device_serial: str,
+                                      device_identifier: str, error_msg: str) -> None:
+        """Record a device processing error as parse failure."""
+        failure_record = {
+            'site_id': device.get("site_id", ""),
+            'site_name': device.get("site_name", ""),
+            'device_id': device.get("id", ""),
+            'device_serial': device_serial,
+            'device_name': device_identifier,
+            'original_address': str(device.get("site_address", "")),
+            'parsed_tokens': 'N/A',
+            'failure_reason': f'device_processing_error: {error_msg}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        self.parse_failures.append(failure_record)
+        self.counters.increment_parse_failure('device_processing_error')
+    
+    # =========================================================================
+    # CONFLICT FILTERING METHODS (Steps 2-3)
+    # =========================================================================
+    
+    def _filter_conflicts(self) -> None:
+        """Filter conflicts through deduplication and skip list (Steps 2-3)."""
+        unique_conflicts = self._remove_duplicate_conflicts()
+        self.filtered_conflicts = self._apply_skip_filters(unique_conflicts)
+    
+    def _remove_duplicate_conflicts(self) -> List[Dict[str, Any]]:
+        """Remove duplicate address pairs from conflicts (Step 2)."""
+        print(" Step 2: Removing duplicate addresses...")
+        
+        unique_conflicts = []
+        seen_addresses: set = set()
+        
+        for conflict in self.all_conflicts:
+            address_key = self._create_conflict_address_key(conflict)
             
-            # Document this as a parse failure
-            failure_record = {
-                'site_id': device.get("site_id", ""),
-                'site_name': device.get("site_name", ""),
-                'device_id': device.get("id", ""),
-                'device_serial': device_serial,
-                'device_name': device_identifier if 'device_identifier' in locals() else device_serial,
-                'original_address': str(device.get("site_address", "")),
-                'parsed_tokens': 'N/A',
-                'failure_reason': f'device_processing_error: {str(device_error)}',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }
-            parse_failures.append(failure_record)
-            counters.increment_parse_failure('device_processing_error')
-
-    print(f"! Step 1 Complete: Found {len(all_conflicts)} address conflicts from {counters.devices_enriched} analyzed devices")
+            if address_key not in seen_addresses:
+                seen_addresses.add(address_key)
+                unique_conflicts.append(conflict)
+            elif self.debug:
+                logging.debug(f"DUPLICATE_REMOVED [{conflict['device_serial']}]")
+        
+        duplicates_removed = len(self.all_conflicts) - len(unique_conflicts)
+        print(f"! Step 2 Complete: Removed {duplicates_removed} duplicate pairs, {len(unique_conflicts)} remain")
+        
+        return unique_conflicts
     
-    # Step 2: Remove duplicate addresses (after normalization) 
-    print(" Step 2: Removing duplicate addresses...")
-    unique_conflicts = []
-    seen_addresses = set()
-    
-    for conflict in all_conflicts:
-        # Create normalized address key for deduplication
+    def _create_conflict_address_key(self, conflict: Dict[str, Any]) -> str:
+        """Create a unique key for a conflict's address pair."""
         mist_addr = conflict['mist_address']
         comp_addr = conflict['comparison_address']
-        address_key = f"{mist_addr['address'].lower().strip()}|{mist_addr['city'].lower().strip()}|{mist_addr['state'].lower().strip()}|{mist_addr['zip'].strip()}" + \
-                     f"||{comp_addr['address'].lower().strip()}|{comp_addr['city'].lower().strip()}|{comp_addr['state'].lower().strip()}|{comp_addr['zip'].strip()}"
         
-        if address_key not in seen_addresses:
-            seen_addresses.add(address_key)
-            unique_conflicts.append(conflict)
-        else:
-            if debug:
-                logging.debug(f"DUPLICATE_REMOVED [{conflict['device_serial']}]: Address pair already seen")
-    
-    duplicates_removed = len(all_conflicts) - len(unique_conflicts)
-    print(f"! Step 2 Complete: Removed {duplicates_removed} duplicate address pairs, {len(unique_conflicts)} unique conflicts remain")
-    
-    # Step 3: Remove addresses in skip file
-    print(" Step 3: Applying address skip filters...")
-    filtered_conflicts = []
-    
-    for conflict in unique_conflicts:
-        comparison_address = conflict['comparison_address']
-        device_serial = conflict['device_serial']
+        mist_key = (f"{mist_addr['address'].lower().strip()}|"
+                    f"{mist_addr['city'].lower().strip()}|"
+                    f"{mist_addr['state'].lower().strip()}|"
+                    f"{mist_addr['zip'].strip()}")
         
-        # Check if comparison address should be automatically skipped
-        should_skip, skip_reason = AddressUtils.check_should_skip(comparison_address, skip_addresses, debug=debug)
+        comp_key = (f"{comp_addr['address'].lower().strip()}|"
+                    f"{comp_addr['city'].lower().strip()}|"
+                    f"{comp_addr['state'].lower().strip()}|"
+                    f"{comp_addr['zip'].strip()}")
         
-        if should_skip:
-            # Automatically treat as a match (Mist address is correct)
-            counters.perfect_matches += 1
-            counters.auto_corrections += 1
+        return f"{mist_key}||{comp_key}"
+    
+    def _apply_skip_filters(self, unique_conflicts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Apply address skip filters to conflicts (Step 3)."""
+        print(" Step 3: Applying address skip filters...")
+        
+        filtered = []
+        
+        for conflict in unique_conflicts:
+            comparison_address = conflict['comparison_address']
+            device_serial = conflict['device_serial']
             
-            if debug:
-                logging.debug(f"ADDRESS_SKIP [{device_serial}]: Skipped comparison address due to: {skip_reason}")
+            should_skip, skip_reason = AddressUtils.check_should_skip(
+                comparison_address, self.skip_addresses, debug=self.debug
+            )
             
-            print(f"    Auto-corrected: {device_serial} (Skip reason: {skip_reason})")
+            if should_skip:
+                self._record_skipped_address(device_serial, skip_reason)
+            else:
+                filtered.append(conflict)
+        
+        skip_filtered = len(unique_conflicts) - len(filtered)
+        print(f"! Step 3 Complete: Removed {skip_filtered} via skip filters, {len(filtered)} require analysis")
+        
+        return filtered
+    
+    def _record_skipped_address(self, device_serial: str, skip_reason: str) -> None:
+        """Record an auto-skipped address."""
+        self.counters.perfect_matches += 1
+        self.counters.auto_corrections += 1
+        
+        if self.debug:
+            logging.debug(f"ADDRESS_SKIP [{device_serial}]: {skip_reason}")
+        
+        print(f"    Auto-corrected: {device_serial} (Skip reason: {skip_reason})")
+    
+    # =========================================================================
+    # VALIDATION AND MISMATCH PROCESSING METHODS (Step 4)
+    # =========================================================================
+    
+    def _process_remaining_conflicts(self) -> None:
+        """Process remaining conflicts with optional validation (Step 4)."""
+        if not self.filtered_conflicts:
+            return
+        
+        if self.address_validation_enabled:
+            self._process_with_validation()
         else:
-            filtered_conflicts.append(conflict)
+            self._process_without_validation()
     
-    skip_filtered = len(unique_conflicts) - len(filtered_conflicts)
-    print(f"! Step 3 Complete: Removed {skip_filtered} addresses via skip filters, {len(filtered_conflicts)} conflicts require analysis")
+    def _process_without_validation(self) -> None:
+        """Process conflicts without external validation."""
+        print(f"\n  Step 4: Processing {len(self.filtered_conflicts)} conflicts without validation...")
+        
+        for conflict in self.filtered_conflicts:
+            self._generate_mismatch_records(conflict, validation_result=None)
     
-    # Step 4: Prepare for external validation (only if enabled)
-    if address_validation_enabled and filtered_conflicts:
-        devices_needing_validation = [(c['device'], c['device_serial'], c['mist_address'], c['comparison_address']) for c in filtered_conflicts]
-        total_validations = len(devices_needing_validation)
-        print(f"\n  Step 4: External address validation enabled - {total_validations} remaining conflicts need validation")
+    def _process_with_validation(self) -> None:
+        """Process conflicts with external Nominatim validation."""
+        total_validations = len(self.filtered_conflicts)
+        print(f"\n  Step 4: External validation enabled - {total_validations} conflicts need validation")
         print(" This may take several minutes due to API rate limiting (1 request/second)...")
-        if debug:
-            logging.debug(f"ADDRESS_VALIDATION: {total_validations} devices require external validation after filtering")
-    elif not address_validation_enabled and filtered_conflicts:
-        # Process conflicts without validation
-        print(f"\n  Step 4: Processing {len(filtered_conflicts)} conflicts without external validation...")
-        for conflict in filtered_conflicts:
-            device = conflict['device'] 
+        
+        org_name = self._get_org_name_for_validation()
+        
+        for idx, conflict in enumerate(tqdm(self.filtered_conflicts, desc="Step 4: Validating", unit="device")):
+            validation_result = self._validate_single_conflict(conflict, idx + 1, total_validations, org_name)
+            self._generate_mismatch_records(conflict, validation_result)
+    
+    def _get_org_name_for_validation(self) -> Optional[str]:
+        """Get organization name for intelligent tiebreaker logic."""
+        try:
+            if self.debug:
+                logging.debug("Fetching organization information for tiebreaker logic...")
+            
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
+            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
+            
+            if org_response.status_code == 200:
+                org_name = org_response.data.get('name', '').strip()
+                if self.debug:
+                    logging.debug(f"Organization name retrieved: '{org_name}'")
+                return org_name
+            
+            if self.debug:
+                logging.warning(f"Failed to retrieve org info: HTTP {org_response.status_code}")
+            return None
+            
+        except Exception as error:
+            if self.debug:
+                logging.warning(f"Could not retrieve organization name: {error}")
+            return None
+    
+    def _validate_single_conflict(self, conflict: Dict[str, Any], current: int,
+                                   total: int, org_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Validate a single conflict using Nominatim API."""
+        device = conflict['device']
+        device_serial = conflict['device_serial']
+        mist_address = conflict['mist_address']
+        comparison_address = conflict['comparison_address']
+        
+        self._print_validation_header(device_serial, mist_address, comparison_address, current, total)
+        
+        try:
+            timeout = int(os.getenv("ADDRESS_VALIDATION_TIMEOUT", "10"))
+            validator_config = AddressValidationConfig(
+                timeout=timeout,
+                debug=self.debug,
+                skip_ssl_verify=self.skip_ssl_verify,
+                org_name=org_name,
+                site_name=device.get("site_name", ""),
+                mist_duplicates=self.mist_duplicates,
+                ref_duplicates=self.ref_duplicates
+            )
+            
+            validator = NominatimValidator(validator_config)
+            validation_result = validator.validate(mist_address, comparison_address)
+            
+            self._print_validation_results(device_serial, validation_result)
+            return validation_result
+            
+        except Exception as error:
+            print(f"    Validation failed: {str(error)}")
+            logging.warning(f"ADDRESS_VALIDATION [{device_serial}]: Validation failed: {error}")
+            if self.debug:
+                logging.debug(f"ADDRESS_VALIDATION [{device_serial}]: {traceback.format_exc()}")
+            return None
+    
+    def _print_validation_header(self, device_serial: str, mist_address: Dict[str, str],
+                                  comparison_address: Dict[str, str], current: int, total: int) -> None:
+        """Print validation header for a device."""
+        mist_str = self._format_address_string(mist_address)
+        comp_str = self._format_address_string(comparison_address)
+        
+        print(f"! [{current}/{total}] Validating {device_serial}...")
+        print(f"    Mist:       {mist_str}")
+        print(f"    Reference:  {comp_str}")
+        
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Starting validation")
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist: {mist_str}")
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison: {comp_str}")
+    
+    def _format_address_string(self, address: Dict[str, str]) -> str:
+        """Format address dictionary as display string."""
+        return (f"{address['address']}, {address['city']}, "
+                f"{address['state']} {address['zip']}").replace(", , ", ", ").strip(", ")
+    
+    def _print_validation_results(self, device_serial: str, result: Dict[str, Any]) -> None:
+        """Print validation results for a device."""
+        mist_valid = result['mist_validation']['valid']
+        comp_valid = result['comparison_validation']['valid']
+        
+        mist_status = " Valid" if mist_valid else " Invalid"
+        comp_status = " Valid" if comp_valid else " Invalid"
+        
+        mist_conf = f"{result['mist_validation']['confidence']:.3f}" if mist_valid else "N/A"
+        comp_conf = f"{result['comparison_validation']['confidence']:.3f}" if comp_valid else "N/A"
+        
+        recommendation_icon = {"mist": " Mist", "comparison": " Reference", "uncertain": " Uncertain"}
+        recommendation_display = recommendation_icon.get(result['recommendation'], result['recommendation'])
+        recommendation_reason = result.get('recommendation_reason', 'No reason provided')
+        
+        print(f"    Results:    Mist: {mist_status} (conf: {mist_conf}) | Reference: {comp_status} (conf: {comp_conf})")
+        print(f"    Recommendation: {recommendation_display}")
+        
+        if result['recommendation'] != 'uncertain' or 'inconclusive' not in recommendation_reason.lower():
+            print(f"    Reason: {recommendation_reason}")
+        
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist valid={mist_valid}, conf={mist_conf}")
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comp valid={comp_valid}, conf={comp_conf}")
+        logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Recommendation: {result['recommendation']}")
+    
+    # =========================================================================
+    # MISMATCH RECORD GENERATION METHODS
+    # =========================================================================
+    
+    def _generate_mismatch_records(self, conflict: Dict[str, Any],
+                                    validation_result: Optional[Dict[str, Any]]) -> None:
+        """Generate mismatch and diff report items for a conflict."""
+        try:
+            device = conflict['device']
             device_serial = conflict['device_serial']
             comparison_result = conflict['comparison_result']
             mist_address = conflict['mist_address']
             comparison_address = conflict['comparison_address']
             
-            # Generate mismatch records
-            try:
-                created_time = int(device.get("created_time", 0))
-                created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
-                year, week, _ = created_date.isocalendar()
-                week_key = f"{year}_Week_{week:02d}"
-
-                # Determine primary mismatch type based on failed fields
-                failed_fields = comparison_result['failed_fields']
-                if 'zip' in failed_fields and len(failed_fields) == 1:
-                    mismatch_type = "Zip Code Mismatch"
-                elif 'address' in failed_fields:
-                    mismatch_type = "Address Mismatch"
-                elif 'city' in failed_fields:
-                    mismatch_type = "City Mismatch"
-                elif 'state' in failed_fields:
-                    mismatch_type = "State Mismatch"
-                else:
-                    mismatch_type = "Multi-field Address Mismatch"
-
-                # Enhanced mismatch item with parse status
-                mismatched_item = {
-                    "Week": week_key,
-                    "Full Site": device.get("site_name", ""),
-                    "System Serial Number": device_serial,
-                    "System Model Number": device.get("model", ""),
-                    "End Customer Name": END_CUSTOMER_NAME,
-                    "Address Line 1": mist_address['address'],
-                    "Address Line 2": "",
-                    "City": mist_address['city'],
-                    "State": mist_address['state'],
-                    "Current Zip Code": mist_address['zip'],
-                    "Current Zip Normalized": AddressUtils.normalize_zip(mist_address['zip']),
-                    "Comparison Zip Code": comparison_address['zip'],
-                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                    "Mismatch Type": mismatch_type,
-                    "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                    "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                    "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                    "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
-                    "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                    "Failed Fields": ', '.join(failed_fields),
-                    # Enhanced fields
-                    "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
-                    "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
-                    "Parse_Issues": f"Mist: {comparison_result['parse_status']['mist_reason']}, Comp: {comparison_result['parse_status']['comparison_reason']}",
-                    # Address validation results (No validation in basic mode)
-                    "Mist_Validation_Status": 'N/A',
-                    "Mist_Confidence": 'N/A',
-                    "Comparison_Validation_Status": 'N/A',
-                    "Comparison_Confidence": 'N/A',
-                    "Validation_Recommendation": 'N/A'
-                }
-                mismatched_items.append(mismatched_item)
-
-                # Enhanced diff report item with parse status
-                diff_item = {
-                    "Week": week_key,
-                    "Full Site": device.get("site_name", ""),
-                    "System Serial Number": device_serial,
-                    "System Model Number": device.get("model", ""),
-                    "End Customer Name": END_CUSTOMER_NAME,
-                    "Mist_Address_Line_1": mist_address['address'],
-                    "Mist_City": mist_address['city'],
-                    "Mist_State": mist_address['state'],
-                    "Mist_Zip_Code": mist_address['zip'],
-                    "Mist_Zip_Normalized": AddressUtils.normalize_zip(mist_address['zip']),
-                    "Comparison_Address": comparison_address['address'],
-                    "Comparison_City": comparison_address['city'],
-                    "Comparison_State": comparison_address['state'],
-                    "Comparison_Zip_Code": comparison_address['zip'],
-                    "Comparison_Zip_Normalized": AddressUtils.normalize_zip(comparison_address['zip']),
-                    "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                    "Mismatch Type": mismatch_type,
-                    "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                    "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                    "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                    "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
-                    "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                    "Failed Fields": ', '.join(failed_fields),
-                    # Enhanced fields
-                    "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
-                    "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
-                    "Parse_Issues": f"Mist: {comparison_result['parse_status']['mist_reason']}, Comp: {comparison_result['parse_status']['comparison_reason']}",
-                    # Address validation results (No validation in basic mode)
-                    "Mist_Validation_Status": 'N/A',
-                    "Mist_Confidence": 'N/A',
-                    "Comparison_Validation_Status": 'N/A',
-                    "Comparison_Confidence": 'N/A',
-                    "Validation_Recommendation": 'N/A'
-                }
-                diff_report_items.append(diff_item)
-                
-            except Exception as mismatch_error:
-                logging.warning(f"! Error processing mismatch for device {device_serial}: {mismatch_error}")
-                counters.comparison_failures += 1
+            week_key = self._get_week_key(device)
+            mismatch_type = self._determine_mismatch_type(comparison_result)
+            
+            mismatch_item = self._build_mismatch_item(
+                device, device_serial, mist_address, comparison_address,
+                comparison_result, week_key, mismatch_type, validation_result
+            )
+            self.mismatched_items.append(mismatch_item)
+            
+            diff_item = self._build_diff_item(
+                device, device_serial, mist_address, comparison_address,
+                comparison_result, week_key, mismatch_type, validation_result
+            )
+            self.diff_report_items.append(diff_item)
+            
+        except Exception as error:
+            logging.warning(f"! Error processing mismatch for device {conflict.get('device_serial', 'unknown')}: {error}")
+            self.counters.comparison_failures += 1
     
-    # Step 4 (continued): Process devices that need validation with proper progress bar
-    if address_validation_enabled and devices_needing_validation:
-        total_validations = len(devices_needing_validation)
-        # Get organization name for intelligent tiebreaker logic
-        org_name = None
-        try:
-            if debug:
-                logging.debug("Fetching organization information for tiebreaker logic...")
-            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
-            if org_response.status_code == 200:
-                org_data = org_response.data
-                org_name = org_data.get('name', '').strip()
-                if debug:
-                    logging.debug(f"Organization name retrieved: '{org_name}'")
-            else:
-                if debug:
-                    logging.warning(f"Failed to retrieve organization info: HTTP {org_response.status_code}")
-        except Exception as e:
-            if debug:
-                logging.warning(f"Could not retrieve organization name for tiebreaker: {e}")
+    def _get_week_key(self, device: Dict[str, Any]) -> str:
+        """Get the week key for a device based on creation time."""
+        created_time = int(device.get("created_time", 0))
+        created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
+        year, week, _ = created_date.isocalendar()
+        return f"{year}_Week_{week:02d}"
+    
+    def _determine_mismatch_type(self, comparison_result: Dict[str, Any]) -> str:
+        """Determine the primary mismatch type based on failed fields."""
+        failed_fields = comparison_result['failed_fields']
         
-        validation_count = 0
-        for device, device_serial, mist_address, comparison_address in tqdm(devices_needing_validation, desc="Step 4: Validating Addresses", unit="device"):
-            validation_count += 1
-            if debug:
-                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Starting validation process")
-                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Mist address: {mist_address}")
-                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Comparison address: {comparison_address}")
-            
-            # Find the corresponding conflict for this device
-            conflict = next((c for c in filtered_conflicts if c['device_serial'] == device_serial), None)
-            if not conflict:
-                logging.warning(f"Could not find conflict data for device {device_serial}")
-                continue
-                
-            comparison_result = conflict['comparison_result']
-            
-            if debug:
-                logging.debug(f"DEVICE_VALIDATION [{device_serial}]: Similarity result: {comparison_result}")
-            
-            # Perform external address validation
-            validation_result = None
-            ADDRESS_VALIDATION_TIMEOUT = int(os.getenv("ADDRESS_VALIDATION_TIMEOUT", "10"))
-            
-            try:
-                # Create formatted address strings for logging
-                mist_addr_str = f"{mist_address['address']}, {mist_address['city']}, {mist_address['state']} {mist_address['zip']}".replace(", , ", ", ").strip(", ")
-                comp_addr_str = f"{comparison_address['address']}, {comparison_address['city']}, {comparison_address['state']} {comparison_address['zip']}".replace(", , ", ", ").strip(", ")
-                
-                print(f"! [{validation_count}/{total_validations}] Validating {device_serial}...")
-                print(f"    Mist:       {mist_addr_str}")
-                print(f"    Reference:  {comp_addr_str}")
-                
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Starting validation")
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist address: {mist_addr_str}")
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison address: {comp_addr_str}")
-                
-                # Create config for NominatimValidator
-                validator_config = AddressValidationConfig(
-                    timeout=ADDRESS_VALIDATION_TIMEOUT,
-                    debug=debug,
-                    skip_ssl_verify=skip_ssl_verify,
-                    org_name=org_name,
-                    site_name=device.get("site_name", ""),
-                    mist_duplicates=mist_duplicates,
-                    ref_duplicates=ref_duplicates
-                )
-                validator = NominatimValidator(validator_config)
-                validation_result = validator.validate(mist_address, comparison_address)
-                
-                # Format results for display
-                mist_status = " Valid" if validation_result['mist_validation']['valid'] else " Invalid"
-                comp_status = " Valid" if validation_result['comparison_validation']['valid'] else " Invalid"
-                
-                mist_conf = f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result['mist_validation']['valid'] else "N/A"
-                comp_conf = f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result['comparison_validation']['valid'] else "N/A"
-                
-                recommendation_icon = {"mist": " Mist", "comparison": " Reference", "uncertain": " Uncertain"}
-                recommendation_display = recommendation_icon.get(validation_result['recommendation'], validation_result['recommendation'])
-                recommendation_reason = validation_result.get('recommendation_reason', 'No reason provided')
-                
-                print(f"    Results:    Mist: {mist_status} (conf: {mist_conf}) | Reference: {comp_status} (conf: {comp_conf})")
-                print(f"    Recommendation: {recommendation_display}")
-                if validation_result['recommendation'] != 'uncertain' or 'inconclusive' not in recommendation_reason.lower():
-                    print(f"    Reason: {recommendation_reason}")
-                
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Mist validation - valid: {validation_result['mist_validation']['valid']}, confidence: {mist_conf}")
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Comparison validation - valid: {validation_result['comparison_validation']['valid']}, confidence: {comp_conf}")
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Final recommendation: {validation_result['recommendation']}")
-                logging.info(f"ADDRESS_VALIDATION [{device_serial}]: Recommendation reason: {recommendation_reason}")
-                
-            except Exception as e:
-                print(f"    Validation failed: {str(e)}")
-                logging.warning(f"ADDRESS_VALIDATION [{device_serial}]: Validation failed: {e}")
-                if debug:
-                    logging.debug(f"ADDRESS_VALIDATION [{device_serial}]: Full exception traceback: {traceback.format_exc()}")
-                validation_result = None
-            
-            # Process mismatch logic for this device
-            if not comparison_result['is_match']:
-                try:
-                    created_time = int(device.get("created_time", 0))
-                    created_date = datetime.fromtimestamp(created_time, tz=timezone.utc)
-                    year, week, _ = created_date.isocalendar()
-                    week_key = f"{year}_Week_{week:02d}"
-
-                    # Determine primary mismatch type based on failed fields
-                    failed_fields = comparison_result['failed_fields']
-                    if 'zip' in failed_fields and len(failed_fields) == 1:
-                        mismatch_type = "Zip Code Mismatch"
-                    elif 'address' in failed_fields:
-                        mismatch_type = "Address Mismatch"
-                    elif 'city' in failed_fields:
-                        mismatch_type = "City Mismatch"
-                    elif 'state' in failed_fields:
-                        mismatch_type = "State Mismatch"
-                    else:
-                        mismatch_type = "Multi-field Address Mismatch"
-
-                    # Standard mismatch item (enhanced format)
-                    mismatched_item = {
-                        "Week": week_key,
-                        "Full Site": device.get("site_name", ""),
-                        "System Serial Number": device_serial,
-                        "System Model Number": device.get("model", ""),
-                        "End Customer Name": END_CUSTOMER_NAME,
-                        "Address Line 1": mist_address['address'],
-                        "Address Line 2": "",
-                        "City": mist_address['city'],
-                        "State": mist_address['state'],
-                        "Current Zip Code": mist_address['zip'],
-                        "Current Zip Normalized": AddressUtils.normalize_zip(mist_address['zip']),
-                        "Comparison Zip Code": comparison_address['zip'],
-                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                        "Mismatch Type": mismatch_type,
-                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
-                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                        "Failed Fields": ', '.join(failed_fields),
-                        # Address validation results (if enabled)
-                        "Mist_Validation_Status": validation_result['mist_validation']['valid'] if validation_result else 'N/A',
-                        "Mist_Confidence": f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result and validation_result['mist_validation']['valid'] else 'N/A',
-                        "Comparison_Validation_Status": validation_result['comparison_validation']['valid'] if validation_result else 'N/A',
-                        "Comparison_Confidence": f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result and validation_result['comparison_validation']['valid'] else 'N/A',
-                        "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
-                    }
-                    mismatched_items.append(mismatched_item)
-
-                    # Diff report item (showing both address sets with similarity scores)
-                    diff_item = {
-                        "Week": week_key,
-                        "Full Site": device.get("site_name", ""),
-                        "System Serial Number": device_serial,
-                        "System Model Number": device.get("model", ""),
-                        "End Customer Name": END_CUSTOMER_NAME,
-                        "Mist_Address_Line_1": mist_address['address'],
-                        "Mist_City": mist_address['city'],
-                        "Mist_State": mist_address['state'],
-                        "Mist_Zip_Code": mist_address['zip'],
-                        "Mist_Zip_Normalized": AddressUtils.normalize_zip(mist_address['zip']),
-                        "Comparison_Address": comparison_address['address'],
-                        "Comparison_City": comparison_address['city'],
-                        "Comparison_State": comparison_address['state'],
-                        "Comparison_Zip_Code": comparison_address['zip'],
-                        "Comparison_Zip_Normalized": AddressUtils.normalize_zip(comparison_address['zip']),
-                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                        "Mismatch Type": mismatch_type,
-                        "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
-                        "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
-                        "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
-                        "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%", 
-                        "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
-                        "Failed Fields": ', '.join(failed_fields),
-                        # Address validation results (if enabled)
-                        "Mist_Validation_Status": validation_result['mist_validation']['valid'] if validation_result else 'N/A',
-                        "Mist_Confidence": f"{validation_result['mist_validation']['confidence']:.3f}" if validation_result and validation_result['mist_validation']['valid'] else 'N/A',
-                        "Comparison_Validation_Status": validation_result['comparison_validation']['valid'] if validation_result else 'N/A',
-                        "Comparison_Confidence": f"{validation_result['comparison_validation']['confidence']:.3f}" if validation_result and validation_result['comparison_validation']['valid'] else 'N/A',
-                        "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
-                    }
-                    diff_report_items.append(diff_item)
-                except Exception as e:
-                    logging.warning(f"! Skipping device due to error: {e}")
+        if 'zip' in failed_fields and len(failed_fields) == 1:
+            return "Zip Code Mismatch"
+        elif 'address' in failed_fields:
+            return "Address Mismatch"
+        elif 'city' in failed_fields:
+            return "City Mismatch"
+        elif 'state' in failed_fields:
+            return "State Mismatch"
+        else:
+            return "Multi-field Address Mismatch"
     
-    else:
-        # Skip external validation section since it's already handled above in the improved order of operations
-        pass
-
-    # End timing and generate artifacts
-    counters.end_timing()
+    def _build_mismatch_item(self, device: Dict[str, Any], device_serial: str,
+                              mist_address: Dict[str, str], comparison_address: Dict[str, str],
+                              comparison_result: Dict[str, Any], week_key: str,
+                              mismatch_type: str, validation_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build a mismatch item dictionary."""
+        return {
+            "Week": week_key,
+            "Full Site": device.get("site_name", ""),
+            "System Serial Number": device_serial,
+            "System Model Number": device.get("model", ""),
+            "End Customer Name": self.end_customer_name,
+            "Address Line 1": mist_address['address'],
+            "Address Line 2": "",
+            "City": mist_address['city'],
+            "State": mist_address['state'],
+            "Current Zip Code": mist_address['zip'],
+            "Current Zip Normalized": AddressUtils.normalize_zip(mist_address['zip']),
+            "Comparison Zip Code": comparison_address['zip'],
+            "End Customer Account ID": self.end_customer_account_id,
+            "Mismatch Type": mismatch_type,
+            "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+            "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+            "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+            "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+            "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+            "Failed Fields": ', '.join(comparison_result['failed_fields']),
+            "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
+            "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
+            "Parse_Issues": self._format_parse_issues(comparison_result),
+            "Mist_Validation_Status": self._get_validation_status(validation_result, 'mist'),
+            "Mist_Confidence": self._get_validation_confidence(validation_result, 'mist'),
+            "Comparison_Validation_Status": self._get_validation_status(validation_result, 'comparison'),
+            "Comparison_Confidence": self._get_validation_confidence(validation_result, 'comparison'),
+            "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
+        }
     
-    # Create parse failures artifact if there were any
-    if parse_failures:
-        CacheUtils.create_address_parse_failures_csv(parse_failures)
+    def _build_diff_item(self, device: Dict[str, Any], device_serial: str,
+                          mist_address: Dict[str, str], comparison_address: Dict[str, str],
+                          comparison_result: Dict[str, Any], week_key: str,
+                          mismatch_type: str, validation_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build a diff report item dictionary."""
+        return {
+            "Week": week_key,
+            "Full Site": device.get("site_name", ""),
+            "System Serial Number": device_serial,
+            "System Model Number": device.get("model", ""),
+            "End Customer Name": self.end_customer_name,
+            "Mist_Address_Line_1": mist_address['address'],
+            "Mist_City": mist_address['city'],
+            "Mist_State": mist_address['state'],
+            "Mist_Zip_Code": mist_address['zip'],
+            "Mist_Zip_Normalized": AddressUtils.normalize_zip(mist_address['zip']),
+            "Comparison_Address": comparison_address['address'],
+            "Comparison_City": comparison_address['city'],
+            "Comparison_State": comparison_address['state'],
+            "Comparison_Zip_Code": comparison_address['zip'],
+            "Comparison_Zip_Normalized": AddressUtils.normalize_zip(comparison_address['zip']),
+            "End Customer Account ID": self.end_customer_account_id,
+            "Mismatch Type": mismatch_type,
+            "Overall Similarity": f"{comparison_result['overall_similarity']:.1f}%",
+            "Address Similarity": f"{comparison_result['field_similarities']['address']:.1f}%",
+            "City Similarity": f"{comparison_result['field_similarities']['city']:.1f}%",
+            "State Similarity": f"{comparison_result['field_similarities']['state']:.1f}%",
+            "Zip Similarity": f"{comparison_result['field_similarities']['zip']:.1f}%",
+            "Failed Fields": ', '.join(comparison_result['failed_fields']),
+            "Mist_Parse_Status": comparison_result['parse_status']['mist_parseable'],
+            "Comparison_Parse_Status": comparison_result['parse_status']['comparison_parseable'],
+            "Parse_Issues": self._format_parse_issues(comparison_result),
+            "Mist_Validation_Status": self._get_validation_status(validation_result, 'mist'),
+            "Mist_Confidence": self._get_validation_confidence(validation_result, 'mist'),
+            "Comparison_Validation_Status": self._get_validation_status(validation_result, 'comparison'),
+            "Comparison_Confidence": self._get_validation_confidence(validation_result, 'comparison'),
+            "Validation_Recommendation": validation_result['recommendation'] if validation_result else 'N/A'
+        }
     
-    # Enhanced results display
-    print(f"\n  Data Integrity Analysis Results:")
-    print(f"   Total devices analyzed: {counters.total_devices}")
-    print(f"   Devices with comparison data: {counters.devices_enriched}")
-    print(f"    Devices excluded (not in comparison CSV): {counters.devices_skipped}")
-    print(f"   Address conflicts found: {counters.mismatches_found}")
-    print(f"   Consistent addresses: {counters.perfect_matches}")
-    print(f"   Auto-skipped addresses: {counters.auto_corrections}")
-    print(f"   Parse failures: {counters.parse_failures}")
+    def _format_parse_issues(self, comparison_result: Dict[str, Any]) -> str:
+        """Format parse issues for display."""
+        mist_reason = comparison_result['parse_status']['mist_reason']
+        comp_reason = comparison_result['parse_status']['comparison_reason']
+        return f"Mist: {mist_reason}, Comp: {comp_reason}"
     
-    if counters.mismatches_found > 0:
-        conflict_rate = (counters.mismatches_found / counters.devices_enriched) * 100
-        print(f"   Conflict rate: {conflict_rate:.1f}% of analyzed devices have address discrepancies")
+    def _get_validation_status(self, validation_result: Optional[Dict[str, Any]], source: str) -> str:
+        """Get validation status for mist or comparison address."""
+        if not validation_result:
+            return 'N/A'
+        key = f'{source}_validation'
+        return validation_result[key]['valid']
     
-    if counters.parse_failures > 0:
-        print(f"   Parse failure breakdown:")
-        for reason, count in counters.parse_failure_reasons.items():
-            print(f"      - {reason}: {count}")
+    def _get_validation_confidence(self, validation_result: Optional[Dict[str, Any]], source: str) -> str:
+        """Get validation confidence for mist or comparison address."""
+        if not validation_result:
+            return 'N/A'
+        key = f'{source}_validation'
+        if validation_result[key]['valid']:
+            return f"{validation_result[key]['confidence']:.3f}"
+        return 'N/A'
     
-    processing_rate = counters.total_devices / counters.get_duration() if counters.get_duration() > 0 else 0
-    print(f"    Processing rate: {processing_rate:.1f} devices/second")
-
-    # Log comprehensive summary
-    counters.log_summary()
-
-    if mismatched_items:
+    # =========================================================================
+    # RESULTS DISPLAY METHODS
+    # =========================================================================
+    
+    def _finalize_and_display_results(self) -> None:
+        """Finalize processing and display results."""
+        self.counters.end_timing()
+        
+        if self.parse_failures:
+            CacheUtils.create_address_parse_failures_csv(self.parse_failures)
+        
+        self._print_results_summary()
+        self.counters.log_summary()
+        
+        if self.mismatched_items:
+            self._display_conflict_preview()
+            self._save_results_to_csv()
+        else:
+            self._print_success_message()
+    
+    def _print_results_summary(self) -> None:
+        """Print comprehensive results summary."""
+        print(f"\n  Data Integrity Analysis Results:")
+        print(f"   Total devices analyzed: {self.counters.total_devices}")
+        print(f"   Devices with comparison data: {self.counters.devices_enriched}")
+        print(f"    Devices excluded (not in comparison CSV): {self.counters.devices_skipped}")
+        print(f"   Address conflicts found: {self.counters.mismatches_found}")
+        print(f"   Consistent addresses: {self.counters.perfect_matches}")
+        print(f"   Auto-skipped addresses: {self.counters.auto_corrections}")
+        print(f"   Parse failures: {self.counters.parse_failures}")
+        
+        if self.counters.mismatches_found > 0 and self.counters.devices_enriched > 0:
+            conflict_rate = (self.counters.mismatches_found / self.counters.devices_enriched) * 100
+            print(f"   Conflict rate: {conflict_rate:.1f}% of analyzed devices have discrepancies")
+        
+        if self.counters.parse_failures > 0:
+            print("   Parse failure breakdown:")
+            for reason, count in self.counters.parse_failure_reasons.items():
+                print(f"      - {reason}: {count}")
+        
+        duration = self.counters.get_duration()
+        if duration > 0:
+            processing_rate = self.counters.total_devices / duration
+            print(f"    Processing rate: {processing_rate:.1f} devices/second")
+    
+    def _display_conflict_preview(self) -> None:
+        """Display preview of address conflicts."""
         print(f"\n  Data Integrity Conflicts (address discrepancies requiring review):")
         print("=" * 130)
-        for idx, item in enumerate(mismatched_items[:10]):  # Show first 10
-            mist_addr = f"{item.get('Mist_Address_Line_1', '')}, {item.get('Mist_City', '')}, {item.get('Mist_State', '')}"
-            comp_addr = f"{item.get('Comparison_Address', '')}, {item.get('Comparison_City', '')}, {item.get('Comparison_State', '')}"
-            print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15}")
-            print(f"     Mist:       {mist_addr}")
-            print(f"     Reference:  {comp_addr}")
-            print(f"     Similarity: {item['Overall Similarity']:<6} | Type: {item['Mismatch Type']}")
-            if address_validation_enabled and item.get('Validation_Recommendation', 'N/A') != 'N/A':
-                print(f"     Recommendation: {item['Validation_Recommendation']}")
-            print()
         
-        if len(mismatched_items) > 10:
-            print(f"   ... and {len(mismatched_items) - 10} more conflicts (see CSV report for complete list)")
-            
-        # Always save to CSV (no prompting)
-        if mismatched_items:
-            base_filename = comparison_file.replace('.csv', '')
-            
-            # Save comprehensive address comparison report with both address sets
-            output_file = f"AddressMismatches_vs_{base_filename}.csv"
-            fieldnames = [
-                "Week", "Full Site", "System Serial Number", "System Model Number", 
-                "End Customer Name", "Mist_Address_Line_1", "Mist_City", "Mist_State",
-                "Mist_Zip_Code", "Mist_Zip_Normalized", "Comparison_Address", "Comparison_City", 
-                "Comparison_State", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
-                "End Customer Account ID", "Mismatch Type", "Overall Similarity",
-                "Address Similarity", "City Similarity", "State Similarity", "Zip Similarity", "Failed Fields",
-                "Mist_Parse_Status", "Comparison_Parse_Status", "Parse_Issues",
-                "Mist_Validation_Status", "Mist_Confidence", "Comparison_Validation_Status", "Comparison_Confidence", 
-                "Validation_Recommendation"
-            ]
-            
-            with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(diff_report_items)
-            
-            print(f"! Data integrity report saved to: {output_file}")
-            print(f"! Location: {FilePathUtils.get_csv_path(output_file)}")
-            print(f"\n  Data Integrity Summary:")
-            print(f"   Found {len(diff_report_items)} address conflicts requiring review")
-            if address_validation_enabled:
-                print(f"   External validation recommendations included")
-                print(f"   Check 'Validation_Recommendation' column for guidance")
-            else:
-                print(f"    No external validation performed")
-                print(f"   Run with --address-check for intelligent recommendations")
-            
-            logging.info(f"Saved {len(diff_report_items)} address conflicts to {output_file}")
-    else:
-        total_good_addresses = counters.perfect_matches + counters.auto_corrections
-        print(f"! Data integrity check complete! All {total_good_addresses} addresses are consistent.")
-        print(f"   No conflicts found between Mist and comparison data")
-        if counters.auto_corrections > 0:
-            print(f"   {counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
+        for idx, item in enumerate(self.mismatched_items[:10]):
+            self._print_conflict_item(idx, item)
+        
+        if len(self.mismatched_items) > 10:
+            remaining = len(self.mismatched_items) - 10
+            print(f"   ... and {remaining} more conflicts (see CSV report for complete list)")
+    
+    def _print_conflict_item(self, idx: int, item: Dict[str, Any]) -> None:
+        """Print a single conflict item."""
+        mist_addr = f"{item.get('Mist_Address_Line_1', '')}, {item.get('Mist_City', '')}, {item.get('Mist_State', '')}"
+        comp_addr = f"{item.get('Comparison_Address', '')}, {item.get('Comparison_City', '')}, {item.get('Comparison_State', '')}"
+        
+        print(f"[{idx+1:2}] Serial: {item['System Serial Number']:<15}")
+        print(f"     Mist:       {mist_addr}")
+        print(f"     Reference:  {comp_addr}")
+        print(f"     Similarity: {item['Overall Similarity']:<6} | Type: {item['Mismatch Type']}")
+        
+        if self.address_validation_enabled and item.get('Validation_Recommendation', 'N/A') != 'N/A':
+            print(f"     Recommendation: {item['Validation_Recommendation']}")
+        print()
+    
+    def _save_results_to_csv(self) -> None:
+        """Save results to CSV file."""
+        base_filename = self.comparison_file.replace('.csv', '')
+        output_file = f"AddressMismatches_vs_{base_filename}.csv"
+        
+        fieldnames = self._get_output_fieldnames()
+        
+        with open(output_file, mode="w", newline="", encoding="utf-8") as file_handle:
+            writer = csv.DictWriter(file_handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.diff_report_items)
+        
+        self._print_save_confirmation(output_file)
+    
+    def _get_output_fieldnames(self) -> List[str]:
+        """Get fieldnames for output CSV."""
+        return [
+            "Week", "Full Site", "System Serial Number", "System Model Number",
+            "End Customer Name", "Mist_Address_Line_1", "Mist_City", "Mist_State",
+            "Mist_Zip_Code", "Mist_Zip_Normalized", "Comparison_Address", "Comparison_City",
+            "Comparison_State", "Comparison_Zip_Code", "Comparison_Zip_Normalized",
+            "End Customer Account ID", "Mismatch Type", "Overall Similarity",
+            "Address Similarity", "City Similarity", "State Similarity", "Zip Similarity", "Failed Fields",
+            "Mist_Parse_Status", "Comparison_Parse_Status", "Parse_Issues",
+            "Mist_Validation_Status", "Mist_Confidence", "Comparison_Validation_Status",
+            "Comparison_Confidence", "Validation_Recommendation"
+        ]
+    
+    def _print_save_confirmation(self, output_file: str) -> None:
+        """Print save confirmation message."""
+        print(f"! Data integrity report saved to: {output_file}")
+        print(f"! Location: {FilePathUtils.get_csv_path(output_file)}")
+        print(f"\n  Data Integrity Summary:")
+        print(f"   Found {len(self.diff_report_items)} address conflicts requiring review")
+        
+        if self.address_validation_enabled:
+            print("   External validation recommendations included")
+            print("   Check 'Validation_Recommendation' column for guidance")
+        else:
+            print("    No external validation performed")
+            print("   Run with --address-check for intelligent recommendations")
+        
+        logging.info(f"Saved {len(self.diff_report_items)} address conflicts to {output_file}")
+    
+    def _print_success_message(self) -> None:
+        """Print success message when no conflicts found."""
+        total_good = self.counters.perfect_matches + self.counters.auto_corrections
+        print(f"! Data integrity check complete! All {total_good} addresses are consistent.")
+        print("   No conflicts found between Mist and comparison data")
+        
+        if self.counters.auto_corrections > 0:
+            print(f"   {self.counters.auto_corrections} addresses auto-skipped via AddressSkip.csv")
 
 
 class WAN2MigrationManager:
@@ -24623,6 +24934,420 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     logging.warning(f"Menu #104 DESTRUCTIVE operation complete ({operation_mode.upper()} mode): {success_count} templates updated, {failure_count} failed")
     if devices_needing_migration:
         logging.warning(f"Device override migration ({operation_mode.upper()} mode): {device_success} successful, {device_failed} failed")
+
+
+# ============================================================================
+# WAN PROBE CONFIGURATION MANAGER CLASS
+# ============================================================================
+class WANProbeConfigManager:
+    """
+    Manages WAN interface ICMP probe configuration for gateway templates.
+    
+    Menu #113: Configure WAN probe override settings (probe IPs and profile)
+    for all WAN interfaces across selected gateway templates.
+    
+    Default Configuration:
+        - probe IPs: ["192.151.29.254", "18.154.184.32"]
+        - probe_profile: "lte"
+    
+    This operation updates the wan_probe_override section for all interfaces
+    where usage == "wan" in the template's port_config.
+    """
+    
+    # Default probe configuration
+    DEFAULT_PROBE_IPS = ["192.151.29.254", "18.154.184.32"]
+    DEFAULT_PROBE_PROFILE = "lte"
+    
+    def __init__(self):
+        """Initialize the WAN Probe Configuration Manager."""
+        self.org_id = None
+        self.templates = []
+        self.sites = []
+        self.template_site_counts = {}
+        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
+        self.probe_profile = self.DEFAULT_PROBE_PROFILE
+    
+    @classmethod
+    def configure(cls, dry_run: bool = False) -> None:
+        """
+        Menu #113: Configure WAN Probe Override on Gateway Templates (DESTRUCTIVE)
+        
+        Updates wan_probe_override settings for all WAN interfaces in selected
+        gateway templates. Replaces existing probe IPs with configured values.
+        
+        Args:
+            dry_run: If True, show what would change without making modifications
+        """
+        manager = cls()
+        manager._execute(dry_run)
+    
+    def _execute(self, dry_run: bool) -> None:
+        """Main execution flow for WAN probe configuration."""
+        self._display_header(dry_run)
+        
+        if not self._initialize():
+            return
+        
+        if not self._load_data():
+            return
+        
+        templates_to_modify = self._select_templates()
+        if not templates_to_modify:
+            return
+        
+        templates_with_changes = self._analyze_templates(templates_to_modify)
+        if not templates_with_changes:
+            print(f"\n  No WAN interfaces found in selected templates.")
+            print("  No changes needed.")
+            logging.info("Menu #113: No WAN interfaces found in selected templates")
+            return
+        
+        self._show_preview(templates_with_changes, dry_run)
+        
+        if not dry_run:
+            if not self._confirm_operation(len(templates_with_changes)):
+                return
+        
+        results = self._apply_changes(templates_with_changes, dry_run)
+        self._generate_report(results, dry_run)
+    
+    def _display_header(self, dry_run: bool) -> None:
+        """Display operation header with configuration details."""
+        print("\n  DESTRUCTIVE: Configure WAN Interface ICMP Probe Settings")
+        print("=" * 70)
+        if dry_run:
+            print("  >> DRY-RUN MODE: No changes will be made to templates")
+            print("  >> This will show what WOULD be changed without modifying anything")
+        else:
+            print("  !? WARNING: This operation modifies gateway templates")
+            print("  !? All sites using affected templates will inherit the change")
+        print("=" * 70)
+        print(f"\n  Probe Configuration:")
+        print(f"    Probe IPs: {self.probe_ips}")
+        print(f"    Probe Profile: {self.probe_profile}")
+        print("=" * 70)
+        logging.warning("Menu #113 DESTRUCTIVE: Configure WAN Probe Override operation started")
+    
+    def _initialize(self) -> bool:
+        """Initialize org_id. Returns True on success."""
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not self.org_id:
+            print(" Failed to get organization ID.")
+            logging.error("Menu #113: Could not obtain org_id")
+            return False
+        return True
+    
+    def _load_data(self) -> bool:
+        """Load gateway templates and site data. Returns True on success."""
+        print("\n  Loading gateway template data...")
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgExportUtils.sites)
+        
+        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
+        with open(templates_path, encoding="utf-8") as file_handle:
+            self.templates = list(csv.DictReader(file_handle))
+        
+        if not self.templates:
+            print(" No gateway templates found.")
+            logging.warning("Menu #113: No gateway templates available")
+            return False
+        
+        sites_path = FilePathUtils.get_csv_path("SiteList.csv")
+        with open(sites_path, encoding="utf-8") as file_handle:
+            self.sites = list(csv.DictReader(file_handle))
+        
+        # Build template site counts (excluding VRE sites)
+        for site in self.sites:
+            if site.get("name", "").startswith("VRE"):
+                continue
+            template_id = site.get("gatewaytemplate_id", "").strip()
+            if template_id:
+                self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
+        
+        logging.info(f"Loaded {len(self.templates)} gateway templates and {len(self.sites)} sites")
+        return True
+    
+    def _select_templates(self) -> List[Dict[str, Any]]:
+        """Display templates and get user selection. Returns selected templates."""
+        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
+        
+        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")
+        template_list = []
+        for idx, template in enumerate(templates_sorted, start=1):
+            template_id = template.get("id", "")
+            template_name = template.get("name", "Unnamed Template")
+            site_count = self.template_site_counts.get(template_id, 0)
+            template_list.append({
+                "id": template_id,
+                "name": template_name,
+                "site_count": site_count
+            })
+            print(f"   [{idx}] {template_name} ({site_count} sites)")
+        
+        print("\n  Template Selection:")
+        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")
+        print("   Or 'all' to modify all templates")
+        print("   Or 'cancel' to abort")
+        
+        selection = input("\n  Selection: ").strip().lower()
+        
+        if selection == "cancel":
+            print(" Operation cancelled.")
+            logging.info("Menu #113 cancelled by user at template selection")
+            return []
+        
+        if selection == "all":
+            return template_list
+        
+        try:
+            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]
+            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]
+            if not selected:
+                print(" No valid templates selected.")
+                return []
+            return selected
+        except (ValueError, IndexError) as error:
+            print(f" Invalid selection: {error}")
+            logging.error(f"Menu #113: Invalid template selection: {error}")
+            return []
+    
+    def _analyze_templates(self, templates_to_modify: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Fetch and analyze templates for WAN interfaces. Returns templates with changes."""
+        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")
+        templates_with_changes = []
+        
+        def fetch_and_analyze(template_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            """Worker function to fetch and analyze a single template."""
+            template_id = template_info["id"]
+            template_name = template_info["name"]
+            
+            try:
+                logging.debug(f"Fetching template configuration for {template_name}")
+                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+                    apisession, self.org_id, template_id
+                )
+                config = response.data if hasattr(response, 'data') else {}
+                
+                if not isinstance(config, dict):
+                    logging.warning(f"Template {template_name} returned invalid structure")
+                    return None
+                
+                port_config = config.get("port_config", {})
+                if not isinstance(port_config, dict):
+                    logging.debug(f"Template {template_name} has no port_config")
+                    return None
+                
+                # Find all WAN interfaces
+                wan_interfaces = []
+                for port_name, port_settings in port_config.items():
+                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":
+                        current_probe = port_settings.get("wan_probe_override", {})
+                        current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
+                        current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
+                        
+                        wan_interfaces.append({
+                            "port_name": port_name,
+                            "current_ips": current_ips,
+                            "current_profile": current_profile
+                        })
+                
+                if wan_interfaces:
+                    return {
+                        "id": template_id,
+                        "name": template_name,
+                        "site_count": template_info["site_count"],
+                        "config": config,
+                        "wan_interfaces": wan_interfaces
+                    }
+                return None
+                
+            except Exception as error:
+                logging.error(f"Error analyzing template {template_name}: {error}")
+                logging.error(traceback.format_exc())
+                print(f"\n  !? Error analyzing template '{template_name}': {error}")
+                return None
+        
+        # Parallel fetch with ThreadPoolExecutor
+        max_workers = min(10, len(templates_to_modify))
+        logging.info(f"Fetching {len(templates_to_modify)} templates in parallel (max {max_workers} workers)")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            import concurrent.futures
+            future_map = {executor.submit(fetch_and_analyze, t): t for t in templates_to_modify}
+            
+            for future in tqdm(concurrent.futures.as_completed(future_map),
+                              total=len(templates_to_modify),
+                              desc="Analyzing templates",
+                              unit="template"):
+                result = future.result()
+                if result:
+                    templates_with_changes.append(result)
+        
+        return templates_with_changes
+    
+    def _show_preview(self, templates_with_changes: List[Dict[str, Any]], dry_run: bool) -> None:
+        """Display preview of changes to be made."""
+        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)
+        total_sites = sum(t["site_count"] for t in templates_with_changes)
+        
+        print(f"\n  Preview of Changes:")
+        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")
+        print(f"  Affecting {total_sites} sites")
+        
+        for template in templates_with_changes:
+            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")
+            for wan_if in template["wan_interfaces"]:
+                port = wan_if["port_name"]
+                current_ips = wan_if["current_ips"] or ["(none)"]
+                current_profile = wan_if["current_profile"] or "(none)"
+                print(f"     {port}:")
+                print(f"       Current: ips={current_ips}, profile={current_profile}")
+                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")
+    
+    def _confirm_operation(self, template_count: int) -> bool:
+        """Prompt for confirmation. Returns True if confirmed."""
+        print(f"\n  {'=' * 70}")
+        print(f"  !? CRITICAL: This will modify {template_count} gateway templates")
+        print(f"  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
+        print(f"  {'=' * 70}")
+        
+        confirmation = input("\n  Confirmation: ").strip()
+        if confirmation != "APPLY":
+            print(" Operation cancelled.")
+            logging.info("Menu #113 cancelled by user at final confirmation")
+            return False
+        return True
+    
+    def _apply_changes(self, templates_with_changes: List[Dict[str, Any]], dry_run: bool) -> List[Dict[str, Any]]:
+        """Apply probe configuration changes to templates. Returns results."""
+        print("\n  Applying WAN probe configuration...")
+        results = []
+        
+        for template in tqdm(templates_with_changes, desc="Updating templates", unit="template"):
+            result = self._update_single_template(template, dry_run)
+            results.append(result)
+        
+        return results
+    
+    def _update_single_template(self, template: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
+        """Update a single template's WAN probe configuration."""
+        template_id = template["id"]
+        template_name = template["name"]
+        config = template["config"]
+        
+        result = {
+            "template_name": template_name,
+            "template_id": template_id,
+            "site_count": template["site_count"],
+            "interfaces_updated": [],
+            "status": "",
+            "error": ""
+        }
+        
+        try:
+            port_config = config.get("port_config", {})
+            interfaces_modified = []
+            
+            for wan_if in template["wan_interfaces"]:
+                port_name = wan_if["port_name"]
+                if port_name in port_config:
+                    # Set wan_probe_override
+                    port_config[port_name]["wan_probe_override"] = {
+                        "ips": self.probe_ips.copy(),
+                        "probe_profile": self.probe_profile
+                    }
+                    interfaces_modified.append(port_name)
+                    logging.debug(f"Template {template_name}: Updated {port_name} probe config")
+            
+            if interfaces_modified:
+                config["port_config"] = port_config
+                result["interfaces_updated"] = interfaces_modified
+                
+                if dry_run:
+                    result["status"] = "DRY-RUN"
+                    logging.info(f"DRY-RUN: Would update template {template_name} interfaces: {interfaces_modified}")
+                else:
+                    logging.debug(f"Updating template {template_name} via API")
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                        apisession, self.org_id, template_id, body=config
+                    )
+                    
+                    if update_resp.status_code == 200:
+                        result["status"] = "SUCCESS"
+                        logging.info(f"Successfully updated template {template_name}")
+                    else:
+                        result["status"] = "FAILED"
+                        result["error"] = f"API returned status {update_resp.status_code}"
+                        logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
+            else:
+                result["status"] = "SKIPPED"
+                result["error"] = "No WAN interfaces found in port_config"
+        
+        except Exception as error:
+            result["status"] = "ERROR"
+            result["error"] = str(error)
+            logging.error(f"Error updating template {template_name}: {error}")
+            logging.error(traceback.format_exc())
+        
+        return result
+    
+    def _generate_report(self, results: List[Dict[str, Any]], dry_run: bool) -> None:
+        """Generate and display final report."""
+        # Prepare report data
+        report_data = []
+        for result in results:
+            report_data.append({
+                "template_name": result["template_name"],
+                "template_id": result["template_id"],
+                "site_count": result["site_count"],
+                "interfaces_updated": ", ".join(result["interfaces_updated"]) if result["interfaces_updated"] else "",
+                "interface_count": len(result["interfaces_updated"]),
+                "status": result["status"],
+                "error": result["error"],
+                "new_probe_ips": ", ".join(self.probe_ips),
+                "new_probe_profile": self.probe_profile
+            })
+        
+        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"
+        DataExporter.save_data_to_output(report_data, output_file)
+        
+        # Calculate summary
+        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)
+        total_sites = sum(r["site_count"] for r in results if r["status"] in ["SUCCESS", "DRY-RUN"])
+        
+        if dry_run:
+            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
+            print(f"\n  WAN Probe Configuration DRY-RUN Complete!")
+            print(f"=" * 70)
+            print(f"  >> DRY-RUN MODE: No actual changes were made")
+            print(f"  Templates Analyzed: {len(results)}")
+            print(f"  Would Update: {dry_run_count} templates")
+            print(f"  WAN Interfaces: {total_interfaces}")
+            print(f"  Sites Affected: {total_sites}")
+            print(f"\n  >> To apply changes, run without --dry-run flag")
+        else:
+            success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+            failure_count = len(results) - success_count
+            
+            print(f"\n  WAN Probe Configuration Complete!")
+            print(f"=" * 70)
+            print(f"  Templates Updated: {success_count}")
+            print(f"  Templates Failed: {failure_count}")
+            print(f"  WAN Interfaces Configured: {total_interfaces}")
+            print(f"  Sites Affected: {total_sites}")
+            
+            if success_count > 0:
+                print(f"\n  Configuration Applied:")
+                print(f"    Probe IPs: {self.probe_ips}")
+                print(f"    Probe Profile: {self.probe_profile}")
+            
+            if failure_count > 0:
+                print(f"\n  !? {failure_count} templates failed - check audit report")
+        
+        print(f"\n  Report saved to: {output_file}")
+        print(f"=" * 70)
+        
+        logging.warning(f"Menu #113 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated")
 
 
 # ============================================================================
@@ -34711,15 +35436,7 @@ class FirmwareManager:
         logging.info("Starting bulk switch firmware upgrade by site...")
         logging.debug("FirmwareManager.bulk_upgrade_switch_firmware_by_site() initiated")
         
-        # Set up the implementation to use this class's session and org_id
-        global apisession
-        original_apisession = apisession
-        apisession = self.apisession
-        
-        try:
-            return bulk_upgrade_switch_firmware_by_site_impl(self.org_id, sites_to_upgrade_override)
-        finally:
-            apisession = original_apisession
+        BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
 
     def upgrade_switch_firmware_by_gateway_template(self):
         """
@@ -37362,73 +38079,138 @@ class BulkAPFirmwareUpgrader:
 # NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
 
 
-# SWITCH FIRMWARE UPGRADE IMPLEMENTATION FUNCTION
-def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=None):
+class BulkSwitchFirmwareUpgrader:
     """
-    DESTRUCTIVE: Execute firmware upgrades on switches across selected sites.
+    Executes firmware upgrades on switches across selected sites with safety checks.
     
-    This function performs bulk firmware upgrades on network switches with comprehensive
-    safety checks and detailed progress tracking. Supports multiple upgrade strategies
-    including big bang, canary testing, and rolling upgrade modes.
+    Supports multiple upgrade strategies (big_bang, serial, canary) with comprehensive
+    progress tracking, firmware caching, and model compatibility validation.
     
-    SECURITY: This operation will reboot network switches and may cause network disruption.
-    All switches in target sites will be affected. Use with extreme caution in production.
-    
-    Args:
-        org_id: Organization ID
-        sites_to_upgrade_override: Optional list of site dictionaries for template-based upgrades
-        
-    Returns:
-        dict: Upgrade operation results and status information
-        canary_percentage (int): Percentage of devices for canary testing
-        rrm_rollout_percentage (int): Percentage per wave for rolling upgrades
-        delay_between_canary_and_rrm (int): Minutes between canary and rollout phases
-        delay_between_rrm_waves (int): Minutes between rolling upgrade waves
-        csv_export_path (str): Path for exporting upgrade operation details
-        
-    Returns:
-        dict: Comprehensive upgrade operation results with success/failure tracking
-        
-    Raises:
-        Exception: On critical API failures or validation errors
-        
     NETWORK IMPACT WARNING:
     - Switch reboots will disrupt network connectivity
     - Plan maintenance windows for production environments
     - Verify backup connectivity paths before execution
-    - Monitor upgrade progress closely for rapid intervention
     """
-    # Set up logging for this function
-    logger = logging.getLogger(__name__)
-    logger.debug(f"Starting bulk switch firmware upgrade - org_id: {org_id}")
     
-    # Get organization information
-    print("\n-> Validating organization access...")
-    try:
-        org_info = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
-        if org_info.status_code != 200:
-            print(f"X  Error accessing organization: {org_info.status_code}")
-            logger.error(f"Failed to access organization {org_id}: {org_info.status_code}")
-            return {"error": "Organization access failed"}
+    # Cache settings
+    CACHE_FILE = os.path.join("data", "cached_org_devices_versions_switch.csv")
+    CACHE_FRESHNESS_HOURS = 24
+    
+    def __init__(self, org_id: str, sites_override: Optional[List[Dict[str, Any]]] = None):
+        """
+        Initialize the switch firmware upgrader.
         
-        org_name = org_info.data.get('name', 'Unknown')
-        print(f"!? Organization: {org_name}")
-        logger.debug(f"Organization validated: {org_name}")
+        Args:
+            org_id: Organization ID
+            sites_override: Optional list of site dicts for template-based upgrades
+        """
+        self.org_id = org_id
+        self.sites_override = sites_override
+        self.logger = logging.getLogger(__name__)
         
-    except Exception as e:
-        print(f"X  Error validating organization: {str(e)}")
-        logger.error(f"Organization validation failed: {str(e)}")
-        return {"error": f"Organization validation error: {str(e)}"}
+        # State variables initialized during execution
+        self.org_name: str = ""
+        self.selected_sites: List[Dict[str, Any]] = []
+        self.switch_models: set = set()
+        self.current_firmware_versions: set = set()
+        self.available_versions: List[str] = []
+        self.compatible_versions: Dict[str, set] = {}
+        self.target_version: str = ""
+        
+        # Upgrade parameters
+        self.upgrade_strategy: str = ""
+        self.force_upgrade: bool = False
+        self.auto_reboot: bool = True
+        self.take_snapshot: bool = True
+        
+        # Results tracking
+        self.upgrade_results: Dict[str, Any] = {}
 
-    # Site selection logic
-    if sites_to_upgrade_override:
-        selected_sites = sites_to_upgrade_override
-        print(f"-> Using provided site list: {len(selected_sites)} sites")
-    else:
-        # Get available sites
+    def execute(self) -> Dict[str, Any]:
+        """
+        Main entry point - orchestrates the complete upgrade workflow.
+        
+        Returns:
+            Dict with upgrade operation results and status information
+        """
+        self.logger.debug(f"Starting bulk switch firmware upgrade - org_id: {self.org_id}")
+        
+        # Step 1: Validate organization access
+        if not self._validate_organization():
+            return {"error": "Organization validation failed"}
+        
+        # Step 2: Select sites for upgrade
+        site_result = self._select_sites()
+        if site_result:
+            return site_result
+        
+        # Step 3: Configure upgrade parameters
+        if not self._configure_upgrade_parameters():
+            return {"cancelled": True}
+        
+        # Step 4: Discover and select firmware version
+        firmware_result = self._discover_and_select_firmware()
+        if firmware_result:
+            return firmware_result
+        
+        # Step 5: Confirm upgrade operation
+        if not self._confirm_upgrade():
+            return {"cancelled": True}
+        
+        # Step 6: Execute upgrades across sites
+        return self._execute_upgrades()
+
+    # =========================================================================
+    # STEP 1: Organization Validation
+    # =========================================================================
+    
+    def _validate_organization(self) -> bool:
+        """Validate organization access and retrieve org name."""
+        print("\n-> Validating organization access...")
+        try:
+            org_info = mistapi.api.v1.orgs.orgs.getOrg(apisession, self.org_id)
+            if org_info.status_code != 200:
+                print(f"X  Error accessing organization: {org_info.status_code}")
+                self.logger.error(f"Failed to access organization {self.org_id}: {org_info.status_code}")
+                return False
+            
+            self.org_name = org_info.data.get('name', 'Unknown')
+            print(f"!? Organization: {self.org_name}")
+            self.logger.debug(f"Organization validated: {self.org_name}")
+            return True
+            
+        except Exception as e:
+            print(f"X  Error validating organization: {str(e)}")
+            self.logger.error(f"Organization validation failed: {str(e)}")
+            return False
+
+    # =========================================================================
+    # STEP 2: Site Selection
+    # =========================================================================
+    
+    def _select_sites(self) -> Optional[Dict[str, Any]]:
+        """
+        Select sites for upgrade - uses override or interactive selection.
+        
+        Returns:
+            None on success, error dict on failure
+        """
+        if self.sites_override:
+            return self._use_override_sites()
+        return self._interactive_site_selection()
+
+    def _use_override_sites(self) -> Optional[Dict[str, Any]]:
+        """Use provided site list from template-based upgrade."""
+        self.selected_sites = self.sites_override if self.sites_override else []
+        print(f"-> Using provided site list: {len(self.selected_sites)} sites")
+        return None
+        return None
+
+    def _interactive_site_selection(self) -> Optional[Dict[str, Any]]:
+        """Interactive site selection with discovery."""
         print("\n-> Discovering available sites...")
         try:
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, self.org_id)
             if sites_response.status_code != 200:
                 print(f"X  Error retrieving sites: {sites_response.status_code}")
                 return {"error": "Failed to retrieve sites"}
@@ -37436,697 +38218,773 @@ def bulk_upgrade_switch_firmware_by_site_impl(org_id, sites_to_upgrade_override=
             all_sites = sites_response.data
             print(f"!? Found {len(all_sites)} total sites")
             
-            # Present site selection to user
-            print("\nAvailable sites:")
-            for index, site in enumerate(all_sites, 1):
-                print(f"{index:3}. {site.get('name', 'Unnamed')} (ID: {site.get('id', 'Unknown')})")
+            return self._prompt_site_selection(all_sites)
             
-            print("\nSite selection options:")
-            print("A. All sites")
-            print("S. Select specific sites")
-            print("C. Cancel operation")
-            
-            site_choice = input("\nEnter your choice (A/S/C): ").strip().upper()
-            
-            if site_choice == 'C':
-                print("-> Operation cancelled by user")
-                return {"cancelled": True}
-            elif site_choice == 'A':
-                selected_sites = all_sites
-                print(f"-> Selected all {len(selected_sites)} sites")
-            elif site_choice == 'S':
-                selected_sites = []
-                print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
-                site_input = input("Sites: ").strip()
-                
-                # Parse site selection
-                try:
-                    for part in site_input.split(','):
-                        part = part.strip()
-                        if '-' in part:
-                            start, end = map(int, part.split('-'))
-                            for device_index in range(start-1, end):
-                                if 0 <= device_index < len(all_sites):
-                                    selected_sites.append(all_sites[device_index])
-                        else:
-                            index = int(part) - 1
-                            if 0 <= index < len(all_sites):
-                                selected_sites.append(all_sites[index])
-                    
-                    print(f"-> Selected {len(selected_sites)} sites")
-                    
-                except Exception as e:
-                    print(f"X  Invalid site selection: {str(e)}")
-                    return {"error": "Invalid site selection"}
-            else:
-                print("X  Invalid selection")
-                return {"error": "Invalid selection"}
-                
         except Exception as e:
             print(f"X  Error during site discovery: {str(e)}")
-            logger.error(f"Site discovery failed: {str(e)}")
+            self.logger.error(f"Site discovery failed: {str(e)}")
             return {"error": f"Site discovery error: {str(e)}"}
 
-    if not selected_sites:
-        print("X  No sites selected")
-        return {"error": "No sites selected"}
-
-    # Switch firmware upgrade parameter selection
-    print(f"\n{'='*60}")
-    print("SWITCH FIRMWARE UPGRADE PARAMETER CONFIGURATION")
-    print(f"{'='*60}")
-    
-    # Strategy selection
-    print("\nUpgrade Strategy Options:")
-    print("1. big_bang    - Upgrade all switches simultaneously (fastest)")
-    print("2. serial      - Upgrade switches one by one (safest)")
-    print("3. canary      - Test subset first, then upgrade remaining")
-    
-    while True:
-        strategy_choice = input("\nSelect upgrade strategy (1-3): ").strip()
-        if strategy_choice == '1':
-            upgrade_strategy = 'big_bang'
-            break
-        elif strategy_choice == '2':
-            upgrade_strategy = 'serial'
-            break
-        elif strategy_choice == '3':
-            upgrade_strategy = 'canary'
-            break
-        else:
-            print("X  Please enter 1, 2, or 3")
-    
-    print(f"-> Selected strategy: {upgrade_strategy}")
-    
-    # Force upgrade selection
-    print("\nForce Upgrade Options:")
-    print("1. Yes - Force upgrade even if same version (recommended for testing)")
-    print("2. No  - Skip devices already on target version (recommended for production)")
-    
-    while True:
-        force_choice = input("\nForce upgrade? (1-2): ").strip()
-        if force_choice == '1':
-            force_upgrade = True
-            break
-        elif force_choice == '2':
-            force_upgrade = False
-            break
-        else:
-            print("X  Please enter 1 or 2")
-    
-    print(f"-> Force upgrade: {'Yes' if force_upgrade else 'No'}")
-    
-    # Reboot selection
-    print("\nReboot Options:")
-    print("1. Yes - Reboot after upgrade (required for switches - recommended)")
-    print("2. No  - No reboot (not recommended for switches)")
-    
-    while True:
-        reboot_choice = input("\nReboot after upgrade? (1-2): ").strip()
-        if reboot_choice == '1':
-            auto_reboot = True
-            break
-        elif reboot_choice == '2':
-            auto_reboot = False
-            print("!? WARNING: Switches typically require reboot to complete firmware upgrade")
-            break
-        else:
-            print("X  Please enter 1 or 2")
-    
-    print(f"-> Auto reboot: {'Yes' if auto_reboot else 'No'}")
-    
-    # Recovery snapshot selection (Junos specific)
-    print("\nRecovery Snapshot Options (Junos devices only):")
-    print("1. Yes - Take recovery snapshot after device reboots (recommended for Junos)")
-    print("2. No  - Skip recovery snapshot (faster but no post-upgrade backup)")
-    
-    while True:
-        snapshot_choice = input("\nTake recovery snapshot after reboot? (1-2): ").strip()
-        if snapshot_choice == '1':
-            take_snapshot = True
-            break
-        elif snapshot_choice == '2':
-            take_snapshot = False
-            break
-        else:
-            print("X  Please enter 1 or 2")
-    
-    print(f"-> Recovery snapshot after reboot: {'Yes' if take_snapshot else 'No'}")
-
-    # Firmware version selection
-    print(f"\n{'='*60}")
-    print("FIRMWARE VERSION SELECTION")
-    print(f"{'='*60}")
-    
-    # Get available firmware versions for switches
-    print("\n-> Discovering available switch firmware versions...")
-    try:
-        # Get switch inventory to determine current firmware and models
-        switches_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-            apisession, org_id, type="switch"
-        )
+    def _prompt_site_selection(self, all_sites: List[Dict]) -> Optional[Dict[str, Any]]:
+        """Display site list and get user selection."""
+        self._display_site_list(all_sites)
         
-        if switches_response.status_code != 200:
-            print(f"X  Error retrieving switch inventory: {switches_response.status_code}")
+        print("\nSite selection options:")
+        print("A. All sites")
+        print("S. Select specific sites")
+        print("C. Cancel operation")
+        
+        site_choice = input("\nEnter your choice (A/S/C): ").strip().upper()
+        
+        if site_choice == 'C':
+            print("-> Operation cancelled by user")
+            return {"cancelled": True}
+        elif site_choice == 'A':
+            self.selected_sites = all_sites
+            print(f"-> Selected all {len(self.selected_sites)} sites")
+        elif site_choice == 'S':
+            return self._parse_specific_sites(all_sites)
+        else:
+            print("X  Invalid selection")
+            return {"error": "Invalid selection"}
+        
+        if not self.selected_sites:
+            print("X  No sites selected")
+            return {"error": "No sites selected"}
+        
+        return None
+
+    def _display_site_list(self, sites: List[Dict]) -> None:
+        """Display numbered list of available sites."""
+        print("\nAvailable sites:")
+        for index, site in enumerate(sites, 1):
+            site_name = site.get('name', 'Unnamed')
+            site_id = site.get('id', 'Unknown')
+            print(f"{index:3}. {site_name} (ID: {site_id})")
+
+    def _parse_specific_sites(self, all_sites: List[Dict]) -> Optional[Dict[str, Any]]:
+        """Parse user input for specific site selection."""
+        print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
+        site_input = input("Sites: ").strip()
+        
+        try:
+            self.selected_sites = []
+            for part in site_input.split(','):
+                part = part.strip()
+                if '-' in part:
+                    start, end = map(int, part.split('-'))
+                    for device_index in range(start-1, end):
+                        if 0 <= device_index < len(all_sites):
+                            self.selected_sites.append(all_sites[device_index])
+                else:
+                    index = int(part) - 1
+                    if 0 <= index < len(all_sites):
+                        self.selected_sites.append(all_sites[index])
+            
+            print(f"-> Selected {len(self.selected_sites)} sites")
+            
+            if not self.selected_sites:
+                print("X  No valid sites selected")
+                return {"error": "No valid sites selected"}
+            
+            return None
+            
+        except Exception as e:
+            print(f"X  Invalid site selection: {str(e)}")
+            return {"error": "Invalid site selection"}
+
+    # =========================================================================
+    # STEP 3: Upgrade Parameters Configuration
+    # =========================================================================
+    
+    def _configure_upgrade_parameters(self) -> bool:
+        """Configure all upgrade parameters interactively."""
+        print(f"\n{'='*60}")
+        print("SWITCH FIRMWARE UPGRADE PARAMETER CONFIGURATION")
+        print(f"{'='*60}")
+        
+        self._select_strategy()
+        self._select_force_option()
+        self._select_reboot_option()
+        self._select_snapshot_option()
+        
+        return True
+
+    def _select_strategy(self) -> None:
+        """Select upgrade strategy (big_bang, serial, canary)."""
+        print("\nUpgrade Strategy Options:")
+        print("1. big_bang    - Upgrade all switches simultaneously (fastest)")
+        print("2. serial      - Upgrade switches one by one (safest)")
+        print("3. canary      - Test subset first, then upgrade remaining")
+        
+        while True:
+            strategy_choice = input("\nSelect upgrade strategy (1-3): ").strip()
+            if strategy_choice == '1':
+                self.upgrade_strategy = 'big_bang'
+                break
+            elif strategy_choice == '2':
+                self.upgrade_strategy = 'serial'
+                break
+            elif strategy_choice == '3':
+                self.upgrade_strategy = 'canary'
+                break
+            else:
+                print("X  Please enter 1, 2, or 3")
+        
+        print(f"-> Selected strategy: {self.upgrade_strategy}")
+
+    def _select_force_option(self) -> None:
+        """Select force upgrade option."""
+        print("\nForce Upgrade Options:")
+        print("1. Yes - Force upgrade even if same version (recommended for testing)")
+        print("2. No  - Skip devices already on target version (recommended for production)")
+        
+        while True:
+            force_choice = input("\nForce upgrade? (1-2): ").strip()
+            if force_choice == '1':
+                self.force_upgrade = True
+                break
+            elif force_choice == '2':
+                self.force_upgrade = False
+                break
+            else:
+                print("X  Please enter 1 or 2")
+        
+        print(f"-> Force upgrade: {'Yes' if self.force_upgrade else 'No'}")
+
+    def _select_reboot_option(self) -> None:
+        """Select auto-reboot option."""
+        print("\nReboot Options:")
+        print("1. Yes - Reboot after upgrade (required for switches - recommended)")
+        print("2. No  - No reboot (not recommended for switches)")
+        
+        while True:
+            reboot_choice = input("\nReboot after upgrade? (1-2): ").strip()
+            if reboot_choice == '1':
+                self.auto_reboot = True
+                break
+            elif reboot_choice == '2':
+                self.auto_reboot = False
+                print("!? WARNING: Switches typically require reboot to complete firmware upgrade")
+                break
+            else:
+                print("X  Please enter 1 or 2")
+        
+        print(f"-> Auto reboot: {'Yes' if self.auto_reboot else 'No'}")
+
+    def _select_snapshot_option(self) -> None:
+        """Select recovery snapshot option (Junos specific)."""
+        print("\nRecovery Snapshot Options (Junos devices only):")
+        print("1. Yes - Take recovery snapshot after device reboots (recommended for Junos)")
+        print("2. No  - Skip recovery snapshot (faster but no post-upgrade backup)")
+        
+        while True:
+            snapshot_choice = input("\nTake recovery snapshot after reboot? (1-2): ").strip()
+            if snapshot_choice == '1':
+                self.take_snapshot = True
+                break
+            elif snapshot_choice == '2':
+                self.take_snapshot = False
+                break
+            else:
+                print("X  Please enter 1 or 2")
+        
+        print(f"-> Recovery snapshot after reboot: {'Yes' if self.take_snapshot else 'No'}")
+
+    # =========================================================================
+    # STEP 4: Firmware Discovery and Selection
+    # =========================================================================
+    
+    def _discover_and_select_firmware(self) -> Optional[Dict[str, Any]]:
+        """
+        Discover available firmware versions and get user selection.
+        
+        Returns:
+            None on success, error dict on failure
+        """
+        print(f"\n{'='*60}")
+        print("FIRMWARE VERSION SELECTION")
+        print(f"{'='*60}")
+        
+        # Fetch switch inventory to determine models
+        if not self._fetch_switch_inventory():
             return {"error": "Failed to retrieve switch inventory"}
         
-        switches = switches_response.data
-        if not switches:
-            print("X  No switches found in organization")
-            return {"error": "No switches found"}
-        
-        print(f"!? Found {len(switches)} switches")
-        
-        # Extract unique current firmware versions and models
-        current_firmware_versions = set()
-        switch_models = set()
-        for switch in switches:
-            if switch.get('version'):
-                current_firmware_versions.add(switch.get('version'))
-            if switch.get('model'):
-                switch_models.add(switch.get('model'))
-        
-        print(f"-> Switch models found: {', '.join(sorted(switch_models))}")
-        print(f"-> Current firmware versions: {', '.join(sorted(current_firmware_versions))}")
-        
-        if not switch_models:
-            print("!? WARNING: No switch models detected - firmware filtering may not work properly")
-            logger.warning("No switch models found in inventory - firmware compatibility checking disabled")
-        
-        # Check for cached firmware data first, then query API if needed
-        print("\n-> Checking for cached firmware versions...")
-        available_versions = []
-        compatible_versions = {}  # Initialize here for scope
-        firmware_data = []
-        
-        # Define cache file path and freshness threshold
-        # Name reflects API endpoint: /orgs/{org_id}/devices/versions?type=switch
-        cache_file = os.path.join("data", "cached_org_devices_versions_switch.csv")
-        cache_freshness_hours = 24  # Cache is fresh for 24 hours
-        use_cached_data = False
-        
-        # Check if cache file exists and is fresh
-        if os.path.exists(cache_file):
-            try:
-                file_age_hours = (datetime.now().timestamp() - os.path.getmtime(cache_file)) / 3600
-                if file_age_hours < cache_freshness_hours:
-                    # Check if file has content before using it
-                    file_size = os.path.getsize(cache_file)
-                    if file_size == 0:
-                        print(f"-> Cache file exists but is empty, will query API")
-                        logger.info("Cache file is empty, will refresh from API")
-                    else:
-                        print(f"!? Found fresh cached firmware data ({file_age_hours:.1f} hours old)")
-                        logger.info(f"Using cached firmware data from {cache_file} (age: {file_age_hours:.1f} hours)")
-                        
-                        # Read cached data and validate content
-                        with open(cache_file, 'r', newline='', encoding='utf-8') as csvfile:
-                            reader = csv.DictReader(csvfile)
-                            for row in reader:
-                                # Convert CSV row back to API format
-                                firmware_entry = {
-                                    'version': row['version'],
-                                    'model': row['model'],
-                                    'record_id': int(row.get('record_id', 0)) if row.get('record_id') else None,
-                                    'record_size': int(row.get('record_size', 0)) if row.get('record_size') else None,
-                                    'record_md5': row.get('record_md5', ''),
-                                    '_short': row.get('_short', ''),
-                                }
-                                firmware_data.append(firmware_entry)
-                        
-                        # Validate that we actually loaded data
-                        if firmware_data:
-                            use_cached_data = True
-                            logger.info(f"Loaded {len(firmware_data)} firmware entries from cache")
-                        else:
-                            print(f"-> Cache file has no valid data rows, will query API")
-                            logger.info("Cache file exists but contains no valid data, will refresh from API")
-                else:
-                    print(f"-> Cache file exists but is stale ({file_age_hours:.1f} hours old, threshold: {cache_freshness_hours}h)")
-                    logger.info(f"Cache file stale, will refresh from API")
-            except Exception as cache_error:
-                logger.warning(f"Error reading cache file: {cache_error}")
-                print("-> Cache file unreadable, will query API")
-        else:
-            print("-> No cache file found, will query API")
-            logger.info("No cached firmware data found")
-        
-        # Query API if cache not used
-        if not use_cached_data:
-            print("-> Querying available firmware versions from Mist API...")
-            try:
-                # Use the proper listOrgAvailableDeviceVersions API with type=switch parameter
-                logger.debug("Calling listOrgAvailableDeviceVersions API for switch firmware")
-                versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(
-                    apisession, 
-                    org_id, 
-                    type="switch"
-                )
-                
-                if versions_response and hasattr(versions_response, 'data') and versions_response.data:
-                    firmware_data = versions_response.data
-                    logger.debug(f"API returned {len(firmware_data)} firmware entries for switches")
-                
-                    # Save fresh API data to cache file
-                    try:
-                        os.makedirs("data", exist_ok=True)  # Ensure data directory exists
-                        with open(cache_file, 'w', newline='', encoding='utf-8') as csvfile:
-                            fieldnames = ['version', 'model', 'record_id', 'record_size', 'record_md5', '_short']
-                            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                            writer.writeheader()
-                            
-                            for entry in firmware_data:
-                                if isinstance(entry, dict):
-                                    # Write relevant fields to cache
-                                    cache_row = {
-                                        'version': entry.get('version', ''),
-                                        'model': entry.get('model', ''),
-                                        'record_id': entry.get('record_id', ''),
-                                        'record_size': entry.get('record_size', ''),
-                                        'record_md5': entry.get('record_md5', ''),
-                                        '_short': entry.get('_short', ''),
-                                    }
-                                    writer.writerow(cache_row)
-                        
-                        print(f"!? Cached {len(firmware_data)} firmware entries to {cache_file}")
-                        logger.info(f"Saved {len(firmware_data)} firmware entries to cache file")
-                        
-                    except Exception as save_error:
-                        logger.warning(f"Failed to save firmware cache: {save_error}")
-                        print(f"!? Warning: Could not cache firmware data: {save_error}")
-                
-                else:
-                    logger.warning("API returned empty or invalid firmware data")
-                    raise Exception("No firmware data returned from API")
-                    
-            except Exception as api_error:
-                logger.error(f"Failed to query switch firmware versions from API: {api_error}")
-                print(f"X  Error querying firmware versions: {api_error}")
-                print("   Cannot proceed without current firmware version list.")
-                return {"error": f"API firmware query failed: {api_error}"}
-        
-        # Process firmware data (works for both cached and fresh API data)
-        if firmware_data:
-            print(f"-> Processing {len(firmware_data)} firmware entries...")
-            
-            # Filter firmware versions by device model compatibility
-            for firmware_entry in firmware_data:
-                if isinstance(firmware_entry, dict):
-                    # Get version number and model - API returns individual model per entry
-                    version = firmware_entry.get('version')
-                    firmware_model = firmware_entry.get('model')  # Single model, not array
-                    
-                    if version and firmware_model:
-                        # Check if this firmware model is compatible with any of our switch models
-                        if firmware_model in switch_models:
-                            if version not in compatible_versions:
-                                compatible_versions[version] = set()
-                            compatible_versions[version].add(firmware_model)
-                            available_versions.append(version)
-                            
-                            logger.debug(f"Firmware version {version} compatible with organization model: {firmware_model}")
-                        else:
-                            logger.debug(f"Firmware version {version} NOT compatible - available for: {firmware_model}, organization has: {sorted(switch_models)}")
-                        
-
-            
-            # Remove duplicates and sort versions (newest first)
-            unique_versions = list(set(available_versions))
-            
-            def version_sort_key(version_string):
-                """
-                Create sort key for proper version number ordering.
-                Handles Juniper version formats like: 24.4R2.23, 24.4R1-S2.12, 23.4R3.11
-                """
-                try:
-                    # Remove common prefixes and suffixes, normalize separators
-                    normalized = version_string.replace('-S', '.').replace('R', '.')
-                    # Split into parts and convert numbers to integers for proper numeric sorting
-                    parts = []
-                    for part in normalized.split('.'):
-                        # Try to convert to int, fall back to string comparison
-                        try:
-                            parts.append(int(part))
-                        except ValueError:
-                            # Keep as string for non-numeric parts, but ensure consistent ordering
-                            parts.append(part.lower())
-                    return parts
-                except Exception:
-                    # Fallback to string sorting if parsing fails
-                    return [version_string.lower()]
-            
-            available_versions = sorted(unique_versions, key=version_sort_key, reverse=True)
-            
-            # Count firmware entries by model for debugging
-            model_counts = {}
-            vjunos_versions = []
-            ex4100_versions = []
-            for entry in firmware_data:
-                if isinstance(entry, dict):
-                    model = entry.get('model', 'Unknown')
-                    version = entry.get('version')
-                    model_counts[model] = model_counts.get(model, 0) + 1
-                    if model == 'VJUNOS' and version:
-                        vjunos_versions.append(version)
-                    elif model == 'EX4100-F-12P' and version:
-                        ex4100_versions.append(version)
-            
-            logger.debug(f"Firmware model distribution in data:")
-            for model in sorted(switch_models):
-                count = model_counts.get(model, 0)
-                logger.debug(f"  {model}: {count} firmware entries")
-            
-            if vjunos_versions:
-                logger.debug(f"Sample VJUNOS versions found: {sorted(set(vjunos_versions))[:5]}")
-            else:
-                logger.debug("No VJUNOS firmware entries found in data")
-            
-            # Log compatibility summary
-            logger.info(f"Successfully filtered {len(available_versions)} compatible switch firmware versions from {len(firmware_data)} total entries")
-            if compatible_versions:
-                logger.debug("Firmware compatibility summary:")
-                for version in available_versions[:5]:  # Log top 5 versions
-                    models_list = sorted(compatible_versions.get(version, []))
-                    logger.debug(f"  {version}: {models_list}")
-            else:
-                logger.warning("No compatible firmware versions found for organization switch models")
-        else:
-            logger.error("No firmware data available for processing")
-            print("X  No firmware data available")
+        # Load firmware data (cached or fresh from API)
+        firmware_data = self._load_firmware_data()
+        if not firmware_data:
             return {"error": "No firmware data available"}
-            
-        # Validate we have compatible firmware versions
-        if not available_versions:
-            if switch_models:
-                error_msg = f"No compatible firmware versions found for switch models: {', '.join(sorted(switch_models))}"
-                print(f"X  {error_msg}")
-                print("   This may indicate:")
-                print("   - Switch models are not supported by current firmware releases")
-                print("   - API data may be incomplete or outdated")
-                print("   - Switch models may need manual firmware specification")
-            else:
-                error_msg = "No switch firmware versions available from API"
-                print(f"X  {error_msg}")
-            
-            logger.error(error_msg)
-            
-            # Offer manual firmware version entry as fallback
-            print(f"\nFallback Option:")
-            print("You can still proceed by manually specifying a firmware version.")
-            print("!? WARNING: Manual entry bypasses model compatibility checks!")
-            print("Ensure the firmware version you enter is compatible with your switch models.")
-            
-            fallback_choice = input("\nProceed with manual firmware entry? (y/N): ").strip().lower()
-            if fallback_choice not in ['y', 'yes']:
-                print("-> Operation cancelled")
-                return {"error": "No compatible firmware versions and manual entry declined"}
-                
-            # Manual firmware entry
-            print("\nManual firmware version entry:")
-            print(f"Switch models in organization: {', '.join(sorted(switch_models))}")
-            print("Examples: 23.4R2.21, 22.4R3.25, 21.4R3.15, 20.4R3.8")
-            
-            while True:
-                manual_version = input("Enter firmware version: ").strip()
-                if manual_version:
-                    target_version = manual_version
-                    print(f"!? Using manually specified firmware version: {target_version}")
-                    print("   Model compatibility has NOT been verified!")
-                    logger.warning(f"Using manually specified firmware {target_version} - compatibility not verified for models: {sorted(switch_models)}")
-                    break
-                else:
-                    print("X  Firmware version is required")
-            
-            # Skip the normal selection process
-            available_versions = [target_version]
         
-        if available_versions:
-            print(f"!? Found {len(available_versions)} compatible firmware versions")
-            
-            # Present firmware versions as indexed list with model compatibility
-            print("\nAvailable firmware versions (filtered by device model compatibility):")
-            print("Index | Version      | Compatible Models                | Notes")
-            print("------|--------------|----------------------------------|------")
-            
-            for idx, version in enumerate(available_versions, 1):
-                notes = ""
-                if version in current_firmware_versions:
-                    notes = "(Currently installed)"
-                elif idx == 1:
-                    notes = "(Latest/Recommended)"
-                
-                # Show which models this version is compatible with
-                version_models = sorted(compatible_versions.get(version, []))
-                models_str = ", ".join(version_models) if version_models else "Unknown"
-                if len(models_str) > 32:  # Truncate if too long
-                    models_str = models_str[:29] + "..."
-                
-                print(f"{idx:5} | {version:12} | {models_str:32} | {notes}")
-            
-            # Get user selection
-            while True:
-                try:
-                    print(f"\nSelect firmware version by index (1-{len(available_versions)}):")
-                    selection = input("Enter index number: ").strip()
-                    
-                    if not selection:
-                        print("X  Selection required")
-                        continue
-                        
-                    selection_idx = int(selection) - 1  # Convert to 0-based index
-                    
-                    if 0 <= selection_idx < len(available_versions):
-                        target_version = available_versions[selection_idx]
-                        print(f"-> Selected firmware version: {target_version}")
-                        break
-                    else:
-                        print(f"X  Invalid selection. Please enter a number between 1 and {len(available_versions)}")
-                        
-                except ValueError:
-                    print("X  Invalid input. Please enter a number")
-                except KeyboardInterrupt:
-                    print("\n-> Operation cancelled by user")
-                    return {"cancelled": True}
-        else:
-            # Fallback to manual entry if no versions found
-            print("-> No firmware versions available from API, using manual entry")
-            print("\nPlease enter target firmware version manually:")
-            print("Examples: 23.4R2.21, 22.4R3.25, 21.4R3.15, 20.4R3.8")
-            
-            target_version = input("Target firmware version: ").strip()
-            if not target_version:
-                print("X  Firmware version is required")
-                return {"error": "No firmware version specified"}
+        # Process firmware for compatibility
+        self._process_firmware_data(firmware_data)
         
-        print(f"-> Target firmware version: {target_version}")
+        # Get user version selection
+        return self._get_version_selection()
+
+    def _fetch_switch_inventory(self) -> bool:
+        """Fetch switch inventory to determine current firmware and models."""
+        print("\n-> Discovering available switch firmware versions...")
+        try:
+            switches_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                apisession, self.org_id, type="switch"
+            )
+            
+            if switches_response.status_code != 200:
+                print(f"X  Error retrieving switch inventory: {switches_response.status_code}")
+                return False
+            
+            switches = switches_response.data
+            if not switches:
+                print("X  No switches found in organization")
+                return False
+            
+            print(f"!? Found {len(switches)} switches")
+            
+            # Extract unique firmware versions and models
+            for switch in switches:
+                if switch.get('version'):
+                    self.current_firmware_versions.add(switch.get('version'))
+                if switch.get('model'):
+                    self.switch_models.add(switch.get('model'))
+            
+            print(f"-> Switch models found: {', '.join(sorted(self.switch_models))}")
+            print(f"-> Current firmware versions: {', '.join(sorted(self.current_firmware_versions))}")
+            
+            if not self.switch_models:
+                print("!? WARNING: No switch models detected - firmware filtering may not work properly")
+                self.logger.warning("No switch models found in inventory")
+            
+            return True
+            
+        except Exception as e:
+            print(f"X  Error fetching switch inventory: {str(e)}")
+            self.logger.error(f"Switch inventory fetch failed: {str(e)}")
+            return False
+
+    def _load_firmware_data(self) -> List[Dict[str, Any]]:
+        """Load firmware data from cache or API."""
+        print("\n-> Checking for cached firmware versions...")
         
-    except Exception as e:
-        print(f"X  Error during firmware discovery: {str(e)}")
-        logger.error(f"Firmware discovery failed: {str(e)}")
-        return {"error": f"Firmware discovery error: {str(e)}"}
+        # Try cache first
+        cached_data = self._load_from_cache()
+        if cached_data:
+            return cached_data
+        
+        # Fetch from API
+        return self._fetch_firmware_from_api()
 
-    # Configuration summary and confirmation
-    print(f"\n{'='*60}")
-    print("UPGRADE CONFIGURATION SUMMARY")
-    print(f"{'='*60}")
-    print(f"Organization: {org_name}")
-    print(f"Sites to upgrade: {len(selected_sites)}")
-    print(f"Target firmware: {target_version}")
-    print(f"Upgrade strategy: {upgrade_strategy}")
-    print(f"Force upgrade: {'Yes' if force_upgrade else 'No'}")
-    print(f"Auto reboot: {'Yes' if auto_reboot else 'No'}")
-    print(f"Recovery snapshot after reboot: {'Yes' if take_snapshot else 'No'}")
-    
-    print(f"\n!? CRITICAL WARNING !?")
-    print("Switch firmware upgrades will cause network disruption!")
-    print("- Switches will reboot and be offline during upgrade")
-    print("- Plan appropriate maintenance windows") 
-    print("- Ensure backup connectivity if needed")
-    print("- Monitor upgrade progress closely")
-    
-    print(f"\nTo proceed with switch firmware upgrade, type: UPGRADE SWITCHES")
-    confirmation = InputUtils.safe_input("Confirmation: ", "", True, "switch firmware upgrade confirmation")
-    
-    if confirmation is None or confirmation != "UPGRADE SWITCHES":
-        print("-> Operation cancelled - incorrect confirmation")
-        logger.info("Switch firmware upgrade cancelled by user")
-        return {"cancelled": True}
-
-    # Execute upgrade operation
-    print(f"\n{'='*60}")
-    print("EXECUTING SWITCH FIRMWARE UPGRADE")
-    print(f"{'='*60}")
-    
-    # Initialize results tracking
-    upgrade_results = {
-        'operation_id': f"switch_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        'target_version': target_version,
-        'strategy': upgrade_strategy,
-        'force': force_upgrade,
-        'reboot': auto_reboot,
-        'snapshot': take_snapshot,
-        'sites_processed': 0,
-        'sites_successful': 0,
-        'sites_failed': 0,
-        'site_results': [],
-        'start_time': datetime.now().isoformat(),
-        'end_time': None
-    }
-    
-    logger.info(f"Starting switch firmware upgrade: {upgrade_results['operation_id']}")
-
-    try:
-        # Process each site for switch firmware upgrade
-        for site_index, site_info in enumerate(selected_sites, 1):
-            site_id = site_info.get('id')
-            site_name = site_info.get('name', 'Unknown Site')
+    def _load_from_cache(self) -> Optional[List[Dict[str, Any]]]:
+        """Load firmware data from cache file if fresh."""
+        if not os.path.exists(self.CACHE_FILE):
+            print("-> No cache file found, will query API")
+            self.logger.info("No cached firmware data found")
+            return None
+        
+        try:
+            file_age_hours = (datetime.now().timestamp() - os.path.getmtime(self.CACHE_FILE)) / 3600
             
-            print(f"\n-> Processing site {site_index}/{len(selected_sites)}: {site_name}")
-            logger.debug(f"Processing site: {site_name} ({site_id})")
+            if file_age_hours >= self.CACHE_FRESHNESS_HOURS:
+                print(f"-> Cache file exists but is stale ({file_age_hours:.1f} hours old)")
+                self.logger.info("Cache file stale, will refresh from API")
+                return None
             
-            try:
-                # Get switches for this site
-                site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    apisession, site_id, type="switch"
-                )
-                
-                if site_devices_response.status_code != 200:
-                    print(f"  X  Error retrieving devices: {site_devices_response.status_code}")
-                    upgrade_results['sites_failed'] += 1
-                    upgrade_results['site_results'].append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'status': 'failed',
-                        'error': f"Device retrieval failed: {site_devices_response.status_code}"
-                    })
-                    continue
-                
-                site_switches = [d for d in site_devices_response.data if d.get('type') == 'switch']
-                
-                if not site_switches:
-                    print(f"  -> No switches found in site")
-                    upgrade_results['sites_processed'] += 1
-                    upgrade_results['site_results'].append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'status': 'skipped',
-                        'switches_count': 0,
-                        'reason': 'No switches found'
-                    })
-                    continue
-                
-                print(f"  -> Found {len(site_switches)} switches")
-                
-                # Extract switch device IDs for targeted upgrade
-                switch_device_ids = [switch.get('id') for switch in site_switches if switch.get('id')]
-                
-                if not switch_device_ids:
-                    logger.error(f"No valid switch device IDs found for site {site_name}")
-                    upgrade_results['sites_failed'] += 1
-                    upgrade_results['site_results'].append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'status': 'failed',
-                        'reason': 'No valid switch device IDs'
-                    })
-                    continue
-                
-                logger.debug(f"Switch device IDs for upgrade: {switch_device_ids}")
-                
-                # Prepare upgrade request with device IDs to target only switches
-                upgrade_request = {
-                    'version': target_version,
-                    'strategy': upgrade_strategy,
-                    'force': force_upgrade,
-                    'reboot': auto_reboot,
-                    'snapshot': take_snapshot,
-                    'device_ids': switch_device_ids  # Target only the switch devices
+            file_size = os.path.getsize(self.CACHE_FILE)
+            if file_size == 0:
+                print("-> Cache file exists but is empty, will query API")
+                self.logger.info("Cache file is empty, will refresh from API")
+                return None
+            
+            print(f"!? Found fresh cached firmware data ({file_age_hours:.1f} hours old)")
+            self.logger.info(f"Using cached firmware data (age: {file_age_hours:.1f} hours)")
+            
+            return self._read_cache_file()
+            
+        except Exception as cache_error:
+            self.logger.warning(f"Error reading cache file: {cache_error}")
+            print("-> Cache file unreadable, will query API")
+            return None
+
+    def _read_cache_file(self) -> List[Dict[str, Any]]:
+        """Read and parse cache file contents."""
+        firmware_data = []
+        with open(self.CACHE_FILE, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                firmware_entry = {
+                    'version': row['version'],
+                    'model': row['model'],
+                    'record_id': int(row.get('record_id', 0)) if row.get('record_id') else None,
+                    'record_size': int(row.get('record_size', 0)) if row.get('record_size') else None,
+                    'record_md5': row.get('record_md5', ''),
+                    '_short': row.get('_short', ''),
                 }
+                firmware_data.append(firmware_entry)
+        
+        if firmware_data:
+            self.logger.info(f"Loaded {len(firmware_data)} firmware entries from cache")
+        
+        return firmware_data if firmware_data else []
+
+    def _fetch_firmware_from_api(self) -> List[Dict[str, Any]]:
+        """Fetch firmware versions from Mist API."""
+        print("-> Querying available firmware versions from Mist API...")
+        try:
+            self.logger.debug("Calling listOrgAvailableDeviceVersions API for switch firmware")
+            versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(
+                apisession, self.org_id, type="switch"
+            )
+            
+            if not (versions_response and hasattr(versions_response, 'data') and versions_response.data):
+                self.logger.warning("API returned empty or invalid firmware data")
+                print("X  No firmware data returned from API")
+                return []
+            
+            firmware_data = versions_response.data
+            self.logger.debug(f"API returned {len(firmware_data)} firmware entries")
+            
+            # Save to cache
+            self._save_to_cache(firmware_data)
+            
+            return firmware_data
+            
+        except Exception as api_error:
+            self.logger.error(f"Failed to query switch firmware versions: {api_error}")
+            print(f"X  Error querying firmware versions: {api_error}")
+            return []
+
+    def _save_to_cache(self, firmware_data: List[Dict[str, Any]]) -> None:
+        """Save firmware data to cache file."""
+        try:
+            os.makedirs("data", exist_ok=True)
+            with open(self.CACHE_FILE, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['version', 'model', 'record_id', 'record_size', 'record_md5', '_short']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
                 
-                print(f"  -> Initiating firmware upgrade...")
-                logger.debug(f"Upgrade request for site {site_name}: {upgrade_request}")
+                for entry in firmware_data:
+                    if isinstance(entry, dict):
+                        cache_row = {
+                            'version': entry.get('version', ''),
+                            'model': entry.get('model', ''),
+                            'record_id': entry.get('record_id', ''),
+                            'record_size': entry.get('record_size', ''),
+                            'record_md5': entry.get('record_md5', ''),
+                            '_short': entry.get('_short', ''),
+                        }
+                        writer.writerow(cache_row)
+            
+            print(f"!? Cached {len(firmware_data)} firmware entries to {self.CACHE_FILE}")
+            self.logger.info(f"Saved {len(firmware_data)} firmware entries to cache")
+            
+        except Exception as save_error:
+            self.logger.warning(f"Failed to save firmware cache: {save_error}")
+            print(f"!? Warning: Could not cache firmware data: {save_error}")
+
+    def _process_firmware_data(self, firmware_data: List[Dict[str, Any]]) -> None:
+        """Process firmware data for model compatibility filtering."""
+        print(f"-> Processing {len(firmware_data)} firmware entries...")
+        
+        raw_versions = []
+        for firmware_entry in firmware_data:
+            if not isinstance(firmware_entry, dict):
+                continue
+            
+            version = firmware_entry.get('version')
+            firmware_model = firmware_entry.get('model')
+            
+            if version and firmware_model and firmware_model in self.switch_models:
+                if version not in self.compatible_versions:
+                    self.compatible_versions[version] = set()
+                self.compatible_versions[version].add(firmware_model)
+                raw_versions.append(version)
+                self.logger.debug(f"Firmware {version} compatible with model: {firmware_model}")
+        
+        # Remove duplicates and sort
+        unique_versions = list(set(raw_versions))
+        self.available_versions = sorted(unique_versions, key=self._version_sort_key, reverse=True)
+        
+        self.logger.info(f"Filtered {len(self.available_versions)} compatible versions from {len(firmware_data)} entries")
+
+    @staticmethod
+    def _version_sort_key(version_string: str) -> List:
+        """Create sort key for proper version number ordering."""
+        try:
+            normalized = version_string.replace('-S', '.').replace('R', '.')
+            parts = []
+            for part in normalized.split('.'):
+                try:
+                    parts.append(int(part))
+                except ValueError:
+                    parts.append(part.lower())
+            return parts
+        except Exception:
+            return [version_string.lower()]
+
+    def _get_version_selection(self) -> Optional[Dict[str, Any]]:
+        """Get user's firmware version selection."""
+        if not self.available_versions:
+            return self._handle_no_versions()
+        
+        print(f"!? Found {len(self.available_versions)} compatible firmware versions")
+        self._display_version_table()
+        
+        return self._prompt_version_selection()
+
+    def _handle_no_versions(self) -> Optional[Dict[str, Any]]:
+        """Handle case when no compatible versions found."""
+        if self.switch_models:
+            print(f"X  No compatible firmware versions found for: {', '.join(sorted(self.switch_models))}")
+        else:
+            print("X  No switch firmware versions available from API")
+        
+        print(f"\nFallback Option:")
+        print("You can still proceed by manually specifying a firmware version.")
+        print("!? WARNING: Manual entry bypasses model compatibility checks!")
+        
+        fallback_choice = input("\nProceed with manual firmware entry? (y/N): ").strip().lower()
+        if fallback_choice not in ['y', 'yes']:
+            print("-> Operation cancelled")
+            return {"error": "No compatible firmware versions and manual entry declined"}
+        
+        return self._get_manual_version_entry()
+
+    def _get_manual_version_entry(self) -> Optional[Dict[str, Any]]:
+        """Get manually entered firmware version."""
+        print("\nManual firmware version entry:")
+        print(f"Switch models in organization: {', '.join(sorted(self.switch_models))}")
+        print("Examples: 23.4R2.21, 22.4R3.25, 21.4R3.15, 20.4R3.8")
+        
+        while True:
+            manual_version = input("Enter firmware version: ").strip()
+            if manual_version:
+                self.target_version = manual_version
+                print(f"!? Using manually specified firmware version: {self.target_version}")
+                print("   Model compatibility has NOT been verified!")
+                self.logger.warning(f"Using manually specified firmware {self.target_version}")
+                return None
+            else:
+                print("X  Firmware version is required")
+
+    def _display_version_table(self) -> None:
+        """Display available firmware versions in formatted table."""
+        print("\nAvailable firmware versions (filtered by device model compatibility):")
+        print("Index | Version      | Compatible Models                | Notes")
+        print("------|--------------|----------------------------------|------")
+        
+        for idx, version in enumerate(self.available_versions, 1):
+            notes = self._get_version_notes(version, idx)
+            models_str = self._format_compatible_models(version)
+            print(f"{idx:5} | {version:12} | {models_str:32} | {notes}")
+
+    def _get_version_notes(self, version: str, index: int) -> str:
+        """Get notes string for a firmware version."""
+        if version in self.current_firmware_versions:
+            return "(Currently installed)"
+        elif index == 1:
+            return "(Latest/Recommended)"
+        return ""
+
+    def _format_compatible_models(self, version: str) -> str:
+        """Format compatible models string for display."""
+        version_models = sorted(self.compatible_versions.get(version, []))
+        models_str = ", ".join(version_models) if version_models else "Unknown"
+        if len(models_str) > 32:
+            models_str = models_str[:29] + "..."
+        return models_str
+
+    def _prompt_version_selection(self) -> Optional[Dict[str, Any]]:
+        """Prompt user to select firmware version by index."""
+        while True:
+            try:
+                print(f"\nSelect firmware version by index (1-{len(self.available_versions)}):")
+                selection = input("Enter index number: ").strip()
                 
-                # Execute upgrade via Mist API
-                upgrade_response = mistapi.api.v1.sites.devices.upgradeSiteDevices(
-                    apisession, site_id, body=upgrade_request
-                )
+                if not selection:
+                    print("X  Selection required")
+                    continue
                 
-                if upgrade_response.status_code in [200, 202]:
-                    print(f"  !? Upgrade initiated successfully")
-                    upgrade_results['sites_successful'] += 1
-                    upgrade_results['site_results'].append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'status': 'initiated',
-                        'switches_count': len(site_switches),
-                        'target_version': target_version,
-                        'strategy': upgrade_strategy,
-                        'response_code': upgrade_response.status_code
-                    })
-                    logger.info(f"Switch firmware upgrade initiated for site: {site_name}")
-                    
+                selection_idx = int(selection) - 1
+                
+                if 0 <= selection_idx < len(self.available_versions):
+                    self.target_version = self.available_versions[selection_idx]
+                    print(f"-> Selected firmware version: {self.target_version}")
+                    return None
                 else:
-                    print(f"  X  Upgrade failed: HTTP {upgrade_response.status_code}")
-                    upgrade_results['sites_failed'] += 1
-                    upgrade_results['site_results'].append({
-                        'site_id': site_id,
-                        'site_name': site_name,
-                        'status': 'failed',
-                        'switches_count': len(site_switches),
-                        'error': f"API error: {upgrade_response.status_code}",
-                        'response': upgrade_response.data if hasattr(upgrade_response, 'data') else None
-                    })
-                    logger.error(f"Switch firmware upgrade failed for site {site_name}: {upgrade_response.status_code}")
-            
-            except Exception as e:
-                print(f"  X  Error processing site: {str(e)}")
-                upgrade_results['sites_failed'] += 1
-                upgrade_results['site_results'].append({
-                    'site_id': site_id,
-                    'site_name': site_name,
-                    'status': 'error',
-                    'error': str(e)
-                })
-                logger.error(f"Exception processing site {site_name}: {str(e)}")
-            
-            upgrade_results['sites_processed'] += 1
+                    print(f"X  Invalid selection. Enter a number between 1 and {len(self.available_versions)}")
+                    
+            except ValueError:
+                print("X  Invalid input. Please enter a number")
+            except KeyboardInterrupt:
+                print("\n-> Operation cancelled by user")
+                return {"cancelled": True}
+
+    # =========================================================================
+    # STEP 5: Upgrade Confirmation
+    # =========================================================================
+    
+    def _confirm_upgrade(self) -> bool:
+        """Display configuration summary and get user confirmation."""
+        self._display_config_summary()
+        self._display_warnings()
         
-        # Finalize results
-        upgrade_results['end_time'] = datetime.now().isoformat()
+        print(f"\nTo proceed with switch firmware upgrade, type: UPGRADE SWITCHES")
+        confirmation = InputUtils.safe_input("Confirmation: ", "", True, "switch firmware upgrade confirmation")
         
+        if confirmation is None or confirmation != "UPGRADE SWITCHES":
+            print("-> Operation cancelled - incorrect confirmation")
+            self.logger.info("Switch firmware upgrade cancelled by user")
+            return False
+        
+        return True
+
+    def _display_config_summary(self) -> None:
+        """Display upgrade configuration summary."""
+        print(f"\n{'='*60}")
+        print("UPGRADE CONFIGURATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Organization: {self.org_name}")
+        print(f"Sites to upgrade: {len(self.selected_sites)}")
+        print(f"Target firmware: {self.target_version}")
+        print(f"Upgrade strategy: {self.upgrade_strategy}")
+        print(f"Force upgrade: {'Yes' if self.force_upgrade else 'No'}")
+        print(f"Auto reboot: {'Yes' if self.auto_reboot else 'No'}")
+        print(f"Recovery snapshot after reboot: {'Yes' if self.take_snapshot else 'No'}")
+
+    def _display_warnings(self) -> None:
+        """Display critical warnings before upgrade."""
+        print(f"\n!? CRITICAL WARNING !?")
+        print("Switch firmware upgrades will cause network disruption!")
+        print("- Switches will reboot and be offline during upgrade")
+        print("- Plan appropriate maintenance windows")
+        print("- Ensure backup connectivity if needed")
+        print("- Monitor upgrade progress closely")
+
+    # =========================================================================
+    # STEP 6: Execute Upgrades
+    # =========================================================================
+    
+    def _execute_upgrades(self) -> Dict[str, Any]:
+        """Execute firmware upgrades across all selected sites."""
+        print(f"\n{'='*60}")
+        print("EXECUTING SWITCH FIRMWARE UPGRADE")
+        print(f"{'='*60}")
+        
+        self._initialize_results()
+        self.logger.info(f"Starting switch firmware upgrade: {self.upgrade_results['operation_id']}")
+        
+        try:
+            for site_index, site_info in enumerate(self.selected_sites, 1):
+                self._process_site(site_index, site_info)
+            
+            self._finalize_results()
+            return self.upgrade_results
+            
+        except Exception as e:
+            return self._handle_critical_error(e)
+
+    def _initialize_results(self) -> None:
+        """Initialize results tracking structure."""
+        self.upgrade_results = {
+            'operation_id': f"switch_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'target_version': self.target_version,
+            'strategy': self.upgrade_strategy,
+            'force': self.force_upgrade,
+            'reboot': self.auto_reboot,
+            'snapshot': self.take_snapshot,
+            'sites_processed': 0,
+            'sites_successful': 0,
+            'sites_failed': 0,
+            'site_results': [],
+            'start_time': datetime.now().isoformat(),
+            'end_time': None
+        }
+
+    def _process_site(self, site_index: int, site_info: Dict[str, Any]) -> None:
+        """Process firmware upgrade for a single site."""
+        site_id = site_info.get('id', '')
+        site_name = site_info.get('name', 'Unknown Site')
+        
+        if not site_id:
+            self.logger.error(f"Site has no ID: {site_name}")
+            self.upgrade_results['sites_failed'] += 1
+            return
+        
+        print(f"\n-> Processing site {site_index}/{len(self.selected_sites)}: {site_name}")
+        self.logger.debug(f"Processing site: {site_name} ({site_id})")
+        
+        try:
+            # Get switches for this site
+            site_switches = self._get_site_switches(site_id, site_name)
+            if site_switches is None:
+                return
+            
+            if not site_switches:
+                self._record_no_switches(site_id, site_name)
+                return
+            
+            print(f"  -> Found {len(site_switches)} switches")
+            
+            # Execute upgrade for this site
+            self._execute_site_upgrade(site_id, site_name, site_switches)
+            
+        except Exception as e:
+            self._record_site_error(site_id, site_name, str(e))
+        
+        self.upgrade_results['sites_processed'] += 1
+
+    def _get_site_switches(self, site_id: str, site_name: str) -> Optional[List[Dict]]:
+        """Get switches for a specific site."""
+        site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+            apisession, site_id, type="switch"
+        )
+        
+        if site_devices_response.status_code != 200:
+            print(f"  X  Error retrieving devices: {site_devices_response.status_code}")
+            self.upgrade_results['sites_failed'] += 1
+            self.upgrade_results['site_results'].append({
+                'site_id': site_id,
+                'site_name': site_name,
+                'status': 'failed',
+                'error': f"Device retrieval failed: {site_devices_response.status_code}"
+            })
+            return None
+        
+        return [d for d in site_devices_response.data if d.get('type') == 'switch']
+
+    def _record_no_switches(self, site_id: str, site_name: str) -> None:
+        """Record result when no switches found in site."""
+        print(f"  -> No switches found in site")
+        self.upgrade_results['sites_processed'] += 1
+        self.upgrade_results['site_results'].append({
+            'site_id': site_id,
+            'site_name': site_name,
+            'status': 'skipped',
+            'switches_count': 0,
+            'reason': 'No switches found'
+        })
+
+    def _execute_site_upgrade(self, site_id: str, site_name: str, switches: List[Dict]) -> None:
+        """Execute firmware upgrade for switches in a site."""
+        switch_device_ids: List[str] = [str(s.get('id')) for s in switches if s.get('id')]
+        
+        if not switch_device_ids:
+            self.logger.error(f"No valid switch device IDs found for site {site_name}")
+            self.upgrade_results['sites_failed'] += 1
+            self.upgrade_results['site_results'].append({
+                'site_id': site_id,
+                'site_name': site_name,
+                'status': 'failed',
+                'reason': 'No valid switch device IDs'
+            })
+            return
+        
+        upgrade_request = self._build_upgrade_request(switch_device_ids)
+        
+        print(f"  -> Initiating firmware upgrade...")
+        self.logger.debug(f"Upgrade request for site {site_name}: {upgrade_request}")
+        
+        upgrade_response = mistapi.api.v1.sites.devices.upgradeSiteDevices(
+            apisession, site_id, body=upgrade_request
+        )
+        
+        self._record_upgrade_result(site_id, site_name, switches, upgrade_response)
+
+    def _build_upgrade_request(self, device_ids: List[str]) -> Dict[str, Any]:
+        """Build the upgrade request payload."""
+        return {
+            'version': self.target_version,
+            'strategy': self.upgrade_strategy,
+            'force': self.force_upgrade,
+            'reboot': self.auto_reboot,
+            'snapshot': self.take_snapshot,
+            'device_ids': device_ids
+        }
+
+    def _record_upgrade_result(self, site_id: str, site_name: str, 
+                               switches: List[Dict], response) -> None:
+        """Record the result of an upgrade attempt."""
+        if response.status_code in [200, 202]:
+            print(f"  !? Upgrade initiated successfully")
+            self.upgrade_results['sites_successful'] += 1
+            self.upgrade_results['site_results'].append({
+                'site_id': site_id,
+                'site_name': site_name,
+                'status': 'initiated',
+                'switches_count': len(switches),
+                'target_version': self.target_version,
+                'strategy': self.upgrade_strategy,
+                'response_code': response.status_code
+            })
+            self.logger.info(f"Switch firmware upgrade initiated for site: {site_name}")
+        else:
+            print(f"  X  Upgrade failed: HTTP {response.status_code}")
+            self.upgrade_results['sites_failed'] += 1
+            self.upgrade_results['site_results'].append({
+                'site_id': site_id,
+                'site_name': site_name,
+                'status': 'failed',
+                'switches_count': len(switches),
+                'error': f"API error: {response.status_code}",
+                'response': response.data if hasattr(response, 'data') else None
+            })
+            self.logger.error(f"Switch firmware upgrade failed for site {site_name}: {response.status_code}")
+
+    def _record_site_error(self, site_id: str, site_name: str, error: str) -> None:
+        """Record an error that occurred while processing a site."""
+        print(f"  X  Error processing site: {error}")
+        self.upgrade_results['sites_failed'] += 1
+        self.upgrade_results['site_results'].append({
+            'site_id': site_id,
+            'site_name': site_name,
+            'status': 'error',
+            'error': error
+        })
+        self.logger.error(f"Exception processing site {site_name}: {error}")
+
+    def _finalize_results(self) -> None:
+        """Finalize results and display summary."""
+        self.upgrade_results['end_time'] = datetime.now().isoformat()
+        self._display_results_summary()
+
+    def _display_results_summary(self) -> None:
+        """Display the final upgrade results summary."""
         print(f"\n{'='*60}")
         print("SWITCH FIRMWARE UPGRADE SUMMARY")
         print(f"{'='*60}")
-        print(f"Operation ID: {upgrade_results['operation_id']}")
-        print(f"Sites processed: {upgrade_results['sites_processed']}")
-        print(f"Sites successful: {upgrade_results['sites_successful']}")  
-        print(f"Sites failed: {upgrade_results['sites_failed']}")
-        print(f"Target firmware: {target_version}")
-        print(f"Strategy: {upgrade_strategy}")
+        print(f"Operation ID: {self.upgrade_results['operation_id']}")
+        print(f"Sites processed: {self.upgrade_results['sites_processed']}")
+        print(f"Sites successful: {self.upgrade_results['sites_successful']}")
+        print(f"Sites failed: {self.upgrade_results['sites_failed']}")
+        print(f"Target firmware: {self.target_version}")
+        print(f"Strategy: {self.upgrade_strategy}")
         
-        if upgrade_results['sites_failed'] > 0:
-            print(f"\n!? {upgrade_results['sites_failed']} sites encountered errors:")
-            for result in upgrade_results['site_results']:
-                if result['status'] in ['failed', 'error']:
-                    print(f"  - {result['site_name']}: {result.get('error', 'Unknown error')}")
+        self._display_failure_details()
         
         print(f"\nUpgrade operations have been initiated.")
         print(f"Monitor progress through Mist dashboard or API.")
         print(f"Check individual switch status for completion.")
         
-        logger.info(f"Switch firmware upgrade operation completed: {upgrade_results['operation_id']}")
-        return upgrade_results
-        
-    except Exception as e:
-        error_msg = f"Critical error in switch firmware upgrade: {str(e)}"
-        print(f"\nX  {error_msg}")
-        logger.error(error_msg)
-        
-        upgrade_results['end_time'] = datetime.now().isoformat()
-        upgrade_results['error'] = str(e)
-        
-        return upgrade_results
+        self.logger.info(f"Switch firmware upgrade operation completed: {self.upgrade_results['operation_id']}")
 
+    def _display_failure_details(self) -> None:
+        """Display details of any failed sites."""
+        if self.upgrade_results['sites_failed'] > 0:
+            print(f"\n!? {self.upgrade_results['sites_failed']} sites encountered errors:")
+            for result in self.upgrade_results['site_results']:
+                if result['status'] in ['failed', 'error']:
+                    error_msg = result.get('error', 'Unknown error')
+                    print(f"  - {result['site_name']}: {error_msg}")
+
+    def _handle_critical_error(self, error: Exception) -> Dict[str, Any]:
+        """Handle critical error during upgrade execution."""
+        error_msg = f"Critical error in switch firmware upgrade: {str(error)}"
+        print(f"\nX  {error_msg}")
+        self.logger.error(error_msg)
+        
+        self.upgrade_results['end_time'] = datetime.now().isoformat()
+        self.upgrade_results['error'] = str(error)
+        
+        return self.upgrade_results
 
 
 # ============================================================================
@@ -41007,7 +41865,7 @@ menu_actions = {
     
     # Status & Monitoring
     "60": (lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).check_firmware_upgrade_status(), "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"),
-    "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: compare_inventory_with_csv(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
+    "61": (lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify).execute(), "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"),
     "62": (TroubleshootUtils.launch_interactive, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
     # Work In Progress Features (Read-Only)
@@ -41096,6 +41954,7 @@ menu_actions = {
     "109": (SiteConfigManager.create_ap_model_device_profiles, " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)"),
     "110": (SiteConfigManager.assign_aps_to_matching_device_profiles, " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"),
     "111": (GatewayTemplateConfigManager.clone_by_location, " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"),
+    "113": (lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run), " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)"),
     
     # ==============================
     # MAPS MANAGER (External Module)
@@ -41402,6 +42261,7 @@ def run_systematic_test():
         "109": "DESTRUCTIVE: Creates device profiles for AP models - requires uppercase confirmation",
         "110": "DESTRUCTIVE: Assigns APs to device profiles - requires uppercase confirmation",
         "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation",
+        "113": "DESTRUCTIVE: Configures WAN probe override on templates - requires uppercase confirmation",
         
         # Interactive visualization tools
         "112": "Maps Manager - requires interactive Dash web server and browser"
@@ -41624,6 +42484,7 @@ def run_interactive_test():
         "109": "DESTRUCTIVE: Creates device profiles",
         "110": "DESTRUCTIVE: Assigns APs to device profiles",
         "111": "DESTRUCTIVE: Clones gateway templates by state/country",
+        "113": "DESTRUCTIVE: Configures WAN probe override on templates",
         "90": "DESTRUCTIVE: AP firmware upgrade",
         "91": "DESTRUCTIVE: Device reboot",
         "92": "DESTRUCTIVE: Virtual chassis conversion",
@@ -44344,7 +45205,7 @@ def main():
             "OrgExportUtils.devices_with_site_info",
             "export_gateway_device_configs_to_csv",
             "APIFetchUtils.gateway_device_configs",
-            "compare_inventory_with_csv",
+            "InventoryCSVComparator",
             "export_gateways_with_wan_overrides_to_csv",
             # Newly added fast-capable stats exporters:
             "OrgExportUtils.device_stats",
