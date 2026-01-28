@@ -35863,7 +35863,9 @@ class FirmwareManager:
     
     def _execute_bulk_upgrade(self, sites_to_upgrade_override):
         """Execute the bulk firmware upgrade using BulkAPFirmwareUpgrader class."""
-        upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override)
+        # Check for dry_run flag from global args
+        dry_run = getattr(globals().get('args', None), 'dry_run', False)
+        upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)
         return upgrader.execute()
     
     def _execute_status_check(self, scope_choice, site_filter):
@@ -37674,10 +37676,11 @@ class BulkAPFirmwareUpgrader:
     - Auto-upgrade configuration
     """
     
-    def __init__(self, org_id: str, sites_override: Optional[list] = None):
+    def __init__(self, org_id: str, sites_override: Optional[list] = None, dry_run: bool = False):
         """Initialize the bulk AP firmware upgrader."""
         self.org_id = org_id
         self.sites_override = sites_override
+        self.dry_run = dry_run
         
         # Site context
         self.sites_to_upgrade: list = []
@@ -37708,6 +37711,10 @@ class BulkAPFirmwareUpgrader:
         logging.info("Starting advanced bulk AP firmware upgrade by site...")
         logging.debug("BulkAPFirmwareUpgrader.execute() initiated")
         logging.debug(f"Using org_id: {self.org_id}")
+        
+        if self.dry_run:
+            print("\n  >> DRY-RUN MODE: No actual upgrades will be performed <<")
+            logging.info("DRY-RUN MODE enabled - no API calls will be made")
         
         try:
             if not self._step1_determine_sites():
@@ -38545,7 +38552,12 @@ class BulkAPFirmwareUpgrader:
     def _display_upgrade_warnings(self, total: int) -> None:
         """Display critical upgrade warnings."""
         print(f"\n" + "??" * 50)
-        print(" CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE:")
+        if self.dry_run:
+            print(" DRY-RUN MODE - NO ACTUAL CHANGES WILL BE MADE")
+            print("??" * 50)
+            print(" This will simulate the firmware upgrade workflow:")
+        else:
+            print(" CRITICAL WARNING - ADVANCED FIRMWARE UPGRADE:")
         print("!? APs will REBOOT during upgrade")
         print("!? Wi-Fi connectivity will be TEMPORARILY LOST")
         print("!? Upgrades take 5-15 minutes per device")
@@ -38644,6 +38656,13 @@ class BulkAPFirmwareUpgrader:
         device_ids = [d.get("id") for d in site_data['devices'] if d.get("id")]
         
         body = self._build_upgrade_body(version, device_ids)
+        
+        if self.dry_run:
+            print(f"      [DRY-RUN] Would upgrade {len(device_ids)} devices to {version}")
+            logging.info(f"DRY-RUN: Would call upgradeSiteDevices for site {site_name} with {len(device_ids)} devices")
+            self.successful_upgrades += len(site_data['devices'])
+            return
+        
         resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
         
         if hasattr(resp, "data") and resp.data and isinstance(resp.data, dict):
@@ -38663,6 +38682,13 @@ class BulkAPFirmwareUpgrader:
             device_ids = [d.get("id") for d in devices if d.get("id")]
             
             body = self._build_upgrade_body(version, device_ids)
+            
+            if self.dry_run:
+                print(f"         [DRY-RUN] {model}: Would upgrade {len(devices)} devices to {version}")
+                logging.info(f"DRY-RUN: Would call upgradeSiteDevices for {model} at {site_name} with {len(device_ids)} devices")
+                self.successful_upgrades += len(devices)
+                continue
+            
             resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
             
             if hasattr(resp, "data") and resp.data and isinstance(resp.data, dict):
@@ -38700,6 +38726,9 @@ class BulkAPFirmwareUpgrader:
     
     def _log_upgrade_results(self, site_id: str, site_name: str, site_data: dict, status: str) -> None:
         """Log upgrade results for each device."""
+        # Add DRY-RUN prefix to status if in dry-run mode
+        effective_status = f"DRY-RUN: {status}" if self.dry_run else status
+        
         for device in site_data['devices']:
             target = self._get_device_target_version(device)
             self.results.append({
@@ -38716,8 +38745,8 @@ class BulkAPFirmwareUpgrader:
                 "P2P Enabled": self.upgrade_config["enable_p2p"],
                 "Max Failure %": self.upgrade_config["max_failure_percentage"],
                 "Force Upgrade": self.upgrade_config["force"],
-                "Upgrade ID": self.upgrade_ids[-1] if self.upgrade_ids else "N/A",
-                "Status": status,
+                "Upgrade ID": self.upgrade_ids[-1] if self.upgrade_ids else ("N/A (DRY-RUN)" if self.dry_run else "N/A"),
+                "Status": effective_status,
                 "Timestamp": datetime.now(timezone.utc).isoformat()
             })
     
@@ -38838,7 +38867,8 @@ class BulkAPFirmwareUpgrader:
             return
         
         site_name = self.sites_to_upgrade[0]['name'] if self.sites_to_upgrade else "Unknown"
-        filename = os.path.join("data", f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        dry_run_suffix = "_DRYRUN" if self.dry_run else ""
+        filename = os.path.join("data", f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{dry_run_suffix}.csv")
         
         try:
             fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC",
@@ -38851,9 +38881,13 @@ class BulkAPFirmwareUpgrader:
                 writer.writeheader()
                 writer.writerows(self.results)
             
-            print(f"\n  Advanced Firmware Upgrade Completed!")
-            print(f"   Successful: {self.successful_upgrades}")
-            print(f"   Failed: {self.failed_upgrades}")
+            if self.dry_run:
+                print(f"\n  DRY-RUN Complete - No actual upgrades performed!")
+                print(f"   Would have upgraded: {self.successful_upgrades} devices")
+            else:
+                print(f"\n  Advanced Firmware Upgrade Completed!")
+                print(f"   Successful: {self.successful_upgrades}")
+                print(f"   Failed: {self.failed_upgrades}")
             print(f"   Results: {filename}")
             logging.info(f"Upgrade results written to {filename}")
         except Exception as e:

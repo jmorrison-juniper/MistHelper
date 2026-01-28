@@ -550,6 +550,29 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.19.03",
+      "date": "2026-01-28",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 (AP Firmware Upgrade): Added --dry-run support",
+          "Dry-run mode simulates upgrade workflow without making API calls",
+          "Results file shows 'DRY-RUN:' prefix and '_DRYRUN' suffix in filename"
+        ],
+        "cli_options": [
+          "--dry-run flag now supported for Menu 90 BulkAPFirmwareUpgrader"
+        ],
+        "refactoring": [
+          "BulkAPFirmwareUpgrader.__init__(): Added dry_run parameter",
+          "FirmwareManager._execute_bulk_upgrade(): Passes dry_run from global args",
+          "_execute_single_version_upgrade(): Skips API call in dry-run mode",
+          "_execute_multi_version_upgrade(): Skips API call per model in dry-run mode",
+          "_log_upgrade_results(): Prefixes status with 'DRY-RUN:' when applicable",
+          "_step11_write_results(): Adds '_DRYRUN' suffix to output filename",
+          "_display_upgrade_warnings(): Shows dry-run mode indicator banner"
+        ]
+      }
+    },
+    {
       "version": "26.01.28.18.55",
       "date": "2026-01-28",
       "changes": {
