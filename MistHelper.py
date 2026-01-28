@@ -37880,9 +37880,18 @@ class BulkAPFirmwareUpgrader:
             logging.error("No sites found for all-sites selection")
             return False
         
+        # Display all sites before confirmation
+        print(f"\n  Sites to be included ({len(sites)} total):")
+        print(f"  " + "=" * 60)
+        for idx, site in enumerate(sites):
+            site_name = site.get('name', 'Unnamed')
+            print(f"   [{idx:3d}] {site_name}")
+        print(f"  " + "=" * 60)
+        
         # Confirmation prompt for safety
-        print(f"\n  WARNING: You are about to upgrade ALL {len(sites)} sites in this organization!")
-        print(f"  This will create {len(sites)} individual upgrade jobs.")
+        print(f"\n  WARNING: You are about to upgrade ALL {len(sites)} sites!")
+        print(f"  This will create up to {len(sites)} individual upgrade jobs.")
+        print(f"  (Sites with no APs or all APs at target version will be skipped)")
         confirm = input(f"\n  Type 'ALL' to confirm: ").strip()
         
         if confirm != "ALL":
@@ -38051,17 +38060,34 @@ class BulkAPFirmwareUpgrader:
             print(f"      Failed to fetch APs for site '{site_name}': {e}")
     
     def _display_ap_discovery_summary(self) -> None:
-        """Display AP discovery summary."""
+        """Display AP discovery summary with per-site model breakdown."""
         total_aps = len(self.all_aps)
         sites_with_aps = len([s for s in self.all_sites_aps.values() if s['count'] > 0])
         
         print(f"\n  AP Discovery Summary:")
-        print(f"   !? Total APs found: {total_aps}")
-        print(f"   !? Sites with APs: {sites_with_aps}/{len(self.sites_to_upgrade)}")
+        print(f"   Total APs found: {total_aps}")
+        print(f"   Sites with APs: {sites_with_aps}/{len(self.sites_to_upgrade)}")
         
+        print(f"\n  Per-Site Breakdown:")
+        print(f"  " + "-" * 70)
         for site_data in self.all_sites_aps.values():
-            status = f" (Error: {site_data['error']})" if 'error' in site_data else ""
-            print(f"   !? {site_data['name']}: {site_data['count']} APs{status}")
+            site_name = site_data['name']
+            ap_count = site_data['count']
+            
+            if 'error' in site_data:
+                print(f"   {site_name}: ERROR - {site_data['error']}")
+            elif ap_count == 0:
+                print(f"   {site_name}: No APs (will be skipped)")
+            else:
+                # Count models at this site
+                model_counts = {}
+                for ap in site_data.get('aps', []):
+                    model = ap.get('model', 'Unknown')
+                    model_counts[model] = model_counts.get(model, 0) + 1
+                
+                model_summary = ", ".join(f"{m}:{c}" for m, c in sorted(model_counts.items()))
+                print(f"   {site_name}: {ap_count} APs ({model_summary})")
+        print(f"  " + "-" * 70)
     
     # =========================================================================
     # STEP 3: FIRMWARE STATS COLLECTION

@@ -550,6 +550,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.18.51",
+      "date": "2026-01-28",
+      "changes": {
+        "enhancements": [
+          "Menu 90 'All sites' mode: Now displays full site list before confirmation prompt",
+          "AP Discovery Summary: Enhanced to show per-site model breakdown (e.g., 'Site-A: 12 APs (AP45:8, AP34:4)')",
+          "Clarified that sites with no APs or all APs at target will be skipped"
+        ],
+        "refactoring": [
+          "_select_all_sites_in_org(): Shows indexed site list before 'ALL' confirmation",
+          "_display_ap_discovery_summary(): Now shows model counts per site"
+        ]
+      }
+    },
+    {
       "version": "26.01.28.18.46",
       "date": "2026-01-28",
       "changes": {
