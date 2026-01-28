@@ -37865,7 +37865,7 @@ class BulkAPFirmwareUpgrader:
             return True
     
     def _select_all_sites_in_org(self) -> bool:
-        """Select all sites in the organization for upgrade."""
+        """Select all sites in the organization for upgrade (confirmation deferred to Step 7)."""
         # Ensure site list is available
         csv_file = "SiteList.csv"
         CacheUtils.check_and_generate_csv(csv_file, OrgExportUtils.sites)
@@ -37880,26 +37880,7 @@ class BulkAPFirmwareUpgrader:
             logging.error("No sites found for all-sites selection")
             return False
         
-        # Display all sites before confirmation
-        print(f"\n  Sites to be included ({len(sites)} total):")
-        print(f"  " + "=" * 60)
-        for idx, site in enumerate(sites):
-            site_name = site.get('name', 'Unnamed')
-            print(f"   [{idx:3d}] {site_name}")
-        print(f"  " + "=" * 60)
-        
-        # Confirmation prompt for safety
-        print(f"\n  WARNING: You are about to upgrade ALL {len(sites)} sites!")
-        print(f"  This will create up to {len(sites)} individual upgrade jobs.")
-        print(f"  (Sites with no APs or all APs at target version will be skipped)")
-        confirm = input(f"\n  Type 'ALL' to confirm: ").strip()
-        
-        if confirm != "ALL":
-            print(" Operation cancelled - confirmation not received.")
-            logging.warning("All-sites upgrade cancelled - user did not confirm")
-            return False
-        
-        # Build sites list from all sites
+        # Build sites list from all sites (no confirmation yet - will confirm after seeing AP inventory)
         for site in sites:
             site_id = site.get('id', '')
             site_name = site.get('name', 'Unnamed')
@@ -37910,8 +37891,9 @@ class BulkAPFirmwareUpgrader:
             print(" No valid sites found. Exiting.")
             return False
         
-        print(f"\n  Selected ALL {len(self.sites_to_upgrade)} sites for upgrade")
-        logging.info(f"All-sites selection: {len(self.sites_to_upgrade)} sites selected for upgrade")
+        print(f"\n  Queued {len(self.sites_to_upgrade)} sites for AP inventory scan...")
+        print(f"  (Sites without APs will be automatically excluded)")
+        logging.info(f"All-sites mode: {len(self.sites_to_upgrade)} sites queued for inventory scan")
         return True
     
     def _select_multiple_sites_interactively(self) -> bool:
@@ -38522,10 +38504,43 @@ class BulkAPFirmwareUpgrader:
         """Display warnings and get user confirmation."""
         total = sum(len(p["devices"]) for p in self.upgrade_plan.values())
         
+        # For multi-site upgrades, show comprehensive site/model breakdown
+        if len(self.sites_to_upgrade) > 1:
+            self._display_multi_site_summary()
+        
         self._display_upgrade_warnings(total)
         self._display_final_plan()
         
         return self._get_upgrade_confirmation(total)
+    
+    def _display_multi_site_summary(self) -> None:
+        """Display comprehensive site and model summary for multi-site upgrades."""
+        print(f"\n  Sites with APs to Upgrade:")
+        print(f"  " + "=" * 70)
+        
+        # Organize by site for display
+        site_summary = {}
+        for model, plan in self.upgrade_plan.items():
+            target_version = plan['version']
+            for device in plan['devices']:
+                site_name = device.get('_site_name', 'Unknown')
+                if site_name not in site_summary:
+                    site_summary[site_name] = {'models': {}, 'total': 0, 'version': target_version}
+                if model not in site_summary[site_name]['models']:
+                    site_summary[site_name]['models'][model] = 0
+                site_summary[site_name]['models'][model] += 1
+                site_summary[site_name]['total'] += 1
+        
+        # Display each site with its model breakdown
+        for site_name in sorted(site_summary.keys()):
+            info = site_summary[site_name]
+            model_str = ", ".join(f"{m}:{c}" for m, c in sorted(info['models'].items()))
+            print(f"   {site_name}: {info['total']} APs ({model_str})")
+        
+        print(f"  " + "=" * 70)
+        print(f"   Total: {len(site_summary)} sites, {sum(s['total'] for s in site_summary.values())} APs")
+        if self.skipped_already_at_target > 0:
+            print(f"   Skipped: {self.skipped_already_at_target} APs already at target version")
     
     def _display_upgrade_warnings(self, total: int) -> None:
         """Display critical upgrade warnings."""
@@ -38548,14 +38563,20 @@ class BulkAPFirmwareUpgrader:
     
     def _get_upgrade_confirmation(self, total: int) -> bool:
         """Get user confirmation for upgrade."""
-        print(f"\n  Type 'UPGRADE' to confirm upgrading {total} devices:")
+        sites_count = len(set(d.get('_site_id') for p in self.upgrade_plan.values() for d in p['devices']))
+        
+        if sites_count > 1:
+            print(f"\n  Type 'UPGRADE' to confirm upgrading {total} devices across {sites_count} sites:")
+        else:
+            print(f"\n  Type 'UPGRADE' to confirm upgrading {total} devices:")
+        
         try:
             confirm = input(">>> ").strip()
             if confirm != "UPGRADE":
                 print(" Upgrade cancelled.")
                 return False
             print(" User confirmed. Proceeding...")
-            logging.info(f"User confirmed upgrade for {total} devices")
+            logging.info(f"User confirmed upgrade for {total} devices across {sites_count} sites")
             return True
         except (KeyboardInterrupt, EOFError):
             return False

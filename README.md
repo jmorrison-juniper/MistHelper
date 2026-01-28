@@ -550,6 +550,25 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.18.55",
+      "date": "2026-01-28",
+      "changes": {
+        "workflow_improvements": [
+          "Menu 90 'All sites' mode: Removed early confirmation - now scans AP inventory first",
+          "Final confirmation (Step 7) now shows comprehensive site/model breakdown",
+          "Confirmation prompt shows 'UPGRADE X devices across Y sites' for multi-site upgrades"
+        ],
+        "new_methods": [
+          "BulkAPFirmwareUpgrader._display_multi_site_summary(): Shows per-site AP/model breakdown at confirmation"
+        ],
+        "refactoring": [
+          "_select_all_sites_in_org(): Removed early 'ALL' confirmation, defers to Step 7",
+          "_step7_confirm_upgrade(): Calls _display_multi_site_summary() for multi-site upgrades",
+          "_get_upgrade_confirmation(): Shows site count in confirmation prompt"
+        ]
+      }
+    },
+    {
       "version": "26.01.28.18.51",
       "date": "2026-01-28",
       "changes": {
