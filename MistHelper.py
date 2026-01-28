@@ -37835,19 +37835,127 @@ class BulkAPFirmwareUpgrader:
             print(f"      !? '{site}'")
     
     def _select_site_interactively(self, filename: str) -> bool:
-        """Select site interactively when no file exists."""
-        print(f"! {filename} not found - Single site mode")
-        print(f"   To enable bulk mode, create '{filename}' in data/ folder")
+        """Select site(s) interactively when no file exists."""
+        print(f"! {filename} not found - Interactive site selection")
+        print(f"   To enable file-based bulk mode, create '{filename}' in data/ folder")
         
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            print(" No site selected. Exiting.")
+        # Offer selection mode choice
+        print(f"\n  Site Selection Mode:")
+        print(f"   [1] Single site - select one site")
+        print(f"   [2] Multiple sites - select multiple sites (comma-separated)")
+        
+        mode_choice = input("\n  Selection mode (1 or 2): ").strip()
+        
+        if mode_choice == "2":
+            return self._select_multiple_sites_interactively()
+        else:
+            # Default to single site mode
+            site_id = PromptUtils.select_site()
+            if not site_id:
+                logging.error("No site selected. Exiting.")
+                print(" No site selected. Exiting.")
+                return False
+            
+            site_name = self._get_site_name(site_id)
+            self.sites_to_upgrade = [{'name': site_name, 'id': site_id}]
+            return True
+    
+    def _select_multiple_sites_interactively(self) -> bool:
+        """Select multiple sites from an indexed list using comma-separated indices."""
+        # Ensure site list is available
+        csv_file = "SiteList.csv"
+        CacheUtils.check_and_generate_csv(csv_file, OrgExportUtils.sites)
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)
+        
+        # Load sites from CSV
+        with open(csv_file_path, mode='r', encoding='utf-8') as file:
+            sites = list(csv.DictReader(file))
+        
+        if not sites:
+            print(" No sites found in organization.")
+            logging.error("No sites found for multi-site selection")
             return False
         
-        site_name = self._get_site_name(site_id)
-        self.sites_to_upgrade = [{'name': site_name, 'id': site_id}]
+        # Display indexed site list
+        print(f"\n  Available Sites ({len(sites)} total):")
+        print(f"  " + "=" * 60)
+        for idx, site in enumerate(sites):
+            site_name = site.get('name', 'Unnamed')
+            print(f"   [{idx}] {site_name}")
+        print(f"  " + "=" * 60)
+        
+        # Prompt for comma-separated indices
+        print(f"\n  Enter site indices as comma-separated list (e.g., 0,3,5,12)")
+        print(f"  Or enter a range using dash (e.g., 0-5,10,15-20)")
+        user_input = input("\n  Site indices: ").strip()
+        
+        if not user_input:
+            print(" No sites selected. Exiting.")
+            logging.error("No site indices entered for multi-site selection")
+            return False
+        
+        # Parse indices (supports both comma-separated and ranges like 0-5)
+        selected_indices = self._parse_index_input(user_input, len(sites))
+        
+        if not selected_indices:
+            print(" No valid site indices found. Exiting.")
+            logging.error("No valid site indices parsed from input")
+            return False
+        
+        # Build sites list from selected indices
+        for idx in selected_indices:
+            site = sites[idx]
+            site_id = site.get('id', '')
+            site_name = site.get('name', 'Unnamed')
+            if site_id:
+                self.sites_to_upgrade.append({'name': site_name, 'id': site_id})
+        
+        if not self.sites_to_upgrade:
+            print(" No valid sites found from selection. Exiting.")
+            return False
+        
+        # Display selected sites
+        print(f"\n  Selected {len(self.sites_to_upgrade)} site(s) for upgrade:")
+        for site in self.sites_to_upgrade:
+            print(f"   - {site['name']}")
+        
+        logging.info(f"Multi-site selection: {len(self.sites_to_upgrade)} sites selected")
         return True
+    
+    def _parse_index_input(self, user_input: str, max_index: int) -> list:
+        """Parse comma-separated indices and ranges into a list of valid indices."""
+        selected_indices = []
+        parts = [part.strip() for part in user_input.split(',')]
+        
+        for part in parts:
+            if '-' in part and not part.startswith('-'):
+                # Handle range like "0-5"
+                try:
+                    range_parts = part.split('-')
+                    if len(range_parts) == 2:
+                        start = int(range_parts[0].strip())
+                        end = int(range_parts[1].strip())
+                        for idx in range(start, end + 1):
+                            if 0 <= idx < max_index and idx not in selected_indices:
+                                selected_indices.append(idx)
+                except ValueError:
+                    logging.warning(f"Invalid range format: {part}")
+                    continue
+            else:
+                # Handle single index
+                try:
+                    idx = int(part)
+                    if 0 <= idx < max_index and idx not in selected_indices:
+                        selected_indices.append(idx)
+                    elif idx >= max_index:
+                        print(f"   !? Index {idx} out of range (max: {max_index - 1})")
+                except ValueError:
+                    logging.warning(f"Invalid index: {part}")
+                    continue
+        
+        # Sort indices for consistent ordering
+        selected_indices.sort()
+        return selected_indices
     
     def _get_site_name(self, site_id: str) -> str:
         """Get site name from site ID."""
@@ -38124,7 +38232,7 @@ class BulkAPFirmwareUpgrader:
         print(f"   Current versions: {', '.join(sorted(current, reverse=True))}")
         print(f"   Available versions ({len(versions)} found):")
         
-        for idx, v in enumerate(versions[:15]):  # Show top 15
+        for idx, v in enumerate(versions):  # Show all available versions
             num = v.get("version", "Unknown")
             indicators = []
             if v.get("recommended"):

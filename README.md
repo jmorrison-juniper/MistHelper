@@ -550,6 +550,28 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.18.30",
+      "date": "2026-01-28",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 (AP Firmware Upgrade): Added multi-site selection mode",
+          "New selection prompt offers [1] Single site or [2] Multiple sites modes",
+          "Multiple sites mode displays indexed site list with support for:",
+          "  - Comma-separated indices (e.g., 0,3,5,12)",
+          "  - Range notation (e.g., 0-5,10,15-20)",
+          "  - Mixed input (e.g., 0-3,7,10-12)",
+          "Each selected site gets its own individual upgrade job"
+        ],
+        "new_methods": [
+          "BulkAPFirmwareUpgrader._select_multiple_sites_interactively(): Multi-site selection with indexed display",
+          "BulkAPFirmwareUpgrader._parse_index_input(): Parses comma-separated indices and range notation"
+        ],
+        "refactoring": [
+          "_select_site_interactively(): Now offers mode selection before proceeding"
+        ]
+      }
+    },
+    {
       "version": "26.01.18.02.10",
       "date": "2026-01-18",
       "changes": {
