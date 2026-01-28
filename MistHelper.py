@@ -1966,6 +1966,16 @@ FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))
 FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8"))
 FAST_MODE_USE_CONNECTION_AWARE_THREADING = os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
 
+# WAN Port Configuration from .env (REQUIRED - no defaults)
+# MIST_WAN_TARGET_PORTS: Comma-separated list of WAN port names to target
+# Example: "ge-0/0/0,ge-0/0/1,ge-0/0/2,{{wan1_interface}},{{wan2_interface}},{{wan3_interface}}"
+MIST_WAN_TARGET_PORTS = [p.strip() for p in os.getenv("MIST_WAN_TARGET_PORTS", "").split(",") if p.strip()]
+
+# Site Exclusion Configuration from .env (REQUIRED - no defaults)
+# MIST_SITE_EXCLUDE_PREFIX: Site name prefix to exclude from destructive operations
+# Example: "VRE" to exclude Juniper internal VRE sites
+MIST_SITE_EXCLUDE_PREFIX = os.getenv("MIST_SITE_EXCLUDE_PREFIX", "")
+
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
 OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
@@ -18499,8 +18509,12 @@ class GatewayExportUtils:
             logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
 
         overridden_port_info = []
-        # Target ports: original 3 hardcoded ports + 3 variable-based ports (6 total)
-        target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
+        # Target ports loaded from MIST_WAN_TARGET_PORTS environment variable
+        target_ports = MIST_WAN_TARGET_PORTS
+        if not target_ports:
+            print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")
+            logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")
+            return []
 
         # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
         logging.info(" First pass: Identifying devices with port overrides...")
@@ -23727,7 +23741,7 @@ class WAN2MigrationManager:
         if not sites_to_configure:
             return
         
-        sites_to_configure = self._filter_vre_sites(sites_to_configure)
+        sites_to_configure = self._filter_excluded_sites(sites_to_configure)
         if not sites_to_configure:
             return
         
@@ -23803,22 +23817,25 @@ class WAN2MigrationManager:
             logging.error(f"Invalid site selection in Menu #103: {error}")
             return []
     
-    def _filter_vre_sites(self, sites_to_configure: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filter out VRE sites from configuration list."""
+    def _filter_excluded_sites(self, sites_to_configure: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter out excluded sites from configuration list based on MIST_SITE_EXCLUDE_PREFIX."""
+        if not MIST_SITE_EXCLUDE_PREFIX:
+            return sites_to_configure  # No prefix configured, include all sites
+        
         original_count = len(sites_to_configure)
         filtered_sites = [
             site for site in sites_to_configure 
-            if not site.get("name", "").startswith("VRE")
+            if not site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX)
         ]
         filtered_count = original_count - len(filtered_sites)
         
         if filtered_count > 0:
-            print(f"\n  !? SECURITY: Excluded {filtered_count} VRE sites from configuration")
-            logging.info(f"Menu #103: Excluded {filtered_count} VRE sites from WAN2 variable operation")
+            print(f"\n  !? SECURITY: Excluded {filtered_count} '{MIST_SITE_EXCLUDE_PREFIX}*' sites from configuration")
+            logging.info(f"Menu #103: Excluded {filtered_count} sites matching prefix '{MIST_SITE_EXCLUDE_PREFIX}' from WAN2 variable operation")
         
         if not filtered_sites:
-            print(" No sites remaining after filtering VRE sites.")
-            logging.warning("Menu #103: All selected sites were VRE sites - operation cancelled")
+            print(f" No sites remaining after filtering '{MIST_SITE_EXCLUDE_PREFIX}*' sites.")
+            logging.warning(f"Menu #103: All selected sites matched exclude prefix '{MIST_SITE_EXCLUDE_PREFIX}' - operation cancelled")
         
         return filtered_sites
     
@@ -24301,17 +24318,19 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     with open(sites_path, encoding="utf-8") as f:
         all_sites = list(csv.DictReader(f))
     
-    # OPTIMIZATION: Filter out VRE sites BEFORE any processing (not after)
+    # OPTIMIZATION: Filter out excluded sites BEFORE any processing (not after)
     # This reduces memory usage and speeds up all subsequent operations
     original_site_count = len(all_sites)
-    sites = [site for site in all_sites if not site.get("name", "").startswith("VRE")]
-    vre_filtered_count = original_site_count - len(sites)
+    if MIST_SITE_EXCLUDE_PREFIX:
+        sites = [site for site in all_sites if not site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX)]
+        excluded_count = original_site_count - len(sites)
+        if excluded_count > 0:
+            print(f"\n  !? SECURITY: Excluded {excluded_count} '{MIST_SITE_EXCLUDE_PREFIX}*' sites from template impact analysis (early filter)")
+            logging.info(f"Menu #104: Excluded {excluded_count} sites matching prefix '{MIST_SITE_EXCLUDE_PREFIX}' from WAN2 template operation (early optimization)")
+    else:
+        sites = all_sites
     
-    if vre_filtered_count > 0:
-        print(f"\n  !? SECURITY: Excluded {vre_filtered_count} VRE sites from template impact analysis (early filter)")
-        logging.info(f"Menu #104: Excluded {vre_filtered_count} VRE sites from WAN2 template operation (early optimization)")
-    
-    logging.info(f"Processing {len(sites)} non-VRE sites for template assignment counts")
+    logging.info(f"Processing {len(sites)} sites for template assignment counts")
     
     template_site_counts = {}
     for site in sites:
@@ -24619,7 +24638,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
     
     # OPTIMIZATION: Build site-to-template mapping and filter to only sites using migrated templates
     # This reduces API calls from 3300+ sites to only affected sites (typically <100)
-    # Also filters out VRE sites from device migration scope (already filtered from sites list earlier)
+    # Also filters out excluded sites from device migration scope (already filtered from sites list earlier)
     site_to_template = {}
     affected_site_ids = set()
     for site in sites:
@@ -24627,9 +24646,9 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
         site_name = site.get("name", "").strip()
         template_id = site.get("gatewaytemplate_id", "").strip()
         
-        # Skip VRE sites (redundant safety check - already filtered from sites list)
-        if site_name.startswith("VRE"):
-            logging.debug(f"Skipping VRE site {site_name} from device migration scope")
+        # Skip excluded sites (redundant safety check - already filtered from sites list)
+        if MIST_SITE_EXCLUDE_PREFIX and site_name.startswith(MIST_SITE_EXCLUDE_PREFIX):
+            logging.debug(f"Skipping excluded site {site_name} from device migration scope")
             continue
             
         if site_id and template_id:
@@ -24956,9 +24975,11 @@ class WANProbeConfigManager:
     where usage == "wan" in the template's port_config.
     """
     
-    # Default probe configuration
-    DEFAULT_PROBE_IPS = ["192.151.29.254", "18.154.184.32"]
-    DEFAULT_PROBE_PROFILE = "lte"
+    # Default probe configuration - loaded from environment variables
+    # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
+    # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
+    DEFAULT_PROBE_IPS = [ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()]
+    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
     
     def __init__(self):
         """Initialize the WAN Probe Configuration Manager."""
@@ -25058,9 +25079,9 @@ class WANProbeConfigManager:
         with open(sites_path, encoding="utf-8") as file_handle:
             self.sites = list(csv.DictReader(file_handle))
         
-        # Build template site counts (excluding VRE sites)
+        # Build template site counts (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
         for site in self.sites:
-            if site.get("name", "").startswith("VRE"):
+            if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue
             template_id = site.get("gatewaytemplate_id", "").strip()
             if template_id:
@@ -25371,13 +25392,15 @@ class WANProbeDeviceOverrideManager:
         5. Apply ICMP probe configuration to ONLY overridden WAN ports
     
     Default Configuration:
-        - probe IPs: ["192.151.29.254", "18.154.184.32"]
-        - probe_profile: "lte"
+        - probe IPs: ["192.151.29.254", "18.154.184.32"] (override via MIST_WAN_PROBE_IPS)
+        - probe_profile: "lte" (override via MIST_WAN_PROBE_PROFILE)
     """
     
-    # Default probe configuration (same as Menu 113)
-    DEFAULT_PROBE_IPS = ["192.151.29.254", "18.154.184.32"]
-    DEFAULT_PROBE_PROFILE = "lte"
+    # Default probe configuration - loaded from environment variables (same as Menu 113)
+    # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
+    # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
+    DEFAULT_PROBE_IPS = [ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()]
+    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
     
     def __init__(self):
         """Initialize the WAN Probe Device Override Manager."""
@@ -25484,10 +25507,10 @@ class WANProbeDeviceOverrideManager:
         """Display templates and get user selection. Returns True if selected."""
         templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
         
-        # Build site counts per template
+        # Build site counts per template (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
         template_site_counts = {}
         for site in self.sites:
-            if site.get("name", "").startswith("VRE"):
+            if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue
             template_id = site.get("gatewaytemplate_id", "").strip()
             if template_id:
@@ -25542,7 +25565,7 @@ class WANProbeDeviceOverrideManager:
         
         self.template_sites = []
         for site in self.sites:
-            if site.get("name", "").startswith("VRE"):
+            if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue
             if site.get("gatewaytemplate_id", "").strip() == template_id:
                 self.template_sites.append({
@@ -25564,8 +25587,12 @@ class WANProbeDeviceOverrideManager:
         print(f"\n  Scanning {len(self.template_sites)} sites for gateway devices with WAN overrides...")
         
         devices_with_overrides = []
-        target_ports = ["ge-0/0/0", "ge-0/0/1", "ge-0/0/2", 
-                       "{{wan1_interface}}", "{{wan2_interface}}", "{{wan3_interface}}"]
+        # Target ports loaded from MIST_WAN_TARGET_PORTS environment variable
+        target_ports = MIST_WAN_TARGET_PORTS
+        if not target_ports:
+            print(" MIST_WAN_TARGET_PORTS not configured in .env - cannot identify WAN ports")
+            logging.error("Menu #114: MIST_WAN_TARGET_PORTS environment variable not set")
+            return []
         
         for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):
             site_id = site_info["site_id"]
@@ -38169,23 +38196,43 @@ class BulkAPFirmwareUpgrader:
         return True
     
     def _select_strategy(self) -> None:
-        """Select upgrade strategy."""
-        strategies = {
-            "1": ("big_bang", "Upgrade all at once"),
-            "2": ("canary", "Phased rollout"),
-            "3": ("rrm", "RRM-aware upgrade"),
-            "4": ("serial", "One at a time")
+        """Select separate download and reboot strategies."""
+        # Download strategies (how firmware is distributed to devices)
+        download_strategies = {
+            "1": ("big_bang", "Download all at once - no orchestration"),
+            "2": ("serial", "Download one device at a time"),
+            "3": ("canary", "Phased download rollout")
         }
         
-        print(" Select upgrade strategy:")
-        for key, (name, desc) in strategies.items():
+        # Reboot strategies (how devices are rebooted after download)
+        reboot_strategies = {
+            "1": ("big_bang", "Reboot all at once"),
+            "2": ("serial", "Reboot one at a time"),
+            "3": ("canary", "Phased reboot rollout"),
+            "4": ("rrm", "RRM-aware reboot (AP only - minimizes Wi-Fi disruption)")
+        }
+        
+        # Select download strategy
+        print("\n DOWNLOAD Strategy (how firmware is distributed):")
+        for key, (name, desc) in download_strategies.items():
             print(f"   [{key}] {name.upper()}: {desc}")
         
-        choice = input("Select (1-4, default=3): ").strip() or "3"
-        strategy = strategies.get(choice, strategies["3"])[0]
+        download_choice = input("Select download strategy (1-3, default=3 canary): ").strip() or "3"
+        download_strategy = download_strategies.get(download_choice, download_strategies["3"])[0]
+        print(f"! Selected download strategy: {download_strategy.upper()}")
+        
+        # Select reboot strategy
+        print("\n REBOOT Strategy (how devices restart after download):")
+        for key, (name, desc) in reboot_strategies.items():
+            print(f"   [{key}] {name.upper()}: {desc}")
+        
+        reboot_choice = input("Select reboot strategy (1-4, default=4 rrm): ").strip() or "4"
+        reboot_strategy = reboot_strategies.get(reboot_choice, reboot_strategies["4"])[0]
+        print(f"! Selected reboot strategy: {reboot_strategy.upper()}")
         
         self.upgrade_config = {
-            "strategy": strategy,
+            "download_strategy": download_strategy,
+            "reboot_strategy": reboot_strategy,
             "force": False,
             "enable_p2p": True,
             "max_failure_percentage": 5,
@@ -38194,13 +38241,16 @@ class BulkAPFirmwareUpgrader:
             "p2p_cluster_size": 10,
             "reboot": True
         }
-        print(f"! Selected strategy: {strategy.upper()}")
+        print(f"\n! Final strategy: Download={download_strategy.upper()}, Reboot={reboot_strategy.upper()}")
     
     def _configure_strategy_options(self) -> None:
         """Configure strategy-specific options."""
-        if self.upgrade_config["strategy"] == "canary":
+        # Configure options based on download strategy
+        if self.upgrade_config["download_strategy"] == "canary":
             self._configure_canary_options()
-        elif self.upgrade_config["strategy"] == "rrm":
+        
+        # Configure options based on reboot strategy
+        if self.upgrade_config["reboot_strategy"] == "rrm":
             self._configure_rrm_options()
     
     def _configure_canary_options(self) -> None:
@@ -38256,7 +38306,8 @@ class BulkAPFirmwareUpgrader:
     def _display_final_config(self) -> None:
         """Display final upgrade configuration."""
         print(f"\n  Final Configuration:")
-        print(f"Strategy: {self.upgrade_config['strategy'].upper()}")
+        print(f"Download Strategy: {self.upgrade_config['download_strategy'].upper()}")
+        print(f"Reboot Strategy: {self.upgrade_config['reboot_strategy'].upper()}")
         print(f"P2P: {self.upgrade_config['enable_p2p']}")
         print(f"Force: {self.upgrade_config['force']}")
     
@@ -38280,7 +38331,8 @@ class BulkAPFirmwareUpgrader:
         print("!? APs will REBOOT during upgrade")
         print("!? Wi-Fi connectivity will be TEMPORARILY LOST")
         print("!? Upgrades take 5-15 minutes per device")
-        print(f"!? Strategy: {self.upgrade_config['strategy'].upper()}")
+        print(f"!? Download Strategy: {self.upgrade_config['download_strategy'].upper()}")
+        print(f"!? Reboot Strategy: {self.upgrade_config['reboot_strategy'].upper()}")
         print("??" * 50)
     
     def _display_final_plan(self) -> None:
@@ -38386,9 +38438,10 @@ class BulkAPFirmwareUpgrader:
             print(f"         !? {model}: {len(devices)} devices firmware {version}")
     
     def _build_upgrade_body(self, version: str, device_ids: list) -> dict:
-        """Build upgrade API request body."""
+        """Build upgrade API request body with separate download and reboot strategies."""
         body = {
-            "strategy": self.upgrade_config["strategy"],
+            "download_strategy": self.upgrade_config["download_strategy"],
+            "reboot_strategy": self.upgrade_config["reboot_strategy"],
             "force": self.upgrade_config["force"],
             "enable_p2p": self.upgrade_config["enable_p2p"],
             "max_failure_percentage": self.upgrade_config["max_failure_percentage"],
@@ -38398,9 +38451,11 @@ class BulkAPFirmwareUpgrader:
         }
         if self.upgrade_config["enable_p2p"]:
             body["p2p_cluster_size"] = self.upgrade_config["p2p_cluster_size"]
-        if self.upgrade_config["strategy"] == "canary":
+        # Canary phases apply to both download and reboot if either uses canary strategy
+        if self.upgrade_config["download_strategy"] == "canary" or self.upgrade_config["reboot_strategy"] == "canary":
             body["canary_phases"] = self.upgrade_config["canary_phases"]
-        elif self.upgrade_config["strategy"] == "rrm":
+        # RRM options apply when reboot strategy is rrm
+        if self.upgrade_config["reboot_strategy"] == "rrm":
             for key in ["rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage"]:
                 if key in self.upgrade_config:
                     body[key] = self.upgrade_config[key]
@@ -38421,7 +38476,8 @@ class BulkAPFirmwareUpgrader:
                 "Model": device.get("model", "Unknown"),
                 "Current Version": self.ap_versions.get(device.get("id"), "Unknown"),
                 "Target Version": target,
-                "Strategy": self.upgrade_config["strategy"],
+                "Download Strategy": self.upgrade_config["download_strategy"],
+                "Reboot Strategy": self.upgrade_config["reboot_strategy"],
                 "P2P Enabled": self.upgrade_config["enable_p2p"],
                 "Max Failure %": self.upgrade_config["max_failure_percentage"],
                 "Force Upgrade": self.upgrade_config["force"],
