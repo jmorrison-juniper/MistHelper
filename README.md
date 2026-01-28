@@ -550,6 +550,26 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.18.46",
+      "date": "2026-01-28",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 (AP Firmware Upgrade): Smart filtering to skip APs already at target version",
+          "Devices already at selected target firmware are automatically excluded from upgrade",
+          "Sites with no devices needing upgrade are skipped entirely",
+          "Summary shows count of skipped devices for transparency"
+        ],
+        "new_attributes": [
+          "BulkAPFirmwareUpgrader.skipped_already_at_target: Counter for devices skipped"
+        ],
+        "refactoring": [
+          "_get_user_version_selection(): Filters devices by comparing current vs target version",
+          "_validate_upgrade_plan(): Shows skipped device count in summary",
+          "_step8_execute_upgrades(): Filters out sites with no devices needing upgrade"
+        ]
+      }
+    },
+    {
       "version": "26.01.28.18.40",
       "date": "2026-01-28",
       "changes": {

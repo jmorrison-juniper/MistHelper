@@ -37694,6 +37694,7 @@ class BulkAPFirmwareUpgrader:
         
         # Upgrade plan
         self.upgrade_plan: dict = {}
+        self.skipped_already_at_target: int = 0
         self.upgrade_config: dict = {}
         self.upgrade_ids: list = []
         
@@ -38298,12 +38299,34 @@ class BulkAPFirmwareUpgrader:
                 idx = int(user_input)
                 if 0 <= idx < len(versions):
                     selected = versions[idx]
+                    target_version = selected.get("version")
+                    
+                    # Filter out devices already at target version
+                    devices_needing_upgrade = []
+                    devices_already_at_target = []
+                    for device in devices:
+                        device_id = device.get("id")
+                        current_version = self.ap_versions.get(device_id, "Unknown")
+                        if current_version == target_version:
+                            devices_already_at_target.append(device)
+                        else:
+                            devices_needing_upgrade.append(device)
+                    
+                    # Report filtering results
+                    if devices_already_at_target:
+                        print(f"   -> Skipping {len(devices_already_at_target)} device(s) already at {target_version}")
+                        self.skipped_already_at_target += len(devices_already_at_target)
+                    
+                    if not devices_needing_upgrade:
+                        print(f"!  All {len(devices)} {model} devices already at {target_version} - nothing to upgrade")
+                        return False
+                    
                     self.upgrade_plan[model] = {
-                        "version": selected.get("version"),
+                        "version": target_version,
                         "version_info": selected,
-                        "devices": devices
+                        "devices": devices_needing_upgrade
                     }
-                    print(f"! Selected version {selected.get('version')} for {model}")
+                    print(f"! Selected version {target_version} for {model} ({len(devices_needing_upgrade)} devices need upgrade)")
                     return True
                 print(f"! Invalid selection.")
             except ValueError:
@@ -38322,7 +38345,9 @@ class BulkAPFirmwareUpgrader:
         for model, plan in self.upgrade_plan.items():
             print(f"   {model}: {len(plan['devices'])} devices firmware {plan['version']}")
         
-        print(f"\n   Total: {total} devices, {len(versions)} version(s)")
+        print(f"\n   Total: {total} devices to upgrade, {len(versions)} version(s)")
+        if self.skipped_already_at_target > 0:
+            print(f"   Skipped: {self.skipped_already_at_target} devices already at target version")
         
         if len(versions) > 1:
             confirm = input("\n  Proceed with multi-version upgrade? (y/n): ").strip().lower() or "y"
@@ -38520,8 +38545,19 @@ class BulkAPFirmwareUpgrader:
         
         devices_by_site = self._organize_devices_by_site()
         
-        for site_index, (site_id, site_data) in enumerate(devices_by_site.items(), 1):
-            self._execute_site_upgrade(site_index, len(devices_by_site), site_id, site_data)
+        # Filter out sites with no devices needing upgrade
+        sites_with_upgrades = {sid: data for sid, data in devices_by_site.items() if data['devices']}
+        skipped_sites = len(devices_by_site) - len(sites_with_upgrades)
+        
+        if skipped_sites > 0:
+            print(f"   Skipping {skipped_sites} site(s) with no devices needing upgrade")
+        
+        if not sites_with_upgrades:
+            print("   No sites have devices needing upgrade - nothing to do")
+            return
+        
+        for site_index, (site_id, site_data) in enumerate(sites_with_upgrades.items(), 1):
+            self._execute_site_upgrade(site_index, len(sites_with_upgrades), site_id, site_data)
     
     def _organize_devices_by_site(self) -> dict:
         """Organize upgrade plan devices by site."""
