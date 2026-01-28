@@ -38607,8 +38607,9 @@ class BulkAPFirmwareUpgrader:
         
         try:
             fieldnames = ["Site ID", "Site Name", "Device ID", "Device Name", "Device MAC",
-                         "Model", "Current Version", "Target Version", "Strategy", "P2P Enabled",
-                         "Max Failure %", "Force Upgrade", "Upgrade ID", "Status", "Timestamp"]
+                         "Model", "Current Version", "Target Version", "Download Strategy", 
+                         "Reboot Strategy", "P2P Enabled", "Max Failure %", "Force Upgrade", 
+                         "Upgrade ID", "Status", "Timestamp"]
             
             with open(filename, "w", newline='', encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
