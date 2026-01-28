@@ -550,6 +550,23 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.01.28.18.40",
+      "date": "2026-01-28",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 (AP Firmware Upgrade): Added 'All sites' selection mode",
+          "Site selection now offers three modes:",
+          "  [1] Single site - select one site",
+          "  [2] Multiple sites - comma-separated indices with range support",
+          "  [3] All sites - upgrade all sites in the organization",
+          "All-sites mode requires typing 'ALL' to confirm (safety measure)"
+        ],
+        "new_methods": [
+          "BulkAPFirmwareUpgrader._select_all_sites_in_org(): Selects all org sites with confirmation"
+        ]
+      }
+    },
+    {
       "version": "26.01.28.18.30",
       "date": "2026-01-28",
       "changes": {

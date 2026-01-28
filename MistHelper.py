@@ -37843,11 +37843,14 @@ class BulkAPFirmwareUpgrader:
         print(f"\n  Site Selection Mode:")
         print(f"   [1] Single site - select one site")
         print(f"   [2] Multiple sites - select multiple sites (comma-separated)")
+        print(f"   [3] All sites - upgrade all sites in the organization")
         
-        mode_choice = input("\n  Selection mode (1 or 2): ").strip()
+        mode_choice = input("\n  Selection mode (1, 2, or 3): ").strip()
         
         if mode_choice == "2":
             return self._select_multiple_sites_interactively()
+        elif mode_choice == "3":
+            return self._select_all_sites_in_org()
         else:
             # Default to single site mode
             site_id = PromptUtils.select_site()
@@ -37859,6 +37862,47 @@ class BulkAPFirmwareUpgrader:
             site_name = self._get_site_name(site_id)
             self.sites_to_upgrade = [{'name': site_name, 'id': site_id}]
             return True
+    
+    def _select_all_sites_in_org(self) -> bool:
+        """Select all sites in the organization for upgrade."""
+        # Ensure site list is available
+        csv_file = "SiteList.csv"
+        CacheUtils.check_and_generate_csv(csv_file, OrgExportUtils.sites)
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)
+        
+        # Load sites from CSV
+        with open(csv_file_path, mode='r', encoding='utf-8') as file:
+            sites = list(csv.DictReader(file))
+        
+        if not sites:
+            print(" No sites found in organization.")
+            logging.error("No sites found for all-sites selection")
+            return False
+        
+        # Confirmation prompt for safety
+        print(f"\n  WARNING: You are about to upgrade ALL {len(sites)} sites in this organization!")
+        print(f"  This will create {len(sites)} individual upgrade jobs.")
+        confirm = input(f"\n  Type 'ALL' to confirm: ").strip()
+        
+        if confirm != "ALL":
+            print(" Operation cancelled - confirmation not received.")
+            logging.warning("All-sites upgrade cancelled - user did not confirm")
+            return False
+        
+        # Build sites list from all sites
+        for site in sites:
+            site_id = site.get('id', '')
+            site_name = site.get('name', 'Unnamed')
+            if site_id:
+                self.sites_to_upgrade.append({'name': site_name, 'id': site_id})
+        
+        if not self.sites_to_upgrade:
+            print(" No valid sites found. Exiting.")
+            return False
+        
+        print(f"\n  Selected ALL {len(self.sites_to_upgrade)} sites for upgrade")
+        logging.info(f"All-sites selection: {len(self.sites_to_upgrade)} sites selected for upgrade")
+        return True
     
     def _select_multiple_sites_interactively(self) -> bool:
         """Select multiple sites from an indexed list using comma-separated indices."""
