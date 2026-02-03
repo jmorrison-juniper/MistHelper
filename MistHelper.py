@@ -1988,6 +1988,316 @@ DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite da
 # Initialize Mist API session (will be set up after authentication)
 apisession = None
 
+# MSP privilege tracking (populated after authentication)
+msp_privileges = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
+
+def detect_msp_privileges():
+    """Detect MSP-level privileges from the authenticated user's profile.
+    
+    Calls GET /api/v1/self to retrieve user privileges and extracts any MSP-level access.
+    This enables MSP menu options when the user has appropriate permissions.
+    
+    Returns:
+        list: List of MSP privilege dicts with keys: msp_id, msp_name, role, scope
+              Empty list if user has no MSP privileges or detection fails.
+    """
+    global apisession, msp_privileges
+    
+    if not apisession:
+        logging.warning("Cannot detect MSP privileges - no active session")
+        return []
+    
+    try:
+        import mistapi.api.v1.self.self as self_api
+        response = self_api.getSelf(apisession)
+        
+        if not response or not hasattr(response, 'data'):
+            logging.warning("getSelf returned no data - cannot detect MSP privileges")
+            return []
+        
+        user_data = response.data
+        if not isinstance(user_data, dict):
+            logging.warning(f"getSelf returned unexpected type: {type(user_data)}")
+            return []
+        
+        privileges = user_data.get('privileges', [])
+        detected_msps = []
+        
+        for priv in privileges:
+            if isinstance(priv, dict) and priv.get('msp_id'):
+                msp_info = {
+                    'msp_id': priv.get('msp_id'),
+                    'msp_name': priv.get('msp_name', 'Unknown'),
+                    'role': priv.get('role', 'unknown'),
+                    'scope': priv.get('scope', 'unknown')
+                }
+                detected_msps.append(msp_info)
+                logging.info(f"Detected MSP privilege: {msp_info['msp_name']} (ID: {msp_info['msp_id'][:8]}..., role: {msp_info['role']}, scope: {msp_info['scope']})")
+        
+        if detected_msps:
+            msp_privileges = detected_msps
+            logging.info(f"User has MSP-level access to {len(detected_msps)} MSP(s)")
+        else:
+            logging.debug("No MSP privileges detected for current user")
+        
+        return detected_msps
+        
+    except Exception as e:
+        logging.warning(f"Failed to detect MSP privileges: {e}")
+        return []
+
+
+def initialize_mist_session_interactive():
+    """Initialize Mist API session using interactive login (username/password).
+    
+    This method prompts for email and password, handles 2FA if required,
+    and establishes a session-based authentication that can access MSP-level APIs
+    (unlike org-scoped API tokens).
+    
+    Returns:
+        bool: True if login successful, False otherwise.
+    """
+    global apisession, mistapi
+    
+    # Ensure mistapi is available
+    if mistapi is None:
+        try:
+            import mistapi as mistapi_fallback
+            mistapi = mistapi_fallback
+        except ImportError as import_err:
+            logging.error(f"Cannot import mistapi: {import_err}")
+            print("X Failed to import mistapi library")
+            return False
+    
+    print("")
+    print("="*60)
+    print("  INTERACTIVE MIST API LOGIN")
+    print("="*60)
+    print("")
+    print("  This authentication method uses session/cookie-based login,")
+    print("  which can access MSP-level APIs (unlike org-scoped API tokens).")
+    print("")
+    
+    # Show available Mist clouds (from mistapi documentation)
+    MIST_CLOUDS = {
+        '1': ('Global 01', 'api.mist.com'),
+        '2': ('Global 02', 'api.gc1.mist.com'),
+        '3': ('Global 03', 'api.ac2.mist.com'),
+        '4': ('Global 04', 'api.gc2.mist.com'),
+        '5': ('Global 05', 'api.gc4.mist.com'),
+        '6': ('EMEA 01', 'api.eu.mist.com'),
+        '7': ('EMEA 02', 'api.gc3.mist.com'),
+        '8': ('EMEA 03', 'api.ac6.mist.com'),
+        '9': ('EMEA 04', 'api.gc6.mist.com'),
+        '10': ('APAC 01', 'api.ac5.mist.com'),
+        '11': ('APAC 03', 'api.gc7.mist.com'),
+    }
+    
+    print("  Available Mist Clouds:")
+    for key, (name, host) in MIST_CLOUDS.items():
+        print(f"    {key:>2}. {name:<12} ({host})")
+    print("")
+    
+    try:
+        cloud_choice = InputUtils.safe_input("  Select cloud (1-11, or press Enter for Global 01): ", context="interactive_login").strip()
+    except SystemExit:
+        return False
+    
+    if cloud_choice == '' or cloud_choice not in MIST_CLOUDS:
+        cloud_choice = '1'  # Default to Global 01
+    
+    cloud_name, host = MIST_CLOUDS[cloud_choice]
+    print(f"  Using cloud: {cloud_name} ({host})")
+    print("")
+    
+    # Get credentials
+    try:
+        email = InputUtils.safe_input("  Email: ", context="interactive_login").strip()
+    except SystemExit:
+        return False
+    
+    if not email:
+        print("X Email is required")
+        return False
+    
+    try:
+        import getpass
+        password = getpass.getpass("  Password: ")
+    except EOFError:
+        logging.info("EOF during password entry - session disconnected")
+        return False
+    except Exception as e:
+        logging.error(f"Failed to read password: {e}")
+        print(f"X Failed to read password: {e}")
+        return False
+    
+    if not password:
+        print("X Password is required")
+        return False
+    
+    print("")
+    print("  Authenticating...")
+    
+    try:
+        # DEBUG: Log credential info (redacted)
+        logging.debug(f"Interactive login - host: {host}")
+        logging.debug(f"Interactive login - email: {email}")
+        logging.debug(f"Interactive login - password length: {len(password) if password else 0}")
+        
+        # Create session with credentials in constructor
+        # The mistapi library stores these and uses them in login_with_return
+        print("  Creating API session...")
+        apisession = mistapi.APISession(
+            email=email,
+            password=password,
+            host=host,
+            console_log_level=20,  # INFO level to see what's happening
+            show_cli_notif=False
+        )
+        
+        # CRITICAL: Clear any API token loaded from environment!
+        # The _load_env() in __init__ may have loaded MIST_APITOKEN from .env,
+        # which causes login_with_return() to use token auth instead of email/password.
+        # We must clear it to force the email/password login path.
+        if apisession._apitoken:
+            logging.debug(f"Clearing API token to force email/password login (had {len(apisession._apitoken)} token(s))")
+            apisession._apitoken = []
+            apisession._apitoken_index = -1
+        
+        # DEBUG: Check if credentials were stored
+        logging.debug(f"APISession created - email stored: {apisession.email}")
+        logging.debug(f"APISession created - password stored: {apisession._password is not None}")
+        logging.debug(f"APISession created - cloud_uri: {apisession._cloud_uri}")
+        logging.debug(f"APISession created - apitoken count: {len(apisession._apitoken)}")
+        
+        # Attempt login using login_with_return() 
+        # Don't pass credentials again - they're already stored in the session
+        # Returns: {'authenticated': bool, 'error': str}
+        print("  Sending login request...")
+        login_result = apisession.login_with_return()
+        
+        logging.debug(f"login_with_return result: {login_result}")
+        print(f"  DEBUG: login_with_return returned: {login_result}")
+        
+        # Check if 2FA is required
+        if login_result and login_result.get('two_factor_required'):
+            print("")
+            print("  Two-factor authentication required.")
+            try:
+                two_factor_code = InputUtils.safe_input("  Enter 2FA code: ", context="interactive_login").strip()
+            except SystemExit:
+                apisession = None
+                return False
+            
+            if not two_factor_code:
+                print("X 2FA code is required")
+                apisession = None
+                return False
+            
+            # Retry login with 2FA code - pass it as parameter
+            print("  Sending 2FA verification...")
+            login_result = apisession.login_with_return(two_factor=two_factor_code)
+            logging.debug(f"login_with_return (2FA) result: {login_result}")
+        
+        # Check the actual 'authenticated' field from login_with_return
+        # Note: mistapi returns {'authenticated': bool, 'error': str}, NOT 'success'
+        if not login_result or not login_result.get('authenticated', False):
+            error_message = login_result.get('error', 'Unknown error') if login_result else 'No response'
+            print(f"X Authentication failed: {error_message}")
+            logging.error(f"Interactive login failed: {error_message}")
+            apisession = None
+            return False
+        
+        # Login succeeded - verify with a test API call
+        print("")
+        print("  + Login successful!")
+        logging.info(f"Interactive login successful for {email} to {host}")
+        
+        # Detect MSP privileges
+        print("  Checking for MSP privileges...")
+        detected = detect_msp_privileges()
+        if detected:
+            print(f"  + MSP access detected: {len(detected)} MSP(s) available")
+            for msp in detected:
+                print(f"    - {msp['msp_name']} (role: {msp['role']})")
+        else:
+            print("  - No MSP privileges detected (org-level access only)")
+        
+        print("")
+        return True
+            
+    except Exception as e:
+        error_msg = str(e)
+        if "invalid" in error_msg.lower() or "credential" in error_msg.lower():
+            print("X Invalid email or password")
+        elif "two_factor" in error_msg.lower() or "2fa" in error_msg.lower():
+            print("X Two-factor authentication failed")
+        elif "401" in error_msg:
+            print("X Invalid email or password (authentication failed)")
+        else:
+            print(f"X Login failed: {e}")
+        logging.error(f"Interactive login failed: {e}")
+        apisession = None
+        return False
+
+
+def switch_to_interactive_login():
+    """Menu option to switch from API token to interactive login.
+    
+    This allows users to re-authenticate using email/password to gain
+    MSP-level API access during an existing session.
+    """
+    global apisession, msp_privileges
+    
+    print("")
+    print("="*60)
+    print("  SWITCH TO INTERACTIVE LOGIN")
+    print("="*60)
+    print("")
+    print("  This will replace your current API token session with")
+    print("  an interactive (email/password) session.")
+    print("")
+    print("  Benefits of interactive login:")
+    print("    - Can access MSP-level APIs (if you have MSP privileges)")
+    print("    - Session-based auth with cookie management")
+    print("    - Supports 2FA authentication")
+    print("")
+    
+    if msp_privileges:
+        print(f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)")
+        print("")
+    
+    try:
+        confirm = InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
+    except SystemExit:
+        return
+    
+    if confirm != 'y':
+        print("  Cancelled.")
+        return
+    
+    # Clear existing session
+    old_session = apisession
+    apisession = None
+    msp_privileges = []
+    
+    # Attempt interactive login
+    if initialize_mist_session_interactive():
+        print("")
+        print("  + Successfully switched to interactive login")
+        if msp_privileges:
+            print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")
+        logging.info("Successfully switched to interactive login session")
+    else:
+        # Restore old session if login failed
+        print("")
+        print("X Login failed - restoring previous session")
+        apisession = old_session
+        # Re-detect MSP privileges for restored session
+        detect_msp_privileges()
+        logging.warning("Interactive login failed - restored previous API session")
+
+
 def initialize_mist_session():
     """Initialize the Mist API session with authentication.
 
@@ -10388,14 +10698,127 @@ class OrgExportUtils:
     
     @staticmethod
     def msp():
-        """Export MSP data to OrgMsp.csv."""
-        logging.warning(" MSP data is available only at MSP level, not organization level")
-        print(" MSP data is available only at MSP level, not organization level")
-        print(" To access MSP data, use the Mist API MSP endpoints directly:")
-        print("   - GET /api/v1/msps (list MSPs)")
-        print("   - GET /api/v1/msps/{msp_id} (get MSP details)")
-        print("   - GET /api/v1/msps/{msp_id}/orgs (list organizations under MSP)")
-        print("   This organization-level export is not applicable for MSP data.")
+        """Export MSP data - lists organizations under MSP when MSP privileges are available.
+        
+        When the user has MSP-level privileges (detected at login), this function
+        lists all organizations under the MSP and exports to MspOrganizations.csv.
+        
+        If no MSP privileges are available, provides guidance on requirements.
+        """
+        global msp_privileges
+        
+        if not msp_privileges:
+            # No MSP privileges detected - show guidance
+            logging.warning("MSP data requires MSP-level privileges (not detected)")
+            print("")
+            print("="*60)
+            print("  MSP ACCESS NOT AVAILABLE")
+            print("="*60)
+            print("")
+            print("  MSP-level API access requires one of the following:")
+            print("")
+            print("  1. Interactive login with MSP admin credentials:")
+            print("     python MistHelper.py --login")
+            print("")
+            print("  2. A personal API token from an MSP Super User")
+            print("     (The token inherits the user's MSP privileges)")
+            print("")
+            print("  Note: Organization-scoped API tokens CANNOT access MSP APIs.")
+            print("  The token must be from a user who has MSP-level access.")
+            print("")
+            print("  MSP API Endpoints available with proper access:")
+            print("    - GET /api/v1/msps/{msp_id}/orgs (list organizations)")
+            print("    - GET /api/v1/msps/{msp_id}/licenses (MSP licenses)")
+            print("    - GET /api/v1/msps/{msp_id}/stats/orgs (org statistics)")
+            print("    - GET /api/v1/msps/{msp_id}/inventory/{mac} (cross-org device lookup)")
+            print("")
+            return
+        
+        # MSP privileges available - let user select which MSP to query
+        print("")
+        print("="*60)
+        print("  MSP ORGANIZATION EXPORT")
+        print("="*60)
+        print("")
+        
+        selected_msp = None
+        if len(msp_privileges) == 1:
+            selected_msp = msp_privileges[0]
+            print(f"  Using MSP: {selected_msp['msp_name']}")
+        else:
+            print("  Available MSPs:")
+            for idx, msp in enumerate(msp_privileges, start=1):
+                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")
+            print("")
+            try:
+                choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_export").strip()
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(msp_privileges):
+                    selected_msp = msp_privileges[choice_idx]
+                else:
+                    print("X Invalid selection")
+                    return
+            except (ValueError, SystemExit):
+                print("X Invalid input")
+                return
+        
+        msp_id = selected_msp['msp_id']
+        msp_name = selected_msp['msp_name']
+        print(f"  Fetching organizations for MSP: {msp_name}...")
+        logging.info(f"Fetching MSP organizations for {msp_name} (ID: {msp_id})")
+        
+        # Verify session is valid before API call
+        if apisession is None:
+            print("X No active API session")
+            logging.error("Cannot fetch MSP orgs - apisession is None")
+            return
+        
+        try:
+            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print("X Failed to retrieve MSP organizations")
+                logging.error("listMspOrgs returned no data")
+                return
+            
+            orgs_data = response.data
+            if not isinstance(orgs_data, list):
+                orgs_data = [orgs_data] if orgs_data else []
+            
+            if not orgs_data:
+                print("  No organizations found under this MSP")
+                logging.info("MSP has no organizations")
+                DataExporter.save_data_to_output([], "MspOrganizations.csv")
+                return
+            
+            # Process and export
+            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)
+            processed = DataProcessingUtils.escape_multiline(processed)
+            
+            # Add MSP context to each record
+            for record in processed:
+                record['msp_id'] = msp_id
+                record['msp_name'] = msp_name
+            
+            DataExporter.save_data_to_output(processed, "MspOrganizations.csv")
+            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
+            logging.info(f"Exported {len(processed)} MSP organizations to MspOrganizations.csv")
+            
+            # Show summary
+            print("")
+            print(f"  Organizations under {msp_name}:")
+            for org in orgs_data[:10]:  # Show first 10
+                org_name = org.get('name', 'Unknown')
+                org_id = org.get('id', 'N/A')
+                print(f"    - {org_name} ({org_id[:8]}...)")
+            if len(orgs_data) > 10:
+                print(f"    ... and {len(orgs_data) - 10} more")
+            print("")
+            
+        except Exception as e:
+            print(f"X Error fetching MSP organizations: {e}")
+            logging.error(f"Failed to fetch MSP organizations: {e}")
     
     @staticmethod
     def mx_edges():
@@ -25584,81 +26007,87 @@ class WANProbeDeviceOverrideManager:
     
     def _find_devices_with_overrides(self) -> List[Dict[str, Any]]:
         """Find gateway devices with WAN port overrides. Returns list of devices."""
-        print(f"\n  Scanning {len(self.template_sites)} sites for gateway devices with WAN overrides...")
+        print(f"\n  Scanning {len(self.template_sites)} sites for gateway devices...")
         
-        devices_with_overrides = []
-        # Target ports loaded from MIST_WAN_TARGET_PORTS environment variable
-        target_ports = MIST_WAN_TARGET_PORTS
-        if not target_ports:
-            print(" MIST_WAN_TARGET_PORTS not configured in .env - cannot identify WAN ports")
-            logging.error("Menu #114: MIST_WAN_TARGET_PORTS environment variable not set")
-            return []
-        
+        # First pass: Find all gateway devices in template sites
+        all_gateways = []
         for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):
             site_id = site_info["site_id"]
             site_name = site_info["site_name"]
             
             try:
-                # List all gateway devices in site
                 resp = mistapi.api.v1.sites.devices.listSiteDevices(
                     apisession, site_id, type="gateway", limit=1000
                 )
                 devices = resp.data if hasattr(resp, 'data') else []
                 
                 for device in devices:
-                    if not isinstance(device, dict):
-                        continue
-                    
-                    device_id = device.get("id", "")
-                    device_name = device.get("name", "Unknown Device")
-                    port_config = device.get("port_config", {})
-                    
-                    if not isinstance(port_config, dict) or not port_config:
-                        continue
-                    
-                    # Find WAN ports with overrides
-                    overridden_wan_ports = []
-                    for port_name, port_settings in port_config.items():
-                        if not isinstance(port_settings, dict):
-                            continue
-                        
-                        # Check if this is a WAN port (usage == "wan")
-                        if port_settings.get("usage") != "wan":
-                            continue
-                        
-                        # Check if this port matches our target patterns
-                        is_target = any(
-                            port_name == target or port_name.startswith(f"{target}.")
-                            for target in target_ports
-                        )
-                        
-                        if is_target:
-                            current_probe = port_settings.get("wan_probe_override", {})
-                            current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                            current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
-                            
-                            overridden_wan_ports.append({
-                                "port_name": port_name,
-                                "current_ips": current_ips,
-                                "current_profile": current_profile,
-                                "port_settings": port_settings
-                            })
-                    
-                    if overridden_wan_ports:
-                        devices_with_overrides.append({
-                            "device_id": device_id,
-                            "device_name": device_name,
+                    if isinstance(device, dict):
+                        all_gateways.append({
+                            "device": device,
                             "site_id": site_id,
-                            "site_name": site_name,
-                            "overridden_wan_ports": overridden_wan_ports
+                            "site_name": site_name
                         })
-            
             except Exception as error:
                 logging.warning(f"Error scanning site {site_name}: {error}")
                 continue
         
+        # Check if any gateways exist
+        if not all_gateways:
+            print(f"\n  No gateway devices found in the {len(self.template_sites)} sites using this template.")
+            print(f"  Gateways must be assigned to sites before checking for port overrides.")
+            logging.info("Menu #114: No gateway devices found in template sites")
+            return []
+        
+        print(f"\n  Found {len(all_gateways)} gateway devices. Checking for WAN port overrides...")
+        
+        # Second pass: Check each gateway for WAN port overrides
+        devices_with_overrides = []
+        for gateway_info in all_gateways:
+            device = gateway_info["device"]
+            site_id = gateway_info["site_id"]
+            site_name = gateway_info["site_name"]
+            
+            device_id = device.get("id", "")
+            device_name = device.get("name", "Unknown Device")
+            port_config = device.get("port_config", {})
+            
+            if not isinstance(port_config, dict) or not port_config:
+                continue
+            
+            # Find WAN ports with device-level overrides
+            overridden_wan_ports = []
+            for port_name, port_settings in port_config.items():
+                if not isinstance(port_settings, dict):
+                    continue
+                
+                # Check if this is a WAN port (usage == "wan")
+                if port_settings.get("usage") != "wan":
+                    continue
+                
+                # This WAN port has a device-level override - collect its current probe config
+                current_probe = port_settings.get("wan_probe_override", {})
+                current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
+                current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
+                
+                overridden_wan_ports.append({
+                    "port_name": port_name,
+                    "current_ips": current_ips,
+                    "current_profile": current_profile,
+                    "port_settings": port_settings
+                })
+            
+            if overridden_wan_ports:
+                devices_with_overrides.append({
+                    "device_id": device_id,
+                    "device_name": device_name,
+                    "site_id": site_id,
+                    "site_name": site_name,
+                    "overridden_wan_ports": overridden_wan_ports
+                })
+        
         if not devices_with_overrides:
-            print(f"\n  No gateway devices with WAN port overrides found.")
+            print(f"\n  No WAN port overrides found on the {len(all_gateways)} gateway devices.")
             print(f"  All devices are using template-level WAN configuration.")
             logging.info("Menu #114: No devices with WAN port overrides found")
             return []
@@ -37929,7 +38358,7 @@ class BulkAPFirmwareUpgrader:
         
         # Prompt for comma-separated indices
         print(f"\n  Enter site indices as comma-separated list (e.g., 0,3,5,12)")
-        print(f"  Or enter a range using dash (e.g., 0-5,10,15-20)")
+        print(f"  Or enter ranges using dash or 'through' (e.g., 0-5, 1 through 20, 10,15-20)")
         user_input = input("\n  Site indices: ").strip()
         
         if not user_input:
@@ -37966,21 +38395,36 @@ class BulkAPFirmwareUpgrader:
         return True
     
     def _parse_index_input(self, user_input: str, max_index: int) -> list:
-        """Parse comma-separated indices and ranges into a list of valid indices."""
+        """Parse comma-separated indices and ranges into a list of valid indices.
+        
+        Supports formats:
+        - Single indices: 0, 3, 5, 12
+        - Dash ranges: 0-5, 10-20
+        - 'through' ranges: 1 through 20, 5 through 10
+        - Mixed: 0-5, 10, 15 through 20, 25
+        """
         selected_indices = []
-        parts = [part.strip() for part in user_input.split(',')]
+        
+        # Normalize 'through' to '-' for consistent parsing
+        normalized_input = user_input.lower().replace(' through ', '-').replace('through', '-')
+        
+        parts = [part.strip() for part in normalized_input.split(',')]
         
         for part in parts:
             if '-' in part and not part.startswith('-'):
-                # Handle range like "0-5"
+                # Handle range like "0-5" or "1 through 20" (normalized to "1-20")
                 try:
                     range_parts = part.split('-')
                     if len(range_parts) == 2:
                         start = int(range_parts[0].strip())
                         end = int(range_parts[1].strip())
+                        if start > end:
+                            start, end = end, start  # Swap if reversed
                         for idx in range(start, end + 1):
                             if 0 <= idx < max_index and idx not in selected_indices:
                                 selected_indices.append(idx)
+                            elif idx >= max_index:
+                                print(f"   !? Index {idx} out of range (max: {max_index - 1})")
                 except ValueError:
                     logging.warning(f"Invalid range format: {part}")
                     continue
@@ -38761,53 +39205,342 @@ class BulkAPFirmwareUpgrader:
     # STEP 9: AUTO-UPGRADE CONFIGURATION
     # =========================================================================
     
-    def _step9_configure_auto_upgrade(self) -> None:
-        """Configure site auto-upgrade settings."""
-        print(f"\n  Configuring site auto-upgrade settings...")
+    def _fetch_ap_model_families(self) -> dict:
+        """
+        Dynamically fetch AP model families from the Mist const/device_models API.
         
-        # Use first site for auto-upgrade config
+        Groups AP models by their ap_type (hardware chipset/generation).
+        Returns dict mapping ap_type to list of model names - fully dynamic, no hardcoding.
+        """
+        print("   Fetching AP model definitions from Mist API...")
+        
+        try:
+            # Use the const API to get all device models
+            import importlib
+            device_models_module = importlib.import_module('mistapi.api.v1.const.device_models')
+            list_device_models = getattr(device_models_module, 'listDeviceModels')
+            response = list_device_models(apisession)
+            
+            all_models = getattr(response, 'data', response) or []
+            
+            # Filter to APs only and group by ap_type
+            ap_type_to_models = {}
+            for model_info in all_models:
+                if not isinstance(model_info, dict):
+                    continue
+                if model_info.get('type') != 'ap':
+                    continue
+                
+                model_name = model_info.get('model', '')
+                ap_type = model_info.get('ap_type', 'unknown')
+                
+                if not model_name:
+                    continue
+                
+                if ap_type not in ap_type_to_models:
+                    ap_type_to_models[ap_type] = []
+                ap_type_to_models[ap_type].append(model_name)
+            
+            # Build families dict using ap_type as the key (fully dynamic)
+            # Format: "ap_type (MODEL1, MODEL2, ...)" for display
+            families = {}
+            for ap_type, models in sorted(ap_type_to_models.items()):
+                families[ap_type] = sorted(models)
+            
+            logging.info(f"Fetched {len(families)} AP families with {sum(len(m) for m in families.values())} total models from API")
+            return families
+            
+        except Exception as e:
+            logging.warning(f"Failed to fetch AP model families from API: {e}")
+            print(f"   Warning: Could not fetch AP models from API")
+            return {}
+    
+    def _step9_configure_auto_upgrade(self) -> None:
+        """Configure site auto-upgrade settings for ALL selected sites."""
         if not self.sites_to_upgrade:
             return
         
-        site = self.sites_to_upgrade[0]
-        site_id, site_name = site['id'], site['name']
+        print(f"\n  Site Auto-Upgrade Configuration")
+        print("=" * 60)
+        print(f"   This will configure auto-upgrade for {len(self.sites_to_upgrade)} site(s)")
+        print(f"   Auto-upgrade ensures new APs automatically upgrade to target firmware")
         
-        target_versions = set(p["version"] for p in self.upgrade_plan.values())
-        
-        if len(target_versions) == 1:
-            self._configure_single_version_auto_upgrade(site_id, site_name, list(target_versions)[0])
-        else:
-            self._configure_multi_version_auto_upgrade(site_id, site_name)
-    
-    def _configure_single_version_auto_upgrade(self, site_id: str, site_name: str, version: str) -> None:
-        """Configure auto-upgrade for single version scenario."""
-        prompt = input(f"Configure site auto-upgrade? (Y/n): ").strip().lower()
-        if prompt in ['n', 'no']:
+        # Step 1: Ask if user wants to configure auto-upgrade
+        try:
+            prompt = input(f"\n  Configure site auto-upgrade? (Y/n): ").strip().lower()
+            if prompt in ['n', 'no']:
+                print("   Skipping auto-upgrade configuration")
+                return
+        except (EOFError, KeyboardInterrupt):
             return
         
-        try:
-            custom_versions = {model: plan["version"] for model, plan in self.upgrade_plan.items()}
-            auto_upgrade = {"enabled": True, "version": "custom", "custom_versions": custom_versions}
-            
-            settings = {"auto_upgrade": auto_upgrade}
-            mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
-            print(f"   Site auto-upgrade configured successfully")
-        except Exception as e:
-            print(f"   Failed to configure auto-upgrade: {e}")
+        # Step 2: Build base custom_versions from upgrade plan
+        custom_versions = {model: plan["version"] for model, plan in self.upgrade_plan.items()}
+        
+        # Step 3: Offer to add versions for models not currently at sites
+        custom_versions = self._offer_additional_model_versions(custom_versions)
+        
+        # Step 4: Configure scheduling
+        schedule_config = self._configure_auto_upgrade_schedule()
+        
+        # Step 5: Apply to all sites
+        self._apply_auto_upgrade_to_all_sites(custom_versions, schedule_config)
     
-    def _configure_multi_version_auto_upgrade(self, site_id: str, site_name: str) -> None:
-        """Configure auto-upgrade for multi-version scenario."""
-        print(f"   Multiple versions - configuring model-specific auto-upgrade...")
+    def _offer_additional_model_versions(self, custom_versions: dict) -> dict:
+        """Offer to configure firmware versions for AP models not present at sites."""
+        print(f"\n  Additional Model Configuration")
+        print("-" * 60)
+        print(f"   Current upgrade targets: {len(custom_versions)} model(s)")
+        for model, version in sorted(custom_versions.items()):
+            print(f"      {model}: {version}")
         
         try:
-            custom_versions = {model: plan["version"] for model, plan in self.upgrade_plan.items()}
-            auto_upgrade = {"enabled": True, "version": "custom", "custom_versions": custom_versions}
+            add_more = input(f"\n  Add firmware versions for other AP models? (y/N): ").strip().lower()
+            if add_more not in ['y', 'yes']:
+                return custom_versions
+        except (EOFError, KeyboardInterrupt):
+            return custom_versions
+        
+        # Fetch AP model families dynamically from API
+        ap_families = self._fetch_ap_model_families()
+        if not ap_families:
+            print("   Could not fetch AP model families from API")
+            return custom_versions
+        
+        # Display family-based selection
+        print(f"\n  AP Model Families (select by family to set ONE version for all models in that family):")
+        print("-" * 60)
+        
+        family_list = list(ap_families.items())
+        for idx, (ap_type, models) in enumerate(family_list, 1):
+            models_str = ", ".join(models)
+            print(f"   [{idx}] {ap_type}: {models_str}")
+        
+        print(f"\n  Options:")
+        print(f"   - Enter family numbers (e.g., '1,3,5') - you will select ONE version per family")
+        print(f"   - Enter 'all' to configure all AP model families")
+        print(f"   - Press Enter to skip")
+        
+        try:
+            selection = input(f"\n  Selection: ").strip()
+            if not selection:
+                return custom_versions
+        except (EOFError, KeyboardInterrupt):
+            return custom_versions
+        
+        # Parse selection into families (not individual models)
+        selected_families = self._parse_family_selection(selection, family_list)
+        
+        if not selected_families:
+            print("   No families selected")
+            return custom_versions
+        
+        # Select ONE version per family
+        return self._select_versions_by_family(custom_versions, selected_families)
+    
+    def _parse_family_selection(self, selection: str, family_list: list) -> dict:
+        """Parse user selection into dict of {ap_type: [models]}."""
+        selected_families = {}
+        
+        if selection.lower() == 'all':
+            return {ap_type: models for ap_type, models in family_list}
+        
+        parts = [p.strip() for p in selection.split(',')]
+        for part in parts:
+            if part.isdigit():
+                idx = int(part) - 1
+                if 0 <= idx < len(family_list):
+                    ap_type, models = family_list[idx]
+                    selected_families[ap_type] = models
+        
+        return selected_families
+    
+    def _select_versions_by_family(self, custom_versions: dict, selected_families: dict) -> dict:
+        """Select ONE firmware version per family, applying to all models in that family."""
+        print(f"\n  Selecting firmware versions by family")
+        print(f"  (One version selection applies to ALL models in each family)")
+        print("-" * 60)
+        
+        for ap_type, models in selected_families.items():
+            # Skip models already configured
+            new_models = [m for m in models if m not in custom_versions]
+            if not new_models:
+                print(f"\n   {ap_type}: All models already configured - skipping")
+                continue
             
-            settings = {"auto_upgrade": auto_upgrade}
-            mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
-            print(f"   Site auto-upgrade configured with model-specific versions")
-        except Exception as e:
-            print(f"   Failed to configure auto-upgrade: {e}")
+            print(f"\n   Family: {ap_type}")
+            print(f"   Models: {', '.join(new_models)}")
+            
+            # Find versions compatible with ALL models in this family
+            universal_versions = self._find_universal_versions_for_models(set(new_models))
+            
+            if not universal_versions:
+                print(f"   ! No universal version found for all models in {ap_type}")
+                print(f"   ! You may need to configure these models individually")
+                continue
+            
+            # Sort versions by semantic version (newest/highest first)
+            sorted_versions = sorted(universal_versions, key=self._version_sort_key, reverse=True)[:10]
+            
+            print(f"   Available versions (compatible with ALL {len(new_models)} models):")
+            for idx, version in enumerate(sorted_versions, 1):
+                print(f"      [{idx}] {version}")
+            
+            try:
+                choice = input(f"\n   Select version for {ap_type} (1-{len(sorted_versions)}), 's' to skip: ").strip().lower()
+                if choice == 's':
+                    print(f"   Skipped {ap_type}")
+                    continue
+                if choice.isdigit():
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(sorted_versions):
+                        selected_version = sorted_versions[idx]
+                        for model in new_models:
+                            custom_versions[model] = selected_version
+                        print(f"   -> Applied {selected_version} to: {', '.join(new_models)}")
+            except (EOFError, KeyboardInterrupt, ValueError):
+                continue
+        
+        return custom_versions
+    
+    def _find_universal_versions_for_models(self, models: set) -> list:
+        """Find firmware versions compatible with all specified models.
+        
+        The API returns separate entries per model, so we need to aggregate
+        all entries by version number first, then check which versions
+        cover all requested models.
+        """
+        # First, build a map of version -> set of compatible models
+        version_to_compatible_models = {}
+        
+        for version_info in self.available_versions:
+            if not isinstance(version_info, dict):
+                continue
+            version = version_info.get("version", "")
+            if not version:
+                continue
+            
+            # Collect all models this entry covers
+            entry_models = set(version_info.get("models", []))
+            if version_info.get("model"):
+                entry_models.add(version_info.get("model"))
+            
+            # Aggregate into the version map
+            if version not in version_to_compatible_models:
+                version_to_compatible_models[version] = set()
+            version_to_compatible_models[version].update(entry_models)
+        
+        # Now find versions where all requested models are covered
+        universal = []
+        for version, compatible_models in version_to_compatible_models.items():
+            if models.issubset(compatible_models):
+                universal.append(version)
+        
+        return list(set(universal))
+    
+    def _version_sort_key(self, version_string: str) -> list:
+        """Create sort key for proper semantic version number ordering.
+        
+        Converts version strings like '0.14.30052' into comparable tuples.
+        Handles mixed numeric/text parts gracefully.
+        """
+        try:
+            parts = []
+            for part in version_string.split('.'):
+                try:
+                    parts.append(int(part))
+                except ValueError:
+                    parts.append(part.lower())
+            return parts
+        except Exception:
+            return [version_string.lower()]
+    
+    def _configure_auto_upgrade_schedule(self) -> dict:
+        """Configure auto-upgrade scheduling options."""
+        schedule = {}
+        
+        print(f"\n  Auto-Upgrade Scheduling")
+        print("-" * 60)
+        print(f"   Configure when auto-upgrades should occur")
+        
+        # Day of week selection
+        print(f"\n  Day of week options:")
+        days = ["any", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        print(f"   [0] any (default)")
+        for idx, day in enumerate(days[1:], 1):
+            print(f"   [{idx}] {day}")
+        
+        try:
+            day_choice = input(f"\n  Select day (0-7, default=0 any): ").strip() or "0"
+            if day_choice.isdigit() and 0 <= int(day_choice) < len(days):
+                schedule["day_of_week"] = days[int(day_choice)]
+            else:
+                schedule["day_of_week"] = "any"
+        except (EOFError, KeyboardInterrupt, ValueError):
+            schedule["day_of_week"] = "any"
+        
+        # Time of day selection
+        print(f"\n  Time of day (24-hour format HH:MM, or 'any'):")
+        print(f"   Examples: 02:00 (2 AM), 14:00 (2 PM), any")
+        
+        try:
+            time_input = input(f"   Enter time (default=any): ").strip() or "any"
+            if time_input.lower() == "any":
+                schedule["time_of_day"] = "any"
+            elif ":" in time_input:
+                schedule["time_of_day"] = time_input
+            else:
+                schedule["time_of_day"] = "any"
+        except (EOFError, KeyboardInterrupt):
+            schedule["time_of_day"] = "any"
+        
+        return schedule
+    
+    def _apply_auto_upgrade_to_all_sites(self, custom_versions: dict, schedule: dict) -> None:
+        """Apply auto-upgrade configuration to ALL selected sites."""
+        print(f"\n  Applying Auto-Upgrade to {len(self.sites_to_upgrade)} Site(s)")
+        print("=" * 60)
+        
+        # Build auto-upgrade configuration
+        auto_upgrade = {
+            "enabled": True,
+            "version": "custom",
+            "custom_versions": custom_versions
+        }
+        
+        # Add scheduling if configured
+        if schedule.get("day_of_week") and schedule["day_of_week"] != "any":
+            auto_upgrade["day_of_week"] = schedule["day_of_week"]
+        if schedule.get("time_of_day") and schedule["time_of_day"] != "any":
+            auto_upgrade["time_of_day"] = schedule["time_of_day"]
+        
+        settings = {"auto_upgrade": auto_upgrade}
+        
+        successful = 0
+        failed = 0
+        
+        for site in self.sites_to_upgrade:
+            site_id = site['id']
+            site_name = site['name']
+            
+            try:
+                mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+                print(f"   [OK] {site_name}")
+                successful += 1
+            except Exception as e:
+                print(f"   [FAIL] {site_name}: {e}")
+                logging.error(f"Failed to configure auto-upgrade for site {site_name}: {e}")
+                failed += 1
+        
+        print(f"\n  Auto-Upgrade Configuration Complete:")
+        print(f"   Successful: {successful} site(s)")
+        if failed > 0:
+            print(f"   Failed: {failed} site(s)")
+        print(f"   Models configured: {len(custom_versions)}")
+        for model, version in sorted(custom_versions.items()):
+            print(f"      {model}: {version}")
+        if schedule.get("day_of_week") != "any" or schedule.get("time_of_day") != "any":
+            print(f"   Schedule: {schedule.get('day_of_week', 'any')} at {schedule.get('time_of_day', 'any')}")
     
     # =========================================================================
     # STEP 10: STATUS CHECK
@@ -42673,10 +43406,13 @@ menu_actions = {
     
     "102": (lambda: WLANRadiusTimerManager().manage(), "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"),
     
+    # Authentication Management
+    "115": (switch_to_interactive_login, "Switch to interactive login (email/password) - Enables MSP-level API access for current session"),
+    
     # Organization Management (Read-Only)
     "54": (OrgExportUtils.api_tokens, "Export API token information for the organization"),
     "55": (OrgExportUtils.admins, "Export administrator information for the organization"),
-    "56": (OrgExportUtils.msp, "Export MSP (Managed Service Provider) information for the organization"),
+    "56": (OrgExportUtils.msp, "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not org-level)"),
     "57": (OrgExportUtils.sso, "Export SSO (Single Sign-On) information for the organization"),
     "58": (OrgExportUtils.usage, "Export license usage information for the organization"),
     "59": (OrgExportUtils.mx_edges, "Export MX Edge information for the organization"),
@@ -45993,6 +46729,7 @@ def main():
     parser.add_argument("--skip-ssl-verify", action="store_true", help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)")
     parser.add_argument("--no-env", action="store_true", help="Disable .env file loading for SSH operations (require explicit command line parameters)")
     parser.add_argument("--tui", action="store_true", help="Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library")
+    parser.add_argument("--login", action="store_true", help="Use interactive login (email/password) instead of API token - enables MSP-level API access")
     args = parser.parse_args()
 
     # Store args globally for menu functions to access CLI flags
@@ -46073,10 +46810,20 @@ def main():
         logging.debug("Dependencies already initialized, skipping duplicate initialization")
     
     # Initialize Mist API session after dependencies are available
-    if not initialize_mist_session():
-        logging.error("Failed to initialize Mist API session")
-        print(" Failed to initialize Mist API session. Check your credentials.")
-        sys.exit(1)
+    # Use interactive login if --login flag is specified (enables MSP-level API access)
+    if args.login:
+        logging.info("Interactive login mode requested via --login flag")
+        if not initialize_mist_session_interactive():
+            logging.error("Failed to initialize Mist API session via interactive login")
+            print(" Failed to initialize Mist API session. Check your credentials.")
+            sys.exit(1)
+    else:
+        if not initialize_mist_session():
+            logging.error("Failed to initialize Mist API session")
+            print(" Failed to initialize Mist API session. Check your credentials.")
+            sys.exit(1)
+        # Detect MSP privileges even with token-based auth (in case token has MSP scope)
+        detect_msp_privileges()
     
     # Set global output format based on CLI argument
     global OUTPUT_FORMAT
