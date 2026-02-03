@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 112 actionable menu entries (1–10, 11–89, 90–106, 107–111, 112) with some gaps for future expansion.
+**Operation Count:** The code currently defines 117 actionable menu entries (0–115) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -10,7 +10,7 @@ MistHelper is a production-focused Python application that streamlines large‑s
 ---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 112 actionable menu entries (1–10, 11–89, 90–112) with some gaps for future expansion.
+1. Operation Count: The code currently defines 115 actionable menu entries (0–114) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
@@ -186,6 +186,7 @@ Primary flags (from argparse block near end of file):
 | `--no-env` | Disable .env file loading for SSH operations |
 | `--dry-run` | Preview destructive operations without making changes |
 | `--tui` | Launch Terminal User Interface mode for visual API navigation |
+| `--login` | Use interactive login (email/password) instead of API token - enables MSP-level API access |
 | `--testinteractive` | Run systematic test of read-only interactive menu options |
 
 Examples (PowerShell friendly):
@@ -226,45 +227,53 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 
 | Range | Focus | Highlights |
 |-------|-------|-----------|
+| 0 | Exit | Exit MistHelper |
 | 1–4 | Alarms & Definitions | Org alarms, device events, audit logs (24h), gateway management IPs |
 | 5–8 | WebSocket Commands | MAC table (switches), forwarding table (gateways), routing table (switches - BGP/OSPF/Static), SSR/SRX routing (128T/SRX gateways - Advanced BGP analysis) |
 | 9–10 | Packet Capture | Site & org-level packet captures (wireless/wired/gateway/**switch**/scan/MxEdge) with WebSocket streaming |
-| 11–28 | Org Inventory & Enrichment | Sites, devices, stats, ports, VPN, synthetic tests, templates, location & address enrichment |
-| 29–34 | Site‑Scoped | Per‑site ports, clients, devices, Wi‑Fi sessions, chassis info |
-| 35–39 | Template Bundles | Unified export of gateway/network/RF/site/AP templates |
-| 40–44 | Clients & Security | Wired/wireless clients, security events, rogue client/AP detections |
-| 45–59 | Configuration & Admin | Licenses, PSKs, webhooks, WLANs (org/site), admins, MSP, SSO, usage, MX Edge |
-| 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI actions |
-| 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway config extraction (heavy) |
-| 66–69 | Insights API Operations | Organization & site SLE metrics, client insights, general insight metrics |
-| 70–74 | Interactive Views | Selection, inventory browser, device stats/tests/config views |
-| 75–76 | Continuous Loops | Core dataset refresh + continuous collection cycle |
+| 11–15 | Org Inventory Core | Sites, inventory, device stats, port stats, VPN peer stats |
+| 16–19 | Gateway Exports | Synthetic tests, devices list, site settings (HEAVY), test results by site |
+| 20–28 | Location & Enrichment | Sites/gateways/devices with location info, guests, switch VC stats, combined inventory, templates, WAN overrides |
+| 29–34 | Site‑Scoped | Per‑site ports, clients, devices, device stats, virtual chassis, Wi‑Fi clients |
+| 35–39 | Template Bundles | All templates, network, RF, AP, switch templates |
+| 40–44 | Clients & Security | Wireless/wired clients, security events, rogue clients/APs |
+| 45–53 | Configuration | Licenses, PSKs, webhooks, WLANs (org/site), beacons, maps, zones, insights |
+| 54–59 | Admin & Org Mgmt | API tokens, admins, MSP (info only - requires MSP-level access), SSO, usage, MX Edge |
+| 60–62 | Monitoring / Analytics | Firmware upgrade status, inventory diff (address similarity), Marvis AI troubleshooting |
+| 63–65 | WIP Bulk History | 52‑week device events, 52‑week audit logs, gateway configs (HEAVY) |
+| 66–69 | Insights API | Org SLE metrics, sites SLE summary, site insight metrics, client insights |
+| 70–74 | Interactive Views | Site selection, inventory browser, device stats/tests/config views |
+| 75–76 | Continuous Loops | Both run same continuous collection (5 core API calls with rate limiting) - legacy duplicate |
 | 77–78 | Processing & Support | SFP transceiver merge, site support package generation |
-| 79–80 | CLI / WebSocket | Interactive CLI, ARP via WebSocket (other earlier WebSocket commands removed) |
-| 81–86 | Advanced Insights | Device insights, const definitions, organization insights, anomaly metrics |
+| 79–80 | CLI / WebSocket | Interactive CLI shell, ARP via WebSocket |
+| 81–86 | Advanced Insights | Device insights, const definitions export, org insights, site/device/client anomaly events |
 | 87–89 | WebSocket Device Commands | Device ping, ARP, and service ping via WebSocket (real-time output) |
-| 90–93 | DESTRUCTIVE Ops | AP firmware upgrade strategies, reboots, virtual chassis conversions |
-| 94–96 | Status / Integrity | VC conversion status, gateway stats w/ freshness, WAN port conflict detection |
-| 97 | SSH Runner | Enhanced SSH command execution (auto-detect credentials & command file) |
-| 98 | SSH by Template | SSH runner targeting gateways by template name (online with management IPs only) |
+| 90 | AP Firmware | **DESTRUCTIVE**: Advanced AP firmware upgrade with site selection or template-based targeting, family-based auto-upgrade configuration |
+| 91 | Reboot by Template | **DESTRUCTIVE**: Reboot devices by gateway template list (GatewayTemplateRebootList.CSV) |
+| 92–93 | Virtual Chassis | **DESTRUCTIVE**: Convert VC switches to virtual MAC (single or bulk via VCConvert.CSV) |
+| 94 | VC Status | Check virtual chassis to virtual MAC conversion status |
+| 95–96 | Gateway Status | Gateway stats with freshness check, WAN port conflict detection |
+| 97–98 | SSH Runner | Enhanced SSH command execution (interactive or by gateway template) |
 | 99 | Switch Firmware | **DESTRUCTIVE**: Advanced switch firmware upgrade with mode selection |
-| 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR firmware upgrade with mode selection |
+| 100 | SSR Firmware | **DESTRUCTIVE**: Advanced SSR/SRX firmware upgrade with mode selection |
 | 101 | TUI Mode | Launch Terminal User Interface for visual Mist API library navigation |
-| 102 | WLAN RADIUS Timers | Manage WLAN RADIUS authentication timers for site or template WLANs |
-| 103–104 | Gateway Template WAN2 | Set site variables & migrate templates to use {{wan2_interface}} variable |
-| 105 | Template Config Extract | Extract DIA_Pico (traffic steering) & Picocell (application policy) to JSON |
-| 106 | Template Config Apply | **DESTRUCTIVE**: Replicate extracted configs to other templates with confirmation |
-| 107 | Create Test Sites | **DESTRUCTIVE**: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries |
-| 108 | Country RF Templates | **DESTRUCTIVE**: Create country-specific RF templates and assign sites to matching templates (auto/default settings) |
-| 109 | AP Model Device Profiles | **DESTRUCTIVE**: Scan org for AP models and create Device Profile per model with inherit/auto settings |
-| 110 | Assign APs to Profiles | **DESTRUCTIVE**: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles |
-| 111 | Clone Templates by Geography | **DESTRUCTIVE**: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites |
+| 102 | WLAN RADIUS Timers | Manage WLAN RADIUS authentication timers (timeout, retries, selection, fast_dot1x) |
+| 103–104 | Gateway WAN2 Variable | Set WAN2 site variables & **DESTRUCTIVE**: migrate templates to {{wan2_interface}} |
+| 105–106 | Template Config | Extract DIA_Pico/Picocell configs to JSON & **DESTRUCTIVE**: apply to other templates |
+| 107 | Create Test Sites | **DESTRUCTIVE**: Create 137 test sites from NorthAmericanTestSites.csv |
+| 108 | Country RF Templates | **DESTRUCTIVE**: Create country-specific RF templates and assign sites |
+| 109 | AP Device Profiles | **DESTRUCTIVE**: Create Device Profile per AP model with inherit/auto settings |
+| 110 | Assign APs to Profiles | **DESTRUCTIVE**: Assign APs to matching Device Profiles (AP-{model}) |
+| 111 | Clone Templates | **DESTRUCTIVE**: Clone Gateway Template by State/Country geography |
 | 112 | Maps Manager | Interactive site floorplan and map operations (sub-menu with 19 operations) |
+| 113 | WAN Probe Templates | **DESTRUCTIVE**: Configure WAN Probe Override on Gateway Templates (supports --dry-run) |
+| 114 | WAN Probe Devices | **DESTRUCTIVE**: Configure WAN Probe on Device Port Overrides (supports --dry-run) |
+| 115 | Interactive Login | Switch to interactive login (email/password) - Enables MSP-level API access |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
 * 63–65 intentionally marked WIP; expect evolution.
-* 90–93, 99–100 should never be scripted unattended without explicit review.
+* 90–93, 99–100, 104, 106–111, 113–114 should never be scripted unattended without explicit review.
 
 ---
 ## 9. Systematic Test Mode (`--test`)
@@ -549,6 +558,68 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.02.23.15",
+      "date": "2026-02-02",
+      "changes": {
+        "feature_additions": [
+          "Interactive login support (--login flag): Enables MSP-level API access via email/password authentication",
+          "MSP privilege detection: Automatically detects MSP-level access from user profile at startup",
+          "Menu Option 115: Switch to interactive login during session to gain MSP access",
+          "Menu Option 56 (MSP): Now exports actual MSP organization data when MSP privileges available"
+        ],
+        "enhancements": [
+          "Session-based authentication with cookie management for MSP API endpoints",
+          "Two-factor authentication (2FA) support in interactive login flow",
+          "Cloud selection during interactive login (Global, EU, GovCloud, Custom)",
+          "MSP organization export includes msp_id and msp_name context fields"
+        ],
+        "new_functions": [
+          "detect_msp_privileges(): Calls GET /api/v1/self to extract MSP privileges from user profile",
+          "initialize_mist_session_interactive(): Full interactive login workflow with 2FA support",
+          "switch_to_interactive_login(): Menu option to re-authenticate with email/password"
+        ],
+        "cli_options": [
+          "--login: Use interactive login (email/password) instead of API token"
+        ],
+        "api_notes": [
+          "MSP-level APIs require session auth or personal token from MSP Super User",
+          "Org-scoped API tokens cannot access /api/v1/msps/{msp_id}/* endpoints",
+          "MSP privilege scope values: 'msp', 'org', 'orggroup'"
+        ]
+      }
+    },
+    {
+      "version": "26.02.02.21.06",
+      "date": "2026-02-02",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 Step 9 (Auto-Upgrade Configuration): Complete rewrite with family-based version selection",
+          "Dynamic AP model families fetched from Mist API at runtime (no hardcoded mappings)",
+          "Auto-upgrade now applies to ALL selected sites (not just first site)",
+          "Site selection now supports 'through' keyword for ranges (e.g., '1 through 20', '5-10')"
+        ],
+        "enhancements": [
+          "Family-based version selection: Select one version per ap_type family, applies to all models",
+          "AP models grouped by ap_type from /api/v1/const/device_models (ruby, jewel, aphx, etc.)",
+          "Universal version detection aggregates firmware compatibility across all API entries",
+          "Semantic version sorting (0.14.x now correctly sorts above 0.8.x)",
+          "Auto-upgrade scheduling: Added day_of_week and time_of_day options"
+        ],
+        "new_methods": [
+          "BulkAPFirmwareUpgrader._fetch_ap_model_families(): Dynamic API lookup for AP families",
+          "BulkAPFirmwareUpgrader._parse_family_selection(): Parse family selection input",
+          "BulkAPFirmwareUpgrader._select_versions_by_family(): One version per family workflow",
+          "BulkAPFirmwareUpgrader._version_sort_key(): Semantic version sorting",
+          "BulkAPFirmwareUpgrader._apply_auto_upgrade_to_all_sites(): Iterate all sites with tracking"
+        ],
+        "refactoring": [
+          "_find_universal_versions_for_models(): Now aggregates entries by version before checking compatibility",
+          "_parse_index_input(): Added 'through' keyword support and reversed range handling",
+          "Removed hardcoded AP_TYPE_FRIENDLY_NAMES constant - fully dynamic from API"
+        ]
+      }
+    },
     {
       "version": "26.01.28.19.03",
       "date": "2026-01-28",
