@@ -40580,16 +40580,41 @@ class MSPInventoryExporter:
         print("=" * 70)
         print("")
         
-        # Validate MSP privileges
+        # Validate MSP privileges - offer interactive login if not available
         if not msp_privileges:
-            print("  X MSP privileges not available")
+            print("  MSP privileges not currently available.")
             print("")
-            print("  To use this feature, you need MSP-level access:")
-            print("    1. Run with --login flag to use interactive login")
-            print("    2. Or use Menu Option 115 to switch to interactive login")
+            print("  This feature requires MSP-level access. Would you like to")
+            print("  switch to interactive login (email/password) now?")
             print("")
-            logging.warning("MSP inventory export attempted without MSP privileges")
-            return
+            
+            try:
+                proceed = InputUtils.safe_input("  Switch to interactive login? (Y/n): ", context="msp_inventory").strip().lower()
+            except SystemExit:
+                return
+            
+            if proceed in ('', 'y', 'yes'):
+                # Call interactive login switch
+                switch_to_interactive_login()
+                
+                # Check if we now have MSP privileges
+                if not msp_privileges:
+                    print("")
+                    print("  X Still no MSP privileges after login.")
+                    print("    Your account may not have MSP-level access.")
+                    logging.warning("MSP inventory export: no MSP privileges after interactive login")
+                    return
+                
+                # Re-print header after login
+                print("")
+                print("=" * 70)
+                print("  MSP-WIDE DEVICE INVENTORY EXPORT (Continuing)")
+                print("=" * 70)
+                print("")
+            else:
+                print("  Cancelled.")
+                logging.info("MSP inventory export cancelled by user")
+                return
         
         print(f"  + MSP privileges detected: {len(msp_privileges)} MSP(s) available")
         print("")

@@ -559,6 +559,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.04.16.20",
+      "date": "2026-02-04",
+      "changes": {
+        "enhancements": [
+          "Menu 117: Auto-prompt for interactive login when MSP privileges missing",
+          "No longer requires user to manually run --login or Menu 115 first",
+          "Improved UX: offers to switch authentication in-place if needed"
+        ]
+      }
+    },
+    {
       "version": "26.02.05.06.15",
       "date": "2026-02-05",
       "changes": {
