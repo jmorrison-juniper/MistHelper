@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 117 actionable menu entries (0–115) with some gaps for future expansion.
+**Operation Count:** The code currently defines 118 actionable menu entries (0–116) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -558,6 +558,38 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.05.05.45",
+      "date": "2026-02-05",
+      "changes": {
+        "feature_additions": [
+          "Menu Option 116: Org-Level AP Firmware Upgrade (new)",
+          "Uses upgradeOrgDevices API for massive efficiency (1 call per version vs 1 per site)",
+          "API call comparison: 50 sites x 3 versions = 150 calls (site-level) vs 3 calls (org-level)"
+        ],
+        "enhancements": [
+          "Site scope selection: 'All sites' or specific site selection",
+          "Version selection per model with automatic grouping by target version",
+          "Full upgrade strategy support (big_bang, serial, canary, rrm)",
+          "Dry-run mode with --dry-run flag",
+          "API efficiency display showing call savings vs site-level approach"
+        ],
+        "new_classes": [
+          "OrgLevelAPFirmwareUpgrader: Complete workflow for org-level AP firmware upgrades"
+        ],
+        "new_methods": [
+          "OrgLevelAPFirmwareUpgrader._step1_select_site_scope(): All sites vs specific selection",
+          "OrgLevelAPFirmwareUpgrader._step2_discover_aps(): Fetch APs from org or selected sites",
+          "OrgLevelAPFirmwareUpgrader._organize_by_version(): Group selections by target version for API",
+          "OrgLevelAPFirmwareUpgrader._execute_upgrades(): Call upgradeOrgDevices per version"
+        ],
+        "api_usage": [
+          "POST /api/v1/orgs/{org_id}/devices/upgrade with all_sites or site_ids",
+          "Models filter via 'models' parameter per API call",
+          "One API call per unique target version"
+        ]
+      }
+    },
     {
       "version": "26.02.05.04.35",
       "date": "2026-02-05",

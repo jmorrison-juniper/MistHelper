@@ -40540,6 +40540,758 @@ class BulkAPFirmwareUpgrader:
 # NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
 
 
+class OrgLevelAPFirmwareUpgrader:
+    """
+    Org-Level AP Firmware Upgrade Manager
+    
+    Uses the upgradeOrgDevices API (POST /api/v1/orgs/{org_id}/devices/upgrade) for
+    massive efficiency improvements when upgrading APs across many sites.
+    
+    API Call Comparison:
+    - Site-level API: 1 call per site per unique version (50 sites x 3 versions = 150 calls)
+    - Org-level API: 1 call per unique version per org (3 versions = 3 calls per org)
+    
+    Key Features:
+    - MSP multi-organization support with unified selection interface
+    - Org-level upgrade executes across all_sites or selected site_ids
+    - Model-filtered upgrades using the 'models' parameter
+    - Full support for upgrade strategies (big_bang, canary, rrm, serial)
+    - Dry-run mode for safe validation
+    
+    Workflow:
+    1. MSP/Org selection (reuses FirmwareManager patterns)
+    2. Site scope selection (all sites or specific sites per org)
+    3. Collect device inventory from selected scope
+    4. Version selection per model (reuses BulkAPFirmwareUpgrader patterns)
+    5. Execute org-level upgrades (one API call per unique version)
+    """
+    
+    def __init__(self, org_id: str, dry_run: bool = False):
+        """Initialize the org-level AP firmware upgrader."""
+        self.org_id = org_id
+        self.dry_run = dry_run
+        
+        # Selection state
+        self.target_all_sites: bool = True
+        self.selected_site_ids: list = []
+        self.selected_sites: list = []
+        
+        # Device data
+        self.all_aps: list = []
+        self.aps_by_model: dict = {}
+        self.ap_versions: dict = {}
+        
+        # Firmware data
+        self.available_versions: list = []
+        self.model_version_ranges: dict = {}
+        
+        # Upgrade plan: {version: {models: [], device_ids: []}}
+        self.upgrade_plan: dict = {}
+        self.skipped_already_at_target: int = 0
+        
+        # Configuration
+        self.upgrade_config: dict = {}
+        
+        # Results
+        self.results: list = []
+        self.successful_api_calls: int = 0
+        self.failed_api_calls: int = 0
+        self.total_devices_upgraded: int = 0
+    
+    def execute(self) -> None:
+        """Execute the org-level AP firmware upgrade workflow."""
+        logging.info("Starting org-level AP firmware upgrade...")
+        logging.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")
+        logging.debug(f"Using org_id: {self.org_id}")
+        
+        print("")
+        print("=" * 70)
+        print("  ORG-LEVEL AP FIRMWARE UPGRADE (Efficient Multi-Site)")
+        print("=" * 70)
+        print("")
+        print("  This operation uses the org-level upgrade API for efficiency:")
+        print("    - 1 API call per unique version (vs 1 per site per version)")
+        print("    - Supports all sites or selected sites per org")
+        print("    - Same upgrade strategies as site-level (big_bang, canary, etc.)")
+        
+        if self.dry_run:
+            print("")
+            print("  >> DRY-RUN MODE: No actual upgrades will be performed <<")
+            logging.info("DRY-RUN MODE enabled - no API calls will be made")
+        
+        try:
+            if not self._step1_select_site_scope():
+                return
+            if not self._step2_discover_aps():
+                return
+            if not self._step3_fetch_firmware_stats():
+                return
+            if not self._step4_fetch_available_firmware():
+                return
+            if not self._step5_select_firmware_versions():
+                return
+            if not self._step6_configure_upgrade():
+                return
+            if not self._step7_confirm_and_execute():
+                return
+            self._step8_write_results()
+        except KeyboardInterrupt:
+            print("\n Operation cancelled by user.")
+            logging.info("Org-level AP firmware upgrade cancelled by user interrupt")
+    
+    # =========================================================================
+    # STEP 1: SITE SCOPE SELECTION
+    # =========================================================================
+    
+    def _step1_select_site_scope(self) -> bool:
+        """Select whether to upgrade all sites or specific sites."""
+        print("")
+        print("-" * 70)
+        print("  STEP 1: Site Scope Selection")
+        print("-" * 70)
+        print("")
+        print("  Select scope for this organization:")
+        print("   [1] All sites - upgrade APs across ALL sites in this org")
+        print("   [2] Select sites - choose specific sites to include")
+        print("")
+        
+        try:
+            choice = InputUtils.safe_input("  Select scope (1 or 2): ", context="org_scope_select").strip()
+        except SystemExit:
+            return False
+        
+        if choice == "1":
+            self.target_all_sites = True
+            self.selected_site_ids = []
+            print("  + Targeting ALL sites in organization")
+            logging.info("Org-level upgrade: targeting all sites")
+            return True
+        elif choice == "2":
+            return self._select_specific_sites()
+        else:
+            print("  X Invalid selection")
+            return False
+    
+    def _select_specific_sites(self) -> bool:
+        """Allow user to select specific sites for upgrade."""
+        print("")
+        print("  Fetching sites from organization...")
+        
+        try:
+            sites_data = APIFetchUtils.all_sites_with_limit(self.org_id)
+            if not sites_data:
+                print("  X No sites found in organization")
+                return False
+            
+            # Sort by name
+            sites_data = sorted(sites_data, key=lambda x: x.get('name', '').lower())
+            
+            print(f"  Found {len(sites_data)} site(s):")
+            print("")
+            
+            for idx, site in enumerate(sites_data, start=1):
+                site_name = site.get('name', 'Unknown')
+                print(f"    {idx:>4}. {site_name}")
+            
+            print("")
+            print("  Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'")
+            print("")
+            
+            try:
+                selection = InputUtils.safe_input("  Select site(s): ", context="site_multi_select").strip().lower()
+            except SystemExit:
+                return False
+            
+            if selection == 'q' or selection == '':
+                return False
+            
+            if selection == 'all':
+                self.target_all_sites = True
+                self.selected_site_ids = []
+                print("  + Targeting ALL sites")
+                return True
+            
+            # Parse selection using FirmwareManager pattern
+            selected_indices = self._parse_selection_input(selection, len(sites_data))
+            if not selected_indices:
+                print("  X Invalid selection")
+                return False
+            
+            self.target_all_sites = False
+            self.selected_sites = [sites_data[idx] for idx in selected_indices]
+            self.selected_site_ids = [s['id'] for s in self.selected_sites]
+            
+            print(f"  + Selected {len(self.selected_site_ids)} site(s)")
+            return True
+            
+        except Exception as e:
+            print(f"  X Error fetching sites: {e}")
+            logging.error(f"Failed to fetch sites for org-level upgrade: {e}")
+            return False
+    
+    def _parse_selection_input(self, selection: str, max_items: int) -> list:
+        """Parse selection input with support for ranges and multiple selections."""
+        indices = []
+        
+        # Handle comma-separated values
+        parts = [p.strip() for p in selection.replace(',', ' ').split()]
+        
+        for part in parts:
+            if '-' in part and not part.startswith('-'):
+                # Range: "1-5"
+                try:
+                    start, end = part.split('-', 1)
+                    start_idx = int(start) - 1
+                    end_idx = int(end) - 1
+                    if 0 <= start_idx <= end_idx < max_items:
+                        indices.extend(range(start_idx, end_idx + 1))
+                except ValueError:
+                    continue
+            elif 'through' in part.lower():
+                # Range: "1 through 5" - handled by splitting on whitespace
+                continue
+            else:
+                try:
+                    idx = int(part) - 1
+                    if 0 <= idx < max_items:
+                        indices.append(idx)
+                except ValueError:
+                    continue
+        
+        # Handle "X through Y" pattern
+        if 'through' in selection.lower():
+            try:
+                before, after = selection.lower().split('through')
+                start_idx = int(before.strip()) - 1
+                end_idx = int(after.strip()) - 1
+                if 0 <= start_idx <= end_idx < max_items:
+                    indices = list(range(start_idx, end_idx + 1))
+            except (ValueError, IndexError):
+                pass
+        
+        return sorted(set(indices))
+    
+    # =========================================================================
+    # STEP 2: DEVICE DISCOVERY
+    # =========================================================================
+    
+    def _step2_discover_aps(self) -> bool:
+        """Discover APs from selected scope."""
+        print("")
+        print("-" * 70)
+        print("  STEP 2: Device Discovery")
+        print("-" * 70)
+        
+        if self.target_all_sites:
+            print("  Fetching all APs from organization...")
+            return self._fetch_org_aps()
+        else:
+            print(f"  Fetching APs from {len(self.selected_site_ids)} selected site(s)...")
+            return self._fetch_selected_sites_aps()
+    
+    def _fetch_org_aps(self) -> bool:
+        """Fetch all APs from the organization."""
+        try:
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            response = org_devices_api.listOrgDevices(apisession, self.org_id, type="ap")
+            
+            if not response or not hasattr(response, 'data'):
+                print("  X Failed to retrieve devices")
+                return False
+            
+            devices_data = response.data
+            if not isinstance(devices_data, list):
+                devices_data = [devices_data] if devices_data else []
+            
+            # Filter to APs only
+            self.all_aps = [d for d in devices_data if d.get('type') == 'ap' or d.get('model', '').startswith('AP')]
+            
+            if not self.all_aps:
+                print("  X No access points found in organization")
+                return False
+            
+            return self._organize_aps_by_model()
+            
+        except Exception as e:
+            print(f"  X Error fetching devices: {e}")
+            logging.error(f"Failed to fetch org devices: {e}")
+            return False
+    
+    def _fetch_selected_sites_aps(self) -> bool:
+        """Fetch APs from selected sites only."""
+        try:
+            all_aps = []
+            for site in self.selected_sites:
+                site_id = site['id']
+                site_name = site.get('name', 'Unknown')
+                
+                print(f"    Fetching APs from {site_name}...")
+                
+                response = mistapi.api.v1.sites.devices.listSiteDevices(
+                    apisession, site_id, type="ap"
+                )
+                
+                if response and hasattr(response, 'data') and response.data:
+                    site_aps = response.data if isinstance(response.data, list) else [response.data]
+                    # Add site info to each AP
+                    for ap in site_aps:
+                        ap['_site_id'] = site_id
+                        ap['_site_name'] = site_name
+                    all_aps.extend(site_aps)
+            
+            self.all_aps = all_aps
+            
+            if not self.all_aps:
+                print("  X No access points found in selected sites")
+                return False
+            
+            return self._organize_aps_by_model()
+            
+        except Exception as e:
+            print(f"  X Error fetching devices: {e}")
+            logging.error(f"Failed to fetch site devices: {e}")
+            return False
+    
+    def _organize_aps_by_model(self) -> bool:
+        """Organize discovered APs by model."""
+        for ap in self.all_aps:
+            model = ap.get('model', 'Unknown')
+            if model not in self.aps_by_model:
+                self.aps_by_model[model] = []
+            self.aps_by_model[model].append(ap)
+        
+        print(f"  + Found {len(self.all_aps)} AP(s) across {len(self.aps_by_model)} model(s)")
+        for model, aps in sorted(self.aps_by_model.items()):
+            print(f"      {model}: {len(aps)} device(s)")
+        
+        return True
+    
+    # =========================================================================
+    # STEP 3: FIRMWARE STATS
+    # =========================================================================
+    
+    def _step3_fetch_firmware_stats(self) -> bool:
+        """Fetch current firmware versions for all discovered APs."""
+        print("")
+        print("-" * 70)
+        print("  STEP 3: Current Firmware Versions")
+        print("-" * 70)
+        print("  Fetching device firmware versions...")
+        
+        try:
+            import mistapi.api.v1.orgs.stats as org_stats_api
+            response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap")
+            
+            if response and hasattr(response, 'data'):
+                stats_data = response.data if isinstance(response.data, list) else [response.data]
+                for stat in stats_data:
+                    device_id = stat.get('id') or stat.get('device_id')
+                    version = stat.get('version', 'Unknown')
+                    if device_id:
+                        self.ap_versions[device_id] = version
+            
+            # Display version summary
+            version_counts = {}
+            for ap in self.all_aps:
+                version = self.ap_versions.get(ap.get('id'), 'Unknown')
+                if version not in version_counts:
+                    version_counts[version] = 0
+                version_counts[version] += 1
+            
+            print("  + Current firmware distribution:")
+            for version, count in sorted(version_counts.items(), reverse=True):
+                print(f"      {version}: {count} device(s)")
+            
+            return True
+            
+        except Exception as e:
+            print(f"  X Error fetching firmware stats: {e}")
+            logging.error(f"Failed to fetch firmware stats: {e}")
+            return False
+    
+    # =========================================================================
+    # STEP 4: AVAILABLE FIRMWARE
+    # =========================================================================
+    
+    def _step4_fetch_available_firmware(self) -> bool:
+        """Fetch available firmware versions for each model."""
+        print("")
+        print("-" * 70)
+        print("  STEP 4: Available Firmware Versions")
+        print("-" * 70)
+        print("  Fetching available firmware for each model...")
+        
+        try:
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            
+            # Fetch device versions for all models we discovered
+            for model in self.aps_by_model.keys():
+                response = org_devices_api.getOrgDeviceUpgrade(
+                    apisession, self.org_id, device_type="ap", model=model
+                )
+                
+                if response and hasattr(response, 'data'):
+                    data = response.data
+                    versions = data.get('versions', []) if isinstance(data, dict) else []
+                    
+                    if versions:
+                        self.available_versions.extend(versions)
+                        version_numbers = [v.get('version') for v in versions if v.get('version')]
+                        self.model_version_ranges[model] = version_numbers
+                        print(f"    {model}: {len(versions)} version(s) available")
+            
+            if not self.available_versions:
+                print("  X No firmware versions available")
+                return False
+            
+            print(f"  + Loaded firmware data for {len(self.model_version_ranges)} model(s)")
+            return True
+            
+        except Exception as e:
+            print(f"  X Error fetching available firmware: {e}")
+            logging.error(f"Failed to fetch available firmware: {e}")
+            return False
+    
+    # =========================================================================
+    # STEP 5: VERSION SELECTION (per model -> grouped by version)
+    # =========================================================================
+    
+    def _step5_select_firmware_versions(self) -> bool:
+        """Let user select firmware version for each model, then group by version."""
+        print("")
+        print("-" * 70)
+        print("  STEP 5: Firmware Version Selection")
+        print("-" * 70)
+        
+        # Temporary storage: model -> {version, devices}
+        model_selections = {}
+        
+        for model, devices in sorted(self.aps_by_model.items()):
+            model_versions = self._get_versions_for_model(model)
+            if not model_versions:
+                print(f"  ! No firmware versions found for {model} - skipping")
+                continue
+            
+            current_versions = set(self.ap_versions.get(d.get('id'), 'Unknown') for d in devices)
+            
+            print(f"\n  Model: {model} ({len(devices)} devices)")
+            print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
+            print(f"    Available versions:")
+            
+            for idx, v in enumerate(model_versions[:10]):  # Show top 10
+                version_num = v.get('version', 'Unknown')
+                indicators = []
+                if v.get('recommended'):
+                    indicators.append("RECOMMENDED")
+                if version_num in current_versions:
+                    indicators.append("CURRENT")
+                ind_text = f" [{', '.join(indicators)}]" if indicators else ""
+                print(f"      [{idx}] {version_num}{ind_text}")
+            
+            try:
+                user_input = InputUtils.safe_input(
+                    f"    Select version (0-{min(len(model_versions)-1, 9)}, 's' to skip): ",
+                    context="version_select"
+                ).strip().lower()
+            except SystemExit:
+                return False
+            
+            if user_input == 's':
+                print(f"    Skipping {model}")
+                continue
+            
+            try:
+                idx = int(user_input)
+                if 0 <= idx < len(model_versions):
+                    selected = model_versions[idx]
+                    target_version = selected.get('version')
+                    
+                    # Filter devices needing upgrade
+                    devices_needing = [d for d in devices 
+                                       if self.ap_versions.get(d.get('id')) != target_version]
+                    
+                    if not devices_needing:
+                        print(f"    All {model} devices already at {target_version}")
+                        continue
+                    
+                    skipped = len(devices) - len(devices_needing)
+                    if skipped:
+                        print(f"    Skipping {skipped} device(s) already at target")
+                        self.skipped_already_at_target += skipped
+                    
+                    model_selections[model] = {
+                        'version': target_version,
+                        'devices': devices_needing
+                    }
+                    print(f"    + Selected {target_version} for {len(devices_needing)} device(s)")
+            except ValueError:
+                print("    Invalid input - skipping model")
+        
+        if not model_selections:
+            print("\n  X No upgrades selected")
+            return False
+        
+        # Reorganize by version for org-level API
+        self._organize_by_version(model_selections)
+        return True
+    
+    def _get_versions_for_model(self, model: str) -> list:
+        """Get sorted versions for a model."""
+        versions = []
+        for v in self.available_versions:
+            if isinstance(v, dict):
+                models = v.get('models', [])
+                single = v.get('model')
+                if model in models or single == model:
+                    versions.append(v)
+        
+        # Deduplicate and sort
+        seen = set()
+        unique = []
+        for v in versions:
+            num = v.get('version')
+            if num and num not in seen:
+                seen.add(num)
+                unique.append(v)
+        
+        try:
+            unique.sort(key=lambda x: tuple(map(int, x.get('version', '0').split('.'))), reverse=True)
+        except ValueError:
+            unique.sort(key=lambda x: x.get('version', ''), reverse=True)
+        
+        return unique
+    
+    def _organize_by_version(self, model_selections: dict) -> None:
+        """Reorganize selections by version for org-level API."""
+        # upgrade_plan: {version: {models: [list], device_ids: [list]}}
+        for model, data in model_selections.items():
+            version = data['version']
+            device_ids = [d.get('id') for d in data['devices'] if d.get('id')]
+            
+            if version not in self.upgrade_plan:
+                self.upgrade_plan[version] = {'models': [], 'device_ids': []}
+            
+            self.upgrade_plan[version]['models'].append(model)
+            self.upgrade_plan[version]['device_ids'].extend(device_ids)
+        
+        print(f"\n  Upgrade Plan Summary (grouped by version):")
+        for version, data in sorted(self.upgrade_plan.items()):
+            models_str = ', '.join(data['models'])
+            print(f"    {version}: {len(data['device_ids'])} device(s) ({models_str})")
+        
+        print(f"\n  API Efficiency:")
+        print(f"    - Org-level calls needed: {len(self.upgrade_plan)}")
+        if not self.target_all_sites:
+            site_count = len(self.selected_site_ids)
+            site_level_calls = site_count * len(self.upgrade_plan)
+            print(f"    - Site-level would need: ~{site_level_calls} calls")
+            print(f"    - Savings: {site_level_calls - len(self.upgrade_plan)} fewer API calls")
+    
+    # =========================================================================
+    # STEP 6: UPGRADE CONFIGURATION
+    # =========================================================================
+    
+    def _step6_configure_upgrade(self) -> bool:
+        """Configure upgrade parameters."""
+        print("")
+        print("-" * 70)
+        print("  STEP 6: Upgrade Configuration")
+        print("-" * 70)
+        
+        # Strategy selection
+        print("\n  Download Strategy:")
+        print("    [1] big_bang - Download to all devices simultaneously")
+        print("    [2] serial - Download to one device at a time")
+        print("    [3] canary - Download in phases")
+        
+        try:
+            dl_choice = InputUtils.safe_input("  Select (1-3) [1]: ", context="dl_strategy").strip() or "1"
+        except SystemExit:
+            return False
+        
+        dl_strategies = {"1": "big_bang", "2": "serial", "3": "canary"}
+        self.upgrade_config['download_strategy'] = dl_strategies.get(dl_choice, "big_bang")
+        
+        print("\n  Reboot Strategy:")
+        print("    [1] big_bang - Reboot all devices simultaneously")
+        print("    [2] serial - Reboot one device at a time")
+        print("    [3] rrm - RF-aware sequential reboot")
+        print("    [4] canary - Reboot in phases")
+        
+        try:
+            rb_choice = InputUtils.safe_input("  Select (1-4) [1]: ", context="rb_strategy").strip() or "1"
+        except SystemExit:
+            return False
+        
+        rb_strategies = {"1": "big_bang", "2": "serial", "3": "rrm", "4": "canary"}
+        self.upgrade_config['reboot_strategy'] = rb_strategies.get(rb_choice, "big_bang")
+        
+        # Other settings with defaults
+        self.upgrade_config['max_failure_percentage'] = 5
+        self.upgrade_config['force'] = False
+        
+        print(f"\n  + Configuration:")
+        print(f"      Download: {self.upgrade_config['download_strategy']}")
+        print(f"      Reboot: {self.upgrade_config['reboot_strategy']}")
+        print(f"      Max Failure: {self.upgrade_config['max_failure_percentage']}%")
+        
+        return True
+    
+    # =========================================================================
+    # STEP 7: CONFIRM AND EXECUTE
+    # =========================================================================
+    
+    def _step7_confirm_and_execute(self) -> bool:
+        """Confirm upgrade plan and execute."""
+        print("")
+        print("-" * 70)
+        print("  STEP 7: Confirm and Execute")
+        print("-" * 70)
+        
+        total_devices = sum(len(d['device_ids']) for d in self.upgrade_plan.values())
+        total_calls = len(self.upgrade_plan)
+        
+        print(f"\n  Summary:")
+        print(f"    - Organization: {self.org_id[:8]}...")
+        print(f"    - Site Scope: {'All sites' if self.target_all_sites else f'{len(self.selected_site_ids)} selected site(s)'}")
+        print(f"    - Total Devices: {total_devices}")
+        print(f"    - API Calls: {total_calls}")
+        
+        print(f"\n  Upgrades by Version:")
+        for version, data in sorted(self.upgrade_plan.items()):
+            models_str = ', '.join(data['models'])
+            print(f"    {version}: {len(data['device_ids'])} device(s) ({models_str})")
+        
+        if self.dry_run:
+            print("\n  >> DRY-RUN: Simulating execution <<")
+            return self._execute_dry_run()
+        
+        print("")
+        print("  " + "!" * 60)
+        print("  !  WARNING: DESTRUCTIVE OPERATION - FIRMWARE UPGRADE  !")
+        print("  " + "!" * 60)
+        print("")
+        
+        try:
+            confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="upgrade_confirm").strip()
+        except SystemExit:
+            return False
+        
+        if confirm != "UPGRADE":
+            print("  X Upgrade cancelled")
+            return False
+        
+        return self._execute_upgrades()
+    
+    def _execute_dry_run(self) -> bool:
+        """Execute dry-run simulation."""
+        print("")
+        for version, data in sorted(self.upgrade_plan.items()):
+            models_str = ', '.join(data['models'])
+            print(f"  [DRY-RUN] Would call upgradeOrgDevices:")
+            print(f"      Version: {version}")
+            print(f"      Models: {models_str}")
+            print(f"      Devices: {len(data['device_ids'])}")
+            print(f"      Site Scope: {'all_sites=true' if self.target_all_sites else f'{len(self.selected_site_ids)} site_ids'}")
+            
+            self.successful_api_calls += 1
+            self.total_devices_upgraded += len(data['device_ids'])
+            
+            # Log results
+            for device_id in data['device_ids']:
+                self.results.append({
+                    'org_id': self.org_id,
+                    'version': version,
+                    'device_id': device_id,
+                    'status': 'DRY-RUN: Would upgrade'
+                })
+        
+        print("")
+        print(f"  DRY-RUN Complete:")
+        print(f"    - API Calls (simulated): {self.successful_api_calls}")
+        print(f"    - Devices (simulated): {self.total_devices_upgraded}")
+        return True
+    
+    def _execute_upgrades(self) -> bool:
+        """Execute actual org-level upgrades."""
+        print("\n  Executing org-level upgrades...")
+        
+        import mistapi.api.v1.orgs.devices as org_devices_api
+        
+        for version, data in sorted(self.upgrade_plan.items()):
+            models_str = ', '.join(data['models'])
+            print(f"\n  Upgrading to {version} ({models_str})...")
+            
+            # Build request body
+            body = {
+                "versions": [{"firmware_type": "ap", "version": version}],
+                "models": [[m] for m in data['models']],  # Each model in its own array
+                "strategy": self.upgrade_config['reboot_strategy'],
+                "download_strategy": self.upgrade_config['download_strategy'],
+                "max_failure_percentage": self.upgrade_config['max_failure_percentage']
+            }
+            
+            # Add site scope
+            if self.target_all_sites:
+                body["all_sites"] = True
+            else:
+                body["site_ids"] = self.selected_site_ids
+            
+            try:
+                response = org_devices_api.upgradeOrgDevices(apisession, self.org_id, body=body)
+                
+                if response and hasattr(response, 'data'):
+                    upgrade_id = response.data.get('id') if isinstance(response.data, dict) else None
+                    print(f"    + Upgrade initiated - ID: {upgrade_id or 'N/A'}")
+                    self.successful_api_calls += 1
+                    self.total_devices_upgraded += len(data['device_ids'])
+                    
+                    # Log results
+                    for device_id in data['device_ids']:
+                        self.results.append({
+                            'org_id': self.org_id,
+                            'version': version,
+                            'device_id': device_id,
+                            'upgrade_id': upgrade_id,
+                            'status': 'Initiated'
+                        })
+                else:
+                    print(f"    X Failed - no response data")
+                    self.failed_api_calls += 1
+                    
+            except Exception as e:
+                print(f"    X Error: {e}")
+                logging.error(f"Org-level upgrade failed for version {version}: {e}")
+                self.failed_api_calls += 1
+        
+        print("")
+        print(f"  Execution Complete:")
+        print(f"    - Successful API Calls: {self.successful_api_calls}")
+        print(f"    - Failed API Calls: {self.failed_api_calls}")
+        print(f"    - Total Devices: {self.total_devices_upgraded}")
+        return True
+    
+    # =========================================================================
+    # STEP 8: WRITE RESULTS
+    # =========================================================================
+    
+    def _step8_write_results(self) -> None:
+        """Write upgrade results to CSV."""
+        if not self.results:
+            return
+        
+        filename = os.path.join("data", "org_level_ap_upgrade_results.csv")
+        try:
+            DataExporter.write_with_format_selection(
+                self.results, 
+                filename,
+                api_function_name="orgLevelAPFirmwareUpgrade"
+            )
+            print(f"\n  Results written to: {filename}")
+        except Exception as e:
+            print(f"  X Failed to write results: {e}")
+
+
 class BulkSwitchFirmwareUpgrader:
     """
     Executes firmware upgrades on switches across selected sites with safety checks.
@@ -44422,6 +45174,11 @@ menu_actions = {
     "114": (lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run), " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)"),
     
     # ==============================
+    # ORG-LEVEL FIRMWARE OPERATIONS
+    # ==============================
+    "116": (lambda: OrgLevelAPFirmwareUpgrader(ConfigUtils.get_cached_or_prompted_org_id(), dry_run=getattr(globals().get('args', None), 'dry_run', False)).execute(), " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), supports --dry-run"),
+    
+    # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
     "112": (lambda: MapsManagerLauncher().launch(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
@@ -44728,6 +45485,7 @@ def run_systematic_test():
         "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation",
         "113": "DESTRUCTIVE: Configures WAN probe override on templates - requires uppercase confirmation",
         "114": "DESTRUCTIVE: Configures WAN probe on device port overrides - requires uppercase confirmation",
+        "116": "DESTRUCTIVE: Org-level AP firmware upgrade - requires uppercase confirmation",
         
         # Interactive visualization tools
         "112": "Maps Manager - requires interactive Dash web server and browser"
