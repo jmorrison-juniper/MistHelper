@@ -559,6 +559,28 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.03.18",
+      "date": "2026-02-05",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 MSP Multi-Org Mode: New upgrade mode [3] available when using MSP session",
+          "MSP firmware upgrades across multiple organizations in a single workflow",
+          "Organization selection with comma-separated list or 'all' option"
+        ],
+        "enhancements": [
+          "FirmwareManager now detects MSP privileges and shows mode [3] when available",
+          "Sequential processing with per-org confirmation and interrupt handling",
+          "Upgrade summary report showing completed/failed/interrupted organizations"
+        ],
+        "new_methods": [
+          "FirmwareManager._execute_msp_multi_org_upgrade(): Main MSP upgrade orchestration",
+          "FirmwareManager._select_msp_for_upgrade(): MSP selection when multiple available",
+          "FirmwareManager._select_orgs_for_upgrade(): Org selection from MSP with validation",
+          "FirmwareManager._print_msp_upgrade_summary(): Results summary formatting"
+        ]
+      }
+    },
+    {
       "version": "26.02.02.23.15",
       "date": "2026-02-02",
       "changes": {

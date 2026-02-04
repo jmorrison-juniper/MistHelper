@@ -36435,24 +36435,38 @@ class FirmwareManager:
         Presents user with choice between:
         1. Site-based upgrade (existing behavior)
         2. Template-based upgrade (new functionality)
+        3. MSP Multi-Org upgrade (when MSP session active) - upgrade across multiple organizations
         
         Returns:
             Results of the selected upgrade operation
         """
+        global msp_privileges
+        
         logging.info("Starting firmware upgrade with mode selection...")
         logging.debug("FirmwareManager.execute_firmware_upgrade_with_mode_selection() initiated")
         
         print(" Advanced AP Firmware Upgrade")
         print("=" * 60)
         
+        # Check if MSP mode is available
+        msp_mode_available = bool(msp_privileges)
+        
         # Step 1: Mode selection
         print("\n  Select upgrade mode:")
         print("   [1] By Site - Upgrade specific sites (CSV file, bulk list, or single site selection)")
         print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
         
+        if msp_mode_available:
+            print("   [3] MSP Multi-Org - Upgrade across multiple organizations (MSP session active)")
+            valid_choices = ["1", "2", "3"]
+            prompt = "\n  Select mode (1-3): "
+        else:
+            valid_choices = ["1", "2"]
+            prompt = "\n  Select mode (1-2): "
+        
         while True:
             try:
-                mode_choice = input("\n  Select mode (1-2): ").strip()
+                mode_choice = input(prompt).strip()
                 if mode_choice == "1":
                     logging.info("User selected site-based upgrade mode")
                     print("\n  Site-based upgrade mode selected")
@@ -36461,13 +36475,289 @@ class FirmwareManager:
                     logging.info("User selected template-based upgrade mode")
                     print("\n  Template-based upgrade mode selected")
                     return self.upgrade_ap_firmware_by_gateway_template()
+                elif mode_choice == "3" and msp_mode_available:
+                    logging.info("User selected MSP multi-org upgrade mode")
+                    print("\n  MSP Multi-Organization upgrade mode selected")
+                    return self._execute_msp_multi_org_upgrade()
                 else:
-                    print("   Invalid selection. Please choose 1 or 2.")
+                    print(f"   Invalid selection. Please choose {'/'.join(valid_choices)}.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
             except KeyboardInterrupt:
                 print("\n\n  Firmware upgrade cancelled by user.")
                 logging.info("Firmware upgrade cancelled during mode selection")
                 return
+    
+    def _execute_msp_multi_org_upgrade(self):
+        """
+        Execute firmware upgrade across multiple organizations within an MSP.
+        
+        This mode allows MSP administrators to:
+        1. Select which MSP to use (if multiple)
+        2. Select which organizations to upgrade
+        3. Choose firmware version (common across all orgs or per-org)
+        4. Execute upgrades sequentially across selected organizations
+        
+        Returns:
+            Summary of upgrade results across all organizations
+        """
+        global msp_privileges, apisession, org_id
+        
+        print("")
+        print("=" * 60)
+        print("  MSP MULTI-ORGANIZATION FIRMWARE UPGRADE")
+        print("=" * 60)
+        print("")
+        print("  WARNING: This will upgrade AP firmware across multiple organizations.")
+        print("  Please review selections carefully before confirming.")
+        print("")
+        
+        # Step 1: Select MSP (if multiple)
+        selected_msp = self._select_msp_for_upgrade()
+        if not selected_msp:
+            print("  Cancelled - no MSP selected")
+            return
+        
+        msp_id = selected_msp['msp_id']
+        msp_name = selected_msp.get('msp_name', 'Unknown MSP')
+        print(f"  + Using MSP: {msp_name}")
+        
+        # Step 2: Fetch and select organizations
+        selected_orgs = self._select_orgs_for_upgrade(msp_id)
+        if not selected_orgs:
+            print("  Cancelled - no organizations selected")
+            return
+        
+        print(f"\n  Selected {len(selected_orgs)} organization(s) for upgrade:")
+        for org in selected_orgs:
+            print(f"    - {org['name']}")
+        
+        # Step 3: Confirm destructive operation
+        print("")
+        print("  " + "!" * 58)
+        print("  !  DESTRUCTIVE OPERATION - FIRMWARE UPGRADE ACROSS ORGS  !")
+        print("  " + "!" * 58)
+        print("")
+        print(f"  You are about to upgrade AP firmware in {len(selected_orgs)} organization(s).")
+        print("")
+        
+        try:
+            confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="msp_firmware_upgrade").strip()
+        except SystemExit:
+            return
+        
+        if confirm != "UPGRADE":
+            print("  X Upgrade cancelled - confirmation not received")
+            logging.warning("MSP multi-org upgrade cancelled - user did not confirm")
+            return
+        
+        # Step 4: Execute upgrades for each organization
+        results = []
+        original_org_id = org_id
+        
+        for idx, org_info in enumerate(selected_orgs, 1):
+            target_org_id = org_info['id']
+            target_org_name = org_info['name']
+            
+            print("")
+            print(f"  [{idx}/{len(selected_orgs)}] Processing: {target_org_name}")
+            print(f"      Organization ID: {target_org_id}")
+            print("-" * 60)
+            
+            try:
+                # Create a new FirmwareManager for this org
+                org_manager = FirmwareManager(apisession, target_org_id)
+                
+                # Set the global org_id for helper functions
+                org_id = target_org_id
+                
+                # Execute site-based upgrade for this org
+                # This will prompt for site selection within the org
+                result = org_manager.bulk_upgrade_ap_firmware_by_site()
+                
+                results.append({
+                    'org_id': target_org_id,
+                    'org_name': target_org_name,
+                    'status': 'completed',
+                    'result': result
+                })
+                
+                logging.info(f"MSP upgrade completed for org: {target_org_name}")
+                
+            except KeyboardInterrupt:
+                print(f"\n  Upgrade interrupted at organization: {target_org_name}")
+                results.append({
+                    'org_id': target_org_id,
+                    'org_name': target_org_name,
+                    'status': 'interrupted',
+                    'result': None
+                })
+                
+                try:
+                    cont = InputUtils.safe_input("  Continue with remaining orgs? (y/N): ", context="msp_continue").strip().lower()
+                except SystemExit:
+                    break
+                    
+                if cont != 'y':
+                    print("  Stopping MSP upgrade process")
+                    break
+                    
+            except Exception as e:
+                error_msg = str(e)
+                print(f"  X Error upgrading {target_org_name}: {error_msg}")
+                logging.error(f"MSP upgrade failed for org {target_org_name}: {e}")
+                
+                results.append({
+                    'org_id': target_org_id,
+                    'org_name': target_org_name,
+                    'status': 'failed',
+                    'error': error_msg
+                })
+        
+        # Restore original org_id
+        org_id = original_org_id
+        
+        # Step 5: Print summary
+        self._print_msp_upgrade_summary(results)
+        
+        return results
+    
+    def _select_msp_for_upgrade(self):
+        """Select MSP for multi-org upgrade. Returns selected MSP dict or None."""
+        global msp_privileges
+        
+        if not msp_privileges:
+            return None
+        
+        if len(msp_privileges) == 1:
+            return msp_privileges[0]
+        
+        print("  Available MSPs:")
+        for idx, msp in enumerate(msp_privileges, start=1):
+            msp_name = msp.get('msp_name', 'Unknown')
+            msp_role = msp.get('role', 'unknown')
+            print(f"    {idx}. {msp_name} (role: {msp_role})")
+        print("")
+        
+        try:
+            choice = InputUtils.safe_input("  Select MSP (number, or 'q' to cancel): ", context="msp_select").strip()
+            if choice.lower() == 'q':
+                return None
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(msp_privileges):
+                return msp_privileges[choice_idx]
+            else:
+                print("  X Invalid selection")
+                return None
+        except (ValueError, SystemExit):
+            return None
+    
+    def _select_orgs_for_upgrade(self, msp_id):
+        """Fetch orgs from MSP and let user select which to upgrade. Returns list of org dicts."""
+        global apisession
+        
+        print(f"  Fetching organizations from MSP...")
+        
+        try:
+            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print("  X Failed to retrieve organizations")
+                return None
+            
+            orgs_data = response.data
+            if not isinstance(orgs_data, list):
+                orgs_data = [orgs_data] if orgs_data else []
+            
+            if not orgs_data:
+                print("  X No organizations found under this MSP")
+                return None
+            
+            # Sort by name
+            orgs_data = sorted(orgs_data, key=lambda x: x.get('name', '').lower())
+            
+            print(f"  Found {len(orgs_data)} organization(s):")
+            print("")
+            
+            # Show all orgs with numbers
+            for idx, org in enumerate(orgs_data, start=1):
+                org_name = org.get('name', 'Unknown')
+                org_id_preview = org.get('id', 'N/A')[:8]
+                print(f"    {idx:>3}. {org_name} ({org_id_preview}...)")
+            
+            print("")
+            print("  Selection options:")
+            print("    - Enter numbers separated by commas (e.g., 1,3,5)")
+            print("    - Enter 'all' to select all organizations")
+            print("    - Enter 'q' to cancel")
+            print("")
+            
+            try:
+                selection = InputUtils.safe_input("  Select organizations: ", context="org_select").strip().lower()
+            except SystemExit:
+                return None
+            
+            if selection == 'q' or selection == '':
+                return None
+            
+            if selection == 'all':
+                return orgs_data
+            
+            # Parse comma-separated numbers
+            selected_orgs = []
+            try:
+                indices = [int(x.strip()) - 1 for x in selection.split(',')]
+                for idx in indices:
+                    if 0 <= idx < len(orgs_data):
+                        selected_orgs.append(orgs_data[idx])
+                    else:
+                        print(f"  Warning: Skipping invalid index {idx + 1}")
+            except ValueError:
+                print("  X Invalid selection format")
+                return None
+            
+            return selected_orgs if selected_orgs else None
+            
+        except Exception as e:
+            print(f"  X Error fetching organizations: {e}")
+            logging.error(f"Failed to fetch MSP orgs for upgrade: {e}")
+            return None
+    
+    def _print_msp_upgrade_summary(self, results):
+        """Print summary of MSP multi-org upgrade results."""
+        print("")
+        print("=" * 60)
+        print("  MSP UPGRADE SUMMARY")
+        print("=" * 60)
+        print("")
+        
+        completed = [r for r in results if r['status'] == 'completed']
+        failed = [r for r in results if r['status'] == 'failed']
+        interrupted = [r for r in results if r['status'] == 'interrupted']
+        
+        print(f"  Total organizations processed: {len(results)}")
+        print(f"    + Completed: {len(completed)}")
+        print(f"    X Failed: {len(failed)}")
+        print(f"    ! Interrupted: {len(interrupted)}")
+        print("")
+        
+        if completed:
+            print("  Completed organizations:")
+            for r in completed:
+                print(f"    + {r['org_name']}")
+        
+        if failed:
+            print("\n  Failed organizations:")
+            for r in failed:
+                print(f"    X {r['org_name']}: {r.get('error', 'Unknown error')}")
+        
+        if interrupted:
+            print("\n  Interrupted organizations:")
+            for r in interrupted:
+                print(f"    ! {r['org_name']}")
+        
+        print("")
+        logging.info(f"MSP upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted")
     
     def bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
         """
