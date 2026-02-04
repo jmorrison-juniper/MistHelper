@@ -559,6 +559,21 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.04.16.35",
+      "date": "2026-02-04",
+      "changes": {
+        "fixes": [
+          "Menu 117: Skip MSP/Org selection after login (exports ALL, not selected)",
+          "Menu 117: Use getOrgInventory API instead of listOrgDevices for full inventory",
+          "Fixed device count showing '1 (unknown:1)' for every org"
+        ],
+        "enhancements": [
+          "Direct interactive login without org selection flow",
+          "Proper inventory fetch with limit=1000 pagination"
+        ]
+      }
+    },
+    {
       "version": "26.02.04.16.20",
       "date": "2026-02-04",
       "changes": {

@@ -40594,13 +40594,19 @@ class MSPInventoryExporter:
                 return
             
             if proceed in ('', 'y', 'yes'):
-                # Call interactive login switch
-                switch_to_interactive_login()
+                # Call interactive login directly (skip MSP/Org selection - we want ALL)
+                if not initialize_mist_session_interactive():
+                    print("")
+                    print("  X Login failed.")
+                    return
+                
+                # Detect MSP privileges after login
+                detect_msp_privileges()
                 
                 # Check if we now have MSP privileges
                 if not msp_privileges:
                     print("")
-                    print("  X Still no MSP privileges after login.")
+                    print("  X No MSP privileges after login.")
                     print("    Your account may not have MSP-level access.")
                     logging.warning("MSP inventory export: no MSP privileges after interactive login")
                     return
@@ -40672,19 +40678,19 @@ class MSPInventoryExporter:
             logging.error(f"MSP inventory export error for {msp_name}: {e}")
     
     def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:
-        """Process a single organization - fetch all devices."""
+        """Process a single organization - fetch all devices from inventory."""
         org_id = org.get('id')
         org_name = org.get('name', 'Unknown Org')
         
         self.org_count += 1
         
         try:
-            # Fetch all devices from this org
-            import mistapi.api.v1.orgs.devices as org_devices_api
-            response = org_devices_api.listOrgDevices(apisession, org_id)
+            # Fetch all devices from org inventory (not listOrgDevices which defaults to APs)
+            import mistapi.api.v1.orgs.inventory as org_inventory_api
+            response = org_inventory_api.getOrgInventory(apisession, org_id, limit=1000)
             
             if not response or not hasattr(response, 'data'):
-                print(f"      {org_name}: No device data")
+                print(f"      {org_name}: No inventory data")
                 return
             
             devices_data = response.data
