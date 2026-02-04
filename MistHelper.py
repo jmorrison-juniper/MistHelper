@@ -36489,107 +36489,498 @@ class FirmwareManager:
     
     def _execute_msp_multi_org_upgrade(self):
         """
-        Execute firmware upgrade across multiple organizations within an MSP.
+        Execute firmware upgrade across multiple MSPs and organizations.
         
         This mode allows MSP administrators to:
-        1. Select which MSP to use (if multiple)
-        2. Select which organizations to upgrade
-        3. Choose firmware version (common across all orgs or per-org)
-        4. Execute upgrades sequentially across selected organizations
+        1. Select multiple MSPs (if multiple available)
+        2. Select multiple organizations per MSP
+        3. Select sites within each organization
+        4. Execute upgrades sequentially with dry-run support
+        
+        Supports selection patterns:
+        - Single index: "1"
+        - Comma-separated: "1,3,5"
+        - Range with dash: "1-5"
+        - Range with 'through': "1 through 5"
+        - All items: "all"
         
         Returns:
             Summary of upgrade results across all organizations
         """
         global msp_privileges, apisession, org_id
         
+        # Check for dry_run mode
+        dry_run = getattr(globals().get('args', None), 'dry_run', False)
+        
         print("")
-        print("=" * 60)
+        print("=" * 70)
         print("  MSP MULTI-ORGANIZATION FIRMWARE UPGRADE")
-        print("=" * 60)
+        print("=" * 70)
+        
+        if dry_run:
+            print("")
+            print("  >> DRY-RUN MODE ENABLED <<")
+            print("  >> No actual upgrades will be performed - simulation only <<")
+        
         print("")
         print("  WARNING: This will upgrade AP firmware across multiple organizations.")
         print("  Please review selections carefully before confirming.")
         print("")
         
-        # Step 1: Select MSP (if multiple)
-        selected_msp = self._select_msp_for_upgrade()
-        if not selected_msp:
+        # Step 1: Select MSPs (supports multi-select)
+        selected_msps = self._select_msps_for_upgrade()
+        if not selected_msps:
             print("  Cancelled - no MSP selected")
             return
         
-        msp_id = selected_msp['msp_id']
-        msp_name = selected_msp.get('msp_name', 'Unknown MSP')
-        print(f"  + Using MSP: {msp_name}")
+        print(f"\n  + Selected {len(selected_msps)} MSP(s)")
         
-        # Step 2: Fetch and select organizations
-        selected_orgs = self._select_orgs_for_upgrade(msp_id)
-        if not selected_orgs:
-            print("  Cancelled - no organizations selected")
+        # Step 2: For each MSP, select organizations and sites
+        upgrade_plan = []  # List of {msp, org, sites} dicts
+        
+        for msp_info in selected_msps:
+            msp_id = msp_info['msp_id']
+            msp_name = msp_info.get('msp_name', 'Unknown MSP')
+            
+            print("")
+            print("-" * 70)
+            print(f"  MSP: {msp_name}")
+            print("-" * 70)
+            
+            # Fetch and select organizations for this MSP
+            selected_orgs = self._select_orgs_for_upgrade(msp_id, msp_name)
+            if not selected_orgs:
+                print(f"    Skipping MSP {msp_name} - no organizations selected")
+                continue
+            
+            # For each org, select sites
+            for org_info in selected_orgs:
+                org_target_id = org_info['id']
+                org_name = org_info['name']
+                
+                print(f"\n    Organization: {org_name}")
+                
+                # Fetch and select sites for this org
+                selected_sites = self._select_sites_for_org_upgrade(org_target_id, org_name)
+                if not selected_sites:
+                    print(f"      Skipping org {org_name} - no sites selected")
+                    continue
+                
+                upgrade_plan.append({
+                    'msp_id': msp_id,
+                    'msp_name': msp_name,
+                    'org_id': org_target_id,
+                    'org_name': org_name,
+                    'sites': selected_sites
+                })
+        
+        if not upgrade_plan:
+            print("\n  No upgrade targets configured. Operation cancelled.")
             return
         
-        print(f"\n  Selected {len(selected_orgs)} organization(s) for upgrade:")
-        for org in selected_orgs:
-            print(f"    - {org['name']}")
+        # Step 3: Display upgrade plan summary
+        self._display_upgrade_plan_summary(upgrade_plan, dry_run)
         
-        # Step 3: Confirm destructive operation
+        # Step 4: Confirm destructive operation (skip in dry-run)
+        if not dry_run:
+            print("")
+            print("  " + "!" * 68)
+            print("  !  DESTRUCTIVE OPERATION - FIRMWARE UPGRADE ACROSS MULTIPLE ORGS  !")
+            print("  " + "!" * 68)
+            print("")
+            
+            total_sites = sum(len(p['sites']) for p in upgrade_plan)
+            total_orgs = len(upgrade_plan)
+            print(f"  You are about to upgrade AP firmware in:")
+            print(f"    - {total_orgs} organization(s)")
+            print(f"    - {total_sites} site(s) total")
+            print("")
+            
+            try:
+                confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="msp_firmware_upgrade").strip()
+            except SystemExit:
+                return
+            
+            if confirm != "UPGRADE":
+                print("  X Upgrade cancelled - confirmation not received")
+                logging.warning("MSP multi-org upgrade cancelled - user did not confirm")
+                return
+        else:
+            print("\n  >> DRY-RUN: Skipping confirmation - proceeding with simulation <<")
+        
+        # Step 5: Execute upgrades
+        results = self._execute_msp_upgrade_plan(upgrade_plan, dry_run)
+        
+        # Step 6: Print summary
+        self._print_msp_upgrade_summary(results, dry_run)
+        
+        return results
+    
+    def _select_msps_for_upgrade(self):
+        """
+        Select MSPs for multi-org upgrade with support for multi-selection.
+        
+        Supports:
+        - Single selection by index
+        - Multiple selection via comma-separated indices
+        - Range selection with dash or 'through' keyword
+        - 'all' to select all MSPs
+        
+        Returns:
+            List of selected MSP dicts or None if cancelled
+        """
+        global msp_privileges
+        
+        if not msp_privileges:
+            return None
+        
+        if len(msp_privileges) == 1:
+            print(f"  Single MSP available: {msp_privileges[0].get('msp_name', 'Unknown')}")
+            return msp_privileges
+        
+        print("  Available MSPs:")
         print("")
-        print("  " + "!" * 58)
-        print("  !  DESTRUCTIVE OPERATION - FIRMWARE UPGRADE ACROSS ORGS  !")
-        print("  " + "!" * 58)
+        for idx, msp in enumerate(msp_privileges, start=1):
+            msp_name = msp.get('msp_name', 'Unknown')
+            msp_role = msp.get('role', 'unknown')
+            print(f"    {idx:>3}. {msp_name} (role: {msp_role})")
+        
         print("")
-        print(f"  You are about to upgrade AP firmware in {len(selected_orgs)} organization(s).")
+        print("  Selection options:")
+        print("    - Single: '1'")
+        print("    - Multiple: '1,3,5'")
+        print("    - Range: '1-3' or '1 through 3'")
+        print("    - All: 'all'")
+        print("    - Cancel: 'q'")
         print("")
         
         try:
-            confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="msp_firmware_upgrade").strip()
+            selection = InputUtils.safe_input("  Select MSP(s): ", context="msp_multi_select").strip().lower()
         except SystemExit:
-            return
+            return None
         
-        if confirm != "UPGRADE":
-            print("  X Upgrade cancelled - confirmation not received")
-            logging.warning("MSP multi-org upgrade cancelled - user did not confirm")
-            return
+        if selection == 'q' or selection == '':
+            return None
         
-        # Step 4: Execute upgrades for each organization
-        results = []
-        original_org_id = org_id
+        if selection == 'all':
+            return msp_privileges
         
-        for idx, org_info in enumerate(selected_orgs, 1):
-            target_org_id = org_info['id']
-            target_org_name = org_info['name']
+        # Parse selection using shared parser
+        selected_indices = self._parse_selection_input(selection, len(msp_privileges))
+        if not selected_indices:
+            print("  X Invalid selection")
+            return None
+        
+        return [msp_privileges[idx] for idx in selected_indices]
+    
+    def _select_orgs_for_upgrade(self, msp_id, msp_name):
+        """
+        Fetch orgs from MSP and let user select which to upgrade.
+        
+        Supports:
+        - Single selection by index
+        - Multiple selection via comma-separated indices
+        - Range selection with dash or 'through' keyword
+        - 'all' to select all organizations
+        
+        Returns:
+            List of org dicts or None if cancelled
+        """
+        global apisession
+        
+        print(f"    Fetching organizations from MSP {msp_name}...")
+        
+        try:
+            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print("    X Failed to retrieve organizations")
+                return None
+            
+            orgs_data = response.data
+            if not isinstance(orgs_data, list):
+                orgs_data = [orgs_data] if orgs_data else []
+            
+            if not orgs_data:
+                print("    X No organizations found under this MSP")
+                return None
+            
+            # Sort by name
+            orgs_data = sorted(orgs_data, key=lambda x: x.get('name', '').lower())
+            
+            print(f"    Found {len(orgs_data)} organization(s):")
+            print("")
+            
+            # Show all orgs with numbers
+            for idx, org in enumerate(orgs_data, start=1):
+                org_name = org.get('name', 'Unknown')
+                org_id_preview = org.get('id', 'N/A')[:8]
+                print(f"      {idx:>3}. {org_name} ({org_id_preview}...)")
             
             print("")
-            print(f"  [{idx}/{len(selected_orgs)}] Processing: {target_org_name}")
-            print(f"      Organization ID: {target_org_id}")
-            print("-" * 60)
+            print("    Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'")
+            print("")
             
             try:
-                # Create a new FirmwareManager for this org
-                org_manager = FirmwareManager(apisession, target_org_id)
+                selection = InputUtils.safe_input("    Select organization(s): ", context="org_multi_select").strip().lower()
+            except SystemExit:
+                return None
+            
+            if selection == 'q' or selection == '':
+                return None
+            
+            if selection == 'all':
+                return orgs_data
+            
+            # Parse selection
+            selected_indices = self._parse_selection_input(selection, len(orgs_data))
+            if not selected_indices:
+                print("    X Invalid selection")
+                return None
+            
+            return [orgs_data[idx] for idx in selected_indices]
+            
+        except Exception as e:
+            print(f"    X Error fetching organizations: {e}")
+            logging.error(f"Failed to fetch MSP orgs for upgrade: {e}")
+            return None
+    
+    def _select_sites_for_org_upgrade(self, target_org_id, org_name):
+        """
+        Fetch sites from org and let user select which to upgrade.
+        
+        Supports:
+        - Single selection by index
+        - Multiple selection via comma-separated indices
+        - Range selection with dash or 'through' keyword
+        - 'all' to select all sites
+        
+        Returns:
+            List of site dicts or None if cancelled
+        """
+        global apisession
+        
+        print(f"      Fetching sites from {org_name}...")
+        
+        try:
+            import mistapi.api.v1.orgs.sites as org_sites_api
+            response = org_sites_api.listOrgSites(apisession, target_org_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print("      X Failed to retrieve sites")
+                return None
+            
+            sites_data = response.data
+            if not isinstance(sites_data, list):
+                sites_data = [sites_data] if sites_data else []
+            
+            if not sites_data:
+                print("      X No sites found in this organization")
+                return None
+            
+            # Sort by name
+            sites_data = sorted(sites_data, key=lambda x: x.get('name', '').lower())
+            
+            print(f"      Found {len(sites_data)} site(s):")
+            print("")
+            
+            # Show all sites with numbers (paginate if many)
+            page_size = 25
+            total_pages = (len(sites_data) + page_size - 1) // page_size
+            current_page = 0
+            
+            while True:
+                start_idx = current_page * page_size
+                end_idx = min(start_idx + page_size, len(sites_data))
                 
+                for idx in range(start_idx, end_idx):
+                    site = sites_data[idx]
+                    site_name = site.get('name', 'Unknown')
+                    print(f"        {idx + 1:>4}. {site_name}")
+                
+                if total_pages > 1:
+                    print(f"\n      Page {current_page + 1}/{total_pages}")
+                    print("      [n]ext page, [p]rev page, or enter selection:")
+                
+                print("")
+                print("      Selection: single '1', multiple '1,3,5', range '1-10', 'all', or 'q'")
+                print("")
+                
+                try:
+                    selection = InputUtils.safe_input("      Select site(s): ", context="site_multi_select").strip().lower()
+                except SystemExit:
+                    return None
+                
+                if selection == 'q' or selection == '':
+                    return None
+                
+                if selection == 'n' and current_page < total_pages - 1:
+                    current_page += 1
+                    continue
+                elif selection == 'p' and current_page > 0:
+                    current_page -= 1
+                    continue
+                elif selection == 'all':
+                    return sites_data
+                else:
+                    # Parse selection
+                    selected_indices = self._parse_selection_input(selection, len(sites_data))
+                    if selected_indices:
+                        return [sites_data[idx] for idx in selected_indices]
+                    print("      X Invalid selection - try again")
+            
+        except Exception as e:
+            print(f"      X Error fetching sites: {e}")
+            logging.error(f"Failed to fetch org sites for upgrade: {e}")
+            return None
+    
+    def _parse_selection_input(self, user_input: str, max_count: int) -> list:
+        """
+        Parse user selection input into list of 0-based indices.
+        
+        Supports:
+        - Single index: "1" -> [0]
+        - Comma-separated: "1,3,5" -> [0, 2, 4]
+        - Dash range: "1-5" -> [0, 1, 2, 3, 4]
+        - 'through' range: "1 through 5" -> [0, 1, 2, 3, 4]
+        - Mixed: "1-3, 5, 7 through 10" -> [0, 1, 2, 4, 6, 7, 8, 9]
+        
+        Note: User input is 1-based, output is 0-based indices
+        
+        Args:
+            user_input: User's selection string
+            max_count: Maximum number of items (for validation)
+            
+        Returns:
+            List of valid 0-based indices, or empty list if invalid
+        """
+        selected_indices = []
+        
+        # Normalize 'through' to '-' for consistent parsing
+        normalized_input = user_input.lower().replace(' through ', '-').replace('through', '-')
+        
+        parts = [part.strip() for part in normalized_input.split(',')]
+        
+        for part in parts:
+            if '-' in part and not part.startswith('-'):
+                # Handle range like "1-5" (1-based user input)
+                try:
+                    range_parts = part.split('-')
+                    if len(range_parts) == 2:
+                        start = int(range_parts[0].strip()) - 1  # Convert to 0-based
+                        end = int(range_parts[1].strip()) - 1    # Convert to 0-based
+                        if start > end:
+                            start, end = end, start  # Swap if reversed
+                        for idx in range(start, end + 1):
+                            if 0 <= idx < max_count and idx not in selected_indices:
+                                selected_indices.append(idx)
+                            elif idx >= max_count:
+                                print(f"      !? Index {idx + 1} out of range (max: {max_count})")
+                except ValueError:
+                    logging.warning(f"Invalid range format: {part}")
+                    continue
+            else:
+                # Handle single index (1-based user input)
+                try:
+                    idx = int(part) - 1  # Convert to 0-based
+                    if 0 <= idx < max_count and idx not in selected_indices:
+                        selected_indices.append(idx)
+                    elif idx >= max_count:
+                        print(f"      !? Index {idx + 1} out of range (max: {max_count})")
+                except ValueError:
+                    logging.warning(f"Invalid index: {part}")
+                    continue
+        
+        # Sort indices for consistent ordering
+        selected_indices.sort()
+        return selected_indices
+    
+    def _display_upgrade_plan_summary(self, upgrade_plan, dry_run):
+        """Display a summary of the planned upgrades."""
+        print("")
+        print("=" * 70)
+        print("  UPGRADE PLAN SUMMARY" + (" (DRY-RUN)" if dry_run else ""))
+        print("=" * 70)
+        print("")
+        
+        total_sites = 0
+        msps_seen = set()
+        
+        for plan in upgrade_plan:
+            msp_name = plan['msp_name']
+            org_name = plan['org_name']
+            sites = plan['sites']
+            total_sites += len(sites)
+            msps_seen.add(plan['msp_id'])
+            
+            print(f"  MSP: {msp_name}")
+            print(f"    Organization: {org_name}")
+            print(f"    Sites ({len(sites)}):")
+            for site in sites[:5]:  # Show first 5
+                print(f"      - {site.get('name', 'Unknown')}")
+            if len(sites) > 5:
+                print(f"      ... and {len(sites) - 5} more")
+            print("")
+        
+        print("-" * 70)
+        print(f"  TOTALS:")
+        print(f"    MSPs: {len(msps_seen)}")
+        print(f"    Organizations: {len(upgrade_plan)}")
+        print(f"    Sites: {total_sites}")
+        print("-" * 70)
+    
+    def _execute_msp_upgrade_plan(self, upgrade_plan, dry_run):
+        """Execute the upgrade plan across all orgs and sites."""
+        global apisession, org_id
+        
+        results = []
+        original_org_id = org_id
+        total_items = len(upgrade_plan)
+        
+        for idx, plan in enumerate(upgrade_plan, 1):
+            target_org_id = plan['org_id']
+            target_org_name = plan['org_name']
+            msp_name = plan['msp_name']
+            sites = plan['sites']
+            
+            print("")
+            print(f"  [{idx}/{total_items}] Processing: {target_org_name} (MSP: {msp_name})")
+            print(f"      Organization ID: {target_org_id}")
+            print(f"      Sites to upgrade: {len(sites)}")
+            print("-" * 70)
+            
+            try:
                 # Set the global org_id for helper functions
                 org_id = target_org_id
                 
-                # Execute site-based upgrade for this org
-                # This will prompt for site selection within the org
-                result = org_manager.bulk_upgrade_ap_firmware_by_site()
+                # Create a BulkAPFirmwareUpgrader with pre-selected sites
+                sites_for_upgrader = [{'id': s['id'], 'name': s.get('name', 'Unknown')} for s in sites]
+                upgrader = BulkAPFirmwareUpgrader(target_org_id, sites_for_upgrader, dry_run=dry_run)
+                result = upgrader.execute()
                 
                 results.append({
+                    'msp_name': msp_name,
                     'org_id': target_org_id,
                     'org_name': target_org_name,
+                    'sites_count': len(sites),
                     'status': 'completed',
-                    'result': result
+                    'result': result,
+                    'dry_run': dry_run
                 })
                 
-                logging.info(f"MSP upgrade completed for org: {target_org_name}")
+                logging.info(f"MSP upgrade {'simulated' if dry_run else 'completed'} for org: {target_org_name}")
                 
             except KeyboardInterrupt:
                 print(f"\n  Upgrade interrupted at organization: {target_org_name}")
                 results.append({
+                    'msp_name': msp_name,
                     'org_id': target_org_id,
                     'org_name': target_org_name,
+                    'sites_count': len(sites),
                     'status': 'interrupted',
-                    'result': None
+                    'result': None,
+                    'dry_run': dry_run
                 })
                 
                 try:
@@ -36607,135 +36998,36 @@ class FirmwareManager:
                 logging.error(f"MSP upgrade failed for org {target_org_name}: {e}")
                 
                 results.append({
+                    'msp_name': msp_name,
                     'org_id': target_org_id,
                     'org_name': target_org_name,
+                    'sites_count': len(sites),
                     'status': 'failed',
-                    'error': error_msg
+                    'error': error_msg,
+                    'dry_run': dry_run
                 })
         
         # Restore original org_id
         org_id = original_org_id
         
-        # Step 5: Print summary
-        self._print_msp_upgrade_summary(results)
-        
         return results
     
-    def _select_msp_for_upgrade(self):
-        """Select MSP for multi-org upgrade. Returns selected MSP dict or None."""
-        global msp_privileges
-        
-        if not msp_privileges:
-            return None
-        
-        if len(msp_privileges) == 1:
-            return msp_privileges[0]
-        
-        print("  Available MSPs:")
-        for idx, msp in enumerate(msp_privileges, start=1):
-            msp_name = msp.get('msp_name', 'Unknown')
-            msp_role = msp.get('role', 'unknown')
-            print(f"    {idx}. {msp_name} (role: {msp_role})")
-        print("")
-        
-        try:
-            choice = InputUtils.safe_input("  Select MSP (number, or 'q' to cancel): ", context="msp_select").strip()
-            if choice.lower() == 'q':
-                return None
-            choice_idx = int(choice) - 1
-            if 0 <= choice_idx < len(msp_privileges):
-                return msp_privileges[choice_idx]
-            else:
-                print("  X Invalid selection")
-                return None
-        except (ValueError, SystemExit):
-            return None
-    
-    def _select_orgs_for_upgrade(self, msp_id):
-        """Fetch orgs from MSP and let user select which to upgrade. Returns list of org dicts."""
-        global apisession
-        
-        print(f"  Fetching organizations from MSP...")
-        
-        try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api
-            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
-            
-            if not response or not hasattr(response, 'data'):
-                print("  X Failed to retrieve organizations")
-                return None
-            
-            orgs_data = response.data
-            if not isinstance(orgs_data, list):
-                orgs_data = [orgs_data] if orgs_data else []
-            
-            if not orgs_data:
-                print("  X No organizations found under this MSP")
-                return None
-            
-            # Sort by name
-            orgs_data = sorted(orgs_data, key=lambda x: x.get('name', '').lower())
-            
-            print(f"  Found {len(orgs_data)} organization(s):")
-            print("")
-            
-            # Show all orgs with numbers
-            for idx, org in enumerate(orgs_data, start=1):
-                org_name = org.get('name', 'Unknown')
-                org_id_preview = org.get('id', 'N/A')[:8]
-                print(f"    {idx:>3}. {org_name} ({org_id_preview}...)")
-            
-            print("")
-            print("  Selection options:")
-            print("    - Enter numbers separated by commas (e.g., 1,3,5)")
-            print("    - Enter 'all' to select all organizations")
-            print("    - Enter 'q' to cancel")
-            print("")
-            
-            try:
-                selection = InputUtils.safe_input("  Select organizations: ", context="org_select").strip().lower()
-            except SystemExit:
-                return None
-            
-            if selection == 'q' or selection == '':
-                return None
-            
-            if selection == 'all':
-                return orgs_data
-            
-            # Parse comma-separated numbers
-            selected_orgs = []
-            try:
-                indices = [int(x.strip()) - 1 for x in selection.split(',')]
-                for idx in indices:
-                    if 0 <= idx < len(orgs_data):
-                        selected_orgs.append(orgs_data[idx])
-                    else:
-                        print(f"  Warning: Skipping invalid index {idx + 1}")
-            except ValueError:
-                print("  X Invalid selection format")
-                return None
-            
-            return selected_orgs if selected_orgs else None
-            
-        except Exception as e:
-            print(f"  X Error fetching organizations: {e}")
-            logging.error(f"Failed to fetch MSP orgs for upgrade: {e}")
-            return None
-    
-    def _print_msp_upgrade_summary(self, results):
+    def _print_msp_upgrade_summary(self, results, dry_run=False):
         """Print summary of MSP multi-org upgrade results."""
         print("")
-        print("=" * 60)
-        print("  MSP UPGRADE SUMMARY")
-        print("=" * 60)
+        print("=" * 70)
+        print("  MSP UPGRADE SUMMARY" + (" (DRY-RUN)" if dry_run else ""))
+        print("=" * 70)
         print("")
         
         completed = [r for r in results if r['status'] == 'completed']
         failed = [r for r in results if r['status'] == 'failed']
         interrupted = [r for r in results if r['status'] == 'interrupted']
         
+        total_sites = sum(r.get('sites_count', 0) for r in results)
+        
         print(f"  Total organizations processed: {len(results)}")
+        print(f"  Total sites targeted: {total_sites}")
         print(f"    + Completed: {len(completed)}")
         print(f"    X Failed: {len(failed)}")
         print(f"    ! Interrupted: {len(interrupted)}")
@@ -36744,7 +37036,8 @@ class FirmwareManager:
         if completed:
             print("  Completed organizations:")
             for r in completed:
-                print(f"    + {r['org_name']}")
+                status_prefix = "(DRY-RUN) " if r.get('dry_run') else ""
+                print(f"    + {status_prefix}{r['org_name']} ({r.get('sites_count', 0)} sites)")
         
         if failed:
             print("\n  Failed organizations:")
@@ -36757,7 +37050,13 @@ class FirmwareManager:
                 print(f"    ! {r['org_name']}")
         
         print("")
-        logging.info(f"MSP upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted")
+        mode_str = "DRY-RUN " if dry_run else ""
+        logging.info(f"MSP {mode_str}upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted")
+    
+    def _select_msp_for_upgrade(self):
+        """DEPRECATED: Use _select_msps_for_upgrade() instead. Kept for compatibility."""
+        msps = self._select_msps_for_upgrade()
+        return msps[0] if msps and len(msps) == 1 else None
     
     def bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
         """

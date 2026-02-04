@@ -559,6 +559,37 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.04.02",
+      "date": "2026-02-05",
+      "changes": {
+        "feature_additions": [
+          "Menu 90 MSP Mode: Full multi-MSP, multi-org, multi-site selection support",
+          "Selection patterns: single '1', CSV '1,3,5', range '1-5' or '1 through 5', 'all'",
+          "Dry-run support: --dry-run flag works with MSP multi-org upgrades",
+          "Site selection per organization with pagination for large site lists"
+        ],
+        "enhancements": [
+          "MSP selection now supports selecting multiple MSPs in one workflow",
+          "Organization selection per MSP with consistent selection patterns",
+          "Site selection per org with configurable ranges and pagination",
+          "Upgrade plan summary shows MSPs, orgs, and sites before confirmation",
+          "Dry-run mode skips confirmation and shows simulation banner"
+        ],
+        "new_methods": [
+          "FirmwareManager._select_msps_for_upgrade(): Multi-MSP selection with ranges",
+          "FirmwareManager._select_sites_for_org_upgrade(): Site selection per org",
+          "FirmwareManager._parse_selection_input(): Unified selection parser",
+          "FirmwareManager._display_upgrade_plan_summary(): Pre-execution plan review",
+          "FirmwareManager._execute_msp_upgrade_plan(): Orchestrated execution"
+        ],
+        "refactoring": [
+          "Replaced single-MSP selection with multi-MSP support",
+          "Sites now pre-selected before upgrade execution (no per-org prompts)",
+          "Unified selection parsing for MSPs, orgs, and sites"
+        ]
+      }
+    },
+    {
       "version": "26.02.05.03.18",
       "date": "2026-02-05",
       "changes": {
