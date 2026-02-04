@@ -40540,6 +40540,255 @@ class BulkAPFirmwareUpgrader:
 # NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
 
 
+class MSPInventoryExporter:
+    """
+    MSP-Wide Device Inventory Export
+    
+    Exports device inventory across all MSPs and all organizations into a consolidated CSV.
+    Requires MSP privileges (obtained via --login interactive authentication).
+    
+    Output Fields:
+    - MSP context: msp_id, msp_name
+    - Org context: org_id, org_name
+    - Site context: site_id, site_name
+    - Device fields: type, model, mac, serial, name, version, status, etc.
+    
+    Output File: data/MSP_Inventory_Export.csv
+    """
+    
+    def __init__(self):
+        """Initialize the MSP inventory exporter."""
+        self.all_devices: list = []
+        self.msp_count: int = 0
+        self.org_count: int = 0
+        self.device_count: int = 0
+        self.errors: list = []
+    
+    @staticmethod
+    def execute() -> None:
+        """Main entry point - exports MSP-wide inventory to CSV."""
+        exporter = MSPInventoryExporter()
+        exporter._run()
+    
+    def _run(self) -> None:
+        """Execute the MSP inventory export workflow."""
+        global msp_privileges, apisession
+        
+        print("")
+        print("=" * 70)
+        print("  MSP-WIDE DEVICE INVENTORY EXPORT")
+        print("=" * 70)
+        print("")
+        
+        # Validate MSP privileges
+        if not msp_privileges:
+            print("  X MSP privileges not available")
+            print("")
+            print("  To use this feature, you need MSP-level access:")
+            print("    1. Run with --login flag to use interactive login")
+            print("    2. Or use Menu Option 115 to switch to interactive login")
+            print("")
+            logging.warning("MSP inventory export attempted without MSP privileges")
+            return
+        
+        print(f"  + MSP privileges detected: {len(msp_privileges)} MSP(s) available")
+        print("")
+        
+        # Step 1: Iterate through all MSPs
+        for msp_info in msp_privileges:
+            self._process_msp(msp_info)
+        
+        # Step 2: Write results
+        if self.all_devices:
+            self._write_results()
+            self._print_summary()
+        else:
+            print("  X No devices found across any MSP/organization")
+    
+    def _process_msp(self, msp_info: dict) -> None:
+        """Process a single MSP - fetch all orgs and their devices."""
+        msp_id = msp_info.get('msp_id')
+        msp_name = msp_info.get('msp_name', 'Unknown MSP')
+        
+        print(f"  Processing MSP: {msp_name}")
+        print("-" * 70)
+        
+        self.msp_count += 1
+        
+        # Fetch organizations under this MSP
+        try:
+            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print(f"    X Failed to retrieve organizations for {msp_name}")
+                self.errors.append(f"MSP {msp_name}: Failed to fetch orgs")
+                return
+            
+            orgs_data = response.data
+            if not isinstance(orgs_data, list):
+                orgs_data = [orgs_data] if orgs_data else []
+            
+            if not orgs_data:
+                print(f"    ! No organizations found under {msp_name}")
+                return
+            
+            print(f"    Found {len(orgs_data)} organization(s)")
+            
+            # Process each organization
+            for org in orgs_data:
+                self._process_org(msp_id, msp_name, org)
+            
+            print("")
+            
+        except Exception as e:
+            print(f"    X Error processing MSP {msp_name}: {e}")
+            self.errors.append(f"MSP {msp_name}: {e}")
+            logging.error(f"MSP inventory export error for {msp_name}: {e}")
+    
+    def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:
+        """Process a single organization - fetch all devices."""
+        org_id = org.get('id')
+        org_name = org.get('name', 'Unknown Org')
+        
+        self.org_count += 1
+        
+        try:
+            # Fetch all devices from this org
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            response = org_devices_api.listOrgDevices(apisession, org_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print(f"      {org_name}: No device data")
+                return
+            
+            devices_data = response.data
+            if not isinstance(devices_data, list):
+                devices_data = [devices_data] if devices_data else []
+            
+            if not devices_data:
+                print(f"      {org_name}: 0 devices")
+                return
+            
+            # Build site lookup for this org
+            site_lookup = self._build_site_lookup(org_id)
+            
+            # Add MSP/Org context to each device
+            for device in devices_data:
+                device['_msp_id'] = msp_id
+                device['_msp_name'] = msp_name
+                device['_org_id'] = org_id
+                device['_org_name'] = org_name
+                
+                # Add site name from lookup
+                site_id = device.get('site_id')
+                device['_site_name'] = site_lookup.get(site_id, 'Unknown Site') if site_id else 'Unassigned'
+                
+                self.all_devices.append(device)
+            
+            self.device_count += len(devices_data)
+            
+            # Count by type
+            type_counts = {}
+            for device in devices_data:
+                device_type = device.get('type', 'unknown')
+                type_counts[device_type] = type_counts.get(device_type, 0) + 1
+            
+            type_summary = ", ".join(f"{t}:{c}" for t, c in sorted(type_counts.items()))
+            print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
+            
+        except Exception as e:
+            print(f"      {org_name}: Error - {e}")
+            self.errors.append(f"Org {org_name}: {e}")
+            logging.error(f"MSP inventory export error for org {org_name}: {e}")
+    
+    def _build_site_lookup(self, org_id: str) -> dict:
+        """Build a site_id -> site_name lookup for an org."""
+        try:
+            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            return {s.get('id'): s.get('name', 'Unknown') for s in sites}
+        except Exception as e:
+            logging.debug(f"Failed to build site lookup for org {org_id}: {e}")
+            return {}
+    
+    def _write_results(self) -> None:
+        """Write all devices to CSV."""
+        # Define column order - important fields first
+        priority_fields = [
+            '_msp_name', '_msp_id',
+            '_org_name', '_org_id',
+            '_site_name', 'site_id',
+            'type', 'model', 'mac', 'serial', 'name',
+            'version', 'status', 'ip', 'public_ip'
+        ]
+        
+        # Flatten nested fields
+        flattened = DataProcessingUtils.flatten_nested_fields(self.all_devices)
+        
+        # Get all unique fields
+        all_fields = set()
+        for device in flattened:
+            all_fields.update(device.keys())
+        
+        # Order fields: priority first, then remaining alphabetically
+        remaining_fields = sorted(all_fields - set(priority_fields))
+        ordered_fields = [f for f in priority_fields if f in all_fields] + remaining_fields
+        
+        # Build rows
+        rows = []
+        for device in flattened:
+            row = {field: device.get(field, '') for field in ordered_fields}
+            rows.append(row)
+        
+        # Sort by MSP, Org, Site, Type, Name
+        rows.sort(key=lambda x: (
+            x.get('_msp_name', '').lower(),
+            x.get('_org_name', '').lower(),
+            x.get('_site_name', '').lower(),
+            x.get('type', ''),
+            x.get('name', '').lower()
+        ))
+        
+        filename = os.path.join("data", "MSP_Inventory_Export.csv")
+        DataExporter.write_with_format_selection(
+            rows,
+            filename,
+            api_function_name="mspInventoryExport"
+        )
+        print(f"\n  + Results written to: {filename}")
+    
+    def _print_summary(self) -> None:
+        """Print summary statistics."""
+        print("")
+        print("=" * 70)
+        print("  EXPORT SUMMARY")
+        print("=" * 70)
+        print(f"    MSPs processed:         {self.msp_count}")
+        print(f"    Organizations scanned:  {self.org_count}")
+        print(f"    Total devices exported: {self.device_count}")
+        
+        if self.errors:
+            print(f"    Errors encountered:     {len(self.errors)}")
+            for error in self.errors[:5]:  # Show first 5 errors
+                print(f"      - {error}")
+            if len(self.errors) > 5:
+                print(f"      ... and {len(self.errors) - 5} more")
+        
+        # Device type breakdown
+        type_counts = {}
+        for device in self.all_devices:
+            device_type = device.get('type', 'unknown')
+            type_counts[device_type] = type_counts.get(device_type, 0) + 1
+        
+        if type_counts:
+            print("")
+            print("  Device Type Breakdown:")
+            for device_type, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+                print(f"    {device_type:>12}: {count:>6}")
+        
+        print("")
+
+
 class OrgLevelAPFirmwareUpgrader:
     """
     Org-Level AP Firmware Upgrade Manager
@@ -45179,6 +45428,11 @@ menu_actions = {
     "116": (lambda: OrgLevelAPFirmwareUpgrader(ConfigUtils.get_cached_or_prompted_org_id(), dry_run=getattr(globals().get('args', None), 'dry_run', False)).execute(), " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), supports --dry-run"),
     
     # ==============================
+    # MSP OPERATIONS
+    # ==============================
+    "117": (MSPInventoryExporter.execute, "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP privileges via --login)"),
+    
+    # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
     "112": (lambda: MapsManagerLauncher().launch(), "Maps Manager - Interactive site floorplan and map operations (sub-menu)"),
@@ -45486,6 +45740,7 @@ def run_systematic_test():
         "113": "DESTRUCTIVE: Configures WAN probe override on templates - requires uppercase confirmation",
         "114": "DESTRUCTIVE: Configures WAN probe on device port overrides - requires uppercase confirmation",
         "116": "DESTRUCTIVE: Org-level AP firmware upgrade - requires uppercase confirmation",
+        "117": "MSP Inventory Export - requires MSP privileges via --login",
         
         # Interactive visualization tools
         "112": "Maps Manager - requires interactive Dash web server and browser"

@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 118 actionable menu entries (0–116) with some gaps for future expansion.
+**Operation Count:** The code currently defines 119 actionable menu entries (0–117) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -558,6 +558,31 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.05.06.15",
+      "date": "2026-02-05",
+      "changes": {
+        "feature_additions": [
+          "Menu Option 117: MSP Inventory Export (new)",
+          "Exports device inventory across ALL MSPs and ALL organizations to CSV",
+          "Requires MSP privileges (use --login or Menu 115 for interactive auth)"
+        ],
+        "enhancements": [
+          "Output includes MSP/Org/Site context columns for each device",
+          "Device type breakdown summary (ap, switch, gateway counts)",
+          "Site name lookup for user-friendly output",
+          "Progress display showing org-by-org processing"
+        ],
+        "new_classes": [
+          "MSPInventoryExporter: Complete MSP-wide inventory export workflow"
+        ],
+        "output_fields": [
+          "_msp_name, _msp_id, _org_name, _org_id, _site_name, site_id",
+          "type, model, mac, serial, name, version, status, ip, public_ip"
+        ],
+        "output_file": "data/MSP_Inventory_Export.csv"
+      }
+    },
     {
       "version": "26.02.05.05.45",
       "date": "2026-02-05",
