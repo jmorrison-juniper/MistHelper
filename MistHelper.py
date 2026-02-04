@@ -1996,6 +1996,7 @@ def detect_msp_privileges():
     
     Calls GET /api/v1/self to retrieve user privileges and extracts any MSP-level access.
     This enables MSP menu options when the user has appropriate permissions.
+    If MSP names are not provided in the privileges, fetches them from the MSP API.
     
     Returns:
         list: List of MSP privilege dicts with keys: msp_id, msp_name, role, scope
@@ -2025,9 +2026,17 @@ def detect_msp_privileges():
         
         for priv in privileges:
             if isinstance(priv, dict) and priv.get('msp_id'):
+                msp_id = priv.get('msp_id')
+                # Try multiple field names for MSP name (API inconsistency)
+                msp_name = priv.get('msp_name') or priv.get('name') or None
+                
+                # If name still not found, try to fetch it from MSP API
+                if not msp_name or msp_name == 'Unknown':
+                    msp_name = _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"
+                
                 msp_info = {
-                    'msp_id': priv.get('msp_id'),
-                    'msp_name': priv.get('msp_name', 'Unknown'),
+                    'msp_id': msp_id,
+                    'msp_name': msp_name,
                     'role': priv.get('role', 'unknown'),
                     'scope': priv.get('scope', 'unknown')
                 }
@@ -2045,6 +2054,25 @@ def detect_msp_privileges():
     except Exception as e:
         logging.warning(f"Failed to detect MSP privileges: {e}")
         return []
+
+
+def _fetch_msp_name(msp_id: str) -> str:
+    """Helper to fetch MSP name from MSP API when not provided in privileges.
+    
+    Args:
+        msp_id: The MSP ID to look up
+        
+    Returns:
+        MSP name string, or None if lookup fails
+    """
+    try:
+        import mistapi.api.v1.msps.msps as msps_api
+        response = msps_api.getMspDetails(apisession, msp_id)
+        if response and hasattr(response, 'data') and isinstance(response.data, dict):
+            return response.data.get('name', None)
+    except Exception as e:
+        logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")
+    return None
 
 
 def initialize_mist_session_interactive():
@@ -2260,9 +2288,13 @@ def switch_to_interactive_login():
     """Menu option to switch from API token to interactive login.
     
     This allows users to re-authenticate using email/password to gain
-    MSP-level API access during an existing session.
+    MSP-level API access during an existing session. After successful login,
+    if MSP privileges are detected, prompts user to select MSP and org.
+    
+    Returns:
+        bool: True to signal the menu should continue, False otherwise
     """
-    global apisession, msp_privileges
+    global apisession, msp_privileges, org_id
     
     print("")
     print("="*60)
@@ -2276,6 +2308,7 @@ def switch_to_interactive_login():
     print("    - Can access MSP-level APIs (if you have MSP privileges)")
     print("    - Session-based auth with cookie management")
     print("    - Supports 2FA authentication")
+    print("    - Select and switch between MSPs and Organizations")
     print("")
     
     if msp_privileges:
@@ -2285,32 +2318,202 @@ def switch_to_interactive_login():
     try:
         confirm = InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
     except SystemExit:
-        return
+        return True  # Return to menu
     
     if confirm != 'y':
         print("  Cancelled.")
-        return
+        return True  # Return to menu
     
     # Clear existing session
     old_session = apisession
+    old_org_id = org_id
     apisession = None
     msp_privileges = []
+    org_id = None
     
     # Attempt interactive login
-    if initialize_mist_session_interactive():
-        print("")
-        print("  + Successfully switched to interactive login")
-        if msp_privileges:
-            print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")
-        logging.info("Successfully switched to interactive login session")
-    else:
+    if not initialize_mist_session_interactive():
         # Restore old session if login failed
         print("")
         print("  X Login failed - restoring previous session")
         apisession = old_session
+        org_id = old_org_id
         # Re-detect MSP privileges for restored session
         detect_msp_privileges()
         logging.warning("Interactive login failed - restored previous API session")
+        return True  # Return to menu
+    
+    print("")
+    print("  + Successfully switched to interactive login")
+    if msp_privileges:
+        print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")
+    logging.info("Successfully switched to interactive login session")
+    
+    # If MSP privileges detected, offer to select MSP and org
+    if msp_privileges:
+        _select_msp_and_org()
+    else:
+        # No MSP, just select org from user privileges
+        _select_org_from_session()
+    
+    return True  # Return to menu
+
+
+def _select_msp_and_org():
+    """Helper to select MSP and then an organization within that MSP.
+    
+    Updates global org_id based on user selection.
+    """
+    global org_id, msp_privileges
+    
+    print("")
+    print("="*60)
+    print("  SELECT MSP AND ORGANIZATION")
+    print("="*60)
+    print("")
+    
+    # Step 1: Select MSP
+    selected_msp = None
+    if len(msp_privileges) == 1:
+        selected_msp = msp_privileges[0]
+        print(f"  Using MSP: {selected_msp['msp_name']} (only one available)")
+    else:
+        print("  Available MSPs:")
+        for idx, msp in enumerate(msp_privileges, start=1):
+            msp_name = msp.get('msp_name', 'Unknown')
+            msp_role = msp.get('role', 'unknown')
+            print(f"    {idx}. {msp_name} (role: {msp_role})")
+        print("")
+        try:
+            choice = InputUtils.safe_input("  Select MSP (number, or Enter to skip): ", context="msp_select").strip()
+            if choice == "":
+                print("  Skipping MSP selection - using direct org access")
+                _select_org_from_session()
+                return
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(msp_privileges):
+                selected_msp = msp_privileges[choice_idx]
+            else:
+                print("  X Invalid selection - skipping MSP selection")
+                _select_org_from_session()
+                return
+        except (ValueError, SystemExit):
+            print("  X Invalid input - skipping MSP selection")
+            _select_org_from_session()
+            return
+    
+    msp_id = selected_msp['msp_id']
+    msp_name = selected_msp.get('msp_name', 'Unknown')
+    print(f"  + Selected MSP: {msp_name}")
+    
+    # Step 2: Fetch organizations under this MSP
+    print(f"  Fetching organizations under {msp_name}...")
+    
+    try:
+        import mistapi.api.v1.msps.orgs as msp_orgs_api
+        response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+        
+        if not response or not hasattr(response, 'data'):
+            print("  X Failed to retrieve MSP organizations")
+            logging.error("listMspOrgs returned no data")
+            return
+        
+        orgs_data = response.data
+        if not isinstance(orgs_data, list):
+            orgs_data = [orgs_data] if orgs_data else []
+        
+        if not orgs_data:
+            print("  No organizations found under this MSP")
+            return
+        
+        # Sort orgs by name for easier selection
+        orgs_data = sorted(orgs_data, key=lambda x: x.get('name', '').lower())
+        
+        print(f"  Found {len(orgs_data)} organization(s):")
+        print("")
+        
+        # Show all orgs with pagination if many
+        page_size = 20
+        current_page = 0
+        total_pages = (len(orgs_data) + page_size - 1) // page_size
+        
+        while True:
+            start_idx = current_page * page_size
+            end_idx = min(start_idx + page_size, len(orgs_data))
+            
+            for idx in range(start_idx, end_idx):
+                org = orgs_data[idx]
+                org_name = org.get('name', 'Unknown')
+                org_id_preview = org.get('id', 'N/A')[:8]
+                print(f"    {idx + 1:>3}. {org_name} ({org_id_preview}...)")
+            
+            print("")
+            if total_pages > 1:
+                print(f"  Page {current_page + 1}/{total_pages}")
+                print("  Enter number to select, 'n' for next page, 'p' for previous, 'q' to skip")
+            else:
+                print("  Enter number to select, or 'q' to skip")
+            
+            try:
+                choice = InputUtils.safe_input("  Selection: ", context="org_select").strip().lower()
+            except SystemExit:
+                return
+            
+            if choice == 'q' or choice == '':
+                print("  Skipping org selection")
+                return
+            elif choice == 'n' and current_page < total_pages - 1:
+                current_page += 1
+                continue
+            elif choice == 'p' and current_page > 0:
+                current_page -= 1
+                continue
+            else:
+                try:
+                    choice_idx = int(choice) - 1
+                    if 0 <= choice_idx < len(orgs_data):
+                        selected_org = orgs_data[choice_idx]
+                        org_id = selected_org.get('id')
+                        org_name = selected_org.get('name', 'Unknown')
+                        print("")
+                        print(f"  + Selected organization: {org_name}")
+                        print(f"  + Organization ID: {org_id}")
+                        logging.info(f"User selected org: {org_name} ({org_id}) under MSP: {msp_name}")
+                        return
+                    else:
+                        print("  X Invalid number - try again")
+                except ValueError:
+                    print("  X Invalid input - try again")
+        
+    except Exception as e:
+        print(f"  X Error fetching MSP organizations: {e}")
+        logging.error(f"Failed to fetch MSP organizations: {e}")
+
+
+def _select_org_from_session():
+    """Helper to select organization from session privileges (non-MSP path).
+    
+    Uses mistapi's built-in org selection when user doesn't have MSP access
+    or chooses to skip MSP selection.
+    """
+    global org_id
+    
+    print("")
+    print("  Selecting organization from your session privileges...")
+    print("")
+    
+    try:
+        # Use mistapi's built-in org selection
+        org_id_list = mistapi.cli.select_org(apisession)
+        if org_id_list and len(org_id_list) > 0:
+            org_id = org_id_list[0]
+            print(f"  + Organization ID set: {org_id}")
+            logging.info(f"User selected org from session: {org_id}")
+        else:
+            print("  X No organization selected")
+    except Exception as e:
+        print(f"  X Error selecting organization: {e}")
+        logging.error(f"Failed to select org from session: {e}")
 
 
 def initialize_mist_session():
@@ -47059,13 +47262,24 @@ def main():
                     logging.debug("EXIT: main() - user requested exit")
                     sys.exit(0)
                 
-                func()
+                # Menu options that should return to menu even in direct mode
+                # (session management operations that change context)
+                session_management_options = {"115"}  # Switch to interactive login
+                
+                result = func()
                 logging.info(f"Menu option '{iwant}' execution complete.")
                 
-                # In container mode, return to menu. In direct mode, exit.
+                # In container mode, return to menu. In direct mode, exit (unless session management)
                 if not container_mode:
-                    logging.debug("EXIT: main() - interactive success (direct mode)")
-                    sys.exit(0)
+                    if iwant in session_management_options:
+                        # Session management completed - return to menu to use new context
+                        logging.info(f"Session management option '{iwant}' completed - returning to menu")
+                        print(f"\n[SESSION] Context updated. Returning to menu...")
+                        print("=" * 60)
+                        continue
+                    else:
+                        logging.debug("EXIT: main() - interactive success (direct mode)")
+                        sys.exit(0)
                 else:
                     logging.debug(f"Container mode: option '{iwant}' completed successfully, returning to menu")
                     print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")
