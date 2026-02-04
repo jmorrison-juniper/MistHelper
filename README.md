@@ -559,6 +559,24 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.04.35",
+      "date": "2026-02-05",
+      "changes": {
+        "bug_fixes": [
+          "Fixed multi-version upgrade to group by VERSION instead of MODEL",
+          "3 models with 2 versions now makes 2 API calls (was incorrectly 3)"
+        ],
+        "enhancements": [
+          "API call estimate now correctly counts unique versions per site",
+          "Upgrade output shows version with list of models being upgraded"
+        ],
+        "refactoring": [
+          "_execute_multi_version_upgrade(): Groups devices by target version",
+          "_estimate_api_calls(): Counts calls by unique versions, not models"
+        ]
+      }
+    },
+    {
       "version": "26.02.05.04.20",
       "date": "2026-02-05",
       "changes": {

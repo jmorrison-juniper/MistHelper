@@ -39807,15 +39807,16 @@ class BulkAPFirmwareUpgrader:
         breakdown = []
         
         for site_id, site_info in devices_by_site.items():
+            # API calls are grouped by VERSION, not by model
             # If all devices at site use same version: 1 call
-            # If different versions: 1 call per unique (model, version) combo
-            if len(site_info['versions']) == 1:
-                calls_for_site = 1
+            # If different versions: 1 call per unique version
+            num_versions = len(site_info['versions'])
+            calls_for_site = num_versions
+            
+            if num_versions == 1:
                 reason = "single version"
             else:
-                # Multiple versions = per-model calls
-                calls_for_site = len(site_info['models'])
-                reason = f"{len(site_info['models'])} models"
+                reason = f"{num_versions} versions"
             
             upgrade_calls += calls_for_site
             breakdown.append({
@@ -40015,18 +40016,30 @@ class BulkAPFirmwareUpgrader:
         self.successful_upgrades += len(site_data['devices'])
     
     def _execute_multi_version_upgrade(self, site_id: str, site_name: str, site_data: dict) -> None:
-        """Execute upgrade when devices use different versions."""
-        print(f"      Multiple versions - executing per model...")
+        """Execute upgrade when devices use different versions - grouped by version."""
+        print(f"      Multiple versions - grouping by target version...")
+        
+        # Group devices by target version (not by model)
+        devices_by_version = {}
         for model, model_info in site_data['models'].items():
             version = model_info['version']
-            devices = model_info['devices']
+            if version not in devices_by_version:
+                devices_by_version[version] = {'devices': [], 'models': []}
+            devices_by_version[version]['devices'].extend(model_info['devices'])
+            devices_by_version[version]['models'].append(model)
+        
+        # Execute one API call per unique version
+        for version, version_info in devices_by_version.items():
+            devices = version_info['devices']
+            models = version_info['models']
             device_ids = [d.get("id") for d in devices if d.get("id")]
+            models_str = ", ".join(models)
             
             body = self._build_upgrade_body(version, device_ids)
             
             if self.dry_run:
-                print(f"         [DRY-RUN] {model}: Would upgrade {len(devices)} devices to {version}")
-                logging.info(f"DRY-RUN: Would call upgradeSiteDevices for {model} at {site_name} with {len(device_ids)} devices")
+                print(f"         [DRY-RUN] {version}: Would upgrade {len(devices)} devices ({models_str})")
+                logging.info(f"DRY-RUN: Would call upgradeSiteDevices for version {version} at {site_name} with {len(device_ids)} devices")
                 self.successful_upgrades += len(devices)
                 continue
             
@@ -40037,7 +40050,7 @@ class BulkAPFirmwareUpgrader:
                     self.upgrade_ids.append(resp.data["upgrade_id"])
             
             self.successful_upgrades += len(devices)
-            print(f"         !? {model}: {len(devices)} devices firmware {version}")
+            print(f"         + {version}: {len(devices)} devices ({models_str})")
     
     def _build_upgrade_body(self, version: str, device_ids: list) -> dict:
         """Build upgrade API request body with separate download and reboot strategies."""
