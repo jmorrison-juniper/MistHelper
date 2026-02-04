@@ -2172,15 +2172,25 @@ def initialize_mist_session_interactive():
         
         # Attempt login using login_with_return() 
         # Don't pass credentials again - they're already stored in the session
-        # Returns: {'authenticated': bool, 'error': str}
+        # Returns: {'authenticated': bool, 'error': str|dict}
+        # When 2FA required: error contains dict with two_factor_required=True
         print("  Sending login request...")
         login_result = apisession.login_with_return()
         
         logging.debug(f"login_with_return result: {login_result}")
-        print(f"  DEBUG: login_with_return returned: {login_result}")
         
-        # Check if 2FA is required
-        if login_result and login_result.get('two_factor_required'):
+        # Check if 2FA is required - the error field contains resp.data dict
+        # when auth fails due to 2FA requirement
+        error_data = login_result.get('error', {}) if login_result else {}
+        two_factor_required = False
+        
+        if isinstance(error_data, dict) and error_data.get('two_factor_required'):
+            two_factor_required = True
+        elif login_result and login_result.get('two_factor_required'):
+            # Fallback check at top level
+            two_factor_required = True
+        
+        if two_factor_required:
             print("")
             print("  Two-factor authentication required.")
             try:
@@ -2190,7 +2200,7 @@ def initialize_mist_session_interactive():
                 return False
             
             if not two_factor_code:
-                print("X 2FA code is required")
+                print("  X 2FA code is required")
                 apisession = None
                 return False
             
@@ -2200,10 +2210,15 @@ def initialize_mist_session_interactive():
             logging.debug(f"login_with_return (2FA) result: {login_result}")
         
         # Check the actual 'authenticated' field from login_with_return
-        # Note: mistapi returns {'authenticated': bool, 'error': str}, NOT 'success'
+        # Note: mistapi returns {'authenticated': bool, 'error': str|dict}
         if not login_result or not login_result.get('authenticated', False):
-            error_message = login_result.get('error', 'Unknown error') if login_result else 'No response'
-            print(f"X Authentication failed: {error_message}")
+            error_field = login_result.get('error', 'Unknown error') if login_result else 'No response'
+            # Format error message - handle both string and dict error responses
+            if isinstance(error_field, dict):
+                error_message = error_field.get('detail', str(error_field))
+            else:
+                error_message = str(error_field)
+            print(f"  X Authentication failed: {error_message}")
             logging.error(f"Interactive login failed: {error_message}")
             apisession = None
             return False
@@ -2229,13 +2244,13 @@ def initialize_mist_session_interactive():
     except Exception as e:
         error_msg = str(e)
         if "invalid" in error_msg.lower() or "credential" in error_msg.lower():
-            print("X Invalid email or password")
+            print("  X Invalid email or password")
         elif "two_factor" in error_msg.lower() or "2fa" in error_msg.lower():
-            print("X Two-factor authentication failed")
+            print("  X Two-factor authentication failed")
         elif "401" in error_msg:
-            print("X Invalid email or password (authentication failed)")
+            print("  X Invalid email or password (authentication failed)")
         else:
-            print(f"X Login failed: {e}")
+            print(f"  X Login failed: {e}")
         logging.error(f"Interactive login failed: {e}")
         apisession = None
         return False
@@ -2291,7 +2306,7 @@ def switch_to_interactive_login():
     else:
         # Restore old session if login failed
         print("")
-        print("X Login failed - restoring previous session")
+        print("  X Login failed - restoring previous session")
         apisession = old_session
         # Re-detect MSP privileges for restored session
         detect_msp_privileges()
