@@ -39769,7 +39769,97 @@ class BulkAPFirmwareUpgrader:
         self._display_upgrade_warnings(total)
         self._display_final_plan()
         
+        # Show API call estimate before confirmation
+        self._display_api_call_estimate()
+        
         return self._get_upgrade_confirmation(total)
+    
+    def _estimate_api_calls(self) -> dict:
+        """
+        Estimate the number of API calls required for the upgrade operation.
+        
+        Returns dict with:
+        - upgrade_calls: Number of upgradeSiteDevices API calls
+        - auto_upgrade_calls: Number of site auto-upgrade config calls (if enabled)
+        - total_calls: Total API calls
+        - breakdown: Per-site breakdown of calls
+        """
+        # Organize devices by site to understand call patterns
+        devices_by_site = {}
+        for model, plan in self.upgrade_plan.items():
+            version = plan['version']
+            for device in plan["devices"]:
+                site_id = device.get("_site_id")
+                site_name = device.get("_site_name", "Unknown")
+                if site_id not in devices_by_site:
+                    devices_by_site[site_id] = {
+                        'name': site_name,
+                        'versions': set(),
+                        'models': set(),
+                        'device_count': 0
+                    }
+                devices_by_site[site_id]['versions'].add(version)
+                devices_by_site[site_id]['models'].add(model)
+                devices_by_site[site_id]['device_count'] += 1
+        
+        # Calculate upgrade API calls
+        upgrade_calls = 0
+        breakdown = []
+        
+        for site_id, site_info in devices_by_site.items():
+            # If all devices at site use same version: 1 call
+            # If different versions: 1 call per unique (model, version) combo
+            if len(site_info['versions']) == 1:
+                calls_for_site = 1
+                reason = "single version"
+            else:
+                # Multiple versions = per-model calls
+                calls_for_site = len(site_info['models'])
+                reason = f"{len(site_info['models'])} models"
+            
+            upgrade_calls += calls_for_site
+            breakdown.append({
+                'site_name': site_info['name'],
+                'devices': site_info['device_count'],
+                'calls': calls_for_site,
+                'reason': reason
+            })
+        
+        # Auto-upgrade configuration calls (1 per site if user enables it in step 9)
+        auto_upgrade_calls = len(devices_by_site)  # Potential calls
+        
+        return {
+            'upgrade_calls': upgrade_calls,
+            'auto_upgrade_calls': auto_upgrade_calls,
+            'total_calls': upgrade_calls,  # Auto-upgrade is optional, not counted by default
+            'site_count': len(devices_by_site),
+            'breakdown': breakdown
+        }
+    
+    def _display_api_call_estimate(self) -> None:
+        """Display estimated API calls before confirmation."""
+        estimate = self._estimate_api_calls()
+        
+        print(f"\n  API Call Estimate:")
+        print(f"  " + "-" * 50)
+        print(f"   Upgrade API calls: {estimate['upgrade_calls']}")
+        print(f"   Sites to process: {estimate['site_count']}")
+        
+        # Show breakdown for multi-site or complex upgrades
+        if estimate['site_count'] > 1 or estimate['upgrade_calls'] > 1:
+            print(f"\n   Breakdown by site:")
+            for item in estimate['breakdown'][:10]:  # Show first 10
+                print(f"     - {item['site_name']}: {item['calls']} call(s) ({item['reason']}, {item['devices']} devices)")
+            if len(estimate['breakdown']) > 10:
+                remaining = len(estimate['breakdown']) - 10
+                remaining_calls = sum(b['calls'] for b in estimate['breakdown'][10:])
+                print(f"     ... and {remaining} more sites ({remaining_calls} additional calls)")
+        
+        print(f"  " + "-" * 50)
+        
+        # Add note about auto-upgrade
+        if estimate['auto_upgrade_calls'] > 0:
+            print(f"   Note: If you configure auto-upgrade (Step 9), add {estimate['auto_upgrade_calls']} more call(s)")
     
     def _display_multi_site_summary(self) -> None:
         """Display comprehensive site and model summary for multi-site upgrades."""

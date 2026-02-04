@@ -559,6 +559,26 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.04.20",
+      "date": "2026-02-05",
+      "changes": {
+        "feature_additions": [
+          "Menu 90: API call estimate displayed before upgrade confirmation",
+          "Shows exact number of upgrade API calls required",
+          "Breakdown by site showing calls per site with reason (single/multi version)"
+        ],
+        "enhancements": [
+          "Confirmation screen now shows total upgrade API calls",
+          "Per-site breakdown shows device count and call reason",
+          "Note about additional auto-upgrade API calls if step 9 is used"
+        ],
+        "new_methods": [
+          "BulkAPFirmwareUpgrader._estimate_api_calls(): Calculate upgrade API calls",
+          "BulkAPFirmwareUpgrader._display_api_call_estimate(): Show estimate to user"
+        ]
+      }
+    },
+    {
       "version": "26.02.05.04.02",
       "date": "2026-02-05",
       "changes": {
