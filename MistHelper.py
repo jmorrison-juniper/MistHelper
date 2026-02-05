@@ -40820,6 +40820,557 @@ class MSPInventoryExporter:
         print("")
 
 
+class SiteAutoUpgradeConfigurator:
+    """
+    Configure AP Auto-Upgrade Settings at Site Level
+    
+    This is a standalone utility to configure auto-upgrade settings for sites
+    WITHOUT initiating immediate firmware upgrades. It sets the auto_upgrade
+    configuration in site settings so that:
+    - New APs automatically upgrade to the specified firmware
+    - Existing APs upgrade during scheduled maintenance windows
+    
+    Site Selection Options:
+    - All sites in the organization
+    - Single site by selection
+    - Multiple sites by comma-separated index numbers
+    - Range of sites by index (e.g., 1-10)
+    """
+    
+    def __init__(self, org_id: str):
+        """Initialize the configurator."""
+        self.org_id = org_id
+        self.all_sites = []
+        self.selected_sites = []
+        self.available_versions = []
+        self.model_version_map = {}  # model -> list of available versions
+        self.custom_versions = {}  # model -> selected version
+        self.schedule = {}
+        self.current_site_versions = {}  # For single-site: model -> current version
+        self.is_single_site = False
+    
+    @staticmethod
+    def execute():
+        """Static entry point for menu system."""
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        configurator = SiteAutoUpgradeConfigurator(org_id)
+        configurator._run()
+    
+    def _run(self) -> None:
+        """Execute the configuration workflow."""
+        print("")
+        print("=" * 70)
+        print("  SITE AUTO-UPGRADE CONFIGURATION")
+        print("=" * 70)
+        print("")
+        print("  This tool configures auto-upgrade settings for sites WITHOUT")
+        print("  initiating immediate upgrades. Auto-upgrade ensures:")
+        print("    - New APs automatically upgrade to target firmware")
+        print("    - Scheduled upgrades during maintenance windows")
+        print("")
+        
+        # Step 1: Fetch all sites
+        if not self._step1_fetch_sites():
+            return
+        
+        # Step 2: Site selection
+        if not self._step2_select_sites():
+            return
+        
+        # Step 3: Fetch available firmware versions
+        if not self._step3_fetch_available_versions():
+            return
+        
+        # Step 4: Select firmware versions per model
+        if not self._step4_select_versions():
+            return
+        
+        # Step 5: Configure schedule
+        self._step5_configure_schedule()
+        
+        # Step 6: Confirm and apply
+        self._step6_confirm_and_apply()
+    
+    def _step1_fetch_sites(self) -> bool:
+        """Fetch all sites in the organization."""
+        print("-" * 70)
+        print("  STEP 1: Loading Sites")
+        print("-" * 70)
+        
+        try:
+            self.all_sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            
+            if not self.all_sites:
+                print("  X No sites found in organization")
+                return False
+            
+            # Sort by name
+            self.all_sites.sort(key=lambda s: s.get('name', '').lower())
+            print(f"  + Found {len(self.all_sites)} site(s)")
+            return True
+            
+        except Exception as e:
+            print(f"  X Error fetching sites: {e}")
+            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch sites: {e}")
+            return False
+    
+    def _step2_select_sites(self) -> bool:
+        """Allow user to select sites with flexible options."""
+        print("")
+        print("-" * 70)
+        print("  STEP 2: Site Selection")
+        print("-" * 70)
+        print("")
+        print("  Selection Options:")
+        print("    [A] All sites in organization")
+        print("    [S] Single site (interactive selection)")
+        print("    [L] List view - select by index numbers")
+        print("")
+        
+        try:
+            choice = InputUtils.safe_input("  Selection mode (A/S/L): ", context="auto_upgrade_config").strip().upper()
+        except SystemExit:
+            return False
+        
+        if choice == 'A':
+            return self._select_all_sites()
+        elif choice == 'S':
+            return self._select_single_site()
+        elif choice == 'L':
+            return self._select_from_list()
+        else:
+            print("  Invalid selection. Using 'All sites'.")
+            return self._select_all_sites()
+    
+    def _select_all_sites(self) -> bool:
+        """Select all sites."""
+        self.selected_sites = self.all_sites.copy()
+        print(f"  + Selected ALL {len(self.selected_sites)} site(s)")
+        return True
+    
+    def _select_single_site(self) -> bool:
+        """Interactive single site selection - shows full list."""
+        print(f"\n  All Sites ({len(self.all_sites)} total):")
+        print("-" * 70)
+        
+        for idx, site in enumerate(self.all_sites, 1):
+            print(f"    [{idx:>3}] {site.get('name', 'Unknown')}")
+        
+        print("")
+        try:
+            selection = InputUtils.safe_input("  Enter site number (or 'q' to cancel): ", context="auto_upgrade_config").strip().lower()
+        except SystemExit:
+            return False
+        
+        if selection == 'q':
+            return False
+        
+        if selection.isdigit():
+            idx = int(selection) - 1
+            if 0 <= idx < len(self.all_sites):
+                self.selected_sites = [self.all_sites[idx]]
+                self.is_single_site = True
+                print(f"  + Selected: {self.all_sites[idx].get('name')}")
+                # Fetch current auto-upgrade settings for this site
+                self._fetch_current_site_settings(self.all_sites[idx]['id'])
+                return True
+            else:
+                print("  Invalid selection")
+                return False
+        
+        print("  Invalid input")
+        return False
+    
+    def _fetch_current_site_settings(self, site_id: str) -> None:
+        """Fetch current auto-upgrade settings for a single site."""
+        try:
+            response = mistapi.api.v1.sites.setting.getSiteSettings(apisession, site_id)
+            if response and hasattr(response, 'data') and response.data:
+                settings = response.data if isinstance(response.data, dict) else {}
+                auto_upgrade = settings.get('auto_upgrade', {})
+                if auto_upgrade:
+                    self.current_site_versions = auto_upgrade.get('custom_versions', {})
+                    # Also capture current schedule
+                    if auto_upgrade.get('day_of_week'):
+                        self.schedule['day_of_week'] = auto_upgrade['day_of_week']
+                    if auto_upgrade.get('time_of_day'):
+                        self.schedule['time_of_day'] = auto_upgrade['time_of_day']
+                    if self.current_site_versions:
+                        print(f"  + Current auto-upgrade settings found ({len(self.current_site_versions)} model(s) configured)")
+        except Exception as e:
+            logging.debug(f"Could not fetch current site settings: {e}")
+    
+    def _select_from_list(self) -> bool:
+        """Display numbered list and allow index/range selection."""
+        print(f"\n  All Sites ({len(self.all_sites)} total):")
+        print("-" * 70)
+        
+        # Display all sites with index
+        for idx, site in enumerate(self.all_sites, 1):
+            print(f"    [{idx:>3}] {site.get('name', 'Unknown')}")
+        
+        print("")
+        print("  Enter selection:")
+        print("    - Single: 5")
+        print("    - Multiple: 1,3,5,7")
+        print("    - Range: 1-10")
+        print("    - Combined: 1-5,8,12-15")
+        print("")
+        
+        try:
+            selection = InputUtils.safe_input("  Selection: ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            return False
+        
+        if not selection:
+            print("  No selection made")
+            return False
+        
+        # Parse selection
+        indices = self._parse_index_selection(selection)
+        
+        if not indices:
+            print("  X Invalid selection format")
+            return False
+        
+        # Convert to sites
+        for idx in indices:
+            if 1 <= idx <= len(self.all_sites):
+                self.selected_sites.append(self.all_sites[idx - 1])
+        
+        if not self.selected_sites:
+            print("  X No valid sites selected")
+            return False
+        
+        print(f"  + Selected {len(self.selected_sites)} site(s):")
+        for site in self.selected_sites[:5]:
+            print(f"      - {site.get('name')}")
+        if len(self.selected_sites) > 5:
+            print(f"      ... and {len(self.selected_sites) - 5} more")
+        
+        return True
+    
+    def _parse_index_selection(self, selection: str) -> list:
+        """Parse index selection string into list of integers."""
+        indices = set()
+        parts = selection.replace(' ', '').split(',')
+        
+        for part in parts:
+            if '-' in part:
+                # Range: 1-10
+                try:
+                    range_parts = part.split('-')
+                    if len(range_parts) == 2:
+                        start = int(range_parts[0])
+                        end = int(range_parts[1])
+                        indices.update(range(start, end + 1))
+                except ValueError:
+                    continue
+            else:
+                # Single number
+                try:
+                    indices.add(int(part))
+                except ValueError:
+                    continue
+        
+        return sorted(indices)
+    
+    def _step3_fetch_available_versions(self) -> bool:
+        """Fetch available firmware versions."""
+        print("")
+        print("-" * 70)
+        print("  STEP 3: Available Firmware Versions")
+        print("-" * 70)
+        print("  Fetching available AP firmware versions...")
+        
+        try:
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            response = org_devices_api.listOrgAvailableDeviceVersions(apisession, self.org_id, type="ap")
+            
+            if not response or not hasattr(response, 'data'):
+                print("  X Failed to fetch available versions")
+                return False
+            
+            self.available_versions = response.data if isinstance(response.data, list) else []
+            
+            # Build model -> versions map
+            for version_info in self.available_versions:
+                if not isinstance(version_info, dict):
+                    continue
+                model = version_info.get('model')
+                version = version_info.get('version')
+                if model and version:
+                    if model not in self.model_version_map:
+                        self.model_version_map[model] = []
+                    self.model_version_map[model].append(version)
+            
+            print(f"  + Found firmware for {len(self.model_version_map)} AP model(s)")
+            return True
+            
+        except Exception as e:
+            print(f"  X Error fetching firmware versions: {e}")
+            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch versions: {e}")
+            return False
+    
+    def _step4_select_versions(self) -> bool:
+        """Select firmware version per AP model."""
+        print("")
+        print("-" * 70)
+        print("  STEP 4: Firmware Version Selection")
+        print("-" * 70)
+        print("")
+        print("  Select firmware version for each AP model family.")
+        if self.is_single_site and self.current_site_versions:
+            print("  Press Enter to keep current version, or select a new one.")
+            # Pre-populate with ALL current values so they're preserved if user presses Enter
+            self.custom_versions = self.current_site_versions.copy()
+            print(f"  (Pre-loaded {len(self.custom_versions)} existing model configurations)")
+        else:
+            print("  Press Enter to skip a model (won't be included in auto-upgrade).")
+        print("")
+        
+        # Group models by family prefix (AP41, AP43, etc.)
+        model_families = {}
+        for model in sorted(self.model_version_map.keys()):
+            # Extract family prefix (e.g., AP41 from AP41, AP41E)
+            family = model.rstrip('EP')  # Remove E, P suffixes for grouping
+            if family not in model_families:
+                model_families[family] = []
+            model_families[family].append(model)
+        
+        # For each family, offer latest versions
+        for family, models in sorted(model_families.items()):
+            # Get versions available for any model in this family
+            family_versions = set()
+            for model in models:
+                family_versions.update(self.model_version_map.get(model, []))
+            
+            if not family_versions:
+                continue
+            
+            # Sort versions descending (newest first) - show ALL versions
+            sorted_versions = sorted(family_versions, reverse=True)
+            
+            # Check for current version (for single-site mode)
+            current_version = None
+            if self.is_single_site:
+                for model in models:
+                    if model in self.current_site_versions:
+                        current_version = self.current_site_versions[model]
+                        break
+            
+            print(f"\n  {family} family ({', '.join(models)}):")
+            for idx, version in enumerate(sorted_versions, 1):
+                marker = " <-- current" if version == current_version else ""
+                print(f"    [{idx:>2}] {version}{marker}")
+            
+            if current_version:
+                print(f"    [Enter] Keep current: {current_version}")
+            else:
+                print(f"    [Enter] Skip")
+            
+            try:
+                choice = InputUtils.safe_input(f"  Select version (1-{len(sorted_versions)}): ", context="auto_upgrade_config").strip()
+            except SystemExit:
+                return False
+            
+            if choice and choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(sorted_versions):
+                    selected_version = sorted_versions[idx]
+                    # Apply to all models in family
+                    for model in models:
+                        if selected_version in self.model_version_map.get(model, []):
+                            self.custom_versions[model] = selected_version
+                    print(f"    + Set {family} models to {selected_version}")
+            elif not choice and current_version:
+                # User pressed Enter - current versions already in custom_versions (pre-populated)
+                print(f"    + Keeping {family} models at {current_version}")
+            elif not choice:
+                # No current version and user pressed Enter - skip this family
+                print(f"    - Skipped {family} family")
+        
+        if not self.custom_versions:
+            print("\n  X No versions selected")
+            return False
+        
+        print(f"\n  + Configured {len(self.custom_versions)} model(s)")
+        return True
+    
+    def _step5_configure_schedule(self) -> None:
+        """Configure upgrade schedule (optional)."""
+        print("")
+        print("-" * 70)
+        print("  STEP 5: Schedule Configuration (Optional)")
+        print("-" * 70)
+        print("")
+        print("  Configure when auto-upgrades should occur.")
+        print("")
+        
+        # Day of week
+        print("  Day of week options:")
+        print("    [1] Daily (any day)")
+        print("    [2] Sunday")
+        print("    [3] Monday")
+        print("    [4] Tuesday")
+        print("    [5] Wednesday")
+        print("    [6] Thursday")
+        print("    [7] Friday")
+        print("    [8] Saturday")
+        
+        day_map = {
+            '1': 'any', '2': 'sun', '3': 'mon', '4': 'tue',
+            '5': 'wed', '6': 'thu', '7': 'fri', '8': 'sat'
+        }
+        
+        try:
+            day_choice = InputUtils.safe_input("  Day of week (1-8, default=1 for daily): ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            day_choice = '1'
+        
+        # 'any' = daily (any day of week)
+        self.schedule['day_of_week'] = day_map.get(day_choice, 'any')
+        
+        # Time of day with flexible parsing
+        print("")
+        print("  Time of day for upgrades:")
+        print("    Examples: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM")
+        print("    Leave blank for any time")
+        
+        try:
+            time_input = InputUtils.safe_input("  Time: ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            time_input = ''
+        
+        # Parse various time formats to HH:MM
+        parsed_time = self._parse_time_input(time_input)
+        self.schedule['time_of_day'] = parsed_time
+        
+        # Display schedule summary
+        day_display = 'daily' if self.schedule.get('day_of_week') == 'any' else self.schedule.get('day_of_week', 'daily')
+        time_display = 'any time' if self.schedule.get('time_of_day') == 'any' else self.schedule.get('time_of_day', 'any time')
+        print(f"  + Schedule: {day_display} at {time_display}")
+    
+    def _parse_time_input(self, time_input: str) -> str:
+        """
+        Parse various time formats to HH:MM format for the API.
+        
+        Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, 2:00 PM, etc.
+        Returns: HH:MM format string, or 'any' for any time
+        """
+        if not time_input:
+            return 'any'
+        
+        time_input = time_input.upper().strip()
+        
+        # Check for AM/PM indicator
+        is_pm = 'PM' in time_input
+        is_am = 'AM' in time_input
+        
+        # Remove AM/PM for parsing
+        time_clean = time_input.replace('AM', '').replace('PM', '').strip()
+        
+        hour = 0
+        minute = 0
+        
+        if ':' in time_clean:
+            # Format like 2:00, 02:00, 14:00
+            parts = time_clean.split(':')
+            try:
+                hour = int(parts[0])
+                minute = int(parts[1]) if len(parts) > 1 else 0
+            except ValueError:
+                return 'any'  # Invalid format
+        else:
+            # Format like 2, 02, 14
+            try:
+                hour = int(time_clean)
+                minute = 0
+            except ValueError:
+                return 'any'  # Invalid format
+        
+        # Apply AM/PM conversion
+        if is_pm and hour < 12:
+            hour += 12
+        elif is_am and hour == 12:
+            hour = 0
+        
+        # Validate range
+        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+            return 'any'
+        
+        return f"{hour:02d}:{minute:02d}"
+    
+    def _step6_confirm_and_apply(self) -> None:
+        """Confirm settings and apply to selected sites."""
+        print("")
+        print("-" * 70)
+        print("  STEP 6: Confirm and Apply")
+        print("-" * 70)
+        print("")
+        # Display schedule summary
+        day_display = self.schedule.get('day_of_week') or 'daily'
+        time_display = self.schedule.get('time_of_day') or 'any time'
+        
+        print("  Summary:")
+        print(f"    Sites: {len(self.selected_sites)}")
+        print(f"    Models configured: {len(self.custom_versions)}")
+        for model, version in sorted(self.custom_versions.items()):
+            print(f"      {model}: {version}")
+        print(f"    Schedule: {day_display} at {time_display}")
+        print("")
+        
+        try:
+            confirm = InputUtils.safe_input("  Apply these settings? (y/N): ", context="auto_upgrade_config").strip().lower()
+        except SystemExit:
+            return
+        
+        if confirm not in ('y', 'yes'):
+            print("  Cancelled.")
+            return
+        
+        # Build auto-upgrade configuration
+        # API: day_of_week and time_of_day use 'any' for daily/any time
+        auto_upgrade = {
+            "enabled": True,
+            "version": "custom",
+            "custom_versions": self.custom_versions,
+            "day_of_week": self.schedule.get('day_of_week', 'any'),
+            "time_of_day": self.schedule.get('time_of_day', 'any')
+        }
+        
+        settings = {"auto_upgrade": auto_upgrade}
+        
+        print("")
+        print("  Applying configuration...")
+        print(f"  DEBUG: auto_upgrade payload = {auto_upgrade}")  # DEBUG
+        
+        successful = 0
+        failed = 0
+        
+        for site in self.selected_sites:
+            site_id = site['id']
+            site_name = site.get('name', 'Unknown')
+            
+            try:
+                mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+                print(f"    [OK] {site_name}")
+                successful += 1
+            except Exception as e:
+                print(f"    [FAIL] {site_name}: {e}")
+                logging.error(f"Failed to configure auto-upgrade for site {site_name}: {e}")
+                failed += 1
+        
+        print("")
+        print("=" * 70)
+        print("  CONFIGURATION COMPLETE")
+        print("=" * 70)
+        print(f"    Successful: {successful} site(s)")
+        if failed > 0:
+            print(f"    Failed: {failed} site(s)")
+        print("")
+
+
 class OrgLevelAPFirmwareUpgrader:
     """
     Org-Level AP Firmware Upgrade Manager
@@ -41174,7 +41725,8 @@ class OrgLevelAPFirmwareUpgrader:
                 for stat in stats_data:
                     # Stats returns 'mac' as identifier, inventory also has 'mac'
                     mac = stat.get('mac')
-                    version = stat.get('version', 'Unknown')
+                    # Use 'or' to handle None values (not just missing keys)
+                    version = stat.get('version') or 'Unknown'
                     if mac:
                         self.ap_versions[mac] = version
             
@@ -41182,13 +41734,14 @@ class OrgLevelAPFirmwareUpgrader:
             version_counts = {}
             for ap in self.all_aps:
                 mac = ap.get('mac')
-                version = self.ap_versions.get(mac, 'Unknown')
+                version = self.ap_versions.get(mac) or 'Unknown'
                 if version not in version_counts:
                     version_counts[version] = 0
                 version_counts[version] += 1
             
             print("  + Current firmware distribution:")
-            for version, count in sorted(version_counts.items(), reverse=True):
+            # Sort by version string, handling None safely
+            for version, count in sorted(version_counts.items(), key=lambda x: x[0] or '', reverse=True):
                 print(f"      {version}: {count} device(s)")
             
             return True
@@ -45483,6 +46036,11 @@ menu_actions = {
     # MSP OPERATIONS
     # ==============================
     "117": (MSPInventoryExporter.execute, "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP privileges via --login)"),
+    
+    # ==============================
+    # SITE AUTO-UPGRADE CONFIGURATION
+    # ==============================
+    "118": (SiteAutoUpgradeConfigurator.execute, "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites (all sites, single, list, or range)"),
     
     # ==============================
     # MAPS MANAGER (External Module)
