@@ -1,0 +1,2672 @@
+Juniper Mist Location Services Guide
+Published
+2025-12-04
+Juniper Networks, Inc.
+1133 Innovation Way
+Sunnyvale, California 94089
+USA
+408-745-2000
+www.juniper.net
+Juniper Networks, the Juniper Networks logo, Juniper, and Junos are registered trademarks of Juniper Networks, Inc.
+in the United States and other countries. All other trademarks, service marks, registered marks, or registered service
+marks are the property of their respective owners.
+Juniper Networks assumes no responsibility for any inaccuracies in this document. Juniper Networks reserves the right
+to change, modify, transfer, or otherwise revise this publication without notice.
+ Juniper Mist Location Services Guide
+Copyright © 2025 Juniper Networks, Inc. All rights reserved.
+The information in this document is current as of the date on the title page.
+YEAR 2000 NOTICE
+Juniper Networks hardware and software products are Year 2000 compliant. Junos OS has no known time-related
+limitations through the year 2038. However, the NTP application is known to have some difficulty in the year 2036.
+END USER LICENSE AGREEMENT
+The Juniper Networks product that is the subject of this technical documentation consists of (or is intended for use
+with) Juniper Networks software. Use of such software is subject to the terms and conditions of the End User License
+Agreement ("EULA") posted at https://support.juniper.net/support/eula/. By downloading, installing or using such
+software, you agree to the terms and conditions of that EULA.
+ii
+Table of Contents
+1 Get Started
+Juniper Mist Location Services Overview | 2
+Activate Subscriptions | 7
+APs for Location Services | 8
+AP Placement for Location Services | 9
+AP Deployment Assessment | 11
+2 BLE Settings
+Enable Bluetooth Based Location Services | 21
+BLE Beacons | 22
+Change the BLE Power Settings for Access Points | 24
+Change the BLE and vBLE Power Settings for an AP | 24
+Change the Power Settings for Multiple APs as a Batch | 26
+BLE Power Settings for Juniper Access Points | 27
+3 Floorplan Setup
+Floorplan Setup Overview | 30
+Deploy Mist with Ease using Wireless Design Tools | 31
+Requirements and Considerations | 33
+Match APs in the Project Files to Your Physical Mist APs | 34
+Export Ekahau Design Files and Import them to Mist | 34
+Export Hamina Design Files for Automatic Import to Mist | 35
+Automatically Import Mist Floorplans to Hamina | 37
+Export iBwave Design Files and Import them to Mist | 37
+Add Wayfinding Paths to a Floorplan | 38
+iii
+Add Walls to Improve Wayfinding | 40
+Add Exclusion Zones to Improve Wayfinding | 41
+Add Other Items to a Floorplan | 43
+Add Third-Party Beacons to a Floorplan | 43
+Add Location Zones to a Floorplan | 47
+Auto Zone: Add Location Zones to a Floorplan (BETA) | 48
+Add Proximity Zones to a Floorplan | 51
+Add Virtual Beacons to a Floorplan | 54
+Validate Your Floorplan | 57
+4 Wayfinding and User Engagement
+Wayfinding Use Case | 61
+AR and VR Wayfinding Use Case | 63
+Hybrid Use Case | 65
+Daisy-Chain BT11 APs | 68
+Configure Push Notifications for User Engagement | 70
+5 Asset Visibility and Room Occupancy
+View and Manage BLE Clients | 75
+Prerequisites | 75
+Find the BLE Clients Page | 76
+Filter the Data | 77
+Adjust the Columns | 78
+Add, Modify, or Remove Assets | 78
+Create Named Assets | 79
+Select BLE Clients to Name | 79
+Use a Filter to Generate a Common Name for Similar Assets | 81
+iv
+Use a CSV File to Assign Names to Assets | 81
+Create Asset Filters | 82
+Import Assets | 85
+Guidelines for BLE Beacon Tags | 86
+Rubber Band Model | 87
+Find Equipment Use Case | 88
+Room Utilization Use Case | 91
+Find the Current Location of a Named Asset | 93
+6 Analytics
+Analytics Overview | 96
+MAC Randomization and Location Analytics | 96
+7 Location-Based Application Development
+Juniper Mist SDK | 100
+Webhooks for Location Services | 101
+8 Troubleshoot Location Services
+Location SLEs | 105
+Overview | 105
+Location SLE Blocks | 106
+Search in Live View | 110
+Troubleshoot Location Services Using the RF Environment | 112
+Verify and Enable the vBLE Array | 116
+Check Your Site's Beam Density Coverage | 117
+Troubleshoot the Juniper Mist SDK | 120
+Troubleshoot Incorrect Latitude and Longitude (SDK) | 122
+Marvis Client and Location Services Integration for Troubleshooting | 126
+v
+Other Troubleshooting Tips for Location Services | 127
+vi
+1
+CHAPTER
+Get Started
+IN THIS CHAPTER
+Juniper Mist Location Services Overview | 2
+Activate Subscriptions | 7
+APs for Location Services | 8
+AP Placement for Location Services | 9
+AP Deployment Assessment | 11
+Juniper Mist Location Services Overview
+SUMMARY
+Get familiar with the major components of locationbased services to understand how Juniper Mist™
+ensures location accuracy for wayfinding, asset
+visibility, and user engagement.
+IN THIS SECTION
+How It Works: vBLE Antenna Array | 2
+How It Works: Probability Surfaces | 3
+How It Works: Indoor Location
+Experiences | 4
+Use Cases | 5
+Wayfinding | 5
+Asset Visibility | 6
+User Engagement | 6
+What's Next? | 7
+Virtual Bluetooth LE (vBLE) is a patented technology for indoor Location Services, using virtual beacons
+to locate BLE devices with great precision. Juniper Networks access points (APs) use a dynamic 8-
+directional antenna array that blankets an area with BLE signals and is capable of both transmitting and
+receiving BLE signals.
+Virtual beacons are an efficient alternative when compared to physical beacons in terms of time and
+cost savings. With virtual beacons, there is no need to install and configure physical beacons, no need
+for site surveys, and no need for additional hardware. This makes for simpler, more efficient
+deployments and makes adding and moving vBeacons a hassle-free experience, as you configure
+everything from the Juniper Mist™ portal.
+Video: Location Services with Mist
+How It Works: vBLE Antenna Array
+Juniper Mist APs transmit BLE signals using an 8-element directional vBLE antenna array.
+2
+Figure 1: vBLE Antenna Array
+Video: Location - How it Works
+How It Works: Probability Surfaces
+When your customer or visitor uses your Juniper Mist SDK-enabled application, the Juniper Mist cloud
+uses probability surfaces to determine the user's location. Probability surfaces provide the best possible
+location accuracy with sub-second latency.
+The Juniper Mist cloud uses the RF fingerprints sent by the SDK client to create probability surfaces.
+This is done by splitting the floorplan up into 1-meter squares and calculating the estimated RF
+fingerprints for each square.
+Each of the AP’s eight directional beams contribute to the likely location of the client device, examining
+all the probability surfaces (one for each beam) and combining them to find the likely point on the map
+where the device is located.
+In this example, the center of the red area is the peak of the surface and the highest probability of the
+client's location. The blue area depicts the lowest area of the surface and the least probability of the
+client's location.
+3
+As the SDK client sends RF fingerprints to the Juniper Mist cloud, Juniper Mist enters the machine
+learning process, and the location model is optimized for that device.
+How It Works: Indoor Location Experiences
+The Juniper Mist SDK provides the tools that you need for building customer-facing applications that
+deliver indoor location services. When you integrate the Juniper Mist SDK with Juniper Mist Wi-Fi and
+location-based services, you can determine a user's location and deliver proximity-based notifications
+using Juniper Mist's patented vBLE Technology.
+SDK-integrated mobile devices listen for and receive the Bluetooth Low Energy (BLE) packets that are
+transmitted by the APs. The information in these packets gets packaged up by the SDK client and sent
+to the Juniper Mist cloud. Finally, the cloud returns the x,y coordinates to the mobile device every
+second based on the information that it received.
+For more information, see "Juniper Mist SDK" on page 100.
+Your application uses this information to provide relevant experiences, such as wayfinding directions
+and push notifications.
+4
+Figure 2: How Mist Shows User Location With vBLE
+Video: Modern RF Glass
+Use Cases
+Juniper Mist supports many location-based use cases. A few possibilities are described below.
+Wayfinding
+Wayfinding is just like the Google and Apple Maps experience, navigating you from point A to point B.
+Picture a retail location. A customer is shopping at a store, and they have the retailer’s mobile
+application on their cell phone. APs transmitting BLE are located all over the store. If you integrate the
+SDK into your customer-facing app, you can support wayfinding. The retail customer can search for an
+item and then be guided turn by turn to the location of the item within the store.
+For more information, see "Wayfinding Use Case" on page 61.
+Video: Wayfinding Use Case
+5
+Asset Visibility
+Quickly locate assets such as electronics and equipment. To support asset tracking, you attach BLE
+beacon tags to the assets that you want to track. When the AP hears the BLE transmission from the tag,
+it locates that asset on the Live View in the Juniper Mist portal. Staff at a hospital can use this feature to
+track down the location of medical equipment, such as wheelchairs.
+For more information, see "Find Equipment Use Case" on page 88.
+Figure 3: Asset Tracking Example
+Figure 3 on page
+6
+Video: User Experiences with Location Services Webinar
+User Engagement
+When a site visitor enters a virtual beacon's coverage area, the Location Engine sends a push
+notification to display a greeting. One example of this is when a person enters through the front door of
+an office building and a redirect link to the company homepage is sent to their device.
+6
+Figure 4: User Engagement Example
+Video: Juniper Mist User Engagement Demo
+What's Next?
+• Obtain and activate your subscriptions. See "Activate Subscriptions" on page 7.
+• Select your APs. See "APs for Location Services" on page 8.
+• Place your APs to ensure full BLE coverage. See "AP Placement for Location Services" on page 9.
+• Set up your floorplan to ensure location accuracy. See "Floorplan Setup Overview" on page 30.
+• Implement your use cases.
+For example, see:
+• "Wayfinding Use Case" on page 61
+• "Find Equipment Use Case" on page 88
+Activate Subscriptions
+SUMMARY
+7
+To implement location services for your organization, purchase the appropriate subscriptions, and
+activate them.
+Decide which Mist AI and Cloud Services you need, and then contact MistRenewal@juniper.net to
+purchase them. For location-based services, relevant subscriptions include:
+• Juniper Mist Asset Visibility
+• Juniper Mist Premium Analytics
+• Juniper Mist User Engagement
+After you purchase a subscription, Juniper emails the activation code(s) to you.
+To activate a subscription:
+1. From the left menu of the Juniper Mist portal, select Organization > Subscriptions.
+2. Click Apply Activation Code.
+3. Enter the code.
+4. Click Activate.
+APs for Location Services
+SUMMARY
+Get familiar with the access points (APs) that you can use with Juniper Mist™ Location Services.
+The following access points include Juniper's patented virtual Bluetooth Low Energy (vBLE) technology:
+• Indoor access points: AP45, AP43, AP41, AP33, and AP21
+• Outdoor access points: AP63 and AP61
+• BLE only: BT11
+8
+NOTE: You can use the BT11 to ensure full BLE coverage in areas where you don’t need
+an AP for Wi-Fi coverage.
+Compare these access points at Juniper.net.
+AP Placement for Location Services
+SUMMARY
+Learn the do's and don'ts to ensure location accuracy when planning and installing access points (APs)
+at your site.
+To ensure the best possible accuracy and stability, follow these guidelines:
+• Mount the access points (APs) on the ceiling, with the LED facing the floor.
+Example
+• Ceiling mounting results in the best directionality for the Bluetooth Low Energy (BLE) beams.
+• If ceiling mounting isn’t possible and you must mount the AP on a wall, pole, column, or similar
+structure, use brackets to position the AP with the LED facing the floor.
+• Ensure that the AP is 9 to 15 feet (2.7 to 4.5 meters) above the floor.
+• The height requirement ensures that BLE clients receive a strong received signal strength
+indicator (RSSI) and the best possible directionality for the BLE beams.
+• If you need to install APs in an area with ceilings higher than 15 feet, consult with a sales
+engineer.
+• We do not recommend above-ceiling mounting. Again, consult with a sales engineer.
+• Each AP should have an unobstructed line of sight to at least two other APs.
+• Optimal BLE range is a radius of approximately 15 meters (49 feet) from the AP.
+9
+• Install APs within 10 to 15 meters (32 to 49 feet ) of one another.
+• For wayfinding, be sure to provide coverage at junction points and corners.
+• Don't place APs any closer than 8 meters (26 feet) in the same room or space. Closer placement
+offers no benefit in terms of coverage and could cause interference.
+NOTE: If APs are in different rooms, separated by a wall, close placement doesn't pose
+an issue.
+• For corners, hallways, and areas where you need only BLE and not Wi-Fi services, consider using
+Juniper BT11 access points.
+• Don't install an AP:
+• Behind, inside, or on top of other objects.
+• On the floor.
+• Next to metal, glass, or concrete.
+10
+AP Deployment Assessment
+SUMMARY
+Do you have enough access points (APs) at your site?
+Assess your deployment by using Marvis Actions,
+Wireless Service Level Expectations (SLEs), and the
+RF Health and Utilization dashboard in Premium
+Analytics.
+IN THIS SECTION
+Overview | 11
+Juniper Mist Tools | 12
+Wireless SLE Analysis | 14
+RF Health and Utilization Dashboard in
+Premium Analytics | 16
+Recommendations | 18
+Overview
+Determine if you need more APs for optimal connectivity and user experience. Consider our
+recommendations as you optimize your deployment.
+Methodology
+Use the following tools and features to conduct the assessment:
+• Marvis Actions: Utilize Marvis, the virtual network assistant, to analyze network issues, troubleshoot
+problems, and optimize performance.
+• Wireless SLE: Monitor key performance indicators related to coverage, roaming, throughput, and
+capacity to gauge the effectiveness of the current AP deployment.
+• RF Health and Utilization dashboard in Premium Analytics: Evaluate the radio frequency (RF) health,
+interference, and utilization to identify potential areas of improvement in the wireless network.
+Assessment Criteria
+The assessment will focus on the following aspects:
+1. Signal Coverage: Analyze the signal strength and quality across the site to ensure comprehensive
+coverage and minimal dead zones.
+11
+2. Roaming Performance: Assess the seamless transition of client devices between APs to maintain
+uninterrupted connectivity.
+3. Throughput Analysis: Evaluate the data transfer speeds and capacity to accommodate the expected
+user load and application demands.
+4. RF Health and Utilization: Monitor RF health, interference, and spectrum utilization to optimize the
+performance of the wireless network.
+Juniper Mist Tools
+Juniper Mist™ is a subscription-based service. For more details about Juniper Mist subscriptions, see
+Juniper Mist Subscriptions and Subscription Requirements for Marvis Actions.
+Marvis Actions
+In order to ensure optimal network performance and coverage, it is essential to regularly assess the
+sufficiency of the APs in your network. By leveraging the Marvis Actions in Juniper Mist portal, you can
+efficiently identify and address any issues affecting your APs.
+To view the Marvis Actions dashboard, select Marvis > Marvis Actions from the left menu.
+When you click the Wireless button on the Actions dashboard, you'll see a list of all available actions.
+You can then click an action to investigate further.
+Figure 5: Marvis Actions
+See Marvis Actions Overview for details.
+Offline AP Detection
+Marvis can detect APs that are offline due to various reasons, such as power loss or loss of cloud
+connectivity. This report indicates a need for further investigation or potential troubleshooting to
+restore connectivity.
+12
+Investigate the Offline AP action on the Actions dashboard to address any APs that are showing as
+offline. This report help in restoring network connectivity and ensuring seamless operation.
+If Marvis identifies multiple APs as offline, it signals the need for immediate attention to resolve the
+connectivity issues impacting network performance.
+Health Check Failures
+Health check failures reported by Marvis might indicate underlying hardware or software issues
+affecting APs within the network. Swift action is required to rectify these issues to prevent any network
+disruptions.
+Use the Health Check Failed action to investigate and address any APs experiencing health check
+failures. Consider hardware replacement or firmware upgrades as necessary steps to resolve the issue.
+An AP that continuously fails health checks might need to be replaced or have its firmware upgraded to
+ensure proper functioning within the network.
+Non-Compliant Firmware
+The Non-Compliant action flags APs running outdated firmware versions compared with other APs of
+the same model at the site. Updating firmware is crucial to ensure security, stability, and performance
+improvements.
+Upgrade the firmware of Non-Compliant APs from the Marvis Actions page to align with the latest
+version. This step helps in maintaining consistency across APs and mitigating potential vulnerabilities.
+A prompt upgrade of firmware on Non-Compliant APs can enhance network security and performance,
+ensuring all APs operate optimally within the network.
+Coverage Hole Detection
+The Coverage Hole action identifies areas within your network experiencing poor coverage, allowing
+you to optimize placement and configuration of APs to improve network efficiency.
+Utilize the floor plan visual provided by Marvis to pinpoint areas with coverage issues and take
+necessary steps such as adding APs, adjusting placements, or increasing power output to address the
+coverage gaps.
+13
+By identifying and resolving coverage holes promptly, you can enhance network connectivity and user
+experience, ensuring seamless communication across all areas.
+Insufficient Capacity Alert
+The Insufficient Capacity action detects capacity issues arising from increased utilization, especially
+during peak client traffic. Addressing capacity constraints is vital to maintain network performance and
+avoid congestion.
+Analyze the floor plan visual provided by Marvis to identify APs experiencing capacity issues and make
+design improvements to alleviate congestion and optimize network capacity.
+Wireless SLE Analysis
+Juniper Mist uses Service Level Expectations (SLEs) to measure user experiences, with customizable
+thresholds for factors like throughput, capacity, and device health. If experiences fall short, Juniper Mist
+identifies the root causes and provides detailed information for resolution. The SLE dashboard offers a
+quick overview of service levels and issues needing attention.
+See Wireless SLEs Dashboard for more information.
+Select Monitor > Service Levels from the left menu, and then click the Wireless button.
+14
+Use the following SLE to assess your users' experiences with signal strength, throughput, RF channel
+capacity, roaming between APs, and APs availability.
+1. Signal Coverage: Analyze the Received Signal Strength Indicator (RSSI) and signal quality data to
+identify areas with weak coverage or potential signal asymmetry.
+2. Roaming Performance: Evaluate the success rate of client device roams between APs and identify
+any issues related to latency or signal stability.
+3. Throughput Analysis: Assess the estimated per-client throughput and investigate any capacity or
+coverage-related constraints impacting user experience.
+4. Capacity Analysis: Review the RF channel capacity availability and potential limitations due to
+interference or client usage.
+15
+5. AP Health Status: Track AP health to assess your users' experience with AP availability. Get
+percentage of time the APs are operational without rebooting or losing connectivity to the cloud.
+RF Health and Utilization Dashboard in Premium Analytics
+The RF Health and Utilization dashboard provides long-term radio frequency (RF) health and utilization
+pattern for your network. With the information, you can analyze channel utilization trends for different
+radio bands across various sites, floors, and APs, ensuring optimal performance and capacity planning.
+In Juniper Mist portal, click Analytics > Premium Analytics. On the Premium Analytics page, click RF
+Health and Utilization.
+16
+Here you can analyze channel utilization trends for different APs.
+17
+SLE Coverage and Capacity: This report evaluates the SLE coverage and capacity across APs and sites,
+identifying sites with poor signal strength, high interference, or coverage gaps. By analyzing these
+metrics, you can determine where additional APs are needed to improve coverage and signal quality.
+Average Neighbor AP Count: This value indicates the average number of APs at the site that can detect
+each other. A high count signifies a dense deployment, while a low count indicates a sparse deployment.
+Ideally, the value should range between 3 and 5 for optimal performance.
+Average Co-Channel Neighbor Count: This value represents the number of APs broadcasting on the
+same channel, averaged across all Juniper APs at the site. A high count suggests frequent co-channel
+interference on the site. While individual APs use Radio Resource Management (RRM) to mitigate
+interference, a high site-wide count points to broader density challenges.
+By using RF health and utilization data, you can make informed decisions about where to place new APs
+to balance the network load and enhance overall performance.
+See RF Health and Utilization for details.
+Recommendations
+Based on the assessment findings, the following recommendations are proposed:
+• Optimize the placement and configuration of existing APs to improve signal coverage and address
+any identified dead zones. For help placing APs for location services, see the Juniper Mist Location
+Service Guide.
+• Implement recommended actions provided by Marvis to address ongoing network issues and
+enhance overall network performance.
+• Consider the deployment of additional APs in areas with high client density or limited coverage to
+improve user experience and accommodate growing demand.
+• Mitigate any identified RF interference sources and optimize spectrum utilization to ensure a healthy
+RF environment for the wireless network. For help with radio management, see the Juniper Mist
+Wireless Assurance Guide.
+Regularly monitoring and addressing the actions highlighted by Marvis can help you maintain an efficient
+and reliable network infrastructure. This action ensures that the deployed APs are functioning optimally
+and meet the demands of your network environment.
+RELATED DOCUMENTATION
+Wireless Actions
+18
+AP Placement for Location Services
+RF Health and Utilization
+19
+2
+CHAPTER
+BLE Settings
+IN THIS CHAPTER
+Enable Bluetooth Based Location Services | 21
+BLE Beacons | 22
+Change the BLE Power Settings for Access Points | 24
+Enable Bluetooth Based Location Services
+SUMMARY
+Set up your site configuration to enable Virtual Bluetooth LE (vBLE) and related options that are
+required to support various location-based services.
+Virtual Bluetooth LE (vBLE) enables businesses to deliver location-based services to their customers and
+employees. Juniper Networks Access Points (APs) use a dynamic 8-antenna array that transmits BLE
+signals and blankets an entire area with BLE.
+Enable vBLE Engagement if you want the vBLE antenna array to transmit BLE signals for indoor location
+wayfinding. This comes in handy in a retail setting, for example, when a customer in a store needs
+directions for how to get to a particular department.
+Enable Asset Visibility if you also want to use the APs for asset tracking. When you enable Asset
+Visibility, the AP will listen for and locate devices containing BLE tags. This comes in handy for tracking
+equipment, monitoring occupancy, or analyzing staffing.
+You can enable vBLE Engagement and Asset Visibility in the site configuration or the device profiles in
+the Juniper Mist portal. In this procedure, you'll enable them at the site level.
+To enable Bluetooth Based Location Services:
+1. From the left menu of the Juniper Mist portal, select Organization > Site Configuration.
+2. Select the Site where you want to enable location-based services.
+3. Scroll down to Bluetooth based Location Services.
+4. Select the vBLE Engagement check box.
+This enables the vBLE array for all APs at this site; all APs will transmit BLE signals for location
+wayfinding.
+5. (Optional) Select the App Wakeup check box if you want the AP to transmit a ninth omni beam
+("super beacon").
+21
+For example, a retailer might want “super beacons” at the front of a store. When customers enter,
+they get a notification on the retailer’s Mist SDK-enabled mobile application. There are many other
+use cases that you can implement based on your business goals.
+6. (Optional) Select the Asset Visibility check box if you want to use the APs to track assets.
+Note:
+• When you enable Asset Visibility, the APs listen for BLE signals and will indicate the location of
+these BLE clients and assets on the Live View.
+• If you enable both vBLE Engagement and Asset Visibility, the AP must transmit and receive BLE
+signals. To optimize performance, enable only the features that you need for your use cases.
+The following table shows how your selections affect the rate at which the AP sends data to the
+Juniper Mist cloud.
+Table 1: Transmission Rates
+Location Service Enabled Transmission Rate
+Both vBLE Engagement and Asset Visibility Every 2 seconds
+Only vBLE Engagement Every second
+Only Asset Visibility Every 2 seconds
+BLE Beacons
+SUMMARY
+Enable virtual beacons that communicate to Apple and Android devices.
+Virtualized Bluetooth® Low Energy (vBLE) beaconing technology allows exact calculations for locating
+BLE-enabled devices. Juniper Mist access points (APs) use this technology and can simulate third-party
+beacons to locate devices containing BLE sensors. Beacons can be broadcast with different payload
+structures.
+22
+Juniper Mist APs broadcasts three types of beacons:
+• iBeacon–iBeacon is a protocol Apple developed that mobile devices use that allows the device to act
+as a Bluetooth transmitter. When the device gets within range of an AP broadcasting iBeacon, the AP
+detects the device signal and then uses the installed mobile application to trigger an action or push a
+notification to the user’s mobile device. Both iOS and Android devices can use iBeacon.
+• Eddystone UID–Eddystone (Unique beacon ID) UID is a protocol that Google developed. It allows
+mobile devices to act as Bluetooth transmitters. When the device is within range of an AP
+broadcasting Eddystone UID, the AP detects it and uses an installed mobile application to trigger an
+action on the mobile device. Both iOS and Android devices can use Eddystone UID.
+• Eddystone URL–Eddystone URL is a protocol that Google developed. When a device is within range
+of an AP broadcasting Eddystone-URL, the AP will detect it and send a URL from the web in the form
+of a notification to the mobile device. A mobile application is not needed for this to work. Eddystone
+URL is compatible only with Android devices.
+1. From the left menu of the Juniper Mist portal, select Access Points.
+2. Select the Access Point that is going to broadcast BLE beacons.
+3. Scroll down to the BLE Settings configuration block.
+4. Select Enable for each type of BLE beacon you want to broadcast, and then update the payload
+according to the payload structure.
+5. Click Save (in the top right corner).
+NOTE: To verify that the beacons are broadcasting, you can use the Beacon Simulator
+Application. You can download the app from the Apple App Store or from the Google
+Play Store. Make sure to turn on Bluetooth on your mobile device prior to using the
+app.
+23
+Change the BLE Power Settings for Access Points
+SUMMARY
+When needed, you can adjust an access point's
+Bluetooth Low Energy (BLE) and Virtual Bluetooth
+Low Energy (vBLE) power levels.
+IN THIS SECTION
+Change the BLE and vBLE Power Settings for
+an AP | 24
+Change the Power Settings for Multiple APs
+as a Batch | 26
+BLE Power Settings for Juniper Access
+Points | 27
+It's rarely necessary to change the BLE power settings for an access point (AP). Typically, you would
+change them only if you want to fine-tune the location-based services at your site.
+You can change these settings for a single AP or for multiple APs as a batch.
+• "Change the BLE and vBLE Power Settings for an AP" on page 24
+• "Change the Power Settings for Multiple APs as a Batch" on page 26
+Change the BLE and vBLE Power Settings for an AP
+Follow these steps if you need to adjust only one AP.
+1. From the left menu of the Juniper Mist™ portal, select Access Points.
+2. Click the AP that you want to adjust.
+3. Under BLE Settings, drag the BLE Beacon Power slider left (lower power) or right (higher power).
+24
+4. Under vBLE Array, drag the VBLE Beacon Power slider left (lower power) or right (higher power).
+25
+The power level options are from Level 1 (the lowest power) up to Level 7 (the highest power). The
+corresponding transmission power (in dBm) varies for each AP model. For more information, see "BLE
+Power Settings for Juniper Access Points" on page 27.
+5. Click Save (near the top right corner of the page).
+Change the Power Settings for Multiple APs as a Batch
+Follow these steps if you want several APs to have the same BLE and vBLE power levels.
+1. From the left menu of the Juniper Mist portal, select Access Points.
+2. Select the check boxes for the APs that you want to adjust.
+3. Click More, and then click Batch Edit.
+4. Drag the Set Beacon Power control left (lower power) or right (higher power).
+26
+The power level options are from Level 1 (the lowest power) up to Level 7 (the highest power). The
+corresponding transmission power (in dBm) varies for each AP model. For more information, see "BLE
+Power Settings for Juniper Access Points" on page 27.
+5. If you want these same settings to apply to vBLE on the selected APs, enable Virtual BLE Array.
+6. Click OK.
+BLE Power Settings for Juniper Access Points
+SUMMARY
+Understand the meaning of power levels 1-6 on your Juniper access points (APs).
+Table 2: BLE Power Settings for BT11, AP41-US, and AP61-US
+Level Power
+6 12 dBm
+27
+Table 2: BLE Power Settings for BT11, AP41-US, and AP61-US (Continued)
+Level Power
+5 8 dBm
+4 4 dBm
+3 0 dBm
+2 -4 dBm
+1 -8 dBm
+Table 3: BLE Power Settings for AP21, AP33, AP41-WW, AP43, AP45, AP61-WW, and AP63
+Level Power
+6 9 dBm
+5 5 dBm
+4 1 dBm
+3 -3 dBm
+2 -7 dBm
+1 -11 dBm
+28
+3
+CHAPTER
+Floorplan Setup
+IN THIS CHAPTER
+Floorplan Setup Overview | 30
+Deploy Mist with Ease using Wireless Design Tools | 31
+Add Wayfinding Paths to a Floorplan | 38
+Add Other Items to a Floorplan | 43
+Validate Your Floorplan | 57
+Floorplan Setup Overview
+SUMMARY
+Understand the importance of floorplans and get
+familiar with the process of adding them to your
+sites.
+IN THIS SECTION
+Importance of the Floorplan | 30
+Video Overview | 30
+Process Overview | 30
+Importance of the Floorplan
+The floorplan is an essential component of location services. Your floorplan provides Juniper Mist™ with
+accurate information about the site and the access points (APs).
+An accurate floorplan enables the location engine to generate accurate location estimates for the client
+devices, assets, and users at your site.
+The floorplan must be correctly scaled, must include all APs, and must correctly represent their
+positions, heights, and orientations. If an AP is installed at your site but not represented on the
+floorplan, it does not participate in location services.
+Video Overview
+Video: Adding a Floorplan
+Process Overview
+To implement the scenario, do these tasks.
+30
+Table 4: Floorplan Setup Process
+Step Action More Information
+1 Add your floorplans, scale them, and add
+your access points to your floorplans.
+See these topics in the Onboarding Section
+of the Wireless Guide:
+• Adding and Scaling a Floorplan
+• Adding Access Points to a Floorplan
+3 Add other elements as needed for the use
+cases that you're implementing.
+See the use cases chapters of this guide
+and the other sections of this Floorplan
+Setup chapter.
+4 Validate your floorplan. "Validate Your Floorplan" on page 57
+Deploy Mist with Ease using Wireless Design Tools
+SUMMARY
+Read this topic to learn how you can use wireless
+design tools to easily import floorplans and related
+attributes into the Juniper Mist™ portal.
+IN THIS SECTION
+Requirements and Considerations | 33
+Match APs in the Project Files to Your
+Physical Mist APs | 34
+Export Ekahau Design Files and Import them
+to Mist | 34
+Export Hamina Design Files for Automatic
+Import to Mist | 35
+Automatically Import Mist Floorplans to
+Hamina | 37
+Export iBwave Design Files and Import them
+to Mist | 37
+You can manually import a floorplan and related attributes into the Juniper Mist™ portal simply by
+importing the files you already created in wireless design tools such as Ekahau Pro, iBwave, and Hamina.
+31
+Wireless design tools provide a one-stop-shop for all of your floorplan and building design needs. They
+enable you to design your floorplan and related aspects such as access point (AP) placement, AP
+orientation, channel settings, and more. Importing the resulting files saves you time, as the design work
+you have already done in your project within the design tool automatically carries over when you import
+the file into Mist. Using these completed floorplan maps reduces duplication of effort.
+Hamina also offers an integration with the Mist cloud API that enables automatic import of floorplan
+designs into Mist. Once you provide your Mist API key, simply export your floorplan designs from the
+third-party tool and they carry over automatically to Mist. Hamina uses the export function to drive the
+automatic floorplan import to Mist.
+This topic demonstrates the following (in sequential order):
+• Manual Import: How to export design files from wireless design tools and how to manually import
+those files into Mist.
+• Automatic Import (with integrations): How to export design files from wireless design tools for
+automatic import to Mist.
+Each of the wireless design tools is introduced in their own sections of this topic.
+As part of the manual file import, Mist automatically:
+• Imports floorplan images from the file.
+• Sets the scale of the floorplan for you.
+• Imports any APs from the file along with their associated settings, as long as you have completed "AP
+Matching" on page 34.
+• Assigns the AP's x,y coordinates, height, and orientation.
+• Assigns the AP to a site if it has not already assigned to one. This requires Super User or Org
+Network Admin privilege.
+• Places the AP on a floorplan if it has not already been placed on a floorplan.
+• Names the AP if it has not already been named in the wireless design tool. Otherwise, the name
+given in the design tool is carried over as part of the import.
+NOTE: The import action in Mist never changes an AP's assigned site, name, or floorplan
+if one has already been assigned in the design tool.
+Mist currently allows you to import a floorplan using the following file types:
+• Ekahau (.esx files)
+32
+• iBwave (.mist.ibwc files)
+• Hamina (there is no file type necessary for importing Hamina floorplans into Mist, as the items you
+select and export in Hamina are imported directly to Mist as part of the integration).
+The automatic file import from wireless network tools into Mist (via API integrations) includes the
+following:
+• Hamina:
+• Uploads the floorplan to Mist
+• Matches simulated APs from the Hamina project to the APs in Mist
+• Assesses Wi-Fi coverage needs
+• Scales the floorplan
+• Places the APs on the floorplan
+• Assigns APs to the site
+• Assigns AP names, height, orientation, MAC addresses, location, transmit power, channel, and
+channel width settings
+• Deploys new sites in Mist
+Requirements and Considerations
+To import a floorplan into Mist from a third-party project file, you must follow these requirements and
+keep the following information in mind:
+• • iBwave—You must use a minimum version of iBwave Wi-Fi 14.2 or a later.
+• Ekahau Pro—Survey data is not supported for file import. All survey data must be deleted from
+the project prior to importing into Mist.
+• Floorplan image size—The size of the floorplan file you import to Mist must be less than 8 MB
+(less than 1 MB is recommended).
+• You must "Match APs in the Project Files to Your Physical Mist APs" on page 34.
+33
+Match APs in the Project Files to Your Physical Mist APs
+Prior to using the Import Floorplan feature in Mist, you must match the simulated APs in the project files
+to your physical Mist APs. There are several ways to accomplish this:
+• • Match via MAC address—Within the project file, use the <apname> – <apmac> notation to name APs.
+• This is useful if you manually allocate APs ahead of time.
+• Alternatively, you can simply enter the MAC address of the AP name in the project file. This is
+demonstrated in the Ekahau video below. Use this method if you don’t want to name APs in
+Mist.
+• Match via AP name—Name the AP in the project file so that is matches the exact name of the AP
+within Mist.
+• This method is most commonly used in conjunction with the Mist AI Mobile App. The
+advantage is you can pick any AP at random out of the box, and then use the application to
+scan the QR code and enter a name at the time of installation. You do not need to pre-allocate
+APs. See No Link Title.
+• Match via CSV file—Name the AP in the project file, and also import a CSV file with AP name to
+MAC address mapping.
+• This is the most flexible and scalable method. It's especially useful when third-party contactors
+are used to install the APs, as they typically provide a spreadsheet with AP and serial number
+or mac address.
+• Manually match APs when you ingest the project files.
+• This method is only recommended for small deployments, as it is the most time consuming
+method.
+Export Ekahau Design Files and Import them to Mist
+Ekahau is a tool you can use to design your floorplan with granularity for network optimization. It
+enables you to design your floorplan and related devices so that it mirrors the real-world setup. You can
+export your Ekahau floorplan designs from within the tool and then manually import them into Mist.
+1. In Ekahau Pro, navigate to File > Save and save the .esx file which you will import to Mist in an
+upcoming step to a location on your local drive.
+2. df
+3. On the Mist portal, navigate to Location > Live View > Import Floorplan.
+34
+4. On the Import Floorplans window, drag and drop the.esx file you want to import and select any AP
+settings you want to include under More Options. See step 4 in Import a Floorplan for more details
+about what these options do.
+5. Click Import.
+6. To complete "AP Matching" on page 34, select the Match APs button, or click Finish if you are done.
+You should now see your floorplans have been imported along with any associated settings.
+The following videos provide a start-to-finish look at how to design and plan your network using
+Ekahau.
+Video: Create Your Floorplan Design in Ekahau
+Video: AP Placement in Ekahau for Indoor Location Wayfinding
+Video: AP Height and Orientation Considerations in Ekahau
+Video: RRM Planning in Ekahau
+Video: Import Your Ekahau Floorplan Design into Mist
+Export Hamina Design Files for Automatic Import to Mist
+The Hamina Planner is a web-based planning and design tool. It is integrated with Juniper Mist so that,
+when you export your floorplan design from Hamina, it is automatically imported to Mist. This is
+accomplished through Hamina's integration with the Mist cloud API.
+Prior to exporting your Hamina design files, ensure the following:
+• Your design includes:
+• Background map
+• Scaled layout
+• AP locations
+• AP model and type
+• BLE directionality
+• Height settings
+35
+• Walls and attenuating objects
+• Scope zones
+• AP naming is consistent:
+• Helps Mist match APs more easily during import
+• Optional: Preload MAC addresses if known
+1. In Hamina, select your project name from the drop-down menu in the top left corner, then select
+Export.
+2. Under the Juniper Mist section of the Export window, make the appropriate selections in the Region
+and Choose credentials fields. The credentials field is where you select your Mist API credentials. Or,
+you can click the three dots to the right of the field to enter a new API key. Refer to No Link Title if
+you need to obtain your Mist API Key.
+NOTE: The Mist API enables Hamina floorplan designs and AP settings to be brought
+over automatically to Mist.
+3. Select the appropriate Organization, Site, Floorplans, and APs to export, then click Export. This action
+sends all of the selections over to Mist.
+To see the export steps in action, watch the video under the Import & Export, Reimagined section of
+this blog.
+4. On the Mist portal, navigate to Location > Live View. You should see your floorplan imported from
+Hamina.
+NOTE: Additionally, when you create a new project in Hamina, you can choose Connect
+Infrastructure, then choose Juniper Mist and select your region and credentials. This
+automatically brings the floorplan you selected to the Live View page of the Mist portal
+along with any APs and related information.
+Watch the video below for a closer look into the power of the Juniper Mist and Hamina integration.
+Video: Future of Wi-Fi Tools
+36
+Automatically Import Mist Floorplans to Hamina
+On the flip side, you can import Juniper Mist floorplans and associated inventory into Hamina. Follow
+the instructions outlined in Import From Juniper Mist to Hamina to see how this is done.
+If you wish to make changes to a Mist floorplan you imported to Hamina, you can push those changes
+back to Mist by following the export steps in the section above.
+You can also see the steps for importing Mist Floorplans to Hamina in the second half of the video under
+the Import & Export, Reimagined section of this blog.
+Export iBwave Design Files and Import them to Mist
+iBwave is a wireless network design software that enables you to design floorplans and related aspects,
+ensuring an exceptional wireless experience in your buildings. You can export your iBwave floorplan
+designs from within the tool and then manually import into Mist.
+1. Complete the steps outlined in iBwave's Quick Start Guide to create a project in iBwave Express.
+2. In iBwave Express, navigate to File > Export > Export to MIST.
+3. Save the file to a location on your local drive.
+4. On the Mist portal, navigate to Location > Live View > Import Floorplan.
+5. On the Import Floorplans window, select the.mist.ibwc file you want to import and select any AP
+settings you want to be included under More Options. See step 4 in Import a Floorplan for more
+details about what these options do.
+6. Click Import.
+7. To complete AP matching, select the Match APs button, or click Finish if you are done.
+You should now see your floorplans have been imported.
+The following videos provide a start-to-finish look at how to design and plan your network using
+iBwave.
+Video: Create Your Floorplan Design in iBwave
+Video: Place APs on a Floorplan in iBwave
+Video: RRM Planning in iBwave
+Video: Import Your iBwave Floorplan Design into Mist
+37
+SEE ALSO
+No Link Title
+https://docs.hamina.com/planner/import-export/juniper-mist
+https://blog.hamina.com/hamina-wireless-x-juniper-integration-brings-network-design-andoperations-together
+https://support.ekahau.com/hc/en-us/articles/20294597049883-Ekahau-Juniper-Mist-DashboardIntegration-How-To-Guide
+Add Wayfinding Paths to a Floorplan
+SUMMARY
+Follow these steps to ensure successful wayfinding
+experiences by including wayfinding paths on your
+floorplans.
+IN THIS SECTION
+Add Walls to Improve Wayfinding | 40
+Add Exclusion Zones to Improve
+Wayfinding | 41
+In a Juniper Mist™ implementation, indoor location wayfinding paths are just like roads in a GPS
+navigation application. The wayfinding paths are the routes that users travel to reach their indoor
+destination, usually in the form of hallways, corridors, or intersections. You should be familiar with the
+physical space before you add wayfinding paths to the floorplan.
+NOTE: Wayfinding paths are not required for indoor location wayfinding. However, we
+strongly recommend that you configure these paths so that the blue dot on the user’s
+mobile app will snap to the path that you want users to follow. The blue dot will separate
+from the path when a user strays away.
+When creating a wayfinding path, follow these best practices:
+• Minimize the number of wayfinding paths on the floorplan. Draw a single, long path for a single
+hallway, for example. This approach reduces error and prevents gaps between paths. It also reduces
+the chance of the blue dot moving around jumpily while the user is on the path.
+• If you have multiple paths, make sure that they are truly connected and that no gaps exist. To avoid
+potential issues, draw paths so that they intersect one another.
+• Delete any excess segments or nodes by selecting them and then clicking Delete on your keyboard.
+38
+• Add paths for narrow walkway areas such as hallways, corridors, or any areas where your users need
+guidance.
+You do not need to add paths to open areas, such as a cafeteria. As users move around the area, the
+blue dot guides them toward nearby paths.
+Video: Adding Wayfinding Paths to a Floorplan
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Select the site and the floorplan.
+3. Click Wayfinding Paths.
+4. Under Drawing Tool on the right, click Insert Path.
+5. Start drawing your path, as follows:
+a. Click inside the floorplan to indicate the starting point of the path.
+b. Move to the next point that you want the path to include and click there to continue drawing the
+path.
+c. Click the last point drawn to finish drawing the path. This exits the drawing tool.
+NOTE: To replay the animation, refresh the web page.
+6. Fine-tune your paths.
+• If you added multiple lines, zoom in on the floorplan to verify that no gaps exist.
+• Add walls to keep the blue dot contained within a desired vicinity. For example, if there are walls
+around the room that a user is in, the blue dot will be contained within that space. Walls prevent
+39
+the blue dot from snapping to paths outside of an enclosed area. For more information, see "Add
+Walls to Improve Wayfinding" on page 40.
+• Add Exclusion Zones to indicate areas where you don't want the blue dot to go, such as restrooms
+and outdoor areas. For more information, see "Add Exclusion Zones to Improve Wayfinding" on
+page 41.
+7. Click Save.
+Add Walls to Improve Wayfinding
+SUMMARY
+Fine tune blue dot behavior in wayfinding applications by drawing walls on your floorplan.
+You can add walls to the floorplan to keep the blue dot contained within a desired vicinity. For example,
+if there are walls around the room that a user is in, the blue dot will be contained within that space.
+Walls prevent the blue dot from snapping to paths outside of an enclosed area.
+1. From the left menu of the Juniper Mist™ portal, select Location > Live View.
+2. Select the site and the floorplan.
+3. Click Wayfinding Paths.
+4. Under Drawing Tool on the right, click Insert Wall.
+5. Start drawing your wall, as follows:
+a. Click inside the floorplan to indicate the starting point of the wall.
+b. Move to the next point that you want the wall to include and click there to continue drawing the
+wall.
+c. Click the last point drawn to finish drawing the wall. This exits the drawing tool.
+40
+NOTE: To replay the animation, refresh the web page.
+• Make sure that the walls and the wayfinding paths do not intersect.
+• Do not block doorways with walls, or your app will not be able to lead your users through those
+doors. Make sure there is enough space for the blue dot to enter and exit as needed.
+6. Delete any excess segments or nodes by selecting them and then pressing Delete.
+7. Click Save.
+Add Exclusion Zones to Improve Wayfinding
+SUMMARY
+Further fine tune wayfinding experiences by identifying zones where you don't want the blue dot
+to appear.
+Add exclusion zones to indicate areas where you don't want the blue dot to go, such as restrooms and
+outdoor areas. Completely enclose these areas, without any gaps, so that the blue dot cannot enter the
+exclusion zone.
+1. From the left menu of the Juniper Mist™ portal, select Location > Live View.
+41
+2. Select the site and the floorplan.
+3. Click Wayfinding Paths.
+4. Under Drawing Tool on the right, click Insert Wall.
+5. Start drawing the boundaries of the exclusion zone, as follows:
+a. Click inside the floorplan to indicate the starting point of the exclusion zone.
+b. Move to the next point that you want to include and click there to continue drawing the exclusion
+zone.
+c. Click the last point drawn to finish drawing the exclusion zone. This exits the drawing tool.
+NOTE: To replay the animation, refresh the web page.
+• Enclose Exclusion Zones fully by overlapping the corners of the walls with one another as you
+draw them.
+• The blue dot will stop at the edge of the Exclusion Zone and cannot enter by any means. Juniper
+Mist will not collect data while a client or asset is within those areas.
+6. Delete any excess segments or nodes by selecting them and then pressing Delete.
+7. Click Save.
+42
+Add Other Items to a Floorplan
+IN THIS SECTION
+Add Third-Party Beacons to a Floorplan | 43
+Add Location Zones to a Floorplan | 47
+Auto Zone: Add Location Zones to a Floorplan (BETA) | 48
+Add Proximity Zones to a Floorplan | 51
+Add Virtual Beacons to a Floorplan | 54
+NOTE: Before adding items to a floorplan, ensure that it is accurately scaled. See Scale a
+Floorplan.
+You must add your access points to the floorplan. Only APs that are on the floorplan can participate in
+location-based services.
+You also can add many other items, including:
+• "Location zones" on page 47
+• Third-party beacons
+• Virtual beacons
+• Wayfinding paths, walls, and exclusion zones
+For details, continue to the next topics in this guide.
+Add Third-Party Beacons to a Floorplan
+SUMMARY
+43
+If you've installed battery-operated beacons to extend your BLE coverage, follow these steps to
+add them to your floorplan.
+Access point (AP) installation can be challenging in certain types of buildings or structures. One example
+is an atrium, where cabling might interfere with aesthetics. In this case, you can use third-party, batteryoperated beacons to help provide coverage.
+NOTE: 
+• To ensure location accuracy, always use Juniper Mist™ APs. Third-party beacons are
+not meant as a replacement for Juniper Mist APs. Third-party beacons can
+supplement Juniper Mist APs in Mist SDK-enabled wayfinding deployments where
+AP placement proves difficult.
+• Don't confuse third-party beacons with Juniper Mist's virtual beacons. Third-party
+beacons are physical, battery-operated beacons that exist onsite. You can deploy
+them to help provide coverage. Juniper Mist's virtual beacons, on the other hand, do
+not provide coverage. For more information about virtual beacons, see "Add Virtual
+Beacons to a Floorplan" on page 54.
+To add third-party beacons to a floorplan:
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Click the floorplan to which you want to add the third-party beacons.
+3. To ensure that the floorplan displays beacons:
+a. Click the Settings button (near the top right corner of the page).
+b. Select the Show 3rd Party Beacons check box.
+c. Close the Location Settings window.
+4. Click Beacons and Zones (above the map).
+44
+5. Click Add Beacon (above the map).
+The third-party beacon appears at the center of the floorplan. The icon is a black-and-white circle.
+Above the icon is the default name, Anonymous.
+6. Drag the new Anonymous beacon into the correct position on the floorplan.
+7. On the right side of the screen, under 3rd Party Beacons, select the check box for the new
+Anonymous beacon.
+8. Click Edit.
+9. Enter the information about the beacon:
+• For Type, select BLE Eddystone UID (required).
+• Enter a unique Name so that you can easily identify the various beacons that you add.
+• Ensure that the Namespace, Instance, and Mac Address fields contain the correct information.
+• Drag the Transmit Power slider left or right so that it shows the transmission power that is
+configured on the physical beacon.
+• Ensure that the X position and the Y position match the physical location of the beacon.
+45
+NOTE: Juniper Mist will neither manage the beacon nor detect its health.
+10. Click Save.
+Your third-party beacon is visible on the floorplan.
+The AI engine adds the beacon to the beams received. The engine uses the X,Y coordinates and
+transmission power to help calculate beacon location.
+46
+Add Location Zones to a Floorplan
+SUMMARY
+Follow these steps to identify areas of particular interest on your floorplan.
+Location zones are useful whether you're developing applications or using the occupancy and
+engagement analytics pages in the Juniper Mist™ portal.
+After you add location zones to a floorplan, you can use these zones in several ways.
+• On the Occupancy Analytics page, you can monitor each zone's occupancy.
+• On the Engagement Analytics page, you can analyze visitor and employee dwell times in each zone.
+• With API calls, you can capture every zone entry and exit event for client devices, assets, and SDK
+clients.
+• With your Juniper Mist SDK-enabled applications, you can trigger alerts when people enter and exit
+high-security zones.
+To add location zones to a floorplan:
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Select the site and the floorplan.
+3. Click Beacons and Zones.
+4. Click Add Location Zone.
+5. Drag the mouse to define the zone.
+Start from the top left corner of the area that you want to define. Release the mouse at the lower
+right corner of the area.
+47
+TIP: To replay the animation, refresh the page or open the image in a new tab.
+6. Give the zone a unique name:
+a. On the Location Zones list, select the check box for the zone.
+b. Click Edit.
+c. Enter a name.
+d. Click OK.
+7. Add other zones as needed.
+8. Click Save.
+Auto Zone: Add Location Zones to a Floorplan (BETA)
+Auto Zone automatically identifies location zones for you based on the boundaries of a given floorplan.
+This can be especially useful for large deployments containing a vast number of buildings and rooms, as
+48
+it automatically identifies and names the zones for you, thus allowing for more precise analytics to be
+gathered. For more information on location zones, see "Add Location Zones to a Floorplan" on page 47.
+Auto Zone identifies location zones on a floorplan via Juniper's AI-powered image segmentation models,
+which extract zone information directly from the floorplan and enable logical zone grouping. These
+models also provide insight into occupancy and traffic flow. For more information, see Occupancy
+Analytics Zone.
+NOTE: Auto Zone merely suggests location zones for you. You must make adjustments
+and finalize as you see fit.
+Prior to using Auto Zone, ensure the following:
+• Your floorplan is properly scaled. See Scale a Floorplan.
+• Your floorplan is as clean as possible. For example, when rooms are the only thing featured on the
+floorplan, and there is no additional clutter such as furniture or excessive lines, this ensures the most
+accuracy.
+• Clear all existing zones from the floorplan to avoid overlapping zones. You can do this from the list in
+the Location Zones tab to the right of the floorplan.
+To use Auto Zone:
+1. From the Juniper Mist portal, navigate to Location > Live View.
+2. Select the floorplan.
+3. Select the Beacons and Zones button.
+4. Select the Auto Zone button in the top right corner of the screen.
+5. At the bottom of the Auto Zone window, select Start Auto Zone.
+49
+6. Confirm that you want to start Auto Zone by selecting Yes from the pop-up window that appears.
+7. Once Auto Zone completes, review the zones, then select Accept or Reject. A pop-up window will
+appear asking you to confirm your action.
+8. If needed, adjust the proposed zones by physically dragging the corners of the zone with your
+mouse.
+9. Select the Location Zones tab to right of the floorplan to see the list of Location Zones that Auto
+Zone has created for you. You can remove and rename zones from here as needed.
+50
+a. To remove a zone from the floorplan, select the checkbox next to the zone name, then select the
+Remove button at the top.
+b. To rename a zone, simply select the name to highlight it from the righthand list, then click Edit at
+the bottom of the screen. Rename the zone, then select Save.
+NOTE: You can also select a zone from the floorplan and it will highlight the
+corresponding zone in the Location Zones list for you. This helps to ensure you have
+the correct zone selected before editing or removing. If your floorplan is pre-labeled
+with names, Auto Zone will automatically carry the zone names over for you.
+10. When you are done making changes, select the Save button in the top right corner of the screen.
+Add Proximity Zones to a Floorplan
+SUMMARY
+If you're implementing proximity tracing at your site, follow these steps to identify the areas that
+you want to monitor.
+You can create and use Proximity Zones to gather occupancy and engagement data for SDK clients,
+named assets, and connected and unconnected WiFi clients. Users can create individual or grouped
+Proximity Zones for each AP (access point). Proximity Zones triggering is based on the RSSI data
+received from the clients.
+When creating Proximity Zones, you can create:
+• An individual Proximity Zone per AP
+• Multiple Proximity Zones per AP
+• Grouped Proximity Zones per grouped APs
+After you add proximity zones to a floorplan, you can use these zones in several ways.
+• On the Occupancy Analytics page, you can monitor each zone's occupancy by selecting Client
+Density and Proximity Zones. Make sure to enable the Public Occupancy Dashboard in the site
+configuration.
+51
+• On the Engagement Analytics page, you can analyze visitor and employee dwell times in each zone.
+• With API calls, you can capture every zone entry and exit event for client devices, assets, and SDK
+clients. Make sure Proximity Zones is selected as the Streaming API under Webhooks in the site
+configuration.
+• With your Juniper Mist™ SDK-enabled applications, you can trigger alerts when people enter and
+exit high-security zones.
+To add proximity zones to a floorplan:
+1. From the left menu, select Location > Live View.
+2. Select the site and the floorplan.
+3. Click Beacons and Zones.
+4. Click Add Proximity Zone.
+5. Select the AP or group of APs that you want to be in the proximity zone.
+If you selected a group of APs, also select the Group APs into one proximity zone check box to add
+them all to a single proximity zone.
+6. Give the proximity zone a name.
+7. Set the RSSI threshold.
+52
+When a client reaches the indicated RSSI threshold or higher, an in_event is triggered. Similarly, if the
+client travels further away from the AP and the RSSI goes lower than the threshold, an out_event will
+occur.
+8. Click Create.
+You will see the proximity zone on the floorplan based on the information you provided.
+53
+9. Add other proximity zones as needed.
+Add Virtual Beacons to a Floorplan
+SUMMARY
+To send push notifications to your application users as they progress through your site, add virtual
+beacons to your floorplan.
+A virtual beacon is an object on the floorplan that you can use to trigger proximity-based events through
+your Juniper Mist™ SDK-enabled applications.
+Examples
+• At your building entrance: When visitors arrive, display a greeting on their mobile devices.
+• Inside a store: Offer coupons as shoppers pass special displays.
+• At a conference: Prompt attendees to download lecture slides when they enter a breakout room.
+54
+NOTE: A virtual beacon does not transmit or receive signals. It is purely virtual, for the
+purpose of defining a coverage area for a Juniper Mist SDK-enabled interaction.
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Click the site and the floorplan.
+3. Ensure that the floorplan is showing the virtual beacons and their coverage areas:
+a. Click the Settings button (near the top right corner of the page).
+b. In the pop-up window, select the check boxes for Show Virtual Beacons and Show Virtual
+Beacons Coverage.
+c. Close the pop-up window.
+4. Click Beacons and Zones.
+5. Add a virtual beacon:
+a. Click Add VBeacon.
+b. Drag the new Anonymous beacon to the area where you want the users to see the notification.
+c. As needed, add and position more virtual beacons.Click Save.
+55
+The floorplan shows the virtual beacons, surrounded by pink circles that indicate their coverage area.
+6. Set the name and coverage area for each virtual beacon:
+a. Click the virtual beacon.
+b. Click Quick Edit (near the bottom right corner of the page).
+c. Enter a Name to uniquely identify this virtual beacon on the floorplan.
+d. Adjust the Transmit Power to make the coverage area larger or smaller.
+• If the pink area on the map is smaller than the desired coverage area, drag the Transmit Power
+control to the right. After you save the settings, the pink circles will widen.
+56
+• If the pink area is too large, drag the Transmit Power to the left. After you save the settings,
+the pink circles will become narrower.
+e. Click Save to save the settings in the Quick Edit pop-up window.
+Next Steps
+Configure the message that you want to display or the webpage that you want o launch when people
+enter a virtual beacon's coverage area. See "Configure Push Notifications for User Engagement" on page
+70.
+Validate Your Floorplan
+SUMMARY
+Double-check everything to ensure that your floorplan is valid.
+Most issues with location can be traced to floorplan inaccuracies. To enable the AP to generate accurate
+location estimates, the position information in the Juniper Mist portal must match the AP's actual
+position at your site.
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Select the site and the floorplan.
+3. If APs are not visible on the floorplan:
+a. Click the Settings button (near the top right corner of the page).
+b. Select the check boxes to show BT11 and Wi-Fi APs.
+c. Close the Location Settings window.
+4. Check the scale to ensure that distances on the floorplan match the actual distances at the site.
+57
+a. Click Ruler.
+b. Draw a line between two points on the floorplan, such as two walls of a room.
+c. Verify that the line length in the blue box matches the actual measurement at the site.
+d. Click Done to put away the ruler.
+If you need to change the scale, click Setup Floorplan, and then make the changes. For help, review
+the other topics in this chapter.
+5. Click each AP, and verify the information in the Selected Access Point area of the page.
+• The MAC address shown on the floorplan must match the MAC address of the corresponding AP
+at the site. If the MAC addresses don’t match, then Juniper Mist has inaccurate information about
+the location of the AP, and the location estimates will be incorrect.
+• The position, height, and orientation must be accurate to enable Juniper Mist to generate correct
+location estimates.
+If you need to make changes, click Setup Floorplan. Make changes by dragging the AP or by editing
+the position details. For help, review the other topics in this chapter.
+58
+4
+CHAPTER
+Wayfinding and User Engagement
+SUMMARY
+Use the information in this chapter to
+get started with wayfinding and user
+engagement.
+IN THIS CHAPTER
+Wayfinding Use Case | 61
+AR and VR Wayfinding Use
+Case | 63
+Hybrid Use Case | 65
+Daisy-Chain BT11 APs | 68
+Configure Push Notifications for
+User Engagement | 70
+Video Overview
+Video: NOW in 60: Juniper Mist User Engagement
+What Do You Want to Do?
+Table 5: Top Tasks
+If you want to... Use these resources:
+Implement wayfinding to help your customers and
+visitors find their way to rooms, events, and products.
+This use case shows how you can use your Juniper
+Mist User Engagement Subscription and the Juniper
+Mist SDK, you can create wayfinding applications to
+support your customers and visitors.
+"Wayfinding Use Case" on page 61
+Implement a mix of services including wayfinding, push
+notifications, and asset tracking to promote user
+engagement at your site or event.
+This use case shows how a large retailer integrated
+wayfinding with publish notifications and asset
+tracking.
+"Hybrid Use Case" on page 65
+Get configuration tips. Explore the other topics in this chapter.
+60
+Wayfinding Use Case
+SUMMARY
+Are you interested in implementing indoor
+wayfinding at your site? Read through this use case
+to see one way to proceed, and get familiar with
+the components and the an overview of the various
+tasks involved.
+IN THIS SECTION
+Benefits | 61
+Scenario | 61
+Components | 61
+Process Overview | 62
+Benefits
+With virtual Bluetooth LE (vBLE)-equipped Access Points (APs), a Juniper Mist User Engagement
+subscription, and the Juniper Mist SDK, you can integrate turn-by-turn wayfinding into your on-site
+customer engagement applications.
+You can implement wayfinding at large-scale locations such as conference centers, sporting events,
+theme parks, museums, hospitals, department stores, and universities. Wayfinding helps your app users
+find their way to rooms, events, and products.
+See more information about the Juniper Mist User Engagement Subscription.
+Scenario
+For this scenario, let's imagine that your professional association is hosting a large conference at a busy
+convention center. You want to integrate wayfinding into an app that attendees can use to find their
+conference rooms, dining facilities, and other important locations.
+Video: Wayfinding Use Case
+Components
+Juniper Mist uses the following devices and systems to compute location precision.
+61
+• Access Points—APs with the vBLE antenna array transmit BLE signals and broadcast BLE Beacons.
+For more information, see "APs for Location Services" on page 8.
+• Mobile Devices—Mobile devices use Bluetooth to listen to BLE beacons broadcast from APs.
+For more information, see "BLE Beacons" on page 22.
+• Mobile Device Application with Juniper Mist SDK—The SDK (in the mobile app) receives data from
+the AP and sends that data to the cloud.
+For more information, see "Juniper Mist SDK" on page 100.
+• Juniper Mist Cloud—The cloud takes the data that the device sends and runs it through the Location
+Engine. The Location System then returns the location wayfinding information to the user on the
+mobile application.
+Process Overview
+To implement the scenario, do these tasks.
+Table 6: Wayfinding Setup Process
+Step Action More Information
+1 Purchase a Juniper Mist User Engagement
+subscription, and activate it in the Juniper
+Mist portal.
+• Juniper User Engagement information
+• "Activate Subscriptions" on page 7
+2 Ensure that vBLE Engagement is enabled
+for the site.
+NOTE: vBLE Engagement is enabled by
+default after you activate your User
+Engagement subscription.
+"Enable Bluetooth Based Location
+Services" on page 21
+3 Ensure that the Live View floorplan
+includes accurate position, height, and
+orientation data for your APs.
+"Floorplan Setup" on page 30
+4 Add wayfinding paths to the floorplan. "Add Wayfinding Paths to a Floorplan" on
+page 38
+62
+Table 6: Wayfinding Setup Process (Continued)
+Step Action More Information
+5 Obtain the Juniper Mist SDK and integrate
+it into your customer-facing mobile
+application.
+"Juniper Mist SDK" on page 100
+6 Configure push notifications to provide
+feedback and information to customers as
+they pass through specific areas on their
+route.
+"Configure Push Notifications for User
+Engagement" on page 70
+AR and VR Wayfinding Use Case
+SUMMARY
+You can implement indoor wayfinding via
+Augmented and Virtual reality to help your
+employees, visitors, and customers find their away
+around your sites.
+IN THIS SECTION
+Scenario | 64
+WHAT's NEXT | 64
+Juniper Mist location services offers indoor location wayfinding via augmented reality (AR) and virtual
+reality (VR), enabling application users to navigate the premises using their enhanced real-world
+surroundings. You can implement AR/VR wayfinding at large-scale locations where your app users need
+assistance finding their way around.
+A Juniper Mist User Engagement subscription and the Juniper Mist SDK enables you to integrate
+bluedot wayfinding into your on-site mobile workplace and mapping applications. In this, the partner
+application provides the camera-based AR/VR wayfinding experience, and the Mist SDK provides the
+bluedot within that. In order for your employees, customers, or visitors to use AR/VR wayfinding,
+camera access on their device must be enabled for the application. In-app alerts can also be pushed in
+real-time, such as to alert visitors as they approach or enter restricted areas.
+63
+Scenario
+Let's say your company has a large campus with various buildings and rooms, some of which are
+restricted to visitors. You want to integrate wayfinding into an application that both employees and
+visitors can use to find their way around.
+For example, employees may need assistance navigating within large storage facilities to find the
+location of certain items, or they may need help navigating in buildings that they do not typically work
+in. Visitors need assistance navigating within buildings to find areas such as conference rooms or offices,
+and you also want to ensure they stay out of restricted areas.
+WHAT's NEXT
+To get started, see:
+• "Components" on page 61
+• "Process Overview" on page 62
+64
+RELATED DOCUMENTATION
+Wayfinding Use Case | 61
+Juniper Mist SDK | 100
+Hybrid Use Case
+SUMMARY
+See how a retail store achieves a variety of business
+goals by implementing several types of location
+services together.
+IN THIS SECTION
+Super Beacons | 65
+Indoor Location Wayfinding | 66
+Zones for Zone Analytics | 66
+Asset Tracking | 67
+Guidelines | 68
+Juniper Mist™ offers a wide variety of indoor location services that you can mix and match (a hybrid
+approach) depending on your use cases.
+Below is a real-life example of a Mist customer (a large retailer) who uses the following mix of location
+services:
+• Super beacons
+• Indoor location wayfinding
+• Zones for zone analytics
+• Asset tracking
+Super Beacons
+This Juniper Mist customer placed access points (APs) transmitting a ninth omni beam (“super beacons”)
+at the entrances of the store. When customers enter, they get a notification on the retailer’s Mist SDKenabled mobile application. For details about implementing this location service, see "Enable Bluetooth
+Based Location Services" on page 21.
+65
+Indoor Location Wayfinding
+All main aisles and concrete pathways are wayfinding paths for indoor location wayfinding. See
+"Wayfinding Use Case" on page 61.
+The customer installed the APs with drop-threaded rods over the center of an aisle, approximately every
+two aisles. 
+This customer used daisy chaining in several parts of the store where it made sense to save switch ports.
+See "Daisy-Chain BT11 APs" on page 68 .
+Zones for Zone Analytics
+Departments in the center of the store, such as infants’ apparel or men’s clothing, are zones for the
+purpose of gathering zone analytics. See "Add Location Zones to a Floorplan" on page 47.
+Notice that the customer mounted BT11 APs on existing support columns and structural poles. In these
+areas, the retail customer leaves the established wayfinding paths and provides X and Y coordinates to
+the back end for the zone analytics engine to process for retail customers’ shopping habits.
+66
+Asset Tracking
+This Mist customer uses asset tracking so that store employees can locate misplaced items, such as
+warehouse pallets. The customer placed Bluetooth Low Energy (BLE) beacon tags on the items to be
+tracked. With those tags in place, employees can track the location of the assets on the Live View page
+of the Juniper Mist portal. See "Find Equipment Use Case" on page 88.
+67
+Guidelines
+• We always recommend that you refer to the "AP Placement for Location Services" on page 9 to
+ensure that you have proper coverage.
+• You must ensure that products on the shelves do not block APs, as this blockage can interfere with
+Bluetooth. 
+• When placing your APs, be sure that you follow the Rubber Band Model to ensure location accuracy
+and keep customers inside of the APs at the outer edges of the floorplan. See "Rubber Band Model"
+on page 87 .
+• If you cover a large area with Mist APs, you may experience AP Reflection. The AP Reflection
+Detection event on the Analytics > Events page means that the AP is receiving packets sent from its
+own Ethernet port (the source address for inbound packets is the address of the AP itself). Double
+check your physical connections to fix any loops that you may have inadvertently created on your
+network.
+Daisy-Chain BT11 APs
+SUMMARY
+Follow these guidelines to economically power multiple BT11 access points (APs) from one Power
+over Ethernet (PoE) port.
+It can be challenging to support turn-by-turn indoor wayfinding in long hallways. To provide continuous
+Bluetooth Low Energy (BLE) coverage, the access points (APs) must be within 30 to 50 feet (10 to 15
+meters) of one another. If your site has several long hallways, you'll need a lot of access points (APs).
+Purchasing a large number of full-featured APs can get expensive. And powering them can quickly use
+up your switch ports.
+The BLE-only BT11 is an economical choice in any area where you're either overlaying an existing
+wireless network or supporting only location-based services (not Wi-Fi).
+By daisy chaining these APs, you can power four APs per switch port (the directly connected AP and
+three others).
+68
+Before You Begin
+Place your APs to ensure continuous BLE coverage and location accuracy. See "AP Placement for
+Location Services" on page 9.
+To daisy chain BT11 access points:
+Enable PoE Passthrough to extend power from the first AP to the enabled Ethernet ports and/or the
+module port. This allows the first AP to provide Power over Ethernet (PoE) to devices connected to Eth1
+on the AP. To configure PoE Passthrough, see PoE Passthrough.
+Connect the first BT11 AP to a Link Layer Discovery Protocol (LLDP)-enabled switch or a 30-watt (W)
+power injector. Then connect up to three other APs in a daisy chain.
+NOTE: If you use a 15W power injector or a switch without LLDP enabled, you can
+power only two daisy-chained units (the directly connected AP and one other).
+Tips
+• If the APs lack sufficient power, they will reboot. This issue can occur if:
+• The first AP is not connected to an LLDP-enabled port or 30W power injector.
+• The daisy chain includes more than the recommended number of APs.
+• Be mindful of the cable length between the switch and the first BT11. A device loses 4.5W of power
+for every 100 meters of cable separating it from its power source.
+• If the switch port has MAC limiting enabled, increase the limit to allow the actual number of APs in
+the daisy chain.
+69
+Configure Push Notifications for User Engagement
+SUMMARY
+After enabling virtual beacons, add the messages for your push notifications and fine-tune the
+power settings for optimal impact.
+When developing applications with the Juniper Mist SDK (Software Development Kit), you can include
+notifications. For example, you can display a greeting when a user enters your building. You can display a
+special offer when a customer approaches a sales display.
+To set up these notifications, add "virtual beacons" on page 54 to your floor plan. Because the beacons
+are virtual, you can add as many of them as you need. For each one, specify the message or web page to
+display, and define the coverage area. When your mobile app user enters the virtual beacon’s coverage
+area, as shown in pink below, the specified message or web page appears in the app.
+Video Overview
+Video: What are Virtual Beacons
+Before You Begin
+Add virtual beacons to the floorplan. See "Add Virtual Beacons to a Floorplan" on page 54.
+To configure push notifications:
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Click the site and the floorplan.
+3. Ensure that the floorplan is showing the virtual beacons and their coverage areas:
+a. Click the Settings button (near the top right corner of the page).
+b. In the pop-up window, select the check boxes for Show Virtual Beacons and Show Virtual
+Beacons Coverage.
+c. Close the pop-up window.
+70
+4. Configure the notifications for each virtual beacon:
+a. Click the virtual beacon.
+b. Click Quick Edit (near the bottom right corner of the page).
+c. Enter a Name to uniquely identify this virtual beacon on the floorplan.
+d. Enter the Message or URL that you want to display in your application when users enter the
+coverage area of this virtual beacon.
+e. Click Save to save the settings in the Quick Edit pop-up window.
+5. Test your application to ensure that the notifications appear when expected. If needed, adjust the
+coverage area of the virtual beacon.
+A pink circle represents a virtual beacon's coverage area.
+71
+To adjust the coverage area:
+a. Click the virtual beacon.
+b. Click Quick Edit (near the bottom right corner of the page).
+c. Adjust the Transmit Power to make the coverage area larger or smaller.
+• If the pink area on the map is smaller than the desired coverage area, drag the Transmit Power
+control to the right. After you save the settings, the pink circles will widen.
+• If the pink area is too large, drag the Transmit Power to the left. After you save the settings,
+the pink circles will become narrower.
+d. Click Save to save the settings in the Quick Edit pop-up window.
+72
+5
+CHAPTER
+Asset Visibility and Room Occupancy
+SUMMARY
+Use the information in this chapter to
+get started with asset visibility and
+room occupancy.
+IN THIS CHAPTER
+View and Manage BLE Clients |
+ 75
+Create Named Assets | 79
+Create Asset Filters | 82
+Import Assets | 85
+Guidelines for BLE Beacon Tags |
+ 86
+Rubber Band Model | 87
+Find Equipment Use Case | 88
+Room Utilization Use Case | 91
+Find the Current Location of a
+Named Asset | 93
+Video Overview
+Video: NOW in 60: Juniper Mist Asset Visibility
+What Do You Want to Do?
+Table 7: Top Tasks
+If you want to... Use these resources:
+Find equipment at your site.
+With your Asset Visibility subscription, you can easily
+find equipment and other assets, with detailed
+analytics based on their location.
+"Find Equipment Use Case" on page 88
+Track your staff's usage of facilities.
+With your Asset Visibility subscription, you can track
+your staff's usage of your facilities.
+"Room Utilization Use Case" on page 91
+Understand guidelines for optimizing location-based
+experiences.
+Get tips for using BLE beacon tags, positioning your
+access points, and managing assets.
+• "Guidelines for BLE Beacon Tags" on page 86
+• "Rubber Band Model" on page 87
+• "Import Assets" on page 85
+• "Create Named Assets" on page 79
+Explore further.
+Explore use cases and concepts to benefit from your
+Asset Visibility subscription.
+Other topics in this chapter
+With a Premium Analytics subscription, you can use the Asset Insights Dashboard to collect data about
+BLE-tagged asset location, status, and usage. This dashboard provides details about the assets in your
+organization as well as insights into asset inventory across sites. You can also view inactive assets,
+monitor movement trends across zones, and much more.
+74
+View and Manage BLE Clients
+SUMMARY
+The BLE Clients page shows information about all
+Bluetooth Low Energy (BLE) clients that have been
+active at the selected site and floorplan.
+IN THIS SECTION
+Prerequisites | 75
+Find the BLE Clients Page | 76
+Filter the Data | 77
+Adjust the Columns | 78
+Add, Modify, or Remove Assets | 78
+Juniper Mist Asset Visibility is a cloud service that provides real-time tracking and historical location
+analytics for people, Bluetooth Low Energy (BLE) assets, and IoT devices. For example, with asset
+location and tracking configured on a site, you can quickly account for high-value construction
+equipment, or pinpoint the location of key human resources such as nurses or security guards. It's not
+uncommon, however, for the number of assets under management to scale to the thousands and even
+tens of thousands, making it hard to find and track individual items or groups in a meaningful way.
+Juniper Mist provides multiple ways to name, filter, and categorize BLE assets so you can organize and
+identify them at scale.
+Prerequisites
+The BLE Clients page is available only if Asset Visibility is enabled. First purchase and enable an Asset
+Visibility subscription, and then enable Asset Visibility in the site configuration.
+1. Purchase and activate your Asset Visibility subscription. See "Activate Subscriptions" on page 7.
+2. From the left menu of the Juniper Mist portal, select Organization > Site Configuration.
+3. Select the site.
+4. Scroll down to the Bluetooth based Location Services section of the site configuration.
+5. Select the Asset Visibility check box.
+75
+Find the BLE Clients Page
+Juniper Mist Asset Visibility solves this by providing a variety of ways that you can use to name, filter,
+and categorize your BLE assets.
+To view your existing BLE Clients in the Mist dashboard, select a site with BLE clients and then choose
+the following:
+• Clients > BLE Clients
+Figure 6: BLE Clients
+Figure 1 shows a typical list of BLE clients (also called tracked assets, and BLE tags) along with the Live
+View and location history of one selected BLE client. By default, Juniper Mist Asset tracking supports
+BLE MAC addresses and RSSI signal strength. The omnidirectional Bluetooth antenna in Juniper Mist
+APs also works in conjunction with RSSI signal strength identify the quadrant, or relative direction, of
+the asset to the AP.
+From BLE clients page, you can select the site and use the tabs to quickly filter assets that have already
+been grouped:
+76
+• By Site—Select a site from the drop down. Note that if the site does not have any BLE clients, that
+option will not show up in the menu.
+• By Tab:
+• All—Shows all client BLE assets in the site. If a Juniper Mist AP can hear the signal, the asset will
+be listed, regardless of whether the tag is named or labeled or otherwise.
+• "Create Named Assets" on page 79—Use named assets to find and display assets by their custom
+Mist asset label and beacon type.
+• "Create Asset Filters" on page 82—The Asset Filters tab shown a list of existing asset filters, if
+any, that are available in the Mist portal.
+• To add assets to the list, click the Add Asset button to create the filters, as explained below.
+• By Attribute—To filter based on an attribute such as MAC address or manufacturer, start typing in the
+Filter box. For example, you only need to type uni to find assets with "Juniper Networks" in the
+name. You can also use multiple filters to further narrow the list, as shown here:
+•
+Filter the Data
+Use the buttons and the Filter box to narrow or expand the data that is displayed on the BLE Clients
+page.
+• To show only named assets, click the Named Assets button near the top of the page.
+NOTE: For help naming assets, see "Create Named Assets" on page 79.
+• To select a site, use the Site drop-down list near the top of the page.
+• To filter by BLE advertisement details, click the tabs above the table: iBeacon, Eddystone UID,
+Eddystone URL, Eddystone TLM. For example, if you select iBeacon, the table shows only the clients
+that are advertising iBeacon UUID/Major/Minor packets.
+See "BLE Beacons" on page 22.
+77
+Adjust the Columns
+You can add, remove, and sort the columns on the BLE Clients page.
+• To sort by a column, click the column heading. To reverse the sort order, click the column heading
+again.
+• To view the column options, click the settings button at the top right corner of the page.
+In the Table Settings window, select the check box for each column to include. Clear the check box
+for each column to remove. Close the window to apply the changes.
+Add, Modify, or Remove Assets
+• To add an asset, click Add Asset. Then enter the name, select any labels that you want to apply, and
+enter the MAC address.
+NOTE: You also can import a list of assets. See "Import Assets" on page 85.
+• To add or remove labels for assets, select the check boxes for the assets, and then click Edit Assets.
+Then make your changes, and click OK.
+• To delete assets, select the check boxes for the assets, and then click Delete Assets.
+78
+Create Named Assets
+SUMMARY
+For asset visibility use cases, it's helpful to assign
+names to the assets.
+IN THIS SECTION
+Select BLE Clients to Name | 79
+Use a Filter to Generate a Common Name
+for Similar Assets | 81
+Use a CSV File to Assign Names to
+Assets | 81
+Naming assets helps you to identify them in Live View and other areas of the Juniper Mist™ portal.
+Behind the scenes, Juniper Mist prioritizes named assets, compared to the unnamed BLE client devices
+in your environment. This prioritization results in even better location accuracy for the assets that you
+want to track.
+You can use any of these methods to name assets:
+• "Select BLE clients to name." on page 79
+• "Use a filter to generate a common name for similar assets." on page 81
+• "Use a CSV file to assign names to assets." on page 81
+Select BLE Clients to Name
+You can select any Bluetooth Low Energy (BLE) client and enter a name manually or use variables to
+generate a name that includes details such as the site name. Or select multiple clients and use a counter
+to assign similar names, such as Asset 1, Asset 2, and so on.
+1. From the left menu of the Juniper Mist portal, select Clients > BLE Clients.
+2. Select the check box for each client that you want to name.
+3. At the top of the page, click Locate this as an asset (if you selected one client) or click Locate these as
+assets (if you selected multiple clients).
+4. In the pop-up window:
+79
+a. Select the check box.
+b. In the Generate names with format box, enter characters, variables, or both.
+The asset name can include characters that you type, plus information that Juniper Mist generates
+from variables. Read the on-page information to learn more about the variables. To enter a
+variable, type it as shown, including the square brackets.
+NOTE: If you selected multiple clients, you must use a counter variable, such as [ctr]
+or [ctr.3], to give each client a unique name.
+Example: Let's say that you've attached BLE beacon tags to three wheelchairs. You want to name
+them Wheelchair_1, Wheelchair_2, and Wheelchair_3. You'd enter the text, Wheelchair_, along
+with the [ctr] variable.
+TIP: If you have multiple sites, consider including the [site] variable. Then, when
+viewing the BLE Clients page, you can use the site name as a filter.
+5. Click Save.
+80
+Use a Filter to Generate a Common Name for Similar Assets
+You can use a filter to identify and name assets that have a common attribute, such as the manufacturer
+or the iBeacon UUID. For example, let’s say that you attached BLE beacon tags to the inventory carts
+that your employees use in your retail store. You want to name all of these assets Inventory Cart so that
+you can easily identify them in Live View.
+1. From the left menu of the Juniper Mist portal, select Clients > BLE Clients.
+2. In the Filter box, enter the value that you want to use for this filter.
+For this example, the tags on the inventory carts have a common UUID, so you'd enter the complete
+UUID in the Filter box.
+3. Click Create Label.
+4. In the pop-up window, enter the name that you want to assign to these assets.
+For our example, you’d enter Inventory Cart as the name.
+5. To confirm that the label was added, you can look for the assets on the BLE Clients page and in the
+Live View.
+• On the BLE Clients page, enter the name in the Filter box, and press Enter. The table is filtered to
+show the assets with that name.
+• On the Live View page, click the Assets tab and then scroll through the list to see the assets with
+the new name.
+Use a CSV File to Assign Names to Assets
+With this approach, you enter the names and MAC addresses in a file, and then upload it on the BLE
+Clients page.
+For instructions, see "Import Assets" on page 85.
+81
+Create Asset Filters
+SUMMARY
+Create asset filters that you can use to categorize
+and track your BLE assets.
+IN THIS SECTION
+Create an Asset Filter | 83
+BLE Beacons for Filtering | 83
+Requirement: Asset Visibility | 84
+Juniper Mist provides multiple ways to name, filter, and categorize BLE assets so you can organize and
+identify them at scale. One of them is asset filters, which is a method for identifying and tracking asset
+using the asset's existing tags. Many IoT devices and BLE clients come pre-configured with a
+manufacture's tag, asset name, or other identifier that they broadcast along with the BLE beacon. The
+device manufacturer may also provide a way for you to create your own custom tag for their assets.
+Mist BLE can read these values, which means you just need to create a corresponding filter to
+automatically select asset groups according to their filter value. Thus in a hospital setting, for example
+where you may have tens of thousands of tracked assets, asset filters gives you a way to quickly focus
+on just the asset class or type you want, such as EKG stations, IV tables, or Medicine Carts.
+Figure 7: Adding an Asset Filter
+82
+Create an Asset Filter
+As explained below, you can use asset filters to find and display assets according to their beacon type
+and embedded asset value, which can be a very practical way to call-out specific assets from what may
+otherwise be a very long list.
+• In the BLE Clients page, click the Add Asset button and select Asset Filter to open the asset filter
+page.
+• For Filter Type, specify the beacon used by the assets you want to identify.
+• For Value, used the value embedded in the beacon you want to identify and/or track.
+Figure 8: Create an Asset Filter
+You can combine up to six different filter types (that is, the existing tag data embedded in on the asset)
+and values per asset filter, although in many cases a single, unique and class-identifying value such as a
+manufacture's ID is sufficient for the filter to produce the needed specificity.
+BLE Beacons for Filtering
+BLE provide two types of data exchange modes, connected and advertising. Connected mode transfers
+data in a one-to-one connection (which means both data transmission and receipt are acknowledged),
+and advertising mode, which broadcasts data out to anyone who is listening (which means there is no
+guarantee of receipt).
+83
+The two main types of BLE beacons used by BLE assets are iBeacons, created by Apple Computers, and
+Eddystone, developed by Google. Both these operate in advertising mode and periodically broadcast
+specially formatted advertising packets, which can include corresponding data fields.
+To read the data field correctly and thus perform filtering, Mist needs to know how to interpret the BLE
+signal (what we call the asset type in the GUI) and where to look for the payload (what we call the value
+in the GUI).
+• • iBeacon—this is an Apple standard that lets mobile devices listen for BLE advertisements
+"through" the lock screen. iBeacon sub-classifier fields for additional levels of distinction, as
+described below:
+• Proximity UUID (Universally Unique Identifier)—A 128-bit value that uniquely identifies the
+beacon by type or organization. They look like this: f7826da6-4fa2-4e98-8024-
+bc5b71e0893e
+• Major —A 16-bit unsigned integer that can be used to group related beacons that have the
+same proximity UUID.
+• Minor—A 16-bit unsigned integer that differentiates beacons with the same proximity UUID
+and major value.
+• Eddystone UID—A 128-bit beacon ID that is comprised of an 80-bit namespace and a 48-bit
+instance ID. The namespace can be used to group beacons, while the instance ID identifies
+individual devices in the group.
+• Eddystone URL—A URL compressed to fit within the limits of the advertisement frame, that, once
+decoded, the Wi-Fi client can use to access the internet.
+• Eddystone TLM— This frame broadcasts telemetry such as battery voltage and device
+temperature. This frame must be paired with an identifying frame of type Eddystone-UID or
+Eddystone-URL to include an ID.
+• Service UUID—A 128-bit value that uniquely identifies the beacon. They can look like this: Service
+UUID: 0000f7fd-0000-1000-8000-00805f9b34fb
+• MFG Data—When used, displays the name of the device manufacture or other selected data.
+Requirement: Asset Visibility
+Asset Visibility must be enabled for the AP to receive BLE signals. Go to Organization | Admin > Site
+Configuration > Site Name > Bluetooth based Location Services.
+84
+On the same page, you can also, optionally, enable vBLE Engagement for wayfinding. On the APs (or via
+device profile), you may also need to "Enable Bluetooth Based Location Services" on page 21 for the
+beacon type. These options are explained here:
+• Enable Asset Visibility to have the APs listen for BLE signals from nearby devices and display a Live
+View of the locations on the floor plan (note that the APs must already be placed on a floor plan).
+• Enable vBLE Engagement to have the APs transmit BLE signals APs for location wayfinding.
+• Enable App Wakeup to have APs send a "super beacon" that works in conjunction with your
+customized Mist-SDK implementation and mobile app, for example, to pop-up a notification on
+customer's mobile phone when the enter a premises.
+See also "Activate Subscriptions" on page 7.
+Import Assets
+SUMMARY
+Quickly add dozens or hundreds of BLE assets by using a CSV (Comma-Separated Values) file.
+1. Create a CSV file that includes the asset names and MAC addresses.
+CSV Example
+Asset Name,MAC Address
+Asset 1,00:00:00:00:00:01
+Asset 2,00:00:00:00:00:02
+NOTE: If you use a spreadsheet application to create the CSV file, enter the data in two
+columns. The column headings must be Asset Name and MAC Address.
+2. From the left menu of the Juniper Mist™ portal, select Clients > BLE Clients.
+3. Click Import Assets.
+4. Upload the file, and then click Import.
+5. Click OK to close the pop-up window.
+85
+6. To confirm that the assets were added, scroll down the BLE Clients page, or use the Filter box.
+Guidelines for BLE Beacon Tags
+SUMMARY
+Follow these guidelines when selecting Bluetooth Low Energy (BLE) beacon tags to use with
+Juniper Mist™ Asset Visibility.
+Consult with the tag vendor to ensure that your BLE beacon tags meet the following requirements:
+• 1000 to 100 millisecond (ms) interval rate
+The interval rate is the rate at which the BLE tag broadcasts BLE signals. Any setting from 1 second
+(1000 ms) to 0.1 seconds (100 ms) is suitable for asset tracking. More frequent transmissions mean
+that the AP location sensor has more data to use. However, the battery life of the BLE tag will be
+shorter.
+• 0 decibel milliwatt (dBm) for power
+If the power setting is less than 0 dBm, the ceiling-mounted AP will have trouble detecting the BLE
+signal.
+• Static MAC Address
+Juniper Mist uses the MAC address to identify the asset and to match it to the named assets that
+you configure in the portal. If the address is not static, Juniper Mist cannot match it to your named
+assets.
+If your BLE tags don’t meet these standards, reach out to Juniper Mist Support for assistance. To contact
+Support, click the question button in the top right corner of the portal, and then click Support Tickets.
+86
+Rubber Band Model
+SUMMARY
+Use the "rubber band model" to properly place your access points (APs) for BLE coverage.
+When placing access points (APs) for asset visibility use cases, apply the "rubber band model" to ensure
+location accuracy.
+NOTE: We recommend the rubber band model for asset visibility only; it is not necessary
+for other use cases such as wayfinding.
+To apply this model, envision a rubber band that encompasses the desired coverage area. Imagine
+anchoring the rubber band with four APs, one at each corner of the space. Then apply the "AP
+placement guidelines" on page 9 to distribute additional APs, as needed, within that space.
+This approach differs from the way that you'd deploy APs for Wi-Fi coverage. For Wi-Fi, you'd typically
+work from the center outward.
+If you've already deployed APs without this model in mind, consider deploying Juniper BT11 APs to fill
+in. Place these APs at the outer edges of the space to provide the anchor points for the imaginary rubber
+band.
+87
+Find Equipment Use Case
+SUMMARY
+Watch this video and follow the example to see
+how you can use Juniper Mist™ Asset Visibility to
+locate items across your site, whether tracking
+equipment such as wheelchairs, machinery, and
+mobile devices, or personnel via their company
+badges or student IDs.
+IN THIS SECTION
+Benefits | 88
+Scenario | 88
+Components | 89
+Process Overview for Equipment
+Finding | 89
+Benefits
+With an Asset Visibility subscription, you can easily find equipment and other assets, with detailed
+analytics based on their location.
+You can use Asset Visibility in many settings and industries (education, energy, government, health care,
+entertainment, retail, and more).
+Video: Introducing Mist Asset Visibility
+Scenario
+For this scenario, let's consider an example in health care. People often abandon wheelchairs in the
+lobby or hallways. When a patient needs a wheelchair, you need to find one quickly. As shown below,
+you can go to the Live View floorplan and quickly spot a wheelchair that was left in the lobby.
+88
+Components
+This scenario relies on these components:
+• Bluetooth Low Energy (BLE) Beacon Tags—BLE tags broadcast a BLE signal at a regular interval. You
+can use any tag that meets our "Guidelines for BLE Beacon Tags" on page 86.
+• Access Point (APs)—The AP detects the signals from the BLE tags.
+• Juniper Mist Location Engine—The location engine in the Juniper Mist Cloud processes the available
+information to determine the location of the asset.
+NOTE: With BLE beacon tags, the only available information is the BLE signal itself.
+With this limited information, Juniper Mist can provide zonal accuracy, identifying the
+location within 3 to 5 meters.
+• Juniper Mist Portal—In the portal, you’ll activate your subscription, enter names for your assets, and
+use Live View to track them.
+Process Overview for Equipment Finding
+To implement the scenario, do these tasks.
+89
+Table 8: Setup Process
+Step Action More Information
+1 Purchase a Juniper Mist Asset Visibility
+subscription, and activate it in the Mist
+portal.
+• Juniper Mist Asset Visibility information
+• "Activate Subscriptions" on page 7
+2 Go to Organization > Site Configuration,
+and complete both of these tasks:
+• Ensure that Asset Visibility is enabled.
+NOTE: This feature is enabled by
+default after you activate your Asset
+Visibility subscription.
+• To optimize performance for asset
+tracking, disable vBLE Engagement.
+When both features are enabled, the
+AP must transmit and receive. Giving
+the AP extra tasks means that it has
+less time to scan for signals from your
+BLE tags.
+3 Ensure that your APs are placed according
+to the "rubber band model."
+"Rubber Band Model" on page 87
+4 Ensure that the floorplan includes accurate
+position, height, and orientation data for
+your APs.
+"Floorplan Setup" on page 30
+5 Obtain compatible BLE beacon tags and
+attach them to the assets that you want to
+track.
+"Guidelines for BLE Beacon Tags" on page
+86
+6 Name the assets. "Create Named Assets" on page 79
+7 Track the assets in Live View. "Find the Current Location of a Named
+Asset" on page 93
+Also see Asset Insights Dashboard.
+90
+Room Utilization Use Case
+SUMMARY
+Watch this video and follow the example to see
+how you can use Juniper Mist™ Asset Visibility to
+see which rooms at your site are most used, and at
+what times of day.
+IN THIS SECTION
+Benefits | 91
+Scenario | 91
+Components | 91
+Process Overview | 92
+Benefits
+With a Juniper Mist Asset Visibility subscription, you can find assets and people, with detailed analytics
+based on their location. You can use asset tracking in many settings and industries (education, energy,
+government, health care, entertainment, retail, and more).
+Scenario
+This scenario takes place in a busy medical clinic. The main goal is to track the doctors' use of various
+examination rooms. Another goal is to quickly locate a doctor's laptop if the doctor leaves it behind
+anywhere in the facility. You can use location data from the in-room BT11 access points (APs) and the
+APs that provide wireless throughout the clinic.
+Video: Generic Guest Wi-Fi and In-Room Analytics
+Components
+This scenario relies on these components:
+• Bluetooth Low Energy (BLE) beacon tags—BLE tags that are attached to the doctors' badges and the
+laptops. You can use any tag that meets Juniper's "Guidelines for BLE Beacon Tags" on page 86.
+91
+• APs—The AP detects the signals from the BLE tags. In situations where you want BLE coverage but
+don't need wireless coverage, you can use BT11 APs. For best results, install the AP on the ceiling at
+the exact center of the room.
+• Juniper Mist location engine—The location engine in the Juniper Mist cloud processes the available
+information to determine the location of the BLE beacon tag. With BLE beacon tags, Juniper Mist
+can provide zonal accuracy, identifying the location within 3 to 5 meters.
+• Juniper Mist portal—In the portal, you’ll activate your subscription, enter names for your assets, and
+use Live View to track the assets.
+• Juniper Mist API—You can use the programmable API to collect the data that you need for your
+business goals.
+• (Optional) Third-party software—You can pull the data into your favorite third-party software and
+then create colorful data visualizations and reports.
+Process Overview
+Table 9: Asset Tracking Setup Process
+Step Action More Information
+1 Purchase a Juniper Mist Asset Visibility
+subscription, and activate it in the Mist
+portal.
+• Juniper Mist Asset Visibility information
+• "Activate Subscriptions" on page 7
+2 Go to Organization > Site Configuration,
+and complete both of these tasks:
+• Ensure that Asset Visibility is enabled.
+• To optimize performance for asset
+tracking, disable vBLE Engagement.
+When both features are enabled, the
+AP must transmit and receive. Giving
+the AP extra tasks means that it has
+less time to scan for signals from your
+BLE tags.
+92
+Table 9: Asset Tracking Setup Process (Continued)
+Step Action More Information
+3 Ensure that your APs are placed according
+to the "rubber band model."
+"Rubber Band Model" on page 87
+4 Ensure that the floorplan includes accurate
+position, height, and orientation data for
+your APs.
+"Floorplan Setup" on page 30
+5 Purchase BLE badges and assign them to
+your employees.
+"Guidelines for BLE Beacon Tags" on page
+86
+6 Name the badges so that you can quickly
+identify each doctor.
+"Create Named Assets" on page 79
+7 Use the Juniper Mist API to collect the data
+that you need.
+API documentation is available in the
+Juniper Mist portal. At the top right corner
+of the Juniper Mist portal, select the
+question icon, and then select API
+Documentation.
+8 With a Premium Analytics subscription,
+you can use the Asset Insights dashboard
+to gather data about asset location, status,
+and usage.
+Asset Insights Dashboard
+Find the Current Location of a Named Asset
+SUMMARY
+Follow these steps to search for an asset by name in Location Live View.
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+93
+2. (Optional) To simplify the display:
+a. Select the Settings button (near the top right corner of the page).
+b. Clear all check boxes except Show Assets.
+c. Close the pop-up window.
+3. Select the Assets tab (on the right side of the page).
+4. Scroll down the list to find the name of the asset.
+For this example, we selected Wheelchair 1. When you click on the asset name, the asset appears
+with a green icon on the floorplan. All other assets are grayed out to make the selected asset more
+visible.
+NOTE: Juniper Mist provides zonal accuracy, within 3 to 5 meters. Pinpoint accuracy is
+not possible, due to the limited information from the BLE beacon tags.
+5. If you want to see more information about the asset, select Location History (in the lower right
+corner of the page).
+You can select the time frame to see the asset’s locations over time and the percentage of time spent
+in various zones.
+94
+6
+CHAPTER
+Analytics
+IN THIS CHAPTER
+Analytics Overview | 96
+MAC Randomization and Location Analytics | 96
+Analytics Overview
+SUMMARY
+Get started with analytics.
+Once you’ve set up your sites and floorplans for Location Services, you can use the following Analytics
+Dashboards to gather various types of location services data:
+• Engagement Analytics
+• Occupancy Analytics
+• Premium Analytics
+These dashboards provide insights into space occupancy, user visits, user dwell times, location history,
+proximity zones, and so on.
+NOTE: Engagement and Premium Analytics require a subscription. You will need to
+purchase and activate these subscriptions in order for these dashboards to appear in the
+Juniper Mist™ portal. See "Activate Subscriptions" on page 7.
+MAC Randomization and Location Analytics
+SUMMARY
+Learn about MAC randomization and how it can limit
+the usefulness of data you can gather from client
+devices.
+IN THIS SECTION
+Available Data from Bluetooth Devices | 97
+MAC Randomization | 97
+Impact of MAC Randomization | 97
+Active Analytics | 98
+96
+Certain data can be collected passively from Bluetooth devices, without any active engagement with the
+users. However, passive analytics has limitations. Read further to understand the issues and how active
+analytics can help.
+Available Data from Bluetooth Devices
+A Bluetooth device, like any wireless device, announces itself to the world by sending advertisement
+packets. The most common payloads are:
+• Local Name
+• Power Level
+• Manufacturer-Specific Data (including payloads for iBeacon, AltBeacon, and Eddystone)
+However, BLE devices do not advertise constantly. For example, a phone might not advertise when
+ringing or when receiving a text message.
+MAC Randomization
+While advertising, the device can also indicate if it is using its physical MAC address or a random MAC
+address.
+Generally, MAC randomization does not occur with BLE beacon tags or accessories such as wireless
+headsets. However, most mobile devices randomize their MAC address. For example, each time that an
+iOS or MacOS device wakes up, it uses a new, random MAC address.
+Impact of MAC Randomization
+MAC randomization benefits users by protecting their privacy and ensuring that the device is not easily
+trackable. However, if you're relying on passive analytics, MAC randomization poses some challenges.
+• Hidden MAC addresses—If you try to search the data by using a device's physical MAC address, you
+won't find it. Only a random MAC address is advertised, so the physical MAC address is not
+detectable.
+• Multiple MAC addresses—Because certain devices advertise new MAC addresses whenever they
+wake up, you might see multiple addresses from one device.
+97
+Active Analytics
+Passive analytics has challenges due to the limited data in the advertisement packets, the fact that
+devices do not transmit constantly, and MAC randomization.
+Active analytics can be a much more valuable approach. By developing Juniper Mist™ SDK-enabled
+applications, you can drive user engagement and collect more information. For example, you can collect
+information when users log in, click buttons, and follow links. Because the users identify themselves
+when they log in, the data that you collect is de-anonymized. You're counting and tracking the actual
+users of your application, without the issues that can result from MAC randomization.
+98
+7
+CHAPTER
+Location-Based Application
+Development
+IN THIS CHAPTER
+Juniper Mist SDK | 100
+Webhooks for Location Services | 101
+Juniper Mist SDK
+SUMMARY
+Get started using the Juniper Mist™ Software
+Development Kit (SDK) to develop your locationbased applications.
+IN THIS SECTION
+How to Get the Juniper Mist SDK | 100
+How to Get the Juniper Mist SDK
+The Juniper Mist SDK provides the tools you need to build customer-facing applications that deliver
+indoor location services. Use these resources to install the SDK for Android and iOS.
+For installation and integration steps, see the Juniper Mist SDK Manual on github for Android Devices
+and iOS Devices.
+For Android devices, you can add the dependency with the latest version of the Juniper Mist SDK in the
+build.gradle file or manually download the .aar files from github. See the Juniper Mist Location SDK
+Android latest version.
+For iOS, you can use CocoaPods to include SDK in code, or download a framework file from github. See
+the Juniper Mist Location SDK iOS latest version.
+NOTE: In the legacy version of the Juniper Mist SDK, the MSTCentralManager class was
+used when integrating the SDK. Now, with the latest release of the Juniper Mist SDK,
+the IndoorLocationManager class is used. For integration steps, please see:
+• Android SDK Integration Steps
+• iOS SDK Integration Steps
+100
+Webhooks for Location Services
+SUMMARY
+Learn about the location-based webhooks that you
+can configure to obtain real-time data for your
+location-based applications.
+IN THIS SECTION
+Location-Based Webhooks | 101
+Requirements for Using Webhooks | 101
+Learn More | 102
+When you configure webhooks, Juniper Mist™ automatically pushes data to a provided URL. You'll get
+real-time notifications in the Juniper Mist portal as events happen across your organization or within a
+particular site. You can use this data in your Juniper Mist SDK-enabled applications or analyze the data
+with third-party software.
+Location-Based Webhooks
+Location-based webhooks include:
+• Location coordinates—Updated at regular intervals of less than 1 second.
+• Zone entry and exit events—Updated when a client device enters or exits a location zone.
+• Virtual beacon entry and exit events—Updated when a client device enters or exits the coverage area
+of a virtual beacon.
+Requirements for Using Webhooks
+• Correctly scale the floorplan.
+• Place the access points (APs) on the floorplan. Ensure that the orientation and the position on the
+floorplan match the physical orientation and location of the AP at the site.
+• For zone entry and exit events, add zones to the floorplan.
+• For virtual beacon entry and exit events, add virtual beacons to the floorplan.
+101
+Learn More
+For more information about webhooks:
+• In the Juniper Mist portal, click the question mark icon, and then click API Documentation. See the
+Webhooks section of that site.
+• In the Juniper Technical Library, see the Webhooks chapter of the Juniper Mist Automation and
+Integration Guide .
+102
+8
+CHAPTER
+Troubleshoot Location Services
+SUMMARY
+Use the information in this chapter to
+troubleshoot location issues.
+IN THIS CHAPTER
+Location SLEs | 105
+Search in Live View | 110
+Troubleshoot Location Services
+Using the RF Environment | 112
+Verify and Enable the vBLE
+Array | 116
+Check Your Site's Beam Density
+Coverage | 117
+Troubleshoot the Juniper Mist
+SDK | 120
+Troubleshoot Incorrect Latitude
+and Longitude (SDK) | 122
+Marvis Client and Location
+Services Integration for
+Troubleshooting | 126
+Other Troubleshooting Tips for
+Location Services | 127
+What Do You Want to Do?
+Table 10: Top Tasks
+If you want to... Use these resources:
+Search for items on your floorplans.
+Use Live View to look for APs, beacons, zones, and
+other elements. View details to check the settings.
+"Search in Live View" on page 110
+Use the RF Environment to investigate issues with
+location accuracy.
+This tool helps you gain insight into what is going on
+with Mist SDK-enabled clients and named assets.
+"Troubleshoot Location Services Using the RF
+Environment " on page 112
+Check on AP coverage.
+Check current coverage to see if you need to add APs.
+"Check Your Site's Beam Density Coverage" on page
+117
+Get help troubleshooting specific issues. Explore the other topics in this chapter.
+Get help from the Marvis conversational assistant.
+If you have a Marvis subscription, use the
+conversational assistant for immediate insights into
+current conditions, and help resolving issues.
+Marvis Conversational Assistant (topic in the Juniper
+Mist AI-Driven Operations Guide)
+104
+Location SLEs
+SUMMARY
+Use the Location Service Level Experiences (SLE)
+dashboard to assess the service levels for userimpacting factors such as SDK connection issues,
+latency, dropped requests, access point health, and
+more.
+IN THIS SECTION
+Overview | 105
+Location SLE Blocks | 106
+Overview
+IN THIS SECTION
+Finding the Location SLEs Dashboard | 105
+Success Threshold Settings | 106
+Finding the Location SLEs Dashboard
+To find the Location SLEs dashboard, select Monitor > Service Levels from the left menu of the Juniper
+Mist™ portal, and then click the Location button.
+NOTE: Your subscriptions determine which buttons appear.
+105
+Success Threshold Settings
+You can adjust the thresholds that determine success or failure. To do so, click the Settings button at the
+right top corner of the location SLEs section. In the settings window, follow the on-screen instructions
+to set each threshold.
+NOTE: Most SLEs allow you to increase or decrease the threshold. Certain SLEs are not
+adjustable.
+Location SLE Blocks
+As shown in the following example, each SLE block provides valuable information.
+• At the left, you see that this SLE has a 77 percent success rate. If you select the Value filter button,
+you'll see a number instead.
+• At the center, the timeline shows variations across the time period. You can hover your mouse
+pointer over any point to see the exact time and SLE outcome.
+At the right, the classifiers show the percentage of the issues that were attributed to each root cause.
+In this example, the issues were almost evenly distributed among Beam Density (33 percent of the
+issues), Beacon Density (33 percent), and Weak RSSI (32 percent). Another 2 percent of issues were
+attributed to Machine Learning.
+• If you click a classifier, you'll see more information on the Root Cause Analysis page. Most classifiers
+have sub-classifiers for greater insight into the exact causes. The Root Cause Analysis page also
+provides additional details about the scope and impact of the issues. For all location SLEs, the Root
+Cause Analysis page includes a Location tab, where you can see exactly where the issues occurred on
+your floor plans.
+See the following table for more information about the location SLEs and classifiers.
+106
+Table 11: Location SLE Descriptions
+SLEs SLE Descriptions Classifiers Classifier Descriptions
+SDK Connect Time Juniper Mist measures
+the time when your SDKenabled app clients are
+connected to location
+services at your site.
+User Usage Incidents when the client
+connection time was
+below the threshold.
+For example, if you set
+the threshold to 60
+seconds (by clicking the
+Settings button), then this
+classifier is triggered
+when a client is
+connected for less than a
+minute.
+Latency Juniper Mist measures
+the latency of location
+responses and estimates
+to app clients.
+Cellular Latency on a cellular data
+connection
+WiFi Latency on a wireless
+connection
+No Reported Connection
+Type
+Latency with unknown
+connection type
+Teleports Juniper Mist identifies
+instances when the app
+client's estimated location
+veers away (or
+"teleports") from the
+actual location.
+For example, if you set 3
+meters as the service
+target, this SLE is
+triggered when the actual
+location is more than 3
+meters from the
+estimated location.
+Beacon Density The app client detected a
+low number of beacons
+from the access points
+(APs).
+Beam Density The app client detected a
+low number of beams.
+Machine Learning —Changes in machine
+learning affected location
+accuracy.
+107
+Table 11: Location SLE Descriptions (Continued)
+SLEs SLE Descriptions Classifiers Classifier Descriptions
+vBLE Placement The placement of the APs
+affected location
+accuracy.
+Sub-Classifiers:
+• Device Sensor—
+Sensor issues in the
+device affected
+location accuracy with
+respect to motion,
+acceleration, etc.
+• Weak RSSI—The app
+client received a weak
+signal (low Received
+Signal Strength
+Indicator).
+Dropped Requests Juniper Mist monitors the
+instances when dropped
+location requests reduced
+location accuracy.
+The Pending Requests
+classifier uses the
+threshold that you set
+with the Settings button.
+The other classifiers act
+on a pass/fail basing,
+counting any incidents
+that result in dropped
+requests.
+Reconnects Reconnection attempts
+made after losing Internet
+connectivity
+Offline App offline due to issues
+such as Wi-Fi reception,
+poor cellular reception,
+connectivity problems, or
+user actions (for example,
+switching to airplane
+mode)
+Not Uniform Requests Inconsistent speeds when
+sending location requests
+The app relies on uniform
+requests for location
+accuracy.
+108
+Table 11: Location SLE Descriptions (Continued)
+SLEs SLE Descriptions Classifiers Classifier Descriptions
+Dropped by Network Network issues causing
+dropped requests
+Client Request Timeout Client timeouts causing
+dropped requests
+Cellular Dropped requests while
+using a cellular data
+connection
+WiFi Dropped requests while
+using a Wi-Fi connection
+Pending Requests Excess requests above
+the configured SLE
+threshold
+A high number of pending
+requests is used as an
+indicator that future
+requests are likely to be
+dropped.
+AP Health Juniper Mist counts the
+incidents when APs
+rebooted or lost
+connectivity to the cloud.
+Low Power Insufficient power for
+location features
+AP Disconnected Disconnected from cloud
+due to issues such as site
+down, switch down, AP
+reboot, or AP unreachable
+Ethernet Ethernet errors or speed
+mismatch
+Network Issues such as tunnel
+down, latency, or jitter
+109
+Search in Live View
+SUMMARY
+Learn how to search for clients, access points (APs), assets, beacons, zones, and more in Location
+Live View.
+Use the search button on the Live View page to help you find items on a floorplan quickly.
+To search in Live View:
+1. From the left menu of the Juniper Mist™ portal, select Location > Live View.
+2. Select the site and the floorplan.
+3. Click the search button at the top right corner of the floorplan.
+4. Start typing the name of the item that you're looking for.
+You can search the following items:
+• AP name
+• AP MAC address
+110
+• WiFi client name
+• WiFi client MAC address
+• SDK client name
+• SDK client UUID
+• BLE client name
+• BLE client MAC
+• Asset name
+• Asset MAC address
+• vBeacon name
+• vBeacon UUID
+• Third-party beacon name
+• Third-party beacon UUID
+• Zone name
+As you start typing, the matching items appear in the drop-down list.
+111
+NOTE: The list displays only five elements for each category. A fraction in the top right
+corner of the list indicates the total number of possible matches. For example, 5/7
+indicates that the list displays 5 out of 7 items.
+5. From the drop-down list, click the item that you want to see on the floorplan.
+The item is now highlighted on the floorplan and is also selected in the list on right side of the page.
+Troubleshoot Location Services Using the RF
+Environment
+In your Juniper Mist network, you can use the RF Environment (also known as RF Glasses) for
+troubleshooting location accuracy issues. This tool helps you gain insight into what is going on with Mist
+SDK-enabled clients and named assets.
+Video Demo
+Video: Modern RF Glasses
+Steps
+1. From the left menu of the Juniper Mist portal, select Location > Live View.
+2. Click the site and the floorplan that you want to troubleshoot.
+3. Adjust the page settings to show the app clients:
+a. Click the Settings button (near the top right corner of the page).
+112
+b. In the Location Settings window, select the Show App Clients and Show App Clients (Cellular)
+check boxes.
+c. Click X to close the Location Settings window.
+The floorplan displays any clients that are running the Juniper Mist SDK.
+4. Select a client and record the RF environment:
+a. Select the Clients tab on the right side of the page, and then select the client that you want to
+troubleshoot.
+b. Click RF Environment (near the bottom right corner of the page).
+113
+NOTE: The RF Environment link is available only for SDK clients, named assets, and
+connected wireless clients.
+c. Click Record Session (near the top right corner of the page).
+• Your session begins recording. A progress bar appears at the top of the screen.
+• In the Rename Session window, you can rename the session recording or close the window to
+keep the current date and time as the session name.
+• When finished, click Stop Recording.
+114
+NOTE: If you do not stop the recording manually by clicking the button, the
+recording stops automatically after three minutes.
+5. Replay the recording:
+a. From the left menu, select Location > RF Environment Replay.
+b. From the Recorded Sessions list, click the session you just recorded.
+You will see your recording. You can use it to gain an understanding of the current issues,
+troubleshoot, or send to customer support for review.
+Troubleshooting Tips
+When troubleshooting in the RF Environment, pay attention to these elements:
+• Smoothed Location Estimate
+The lime green colored dot represents the smoothed location estimate. (See the Legend in the top
+right corner of the page.) This estimate takes the received signal strength indicator (RSSI) data and
+smooths it out for accuracy and user readability.
+• Beams and Beacons
+On the right side of the page, see how many access points (APs) the client detects. Look at:
+• Beams per second
+115
+• Beacons per beam per second
+These RSSI values come from the AP from the client’s perspective. They indicate how many APs the
+client detects and the number of beams the client detects from the AP.
+• Speed and Direction
+On the right side of the page, Speed and Direction are updated as the client moves within the site.
+• When the client is in motion, the probability surface spreads out.
+• As the client slows down or becomes still, the probability surface shrinks.
+• The red area depicts the peak of the surface and the highest probability of the client's location.
+• The blue area depicts the lowest area of the surface and the least probability of the client's
+location.
+Keep in mind:
+• With a lower-than-average number of beams per second or beacons per beam per second, location
+accuracy might deteriorate.
+• If the RSSI values are not updated for SDK clients, the client is offline.
+• If the RSSI values are not updated for assets, data from the tag is not detected.
+• If the RSSI values are missing, the environment has less data to work with. Less data means that
+location accuracy might deteriorate. If you notice missing RSSI values:
+• Check the organization settings to ensure that vBLE Engagement is enabled. See "Enable
+Bluetooth Based Location Services" on page 21.
+• Check the Access Points page to ensure that the vBLE array is turned on for all APs. See "Verify
+and Enable the vBLE Array" on page 116.
+• Ensure that the AP has been added to the floorplan. See "Floorplan Setup Overview" on page 30.
+Verify and Enable the vBLE Array
+SUMMARY
+116
+Troubleshoot location issues by verifying that virtual Bluetooth Low Energy (vBLE) array is enabled
+on your access points (APs).
+Go to the Access Points page to verify that vBLE is enabled for all APs. If you see an X in the vBLE
+column, the vBLE array is off and needs to be turned on.
+To enable the vBLE array on an access point:
+1. From the left menu of the Juniper Mist portal, select Access Points.
+2. Check the vBLE column to see if any APs need to have vBLE enabled.
+3. To enable vBLE for an AP:
+a. Click the AP.
+b. Under BLE Settings, select the Enable Virtual BLE Array check box.
+c. Click Save.
+Check Your Site's Beam Density Coverage
+SUMMARY
+117
+Troubleshoot location issues by using the Beam Density Map to find weak spots in your BLE
+coverage.
+On the Location Diagnostics page of the Juniper Mist portal, you have the option to view “coverage” on
+the Beam Density Map. This map displays color coding to indicate how much coverage a Mist Access
+Point (AP) is providing a device based on the device's proximity to the AP. This color coding is based on
+the Received Signal Strength Indicator (RSSI) that the device sends to the AP. The RSSI values are based
+on the device’s coordinate (X,Y) location estimate.
+To view the Beam Density Coverage Map:
+1. From the left menu of the Juniper Mist portal, select Location > Location Diagnostics.
+2. Click Beam Density Map (near the top center of the page).
+3. Ensure that you have the appropriate site and floorplan selected:
+4. Click Coverage.
+On the map, you have the option to view coverage for App (Mist SDK Mobile App clients), BLE
+(named assets), and WiFi (unconnected and connected WiFi clients). Select the device type from the
+drop-down list to view the coverage for that device type on the map. The App device type is the only
+device type that has the Beam Density option available in addition to Coverage.
+You can choose to view All clients (selected by default), or you can select a specific client from the
+drop-down list (the options that appear depend on the device type that you select).
+118
+You can also select a time range for which to view coverage. For example, if you would like to see
+coverage from the past hour, you can select “1 hour”.
+5. Notice the RSSI color scale in the top left corner of the page. Use this as your reference as you look
+at the coverage on the map. RSSI values closer to zero indicate that the device is in closer proximity
+to the APs.
+6. Hover your mouse over a device on the map to see the average and maximum RSSI values.
+The values appear to the left of the color scale.
+119
+Troubleshoot the Juniper Mist SDK
+SUMMARY
+Explore these options to resolve issues with your SDK-enabled applications.
+This topic provides information about how to troubleshoot common issues when you develop and test
+your Juniper Mist™ Software Development Kit (SDK).
+NOTE: If you need general information about the SDK, see "Juniper Mist SDK" on page
+100.
+To build a customer-facing application using the Juniper Mist SDK, your system must meet the following
+requirements:
+• iOS System Requirements
+• Android System Requirements
+Prior to troubleshooting, ensure that you are using the correct API callbacks:
+• iOS: didUpdateRelativeLocation
+• Android: onRelativeLocationUpdated
+To troubleshoot the SDK, identify the potential issue and then apply the recommended remedy:
+120
+Table 12: SDK Issues and Remedies
+Potential Issue Remedy
+For iOS devices only: You receive
+SDK errors, or you cannot
+develop and test the project on
+the simulator. (Testing requires a
+Juniper Mist SDK-enabled device
+on which to run the SDK.)
+NOTE: This issue applies only
+to iOS devices.
+Use the following sample app and sample code to run the project on the
+simulator:
+Sample App (iOS only)
+Sample Code (iOS only)
+The floorplan doesn’t load, the
+blue dot is inaccurate, or the app
+doesn't work when you run it on
+a simulator.
+1. Confirm that the X,Y placement of the access points (APs) on the floorplan
+matches the physical placement of the APs in your deployment.
+See Manually Place an Access Point on a Floorplan.
+2. Scale the floorplan accurately. See Scale a Floorplan.
+3. Ensure that you are running the SDK on a device.
+4. Ensure that you enabled Bluetooth permission on the device.
+5. Ensure that the Mobile SDK secret is correct.
+The blue dot is not accurate. 1. Confirm that you are using the latest version of the SDK.
+To get the latest version, click the relevant link:
+• Juniper Mist Location SDK Android latest version
+• Juniper Mist Location SDK iOS latest version
+2. Ensure that you placed your APs according to the deployment guidelines.
+See "AP Placement for Location Services" on page 9.
+3. Collect RF Environment recordings—specifically, the Received Signal
+Strength Indicator (RSSI) values—to see if the SDK receives a strong
+enough signal. See "Troubleshoot Location Services Using the RF
+Environment " on page 112.
+Juniper Mist cannot receive
+virtual beacon notifications.
+1. Confirm that you placed the virtual beacons on the floorplan accurately.
+2. Ensure that the Name, Message, and Url fields are complete.
+121
+Table 12: SDK Issues and Remedies (Continued)
+Potential Issue Remedy
+Juniper Mist cannot receive zone
+notifications.
+1. Confirm that you placed the zones on the floorplan accurately.
+2. Ensure that the zone has a name. See these topics:
+• "Add Location Zones to a Floorplan" on page 47
+• "Add Proximity Zones to a Floorplan" on page 51
+The SDK returns invalid latitude
+and longitude values.
+To resolve this issue, follow the steps in "Troubleshoot Incorrect Latitude and
+Longitude (SDK)" on page 122.
+Troubleshoot Incorrect Latitude and Longitude
+(SDK)
+SUMMARY
+Go through these steps if the SDK returns invalid latitude and longitude values.
+Prior to troubleshooting, ensure that you are using the correct API Callbacks:
+• iOS: didUpdateRelativeLocation
+• Android: onRelativeLocationUpdated
+To troubleshoot incorrect latitude and longitude:
+1. In the Juniper Mist™ portal, open the floorplan, click Add VBeacon, and then drag the virtual beacon
+(vBeacon) to any point on the floorplan.
+Select a position that you can easily identify later when looking at your site on Google Maps or Apple
+Maps. For example, drag the vBeacon to a corner of the building.
+122
+NOTE: If you need general information about adding vBeacons, see "Add Virtual
+Beacons to a Floorplan" on page 54.
+2. Copy and save the X and Y values, which appear near the lower-right corner of the page. Both the
+values should be positive. In case of negative values, remove the negative signs from them.
+3. Drag the vBeacon to a new, identifiable position and save the X and Y values. Then, repeat this step
+for one more point on the floorplan.
+You should now have the X and Y values for three identifiable points on the floorplan.
+4. Click Cancel so that you do not save the vBeacon.
+5. Close the floorplan.
+6. In Google Maps or Apple Maps, complete these steps to get the latitude and longitude values for the
+points that you selected on the floorplan:
+a. Go to the map location for your site, and zoom in.
+b. For each point that you selected on your floorplan, click the corresponding point on the Google
+Map or Apple Map, and save the latitude and longitude values.
+As shown in the following illustration, the points on the map need to correspond to the points
+that you select on your floorplan:
+123
+For more information, go to the support site for Google Maps or Apple Maps.
+Suggested topics:
+• Google Support topic (See the information about about getting the coordinates of a place.)
+• Apple Toolbox topic (See the instructions about dropping a pin and getting the information.)
+NOTE: The links are suggestions only. For up-to-date information, search the Google
+or Apple support site.
+After completing the preceding steps, you should have the latitude and longitude values for the same
+three points that you identified on your floorplan.
+7. Go to the GeoRefParamv2 payload, add the latitude and longitude values that you just obtained, and
+check the sample payload. See the following sample payload.
+The following values match the coordinates shown:
+• lat_lon X value—This is the latitude coordinate.
+• lat_lon Y value—This is the longitude coordinate.
+"GeoRefParamsv2": { 
+        "active": true, 
+        "p1": { 
+            "mist_xy": { 
+                "x": 13.4194,
+                "y": 39.2581 
+124
+            }, 
+            "lat_lon": { 
+                "x": 37.29546,
+                "y": -122.03323 
+            } 
+        }, 
+        "p2": { 
+            "mist_xy": { 
+                "x": 23.3224,
+                "y": 67.2408 
+            }, 
+            "lat_lon": { 
+                "x": 37.29512,
+                "y": -122.03306 
+            } 
+        }, 
+        "p3": { 
+            "mist_xy": { 
+                "x": 52.3277,
+                "y": 75.7614 
+            }, 
+            "lat_lon": { 
+                "x": 37.29506,
+                "y": -122.03269 
+            } 
+        } 
+    } 
+8. Add the PUT request for the GeoRefParamv2 payload into the maps API. /api/v1/sites/:siteID/
+maps/:mapID
+By default, the SDK returns invalid latitude and longitude values if the GeoRefParams is not
+configured in the maps API.
+Additional Troubleshooting
+If the SDK encounters an error, it calls the didErrorOccur method, as follows:
+didErrorOccur(_ withError:,withErrorMessage). 
+The SDK displays details of the errors in the following two values:
+• errorMessage of type NSString
+125
+• errorType of type ErrorType Enum
+For help, see the Integration Steps section of the Github Wiki.
+iOS SDK Github Wiki
+Android SDK Github Wiki
+Marvis Client and Location Services Integration for
+Troubleshooting
+SUMMARY
+Read this topic to better understand the benefits of
+the integration between Marvis Client and Location
+Services and how it can assist with troubleshooting.
+IN THIS SECTION
+Benefits of the Marvis Client and Location
+Services Integration | 126
+WHAT's NEXT | 127
+Marvis Client enables you to view data about client experiences with regards to wireless connectivity
+from the device's perspective. In other words, it provides insight into how your device interacts with and
+experiences the wireless network. This enables you to gain a better understanding of client behavior and
+any potential issues on the network. The Marvis Client works with Location Services by coordinating
+with the Access Points' (APs) vBLE antenna array and on-device vBLE capabilitlies to create some
+powerful benefits, outlined below.
+Benefits of the Marvis Client and Location Services Integration
+• The Marvis Client now includes on-device location awareness via on-device vBLE location. This
+enables Marvis Client to provide enhanced visibility into the wireless network.
+• Enhances network visibility, user experience, and troubleshooting.
+• For example, you can navigate to the floorplan in the Mist portal to use real-time location with
+client telemetry. This enables you to see where and when an issue occured for the Wi-Fi client's
+applications, or to see any Wi-Fi issues being faced. On the floorplan, for example, a cluster of
+Wi-Fi clients in a single area experiencing coverage issues may indicate a Coverage Hole issue.
+126
+• Provides context-aware location insights (for example, location insights for handheld Zebra devices
+used in warehouse settings).
+• Contextual insights into traffic flow and occupancy based on device movement and location trends.
+• Provides a device location accuracy of 1-3-meters.
+WHAT's NEXT
+See the Marvis Client chapter of the Juniper Mist AI-Native Operations Guide to learn more about
+Marvis Client.
+Other Troubleshooting Tips for Location Services
+SUMMARY
+If other troubleshooting efforts haven't resolve your location issues, consider these tips about
+what to check and how to improve location accurcy.
+The majority of location accuracy issues come from an incorrect access point (AP) setup. Ensure that the
+AP information on the floorplan of the Juniper Mist portal matches the APs in the physical deployment.
+After reviewing the issues and remedies below, we highly recommend that you refer to "Troubleshoot
+Location Services Using the RF Environment " on page 112.
+Table 13: Other SDK Issues and Remedies
+Potential Issue Remedy
+Significantly small or large
+movements occur on a
+floorplan.
+Scale. Scale the floorplan accurately. See Scale a Floorplan.
+TIP: If you don’t know the actual dimensions, look for a standard door on the
+floorplan and scale that door to 0.91 meters (3 feet). This will get you close to
+the actual scale.
+127
+Table 13: Other SDK Issues and Remedies (Continued)
+Potential Issue Remedy
+An unexpected jump to
+another area of the floorplan
+(also known as “teleporting”).
+Placement. Confirm that the X,Y placement of the APs on the floorplan matches
+the physical placement of the APs in your deployment.
+See Manually Place an Access Point on a Floorplan.
+An inaccuracy with the client’s
+or asset’s location; for
+example, the client’s or asset’s
+location appears on the
+opposite side of the AP (also
+known as the location being
+“flipped”).
+Rotation. Confirm that the AP’s LED is facing the same direction in which the
+green dot is facing on the floorplan.
+See Manually Place an Access Point on a Floorplan.
+Other unspecified issues Height. Ceiling height of APs can also play a part in location-accuracy issues.
+For any issues you may be experiencing, refer to "AP Placement for Location
+Services" on page 9 to ensure that you have proper coverage.
+If your deployment calls for installing APs outside of these guidelines, contact
+support@mist.com to consult with a sales engineer.
+128
