@@ -41070,9 +41070,9 @@ class OrgLevelAPFirmwareUpgrader:
             return self._fetch_selected_sites_aps()
     
     def _fetch_org_aps(self) -> bool:
-        """Fetch all APs from the organization."""
+        """Fetch all APs from the organization with full pagination."""
         try:
-            # Use getOrgInventory with type="ap" (listOrgDevices doesn't support type filter)
+            # Use getOrgInventory with type="ap" and mistapi.get_all for pagination
             import mistapi.api.v1.orgs.inventory as org_inventory_api
             response = org_inventory_api.getOrgInventory(apisession, self.org_id, type="ap", limit=1000)
             
@@ -41080,7 +41080,9 @@ class OrgLevelAPFirmwareUpgrader:
                 print("  X Failed to retrieve devices")
                 return False
             
-            devices_data = response.data
+            # Use mistapi.get_all to handle pagination (follows 'next' links)
+            devices_data = mistapi.get_all(response=response, mist_session=apisession)
+            
             if not isinstance(devices_data, list):
                 devices_data = [devices_data] if devices_data else []
             
@@ -41164,7 +41166,11 @@ class OrgLevelAPFirmwareUpgrader:
             response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap", limit=1000)
             
             if response and hasattr(response, 'data'):
-                stats_data = response.data if isinstance(response.data, list) else [response.data]
+                # Use mistapi.get_all for pagination
+                stats_data = mistapi.get_all(response=response, mist_session=apisession)
+                if not isinstance(stats_data, list):
+                    stats_data = [stats_data] if stats_data else []
+                
                 for stat in stats_data:
                     # Stats returns 'mac' as identifier, inventory also has 'mac'
                     mac = stat.get('mac')

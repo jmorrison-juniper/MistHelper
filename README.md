@@ -559,6 +559,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.00.25",
+      "date": "2026-02-05",
+      "changes": {
+        "fixes": [
+          "Menu 116: Add full pagination support using mistapi.get_all()",
+          "Menu 116: Inventory fetch now retrieves ALL APs (not just first 1000)",
+          "Menu 116: Stats fetch now retrieves ALL device stats with pagination"
+        ]
+      }
+    },
+    {
       "version": "26.02.05.00.20",
       "date": "2026-02-05",
       "changes": {
