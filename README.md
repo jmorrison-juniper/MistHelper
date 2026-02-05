@@ -559,6 +559,27 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.05.00.20",
+      "date": "2026-02-05",
+      "changes": {
+        "fixes": [
+          "Menu 116: Use listOrgAvailableDeviceVersions API (not getOrgDeviceUpgrade)",
+          "Menu 116: Fix 'Unknown' firmware version display - match by MAC address",
+          "Menu 116: Add limit=1000 to listOrgDevicesStats call for proper pagination"
+        ]
+      }
+    },
+    {
+      "version": "26.02.05.00.15",
+      "date": "2026-02-05",
+      "changes": {
+        "fixes": [
+          "Menu 116: Use getOrgInventory API instead of listOrgDevices (listOrgDevices doesn't support type filter)",
+          "Fixed 'listOrgDevices() got an unexpected keyword argument type' error"
+        ]
+      }
+    },
+    {
       "version": "26.02.04.16.35",
       "date": "2026-02-04",
       "changes": {

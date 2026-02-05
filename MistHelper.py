@@ -41072,8 +41072,9 @@ class OrgLevelAPFirmwareUpgrader:
     def _fetch_org_aps(self) -> bool:
         """Fetch all APs from the organization."""
         try:
-            import mistapi.api.v1.orgs.devices as org_devices_api
-            response = org_devices_api.listOrgDevices(apisession, self.org_id, type="ap")
+            # Use getOrgInventory with type="ap" (listOrgDevices doesn't support type filter)
+            import mistapi.api.v1.orgs.inventory as org_inventory_api
+            response = org_inventory_api.getOrgInventory(apisession, self.org_id, type="ap", limit=1000)
             
             if not response or not hasattr(response, 'data'):
                 print("  X Failed to retrieve devices")
@@ -41083,7 +41084,7 @@ class OrgLevelAPFirmwareUpgrader:
             if not isinstance(devices_data, list):
                 devices_data = [devices_data] if devices_data else []
             
-            # Filter to APs only
+            # Already filtered by API, but verify
             self.all_aps = [d for d in devices_data if d.get('type') == 'ap' or d.get('model', '').startswith('AP')]
             
             if not self.all_aps:
@@ -41160,20 +41161,22 @@ class OrgLevelAPFirmwareUpgrader:
         
         try:
             import mistapi.api.v1.orgs.stats as org_stats_api
-            response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap")
+            response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap", limit=1000)
             
             if response and hasattr(response, 'data'):
                 stats_data = response.data if isinstance(response.data, list) else [response.data]
                 for stat in stats_data:
-                    device_id = stat.get('id') or stat.get('device_id')
+                    # Stats returns 'mac' as identifier, inventory also has 'mac'
+                    mac = stat.get('mac')
                     version = stat.get('version', 'Unknown')
-                    if device_id:
-                        self.ap_versions[device_id] = version
+                    if mac:
+                        self.ap_versions[mac] = version
             
-            # Display version summary
+            # Display version summary - match by MAC address
             version_counts = {}
             for ap in self.all_aps:
-                version = self.ap_versions.get(ap.get('id'), 'Unknown')
+                mac = ap.get('mac')
+                version = self.ap_versions.get(mac, 'Unknown')
                 if version not in version_counts:
                     version_counts[version] = 0
                 version_counts[version] += 1
@@ -41202,29 +41205,41 @@ class OrgLevelAPFirmwareUpgrader:
         print("  Fetching available firmware for each model...")
         
         try:
+            # Use listOrgAvailableDeviceVersions (not getOrgDeviceUpgrade which checks upgrade status)
             import mistapi.api.v1.orgs.devices as org_devices_api
+            response = org_devices_api.listOrgAvailableDeviceVersions(apisession, self.org_id, type="ap")
             
-            # Fetch device versions for all models we discovered
-            for model in self.aps_by_model.keys():
-                response = org_devices_api.getOrgDeviceUpgrade(
-                    apisession, self.org_id, device_type="ap", model=model
-                )
-                
-                if response and hasattr(response, 'data'):
-                    data = response.data
-                    versions = data.get('versions', []) if isinstance(data, dict) else []
-                    
-                    if versions:
-                        self.available_versions.extend(versions)
-                        version_numbers = [v.get('version') for v in versions if v.get('version')]
-                        self.model_version_ranges[model] = version_numbers
-                        print(f"    {model}: {len(versions)} version(s) available")
-            
-            if not self.available_versions:
-                print("  X No firmware versions available")
+            if not response or not hasattr(response, 'data'):
+                print("  X Failed to retrieve available firmware versions")
                 return False
             
-            print(f"  + Loaded firmware data for {len(self.model_version_ranges)} model(s)")
+            self.available_versions = response.data if isinstance(response.data, list) else []
+            
+            # Build model-to-versions mapping
+            for version_info in self.available_versions:
+                if not isinstance(version_info, dict):
+                    continue
+                model = version_info.get('model')
+                version = version_info.get('version')
+                if model and version:
+                    if model not in self.model_version_ranges:
+                        self.model_version_ranges[model] = []
+                    self.model_version_ranges[model].append(version)
+            
+            # Show summary for models we have
+            models_found = 0
+            for model in self.aps_by_model.keys():
+                if model in self.model_version_ranges:
+                    models_found += 1
+                    print(f"    {model}: {len(self.model_version_ranges[model])} version(s) available")
+                else:
+                    print(f"    {model}: No firmware versions found")
+            
+            if models_found == 0:
+                print("  X No firmware versions available for discovered models")
+                return False
+            
+            print(f"  + Loaded firmware data for {models_found} model(s)")
             return True
             
         except Exception as e:
