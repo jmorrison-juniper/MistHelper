@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 119 actionable menu entries (0–117) with some gaps for future expansion.
+**Operation Count:** The code currently defines 120 actionable menu entries (0–119) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -269,6 +269,10 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 113 | WAN Probe Templates | **DESTRUCTIVE**: Configure WAN Probe Override on Gateway Templates (supports --dry-run) |
 | 114 | WAN Probe Devices | **DESTRUCTIVE**: Configure WAN Probe on Device Port Overrides (supports --dry-run) |
 | 115 | Interactive Login | Switch to interactive login (email/password) - Enables MSP-level API access |
+| 116 | AP Firmware Report | Export AP firmware versions with upgrade recommendations (current/available/suggested) |
+| 117 | MSP Inventory | MSP Inventory Export - Device inventory across all MSPs and orgs (requires MSP privileges) |
+| 118 | Site Auto-Upgrade | Configure AP auto-upgrade settings for sites (all, single, list, or range) |
+| 119 | Zone Analysis | Zone Configuration Analysis - Scan all sites for zone deviations (missing/unique zones, count anomalies) |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -558,6 +562,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.08.23.20",
+      "date": "2026-02-08",
+      "changes": {
+        "feature_additions": [
+          "Menu 119: Zone Configuration Analysis - Scan all sites to identify zone deviations",
+          "New ZoneConfigurationAnalyzer class for cross-site zone pattern analysis",
+          "Identifies sites missing common zones, sites with unique zones, and zone count anomalies",
+          "Exports 3 CSV files: Summary, AllZones, and ZoneFrequency reports"
+        ]
+      }
+    },
     {
       "version": "26.02.05.00.25",
       "date": "2026-02-05",

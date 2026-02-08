@@ -45826,6 +45826,376 @@ class MistHelperTUI:
 # have been refactored into GatewayTemplateConfigManager class methods.
 
 
+class ZoneConfigurationAnalyzer:
+    """
+    Analyzes location zone configurations across all sites to identify deviations.
+    
+    Scans all sites in an organization and compares their zone configurations to:
+    - Identify sites with different zone counts than the norm
+    - Find sites missing common zones present in most other sites
+    - Detect unique zones that only appear in specific sites
+    - Flag zone naming inconsistencies
+    
+    SECURITY: Read-only analysis, no configuration changes
+    
+    Usage:
+        ZoneConfigurationAnalyzer.analyze()
+    """
+    
+    @staticmethod
+    def analyze():
+        """
+        Main entry point for zone configuration analysis.
+        
+        Scans all sites, collects zone data, and produces deviation report.
+        """
+        print("Zone Configuration Analyzer:")
+        print("=" * 60)
+        logging.info("Starting zone configuration analysis across all sites...")
+        
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+        
+        # Collect zone data from all sites
+        site_zones = ZoneConfigurationAnalyzer._collect_all_site_zones(current_org_id)
+        
+        if not site_zones:
+            print("! No zone data collected. Please verify sites have zones configured.")
+            return
+        
+        # Analyze the collected data
+        analysis_results = ZoneConfigurationAnalyzer._analyze_zone_patterns(site_zones)
+        
+        # Display and export results
+        ZoneConfigurationAnalyzer._display_results(analysis_results)
+        ZoneConfigurationAnalyzer._export_results(analysis_results, site_zones)
+    
+    @staticmethod
+    def _collect_all_site_zones(org_id: str) -> dict:
+        """
+        Collects zone configurations from all sites in the organization.
+        
+        Args:
+            org_id: Organization ID
+            
+        Returns:
+            Dictionary mapping site_id to site zone data:
+            {
+                site_id: {
+                    "site_name": str,
+                    "zones": [zone_dict, ...],
+                    "zone_names": set,
+                    "zone_count": int
+                }
+            }
+        """
+        logging.info("Fetching all sites in organization...")
+        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        
+        if not sites:
+            logging.warning("No sites found in organization.")
+            return {}
+        
+        print(f"! Found {len(sites)} sites. Scanning zone configurations...")
+        
+        site_zones = {}
+        zones_collected = 0
+        
+        for site in tqdm(sites, desc="Scanning sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unnamed Site")
+            
+            try:
+                response = mistapi.api.v1.sites.zones.listSiteZones(
+                    apisession,
+                    site_id=site_id
+                )
+                
+                if response.status_code == 200:
+                    zones = response.data if isinstance(response.data, list) else []
+                    zone_names = {zone.get("name", "Unnamed") for zone in zones}
+                    
+                    site_zones[site_id] = {
+                        "site_name": site_name,
+                        "zones": zones,
+                        "zone_names": zone_names,
+                        "zone_count": len(zones)
+                    }
+                    zones_collected += len(zones)
+                    logging.debug(f"Site {site_name}: {len(zones)} zones")
+                else:
+                    logging.warning(f"Failed to fetch zones for {site_name}: HTTP {response.status_code}")
+                    site_zones[site_id] = {
+                        "site_name": site_name,
+                        "zones": [],
+                        "zone_names": set(),
+                        "zone_count": 0
+                    }
+            except Exception as error:
+                logging.warning(f"Error fetching zones for {site_name}: {error}")
+                site_zones[site_id] = {
+                    "site_name": site_name,
+                    "zones": [],
+                    "zone_names": set(),
+                    "zone_count": 0
+                }
+        
+        print(f"! Collected {zones_collected} zones from {len(site_zones)} sites.")
+        return site_zones
+    
+    @staticmethod
+    def _analyze_zone_patterns(site_zones: dict) -> dict:
+        """
+        Analyzes zone patterns to identify deviations from the norm.
+        
+        Args:
+            site_zones: Dictionary of site zone data
+            
+        Returns:
+            Analysis results dictionary with:
+            - zone_frequency: How often each zone name appears
+            - common_zones: Zones present in >= 75% of sites
+            - sites_missing_common_zones: Sites missing common zones
+            - sites_with_unique_zones: Sites with zones not in other sites
+            - zone_count_stats: Statistical summary of zone counts
+            - zone_count_deviations: Sites with unusual zone counts
+        """
+        logging.info("Analyzing zone patterns...")
+        
+        # Count zone name frequency across all sites
+        zone_frequency = {}
+        all_zone_names = set()
+        zone_counts = []
+        
+        for site_id, data in site_zones.items():
+            zone_counts.append(data["zone_count"])
+            for zone_name in data["zone_names"]:
+                all_zone_names.add(zone_name)
+                zone_frequency[zone_name] = zone_frequency.get(zone_name, 0) + 1
+        
+        total_sites = len(site_zones)
+        sites_with_zones = len([count for count in zone_counts if count > 0])
+        
+        # Calculate zone count statistics
+        if zone_counts:
+            mean_count = sum(zone_counts) / len(zone_counts)
+            sorted_counts = sorted(zone_counts)
+            median_count = sorted_counts[len(sorted_counts) // 2]
+            min_count = min(zone_counts)
+            max_count = max(zone_counts)
+            
+            # Standard deviation for identifying outliers
+            if len(zone_counts) > 1:
+                variance = sum((count - mean_count) ** 2 for count in zone_counts) / len(zone_counts)
+                std_dev = variance ** 0.5
+            else:
+                std_dev = 0
+        else:
+            mean_count = median_count = min_count = max_count = std_dev = 0
+        
+        zone_count_stats = {
+            "mean": mean_count,
+            "median": median_count,
+            "min": min_count,
+            "max": max_count,
+            "std_dev": std_dev,
+            "total_sites": total_sites,
+            "sites_with_zones": sites_with_zones
+        }
+        
+        # Identify common zones (present in >= 75% of sites that have zones)
+        threshold = max(1, int(sites_with_zones * 0.75))
+        common_zones = {name for name, count in zone_frequency.items() if count >= threshold}
+        
+        # Find sites missing common zones
+        sites_missing_common_zones = {}
+        for site_id, data in site_zones.items():
+            if data["zone_count"] > 0:  # Only check sites that have zones
+                missing = common_zones - data["zone_names"]
+                if missing:
+                    sites_missing_common_zones[site_id] = {
+                        "site_name": data["site_name"],
+                        "missing_zones": missing,
+                        "has_zones": data["zone_names"]
+                    }
+        
+        # Find sites with unique zones (zones that only appear at one site)
+        unique_zone_threshold = max(1, int(sites_with_zones * 0.1))  # Present in < 10% of sites
+        sites_with_unique_zones = {}
+        for site_id, data in site_zones.items():
+            unique_at_site = set()
+            for zone_name in data["zone_names"]:
+                if zone_frequency.get(zone_name, 0) <= unique_zone_threshold:
+                    unique_at_site.add(zone_name)
+            if unique_at_site:
+                sites_with_unique_zones[site_id] = {
+                    "site_name": data["site_name"],
+                    "unique_zones": unique_at_site,
+                    "zone_count": data["zone_count"]
+                }
+        
+        # Identify zone count deviations (more than 1.5 std dev from mean)
+        zone_count_deviations = {}
+        if std_dev > 0:
+            for site_id, data in site_zones.items():
+                count = data["zone_count"]
+                deviation = abs(count - mean_count) / std_dev if std_dev > 0 else 0
+                if deviation > 1.5 or (data["zone_count"] == 0 and mean_count > 0):
+                    zone_count_deviations[site_id] = {
+                        "site_name": data["site_name"],
+                        "zone_count": count,
+                        "deviation_score": round(deviation, 2),
+                        "expected_range": f"{max(0, mean_count - 1.5 * std_dev):.1f} - {mean_count + 1.5 * std_dev:.1f}"
+                    }
+        
+        return {
+            "zone_frequency": zone_frequency,
+            "common_zones": common_zones,
+            "sites_missing_common_zones": sites_missing_common_zones,
+            "sites_with_unique_zones": sites_with_unique_zones,
+            "zone_count_stats": zone_count_stats,
+            "zone_count_deviations": zone_count_deviations,
+            "all_zone_names": all_zone_names
+        }
+    
+    @staticmethod
+    def _display_results(analysis: dict):
+        """Display analysis results to console."""
+        print("\n" + "=" * 60)
+        print("ZONE CONFIGURATION ANALYSIS RESULTS")
+        print("=" * 60)
+        
+        stats = analysis["zone_count_stats"]
+        print(f"\n[SUMMARY]")
+        print(f"  Total sites scanned: {stats['total_sites']}")
+        print(f"  Sites with zones: {stats['sites_with_zones']}")
+        print(f"  Average zones per site: {stats['mean']:.1f}")
+        print(f"  Median zones per site: {stats['median']}")
+        print(f"  Range: {stats['min']} - {stats['max']}")
+        print(f"  Standard deviation: {stats['std_dev']:.2f}")
+        
+        # Common zones
+        print(f"\n[COMMON ZONES] (Present in 75%+ of sites with zones)")
+        if analysis["common_zones"]:
+            for zone_name in sorted(analysis["common_zones"]):
+                frequency = analysis["zone_frequency"].get(zone_name, 0)
+                percentage = (frequency / stats["sites_with_zones"] * 100) if stats["sites_with_zones"] > 0 else 0
+                print(f"  - {zone_name} ({frequency} sites, {percentage:.0f}%)")
+        else:
+            print("  No common zones found (high variation across sites)")
+        
+        # Sites missing common zones
+        print(f"\n[SITES MISSING COMMON ZONES] ({len(analysis['sites_missing_common_zones'])} sites)")
+        if analysis["sites_missing_common_zones"]:
+            for site_id, data in list(analysis["sites_missing_common_zones"].items())[:10]:
+                print(f"  - {data['site_name']}")
+                print(f"    Missing: {', '.join(sorted(data['missing_zones']))}")
+            if len(analysis["sites_missing_common_zones"]) > 10:
+                print(f"  ... and {len(analysis['sites_missing_common_zones']) - 10} more sites")
+        else:
+            print("  All sites have the common zones configured")
+        
+        # Sites with unique zones
+        print(f"\n[SITES WITH UNIQUE ZONES] ({len(analysis['sites_with_unique_zones'])} sites)")
+        if analysis["sites_with_unique_zones"]:
+            for site_id, data in list(analysis["sites_with_unique_zones"].items())[:10]:
+                print(f"  - {data['site_name']}")
+                print(f"    Unique zones: {', '.join(sorted(data['unique_zones']))}")
+            if len(analysis["sites_with_unique_zones"]) > 10:
+                print(f"  ... and {len(analysis['sites_with_unique_zones']) - 10} more sites")
+        else:
+            print("  No sites have unique zone configurations")
+        
+        # Zone count deviations
+        print(f"\n[ZONE COUNT DEVIATIONS] ({len(analysis['zone_count_deviations'])} sites)")
+        if analysis["zone_count_deviations"]:
+            for site_id, data in list(analysis["zone_count_deviations"].items())[:10]:
+                print(f"  - {data['site_name']}: {data['zone_count']} zones")
+                print(f"    Expected range: {data['expected_range']}, Deviation: {data['deviation_score']}x std dev")
+            if len(analysis["zone_count_deviations"]) > 10:
+                print(f"  ... and {len(analysis['zone_count_deviations']) - 10} more sites")
+        else:
+            print("  All sites have zone counts within expected range")
+        
+        print("\n" + "=" * 60)
+    
+    @staticmethod
+    def _export_results(analysis: dict, site_zones: dict):
+        """Export analysis results to CSV files."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Export summary by site
+        summary_rows = []
+        for site_id, data in site_zones.items():
+            missing_common = analysis["sites_missing_common_zones"].get(site_id, {}).get("missing_zones", set())
+            unique_zones = analysis["sites_with_unique_zones"].get(site_id, {}).get("unique_zones", set())
+            deviation_info = analysis["zone_count_deviations"].get(site_id, {})
+            
+            summary_rows.append({
+                "site_id": site_id,
+                "site_name": data["site_name"],
+                "zone_count": data["zone_count"],
+                "zone_names": ", ".join(sorted(data["zone_names"])),
+                "missing_common_zones": ", ".join(sorted(missing_common)) if missing_common else "",
+                "unique_zones": ", ".join(sorted(unique_zones)) if unique_zones else "",
+                "is_deviation": "Yes" if deviation_info else "No",
+                "deviation_score": deviation_info.get("deviation_score", ""),
+                "expected_range": deviation_info.get("expected_range", "")
+            })
+        
+        # Sort by deviation (sites with issues first)
+        summary_rows.sort(key=lambda row: (
+            row["is_deviation"] != "Yes",
+            not row["missing_common_zones"],
+            not row["unique_zones"],
+            row["site_name"]
+        ))
+        
+        summary_filename = f"ZoneAnalysis_Summary_{timestamp}.csv"
+        DataExporter.save_data_to_output(summary_rows, summary_filename, api_function_name="zone_analysis_summary")
+        print(f"! Summary exported to {summary_filename}")
+        
+        # Export all zones with site context
+        all_zones_rows = []
+        for site_id, data in site_zones.items():
+            for zone in data["zones"]:
+                zone_row = {
+                    "site_id": site_id,
+                    "site_name": data["site_name"],
+                    "zone_id": zone.get("id", ""),
+                    "zone_name": zone.get("name", ""),
+                    "map_id": zone.get("map_id", ""),
+                    "vertex_count": len(zone.get("vertices", [])),
+                    "created_time": zone.get("created_time", ""),
+                    "modified_time": zone.get("modified_time", "")
+                }
+                all_zones_rows.append(zone_row)
+        
+        all_zones_filename = f"ZoneAnalysis_AllZones_{timestamp}.csv"
+        DataExporter.save_data_to_output(all_zones_rows, all_zones_filename, api_function_name="zone_analysis_all_zones")
+        print(f"! All zones exported to {all_zones_filename}")
+        
+        # Export zone frequency report
+        frequency_rows = []
+        for zone_name, count in sorted(analysis["zone_frequency"].items(), key=lambda x: -x[1]):
+            sites_with_zone = stats["sites_with_zones"] if (stats := analysis["zone_count_stats"])["sites_with_zones"] > 0 else 1
+            percentage = (count / sites_with_zone * 100)
+            frequency_rows.append({
+                "zone_name": zone_name,
+                "site_count": count,
+                "percentage": f"{percentage:.1f}%",
+                "is_common": "Yes" if zone_name in analysis["common_zones"] else "No"
+            })
+        
+        frequency_filename = f"ZoneAnalysis_Frequency_{timestamp}.csv"
+        DataExporter.save_data_to_output(frequency_rows, frequency_filename, api_function_name="zone_analysis_frequency")
+        print(f"! Zone frequency exported to {frequency_filename}")
+        
+        logging.info(f"Zone analysis complete. Exported 3 CSV files with timestamp {timestamp}")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -46041,6 +46411,11 @@ menu_actions = {
     # SITE AUTO-UPGRADE CONFIGURATION
     # ==============================
     "118": (SiteAutoUpgradeConfigurator.execute, "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites (all sites, single, list, or range)"),
+    
+    # ==============================
+    # ZONE CONFIGURATION ANALYSIS
+    # ==============================
+    "119": (ZoneConfigurationAnalyzer.analyze, "Zone Configuration Analysis - Scan all sites to identify zone deviations (missing zones, unique zones, count anomalies)"),
     
     # ==============================
     # MAPS MANAGER (External Module)
