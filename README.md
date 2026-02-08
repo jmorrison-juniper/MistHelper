@@ -272,7 +272,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 116 | AP Firmware Report | Export AP firmware versions with upgrade recommendations (current/available/suggested) |
 | 117 | MSP Inventory | MSP Inventory Export - Device inventory across all MSPs and orgs (requires MSP privileges) |
 | 118 | Site Auto-Upgrade | Configure AP auto-upgrade settings for sites (all, single, list, or range) |
-| 119 | Zone Analysis | Zone Configuration Analysis - Scan all sites for zone deviations (missing/unique zones, count anomalies) |
+| 119 | Site Config Analysis | Scan all sites for zone, engagement dwell tag, and occupancy setting deviations |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -562,6 +562,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.08.23.28",
+      "date": "2026-02-08",
+      "changes": {
+        "enhancements": [
+          "Menu 119: Extended to analyze engagement dwell tags (passerby/bounce/engaged/stationed time ranges)",
+          "Menu 119: Extended to analyze engagement dwell tag custom names",
+          "Menu 119: Extended to analyze occupancy settings (min_duration, clients_enabled, etc.)",
+          "Menu 119: Extended to analyze analytics enabled/disabled status across sites",
+          "Menu 119: Exports 5 CSV files: Summary, AllZones, ZoneFrequency, DwellConfigs, OccupancyConfigs"
+        ]
+      }
+    },
     {
       "version": "26.02.08.23.20",
       "date": "2026-02-08",
