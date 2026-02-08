@@ -564,6 +564,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.08.23.46",
+      "date": "2026-02-08",
+      "changes": {
+        "code_quality": [
+          "Fixed 20 Pylance type errors with proper guard clauses (no type suppressions)",
+          "Added explicit type annotation for global apisession: Optional[Any]",
+          "Fixed _fetch_msp_name return type from str to Optional[str]",
+          "Added None guards for apisession and ID parameters across MSP and firmware functions"
+        ]
+      }
+    },
+    {
       "version": "26.02.08.23.37",
       "date": "2026-02-08",
       "changes": {

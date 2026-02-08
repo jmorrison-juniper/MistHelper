@@ -1986,10 +1986,11 @@ DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite da
 # ============================================================================
 
 # Initialize Mist API session (will be set up after authentication)
-apisession = None
+# Type annotation uses Any since mistapi is dynamically imported
+apisession: Optional[Any] = None
 
 # MSP privilege tracking (populated after authentication)
-msp_privileges = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
+msp_privileges: List[Dict[str, Any]] = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
 
 def detect_msp_privileges():
     """Detect MSP-level privileges from the authenticated user's profile.
@@ -2027,6 +2028,8 @@ def detect_msp_privileges():
         for priv in privileges:
             if isinstance(priv, dict) and priv.get('msp_id'):
                 msp_id = priv.get('msp_id')
+                if not msp_id or not isinstance(msp_id, str):
+                    continue
                 # Try multiple field names for MSP name (API inconsistency)
                 msp_name = priv.get('msp_name') or priv.get('name') or None
                 
@@ -2056,7 +2059,7 @@ def detect_msp_privileges():
         return []
 
 
-def _fetch_msp_name(msp_id: str) -> str:
+def _fetch_msp_name(msp_id: str) -> Optional[str]:
     """Helper to fetch MSP name from MSP API when not provided in privileges.
     
     Args:
@@ -2065,11 +2068,14 @@ def _fetch_msp_name(msp_id: str) -> str:
     Returns:
         MSP name string, or None if lookup fails
     """
+    if apisession is None:
+        return None
     try:
         import mistapi.api.v1.msps.msps as msps_api
         response = msps_api.getMspDetails(apisession, msp_id)
         if response and hasattr(response, 'data') and isinstance(response.data, dict):
-            return response.data.get('name', None)
+            name = response.data.get('name')
+            return name if isinstance(name, str) else None
     except Exception as e:
         logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")
     return None
@@ -2408,6 +2414,10 @@ def _select_msp_and_org():
     
     # Step 2: Fetch organizations under this MSP
     print(f"  Fetching organizations under {msp_name}...")
+    
+    if apisession is None:
+        print("  X API session not initialized")
+        return
     
     try:
         import mistapi.api.v1.msps.orgs as msp_orgs_api
@@ -36690,6 +36700,10 @@ class FirmwareManager:
         
         print(f"    Fetching organizations from MSP {msp_name}...")
         
+        if apisession is None:
+            print("    X API session not initialized")
+            return None
+        
         try:
             import mistapi.api.v1.msps.orgs as msp_orgs_api
             response = msp_orgs_api.listMspOrgs(apisession, msp_id)
@@ -36762,6 +36776,10 @@ class FirmwareManager:
         global apisession
         
         print(f"      Fetching sites from {org_name}...")
+        
+        if apisession is None:
+            print("      X API session not initialized")
+            return None
         
         try:
             import mistapi.api.v1.orgs.sites as org_sites_api
@@ -40641,10 +40659,18 @@ class MSPInventoryExporter:
         msp_id = msp_info.get('msp_id')
         msp_name = msp_info.get('msp_name', 'Unknown MSP')
         
+        if not msp_id or not isinstance(msp_id, str):
+            print(f"  X Invalid MSP ID for {msp_name}")
+            return
+        
         print(f"  Processing MSP: {msp_name}")
         print("-" * 70)
         
         self.msp_count += 1
+        
+        if apisession is None:
+            print(f"    X API session not initialized")
+            return
         
         # Fetch organizations under this MSP
         try:
@@ -40682,7 +40708,14 @@ class MSPInventoryExporter:
         org_id = org.get('id')
         org_name = org.get('name', 'Unknown Org')
         
+        if not org_id or not isinstance(org_id, str):
+            print(f"      {org_name}: Invalid org ID")
+            return
+        
         self.org_count += 1
+        
+        if apisession is None:
+            return
         
         try:
             # Fetch all devices from org inventory (not listOrgDevices which defaults to APs)
@@ -41082,6 +41115,10 @@ class SiteAutoUpgradeConfigurator:
         print("  STEP 3: Available Firmware Versions")
         print("-" * 70)
         print("  Fetching available AP firmware versions...")
+        
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            return False
         
         try:
             import mistapi.api.v1.orgs.devices as org_devices_api
@@ -41622,6 +41659,10 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _fetch_org_aps(self) -> bool:
         """Fetch all APs from the organization with full pagination."""
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            return False
+        
         try:
             # Use getOrgInventory with type="ap" and mistapi.get_all for pagination
             import mistapi.api.v1.orgs.inventory as org_inventory_api
@@ -41712,6 +41753,10 @@ class OrgLevelAPFirmwareUpgrader:
         print("-" * 70)
         print("  Fetching device firmware versions...")
         
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            return False
+        
         try:
             import mistapi.api.v1.orgs.stats as org_stats_api
             response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap", limit=1000)
@@ -41762,6 +41807,10 @@ class OrgLevelAPFirmwareUpgrader:
         print("  STEP 4: Available Firmware Versions")
         print("-" * 70)
         print("  Fetching available firmware for each model...")
+        
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            return False
         
         try:
             # Use listOrgAvailableDeviceVersions (not getOrgDeviceUpgrade which checks upgrade status)
@@ -42069,6 +42118,10 @@ class OrgLevelAPFirmwareUpgrader:
     def _execute_upgrades(self) -> bool:
         """Execute actual org-level upgrades."""
         print("\n  Executing org-level upgrades...")
+        
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            return False
         
         import mistapi.api.v1.orgs.devices as org_devices_api
         
@@ -46807,6 +46860,10 @@ class SiteAnalyticsConfigurator:
         for site in tqdm(sites, desc="Scanning sites", unit="site"):
             site_id = site.get("id")
             site_name = site.get("name", "Unnamed Site")
+            
+            if not site_id or not isinstance(site_id, str):
+                logging.warning(f"Invalid site_id for {site_name}")
+                continue
             
             try:
                 response = mistapi.api.v1.sites.setting.getSiteSetting(
