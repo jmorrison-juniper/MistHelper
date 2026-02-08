@@ -564,6 +564,16 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.08.23.58",
+      "date": "2026-02-08",
+      "changes": {
+        "enhancements": [
+          "Menu 120: Added WiFi settings to standard configuration (enabled=true, locate_connected=true, locate_unconnected=false)",
+          "SiteAnalyticsConfigurator now checks and applies STANDARD_WIFI settings across all sites"
+        ]
+      }
+    },
+    {
       "version": "26.02.08.23.46",
       "date": "2026-02-08",
       "changes": {

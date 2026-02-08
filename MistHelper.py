@@ -2189,6 +2189,12 @@ def initialize_mist_session_interactive():
             show_cli_notif=False
         )
         
+        # Type guard: APISession constructor should always return valid session
+        if apisession is None:
+            print("  X Failed to create API session")
+            logging.error("APISession constructor returned None")
+            return False
+        
         # CRITICAL: Clear any API token loaded from environment!
         # The _load_env() in __init__ may have loaded MIST_APITOKEN from .env,
         # which causes login_with_return() to use token auth instead of email/password.
@@ -46785,6 +46791,12 @@ class SiteAnalyticsConfigurator:
         "unconnected_clients_enabled": False
     }
     
+    STANDARD_WIFI = {
+        "enabled": True,
+        "locate_connected": True,
+        "locate_unconnected": False
+    }
+    
     @staticmethod
     def execute():
         """
@@ -46901,6 +46913,7 @@ class SiteAnalyticsConfigurator:
             "engagement_deviation": False,
             "analytic_deviation": False,
             "occupancy_deviation": False,
+            "wifi_deviation": False,
             "current_settings": {},
             "deviation_details": []
         }
@@ -46965,6 +46978,19 @@ class SiteAnalyticsConfigurator:
             deviation_record["has_deviations"] = True
             deviation_record["current_settings"]["occupancy"] = current_occupancy
             deviation_record["deviation_details"].extend(occupancy_deviations)
+        
+        # Check WiFi settings
+        current_wifi = settings.get("wifi", {})
+        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_wifi,
+            SiteAnalyticsConfigurator.STANDARD_WIFI,
+            "wifi"
+        )
+        if wifi_deviations:
+            deviation_record["wifi_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["wifi"] = current_wifi
+            deviation_record["deviation_details"].extend(wifi_deviations)
         
         return deviation_record
     
@@ -47046,6 +47072,7 @@ class SiteAnalyticsConfigurator:
         engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
         analytic_count = sum(1 for site in deviations if site["analytic_deviation"])
         occupancy_count = sum(1 for site in deviations if site["occupancy_deviation"])
+        wifi_count = sum(1 for site in deviations if site["wifi_deviation"])
         
         print(f"\n[DEVIATION SUMMARY]")
         print(f"  Total sites with deviations: {len(deviations)}")
@@ -47054,6 +47081,7 @@ class SiteAnalyticsConfigurator:
         print(f"  - Engagement settings: {engagement_count} sites")
         print(f"  - Analytic settings: {analytic_count} sites")
         print(f"  - Occupancy settings: {occupancy_count} sites")
+        print(f"  - WiFi settings: {wifi_count} sites")
         
         # Show first 10 sites with deviations
         print(f"\n[SITES WITH DEVIATIONS] (showing first 10)")
@@ -47069,6 +47097,8 @@ class SiteAnalyticsConfigurator:
                 deviation_types.append("Analytic")
             if site["occupancy_deviation"]:
                 deviation_types.append("Occupancy")
+            if site["wifi_deviation"]:
+                deviation_types.append("WiFi")
             
             print(f"  - {site['site_name']}: {', '.join(deviation_types)}")
         
@@ -47082,6 +47112,7 @@ class SiteAnalyticsConfigurator:
         print(f"  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
         print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
         print(f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}")
+        print(f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}")
     
     @staticmethod
     def _export_deviation_report(deviations: list):
@@ -47098,6 +47129,7 @@ class SiteAnalyticsConfigurator:
                 "engagement_deviation": "Yes" if site["engagement_deviation"] else "No",
                 "analytic_deviation": "Yes" if site["analytic_deviation"] else "No",
                 "occupancy_deviation": "Yes" if site["occupancy_deviation"] else "No",
+                "wifi_deviation": "Yes" if site["wifi_deviation"] else "No",
                 "deviation_count": len(site["deviation_details"]),
                 "deviation_details": "; ".join([
                     f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}"
@@ -47166,6 +47198,10 @@ class SiteAnalyticsConfigurator:
                 if site["occupancy_deviation"]:
                     current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
                     result["sections_updated"].append("occupancy")
+                
+                if site["wifi_deviation"]:
+                    current_settings["wifi"] = SiteAnalyticsConfigurator.STANDARD_WIFI.copy()
+                    result["sections_updated"].append("wifi")
                 
                 # Update site settings
                 update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
