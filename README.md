@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 120 actionable menu entries (0–119) with some gaps for future expansion.
+**Operation Count:** The code currently defines 121 actionable menu entries (0–120) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -273,6 +273,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 117 | MSP Inventory | MSP Inventory Export - Device inventory across all MSPs and orgs (requires MSP privileges) |
 | 118 | Site Auto-Upgrade | Configure AP auto-upgrade settings for sites (all, single, list, or range) |
 | 119 | Site Config Analysis | Scan all sites for zone, engagement dwell tag, and occupancy setting deviations |
+| 120 | Site Analytics Config | **DESTRUCTIVE**: Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -562,6 +563,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.08.23.37",
+      "date": "2026-02-08",
+      "changes": {
+        "feature_additions": [
+          "Menu 120: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings",
+          "New SiteAnalyticsConfigurator class for enforcing standard site analytics configuration",
+          "Scans all sites, identifies deviations from T-Mobile standard, applies corrections with confirmation",
+          "Exports preview report before changes and results report after configuration"
+        ]
+      }
+    },
     {
       "version": "26.02.08.23.28",
       "date": "2026-02-08",

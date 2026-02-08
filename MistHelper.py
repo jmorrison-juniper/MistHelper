@@ -46672,6 +46672,497 @@ class ZoneConfigurationAnalyzer:
         logging.info(f"Site configuration analysis complete. Exported CSV files with timestamp {timestamp}")
 
 
+class SiteAnalyticsConfigurator:
+    """
+    Configures site analytics settings to standard values across all sites.
+    
+    Scans all sites and updates any that deviate from the standard configuration for:
+    - RTSA (Real-Time Statistics & Analytics)
+    - Rogue AP detection
+    - Engagement dwell tags
+    - Occupancy settings
+    - Analytics enabled status
+    
+    SECURITY: DESTRUCTIVE - Modifies site settings. Requires explicit confirmation.
+    
+    Usage:
+        SiteAnalyticsConfigurator.execute()
+    """
+    
+    # Standard configuration values (T-Mobile standard)
+    STANDARD_RTSA = {
+        "enabled": True,
+        "track_asset": True,
+        "app_waking": True
+    }
+    
+    STANDARD_ROGUE = {
+        "min_rssi": -80,
+        "min_duration": 10,
+        "enabled": True,
+        "honeypot_enabled": True,
+        "whitelisted_bssids": [],
+        "whitelisted_ssids": []
+    }
+    
+    STANDARD_ENGAGEMENT = {
+        "dwell_tags": {
+            "passerby": "1-300",
+            "bounce": "301-14400",
+            "engaged": "14401-36000",
+            "stationed": "36001-86400"
+        },
+        "dwell_tag_names": {
+            "passerby": "",
+            "bounce": "",
+            "engaged": "",
+            "stationed": ""
+        }
+    }
+    
+    STANDARD_ANALYTIC = {
+        "enabled": True
+    }
+    
+    STANDARD_OCCUPANCY = {
+        "min_duration": 300,
+        "clients_enabled": True,
+        "sdkclients_enabled": True,
+        "assets_enabled": True,
+        "unconnected_clients_enabled": False
+    }
+    
+    @staticmethod
+    def execute():
+        """
+        Main entry point for site analytics configuration.
+        
+        Scans all sites, identifies deviations, and applies standard configuration.
+        """
+        print("Site Analytics Configurator:")
+        print("=" * 60)
+        print("! DESTRUCTIVE OPERATION - This will modify site settings")
+        print("=" * 60)
+        logging.info("Starting site analytics configuration scan...")
+        
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+        
+        # Collect current settings and identify deviations
+        deviations = SiteAnalyticsConfigurator._scan_for_deviations(current_org_id)
+        
+        if not deviations:
+            print("\n[OK] All sites are configured with standard analytics settings.")
+            return
+        
+        # Display deviations summary
+        SiteAnalyticsConfigurator._display_deviation_summary(deviations)
+        
+        # Export preview report
+        SiteAnalyticsConfigurator._export_deviation_report(deviations)
+        
+        # Confirm before applying changes
+        print("\n" + "=" * 60)
+        print(f"! {len(deviations)} sites will be updated to standard configuration")
+        print("=" * 60)
+        
+        try:
+            confirmation = input("Type 'CONFIGURE' to apply standard settings to all deviating sites: ")
+        except EOFError:
+            logging.info("EOF detected - session disconnected")
+            sys.exit(0)
+        
+        if confirmation != "CONFIGURE":
+            print("! Operation cancelled - confirmation not provided")
+            logging.warning("Site analytics configuration cancelled by user")
+            return
+        
+        # Apply standard configuration
+        results = SiteAnalyticsConfigurator._apply_standard_configuration(deviations)
+        
+        # Export results
+        SiteAnalyticsConfigurator._export_results(results)
+    
+    @staticmethod
+    def _scan_for_deviations(org_id: str) -> list:
+        """
+        Scan all sites and identify those deviating from standard configuration.
+        
+        Returns:
+            List of deviation records with site info and specific deviations
+        """
+        logging.info("Fetching all sites for analytics configuration scan...")
+        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        
+        if not sites:
+            logging.warning("No sites found in organization.")
+            return []
+        
+        print(f"! Scanning {len(sites)} sites for configuration deviations...")
+        
+        deviations = []
+        
+        for site in tqdm(sites, desc="Scanning sites", unit="site"):
+            site_id = site.get("id")
+            site_name = site.get("name", "Unnamed Site")
+            
+            try:
+                response = mistapi.api.v1.sites.setting.getSiteSetting(
+                    apisession,
+                    site_id=site_id
+                )
+                
+                if response.status_code != 200:
+                    logging.warning(f"Failed to fetch settings for {site_name}: HTTP {response.status_code}")
+                    continue
+                
+                settings = response.data if isinstance(response.data, dict) else {}
+                
+                # Check each configuration area for deviations
+                site_deviations = SiteAnalyticsConfigurator._check_deviations(settings, site_id, site_name)
+                
+                if site_deviations["has_deviations"]:
+                    deviations.append(site_deviations)
+                    
+            except Exception as error:
+                logging.warning(f"Error scanning {site_name}: {error}")
+        
+        print(f"! Found {len(deviations)} sites with configuration deviations")
+        return deviations
+    
+    @staticmethod
+    def _check_deviations(settings: dict, site_id: str, site_name: str) -> dict:
+        """Check a single site's settings for deviations from standard."""
+        deviation_record = {
+            "site_id": site_id,
+            "site_name": site_name,
+            "has_deviations": False,
+            "rtsa_deviation": False,
+            "rogue_deviation": False,
+            "engagement_deviation": False,
+            "analytic_deviation": False,
+            "occupancy_deviation": False,
+            "current_settings": {},
+            "deviation_details": []
+        }
+        
+        # Check RTSA settings
+        current_rtsa = settings.get("rtsa", {})
+        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_rtsa, 
+            SiteAnalyticsConfigurator.STANDARD_RTSA,
+            "rtsa"
+        )
+        if rtsa_deviations:
+            deviation_record["rtsa_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["rtsa"] = current_rtsa
+            deviation_record["deviation_details"].extend(rtsa_deviations)
+        
+        # Check Rogue settings
+        current_rogue = settings.get("rogue", {})
+        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_rogue,
+            SiteAnalyticsConfigurator.STANDARD_ROGUE,
+            "rogue"
+        )
+        if rogue_deviations:
+            deviation_record["rogue_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["rogue"] = current_rogue
+            deviation_record["deviation_details"].extend(rogue_deviations)
+        
+        # Check Engagement settings
+        current_engagement = settings.get("engagement", {})
+        engagement_deviations = SiteAnalyticsConfigurator._compare_engagement(current_engagement)
+        if engagement_deviations:
+            deviation_record["engagement_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["engagement"] = current_engagement
+            deviation_record["deviation_details"].extend(engagement_deviations)
+        
+        # Check Analytic settings
+        current_analytic = settings.get("analytic", {})
+        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_analytic,
+            SiteAnalyticsConfigurator.STANDARD_ANALYTIC,
+            "analytic"
+        )
+        if analytic_deviations:
+            deviation_record["analytic_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["analytic"] = current_analytic
+            deviation_record["deviation_details"].extend(analytic_deviations)
+        
+        # Check Occupancy settings
+        current_occupancy = settings.get("occupancy", {})
+        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_occupancy,
+            SiteAnalyticsConfigurator.STANDARD_OCCUPANCY,
+            "occupancy"
+        )
+        if occupancy_deviations:
+            deviation_record["occupancy_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["occupancy"] = current_occupancy
+            deviation_record["deviation_details"].extend(occupancy_deviations)
+        
+        return deviation_record
+    
+    @staticmethod
+    def _compare_settings(current: dict, standard: dict, section: str) -> list:
+        """Compare current settings with standard and return list of deviations."""
+        deviations = []
+        
+        for key, expected_value in standard.items():
+            current_value = current.get(key)
+            
+            # Handle None/missing values
+            if current_value is None:
+                deviations.append({
+                    "section": section,
+                    "key": key,
+                    "current": "NOT SET",
+                    "expected": expected_value
+                })
+            elif current_value != expected_value:
+                deviations.append({
+                    "section": section,
+                    "key": key,
+                    "current": current_value,
+                    "expected": expected_value
+                })
+        
+        return deviations
+    
+    @staticmethod
+    def _compare_engagement(current: dict) -> list:
+        """Compare engagement settings including nested dwell_tags."""
+        deviations = []
+        standard = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT
+        
+        # Check dwell_tags
+        current_dwell_tags = current.get("dwell_tags", {})
+        for tag_name, expected_range in standard["dwell_tags"].items():
+            current_range = current_dwell_tags.get(tag_name)
+            if current_range is None:
+                deviations.append({
+                    "section": "engagement.dwell_tags",
+                    "key": tag_name,
+                    "current": "NOT SET",
+                    "expected": expected_range
+                })
+            elif current_range != expected_range:
+                deviations.append({
+                    "section": "engagement.dwell_tags",
+                    "key": tag_name,
+                    "current": current_range,
+                    "expected": expected_range
+                })
+        
+        # Check dwell_tag_names (should all be empty strings)
+        current_dwell_names = current.get("dwell_tag_names", {})
+        for tag_name, expected_name in standard["dwell_tag_names"].items():
+            current_name = current_dwell_names.get(tag_name)
+            if current_name is not None and current_name != expected_name:
+                deviations.append({
+                    "section": "engagement.dwell_tag_names",
+                    "key": tag_name,
+                    "current": current_name,
+                    "expected": expected_name
+                })
+        
+        return deviations
+    
+    @staticmethod
+    def _display_deviation_summary(deviations: list):
+        """Display summary of deviations found."""
+        print("\n" + "=" * 60)
+        print("SITE ANALYTICS CONFIGURATION DEVIATIONS")
+        print("=" * 60)
+        
+        # Count by deviation type
+        rtsa_count = sum(1 for site in deviations if site["rtsa_deviation"])
+        rogue_count = sum(1 for site in deviations if site["rogue_deviation"])
+        engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
+        analytic_count = sum(1 for site in deviations if site["analytic_deviation"])
+        occupancy_count = sum(1 for site in deviations if site["occupancy_deviation"])
+        
+        print(f"\n[DEVIATION SUMMARY]")
+        print(f"  Total sites with deviations: {len(deviations)}")
+        print(f"  - RTSA settings: {rtsa_count} sites")
+        print(f"  - Rogue settings: {rogue_count} sites")
+        print(f"  - Engagement settings: {engagement_count} sites")
+        print(f"  - Analytic settings: {analytic_count} sites")
+        print(f"  - Occupancy settings: {occupancy_count} sites")
+        
+        # Show first 10 sites with deviations
+        print(f"\n[SITES WITH DEVIATIONS] (showing first 10)")
+        for site in deviations[:10]:
+            deviation_types = []
+            if site["rtsa_deviation"]:
+                deviation_types.append("RTSA")
+            if site["rogue_deviation"]:
+                deviation_types.append("Rogue")
+            if site["engagement_deviation"]:
+                deviation_types.append("Engagement")
+            if site["analytic_deviation"]:
+                deviation_types.append("Analytic")
+            if site["occupancy_deviation"]:
+                deviation_types.append("Occupancy")
+            
+            print(f"  - {site['site_name']}: {', '.join(deviation_types)}")
+        
+        if len(deviations) > 10:
+            print(f"  ... and {len(deviations) - 10} more sites")
+        
+        # Show standard configuration
+        print(f"\n[STANDARD CONFIGURATION TO BE APPLIED]")
+        print(f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}")
+        print(f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}")
+        print(f"  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
+        print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
+        print(f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}")
+    
+    @staticmethod
+    def _export_deviation_report(deviations: list):
+        """Export deviation report before applying changes."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        rows = []
+        for site in deviations:
+            rows.append({
+                "site_id": site["site_id"],
+                "site_name": site["site_name"],
+                "rtsa_deviation": "Yes" if site["rtsa_deviation"] else "No",
+                "rogue_deviation": "Yes" if site["rogue_deviation"] else "No",
+                "engagement_deviation": "Yes" if site["engagement_deviation"] else "No",
+                "analytic_deviation": "Yes" if site["analytic_deviation"] else "No",
+                "occupancy_deviation": "Yes" if site["occupancy_deviation"] else "No",
+                "deviation_count": len(site["deviation_details"]),
+                "deviation_details": "; ".join([
+                    f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}"
+                    for detail in site["deviation_details"][:5]
+                ])
+            })
+        
+        filename = f"SiteAnalytics_Deviations_PREVIEW_{timestamp}.csv"
+        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_deviations")
+        print(f"\n! Preview report exported to {filename}")
+    
+    @staticmethod
+    def _apply_standard_configuration(deviations: list) -> list:
+        """Apply standard configuration to all deviating sites."""
+        print(f"\nApplying standard configuration to {len(deviations)} sites...")
+        
+        results = []
+        success_count = 0
+        failure_count = 0
+        
+        for site in tqdm(deviations, desc="Configuring sites", unit="site"):
+            site_id = site["site_id"]
+            site_name = site["site_name"]
+            
+            result = {
+                "site_id": site_id,
+                "site_name": site_name,
+                "status": "PENDING",
+                "sections_updated": [],
+                "error": None
+            }
+            
+            try:
+                # Fetch current settings
+                response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
+                
+                if response.status_code != 200:
+                    result["status"] = "FAILED"
+                    result["error"] = f"Failed to fetch current settings: HTTP {response.status_code}"
+                    failure_count += 1
+                    results.append(result)
+                    continue
+                
+                current_settings = response.data if isinstance(response.data, dict) else {}
+                
+                # Apply standard configuration for each deviating section
+                if site["rtsa_deviation"]:
+                    current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()
+                    result["sections_updated"].append("rtsa")
+                
+                if site["rogue_deviation"]:
+                    current_settings["rogue"] = SiteAnalyticsConfigurator.STANDARD_ROGUE.copy()
+                    result["sections_updated"].append("rogue")
+                
+                if site["engagement_deviation"]:
+                    if "engagement" not in current_settings:
+                        current_settings["engagement"] = {}
+                    current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tags"].copy()
+                    current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tag_names"].copy()
+                    result["sections_updated"].append("engagement")
+                
+                if site["analytic_deviation"]:
+                    current_settings["analytic"] = SiteAnalyticsConfigurator.STANDARD_ANALYTIC.copy()
+                    result["sections_updated"].append("analytic")
+                
+                if site["occupancy_deviation"]:
+                    current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
+                    result["sections_updated"].append("occupancy")
+                
+                # Update site settings
+                update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
+                    apisession,
+                    site_id,
+                    body=current_settings
+                )
+                
+                if update_response.status_code == 200:
+                    result["status"] = "SUCCESS"
+                    success_count += 1
+                    logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
+                else:
+                    result["status"] = "FAILED"
+                    result["error"] = f"API returned {update_response.status_code}"
+                    failure_count += 1
+                    logging.error(f"Failed to update {site_name}: HTTP {update_response.status_code}")
+                    
+            except Exception as error:
+                result["status"] = "ERROR"
+                result["error"] = str(error)
+                failure_count += 1
+                logging.error(f"Error updating {site_name}: {error}")
+            
+            results.append(result)
+        
+        print(f"\n[CONFIGURATION COMPLETE]")
+        print(f"  SUCCESS: {success_count} sites")
+        print(f"  FAILED: {failure_count} sites")
+        
+        return results
+    
+    @staticmethod
+    def _export_results(results: list):
+        """Export configuration results."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        rows = []
+        for result in results:
+            rows.append({
+                "site_id": result["site_id"],
+                "site_name": result["site_name"],
+                "status": result["status"],
+                "sections_updated": ", ".join(result["sections_updated"]),
+                "error": result["error"] or ""
+            })
+        
+        filename = f"SiteAnalytics_Configuration_Results_{timestamp}.csv"
+        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_results")
+        print(f"! Results exported to {filename}")
+        
+        logging.info(f"Site analytics configuration complete. {len([r for r in results if r['status'] == 'SUCCESS'])} sites updated.")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -46892,6 +47383,11 @@ menu_actions = {
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
     # ==============================
     "119": (ZoneConfigurationAnalyzer.analyze, "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations"),
+    
+    # ==============================
+    # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
+    # ==============================
+    "120": (SiteAnalyticsConfigurator.execute, " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites"),
     
     # ==============================
     # MAPS MANAGER (External Module)
