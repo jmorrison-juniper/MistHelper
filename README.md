@@ -564,6 +564,16 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.02.09.00.33",
+      "date": "2026-02-09",
+      "changes": {
+        "enhancements": [
+          "Menu 120: Added engagement hours to standard configuration (all days set to empty string)",
+          "Detects and clears custom operating hours (sun/mon/tue/wed/thu/fri/sat) to defaults"
+        ]
+      }
+    },
+    {
       "version": "26.02.08.23.58",
       "date": "2026-02-08",
       "changes": {

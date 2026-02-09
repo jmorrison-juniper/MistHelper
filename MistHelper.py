@@ -46776,6 +46776,15 @@ class SiteAnalyticsConfigurator:
             "bounce": "",
             "engaged": "",
             "stationed": ""
+        },
+        "hours": {
+            "sun": "",
+            "mon": "",
+            "tue": "",
+            "wed": "",
+            "thu": "",
+            "fri": "",
+            "sat": ""
         }
     }
     
@@ -47057,6 +47066,19 @@ class SiteAnalyticsConfigurator:
                     "expected": expected_name
                 })
         
+        # Check hours (should all be empty strings - no custom operating hours)
+        current_hours = current.get("hours", {})
+        for day_name, expected_hours in standard["hours"].items():
+            current_day_hours = current_hours.get(day_name)
+            # Deviation if hours are set (non-empty) when they should be empty
+            if current_day_hours is not None and current_day_hours != expected_hours:
+                deviations.append({
+                    "section": "engagement.hours",
+                    "key": day_name,
+                    "current": current_day_hours,
+                    "expected": expected_hours if expected_hours else "(empty)"
+                })
+        
         return deviations
     
     @staticmethod
@@ -47189,6 +47211,7 @@ class SiteAnalyticsConfigurator:
                         current_settings["engagement"] = {}
                     current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tags"].copy()
                     current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tag_names"].copy()
+                    current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
                     result["sections_updated"].append("engagement")
                 
                 if site["analytic_deviation"]:
