@@ -288,6 +288,87 @@ PACKAGE_IMPORT_MAP = {
     'msgpack-python': 'msgpack',
 }
 
+def _get_installed_version(package_name: str) -> str:
+    """Get installed version of a package using importlib.metadata."""
+    try:
+        from importlib.metadata import version as get_version
+        return get_version(package_name)
+    except Exception:
+        return ""
+
+def _parse_version(version_str: str) -> tuple:
+    """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
+    try:
+        parts = []
+        for part in version_str.split('.'):
+            # Handle versions like '1.0.0a1' by extracting numeric prefix
+            numeric = ''
+            for char in part:
+                if char.isdigit():
+                    numeric += char
+                else:
+                    break
+            parts.append(int(numeric) if numeric else 0)
+        return tuple(parts)
+    except Exception:
+        return (0,)
+
+def _version_satisfies(installed: str, spec: str) -> bool:
+    """Check if installed version satisfies the version specification."""
+    if not installed:
+        return False
+    
+    # Parse operator and required version from spec (e.g., ">=0.59.0" or "==1.0.0")
+    operators = ['>=', '<=', '==', '!=', '>', '<']
+    operator = '>='  # Default
+    required_version = ''
+    
+    for op in operators:
+        if op in spec:
+            parts = spec.split(op, 1)
+            if len(parts) == 2:
+                operator = op
+                required_version = parts[1].strip()
+                break
+    
+    if not required_version:
+        return True  # No version requirement, any version satisfies
+    
+    installed_tuple = _parse_version(installed)
+    required_tuple = _parse_version(required_version)
+    
+    # Pad tuples to same length for comparison
+    max_len = max(len(installed_tuple), len(required_tuple))
+    installed_tuple = installed_tuple + (0,) * (max_len - len(installed_tuple))
+    required_tuple = required_tuple + (0,) * (max_len - len(required_tuple))
+    
+    if operator == '>=':
+        return installed_tuple >= required_tuple
+    elif operator == '>':
+        return installed_tuple > required_tuple
+    elif operator == '<=':
+        return installed_tuple <= required_tuple
+    elif operator == '<':
+        return installed_tuple < required_tuple
+    elif operator == '==':
+        return installed_tuple == required_tuple
+    elif operator == '!=':
+        return installed_tuple != required_tuple
+    
+    return True
+
+def _get_latest_pypi_version(package_name: str) -> str:
+    """Query PyPI for the latest version of a package."""
+    try:
+        import urllib.request
+        import json as json_mod
+        url = f"https://pypi.org/pypi/{package_name}/json"
+        with urllib.request.urlopen(url, timeout=5) as response:
+            data = json_mod.loads(response.read().decode())
+            return data.get('info', {}).get('version', '')
+    except Exception:
+        return ""
+
 def _parse_requirements_file(filepath='requirements.txt'):
     """
     Parse requirements.txt and return list of package specifications.
@@ -356,8 +437,14 @@ def _early_dependency_check():
         logging.warning("No packages found in requirements.txt - skipping dependency check")
         return
     
-    # Quick check: try importing each package
+    # Check if we should upgrade to latest versions (not just meet minimum requirements)
+    auto_upgrade_to_latest = os.getenv("AUTO_UPGRADE_TO_LATEST", "true").lower() == "true"
+    if auto_upgrade_to_latest:
+        logging.debug("AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions")
+    
+    # Quick check: try importing each package and check versions
     missing_packages = []
+    outdated_packages = []
     for package_name, package_spec in all_packages:
         # Handle package name vs import name differences
         # Normalize to lowercase for lookup since pip package names are case-insensitive
@@ -368,15 +455,29 @@ def _early_dependency_check():
         
         try:
             __import__(import_name)
+            # Package exists - check if version satisfies requirement
+            installed_version = _get_installed_version(package_name)
+            if installed_version and not _version_satisfies(installed_version, package_spec):
+                outdated_packages.append((package_name, package_spec, installed_version))
+                logging.info(f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})")
+            elif auto_upgrade_to_latest and installed_version:
+                # Check PyPI for newer version
+                latest_version = _get_latest_pypi_version(package_name)
+                if latest_version and _parse_version(latest_version) > _parse_version(installed_version):
+                    outdated_packages.append((package_name, package_spec, installed_version))
+                    logging.info(f"Newer version available: {package_name} {installed_version} -> {latest_version}")
         except ImportError:
             missing_packages.append((package_name, package_spec))
             logging.info(f"Missing dependency detected: {package_name}")
     
-    if not missing_packages:
-        logging.debug(f"All {len(all_packages)} dependencies from requirements.txt present")
+    if not missing_packages and not outdated_packages:
+        logging.debug(f"All {len(all_packages)} dependencies from requirements.txt present and up-to-date")
         return
     
-    logging.info(f"Attempting to auto-install {len(missing_packages)} missing dependencies...")
+    if missing_packages:
+        logging.info(f"Attempting to auto-install {len(missing_packages)} missing dependencies...")
+    if outdated_packages:
+        logging.info(f"Attempting to upgrade {len(outdated_packages)} outdated dependencies...")
     
     # Helper function to find UV executable in various locations
     def find_uv_executable():
@@ -531,7 +632,78 @@ def _early_dependency_check():
                 logging.error(f"Could not install {package_spec} with pip: {pip_error}")
                 failure_count += 1
     
-    logging.info(f"Early dependency check completed: {success_count} installed, {failure_count} failed")
+    # Step 5: Upgrade outdated packages
+    upgrade_count = 0
+    upgrade_failure_count = 0
+    
+    for package_name, package_spec, installed_version in outdated_packages:
+        upgraded = False
+        
+        # Try UV first if available
+        if use_uv and uv_cmd:
+            try:
+                if uv_cmd[0] == sys.executable:
+                    cmd = uv_cmd + ['pip', 'install', '--upgrade', '--python', sys.executable, package_spec]
+                else:
+                    cmd = uv_cmd + ['pip', 'install', '--upgrade', '--python', sys.executable, package_spec]
+                logging.info(f"Upgrading {package_name} from {installed_version} with UV...")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    new_version = _get_installed_version(package_name)
+                    logging.info(f"Successfully upgraded {package_name}: {installed_version} -> {new_version}")
+                    upgrade_count += 1
+                    upgraded = True
+                else:
+                    logging.warning(f"UV upgrade failed for {package_name}: {result.stderr.strip()}")
+                    logging.info(f"Retrying {package_name} upgrade with pip fallback...")
+            except Exception as uv_error:
+                logging.warning(f"UV upgrade error for {package_name}: {uv_error}")
+                logging.info(f"Retrying {package_name} upgrade with pip fallback...")
+        
+        # Try pip if UV not available or UV failed
+        if not upgraded:
+            try:
+                cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade', package_spec]
+                logging.info(f"Upgrading {package_name} from {installed_version} with pip...")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    new_version = _get_installed_version(package_name)
+                    logging.info(f"Successfully upgraded {package_name}: {installed_version} -> {new_version}")
+                    upgrade_count += 1
+                    upgraded = True
+                else:
+                    # Check if failure is due to corrupted package state (no RECORD file)
+                    if 'no-record-file' in result.stderr or 'RECORD' in result.stderr:
+                        logging.warning(f"Package {package_name} has corrupted state - attempting force reinstall...")
+                        force_cmd = [sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', package_spec]
+                        force_result = subprocess.run(force_cmd, capture_output=True, text=True, timeout=60)
+                        if force_result.returncode == 0:
+                            new_version = _get_installed_version(package_name)
+                            logging.info(f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}")
+                            upgrade_count += 1
+                            upgraded = True
+                        else:
+                            logging.error(f"Force reinstall failed for {package_name}: {force_result.stderr.strip()}")
+                            upgrade_failure_count += 1
+                    else:
+                        logging.error(f"Pip upgrade failed for {package_name}: {result.stderr.strip()}")
+                        upgrade_failure_count += 1
+            except Exception as pip_error:
+                logging.error(f"Could not upgrade {package_name} with pip: {pip_error}")
+                upgrade_failure_count += 1
+    
+    # Summary
+    summary_parts = []
+    if missing_packages:
+        summary_parts.append(f"{success_count} installed")
+    if outdated_packages:
+        summary_parts.append(f"{upgrade_count} upgraded")
+    if failure_count + upgrade_failure_count > 0:
+        summary_parts.append(f"{failure_count + upgrade_failure_count} failed")
+    
+    logging.info(f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}")
 
 # Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
 _early_dependency_check()
@@ -1991,6 +2163,7 @@ apisession: Optional[Any] = None
 
 # MSP privilege tracking (populated after authentication)
 msp_privileges: List[Dict[str, Any]] = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
+selected_msp: Optional[Dict[str, Any]] = None  # Currently selected MSP (from menu 115 or elsewhere)
 
 def detect_msp_privileges():
     """Detect MSP-level privileges from the authenticated user's profile.
@@ -2280,6 +2453,24 @@ def initialize_mist_session_interactive():
         
         print("")
         return True
+    
+    except ConnectionError as conn_err:
+        # mistapi 0.59.5+: Raised for proxy/network errors instead of sys.exit()
+        print(f"  X Connection failed: {conn_err}")
+        logging.error(f"Interactive login connection error: {conn_err}")
+        apisession = None
+        return False
+    
+    except ValueError as val_err:
+        # mistapi 0.59.5+: Raised for invalid API token or auth failure instead of sys.exit()
+        error_msg = str(val_err).lower()
+        if "token" in error_msg or "401" in error_msg:
+            print("  X Invalid API token or credentials")
+        else:
+            print(f"  X Authentication error: {val_err}")
+        logging.error(f"Interactive login value error: {val_err}")
+        apisession = None
+        return False
             
     except Exception as e:
         error_msg = str(e)
@@ -2296,18 +2487,9 @@ def initialize_mist_session_interactive():
         return False
 
 
-def switch_to_interactive_login():
-    """Menu option to switch from API token to interactive login.
-    
-    This allows users to re-authenticate using email/password to gain
-    MSP-level API access during an existing session. After successful login,
-    if MSP privileges are detected, prompts user to select MSP and org.
-    
-    Returns:
-        bool: True to signal the menu should continue, False otherwise
-    """
-    global apisession, msp_privileges, org_id
-    
+def _print_switch_login_header():
+    """Display switch to interactive login header and benefits."""
+    logging.debug("Entering _print_switch_login_header()")
     print("")
     print("="*60)
     print("  SWITCH TO INTERACTIVE LOGIN")
@@ -2322,61 +2504,100 @@ def switch_to_interactive_login():
     print("    - Supports 2FA authentication")
     print("    - Select and switch between MSPs and Organizations")
     print("")
-    
     if msp_privileges:
+        logging.debug(f"MSP privileges already detected: {len(msp_privileges)} MSP(s)")
         print(f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)")
         print("")
+
+
+def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
+    """Clear session and attempt interactive login with rollback on failure.
     
-    try:
-        confirm = InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
-    except SystemExit:
-        return True  # Return to menu
+    Returns:
+        bool: True if login succeeded, False if failed (session restored)
+    """
+    global apisession, msp_privileges, org_id
     
-    if confirm != 'y':
-        print("  Cancelled.")
-        return True  # Return to menu
+    logging.debug("Entering _attempt_interactive_login_with_rollback()")
+    logging.debug("Clearing existing session state for re-authentication")
     
-    # Clear existing session
-    old_session = apisession
-    old_org_id = org_id
     apisession = None
     msp_privileges = []
     org_id = None
     
-    # Attempt interactive login
     if not initialize_mist_session_interactive():
-        # Restore old session if login failed
         print("")
         print("  X Login failed - restoring previous session")
         apisession = old_session
         org_id = old_org_id
-        # Re-detect MSP privileges for restored session
         detect_msp_privileges()
         logging.warning("Interactive login failed - restored previous API session")
-        return True  # Return to menu
-    
+        return False
+    logging.debug("Interactive login succeeded")
+    return True
+
+
+def _handle_interactive_login_success():
+    """Handle successful interactive login - display status and select MSP/org."""
+    logging.debug("Entering _handle_interactive_login_success()")
     print("")
     print("  + Successfully switched to interactive login")
     if msp_privileges:
         print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")
-    logging.info("Successfully switched to interactive login session")
+        logging.info(f"Successfully switched to interactive login session with {len(msp_privileges)} MSP(s)")
+    else:
+        logging.info("Successfully switched to interactive login session (no MSP privileges)")
     
-    # If MSP privileges detected, offer to select MSP and org
     if msp_privileges:
         _select_msp_and_org()
     else:
-        # No MSP, just select org from user privileges
         _select_org_from_session()
+
+
+def switch_to_interactive_login():
+    """Menu option to switch from API token to interactive login.
     
-    return True  # Return to menu
+    Returns:
+        bool: True to signal the menu should continue
+    """
+    global apisession, org_id
+    
+    logging.debug("Entering switch_to_interactive_login()")
+    logging.info("User initiated switch to interactive login")
+    
+    _print_switch_login_header()
+    
+    try:
+        confirm = InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
+    except SystemExit:
+        logging.debug("SystemExit during confirmation prompt")
+        return True
+    
+    logging.debug(f"User confirmation received: '{confirm}'")
+    
+    if confirm != 'y':
+        print("  Cancelled.")
+        logging.warning("User cancelled switch to interactive login")
+        return True
+    
+    old_session = apisession
+    old_org_id = org_id
+    
+    if not _attempt_interactive_login_with_rollback(old_session, old_org_id):
+        return True
+    
+    _handle_interactive_login_success()
+    return True
 
 
 def _select_msp_and_org():
     """Helper to select MSP and then an organization within that MSP.
     
-    Updates global org_id based on user selection.
+    Updates global org_id and selected_msp based on user selection.
     """
-    global org_id, msp_privileges
+    global org_id, msp_privileges, selected_msp
+    
+    logging.debug(f"Entering _select_msp_and_org() - {len(msp_privileges)} MSP(s) available")
     
     print("")
     print("="*60)
@@ -2385,10 +2606,11 @@ def _select_msp_and_org():
     print("")
     
     # Step 1: Select MSP
-    selected_msp = None
+    chosen_msp = None
     if len(msp_privileges) == 1:
-        selected_msp = msp_privileges[0]
-        print(f"  Using MSP: {selected_msp['msp_name']} (only one available)")
+        chosen_msp = msp_privileges[0]
+        print(f"  Using MSP: {chosen_msp['msp_name']} (only one available)")
+        logging.debug(f"Single MSP auto-selected: {chosen_msp['msp_name']}")
     else:
         print("  Available MSPs:")
         for idx, msp in enumerate(msp_privileges, start=1):
@@ -2396,50 +2618,69 @@ def _select_msp_and_org():
             msp_role = msp.get('role', 'unknown')
             print(f"    {idx}. {msp_name} (role: {msp_role})")
         print("")
+        choice = ""
         try:
             choice = InputUtils.safe_input("  Select MSP (number, or Enter to skip): ", context="msp_select").strip()
+            logging.debug(f"User MSP selection input: '{choice}'")
             if choice == "":
                 print("  Skipping MSP selection - using direct org access")
+                logging.info("User skipped MSP selection - using direct org access")
                 _select_org_from_session()
                 return
             choice_idx = int(choice) - 1
             if 0 <= choice_idx < len(msp_privileges):
-                selected_msp = msp_privileges[choice_idx]
+                chosen_msp = msp_privileges[choice_idx]
+                logging.info(f"User selected MSP: {chosen_msp.get('msp_name', 'Unknown')} (index {choice_idx + 1})")
             else:
                 print("  X Invalid selection - skipping MSP selection")
+                logging.warning(f"Invalid MSP selection: index {choice_idx + 1} out of range (1-{len(msp_privileges)})")
                 _select_org_from_session()
                 return
-        except (ValueError, SystemExit):
+        except ValueError:
             print("  X Invalid input - skipping MSP selection")
+            logging.warning(f"ValueError during MSP selection - invalid input: '{choice}'")
+            _select_org_from_session()
+            return
+        except SystemExit:
+            logging.debug("SystemExit during MSP selection")
             _select_org_from_session()
             return
     
-    msp_id = selected_msp['msp_id']
-    msp_name = selected_msp.get('msp_name', 'Unknown')
+    # Save selected MSP globally for reuse by other menus (e.g., menu 116)
+    selected_msp = chosen_msp
+    
+    msp_id = chosen_msp['msp_id']
+    msp_name = chosen_msp.get('msp_name', 'Unknown')
     print(f"  + Selected MSP: {msp_name}")
     
     # Step 2: Fetch organizations under this MSP
     print(f"  Fetching organizations under {msp_name}...")
+    logging.info(f"Fetching organizations from MSP: {msp_name} (msp_id: {msp_id})")
     
     if apisession is None:
         print("  X API session not initialized")
+        logging.error("API session not initialized when selecting MSP org")
         return
     
     try:
         import mistapi.api.v1.msps.orgs as msp_orgs_api
+        logging.debug(f"listMspOrgs API call for msp_id: {msp_id}")
         response = msp_orgs_api.listMspOrgs(apisession, msp_id)
         
         if not response or not hasattr(response, 'data'):
             print("  X Failed to retrieve MSP organizations")
-            logging.error("listMspOrgs returned no data")
+            logging.error(f"listMspOrgs returned no data for MSP: {msp_name}")
             return
         
         orgs_data = response.data
         if not isinstance(orgs_data, list):
             orgs_data = [orgs_data] if orgs_data else []
         
+        logging.debug(f"Retrieved {len(orgs_data)} organizations from MSP {msp_name}")
+        
         if not orgs_data:
             print("  No organizations found under this MSP")
+            logging.warning(f"No organizations found under MSP: {msp_name}")
             return
         
         # Sort orgs by name for easier selection
@@ -2514,12 +2755,15 @@ def _select_org_from_session():
     """
     global org_id
     
+    logging.debug("Entering _select_org_from_session()")
+    
     print("")
     print("  Selecting organization from your session privileges...")
     print("")
     
     try:
         # Use mistapi's built-in org selection
+        logging.debug("Invoking mistapi.cli.select_org()")
         org_id_list = mistapi.cli.select_org(apisession)
         if org_id_list and len(org_id_list) > 0:
             org_id = org_id_list[0]
@@ -2527,6 +2771,7 @@ def _select_org_from_session():
             logging.info(f"User selected org from session: {org_id}")
         else:
             print("  X No organization selected")
+            logging.warning("No organization selected from session privileges")
     except Exception as e:
         print(f"  X Error selecting organization: {e}")
         logging.error(f"Failed to select org from session: {e}")
@@ -18771,127 +19016,132 @@ class GatewayExportUtils:
         else:
             logging.info(f"! {output_file} was generated or refreshed")
     
+    # WAN port columns used for conflict analysis
+    WAN_PORT_COLUMNS = [f'if_stat_ge-{port}_ips' for port in ['0/0/0', '0/0/1', '0/0/2']]
+    
     @staticmethod
     def wan_port_conflicts():
         """
-        Checks if AllGatewayDeviceStats.csv exists and is fresh. If not, generates it.
-        Then exports a filtered CSV showing gateways that have IP address conflicts WITHIN the same device:
-        - Same IP address assigned to multiple WAN ports (0/0/0, 0/0/1, 0/0/2)
-        
-        Note: Next hop gateway conflicts are not checked since this data is not available in the CSV.
+        Orchestrates WAN port IP conflict analysis for gateway devices.
+        Delegates to helper methods for loading, analyzing, and exporting results.
         """
         logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
         
-        # Check if AllGatewayDeviceStats.csv exists and is fresh using existing helper
-        stats_file = "AllGatewayDeviceStats.csv"
+        gateway_data = GatewayExportUtils._load_gateway_stats_for_conflicts()
+        if not gateway_data:
+            return
         
+        conflicts_found = GatewayExportUtils._analyze_all_gateway_conflicts(gateway_data)
+        GatewayExportUtils._export_conflict_results(conflicts_found)
+    
+    @staticmethod
+    def _load_gateway_stats_for_conflicts():
+        """Load gateway device stats CSV for conflict analysis."""
+        stats_file = "AllGatewayDeviceStats.csv"
         CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
         
-        # Load the gateway device stats using CSV reader
         stats_path = FilePathUtils.get_csv_path(stats_file)
         try:
-            gateway_data = []
             with open(stats_path, 'r', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                gateway_data = list(reader)
-            
+                gateway_data = list(csv.DictReader(csvfile))
             logging.info(f"! Loaded {len(gateway_data)} gateway device records for analysis")
+            return gateway_data
         except Exception as exception:
             logging.error(f"! Failed to load {stats_file}: {exception}")
             print(f"! Failed to load {stats_file}: {exception}")
-            return
-        
-        # Define WAN port columns to analyze
-        wan_ports = ['0/0/0', '0/0/1', '0/0/2'] 
-        ip_columns = [f'if_stat_ge-{port}_ips' for port in wan_ports]
-        
-        # Find gateways with internal WAN port IP conflicts
+            return None
+    
+    @staticmethod
+    def _analyze_all_gateway_conflicts(gateway_data):
+        """Analyze all gateways for internal WAN port IP conflicts."""
         logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
-        
         conflicts_found = []
         
         for index, row in enumerate(gateway_data):
-            device_name = row.get('device_name', row.get('name', f"Device_{index}"))
-            site_name = row.get('site_name', 'Unknown Site')
-            
-            # Collect IP addresses for this device's WAN ports
-            device_ips = {}  # {ip: [port1, port2, ...]}
-            
-            # Collect IP addresses from WAN ports
-            for col in ip_columns:
-                if col in row and row[col] and str(row[col]).strip():
-                    ip_value = str(row[col]).strip()
-                    if ip_value not in ['', 'nan', 'None', 'null']:
-                        port = col.replace('if_stat_ge-', '').replace('_ips', '')
-                        
-                        if ip_value not in device_ips:
-                            device_ips[ip_value] = []
-                        device_ips[ip_value].append(port)
-            
-            # Check for IP conflicts within this gateway (same IP on multiple ports)
-            ip_conflicts = []
-            for ip_address, ports in device_ips.items():
-                if len(ports) > 1:
-                    ip_conflicts.append({
-                        'type': 'IP Address Conflict',
-                        'value': ip_address,
-                        'ports': ports,
-                        'port_count': len(ports)
-                    })
-                    logging.warning(f"! IP conflict in {device_name}: {ip_address} assigned to ports {', '.join(ports)}")
-            
-            # If this gateway has IP conflicts, add simplified records for each conflicted port
-            if ip_conflicts:
-                # Add records for IP conflicts - one line per conflicted port
-                for conflict in ip_conflicts:
-                    for port in conflict['ports']:
-                        conflicts_found.append({
-                            'device_name': device_name,
-                            'site_name': site_name,
-                            'port_name': f"ge-{port}",
-                            'port_ip': conflict['value'],
-                            'conflict_type': 'IP Address Conflict',
-                            'conflict_with_ports': ', '.join([p for p in conflict['ports'] if p != port])
-                        })
+            device_conflicts = GatewayExportUtils._analyze_device_ip_conflicts(row, index)
+            conflicts_found.extend(device_conflicts)
         
-        # Export results
-        if conflicts_found:
-            output_file = "GatewayWANPortConflicts.csv"
-            
-            # Sort by device name and port name
-            conflicts_found.sort(key=lambda x: (x.get('device_name', ''), x.get('port_name', '')))
-            
-            # Save to CSV using existing helper
-            DataExporter.save_data_to_output(conflicts_found, output_file)
-            
-            logging.info(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
-            print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} conflicted port records)")
-            
-            # Display summary
-            unique_gateways = set()
-            ip_conflict_ports = len(conflicts_found)
-            
-            for record in conflicts_found:
-                unique_gateways.add(record.get('device_name', 'Unknown'))
-            
-            logging.info(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
-            print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts ({ip_conflict_ports} conflicted ports)")
-            
-            # Show sample of conflicted ports
-            print(f"\n  Sample WAN Port IP Conflicts Found:")
-            for sample_index, record in enumerate(conflicts_found[:10], 1):
-                print(f"{sample_index:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
-                print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
-                print(f"    Conflicts with port(s): {record.get('conflict_with_ports', 'Unknown')}")
-                print()
-            
-            if len(conflicts_found) > 10:
-                print(f"... and {len(conflicts_found) - 10} more conflicted ports")
-            
-        else:
-            logging.info(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-            print(" No internal WAN port IP conflicts found - all gateways have unique IP addresses per WAN port")
-            print(" This indicates healthy WAN port configurations with no duplicate IP assignments within individual gateways")
+        return conflicts_found
+    
+    @staticmethod
+    def _analyze_device_ip_conflicts(row, index):
+        """Analyze a single gateway device for WAN port IP conflicts."""
+        device_name = row.get('device_name', row.get('name', f"Device_{index}"))
+        site_name = row.get('site_name', 'Unknown Site')
+        
+        device_ips = GatewayExportUtils._collect_device_wan_ips(row)
+        conflicts = GatewayExportUtils._find_ip_conflicts(device_ips, device_name)
+        
+        return GatewayExportUtils._build_conflict_records(conflicts, device_name, site_name)
+    
+    @staticmethod
+    def _collect_device_wan_ips(row):
+        """Collect IP addresses from WAN ports for a device."""
+        device_ips = {}
+        for col in GatewayExportUtils.WAN_PORT_COLUMNS:
+            if col in row and row[col] and str(row[col]).strip():
+                ip_value = str(row[col]).strip()
+                if ip_value not in ['', 'nan', 'None', 'null']:
+                    port = col.replace('if_stat_ge-', '').replace('_ips', '')
+                    device_ips.setdefault(ip_value, []).append(port)
+        return device_ips
+    
+    @staticmethod
+    def _find_ip_conflicts(device_ips, device_name):
+        """Find IP addresses assigned to multiple WAN ports."""
+        conflicts = []
+        for ip_address, ports in device_ips.items():
+            if len(ports) > 1:
+                conflicts.append({'value': ip_address, 'ports': ports})
+                logging.warning(f"! IP conflict in {device_name}: {ip_address} on ports {', '.join(ports)}")
+        return conflicts
+    
+    @staticmethod
+    def _build_conflict_records(conflicts, device_name, site_name):
+        """Build conflict records for export."""
+        records = []
+        for conflict in conflicts:
+            for port in conflict['ports']:
+                records.append({
+                    'device_name': device_name,
+                    'site_name': site_name,
+                    'port_name': f"ge-{port}",
+                    'port_ip': conflict['value'],
+                    'conflict_type': 'IP Address Conflict',
+                    'conflict_with_ports': ', '.join([p for p in conflict['ports'] if p != port])
+                })
+        return records
+    
+    @staticmethod
+    def _export_conflict_results(conflicts_found):
+        """Export and display WAN port conflict results."""
+        if not conflicts_found:
+            logging.info(" No internal WAN port IP conflicts found")
+            print(" No internal WAN port IP conflicts found - healthy WAN port configurations")
+            return
+        
+        output_file = "GatewayWANPortConflicts.csv"
+        conflicts_found.sort(key=lambda x: (x.get('device_name', ''), x.get('port_name', '')))
+        DataExporter.save_data_to_output(conflicts_found, output_file)
+        
+        unique_gateways = {r.get('device_name', 'Unknown') for r in conflicts_found}
+        logging.info(f"! Exported {len(conflicts_found)} conflicts from {len(unique_gateways)} gateways")
+        print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} records)")
+        print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts")
+        
+        GatewayExportUtils._display_conflict_samples(conflicts_found)
+    
+    @staticmethod
+    def _display_conflict_samples(conflicts_found):
+        """Display sample of WAN port IP conflicts."""
+        print(f"\n  Sample WAN Port IP Conflicts Found:")
+        for idx, record in enumerate(conflicts_found[:10], 1):
+            print(f"{idx:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
+            print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
+            print(f"    Conflicts with: {record.get('conflict_with_ports', 'Unknown')}\n")
+        
+        if len(conflicts_found) > 10:
+            print(f"... and {len(conflicts_found) - 10} more conflicted ports")
     
     @staticmethod
     def with_site_info():
@@ -21142,8 +21392,9 @@ class SSHRunnerManager:
                 else:
                     print(f"! Template '{selection}' not found.")
                 return None
-        except KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             print("\n! Operation cancelled.")
+            logging.info("Template selection cancelled (EOF or interrupt) - SSH/container safe exit")
             return None
     
     @staticmethod
@@ -21173,8 +21424,9 @@ class SSHRunnerManager:
         try:
             confirm = input(f"\n  Execute SSH commands on {count} gateways? (y/N): ").strip().lower()
             return confirm in ['y', 'yes']
-        except KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             print("\n! Operation cancelled.")
+            logging.info("SSH execution confirmation cancelled (EOF or interrupt) - SSH/container safe exit")
             return False
     
     @staticmethod
@@ -36016,15 +36268,16 @@ class FirmwareManager:
             print("   [3] Active upgrade operations only")
             print("   [4] Failed upgrades only")
             print("   [5] Continuous monitoring mode (auto-refresh until complete)")
+            print("   [6] Org-level upgrade jobs (with P2P/scheduling details)")
             
             while True:
                 try:
-                    scope_choice = input("Select scope (1-5): ").strip()
-                    if scope_choice in ['1', '2', '3', '4', '5']:
+                    scope_choice = input("Select scope (1-6): ").strip()
+                    if scope_choice in ['1', '2', '3', '4', '5', '6']:
                         logging.debug(f"User selected scope: {scope_choice}")
                         break
                     else:
-                        print(" Invalid selection. Please choose 1-5.")
+                        print(" Invalid selection. Please choose 1-6.")
                         logging.debug(f"Invalid scope selection: {scope_choice}")
                 except KeyboardInterrupt:
                     print("\n Operation cancelled by user.")
@@ -36044,6 +36297,11 @@ class FirmwareManager:
         if scope_choice == '5':
             logging.info("Entering continuous monitoring mode")
             return self._continuous_monitoring_mode(site_filter)
+        
+        # Handle org-level upgrade jobs (option 6)
+        if scope_choice == '6':
+            logging.info("Fetching org-level upgrade jobs")
+            return self._show_org_level_upgrade_jobs()
         
         # Continue with the existing implementation...
         return self._execute_status_check(scope_choice, site_filter)
@@ -36123,6 +36381,134 @@ class FirmwareManager:
             print("\n\n  Monitoring mode cancelled by user.")
             logging.info("Continuous monitoring mode cancelled by user")
             return
+    
+    def _show_org_level_upgrade_jobs(self):
+        """
+        Display org-level upgrade jobs with full configuration details including P2P settings.
+        
+        Calls:
+        1. GET /api/v1/orgs/{org_id}/devices/upgrade - List all org upgrade jobs
+        2. GET /api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id} - Get details for each job
+        
+        Shows:
+        - Upgrade ID, status, target version
+        - P2P configuration (enable_p2p, p2p_cluster_size, p2p_parallelism)
+        - Scheduling (start_time, reboot_at)
+        - Strategy and canary phases
+        - Progress metrics
+        """
+        print("\n  Org-Level Upgrade Jobs")
+        print("=" * 70)
+        
+        try:
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            
+            # Step 1: List all org-level upgrade jobs
+            print("  Fetching org-level upgrade jobs...")
+            list_response = org_devices_api.listOrgDeviceUpgrades(self.apisession, self.org_id)
+            
+            if not list_response or not hasattr(list_response, 'data'):
+                print("  No org-level upgrade jobs found.")
+                return
+            
+            upgrade_jobs = list_response.data if isinstance(list_response.data, list) else []
+            
+            if not upgrade_jobs:
+                print("  No org-level upgrade jobs found.")
+                return
+            
+            print(f"  Found {len(upgrade_jobs)} org-level upgrade job(s)\n")
+            
+            # Step 2: Get details for each upgrade job
+            for job in upgrade_jobs:
+                job_id = job.get('id') if isinstance(job, dict) else getattr(job, 'id', None)
+                if not job_id:
+                    continue
+                
+                print(f"  Upgrade Job: {job_id}")
+                print("-" * 70)
+                
+                try:
+                    detail_response = org_devices_api.getOrgDeviceUpgrade(
+                        self.apisession, self.org_id, job_id
+                    )
+                    
+                    if detail_response and hasattr(detail_response, 'data'):
+                        details = detail_response.data if isinstance(detail_response.data, dict) else {}
+                        
+                        # Basic info
+                        print(f"    Status: {details.get('status', 'Unknown')}")
+                        print(f"    Target Version: {details.get('target_version', 'Unknown')}")
+                        print(f"    Strategy: {details.get('strategy', 'Unknown')}")
+                        
+                        # Scheduling
+                        start_time = details.get('start_time')
+                        if start_time:
+                            from datetime import datetime as dt_module
+                            try:
+                                start_dt = dt_module.fromtimestamp(start_time)
+                                print(f"    Start Time: {start_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+                            except:
+                                print(f"    Start Time: {start_time} (epoch)")
+                        
+                        reboot_at = details.get('reboot_at')
+                        if reboot_at:
+                            from datetime import datetime as dt_reboot
+                            try:
+                                reboot_dt = dt_reboot.fromtimestamp(reboot_at)
+                                print(f"    Reboot Time: {reboot_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+                            except:
+                                print(f"    Reboot Time: {reboot_at} (epoch)")
+                        
+                        # P2P Configuration
+                        enable_p2p = details.get('enable_p2p', False)
+                        print(f"    P2P Enabled: {enable_p2p}")
+                        if enable_p2p:
+                            p2p_cluster = details.get('p2p_cluster_size', 'Not specified')
+                            p2p_parallel = details.get('p2p_parallelism', 'Not specified')
+                            print(f"    P2P Cluster Size: {p2p_cluster}")
+                            print(f"    P2P Parallelism: {p2p_parallel}")
+                        
+                        # Canary phases
+                        canary_phases = details.get('canary_phases')
+                        if canary_phases:
+                            print(f"    Canary Phases: {canary_phases}")
+                        
+                        max_failure = details.get('max_failure_percentage')
+                        if max_failure is not None:
+                            print(f"    Max Failure %: {max_failure}")
+                        
+                        # Progress
+                        current_phase = details.get('current_phase')
+                        if current_phase is not None:
+                            print(f"    Current Phase: {current_phase}")
+                        
+                        # Targets summary
+                        targets = details.get('targets', {})
+                        if targets:
+                            total = targets.get('total', 0)
+                            upgraded = len(targets.get('upgraded', []))
+                            downloaded = len(targets.get('downloaded', []))
+                            downloading = len(targets.get('download_requested', []))
+                            print(f"    Progress: {upgraded}/{total} upgraded, {downloaded} downloaded, {downloading} downloading")
+                        
+                        # Site upgrades count
+                        upgrades = details.get('upgrades', [])
+                        if upgrades:
+                            print(f"    Sites: {len(upgrades)} site upgrade(s)")
+                        
+                except Exception as e:
+                    print(f"    Error fetching details: {e}")
+                    logging.error(f"Error fetching upgrade job {job_id}: {e}")
+                
+                print()
+            
+            print("=" * 70)
+            print("  Org-level upgrade job details complete.")
+            
+        except Exception as e:
+            print(f"  Error fetching org-level upgrades: {e}")
+            logging.error(f"Error in _show_org_level_upgrade_jobs: {e}")
     
     def _execute_monitoring_check(self, site_filter=None):
         """
@@ -37189,9 +37575,9 @@ class FirmwareManager:
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
-            except KeyboardInterrupt:
+            except (EOFError, KeyboardInterrupt):
                 print("\n  Operation cancelled by user.")
-                logging.info("Switch firmware upgrade cancelled by user")
+                logging.info("Switch firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
                 return
 
     def bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):
@@ -37341,9 +37727,9 @@ class FirmwareManager:
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
-            except KeyboardInterrupt:
+            except (EOFError, KeyboardInterrupt):
                 print("\n  Operation cancelled by user.")
-                logging.info("SSR firmware upgrade cancelled by user")
+                logging.info("SSR firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
                 return
 
     def bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):
@@ -38444,22 +38830,18 @@ class FirmwareUpgradeStatusChecker:
             print(f"   X  No device type information available")
     
     def _display_version_distribution(self) -> None:
-        """Display version distribution (top 10)."""
+        """Display version distribution."""
         print(f"\n  Version Distribution:")
         sorted_versions = sorted(self.summary['devices_by_version'].items(), key=lambda x: x[1], reverse=True)
-        for version, count in sorted_versions[:10]:
+        for version, count in sorted_versions:
             print(f"   X  {version}: {count} devices")
-        if len(sorted_versions) > 10:
-            print(f"   ... and {len(sorted_versions) - 10} more versions")
     
     def _display_model_distribution(self) -> None:
-        """Display model distribution (top 10)."""
+        """Display model distribution."""
         print(f"\n  Model Distribution:")
         sorted_models = sorted(self.summary['devices_by_model'].items(), key=lambda x: x[1], reverse=True)
-        for model, count in sorted_models[:10]:
+        for model, count in sorted_models:
             print(f"   X  {model}: {count} devices")
-        if len(sorted_models) > 10:
-            print(f"   ... and {len(sorted_models) - 10} more models")
     
     def _display_upgrading_devices(self) -> None:
         """Display detailed progress for devices currently upgrading."""
@@ -38467,29 +38849,26 @@ class FirmwareUpgradeStatusChecker:
             return
         
         print(f"\n  Devices Currently Upgrading (Real-Time Progress):")
-        print(f"  {'='*90}")
+        print(f"  {'='*110}")
         
         sorted_upgrading = sorted(self.summary['devices_upgrading'], key=lambda x: x['progress'], reverse=True)
         
-        print(f"  {'Device Name':<25} {'Type':<8} {'Site':<20} {'Progress':<30}")
-        print(f"  {'-'*25} {'-'*8} {'-'*20} {'-'*30}")
+        print(f"  {'Device Name':<35} {'Type':<8} {'Site':<35} {'Progress':<30}")
+        print(f"  {'-'*35} {'-'*8} {'-'*35} {'-'*30}")
         
-        for device in sorted_upgrading[:20]:
+        for device in sorted_upgrading:
             self._print_upgrading_device(device)
         
-        if len(sorted_upgrading) > 20:
-            print(f"  ... and {len(sorted_upgrading) - 20} more devices upgrading")
-        
-        print(f"  {'='*90}")
+        print(f"  {'='*110}")
         self._display_progress_distribution(sorted_upgrading)
     
     def _print_upgrading_device(self, device: Dict[str, Any]) -> None:
         """Print a single upgrading device row."""
-        name = (device['device_name'] or 'Unnamed')[:24]
-        dtype = (device['device_type'] or 'Unknown')[:7]
-        site = (device['site_name'] or 'Unknown')[:19]
+        name = device['device_name'] or 'Unnamed'
+        dtype = device['device_type'] or 'Unknown'
+        site = device['site_name'] or 'Unknown'
         progress_bar = DisplayUtils.create_progress_bar(device['progress'], bar_length=15)
-        print(f"  {name:<25} {dtype:<8} {site:<20} {progress_bar}")
+        print(f"  {name:<35} {dtype:<8} {site:<35} {progress_bar}")
     
     def _display_progress_distribution(self, sorted_upgrading: List[Dict[str, Any]]) -> None:
         """Display progress distribution for upgrading devices."""
@@ -39702,10 +40081,11 @@ class BulkAPFirmwareUpgrader:
             "reboot_strategy": reboot_strategy,
             "force": False,
             "enable_p2p": True,
-            "max_failure_percentage": 5,
+            "max_failure_percentage": 7,
             "start_time": None,
-            "canary_phases": [1, 10, 50, 100],
-            "p2p_cluster_size": 10,
+            "canary_phases": [1, 2, 4, 8, 16, 32, 64, 100],
+            "p2p_cluster_size": 5,
+            "p2p_parallelism": 100,
             "reboot": True
         }
         print(f"\n! Final strategy: Download={download_strategy.upper()}, Reboot={reboot_strategy.upper()}")
@@ -39724,7 +40104,7 @@ class BulkAPFirmwareUpgrader:
         """Configure canary strategy options."""
         print(f"\n  Canary Strategy Configuration:")
         try:
-            failure = input(f"Max failure % (default=5): ").strip()
+            failure = input(f"Max failure % (default=7): ").strip()
             if failure:
                 self.upgrade_config["max_failure_percentage"] = int(failure)
         except ValueError:
@@ -40596,118 +40976,196 @@ class MSPInventoryExporter:
     
     def _run(self) -> None:
         """Execute the MSP inventory export workflow."""
-        global msp_privileges, apisession
+        self._print_header()
         
+        if not self._ensure_msp_privileges():
+            return
+        
+        self._process_all_msps()
+        self._finalize_export()
+    
+    def _print_header(self):
+        """Print export header banner."""
         print("")
         print("=" * 70)
         print("  MSP-WIDE DEVICE INVENTORY EXPORT")
         print("=" * 70)
         print("")
+    
+    def _ensure_msp_privileges(self) -> bool:
+        """Ensure MSP privileges are available, offering login if needed."""
+        global msp_privileges
         
-        # Validate MSP privileges - offer interactive login if not available
+        if msp_privileges:
+            print(f"  + MSP privileges detected: {len(msp_privileges)} MSP(s) available")
+            print("")
+            return True
+        
+        return self._attempt_interactive_login()
+    
+    def _attempt_interactive_login(self) -> bool:
+        """Offer interactive login to obtain MSP privileges."""
+        global msp_privileges
+        
+        self._print_login_prompt()
+        
+        try:
+            proceed = InputUtils.safe_input("  Switch to interactive login? (Y/n): ", context="msp_inventory").strip().lower()
+        except SystemExit:
+            return False
+        
+        if proceed not in ('', 'y', 'yes'):
+            print("  Cancelled.")
+            logging.info("MSP inventory export cancelled by user")
+            return False
+        
+        return self._execute_login_and_validate()
+    
+    def _print_login_prompt(self):
+        """Print the login prompt message."""
+        print("  MSP privileges not currently available.")
+        print("")
+        print("  This feature requires MSP-level access. Would you like to")
+        print("  switch to interactive login (email/password) now?")
+        print("")
+    
+    def _execute_login_and_validate(self) -> bool:
+        """Execute login and validate MSP privileges obtained."""
+        global msp_privileges
+        
+        if not initialize_mist_session_interactive():
+            print("")
+            print("  X Login failed.")
+            return False
+        
+        detect_msp_privileges()
+        
         if not msp_privileges:
-            print("  MSP privileges not currently available.")
             print("")
-            print("  This feature requires MSP-level access. Would you like to")
-            print("  switch to interactive login (email/password) now?")
-            print("")
-            
-            try:
-                proceed = InputUtils.safe_input("  Switch to interactive login? (Y/n): ", context="msp_inventory").strip().lower()
-            except SystemExit:
-                return
-            
-            if proceed in ('', 'y', 'yes'):
-                # Call interactive login directly (skip MSP/Org selection - we want ALL)
-                if not initialize_mist_session_interactive():
-                    print("")
-                    print("  X Login failed.")
-                    return
-                
-                # Detect MSP privileges after login
-                detect_msp_privileges()
-                
-                # Check if we now have MSP privileges
-                if not msp_privileges:
-                    print("")
-                    print("  X No MSP privileges after login.")
-                    print("    Your account may not have MSP-level access.")
-                    logging.warning("MSP inventory export: no MSP privileges after interactive login")
-                    return
-                
-                # Re-print header after login
-                print("")
-                print("=" * 70)
-                print("  MSP-WIDE DEVICE INVENTORY EXPORT (Continuing)")
-                print("=" * 70)
-                print("")
-            else:
-                print("  Cancelled.")
-                logging.info("MSP inventory export cancelled by user")
-                return
+            print("  X No MSP privileges after login.")
+            print("    Your account may not have MSP-level access.")
+            logging.warning("MSP inventory export: no MSP privileges after interactive login")
+            return False
         
+        self._print_continuation_header()
+        return True
+    
+    def _print_continuation_header(self):
+        """Print continuation header after successful login."""
+        global msp_privileges
+        print("")
+        print("=" * 70)
+        print("  MSP-WIDE DEVICE INVENTORY EXPORT (Continuing)")
+        print("=" * 70)
+        print("")
         print(f"  + MSP privileges detected: {len(msp_privileges)} MSP(s) available")
         print("")
-        
-        # Step 1: Iterate through all MSPs
+    
+    def _process_all_msps(self):
+        """Process all MSPs to collect device inventory."""
+        global msp_privileges
         for msp_info in msp_privileges:
             self._process_msp(msp_info)
-        
-        # Step 2: Write results
+    
+    def _finalize_export(self):
+        """Finalize export by writing results or reporting no data."""
         if self.all_devices:
             self._write_results()
             self._print_summary()
         else:
             print("  X No devices found across any MSP/organization")
     
-    def _process_msp(self, msp_info: dict) -> None:
-        """Process a single MSP - fetch all orgs and their devices."""
+    def _validate_msp_info(self, msp_info: dict) -> tuple:
+        """Validate MSP info and return (msp_id, msp_name) or (None, name) on failure."""
         msp_id = msp_info.get('msp_id')
         msp_name = msp_info.get('msp_name', 'Unknown MSP')
         
         if not msp_id or not isinstance(msp_id, str):
             print(f"  X Invalid MSP ID for {msp_name}")
+            return (None, msp_name)
+        return (msp_id, msp_name)
+    
+    def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list:
+        """Fetch organizations under this MSP. Returns empty list on failure."""
+        if apisession is None:
+            print(f"    X API session not initialized")
+            return []
+        import mistapi.api.v1.msps.orgs as msp_orgs_api
+        response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+        
+        if not response or not hasattr(response, 'data'):
+            print(f"    X Failed to retrieve organizations for {msp_name}")
+            self.errors.append(f"MSP {msp_name}: Failed to fetch orgs")
+            return []
+        
+        orgs_data = response.data
+        if not isinstance(orgs_data, list):
+            orgs_data = [orgs_data] if orgs_data else []
+        return orgs_data
+    
+    def _process_msp(self, msp_info: dict) -> None:
+        """Process a single MSP - fetch all orgs and their devices."""
+        msp_id, msp_name = self._validate_msp_info(msp_info)
+        if msp_id is None:
             return
         
         print(f"  Processing MSP: {msp_name}")
         print("-" * 70)
-        
         self.msp_count += 1
         
         if apisession is None:
             print(f"    X API session not initialized")
             return
         
-        # Fetch organizations under this MSP
         try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api
-            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
-            
-            if not response or not hasattr(response, 'data'):
-                print(f"    X Failed to retrieve organizations for {msp_name}")
-                self.errors.append(f"MSP {msp_name}: Failed to fetch orgs")
-                return
-            
-            orgs_data = response.data
-            if not isinstance(orgs_data, list):
-                orgs_data = [orgs_data] if orgs_data else []
-            
+            orgs_data = self._fetch_msp_orgs(msp_id, msp_name)
             if not orgs_data:
                 print(f"    ! No organizations found under {msp_name}")
                 return
             
             print(f"    Found {len(orgs_data)} organization(s)")
-            
-            # Process each organization
             for org in orgs_data:
                 self._process_org(msp_id, msp_name, org)
-            
             print("")
-            
         except Exception as e:
             print(f"    X Error processing MSP {msp_name}: {e}")
             self.errors.append(f"MSP {msp_name}: {e}")
             logging.error(f"MSP inventory export error for {msp_name}: {e}")
+    
+    def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:
+        """Fetch all devices from org inventory. Returns empty list on failure."""
+        if apisession is None:
+            print(f"      {org_name}: API session not initialized")
+            return []
+        import mistapi.api.v1.orgs.inventory as org_inventory_api
+        response = org_inventory_api.getOrgInventory(apisession, org_id, limit=1000)
+        
+        if not response or not hasattr(response, 'data'):
+            print(f"      {org_name}: No inventory data")
+            return []
+        
+        devices_data = response.data
+        if not isinstance(devices_data, list):
+            devices_data = [devices_data] if devices_data else []
+        return devices_data
+    
+    def _enrich_device_context(self, device: dict, msp_id: str, msp_name: str, 
+                                org_id: str, org_name: str, site_lookup: dict) -> None:
+        """Add MSP/Org/Site context to a device record."""
+        device['_msp_id'] = msp_id
+        device['_msp_name'] = msp_name
+        device['_org_id'] = org_id
+        device['_org_name'] = org_name
+        site_id = device.get('site_id')
+        device['_site_name'] = site_lookup.get(site_id, 'Unknown Site') if site_id else 'Unassigned'
+    
+    def _count_device_types(self, devices_data: list) -> dict:
+        """Count devices by type and return type_counts dict."""
+        type_counts = {}
+        for device in devices_data:
+            device_type = device.get('type', 'unknown')
+            type_counts[device_type] = type_counts.get(device_type, 0) + 1
+        return type_counts
     
     def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:
         """Process a single organization - fetch all devices from inventory."""
@@ -40719,54 +41177,24 @@ class MSPInventoryExporter:
             return
         
         self.org_count += 1
-        
         if apisession is None:
             return
         
         try:
-            # Fetch all devices from org inventory (not listOrgDevices which defaults to APs)
-            import mistapi.api.v1.orgs.inventory as org_inventory_api
-            response = org_inventory_api.getOrgInventory(apisession, org_id, limit=1000)
-            
-            if not response or not hasattr(response, 'data'):
-                print(f"      {org_name}: No inventory data")
-                return
-            
-            devices_data = response.data
-            if not isinstance(devices_data, list):
-                devices_data = [devices_data] if devices_data else []
-            
+            devices_data = self._fetch_org_inventory(org_id, org_name)
             if not devices_data:
                 print(f"      {org_name}: 0 devices")
                 return
             
-            # Build site lookup for this org
             site_lookup = self._build_site_lookup(org_id)
-            
-            # Add MSP/Org context to each device
             for device in devices_data:
-                device['_msp_id'] = msp_id
-                device['_msp_name'] = msp_name
-                device['_org_id'] = org_id
-                device['_org_name'] = org_name
-                
-                # Add site name from lookup
-                site_id = device.get('site_id')
-                device['_site_name'] = site_lookup.get(site_id, 'Unknown Site') if site_id else 'Unassigned'
-                
+                self._enrich_device_context(device, msp_id, msp_name, org_id, org_name, site_lookup)
                 self.all_devices.append(device)
             
             self.device_count += len(devices_data)
-            
-            # Count by type
-            type_counts = {}
-            for device in devices_data:
-                device_type = device.get('type', 'unknown')
-                type_counts[device_type] = type_counts.get(device_type, 0) + 1
-            
+            type_counts = self._count_device_types(devices_data)
             type_summary = ", ".join(f"{t}:{c}" for t, c in sorted(type_counts.items()))
             print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
-            
         except Exception as e:
             print(f"      {org_name}: Error - {e}")
             self.errors.append(f"Org {org_name}: {e}")
@@ -40781,51 +41209,63 @@ class MSPInventoryExporter:
             logging.debug(f"Failed to build site lookup for org {org_id}: {e}")
             return {}
     
-    def _write_results(self) -> None:
-        """Write all devices to CSV."""
-        # Define column order - important fields first
-        priority_fields = [
-            '_msp_name', '_msp_id',
-            '_org_name', '_org_id',
-            '_site_name', 'site_id',
-            'type', 'model', 'mac', 'serial', 'name',
+    def _get_priority_fields(self) -> list:
+        """Return list of priority fields for column ordering."""
+        return [
+            '_msp_name', '_msp_id', '_org_name', '_org_id',
+            '_site_name', 'site_id', 'type', 'model', 'mac', 'serial', 'name',
             'version', 'status', 'ip', 'public_ip'
         ]
-        
-        # Flatten nested fields
+    
+    def _order_fields(self, all_fields: set, priority_fields: list) -> list:
+        """Order fields: priority first, then remaining alphabetically."""
+        remaining_fields = sorted(all_fields - set(priority_fields))
+        return [f for f in priority_fields if f in all_fields] + remaining_fields
+    
+    def _build_sorted_rows(self, flattened: list, ordered_fields: list) -> list:
+        """Build rows from flattened data and sort by MSP/Org/Site/Type/Name."""
+        rows = [{field: device.get(field, '') for field in ordered_fields} for device in flattened]
+        rows.sort(key=lambda x: (
+            x.get('_msp_name', '').lower(), x.get('_org_name', '').lower(),
+            x.get('_site_name', '').lower(), x.get('type', ''), x.get('name', '').lower()
+        ))
+        return rows
+    
+    def _write_results(self) -> None:
+        """Write all devices to CSV."""
+        priority_fields = self._get_priority_fields()
         flattened = DataProcessingUtils.flatten_nested_fields(self.all_devices)
         
-        # Get all unique fields
         all_fields = set()
         for device in flattened:
             all_fields.update(device.keys())
         
-        # Order fields: priority first, then remaining alphabetically
-        remaining_fields = sorted(all_fields - set(priority_fields))
-        ordered_fields = [f for f in priority_fields if f in all_fields] + remaining_fields
-        
-        # Build rows
-        rows = []
-        for device in flattened:
-            row = {field: device.get(field, '') for field in ordered_fields}
-            rows.append(row)
-        
-        # Sort by MSP, Org, Site, Type, Name
-        rows.sort(key=lambda x: (
-            x.get('_msp_name', '').lower(),
-            x.get('_org_name', '').lower(),
-            x.get('_site_name', '').lower(),
-            x.get('type', ''),
-            x.get('name', '').lower()
-        ))
+        ordered_fields = self._order_fields(all_fields, priority_fields)
+        rows = self._build_sorted_rows(flattened, ordered_fields)
         
         filename = os.path.join("data", "MSP_Inventory_Export.csv")
-        DataExporter.write_with_format_selection(
-            rows,
-            filename,
-            api_function_name="mspInventoryExport"
-        )
+        DataExporter.write_with_format_selection(rows, filename, api_function_name="mspInventoryExport")
         print(f"\n  + Results written to: {filename}")
+    
+    def _print_summary_errors(self) -> None:
+        """Print error summary if any errors occurred."""
+        if not self.errors:
+            return
+        print(f"    Errors encountered:     {len(self.errors)}")
+        for error in self.errors[:5]:
+            print(f"      - {error}")
+        if len(self.errors) > 5:
+            print(f"      ... and {len(self.errors) - 5} more")
+    
+    def _print_device_breakdown(self) -> None:
+        """Print device type breakdown."""
+        type_counts = self._count_device_types(self.all_devices)
+        if not type_counts:
+            return
+        print("")
+        print("  Device Type Breakdown:")
+        for device_type, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+            print(f"    {device_type:>12}: {count:>6}")
     
     def _print_summary(self) -> None:
         """Print summary statistics."""
@@ -40836,26 +41276,8 @@ class MSPInventoryExporter:
         print(f"    MSPs processed:         {self.msp_count}")
         print(f"    Organizations scanned:  {self.org_count}")
         print(f"    Total devices exported: {self.device_count}")
-        
-        if self.errors:
-            print(f"    Errors encountered:     {len(self.errors)}")
-            for error in self.errors[:5]:  # Show first 5 errors
-                print(f"      - {error}")
-            if len(self.errors) > 5:
-                print(f"      ... and {len(self.errors) - 5} more")
-        
-        # Device type breakdown
-        type_counts = {}
-        for device in self.all_devices:
-            device_type = device.get('type', 'unknown')
-            type_counts[device_type] = type_counts.get(device_type, 0) + 1
-        
-        if type_counts:
-            print("")
-            print("  Device Type Breakdown:")
-            for device_type, count in sorted(type_counts.items(), key=lambda x: -x[1]):
-                print(f"    {device_type:>12}: {count:>6}")
-        
+        self._print_summary_errors()
+        self._print_device_breakdown()
         print("")
 
 
@@ -40876,9 +41298,10 @@ class SiteAutoUpgradeConfigurator:
     - Range of sites by index (e.g., 1-10)
     """
     
-    def __init__(self, org_id: str):
+    def __init__(self, org_id: str, dry_run: bool = False):
         """Initialize the configurator."""
         self.org_id = org_id
+        self.dry_run = dry_run
         self.all_sites = []
         self.selected_sites = []
         self.available_versions = []
@@ -40887,51 +41310,471 @@ class SiteAutoUpgradeConfigurator:
         self.schedule = {}
         self.current_site_versions = {}  # For single-site: model -> current version
         self.is_single_site = False
+        self.msp_all_sites_mode = False  # When True, auto-select all sites (MSP mode)
+        self.org_name = ""  # For MSP mode display
+        logging.debug(f"SiteAutoUpgradeConfigurator initialized: org_id={org_id}, dry_run={dry_run}")
     
     @staticmethod
     def execute():
-        """Static entry point for menu system."""
+        """Static entry point for menu system - checks MSP privileges."""
+        global msp_privileges
+        
+        logging.debug("Entering SiteAutoUpgradeConfigurator.execute()")
+        logging.info("Starting Site Auto-Upgrade Configuration workflow")
+        
+        dry_run = getattr(globals().get('args', None), 'dry_run', False)
+        if dry_run:
+            logging.info("DRY-RUN MODE enabled - no API calls will be made")
+        
+        # Check if user has MSP privileges
+        if msp_privileges and len(msp_privileges) > 0:
+            logging.debug(f"MSP privileges detected: {len(msp_privileges)} MSP(s) available")
+            print("")
+            print("=" * 70)
+            print("  SITE AUTO-UPGRADE CONFIGURATION")
+            print("=" * 70)
+            print("")
+            if dry_run:
+                print("  >> DRY-RUN MODE: No actual changes will be made <<")
+                print("")
+            print("  MSP privileges detected. Select operation mode:")
+            print("")
+            print("    [1] Single Organization - configure auto-upgrade for current org")
+            print("    [2] MSP Multi-Org - configure ALL sites across multiple orgs")
+            print("")
+            
+            try:
+                mode = InputUtils.safe_input("  Select mode (1-2) [1]: ", context="msp_mode_select").strip() or "1"
+            except SystemExit:
+                logging.debug("SystemExit during mode selection")
+                return
+            
+            logging.debug(f"User selected mode: '{mode}'")
+            
+            if mode == "2":
+                logging.info("User selected MSP Multi-Org mode for auto-upgrade configuration")
+                SiteAutoUpgradeConfigurator._execute_msp_mode(dry_run)
+                return
+            else:
+                logging.info("User selected Single Organization mode")
+        
+        # Single-org mode (default or non-MSP user)
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        configurator = SiteAutoUpgradeConfigurator(org_id)
+        if not org_id:
+            print("  X No organization selected")
+            logging.error("No organization selected for Site Auto-Upgrade Configuration")
+            return
+        configurator = SiteAutoUpgradeConfigurator(org_id, dry_run=dry_run)
         configurator._run()
     
-    def _run(self) -> None:
-        """Execute the configuration workflow."""
+    @staticmethod
+    def _execute_msp_mode(dry_run: bool = False):
+        """Execute MSP multi-organization auto-upgrade configuration."""
+        global msp_privileges, apisession
+        
+        logging.debug("Entering SiteAutoUpgradeConfigurator._execute_msp_mode()")
+        
+        print("")
+        print("=" * 70)
+        print("  MSP MULTI-ORG AUTO-UPGRADE CONFIGURATION")
+        print("=" * 70)
+        print("")
+        if dry_run:
+            print("  >> DRY-RUN MODE: No actual changes will be made <<")
+            print("")
+        print(f"  Your account has access to {len(msp_privileges)} MSP(s).")
+        print("  This workflow will configure auto-upgrade settings for ALL sites")
+        print("  across selected organizations.")
+        print("")
+        print("  What this does:")
+        print("    - Enables auto-upgrade on all sites in selected orgs")
+        print("    - Selects latest stable firmware for each AP model")
+        print("    - Applies your chosen schedule (day/time) to all sites")
+        print("")
+        
+        # Step 1: Select MSPs (reuse OrgLevelAPFirmwareUpgrader's method)
+        selected_msps = OrgLevelAPFirmwareUpgrader._select_msps()
+        if not selected_msps:
+            print("  X Cancelled - no MSP selected")
+            logging.warning("MSP mode cancelled - no MSP selected")
+            return
+        
+        logging.info(f"Selected {len(selected_msps)} MSP(s) for auto-upgrade configuration")
+        
+        # Step 2: Select orgs from each MSP
+        selected_orgs = []
+        for msp in selected_msps:
+            orgs = OrgLevelAPFirmwareUpgrader._select_orgs_from_msp(msp)
+            if orgs:
+                selected_orgs.extend(orgs)
+        
+        if not selected_orgs:
+            print("  X Cancelled - no organizations selected")
+            logging.warning("MSP mode cancelled - no organizations selected")
+            return
+        
+        logging.info(f"MSP mode: {len(selected_orgs)} organizations selected for configuration")
+        
+        # Step 3: Confirmation summary
+        print("")
+        print("-" * 70)
+        print("  STEP 3: Confirmation")
+        print("-" * 70)
+        print("")
+        print(f"  Ready to configure auto-upgrade for {len(selected_orgs)} organization(s):")
+        print("")
+        for idx, org in enumerate(selected_orgs, start=1):
+            print(f"    {idx:>3}. {org.get('name', 'Unknown')}")
+        print("")
+        print("  All sites under these organizations will be configured.")
+        print("")
+        
+        try:
+            confirm = InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm").strip().lower()
+        except SystemExit:
+            return
+        
+        if confirm in ['n', 'no']:
+            print("  Cancelled.")
+            return
+        
+        print("")
+        print(f"  + Confirmed - proceeding with {len(selected_orgs)} organization(s)")
+        
+        # Step 4: Configure settings ONCE for all orgs (shared schedule/version settings)
+        print("")
+        print("-" * 70)
+        print("  STEP 4: Schedule Configuration")
+        print("-" * 70)
+        print("")
+        print("  Configure schedule settings that will apply to ALL selected")
+        print("  organizations and their sites.")
+        print("")
+        print("  Each org's available firmware versions will be detected automatically")
+        print("  and the latest stable version will be selected for each AP model.")
+        print("")
+        
+        # Get shared schedule settings
+        shared_schedule = SiteAutoUpgradeConfigurator._get_shared_schedule()
+        if shared_schedule is None:
+            print("  X Cancelled")
+            logging.warning("Schedule configuration cancelled by user")
+            return
+        
+        logging.info(f"Schedule configured: day={shared_schedule.get('day_of_week')}, time={shared_schedule.get('time_of_day')}")
+        
+        # Display what will be applied
+        print("")
+        print("  Configuration to apply:")
+        print(f"    - Day of week: {shared_schedule.get('day_of_week', 'any')}.")
+        print(f"    - Time of day: {shared_schedule.get('time_of_day', '02:00')} (site's local timezone)")
+        print(f"    - Firmware: Latest stable per model (auto-detected)")
+        print(f"    - Organizations: {len(selected_orgs)}")
+        print("")
+        
+        try:
+            final_confirm = InputUtils.safe_input("  Apply this configuration? (Y/n): ", context="msp_final_confirm").strip().lower()
+        except SystemExit:
+            logging.debug("SystemExit during final confirmation")
+            return
+        
+        logging.debug(f"Final confirmation input: '{final_confirm}'")
+        
+        if final_confirm in ['n', 'no']:
+            print("  Cancelled.")
+            logging.warning("User cancelled final MSP confirmation")
+            return
+        
+        logging.info("User confirmed - executing MSP multi-org configuration")
+        
+        # Step 5: Execute configuration for each org
+        print("")
+        print("-" * 70)
+        print("  STEP 5: Applying Configuration")
+        print("-" * 70)
+        
+        all_results = []
+        for idx, org_info in enumerate(selected_orgs, start=1):
+            org_id = org_info['id']
+            org_name = org_info['name']
+            
+            print("")
+            print("=" * 70)
+            print(f"  ORGANIZATION {idx}/{len(selected_orgs)}: {org_name}")
+            print("=" * 70)
+            
+            configurator = SiteAutoUpgradeConfigurator(org_id, dry_run=dry_run)
+            configurator.msp_all_sites_mode = True
+            configurator.org_name = org_name
+            configurator.schedule = shared_schedule.copy()
+            
+            success, site_count = configurator._run_msp_mode()
+            all_results.append({
+                'org_id': org_id,
+                'org_name': org_name,
+                'success': success,
+                'sites_configured': site_count
+            })
+        
+        # Summary
+        SiteAutoUpgradeConfigurator._print_msp_summary(all_results, dry_run)
+    
+    @staticmethod
+    def _get_shared_schedule() -> dict | None:
+        """Get shared schedule settings for MSP mode."""
+        logging.debug("Entering _get_shared_schedule()")
+        print("  Schedule Configuration:")
+        print("    When should auto-upgrades occur?")
+        print("")
+        print("    Day of week:")
+        print("      [1] any - Any day")
+        print("      [2] mon, tue, wed, thu, fri, sat, sun")
+        print("")
+        
+        try:
+            day_input = InputUtils.safe_input("  Day of week [any]: ", context="msp_schedule").strip().lower() or "any"
+        except SystemExit:
+            logging.debug("SystemExit during schedule day input")
+            return None
+        
+        day_map = {
+            "1": "any", "2": "mon", "3": "tue", "4": "wed", 
+            "5": "thu", "6": "fri", "7": "sat", "8": "sun",
+            "any": "any", "mon": "mon", "tue": "tue", "wed": "wed",
+            "thu": "thu", "fri": "fri", "sat": "sat", "sun": "sun"
+        }
+        day_of_week = day_map.get(day_input, "any")
+        
+        print(f"    + Day: {day_of_week}")
+        print("")
+        print("    Time of day (HH:MM in site's local timezone, or 'any'):")
+        
+        try:
+            time_input = InputUtils.safe_input("  Time of day [02:00]: ", context="msp_schedule").strip() or "02:00"
+        except SystemExit:
+            logging.debug("SystemExit during schedule time input")
+            return None
+        
+        time_of_day = time_input if time_input.lower() != "any" else "any"
+        print(f"    + Time: {time_of_day}")
+        
+        logging.debug(f"Schedule configured: day={day_of_week}, time={time_of_day}")
+        return {
+            'day_of_week': day_of_week,
+            'time_of_day': time_of_day
+        }
+    
+    @staticmethod
+    def _print_msp_summary(results: list, dry_run: bool = False):
+        """Print summary of MSP multi-org auto-upgrade configuration."""
+        logging.debug(f"Entering _print_msp_summary(): {len(results)} results, dry_run={dry_run}")
+        print("")
+        print("=" * 70)
+        if dry_run:
+            print("  MSP MULTI-ORG AUTO-UPGRADE SUMMARY (DRY-RUN)")
+        else:
+            print("  MSP MULTI-ORG AUTO-UPGRADE SUMMARY")
+        print("=" * 70)
+        print("")
+        
+        if dry_run:
+            print("  >> DRY-RUN MODE: No actual changes were made <<")
+            print("")
+        
+        total_orgs = len(results)
+        successful_orgs = sum(1 for r in results if r['success'])
+        total_sites = sum(r['sites_configured'] for r in results)
+        
+        if dry_run:
+            print(f"  Organizations processed: {total_orgs}")
+            print(f"  Would configure: {successful_orgs} org(s)")
+            print(f"  Total sites WOULD be configured: {total_sites}")
+        else:
+            print(f"  Organizations processed: {total_orgs}")
+            print(f"  Successful: {successful_orgs}")
+            print(f"  Total sites configured: {total_sites}")
+        print("")
+        
+        if successful_orgs < total_orgs:
+            print("  Failed organizations:")
+            for result in results:
+                if not result['success']:
+                    print(f"    - {result['org_name']}")
+            print("")
+        
+        if dry_run:
+            print("  >> To apply changes, run without --dry-run flag")
+        else:
+            print("  Configuration complete.")
+    
+    def _run_msp_mode(self) -> tuple:
+        """Execute configuration workflow for MSP mode (all sites, auto mode)."""
+        logging.debug(f"Entering _run_msp_mode() for org: {self.org_name}")
+        logging.info(f"Starting MSP mode configuration for org: {self.org_name}")
+        
+        # Fetch sites
+        if not self._step1_fetch_sites():
+            return (False, 0)
+        
+        # Auto-select all sites
+        self.selected_sites = self.all_sites.copy()
+        print(f"  + Auto-selected ALL {len(self.selected_sites)} site(s)")
+        logging.info(f"Auto-selected all {len(self.selected_sites)} sites for configuration")
+        
+        # Fetch available versions
+        if not self._step3_fetch_available_versions():
+            return (False, 0)
+        
+        # Auto-select custom versions (use latest stable for each model)
+        if not self._auto_select_versions():
+            return (False, 0)
+        
+        # Apply configuration (schedule was set before calling)
+        success, count = self._apply_auto_upgrade_config()
+        logging.info(f"MSP mode configuration complete for {self.org_name}: success={success}, sites_configured={count}")
+        return (success, count)
+    
+    def _auto_select_versions(self) -> bool:
+        """Auto-select firmware versions (latest stable for each model)."""
+        logging.debug("Entering _auto_select_versions()")
+        if not self.model_version_map:
+            print("  X No firmware versions available")
+            logging.warning("No firmware versions available for auto-selection")
+            return False
+        
+        print("\n  Auto-selecting firmware versions:")
+        for model, versions in self.model_version_map.items():
+            if versions:
+                # Prefer 'stable' tag, else use first available
+                stable_versions = [v for v in versions if v.get('tag') == 'stable']
+                if stable_versions:
+                    selected = stable_versions[0]
+                else:
+                    selected = versions[0]
+                self.custom_versions[model] = selected.get('version', versions[0].get('version'))
+                print(f"    {model}: {self.custom_versions[model]}")
+        
+        logging.info(f"Auto-selected versions for {len(self.custom_versions)} model(s)")
+        return bool(self.custom_versions)
+    
+    def _apply_auto_upgrade_config(self) -> tuple:
+        """Apply auto-upgrade configuration to all selected sites."""
+        logging.debug("Entering _apply_auto_upgrade_config()")
+        if not self.selected_sites:
+            logging.warning("No sites selected for auto-upgrade configuration")
+            return (False, 0)
+        
+        success_count = 0
+        fail_count = 0
+        
+        # Build auto_upgrade settings
+        auto_upgrade_settings = {
+            'enabled': True,
+            'day_of_week': self.schedule.get('day_of_week', 'any'),
+            'time_of_day': self.schedule.get('time_of_day', '02:00'),
+            'custom_versions': self.custom_versions
+        }
+        
+        logging.debug(f"Auto-upgrade settings: {auto_upgrade_settings}")
+        
+        if self.dry_run:
+            print(f"\n  DRY-RUN: Would apply auto-upgrade to {len(self.selected_sites)} site(s)...")
+            logging.info(f"DRY-RUN: Would apply auto-upgrade to {len(self.selected_sites)} site(s)")
+        else:
+            print(f"\n  Applying auto-upgrade to {len(self.selected_sites)} site(s)...")
+            logging.info(f"Applying auto-upgrade to {len(self.selected_sites)} site(s)")
+        
+        for site in self.selected_sites:
+            site_id = site.get('id')
+            site_name = site.get('name', 'Unknown')
+            
+            if not site_id:
+                logging.warning(f"Skipping site {site_name} - no site ID")
+                fail_count += 1
+                continue
+            
+            if apisession is None:
+                logging.error("API session not initialized")
+                fail_count += 1
+                continue
+            
+            try:
+                # Build site setting update
+                site_setting = {
+                    'auto_upgrade': auto_upgrade_settings
+                }
+                
+                if self.dry_run:
+                    # Skip actual API call in dry-run mode
+                    success_count += 1
+                    logging.info(f"DRY-RUN: Would configure auto-upgrade for site {site_name}")
+                else:
+                    # Update site setting
+                    import mistapi.api.v1.sites.setting as sites_setting_api
+                    response = sites_setting_api.updateSiteSettings(
+                        apisession, site_id, body=site_setting
+                    )
+                    
+                    if response and hasattr(response, 'data'):
+                        success_count += 1
+                        logging.debug(f"Auto-upgrade configured for site {site_name}")
+                    else:
+                        fail_count += 1
+                        logging.warning(f"Failed to configure auto-upgrade for site {site_name}")
+                    
+            except Exception as error:
+                fail_count += 1
+                logging.error(f"Error configuring site {site_name}: {error}")
+        
+        if self.dry_run:
+            print(f"  + Would configure: {success_count} site(s)")
+        else:
+            print(f"  + Configured: {success_count} site(s)")
+        if fail_count > 0:
+            print(f"  X Failed: {fail_count} site(s)")
+        
+        return (fail_count == 0, success_count)
+    
+    def _print_intro_header(self) -> None:
+        """Print introduction header for the configuration workflow."""
         print("")
         print("=" * 70)
         print("  SITE AUTO-UPGRADE CONFIGURATION")
         print("=" * 70)
         print("")
+        if self.dry_run:
+            print("  >> DRY-RUN MODE: No actual changes will be made <<")
+            print("")
         print("  This tool configures auto-upgrade settings for sites WITHOUT")
         print("  initiating immediate upgrades. Auto-upgrade ensures:")
         print("    - New APs automatically upgrade to target firmware")
         print("    - Scheduled upgrades during maintenance windows")
         print("")
+    
+    def _run(self) -> None:
+        """Execute the configuration workflow."""
+        logging.debug(f"Entering _run() for org_id={self.org_id}")
+        self._print_intro_header()
         
-        # Step 1: Fetch all sites
         if not self._step1_fetch_sites():
+            logging.info("Workflow terminated at step 1 (fetch sites)")
             return
-        
-        # Step 2: Site selection
         if not self._step2_select_sites():
+            logging.info("Workflow terminated at step 2 (select sites)")
             return
-        
-        # Step 3: Fetch available firmware versions
         if not self._step3_fetch_available_versions():
+            logging.info("Workflow terminated at step 3 (fetch versions)")
             return
-        
-        # Step 4: Select firmware versions per model
         if not self._step4_select_versions():
+            logging.info("Workflow terminated at step 4 (select versions)")
             return
-        
-        # Step 5: Configure schedule
         self._step5_configure_schedule()
-        
-        # Step 6: Confirm and apply
         self._step6_confirm_and_apply()
+        logging.info("Configuration workflow completed")
     
     def _step1_fetch_sites(self) -> bool:
         """Fetch all sites in the organization."""
+        logging.debug("Entering _step1_fetch_sites()")
         print("-" * 70)
         print("  STEP 1: Loading Sites")
         print("-" * 70)
@@ -40941,11 +41784,13 @@ class SiteAutoUpgradeConfigurator:
             
             if not self.all_sites:
                 print("  X No sites found in organization")
+                logging.warning("No sites found in organization")
                 return False
             
             # Sort by name
             self.all_sites.sort(key=lambda s: s.get('name', '').lower())
             print(f"  + Found {len(self.all_sites)} site(s)")
+            logging.info(f"Fetched {len(self.all_sites)} sites from organization")
             return True
             
         except Exception as e:
@@ -40955,6 +41800,7 @@ class SiteAutoUpgradeConfigurator:
     
     def _step2_select_sites(self) -> bool:
         """Allow user to select sites with flexible options."""
+        logging.debug("Entering _step2_select_sites()")
         print("")
         print("-" * 70)
         print("  STEP 2: Site Selection")
@@ -40969,7 +41815,10 @@ class SiteAutoUpgradeConfigurator:
         try:
             choice = InputUtils.safe_input("  Selection mode (A/S/L): ", context="auto_upgrade_config").strip().upper()
         except SystemExit:
+            logging.debug("SystemExit during site selection mode input")
             return False
+        
+        logging.debug(f"Site selection mode chosen: {choice}")
         
         if choice == 'A':
             return self._select_all_sites()
@@ -41039,15 +41888,15 @@ class SiteAutoUpgradeConfigurator:
         except Exception as e:
             logging.debug(f"Could not fetch current site settings: {e}")
     
-    def _select_from_list(self) -> bool:
-        """Display numbered list and allow index/range selection."""
+    def _display_site_list_with_indices(self) -> None:
+        """Display numbered list of all sites."""
         print(f"\n  All Sites ({len(self.all_sites)} total):")
         print("-" * 70)
-        
-        # Display all sites with index
         for idx, site in enumerate(self.all_sites, 1):
             print(f"    [{idx:>3}] {site.get('name', 'Unknown')}")
-        
+    
+    def _display_selection_instructions(self) -> None:
+        """Display selection format instructions."""
         print("")
         print("  Enter selection:")
         print("    - Single: 5")
@@ -41055,24 +41904,9 @@ class SiteAutoUpgradeConfigurator:
         print("    - Range: 1-10")
         print("    - Combined: 1-5,8,12-15")
         print("")
-        
-        try:
-            selection = InputUtils.safe_input("  Selection: ", context="auto_upgrade_config").strip()
-        except SystemExit:
-            return False
-        
-        if not selection:
-            print("  No selection made")
-            return False
-        
-        # Parse selection
-        indices = self._parse_index_selection(selection)
-        
-        if not indices:
-            print("  X Invalid selection format")
-            return False
-        
-        # Convert to sites
+    
+    def _apply_site_indices(self, indices: list) -> bool:
+        """Apply indices to select sites, return success status."""
         for idx in indices:
             if 1 <= idx <= len(self.all_sites):
                 self.selected_sites.append(self.all_sites[idx - 1])
@@ -41086,8 +41920,28 @@ class SiteAutoUpgradeConfigurator:
             print(f"      - {site.get('name')}")
         if len(self.selected_sites) > 5:
             print(f"      ... and {len(self.selected_sites) - 5} more")
-        
         return True
+    
+    def _select_from_list(self) -> bool:
+        """Display numbered list and allow index/range selection."""
+        self._display_site_list_with_indices()
+        self._display_selection_instructions()
+        
+        try:
+            selection = InputUtils.safe_input("  Selection: ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            return False
+        
+        if not selection:
+            print("  No selection made")
+            return False
+        
+        indices = self._parse_index_selection(selection)
+        if not indices:
+            print("  X Invalid selection format")
+            return False
+        
+        return self._apply_site_indices(indices)
     
     def _parse_index_selection(self, selection: str) -> list:
         """Parse index selection string into list of integers."""
@@ -41114,8 +41968,21 @@ class SiteAutoUpgradeConfigurator:
         
         return sorted(indices)
     
+    def _build_model_version_map(self) -> None:
+        """Build model -> versions map from available versions."""
+        for version_info in self.available_versions:
+            if not isinstance(version_info, dict):
+                continue
+            model = version_info.get('model')
+            version = version_info.get('version')
+            if model and version:
+                if model not in self.model_version_map:
+                    self.model_version_map[model] = []
+                self.model_version_map[model].append(version)
+    
     def _step3_fetch_available_versions(self) -> bool:
         """Fetch available firmware versions."""
+        logging.debug("Entering _step3_fetch_available_versions()")
         print("")
         print("-" * 70)
         print("  STEP 3: Available Firmware Versions")
@@ -41124,39 +41991,31 @@ class SiteAutoUpgradeConfigurator:
         
         if apisession is None or self.org_id is None:
             print("  X API session or org_id not initialized")
+            logging.error("API session or org_id not initialized for firmware fetch")
             return False
         
         try:
             import mistapi.api.v1.orgs.devices as org_devices_api
+            logging.debug(f"Calling listOrgAvailableDeviceVersions for org_id={self.org_id}, type=ap")
             response = org_devices_api.listOrgAvailableDeviceVersions(apisession, self.org_id, type="ap")
             
             if not response or not hasattr(response, 'data'):
                 print("  X Failed to fetch available versions")
+                logging.warning("Firmware version API returned no data")
                 return False
             
             self.available_versions = response.data if isinstance(response.data, list) else []
-            
-            # Build model -> versions map
-            for version_info in self.available_versions:
-                if not isinstance(version_info, dict):
-                    continue
-                model = version_info.get('model')
-                version = version_info.get('version')
-                if model and version:
-                    if model not in self.model_version_map:
-                        self.model_version_map[model] = []
-                    self.model_version_map[model].append(version)
-            
+            self._build_model_version_map()
             print(f"  + Found firmware for {len(self.model_version_map)} AP model(s)")
+            logging.info(f"Retrieved firmware versions for {len(self.model_version_map)} AP models")
             return True
-            
         except Exception as e:
             print(f"  X Error fetching firmware versions: {e}")
             logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch versions: {e}")
             return False
     
-    def _step4_select_versions(self) -> bool:
-        """Select firmware version per AP model."""
+    def _print_step4_header(self) -> None:
+        """Print step 4 header and instructions."""
         print("")
         print("-" * 70)
         print("  STEP 4: Firmware Version Selection")
@@ -41165,83 +42024,126 @@ class SiteAutoUpgradeConfigurator:
         print("  Select firmware version for each AP model family.")
         if self.is_single_site and self.current_site_versions:
             print("  Press Enter to keep current version, or select a new one.")
-            # Pre-populate with ALL current values so they're preserved if user presses Enter
             self.custom_versions = self.current_site_versions.copy()
             print(f"  (Pre-loaded {len(self.custom_versions)} existing model configurations)")
         else:
             print("  Press Enter to skip a model (won't be included in auto-upgrade).")
         print("")
-        
-        # Group models by family prefix (AP41, AP43, etc.)
+    
+    def _group_models_by_family(self) -> dict:
+        """Group models by family prefix (AP41, AP43, etc.)."""
         model_families = {}
         for model in sorted(self.model_version_map.keys()):
-            # Extract family prefix (e.g., AP41 from AP41, AP41E)
-            family = model.rstrip('EP')  # Remove E, P suffixes for grouping
+            family = model.rstrip('EP')
             if family not in model_families:
                 model_families[family] = []
             model_families[family].append(model)
+        return model_families
+    
+    def _get_family_versions(self, models: list) -> list:
+        """Get sorted versions for a model family."""
+        family_versions = set()
+        for model in models:
+            family_versions.update(self.model_version_map.get(model, []))
+        return sorted(family_versions, reverse=True)
+    
+    def _get_current_family_version(self, models: list) -> str | None:
+        """Get current version for a model family if in single-site mode."""
+        if not self.is_single_site:
+            return None
+        for model in models:
+            if model in self.current_site_versions:
+                return self.current_site_versions[model]
+        return None
+    
+    def _display_family_versions(self, family: str, models: list, sorted_versions: list, current_version: str | None) -> None:
+        """Display version options for a model family."""
+        print(f"\n  {family} family ({', '.join(models)}):")
+        for idx, version in enumerate(sorted_versions, 1):
+            marker = " <-- current" if version == current_version else ""
+            print(f"    [{idx:>2}] {version}{marker}")
+        if current_version:
+            print(f"    [Enter] Keep current: {current_version}")
+        else:
+            print(f"    [Enter] Skip")
+    
+    def _apply_family_selection(self, choice: str, family: str, models: list, sorted_versions: list, current_version: str | None) -> None:
+        """Apply user's version selection for a model family."""
+        if choice and choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(sorted_versions):
+                selected_version = sorted_versions[idx]
+                for model in models:
+                    if selected_version in self.model_version_map.get(model, []):
+                        self.custom_versions[model] = selected_version
+                print(f"    + Set {family} models to {selected_version}")
+        elif not choice and current_version:
+            print(f"    + Keeping {family} models at {current_version}")
+        elif not choice:
+            print(f"    - Skipped {family} family")
+    
+    def _step4_select_versions(self) -> bool:
+        """Select firmware version per AP model."""
+        logging.debug("Entering _step4_select_versions()")
+        self._print_step4_header()
+        model_families = self._group_models_by_family()
+        logging.debug(f"Model families to configure: {list(model_families.keys())}")
         
-        # For each family, offer latest versions
         for family, models in sorted(model_families.items()):
-            # Get versions available for any model in this family
-            family_versions = set()
-            for model in models:
-                family_versions.update(self.model_version_map.get(model, []))
-            
-            if not family_versions:
+            sorted_versions = self._get_family_versions(models)
+            if not sorted_versions:
                 continue
             
-            # Sort versions descending (newest first) - show ALL versions
-            sorted_versions = sorted(family_versions, reverse=True)
-            
-            # Check for current version (for single-site mode)
-            current_version = None
-            if self.is_single_site:
-                for model in models:
-                    if model in self.current_site_versions:
-                        current_version = self.current_site_versions[model]
-                        break
-            
-            print(f"\n  {family} family ({', '.join(models)}):")
-            for idx, version in enumerate(sorted_versions, 1):
-                marker = " <-- current" if version == current_version else ""
-                print(f"    [{idx:>2}] {version}{marker}")
-            
-            if current_version:
-                print(f"    [Enter] Keep current: {current_version}")
-            else:
-                print(f"    [Enter] Skip")
+            current_version = self._get_current_family_version(models)
+            self._display_family_versions(family, models, sorted_versions, current_version)
             
             try:
                 choice = InputUtils.safe_input(f"  Select version (1-{len(sorted_versions)}): ", context="auto_upgrade_config").strip()
             except SystemExit:
+                logging.debug("SystemExit during version selection")
                 return False
             
-            if choice and choice.isdigit():
-                idx = int(choice) - 1
-                if 0 <= idx < len(sorted_versions):
-                    selected_version = sorted_versions[idx]
-                    # Apply to all models in family
-                    for model in models:
-                        if selected_version in self.model_version_map.get(model, []):
-                            self.custom_versions[model] = selected_version
-                    print(f"    + Set {family} models to {selected_version}")
-            elif not choice and current_version:
-                # User pressed Enter - current versions already in custom_versions (pre-populated)
-                print(f"    + Keeping {family} models at {current_version}")
-            elif not choice:
-                # No current version and user pressed Enter - skip this family
-                print(f"    - Skipped {family} family")
+            self._apply_family_selection(choice, family, models, sorted_versions, current_version)
         
         if not self.custom_versions:
             print("\n  X No versions selected")
+            logging.warning("No firmware versions selected by user")
             return False
         
         print(f"\n  + Configured {len(self.custom_versions)} model(s)")
+        logging.info(f"User configured {len(self.custom_versions)} model(s) for upgrade")
         return True
+    
+    def _prompt_day_of_week(self) -> str:
+        """Prompt for day of week selection."""
+        print("  Day of week options:")
+        print("    [1] Daily (any day)  [2] Sunday   [3] Monday")
+        print("    [4] Tuesday          [5] Wednesday [6] Thursday")
+        print("    [7] Friday           [8] Saturday")
+        
+        day_map = {'1': 'any', '2': 'sun', '3': 'mon', '4': 'tue',
+                   '5': 'wed', '6': 'thu', '7': 'fri', '8': 'sat'}
+        try:
+            choice = InputUtils.safe_input("  Day of week (1-8, default=1 for daily): ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            choice = '1'
+        return day_map.get(choice, 'any')
+    
+    def _prompt_time_of_day(self) -> str:
+        """Prompt for time of day selection."""
+        print("")
+        print("  Time of day for upgrades:")
+        print("    Examples: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM")
+        print("    Leave blank for any time")
+        try:
+            time_input = InputUtils.safe_input("  Time: ", context="auto_upgrade_config").strip()
+        except SystemExit:
+            time_input = ''
+        return self._parse_time_input(time_input)
     
     def _step5_configure_schedule(self) -> None:
         """Configure upgrade schedule (optional)."""
+        logging.debug("Entering _step5_configure_schedule()")
         print("")
         print("-" * 70)
         print("  STEP 5: Schedule Configuration (Optional)")
@@ -41250,49 +42152,13 @@ class SiteAutoUpgradeConfigurator:
         print("  Configure when auto-upgrades should occur.")
         print("")
         
-        # Day of week
-        print("  Day of week options:")
-        print("    [1] Daily (any day)")
-        print("    [2] Sunday")
-        print("    [3] Monday")
-        print("    [4] Tuesday")
-        print("    [5] Wednesday")
-        print("    [6] Thursday")
-        print("    [7] Friday")
-        print("    [8] Saturday")
+        self.schedule['day_of_week'] = self._prompt_day_of_week()
+        self.schedule['time_of_day'] = self._prompt_time_of_day()
         
-        day_map = {
-            '1': 'any', '2': 'sun', '3': 'mon', '4': 'tue',
-            '5': 'wed', '6': 'thu', '7': 'fri', '8': 'sat'
-        }
-        
-        try:
-            day_choice = InputUtils.safe_input("  Day of week (1-8, default=1 for daily): ", context="auto_upgrade_config").strip()
-        except SystemExit:
-            day_choice = '1'
-        
-        # 'any' = daily (any day of week)
-        self.schedule['day_of_week'] = day_map.get(day_choice, 'any')
-        
-        # Time of day with flexible parsing
-        print("")
-        print("  Time of day for upgrades:")
-        print("    Examples: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM")
-        print("    Leave blank for any time")
-        
-        try:
-            time_input = InputUtils.safe_input("  Time: ", context="auto_upgrade_config").strip()
-        except SystemExit:
-            time_input = ''
-        
-        # Parse various time formats to HH:MM
-        parsed_time = self._parse_time_input(time_input)
-        self.schedule['time_of_day'] = parsed_time
-        
-        # Display schedule summary
         day_display = 'daily' if self.schedule.get('day_of_week') == 'any' else self.schedule.get('day_of_week', 'daily')
         time_display = 'any time' if self.schedule.get('time_of_day') == 'any' else self.schedule.get('time_of_day', 'any time')
         print(f"  + Schedule: {day_display} at {time_display}")
+        logging.info(f"Schedule configured: {day_display} at {time_display}")
     
     def _parse_time_input(self, time_input: str) -> str:
         """
@@ -41344,17 +42210,10 @@ class SiteAutoUpgradeConfigurator:
         
         return f"{hour:02d}:{minute:02d}"
     
-    def _step6_confirm_and_apply(self) -> None:
-        """Confirm settings and apply to selected sites."""
-        print("")
-        print("-" * 70)
-        print("  STEP 6: Confirm and Apply")
-        print("-" * 70)
-        print("")
-        # Display schedule summary
+    def _display_step6_summary(self) -> None:
+        """Display configuration summary for step 6."""
         day_display = self.schedule.get('day_of_week') or 'daily'
         time_display = self.schedule.get('time_of_day') or 'any time'
-        
         print("  Summary:")
         print(f"    Sites: {len(self.selected_sites)}")
         print(f"    Models configured: {len(self.custom_versions)}")
@@ -41362,55 +42221,96 @@ class SiteAutoUpgradeConfigurator:
             print(f"      {model}: {version}")
         print(f"    Schedule: {day_display} at {time_display}")
         print("")
-        
-        try:
-            confirm = InputUtils.safe_input("  Apply these settings? (y/N): ", context="auto_upgrade_config").strip().lower()
-        except SystemExit:
-            return
-        
-        if confirm not in ('y', 'yes'):
-            print("  Cancelled.")
-            return
-        
-        # Build auto-upgrade configuration
-        # API: day_of_week and time_of_day use 'any' for daily/any time
-        auto_upgrade = {
+    
+    def _build_auto_upgrade_payload(self) -> dict:
+        """Build the auto-upgrade configuration payload."""
+        return {
             "enabled": True,
             "version": "custom",
             "custom_versions": self.custom_versions,
             "day_of_week": self.schedule.get('day_of_week', 'any'),
             "time_of_day": self.schedule.get('time_of_day', 'any')
         }
-        
-        settings = {"auto_upgrade": auto_upgrade}
-        
-        print("")
-        print("  Applying configuration...")
-        print(f"  DEBUG: auto_upgrade payload = {auto_upgrade}")  # DEBUG
-        
+    
+    def _apply_to_sites(self, settings: dict) -> tuple:
+        """Apply settings to all selected sites. Returns (successful, failed) counts."""
         successful = 0
         failed = 0
-        
         for site in self.selected_sites:
             site_id = site['id']
             site_name = site.get('name', 'Unknown')
-            
             try:
-                mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
-                print(f"    [OK] {site_name}")
+                if self.dry_run:
+                    print(f"    [DRY-RUN] {site_name}")
+                    logging.info(f"DRY-RUN: Would configure auto-upgrade for site {site_name}")
+                else:
+                    mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+                    print(f"    [OK] {site_name}")
                 successful += 1
             except Exception as e:
                 print(f"    [FAIL] {site_name}: {e}")
                 logging.error(f"Failed to configure auto-upgrade for site {site_name}: {e}")
                 failed += 1
+        return (successful, failed)
+    
+    def _step6_confirm_and_apply(self) -> None:
+        """Confirm settings and apply to selected sites."""
+        logging.debug("Entering _step6_confirm_and_apply()")
+        print("")
+        print("-" * 70)
+        print("  STEP 6: Confirm and Apply")
+        print("-" * 70)
+        print("")
+        
+        self._display_step6_summary()
+        
+        if self.dry_run:
+            print("")
+            print("  >> DRY-RUN MODE: Skipping confirmation <<")
+            logging.debug("Dry-run mode - skipping confirmation prompt")
+        else:
+            try:
+                confirm = InputUtils.safe_input("  Apply these settings? (y/N): ", context="auto_upgrade_config").strip().lower()
+            except SystemExit:
+                logging.debug("SystemExit during confirmation prompt")
+                return
+            
+            logging.debug(f"User confirmation input: '{confirm}'")
+            
+            if confirm not in ('y', 'yes'):
+                print("  Cancelled.")
+                logging.warning("User cancelled auto-upgrade configuration")
+                return
+        
+        logging.info("User confirmed - applying auto-upgrade configuration")
+        auto_upgrade = self._build_auto_upgrade_payload()
+        settings = {"auto_upgrade": auto_upgrade}
+        logging.debug(f"Auto-upgrade payload: {auto_upgrade}")
+        print("")
+        if self.dry_run:
+            print("  DRY-RUN: Simulating configuration...")
+        else:
+            print("  Applying configuration...")
+        print(f"  DEBUG: auto_upgrade payload = {auto_upgrade}")
+        
+        successful, failed = self._apply_to_sites(settings)
         
         print("")
         print("=" * 70)
-        print("  CONFIGURATION COMPLETE")
+        if self.dry_run:
+            print("  DRY-RUN COMPLETE")
+        else:
+            print("  CONFIGURATION COMPLETE")
         print("=" * 70)
-        print(f"    Successful: {successful} site(s)")
+        if self.dry_run:
+            print(f"    Would configure: {successful} site(s)")
+        else:
+            print(f"    Successful: {successful} site(s)")
         if failed > 0:
             print(f"    Failed: {failed} site(s)")
+        if self.dry_run:
+            print("")
+            print("  >> To apply changes, run without --dry-run flag")
         print("")
 
 
@@ -41442,6 +42342,7 @@ class OrgLevelAPFirmwareUpgrader:
     
     def __init__(self, org_id: str, dry_run: bool = False):
         """Initialize the org-level AP firmware upgrader."""
+        logging.debug(f"OrgLevelAPFirmwareUpgrader initialized: org_id={org_id}, dry_run={dry_run}")
         self.org_id = org_id
         self.dry_run = dry_run
         
@@ -41471,6 +42372,406 @@ class OrgLevelAPFirmwareUpgrader:
         self.successful_api_calls: int = 0
         self.failed_api_calls: int = 0
         self.total_devices_upgraded: int = 0
+    
+    @staticmethod
+    def run():
+        """Entry point that detects MSP privileges and branches accordingly."""
+        global msp_privileges, apisession
+        
+        logging.debug("Entering OrgLevelAPFirmwareUpgrader.run()")
+        dry_run = getattr(globals().get('args', None), 'dry_run', False)
+        logging.info(f"OrgLevelAPFirmwareUpgrader workflow started, dry_run={dry_run}")
+        
+        # Check if user has MSP privileges
+        if msp_privileges and len(msp_privileges) > 0:
+            logging.debug(f"MSP privileges detected: {len(msp_privileges)} MSP(s)")
+            print("")
+            print("=" * 70)
+            print("  ORG-LEVEL AP FIRMWARE UPGRADE")
+            print("=" * 70)
+            print("")
+            print("  MSP privileges detected. Select operation mode:")
+            print("")
+            print("    [1] Single Organization - upgrade APs in current org")
+            print("    [2] MSP Multi-Org - select orgs from your MSP(s)")
+            print("")
+            
+            try:
+                mode = InputUtils.safe_input("  Select mode (1-2) [1]: ", context="msp_mode_select").strip() or "1"
+            except SystemExit:
+                logging.debug("SystemExit during mode selection")
+                return
+            
+            logging.debug(f"User selected mode: {mode}")
+            
+            if mode == "2":
+                logging.info("User selected MSP Multi-Org mode")
+                OrgLevelAPFirmwareUpgrader._execute_msp_mode(dry_run)
+                return
+        
+        logging.info("Using single-org mode")
+        # Single-org mode (default or non-MSP user)
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not org_id:
+            print("  X No organization selected")
+            logging.warning("No organization selected")
+            return
+        
+        logging.info(f"Single-org mode: org_id={org_id}")
+        upgrader = OrgLevelAPFirmwareUpgrader(org_id, dry_run=dry_run)
+        upgrader.execute()
+    
+    @staticmethod
+    def _execute_msp_mode(dry_run: bool):
+        """Execute MSP multi-organization upgrade mode."""
+        global msp_privileges, apisession
+        
+        logging.debug(f"Entering _execute_msp_mode(), dry_run={dry_run}")
+        logging.info("Starting MSP Multi-Org AP firmware upgrade workflow")
+        print("")
+        print("=" * 70)
+        print("  MSP MULTI-ORG AP FIRMWARE UPGRADE")
+        print("=" * 70)
+        print("")
+        print(f"  Your account has access to {len(msp_privileges)} MSP(s).")
+        print("  This workflow will guide you through selecting MSPs and organizations,")
+        print("  then execute firmware upgrades across all selected organizations.")
+        
+        if dry_run:
+            print("")
+            print("  >> DRY-RUN MODE: No actual upgrades will be performed <<")
+            logging.debug("Dry-run mode enabled")
+        
+        # Step 1: Select MSPs
+        selected_msps = OrgLevelAPFirmwareUpgrader._select_msps()
+        if not selected_msps:
+            print("  X Cancelled - no MSP selected")
+            logging.warning("MSP selection cancelled")
+            return
+        
+        logging.info(f"User selected {len(selected_msps)} MSP(s)")
+        
+        # Step 2: Select orgs from each MSP
+        selected_orgs = []
+        for msp in selected_msps:
+            orgs = OrgLevelAPFirmwareUpgrader._select_orgs_from_msp(msp)
+            if orgs:
+                selected_orgs.extend(orgs)
+        
+        if not selected_orgs:
+            print("  X Cancelled - no organizations selected")
+            logging.warning("Organization selection cancelled")
+            return
+        
+        logging.info(f"User selected {len(selected_orgs)} organization(s) for upgrade")
+        
+        # Step 3: Confirmation summary before execution
+        print("")
+        print("-" * 70)
+        print("  STEP 3: Confirmation")
+        print("-" * 70)
+        print("")
+        print(f"  Ready to upgrade firmware across {len(selected_orgs)} organization(s):")
+        print("")
+        for idx, org in enumerate(selected_orgs, start=1):
+            print(f"    {idx:>3}. {org.get('name', 'Unknown')}")
+        print("")
+        print("  Each organization will be processed sequentially.")
+        print("  You will configure upgrade settings for each organization.")
+        print("")
+        
+        try:
+            confirm = InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm").strip().lower()
+        except SystemExit:
+            logging.debug("SystemExit during MSP confirmation")
+            return
+        
+        logging.debug(f"User confirmation input: '{confirm}'")
+        
+        if confirm in ['n', 'no']:
+            print("  Cancelled.")
+            logging.warning("User declined MSP multi-org confirmation")
+            return
+        
+        print("")
+        print(f"  + Confirmed - proceeding with {len(selected_orgs)} organization(s)")
+        logging.info(f"User confirmed MSP multi-org upgrade for {len(selected_orgs)} organization(s)")
+        
+        # Step 4: Execute upgrade for each org
+        all_results = []
+        for idx, org_info in enumerate(selected_orgs, start=1):
+            org_id = org_info['id']
+            org_name = org_info['name']
+            
+            print("")
+            print("=" * 70)
+            print(f"  ORGANIZATION {idx}/{len(selected_orgs)}: {org_name}")
+            print("=" * 70)
+            
+            logging.info(f"Processing organization {idx}/{len(selected_orgs)}: {org_name}")
+            upgrader = OrgLevelAPFirmwareUpgrader(org_id, dry_run=dry_run)
+            upgrader.execute()
+            all_results.append({
+                'org_id': org_id,
+                'org_name': org_name,
+                'success': upgrader.successful_api_calls,
+                'failed': upgrader.failed_api_calls,
+                'devices': upgrader.total_devices_upgraded
+            })
+            logging.debug(f"Organization {org_name}: success={upgrader.successful_api_calls}, failed={upgrader.failed_api_calls}, devices={upgrader.total_devices_upgraded}")
+        
+        logging.info(f"MSP multi-org upgrade completed: {len(all_results)} organizations processed")
+        # Summary
+        OrgLevelAPFirmwareUpgrader._print_msp_summary(all_results, dry_run)
+    
+    @staticmethod
+    def _select_msps() -> list:
+        """Select MSPs for upgrade with verbose step-by-step communication.
+        
+        If user already selected an MSP in menu 115, offers it as default.
+        """
+        global msp_privileges, selected_msp
+        
+        logging.debug("Entering _select_msps()")
+        print("")
+        print("-" * 70)
+        print("  STEP 1: MSP Selection")
+        print("-" * 70)
+        print("")
+        print(f"  Your account has access to {len(msp_privileges)} MSP(s).")
+        print("  Select which MSP(s) to operate on.")
+        print("")
+        
+        if len(msp_privileges) == 1:
+            msp_name = msp_privileges[0].get('msp_name', 'Unknown')
+            print(f"  Only one MSP available: {msp_name}")
+            print(f"  + Auto-selected: {msp_name}")
+            logging.info(f"Auto-selected single MSP: {msp_name}")
+            return msp_privileges
+        
+        # Find index of already-selected MSP if any
+        default_idx = None
+        if selected_msp:
+            for idx, msp in enumerate(msp_privileges):
+                if msp.get('msp_id') == selected_msp.get('msp_id'):
+                    default_idx = idx + 1  # 1-indexed for display
+                    break
+        
+        print("  Available MSPs:")
+        print("")
+        for idx, msp in enumerate(msp_privileges, start=1):
+            current_marker = " <-- currently selected" if default_idx == idx else ""
+            print(f"    [{idx:>2}] {msp.get('msp_name', 'Unknown')} (role: {msp.get('role', 'unknown')}){current_marker}")
+        
+        print("")
+        print("  Selection Options:")
+        print("    - Single MSP: Enter number (e.g., '1')")
+        print("    - Multiple MSPs: Comma-separated (e.g., '1,3,5')")
+        print("    - Range: Dash or 'through' (e.g., '1-3' or '1 through 3')")
+        print("    - ALL MSPs: Enter 'all'")
+        print("    - Cancel: Enter 'q'")
+        print("")
+        
+        if default_idx:
+            prompt = f"  Select MSP(s) [Enter for current selection {default_idx}]: "
+        else:
+            prompt = "  Select MSP(s): "
+        
+        try:
+            selection = InputUtils.safe_input(prompt, context="msp_select").strip().lower()
+        except SystemExit:
+            return []
+        
+        # Handle default selection (Enter with selected_msp)
+        if selection == '' and default_idx and selected_msp is not None:
+            print(f"  + Using current MSP: {selected_msp.get('msp_name', 'Unknown')}")
+            logging.debug(f"Using default MSP: {selected_msp.get('msp_name')}")
+            return [selected_msp]
+        if selection in ['q', '']:
+            print("  Cancelled.")
+            logging.info("MSP selection cancelled")
+            return []
+        if selection == 'all':
+            print(f"")
+            print(f"  + Selected ALL {len(msp_privileges)} MSP(s):")
+            for msp in msp_privileges:
+                print(f"      - {msp.get('msp_name', 'Unknown')}")
+            logging.info(f"User selected ALL {len(msp_privileges)} MSP(s)")
+            return msp_privileges
+        
+        indices = OrgLevelAPFirmwareUpgrader._parse_selection(selection, len(msp_privileges))
+        if not indices:
+            print("  X Invalid selection")
+            logging.warning(f"Invalid MSP selection: {selection}")
+            return []
+        
+        selected = [msp_privileges[i] for i in indices]
+        print(f"")
+        print(f"  + Selected {len(selected)} MSP(s):")
+        for msp in selected:
+            print(f"      - {msp.get('msp_name', 'Unknown')}")
+        logging.info(f"User selected {len(selected)} MSP(s)")
+        return selected
+    
+    @staticmethod
+    def _select_orgs_from_msp(msp: dict) -> list:
+        """Select organizations from a specific MSP with verbose communication."""
+        global apisession
+        
+        logging.debug(f"Entering _select_orgs_from_msp() for MSP: {msp.get('msp_name')}")
+        
+        msp_id = msp['msp_id']
+        msp_name = msp.get('msp_name', 'Unknown')
+        
+        print("")
+        print("-" * 70)
+        print(f"  STEP 2: Organization Selection for MSP: {msp_name}")
+        print("-" * 70)
+        print("")
+        print(f"  Fetching organizations from {msp_name}...")
+        
+        if apisession is None:
+            print(f"  X API session not initialized")
+            logging.error("API session not initialized for org fetch")
+            return []
+        
+        try:
+            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            logging.debug(f"Calling listMspOrgs for msp_id={msp_id}")
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            
+            if not response or not hasattr(response, 'data'):
+                print(f"  X Failed to fetch organizations from {msp_name}")
+                logging.warning(f"Failed to fetch organizations from MSP {msp_name}")
+                return []
+            
+            orgs = response.data if isinstance(response.data, list) else [response.data] if response.data else []
+            if not orgs:
+                print(f"  X No organizations found under {msp_name}")
+                logging.warning(f"No organizations found under MSP {msp_name}")
+                return []
+            
+            orgs = sorted(orgs, key=lambda x: x.get('name', '').lower())
+            
+            print(f"  + Found {len(orgs)} organization(s) under {msp_name}")
+            logging.info(f"Found {len(orgs)} organizations under MSP {msp_name}")
+            print("")
+            print("  Organizations:")
+            print("")
+            for idx, org in enumerate(orgs, start=1):
+                print(f"    [{idx:>3}] {org.get('name', 'Unknown')}")
+            
+            print("")
+            print("  Selection Options:")
+            print("    - Single org: Enter number (e.g., '1')")
+            print("    - Multiple orgs: Comma-separated (e.g., '1,3,5')")
+            print("    - Range: Dash or 'through' (e.g., '1-10' or '1 through 10')")
+            print("    - ALL orgs under this MSP: Enter 'all'")
+            print("    - Skip this MSP: Enter 'q'")
+            print("")
+            
+            try:
+                selection = InputUtils.safe_input("  Select organization(s): ", context="org_select").strip().lower()
+            except SystemExit:
+                logging.debug("SystemExit during org selection")
+                return []
+            
+            logging.debug(f"User selection input: '{selection}'")
+            
+            if selection in ['q', '']:
+                print(f"  Skipping {msp_name}")
+                logging.info(f"User skipped MSP {msp_name}")
+                return []
+            if selection == 'all':
+                print(f"")
+                print(f"  + Selected ALL {len(orgs)} organization(s) under {msp_name}:")
+                for org in orgs:
+                    print(f"      - {org.get('name', 'Unknown')}")
+                logging.info(f"User selected ALL {len(orgs)} organizations from MSP {msp_name}")
+                return orgs
+            
+            indices = OrgLevelAPFirmwareUpgrader._parse_selection(selection, len(orgs))
+            if not indices:
+                print("  X Invalid selection, skipping this MSP")
+                logging.warning(f"Invalid org selection '{selection}' for MSP {msp_name}")
+                return []
+            
+            selected = [orgs[i] for i in indices]
+            print(f"")
+            print(f"  + Selected {len(selected)} organization(s) from {msp_name}:")
+            for org in selected:
+                print(f"      - {org.get('name', 'Unknown')}")
+            logging.info(f"User selected {len(selected)} organization(s) from MSP {msp_name}")
+            return selected
+            
+        except Exception as error:
+            print(f"  X Error fetching organizations: {error}")
+            logging.error(f"Failed to fetch orgs from MSP {msp_name}: {error}")
+            return []
+    
+    @staticmethod
+    def _parse_selection(selection: str, max_items: int) -> list:
+        """Parse selection string into list of indices."""
+        indices = []
+        parts = selection.replace(',', ' ').split()
+        
+        for part in parts:
+            if '-' in part and not part.startswith('-'):
+                try:
+                    start, end = part.split('-', 1)
+                    start_idx = int(start) - 1
+                    end_idx = int(end) - 1
+                    if 0 <= start_idx <= end_idx < max_items:
+                        indices.extend(range(start_idx, end_idx + 1))
+                except ValueError:
+                    continue
+            elif 'through' in part.lower():
+                continue  # Handle in full selection string
+            else:
+                try:
+                    idx = int(part) - 1
+                    if 0 <= idx < max_items:
+                        indices.append(idx)
+                except ValueError:
+                    continue
+        
+        # Handle "X through Y" pattern
+        import re
+        through_match = re.search(r'(\d+)\s*through\s*(\d+)', selection, re.IGNORECASE)
+        if through_match:
+            try:
+                start_idx = int(through_match.group(1)) - 1
+                end_idx = int(through_match.group(2)) - 1
+                if 0 <= start_idx <= end_idx < max_items:
+                    indices = list(range(start_idx, end_idx + 1))
+            except ValueError:
+                pass
+        
+        return sorted(set(indices))
+    
+    @staticmethod
+    def _print_msp_summary(results: list, dry_run: bool):
+        """Print summary of MSP multi-org upgrade."""
+        print("")
+        print("=" * 70)
+        print("  MSP MULTI-ORG UPGRADE SUMMARY")
+        print("=" * 70)
+        
+        if dry_run:
+            print("  >> DRY-RUN MODE - No actual changes made <<")
+        
+        total_success = sum(r['success'] for r in results)
+        total_failed = sum(r['failed'] for r in results)
+        total_devices = sum(r['devices'] for r in results)
+        
+        print(f"\n  Organizations: {len(results)}")
+        print(f"  API Calls: {total_success} success, {total_failed} failed")
+        print(f"  Devices: {total_devices}")
+        
+        print("\n  Per-Org Breakdown:")
+        for r in results:
+            status = "OK" if r['failed'] == 0 else "PARTIAL"
+            print(f"    {r['org_name']}: {r['devices']} devices ({status})")
     
     def execute(self) -> None:
         """Execute the org-level AP firmware upgrade workflow."""
@@ -41519,6 +42820,7 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step1_select_site_scope(self) -> bool:
         """Select whether to upgrade all sites or specific sites."""
+        logging.debug("Entering _step1_select_site_scope()")
         print("")
         print("-" * 70)
         print("  STEP 1: Site Scope Selection")
@@ -41532,7 +42834,10 @@ class OrgLevelAPFirmwareUpgrader:
         try:
             choice = InputUtils.safe_input("  Select scope (1 or 2): ", context="org_scope_select").strip()
         except SystemExit:
+            logging.debug("SystemExit during site scope selection")
             return False
+        
+        logging.debug(f"Site scope selection: {choice}")
         
         if choice == "1":
             self.target_all_sites = True
@@ -41544,6 +42849,7 @@ class OrgLevelAPFirmwareUpgrader:
             return self._select_specific_sites()
         else:
             print("  X Invalid selection")
+            logging.warning("Invalid site scope selection")
             return False
     
     def _select_specific_sites(self) -> bool:
@@ -41551,99 +42857,124 @@ class OrgLevelAPFirmwareUpgrader:
         print("")
         print("  Fetching sites from organization...")
         
+        sites_data = self._fetch_sorted_sites()
+        if not sites_data:
+            return False
+        
+        self._display_site_list(sites_data)
+        return self._collect_site_selection(sites_data)
+    
+    def _fetch_sorted_sites(self) -> list | None:
+        """Fetch and sort sites by name."""
         try:
             sites_data = APIFetchUtils.all_sites_with_limit(self.org_id)
             if not sites_data:
                 print("  X No sites found in organization")
-                return False
-            
-            # Sort by name
-            sites_data = sorted(sites_data, key=lambda x: x.get('name', '').lower())
-            
-            print(f"  Found {len(sites_data)} site(s):")
-            print("")
-            
-            for idx, site in enumerate(sites_data, start=1):
-                site_name = site.get('name', 'Unknown')
-                print(f"    {idx:>4}. {site_name}")
-            
-            print("")
-            print("  Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'")
-            print("")
-            
-            try:
-                selection = InputUtils.safe_input("  Select site(s): ", context="site_multi_select").strip().lower()
-            except SystemExit:
-                return False
-            
-            if selection == 'q' or selection == '':
-                return False
-            
-            if selection == 'all':
-                self.target_all_sites = True
-                self.selected_site_ids = []
-                print("  + Targeting ALL sites")
-                return True
-            
-            # Parse selection using FirmwareManager pattern
-            selected_indices = self._parse_selection_input(selection, len(sites_data))
-            if not selected_indices:
-                print("  X Invalid selection")
-                return False
-            
-            self.target_all_sites = False
-            self.selected_sites = [sites_data[idx] for idx in selected_indices]
-            self.selected_site_ids = [s['id'] for s in self.selected_sites]
-            
-            print(f"  + Selected {len(self.selected_site_ids)} site(s)")
-            return True
-            
-        except Exception as e:
-            print(f"  X Error fetching sites: {e}")
-            logging.error(f"Failed to fetch sites for org-level upgrade: {e}")
+                return None
+            return sorted(sites_data, key=lambda s: s.get('name', '').lower())
+        except Exception as error:
+            print(f"  X Error fetching sites: {error}")
+            logging.error(f"Failed to fetch sites for org-level upgrade: {error}")
+            return None
+    
+    def _display_site_list(self, sites_data: list):
+        """Display numbered site list."""
+        print(f"  Found {len(sites_data)} site(s):")
+        print("")
+        for idx, site in enumerate(sites_data, start=1):
+            print(f"    {idx:>4}. {site.get('name', 'Unknown')}")
+        print("")
+        print("  Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'")
+        print("")
+    
+    def _collect_site_selection(self, sites_data: list) -> bool:
+        """Collect and process site selection from user."""
+        try:
+            selection = InputUtils.safe_input("  Select site(s): ", context="site_multi_select").strip().lower()
+        except SystemExit:
             return False
+        
+        if selection == 'q' or selection == '':
+            return False
+        
+        if selection == 'all':
+            self.target_all_sites = True
+            self.selected_site_ids = []
+            print("  + Targeting ALL sites")
+            return True
+        
+        return self._apply_site_selection(sites_data, selection)
+    
+    def _apply_site_selection(self, sites_data: list, selection: str) -> bool:
+        """Apply parsed site selection."""
+        selected_indices = self._parse_selection_input(selection, len(sites_data))
+        if not selected_indices:
+            print("  X Invalid selection")
+            return False
+        
+        self.target_all_sites = False
+        self.selected_sites = [sites_data[idx] for idx in selected_indices]
+        self.selected_site_ids = [site['id'] for site in self.selected_sites]
+        print(f"  + Selected {len(self.selected_site_ids)} site(s)")
+        return True
     
     def _parse_selection_input(self, selection: str, max_items: int) -> list:
         """Parse selection input with support for ranges and multiple selections."""
         indices = []
-        
-        # Handle comma-separated values
-        parts = [p.strip() for p in selection.replace(',', ' ').split()]
+        parts = [part.strip() for part in selection.replace(',', ' ').split()]
         
         for part in parts:
-            if '-' in part and not part.startswith('-'):
-                # Range: "1-5"
-                try:
-                    start, end = part.split('-', 1)
-                    start_idx = int(start) - 1
-                    end_idx = int(end) - 1
-                    if 0 <= start_idx <= end_idx < max_items:
-                        indices.extend(range(start_idx, end_idx + 1))
-                except ValueError:
-                    continue
-            elif 'through' in part.lower():
-                # Range: "1 through 5" - handled by splitting on whitespace
-                continue
-            else:
-                try:
-                    idx = int(part) - 1
-                    if 0 <= idx < max_items:
-                        indices.append(idx)
-                except ValueError:
-                    continue
+            indices.extend(self._parse_selection_part(part, max_items))
         
-        # Handle "X through Y" pattern
-        if 'through' in selection.lower():
-            try:
-                before, after = selection.lower().split('through')
-                start_idx = int(before.strip()) - 1
-                end_idx = int(after.strip()) - 1
-                if 0 <= start_idx <= end_idx < max_items:
-                    indices = list(range(start_idx, end_idx + 1))
-            except (ValueError, IndexError):
-                pass
+        through_indices = self._parse_through_pattern(selection, max_items)
+        if through_indices:
+            indices = through_indices
         
         return sorted(set(indices))
+    
+    def _parse_selection_part(self, part: str, max_items: int) -> list:
+        """Parse a single selection part (range or index)."""
+        if '-' in part and not part.startswith('-'):
+            return self._parse_range_part(part, max_items)
+        if 'through' in part.lower():
+            return []  # Handled separately
+        return self._parse_single_index(part, max_items)
+    
+    def _parse_range_part(self, part: str, max_items: int) -> list:
+        """Parse range like '1-5'."""
+        try:
+            start, end = part.split('-', 1)
+            start_idx = int(start) - 1
+            end_idx = int(end) - 1
+            if 0 <= start_idx <= end_idx < max_items:
+                return list(range(start_idx, end_idx + 1))
+        except ValueError:
+            pass
+        return []
+    
+    def _parse_single_index(self, part: str, max_items: int) -> list:
+        """Parse single index like '3'."""
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < max_items:
+                return [idx]
+        except ValueError:
+            pass
+        return []
+    
+    def _parse_through_pattern(self, selection: str, max_items: int) -> list:
+        """Parse 'X through Y' pattern."""
+        if 'through' not in selection.lower():
+            return []
+        try:
+            before, after = selection.lower().split('through')
+            start_idx = int(before.strip()) - 1
+            end_idx = int(after.strip()) - 1
+            if 0 <= start_idx <= end_idx < max_items:
+                return list(range(start_idx, end_idx + 1))
+        except (ValueError, IndexError):
+            pass
+        return []
     
     # =========================================================================
     # STEP 2: DEVICE DISCOVERY
@@ -41651,6 +42982,7 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step2_discover_aps(self) -> bool:
         """Discover APs from selected scope."""
+        logging.debug("Entering _step2_discover_aps()")
         print("")
         print("-" * 70)
         print("  STEP 2: Device Discovery")
@@ -41658,69 +42990,66 @@ class OrgLevelAPFirmwareUpgrader:
         
         if self.target_all_sites:
             print("  Fetching all APs from organization...")
+            logging.debug("Fetching APs from all sites in organization")
             return self._fetch_org_aps()
         else:
             print(f"  Fetching APs from {len(self.selected_site_ids)} selected site(s)...")
+            logging.debug(f"Fetching APs from {len(self.selected_site_ids)} selected sites")
             return self._fetch_selected_sites_aps()
-    
+
     def _fetch_org_aps(self) -> bool:
         """Fetch all APs from the organization with full pagination."""
+        logging.debug("Entering _fetch_org_aps()")
         if apisession is None or self.org_id is None:
             print("  X API session or org_id not initialized")
+            logging.error("API session or org_id not initialized for AP fetch")
             return False
         
         try:
-            # Use getOrgInventory with type="ap" and mistapi.get_all for pagination
-            import mistapi.api.v1.orgs.inventory as org_inventory_api
-            response = org_inventory_api.getOrgInventory(apisession, self.org_id, type="ap", limit=1000)
-            
-            if not response or not hasattr(response, 'data'):
+            devices_data = self._get_org_inventory()
+            if not devices_data:
                 print("  X Failed to retrieve devices")
+                logging.warning("No device data returned from org inventory")
                 return False
             
-            # Use mistapi.get_all to handle pagination (follows 'next' links)
-            devices_data = mistapi.get_all(response=response, mist_session=apisession)
-            
-            if not isinstance(devices_data, list):
-                devices_data = [devices_data] if devices_data else []
-            
-            # Already filtered by API, but verify
-            self.all_aps = [d for d in devices_data if d.get('type') == 'ap' or d.get('model', '').startswith('AP')]
-            
+            self.all_aps = self._filter_ap_devices(devices_data)
             if not self.all_aps:
                 print("  X No access points found in organization")
+                logging.warning("No APs found in organization")
                 return False
             
-            return self._organize_aps_by_model()
-            
-        except Exception as e:
-            print(f"  X Error fetching devices: {e}")
-            logging.error(f"Failed to fetch org devices: {e}")
+            logging.info(f"Discovered {len(self.all_aps)} APs in organization")
+        except Exception as error:
+            print(f"  X Error fetching devices: {error}")
+            logging.error(f"Failed to fetch org devices: {error}")
             return False
+        
+        return True
+    
+    def _get_org_inventory(self) -> list:
+        """Retrieve org inventory with pagination."""
+        if apisession is None:
+            print("  X API session not initialized")
+            return []
+        import mistapi.api.v1.orgs.inventory as org_inventory_api
+        response = org_inventory_api.getOrgInventory(apisession, self.org_id, type="ap", limit=1000)
+        
+        if not response or not hasattr(response, 'data'):
+            return []
+        
+        devices_data = mistapi.get_all(response=response, mist_session=apisession)
+        if not isinstance(devices_data, list):
+            return [devices_data] if devices_data else []
+        return devices_data
+    
+    def _filter_ap_devices(self, devices_data: list) -> list:
+        """Filter list to only AP devices."""
+        return [d for d in devices_data if d.get('type') == 'ap' or d.get('model', '').startswith('AP')]
     
     def _fetch_selected_sites_aps(self) -> bool:
         """Fetch APs from selected sites only."""
         try:
-            all_aps = []
-            for site in self.selected_sites:
-                site_id = site['id']
-                site_name = site.get('name', 'Unknown')
-                
-                print(f"    Fetching APs from {site_name}...")
-                
-                response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    apisession, site_id, type="ap"
-                )
-                
-                if response and hasattr(response, 'data') and response.data:
-                    site_aps = response.data if isinstance(response.data, list) else [response.data]
-                    # Add site info to each AP
-                    for ap in site_aps:
-                        ap['_site_id'] = site_id
-                        ap['_site_name'] = site_name
-                    all_aps.extend(site_aps)
-            
-            self.all_aps = all_aps
+            self.all_aps = self._collect_aps_from_sites()
             
             if not self.all_aps:
                 print("  X No access points found in selected sites")
@@ -41728,10 +43057,32 @@ class OrgLevelAPFirmwareUpgrader:
             
             return self._organize_aps_by_model()
             
-        except Exception as e:
-            print(f"  X Error fetching devices: {e}")
-            logging.error(f"Failed to fetch site devices: {e}")
+        except Exception as error:
+            print(f"  X Error fetching devices: {error}")
+            logging.error(f"Failed to fetch site devices: {error}")
             return False
+    
+    def _collect_aps_from_sites(self) -> list:
+        """Collect APs from each selected site."""
+        all_aps = []
+        for site in self.selected_sites:
+            site_aps = self._fetch_site_aps(site['id'], site.get('name', 'Unknown'))
+            all_aps.extend(site_aps)
+        return all_aps
+    
+    def _fetch_site_aps(self, site_id: str, site_name: str) -> list:
+        """Fetch APs from a single site."""
+        print(f"    Fetching APs from {site_name}...")
+        
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
+        if not response or not hasattr(response, 'data') or not response.data:
+            return []
+        
+        site_aps = response.data if isinstance(response.data, list) else [response.data]
+        for ap in site_aps:
+            ap['_site_id'] = site_id
+            ap['_site_name'] = site_name
+        return site_aps
     
     def _organize_aps_by_model(self) -> bool:
         """Organize discovered APs by model."""
@@ -41753,54 +43104,84 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step3_fetch_firmware_stats(self) -> bool:
         """Fetch current firmware versions for all discovered APs."""
+        logging.debug("Entering _step3_fetch_firmware_stats()")
+        self._print_step3_header()
+        
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            logging.error("API session or org_id not initialized for firmware stats")
+            return False
+        
+        try:
+            self._populate_ap_versions()
+            logging.info(f"Retrieved firmware versions for {len(self.ap_versions)} devices")
+            self._display_version_distribution()
+            return True
+        except Exception as error:
+            print(f"  X Error fetching firmware stats: {error}")
+            logging.error(f"Failed to fetch firmware stats: {error}")
+            return False
+    
+    def _print_step3_header(self):
+        """Print Step 3 header."""
         print("")
         print("-" * 70)
         print("  STEP 3: Current Firmware Versions")
         print("-" * 70)
         print("  Fetching device firmware versions...")
+    
+    def _populate_ap_versions(self):
+        """Populate ap_versions dict from org stats API."""
+        if apisession is None:
+            return
+        import mistapi.api.v1.orgs.stats as org_stats_api
+        response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap", limit=1000)
         
-        if apisession is None or self.org_id is None:
-            print("  X API session or org_id not initialized")
-            return False
+        if not response or not hasattr(response, 'data'):
+            return
         
-        try:
-            import mistapi.api.v1.orgs.stats as org_stats_api
-            response = org_stats_api.listOrgDevicesStats(apisession, self.org_id, type="ap", limit=1000)
-            
-            if response and hasattr(response, 'data'):
-                # Use mistapi.get_all for pagination
-                stats_data = mistapi.get_all(response=response, mist_session=apisession)
-                if not isinstance(stats_data, list):
-                    stats_data = [stats_data] if stats_data else []
-                
-                for stat in stats_data:
-                    # Stats returns 'mac' as identifier, inventory also has 'mac'
-                    mac = stat.get('mac')
-                    # Use 'or' to handle None values (not just missing keys)
-                    version = stat.get('version') or 'Unknown'
-                    if mac:
-                        self.ap_versions[mac] = version
-            
-            # Display version summary - match by MAC address
-            version_counts = {}
-            for ap in self.all_aps:
-                mac = ap.get('mac')
-                version = self.ap_versions.get(mac) or 'Unknown'
-                if version not in version_counts:
-                    version_counts[version] = 0
-                version_counts[version] += 1
-            
-            print("  + Current firmware distribution:")
-            # Sort by version string, handling None safely
-            for version, count in sorted(version_counts.items(), key=lambda x: x[0] or '', reverse=True):
+        stats_data = mistapi.get_all(response=response, mist_session=apisession)
+        if not isinstance(stats_data, list):
+            stats_data = [stats_data] if stats_data else []
+        
+        for stat in stats_data:
+            mac = stat.get('mac')
+            if mac:
+                self.ap_versions[mac] = stat.get('version') or 'Unknown'
+    
+    def _display_version_distribution(self):
+        """Display firmware version distribution with details for Unknown devices."""
+        version_counts = self._count_versions_by_mac()
+        unknown_devices = self._get_unknown_firmware_devices()
+        
+        print("  + Current firmware distribution:")
+        for version, count in sorted(version_counts.items(), key=lambda x: x[0] or '', reverse=True):
+            if version == 'Unknown' and unknown_devices:
+                # Show device names for unknown firmware (likely offline)
+                device_names = [d.get('name', d.get('mac', 'unnamed')) for d in unknown_devices[:5]]
+                names_str = ', '.join(device_names)
+                if len(unknown_devices) > 5:
+                    names_str += f" +{len(unknown_devices) - 5} more"
+                print(f"      {version}: {count} device(s) - likely offline ({names_str})")
+            else:
                 print(f"      {version}: {count} device(s)")
-            
-            return True
-            
-        except Exception as e:
-            print(f"  X Error fetching firmware stats: {e}")
-            logging.error(f"Failed to fetch firmware stats: {e}")
-            return False
+    
+    def _get_unknown_firmware_devices(self) -> list:
+        """Get list of devices with unknown firmware (not reporting version)."""
+        unknown = []
+        for ap in self.all_aps:
+            version = self.ap_versions.get(ap.get('mac'))
+            if not version or version == 'Unknown':
+                unknown.append(ap)
+        return unknown
+    
+    def _count_versions_by_mac(self) -> dict:
+        """Count devices by version using MAC address lookup."""
+        version_counts = {}
+        for ap in self.all_aps:
+            version = self.ap_versions.get(ap.get('mac')) or 'Unknown'
+            version_counts[version] = version_counts.get(version, 0) + 1
+        return version_counts
     
     # =========================================================================
     # STEP 4: AVAILABLE FIRMWARE
@@ -41808,58 +43189,79 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step4_fetch_available_firmware(self) -> bool:
         """Fetch available firmware versions for each model."""
+        logging.debug("Entering _step4_fetch_available_firmware()")
+        self._print_step4_header()
+        
+        if apisession is None or self.org_id is None:
+            print("  X API session or org_id not initialized")
+            logging.error("API session or org_id not initialized for firmware fetch")
+            return False
+        
+        try:
+            if not self._load_available_versions():
+                print("  X Failed to retrieve available firmware versions")
+                logging.warning("Failed to load available firmware versions")
+                return False
+            
+            logging.debug(f"Loaded {len(self.available_versions)} firmware version entries")
+            self._build_model_version_mapping()
+            return self._display_version_summary()
+            
+        except Exception as error:
+            print(f"  X Error fetching available firmware: {error}")
+            logging.error(f"Failed to fetch available firmware: {error}")
+            return False
+    
+    def _print_step4_header(self):
+        """Print Step 4 header."""
         print("")
         print("-" * 70)
         print("  STEP 4: Available Firmware Versions")
         print("-" * 70)
         print("  Fetching available firmware for each model...")
+    
+    def _load_available_versions(self) -> bool:
+        """Load available firmware versions from API."""
+        if apisession is None:
+            print("  X API session not initialized")
+            return False
+        import mistapi.api.v1.orgs.devices as org_devices_api
+        response = org_devices_api.listOrgAvailableDeviceVersions(apisession, self.org_id, type="ap")
         
-        if apisession is None or self.org_id is None:
-            print("  X API session or org_id not initialized")
+        if not response or not hasattr(response, 'data'):
             return False
         
-        try:
-            # Use listOrgAvailableDeviceVersions (not getOrgDeviceUpgrade which checks upgrade status)
-            import mistapi.api.v1.orgs.devices as org_devices_api
-            response = org_devices_api.listOrgAvailableDeviceVersions(apisession, self.org_id, type="ap")
-            
-            if not response or not hasattr(response, 'data'):
-                print("  X Failed to retrieve available firmware versions")
-                return False
-            
-            self.available_versions = response.data if isinstance(response.data, list) else []
-            
-            # Build model-to-versions mapping
-            for version_info in self.available_versions:
-                if not isinstance(version_info, dict):
-                    continue
-                model = version_info.get('model')
-                version = version_info.get('version')
-                if model and version:
-                    if model not in self.model_version_ranges:
-                        self.model_version_ranges[model] = []
-                    self.model_version_ranges[model].append(version)
-            
-            # Show summary for models we have
-            models_found = 0
-            for model in self.aps_by_model.keys():
-                if model in self.model_version_ranges:
-                    models_found += 1
-                    print(f"    {model}: {len(self.model_version_ranges[model])} version(s) available")
-                else:
-                    print(f"    {model}: No firmware versions found")
-            
-            if models_found == 0:
-                print("  X No firmware versions available for discovered models")
-                return False
-            
-            print(f"  + Loaded firmware data for {models_found} model(s)")
-            return True
-            
-        except Exception as e:
-            print(f"  X Error fetching available firmware: {e}")
-            logging.error(f"Failed to fetch available firmware: {e}")
+        self.available_versions = response.data if isinstance(response.data, list) else []
+        return True
+    
+    def _build_model_version_mapping(self):
+        """Build model-to-versions mapping from available_versions."""
+        for version_info in self.available_versions:
+            if not isinstance(version_info, dict):
+                continue
+            model = version_info.get('model')
+            version = version_info.get('version')
+            if model and version:
+                if model not in self.model_version_ranges:
+                    self.model_version_ranges[model] = []
+                self.model_version_ranges[model].append(version)
+    
+    def _display_version_summary(self) -> bool:
+        """Display version summary for discovered models."""
+        models_found = 0
+        for model in self.aps_by_model.keys():
+            if model in self.model_version_ranges:
+                models_found += 1
+                print(f"    {model}: {len(self.model_version_ranges[model])} version(s) available")
+            else:
+                print(f"    {model}: No firmware versions found")
+        
+        if models_found == 0:
+            print("  X No firmware versions available for discovered models")
             return False
+        
+        print(f"  + Loaded firmware data for {models_found} model(s)")
+        return True
     
     # =========================================================================
     # STEP 5: VERSION SELECTION (per model -> grouped by version)
@@ -41867,83 +43269,125 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step5_select_firmware_versions(self) -> bool:
         """Let user select firmware version for each model, then group by version."""
+        logging.debug("Entering _step5_select_firmware_versions()")
         print("")
         print("-" * 70)
         print("  STEP 5: Firmware Version Selection")
         print("-" * 70)
         
-        # Temporary storage: model -> {version, devices}
-        model_selections = {}
-        
-        for model, devices in sorted(self.aps_by_model.items()):
-            model_versions = self._get_versions_for_model(model)
-            if not model_versions:
-                print(f"  ! No firmware versions found for {model} - skipping")
-                continue
-            
-            current_versions = set(self.ap_versions.get(d.get('id'), 'Unknown') for d in devices)
-            
-            print(f"\n  Model: {model} ({len(devices)} devices)")
-            print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
-            print(f"    Available versions:")
-            
-            for idx, v in enumerate(model_versions[:10]):  # Show top 10
-                version_num = v.get('version', 'Unknown')
-                indicators = []
-                if v.get('recommended'):
-                    indicators.append("RECOMMENDED")
-                if version_num in current_versions:
-                    indicators.append("CURRENT")
-                ind_text = f" [{', '.join(indicators)}]" if indicators else ""
-                print(f"      [{idx}] {version_num}{ind_text}")
-            
-            try:
-                user_input = InputUtils.safe_input(
-                    f"    Select version (0-{min(len(model_versions)-1, 9)}, 's' to skip): ",
-                    context="version_select"
-                ).strip().lower()
-            except SystemExit:
-                return False
-            
-            if user_input == 's':
-                print(f"    Skipping {model}")
-                continue
-            
-            try:
-                idx = int(user_input)
-                if 0 <= idx < len(model_versions):
-                    selected = model_versions[idx]
-                    target_version = selected.get('version')
-                    
-                    # Filter devices needing upgrade
-                    devices_needing = [d for d in devices 
-                                       if self.ap_versions.get(d.get('id')) != target_version]
-                    
-                    if not devices_needing:
-                        print(f"    All {model} devices already at {target_version}")
-                        continue
-                    
-                    skipped = len(devices) - len(devices_needing)
-                    if skipped:
-                        print(f"    Skipping {skipped} device(s) already at target")
-                        self.skipped_already_at_target += skipped
-                    
-                    model_selections[model] = {
-                        'version': target_version,
-                        'devices': devices_needing
-                    }
-                    print(f"    + Selected {target_version} for {len(devices_needing)} device(s)")
-            except ValueError:
-                print("    Invalid input - skipping model")
+        model_selections = self._collect_model_selections()
         
         if not model_selections:
             print("\n  X No upgrades selected")
+            logging.warning("No firmware versions selected by user")
             return False
         
-        # Reorganize by version for org-level API
+        logging.info(f"User selected firmware for {len(model_selections)} model(s)")
         self._organize_by_version(model_selections)
         return True
     
+    def _collect_model_selections(self) -> dict:
+        """Collect firmware version selections for each model."""
+        model_selections = {}
+        
+        for model, devices in sorted(self.aps_by_model.items()):
+            selection = self._process_single_model(model, devices)
+            if selection is None:
+                return {}  # User cancelled
+            if selection:
+                model_selections[model] = selection
+        
+        return model_selections
+    
+    def _process_single_model(self, model: str, devices: list) -> dict | None:
+        """Process version selection for a single model.
+        
+        Returns:
+            dict with version/devices if selected, empty dict if skipped, None if cancelled
+        """
+        model_versions = self._get_versions_for_model(model)
+        if not model_versions:
+            print(f"  ! No firmware versions found for {model} - skipping")
+            return {}
+        
+        current_versions = set(self.ap_versions.get(d.get('id'), 'Unknown') for d in devices)
+        self._display_model_options(model, devices, model_versions, current_versions)
+        
+        user_input = self._get_version_selection_input(model_versions)
+        if user_input is None:
+            return None  # Session cancelled
+        if user_input == 's':
+            print(f"    Skipping {model}")
+            return {}
+        
+        return self._apply_version_selection(model, devices, model_versions, user_input)
+    
+    def _display_model_options(self, model: str, devices: list, model_versions: list, current_versions: set):
+        """Display available firmware versions for a model."""
+        print(f"\n  Model: {model} ({len(devices)} devices)")
+        
+        # Show current versions with context for Unknown
+        if 'Unknown' in current_versions:
+            unknown_devs = [d for d in devices if self.ap_versions.get(d.get('id'), 'Unknown') == 'Unknown']
+            known_versions = sorted([v for v in current_versions if v != 'Unknown'], reverse=True)
+            offline_names = ', '.join([d.get('name', d.get('mac', 'unnamed')[:8]) for d in unknown_devs[:3]])
+            if len(unknown_devs) > 3:
+                offline_names += f" +{len(unknown_devs) - 3} more"
+            if known_versions:
+                print(f"    Current: {', '.join(known_versions)}")
+            print(f"    Offline ({len(unknown_devs)}): {offline_names}")
+        else:
+            print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
+        
+        print(f"    Available versions:")
+        
+        for idx, version_info in enumerate(model_versions[:10]):
+            version_num = version_info.get('version', 'Unknown')
+            indicators = []
+            if version_info.get('recommended'):
+                indicators.append("RECOMMENDED")
+            if version_num in current_versions:
+                indicators.append("CURRENT")
+            ind_text = f" [{', '.join(indicators)}]" if indicators else ""
+            print(f"      [{idx}] {version_num}{ind_text}")
+    
+    def _get_version_selection_input(self, model_versions: list) -> str | None:
+        """Get user input for version selection. Returns None on session cancel."""
+        try:
+            return InputUtils.safe_input(
+                f"    Select version (0-{min(len(model_versions)-1, 9)}, 's' to skip): ",
+                context="version_select"
+            ).strip().lower()
+        except SystemExit:
+            return None
+    
+    def _apply_version_selection(self, model: str, devices: list, model_versions: list, user_input: str) -> dict:
+        """Apply user's version selection for a model."""
+        try:
+            idx = int(user_input)
+            if not (0 <= idx < len(model_versions)):
+                print("    Invalid input - skipping model")
+                return {}
+        except ValueError:
+            print("    Invalid input - skipping model")
+            return {}
+        
+        selected = model_versions[idx]
+        target_version = selected.get('version')
+        
+        devices_needing = [d for d in devices if self.ap_versions.get(d.get('id')) != target_version]
+        if not devices_needing:
+            print(f"    All {model} devices already at {target_version}")
+            return {}
+        
+        skipped = len(devices) - len(devices_needing)
+        if skipped:
+            print(f"    Skipping {skipped} device(s) already at target")
+            self.skipped_already_at_target += skipped
+        
+        print(f"    + Selected {target_version} for {len(devices_needing)} device(s)")
+        return {'version': target_version, 'devices': devices_needing}
+
     def _get_versions_for_model(self, model: str) -> list:
         """Get sorted versions for a model."""
         versions = []
@@ -42002,25 +43446,53 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step6_configure_upgrade(self) -> bool:
         """Configure upgrade parameters."""
+        logging.debug("Entering _step6_configure_upgrade()")
+        self._print_step6_header()
+        
+        if not self._configure_download_strategy():
+            logging.info("Download strategy configuration cancelled")
+            return False
+        if not self._configure_reboot_strategy():
+            logging.info("Reboot strategy configuration cancelled")
+            return False
+        if not self._configure_scheduling():
+            logging.info("Scheduling configuration cancelled")
+            return False
+        if not self._configure_p2p():
+            logging.info("P2P configuration cancelled")
+            return False
+        
+        if not self._apply_default_settings():
+            return False
+        self._display_configuration()
+        logging.info(f"Upgrade configuration complete: {self.upgrade_config}")
+        return True
+    
+    def _print_step6_header(self):
+        """Print Step 6 header."""
         print("")
         print("-" * 70)
         print("  STEP 6: Upgrade Configuration")
         print("-" * 70)
-        
-        # Strategy selection
+    
+    def _configure_download_strategy(self) -> bool:
+        """Configure download strategy."""
         print("\n  Download Strategy:")
         print("    [1] big_bang - Download to all devices simultaneously")
         print("    [2] serial - Download to one device at a time")
         print("    [3] canary - Download in phases")
         
         try:
-            dl_choice = InputUtils.safe_input("  Select (1-3) [1]: ", context="dl_strategy").strip() or "1"
+            choice = InputUtils.safe_input("  Select (1-3) [1]: ", context="dl_strategy").strip() or "1"
         except SystemExit:
             return False
         
-        dl_strategies = {"1": "big_bang", "2": "serial", "3": "canary"}
-        self.upgrade_config['download_strategy'] = dl_strategies.get(dl_choice, "big_bang")
-        
+        strategies = {"1": "big_bang", "2": "serial", "3": "canary"}
+        self.upgrade_config['download_strategy'] = strategies.get(choice, "big_bang")
+        return True
+    
+    def _configure_reboot_strategy(self) -> bool:
+        """Configure reboot strategy."""
         print("\n  Reboot Strategy:")
         print("    [1] big_bang - Reboot all devices simultaneously")
         print("    [2] serial - Reboot one device at a time")
@@ -42028,23 +43500,421 @@ class OrgLevelAPFirmwareUpgrader:
         print("    [4] canary - Reboot in phases")
         
         try:
-            rb_choice = InputUtils.safe_input("  Select (1-4) [1]: ", context="rb_strategy").strip() or "1"
+            choice = InputUtils.safe_input("  Select (1-4) [1]: ", context="rb_strategy").strip() or "1"
         except SystemExit:
             return False
         
-        rb_strategies = {"1": "big_bang", "2": "serial", "3": "rrm", "4": "canary"}
-        self.upgrade_config['reboot_strategy'] = rb_strategies.get(rb_choice, "big_bang")
+        strategies = {"1": "big_bang", "2": "serial", "3": "rrm", "4": "canary"}
+        self.upgrade_config['reboot_strategy'] = strategies.get(choice, "big_bang")
+        return True
+    
+    def _parse_relative_offset(self, offset_str: str):
+        """Parse relative time offset like 'in 15 minutes', '+3h', '2 days'."""
+        from datetime import timedelta
+        offset_str = offset_str.strip().lower()
         
-        # Other settings with defaults
-        self.upgrade_config['max_failure_percentage'] = 5
-        self.upgrade_config['force'] = False
+        # Remove leading "in " or "+"
+        if offset_str.startswith('in '):
+            offset_str = offset_str[3:].strip()
+        elif offset_str.startswith('+'):
+            offset_str = offset_str[1:].strip()
         
-        print(f"\n  + Configuration:")
-        print(f"      Download: {self.upgrade_config['download_strategy']}")
-        print(f"      Reboot: {self.upgrade_config['reboot_strategy']}")
-        print(f"      Max Failure: {self.upgrade_config['max_failure_percentage']}%")
+        # Parse patterns like "15m", "3h", "2d", "15 minutes", "3 hours", "2 days"
+        import re
+        patterns = [
+            (r'^(\d+)\s*m(?:in(?:ute)?s?)?$', 'minutes'),
+            (r'^(\d+)\s*h(?:(?:ou)?rs?)?$', 'hours'),
+            (r'^(\d+)\s*d(?:ays?)?$', 'days'),
+        ]
+        
+        for pattern, unit in patterns:
+            match = re.match(pattern, offset_str)
+            if match:
+                value = int(match.group(1))
+                if unit == 'minutes':
+                    return timedelta(minutes=value)
+                elif unit == 'hours':
+                    return timedelta(hours=value)
+                elif unit == 'days':
+                    return timedelta(days=value)
+        
+        return None
+    
+    def _parse_time_input(self, time_str: str, base_datetime=None, is_for_reboot: bool = False) -> str | None:
+        """Parse time input to ISO 8601 format.
+        
+        Supports:
+        - Absolute: '21:30' (local), '19:45 UTC'
+        - Relative: 'in 15 minutes', 'in 3 hours', 'in 2 days', '+3h', '+30m'
+        - Offset from base: '4 hours after', '+4h' (when base_datetime provided)
+        
+        When use_site_local_time is True, returns time without timezone for site-local scheduling.
+        For download times, relative offsets are allowed even in site-local mode (they convert to UTC).
+        For reboot times in site-local mode, only HH:MM format is allowed.
+        """
+        from datetime import datetime, timedelta, timezone
+        
+        if not time_str or time_str.lower() in ['now', 'immediate', '']:
+            return None  # No scheduling - immediate
+        
+        time_str = time_str.strip()
+        use_site_local = self.upgrade_config.get('use_site_local_time', False)
+        
+        # Check for relative offset patterns
+        # In site-local mode: allowed for download (converts to UTC), blocked for reboot
+        relative_offset = self._parse_relative_offset(time_str)
+        if relative_offset:
+            if use_site_local and is_for_reboot:
+                # Relative times don't make sense for site-local reboot scheduling
+                print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
+                return None
+            if base_datetime:
+                # Offset from provided base time
+                target_dt = base_datetime + relative_offset
+            else:
+                # Offset from now
+                target_dt = datetime.now(timezone.utc) + relative_offset
+            return target_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # Check for "X after download" pattern (only valid for UTC mode or download time)
+        time_str_lower = time_str.lower()
+        if 'after' in time_str_lower:
+            if use_site_local and is_for_reboot:
+                print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
+                return None
+            # Extract the time portion before "after"
+            after_idx = time_str_lower.find('after')
+            time_portion = time_str[:after_idx].strip()
+            relative_offset = self._parse_relative_offset(time_portion)
+            if relative_offset and base_datetime:
+                target_dt = base_datetime + relative_offset
+                return target_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+            return None
+        
+        # Check for UTC suffix on absolute time
+        is_utc = time_str.upper().endswith(' UTC')
+        if is_utc:
+            time_str = time_str[:-4].strip()
+        
+        try:
+            # Parse HH:MM format
+            time_parts = time_str.split(':')
+            if len(time_parts) != 2:
+                return None
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return None
+            
+            # Site-local mode: return without timezone so API uses each site's timezone
+            if use_site_local:
+                # Use tomorrow's date to ensure it's in the future
+                now = datetime.now()
+                target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target_dt <= now:
+                    target_dt += timedelta(days=1)
+                return target_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            
+            # Global UTC mode
+            if is_utc:
+                now = datetime.now(timezone.utc)
+                target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target_dt <= now:
+                    target_dt += timedelta(days=1)
+                return target_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+            else:
+                # User's local time - convert to UTC
+                now_utc = datetime.now(timezone.utc)
+                local_now = datetime.now()
+                target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target_local <= local_now:
+                    target_local += timedelta(days=1)
+                # Calculate UTC offset (both naive for subtraction)
+                utc_offset = now_utc.replace(tzinfo=None) - local_now
+                target_utc = target_local + utc_offset
+                return target_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+        except (ValueError, IndexError):
+            return None
+    
+    def _parse_download_datetime(self, time_str: str):
+        """Parse download time and return as datetime object for reboot offset calculation."""
+        from datetime import datetime, timedelta, timezone
+        
+        if not time_str or time_str.lower() in ['now', 'immediate', '']:
+            return None
+        
+        time_str = time_str.strip()
+        
+        # Check for relative offset
+        relative_offset = self._parse_relative_offset(time_str)
+        if relative_offset:
+            return datetime.now(timezone.utc) + relative_offset
+        
+        # Check for UTC suffix
+        is_utc = time_str.upper().endswith(' UTC')
+        if is_utc:
+            time_str = time_str[:-4].strip()
+        
+        try:
+            time_parts = time_str.split(':')
+            if len(time_parts) != 2:
+                return None
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return None
+            
+            if is_utc:
+                now = datetime.now(timezone.utc)
+                target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target_dt <= now:
+                    target_dt += timedelta(days=1)
+                return target_dt
+            else:
+                now_utc = datetime.now(timezone.utc)
+                local_now = datetime.now()
+                target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target_local <= local_now:
+                    target_local += timedelta(days=1)
+                # Convert local to UTC for offset calculation (both naive for subtraction)
+                offset = now_utc.replace(tzinfo=None) - local_now
+                return target_local + offset
+        except (ValueError, IndexError):
+            return None
+    
+    def _configure_scheduling(self) -> bool:
+        """Configure download and reboot scheduling."""
+        # First ask about time mode
+        print("\n  Time Zone Mode:")
+        print("    [1] Global (UTC) - All sites upgrade at the same instant")
+        print("    [2] Site-Local - Each site upgrades at that time in its timezone")
+        print("        Example: '21:00' site-local = 9pm Eastern, 9pm Pacific, 9pm Central, etc.")
+        
+        try:
+            mode_input = InputUtils.safe_input("  Select time mode (1-2) [1]: ", context="time_mode").strip() or "1"
+        except SystemExit:
+            return False
+        
+        self.upgrade_config['use_site_local_time'] = (mode_input == "2")
+        if self.upgrade_config['use_site_local_time']:
+            print("    + Using site-local time (rolling upgrade across timezones)")
+        else:
+            print("    + Using global UTC time (all sites at same instant)")
+        
+        print("\n  Download Scheduling:")
+        if self.upgrade_config['use_site_local_time']:
+            print("    Absolute: 'HH:MM' (24-hour, site-local)")
+            print("    Relative: 'in 15 minutes', '+3h', '+2m' (converts to UTC)")
+            print("    Note: Relative times start download immediately across all sites;")
+            print("          HH:MM schedules download at that time in each site's timezone")
+        else:
+            print("    Absolute: '21:30' (your local) or '19:45 UTC'")
+            print("    Relative: 'in 15 minutes', 'in 3 hours', 'in 2 days', '+3h'")
+        print("    Immediate: blank or 'now'")
+        
+        try:
+            download_input = InputUtils.safe_input("  Download start time [now]: ", context="sched_download").strip()
+        except SystemExit:
+            return False
+        
+        self.upgrade_config['start_datetime'] = self._parse_time_input(download_input, is_for_reboot=False)
+        download_dt = self._parse_download_datetime(download_input)
+        
+        # Display download scheduling result
+        if self.upgrade_config['start_datetime']:
+            # Detect if download time was relative (contains Z suffix = UTC)
+            download_is_utc = self.upgrade_config['start_datetime'].endswith('Z')
+            if download_is_utc and self.upgrade_config['use_site_local_time']:
+                print(f"    + Download scheduled: {self.upgrade_config['start_datetime']} (UTC - immediate start)")
+            else:
+                time_suffix = " (site-local)" if self.upgrade_config['use_site_local_time'] else " (UTC)"
+                print(f"    + Download scheduled: {self.upgrade_config['start_datetime']}{time_suffix}")
+        else:
+            print("    + Download: immediate")
+        
+        # Always prompt for reboot time (allows "download now, reboot at 2am" workflow)
+        print("\n    Reboot time options:")
+        if self.upgrade_config['use_site_local_time']:
+            print("      Time format: 'HH:MM' (24-hour, site-local)")
+            print("      Example: '02:00' = 2am at each site's local time")
+        else:
+            print("      Absolute: '21:30', '19:45 UTC'")
+            if self.upgrade_config['start_datetime']:
+                print("      Relative to download: '+4h', '4 hours after', 'in 6 hours'")
+        print("      Immediate (after download): blank or 'now'")
+        
+        try:
+            reboot_input = InputUtils.safe_input("  Reboot start time [immediate]: ", context="sched_reboot").strip()
+        except SystemExit:
+            return False
+        
+        parsed_reboot = self._parse_time_input(reboot_input, base_datetime=download_dt, is_for_reboot=True)
+        self.upgrade_config['reboot_datetime'] = parsed_reboot if parsed_reboot else None
+        
+        if self.upgrade_config['reboot_datetime']:
+            time_suffix = " (site-local)" if self.upgrade_config['use_site_local_time'] else " (UTC)"
+            print(f"    + Reboot scheduled: {self.upgrade_config['reboot_datetime']}{time_suffix}")
+        else:
+            print("    + Reboot: immediate (after download completes)")
         
         return True
+    
+    def _apply_default_settings(self) -> bool:
+        """Apply default upgrade settings with optional user prompts."""
+        # Check if canary strategy is selected for either download or reboot
+        uses_canary = (
+            self.upgrade_config.get('download_strategy') == 'canary' or
+            self.upgrade_config.get('reboot_strategy') == 'canary'
+        )
+        
+        # Prompt for canary phases if canary strategy is selected
+        if uses_canary:
+            print("\n  Canary Configuration:")
+            print("    Canary phases define what percentage of devices to upgrade in each wave.")
+            print("    Example: '1,2,4,8,16,32,64,100' means 1%, then 2%, then 4%, etc.")
+            try:
+                phases_input = InputUtils.safe_input(
+                    "  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ",
+                    context="canary_phases"
+                ).strip()
+            except SystemExit:
+                return False
+            
+            if phases_input:
+                try:
+                    phases = [int(p.strip()) for p in phases_input.split(',') if p.strip()]
+                    if phases and all(0 < p <= 100 for p in phases):
+                        self.upgrade_config['canary_phases'] = phases
+                    else:
+                        print("    ! Invalid phases, using default [1,2,4,8,16,32,64,100]")
+                        self.upgrade_config['canary_phases'] = [1, 2, 4, 8, 16, 32, 64, 100]
+                except ValueError:
+                    print("    ! Invalid input, using default [1,2,4,8,16,32,64,100]")
+                    self.upgrade_config['canary_phases'] = [1, 2, 4, 8, 16, 32, 64, 100]
+            else:
+                self.upgrade_config['canary_phases'] = [1, 2, 4, 8, 16, 32, 64, 100]
+        
+        # Prompt for max failure percentage
+        print("\n  Failure Threshold:")
+        print("    Maximum percentage of devices that can fail before aborting upgrade.")
+        try:
+            failure_input = InputUtils.safe_input(
+                "  Max failure percentage [7]: ",
+                context="max_failure"
+            ).strip()
+        except SystemExit:
+            return False
+        
+        if failure_input:
+            try:
+                failure_pct = int(failure_input)
+                if 0 <= failure_pct <= 100:
+                    self.upgrade_config['max_failure_percentage'] = failure_pct
+                else:
+                    print("    ! Invalid percentage, using default 7%")
+                    self.upgrade_config['max_failure_percentage'] = 7
+            except ValueError:
+                print("    ! Invalid input, using default 7%")
+                self.upgrade_config['max_failure_percentage'] = 7
+        else:
+            self.upgrade_config['max_failure_percentage'] = 7
+        
+        self.upgrade_config['force'] = False
+        return True
+
+    def _configure_p2p(self) -> bool:
+        """Configure peer-to-peer firmware distribution settings."""
+        print("\n  Peer-to-Peer Configuration:")
+        print("    P2P allows APs to share firmware with nearby APs to reduce bandwidth.")
+        try:
+            p2p_input = InputUtils.safe_input(
+                "  Enable P2P firmware sharing? (Y/n) [Y]: ",
+                context="p2p_enable"
+            ).strip().lower()
+        except SystemExit:
+            return False
+        
+        # Default to enabled
+        self.upgrade_config['enable_p2p'] = p2p_input not in ['n', 'no']
+        
+        if self.upgrade_config['enable_p2p']:
+            print("    + P2P enabled")
+            
+            # Ask for cluster size
+            try:
+                cluster_input = InputUtils.safe_input(
+                    "  P2P cluster size (APs per cluster) [5]: ",
+                    context="p2p_cluster"
+                ).strip()
+            except SystemExit:
+                return False
+            
+            if cluster_input:
+                try:
+                    cluster_size = int(cluster_input)
+                    if 1 <= cluster_size <= 100:
+                        self.upgrade_config['p2p_cluster_size'] = cluster_size
+                    else:
+                        print("    ! Invalid size, using default 5")
+                        self.upgrade_config['p2p_cluster_size'] = 5
+                except ValueError:
+                    print("    ! Invalid input, using default 5")
+                    self.upgrade_config['p2p_cluster_size'] = 5
+            else:
+                self.upgrade_config['p2p_cluster_size'] = 5
+            
+            # Ask for parallelism (number of simultaneous download batches)
+            try:
+                parallel_input = InputUtils.safe_input(
+                    "  P2P parallelism (simultaneous site batches) [100]: ",
+                    context="p2p_parallelism"
+                ).strip()
+            except SystemExit:
+                return False
+            
+            if parallel_input:
+                try:
+                    parallelism = int(parallel_input)
+                    if 1 <= parallelism <= 500:
+                        self.upgrade_config['p2p_parallelism'] = parallelism
+                    else:
+                        print("    ! Invalid value, using default 100")
+                        self.upgrade_config['p2p_parallelism'] = 100
+                except ValueError:
+                    print("    ! Invalid input, using default 100")
+                    self.upgrade_config['p2p_parallelism'] = 100
+            else:
+                self.upgrade_config['p2p_parallelism'] = 100
+        else:
+            print("    + P2P disabled")
+            self.upgrade_config['p2p_cluster_size'] = 5
+            self.upgrade_config['p2p_parallelism'] = 100
+        
+        return True
+
+    def _display_configuration(self):
+        """Display configured upgrade settings."""
+        print(f"\n  + Configuration:")
+        print(f"      Download Strategy: {self.upgrade_config['download_strategy']}")
+        print(f"      Reboot Strategy: {self.upgrade_config['reboot_strategy']}")
+        
+        # Time mode display
+        use_site_local = self.upgrade_config.get('use_site_local_time', False)
+        time_mode = "Site-Local" if use_site_local else "Global (UTC)"
+        print(f"      Time Mode: {time_mode}")
+        
+        start_dt = self.upgrade_config.get('start_datetime')
+        reboot_dt = self.upgrade_config.get('reboot_datetime')
+        print(f"      Download Time: {start_dt if start_dt else 'Immediate'}")
+        print(f"      Reboot Time: {reboot_dt if reboot_dt else ('Same as download' if start_dt else 'Immediate')}")
+        print(f"      Max Failure: {self.upgrade_config['max_failure_percentage']}%")
+        if 'canary_phases' in self.upgrade_config:
+            phases_str = ', '.join(str(p) for p in self.upgrade_config['canary_phases'])
+            print(f"      Canary Phases: [{phases_str}]%")
+        if self.upgrade_config.get('enable_p2p'):
+            print(f"      P2P Enabled: Yes (cluster: {self.upgrade_config.get('p2p_cluster_size', 5)}, parallel: {self.upgrade_config.get('p2p_parallelism', 100)})")
+        else:
+            print(f"      P2P Enabled: No")
     
     # =========================================================================
     # STEP 7: CONFIRM AND EXECUTE
@@ -42052,45 +43922,72 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step7_confirm_and_execute(self) -> bool:
         """Confirm upgrade plan and execute."""
+        logging.debug("Entering _step7_confirm_and_execute()")
+        self._print_step7_header()
+        self._display_upgrade_summary()
+        self._display_version_breakdown()
+        
+        if self.dry_run:
+            print("\n  >> DRY-RUN: Simulating execution <<")
+            logging.debug("Executing dry-run simulation")
+            return self._execute_dry_run()
+        
+        return self._confirm_and_execute_live()
+    
+    def _print_step7_header(self):
+        """Print Step 7 header."""
         print("")
         print("-" * 70)
         print("  STEP 7: Confirm and Execute")
         print("-" * 70)
-        
+    
+    def _display_upgrade_summary(self):
+        """Display upgrade summary statistics."""
         total_devices = sum(len(d['device_ids']) for d in self.upgrade_plan.values())
         total_calls = len(self.upgrade_plan)
         
         print(f"\n  Summary:")
         print(f"    - Organization: {self.org_id[:8]}...")
-        print(f"    - Site Scope: {'All sites' if self.target_all_sites else f'{len(self.selected_site_ids)} selected site(s)'}")
+        scope = 'All sites' if self.target_all_sites else f'{len(self.selected_site_ids)} selected site(s)'
+        print(f"    - Site Scope: {scope}")
         print(f"    - Total Devices: {total_devices}")
         print(f"    - API Calls: {total_calls}")
-        
+    
+    def _display_version_breakdown(self):
+        """Display upgrades by version."""
         print(f"\n  Upgrades by Version:")
         for version, data in sorted(self.upgrade_plan.items()):
             models_str = ', '.join(data['models'])
             print(f"    {version}: {len(data['device_ids'])} device(s) ({models_str})")
+    
+    def _confirm_and_execute_live(self) -> bool:
+        """Confirm and execute live upgrade."""
+        logging.debug("Entering _confirm_and_execute_live()")
+        self._print_destructive_warning()
         
-        if self.dry_run:
-            print("\n  >> DRY-RUN: Simulating execution <<")
-            return self._execute_dry_run()
+        try:
+            confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="upgrade_confirm").strip()
+        except SystemExit:
+            logging.debug("SystemExit during upgrade confirmation")
+            return False
         
+        logging.debug(f"User confirmation input: '{confirm}'")
+        
+        if confirm != "UPGRADE":
+            print("  X Upgrade cancelled")
+            logging.warning("User cancelled upgrade - confirmation failed")
+            return False
+        
+        logging.info("User confirmed upgrade - executing")
+        return self._execute_upgrades()
+    
+    def _print_destructive_warning(self):
+        """Print destructive operation warning banner."""
         print("")
         print("  " + "!" * 60)
         print("  !  WARNING: DESTRUCTIVE OPERATION - FIRMWARE UPGRADE  !")
         print("  " + "!" * 60)
         print("")
-        
-        try:
-            confirm = InputUtils.safe_input("  Type 'UPGRADE' to proceed: ", context="upgrade_confirm").strip()
-        except SystemExit:
-            return False
-        
-        if confirm != "UPGRADE":
-            print("  X Upgrade cancelled")
-            return False
-        
-        return self._execute_upgrades()
     
     def _execute_dry_run(self) -> bool:
         """Execute dry-run simulation."""
@@ -42102,6 +43999,18 @@ class OrgLevelAPFirmwareUpgrader:
             print(f"      Models: {models_str}")
             print(f"      Devices: {len(data['device_ids'])}")
             print(f"      Site Scope: {'all_sites=true' if self.target_all_sites else f'{len(self.selected_site_ids)} site_ids'}")
+            use_site_local = self.upgrade_config.get('use_site_local_time', False)
+            time_mode = "Site-Local" if use_site_local else "Global (UTC)"
+            print(f"      Time Mode: {time_mode}")
+            start_dt = self.upgrade_config.get('start_datetime')
+            reboot_dt = self.upgrade_config.get('reboot_datetime')
+            print(f"      Download Time: {start_dt if start_dt else 'Immediate'}")
+            print(f"      Reboot Time: {reboot_dt if reboot_dt else ('Same as download' if start_dt else 'Immediate')}")
+            if 'canary_phases' in self.upgrade_config:
+                phases_str = ', '.join(str(p) for p in self.upgrade_config['canary_phases'])
+                print(f"      Canary Phases: [{phases_str}]%")
+            if self.upgrade_config.get('enable_p2p'):
+                print(f"      P2P: Enabled (cluster: {self.upgrade_config.get('p2p_cluster_size', 5)}, parallel: {self.upgrade_config.get('p2p_parallelism', 100)})")
             
             self.successful_api_calls += 1
             self.total_devices_upgraded += len(data['device_ids'])
@@ -42123,10 +44032,13 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _execute_upgrades(self) -> bool:
         """Execute actual org-level upgrades."""
+        logging.debug("Entering _execute_upgrades()")
+        logging.info("Executing org-level AP firmware upgrades")
         print("\n  Executing org-level upgrades...")
         
         if apisession is None or self.org_id is None:
             print("  X API session or org_id not initialized")
+            logging.error("API session or org_id not initialized for upgrade execution")
             return False
         
         import mistapi.api.v1.orgs.devices as org_devices_api
@@ -42134,6 +44046,7 @@ class OrgLevelAPFirmwareUpgrader:
         for version, data in sorted(self.upgrade_plan.items()):
             models_str = ', '.join(data['models'])
             print(f"\n  Upgrading to {version} ({models_str})...")
+            logging.info(f"Processing upgrade to version {version} for models: {models_str}")
             
             # Build request body
             body = {
@@ -42144,11 +44057,32 @@ class OrgLevelAPFirmwareUpgrader:
                 "max_failure_percentage": self.upgrade_config['max_failure_percentage']
             }
             
+            # Add scheduling if configured
+            if self.upgrade_config.get('start_datetime'):
+                body["start_datetime"] = self.upgrade_config['start_datetime']
+            if self.upgrade_config.get('reboot_datetime'):
+                body["reboot_datetime"] = self.upgrade_config['reboot_datetime']
+            
             # Add site scope
             if self.target_all_sites:
                 body["all_sites"] = True
             else:
                 body["site_ids"] = self.selected_site_ids
+            
+            # Add canary phases if canary strategy is selected
+            if 'canary_phases' in self.upgrade_config:
+                body["canary_phases"] = self.upgrade_config['canary_phases']
+            
+            # Add P2P configuration (AP only)
+            if self.upgrade_config.get('enable_p2p'):
+                body["enable_p2p"] = True
+                body["p2p_cluster_size"] = self.upgrade_config.get('p2p_cluster_size', 5)
+                body["p2p_parallelism"] = self.upgrade_config.get('p2p_parallelism', 100)
+            
+            # Debug: show what we're sending (only with --debug flag)
+            logging.debug(f"Upgrade API body: {body}")
+            if is_debug_mode():
+                print(f"    API Body: {body}")
             
             try:
                 response = org_devices_api.upgradeOrgDevices(apisession, self.org_id, body=body)
@@ -42182,6 +44116,7 @@ class OrgLevelAPFirmwareUpgrader:
         print(f"    - Successful API Calls: {self.successful_api_calls}")
         print(f"    - Failed API Calls: {self.failed_api_calls}")
         print(f"    - Total Devices: {self.total_devices_upgraded}")
+        logging.info(f"Org-level upgrade execution complete: successful={self.successful_api_calls}, failed={self.failed_api_calls}, total_devices={self.total_devices_upgraded}")
         return True
     
     # =========================================================================
@@ -42190,7 +44125,9 @@ class OrgLevelAPFirmwareUpgrader:
     
     def _step8_write_results(self) -> None:
         """Write upgrade results to CSV."""
+        logging.debug("Entering _step8_write_results()")
         if not self.results:
+            logging.debug("No results to write")
             return
         
         filename = os.path.join("data", "org_level_ap_upgrade_results.csv")
@@ -42201,8 +44138,10 @@ class OrgLevelAPFirmwareUpgrader:
                 api_function_name="orgLevelAPFirmwareUpgrade"
             )
             print(f"\n  Results written to: {filename}")
+            logging.info(f"Upgrade results written to: {filename}")
         except Exception as e:
             print(f"  X Failed to write results: {e}")
+            logging.error(f"Failed to write upgrade results: {e}")
 
 
 class BulkSwitchFirmwareUpgrader:
@@ -46403,171 +48342,209 @@ class ZoneConfigurationAnalyzer:
         }
     
     @staticmethod
+    def _display_zone_section(zone_analysis: dict) -> None:
+        """Display zone analysis section."""
+        if not zone_analysis:
+            return
+        stats = zone_analysis.get("zone_count_stats", {})
+        print(f"\n{'='*60}")
+        print("[ZONE ANALYSIS]")
+        print(f"{'='*60}")
+        print(f"\n[Zone Summary]")
+        print(f"  Total sites scanned: {stats.get('total_sites', 0)}")
+        print(f"  Sites with zones: {stats.get('sites_with_zones', 0)}")
+        print(f"  Average zones per site: {stats.get('mean', 0):.1f}")
+        print(f"  Median zones per site: {stats.get('median', 0)}")
+        print(f"  Range: {stats.get('min', 0)} - {stats.get('max', 0)}")
+        print(f"  Standard deviation: {stats.get('std_dev', 0):.2f}")
+        
+        ZoneConfigurationAnalyzer._display_common_zones(zone_analysis, stats)
+        ZoneConfigurationAnalyzer._display_missing_zones(zone_analysis)
+        ZoneConfigurationAnalyzer._display_zone_deviations(zone_analysis)
+    
+    @staticmethod
+    def _display_common_zones(zone_analysis: dict, stats: dict) -> None:
+        """Display common zones section."""
+        common_zones = zone_analysis.get("common_zones", set())
+        print(f"\n[Common Zones] (Present in 75%+ of sites with zones)")
+        if common_zones:
+            for zone_name in sorted(common_zones):
+                frequency = zone_analysis.get("zone_frequency", {}).get(zone_name, 0)
+                sites_with_zones = stats.get("sites_with_zones", 1) or 1
+                percentage = (frequency / sites_with_zones * 100)
+                print(f"  - {zone_name} ({frequency} sites, {percentage:.0f}%)")
+        else:
+            print("  No common zones found (high variation across sites)")
+    
+    @staticmethod
+    def _display_missing_zones(zone_analysis: dict) -> None:
+        """Display sites missing common zones."""
+        missing_common = zone_analysis.get("sites_missing_common_zones", {})
+        print(f"\n[Sites Missing Common Zones] ({len(missing_common)} sites)")
+        if missing_common:
+            for site_id, data in list(missing_common.items())[:10]:
+                print(f"  - {data['site_name']}")
+                print(f"    Missing: {', '.join(sorted(data['missing_zones']))}")
+            if len(missing_common) > 10:
+                print(f"  ... and {len(missing_common) - 10} more sites")
+        else:
+            print("  All sites have the common zones configured")
+    
+    @staticmethod
+    def _display_zone_deviations(zone_analysis: dict) -> None:
+        """Display zone count deviations."""
+        zone_deviations = zone_analysis.get("zone_count_deviations", {})
+        print(f"\n[Zone Count Deviations] ({len(zone_deviations)} sites)")
+        if zone_deviations:
+            for site_id, data in list(zone_deviations.items())[:10]:
+                print(f"  - {data['site_name']}: {data['zone_count']} zones")
+                print(f"    Expected range: {data['expected_range']}, Deviation: {data['deviation_score']}x std dev")
+            if len(zone_deviations) > 10:
+                print(f"  ... and {len(zone_deviations) - 10} more sites")
+        else:
+            print("  All sites have zone counts within expected range")
+    
+    @staticmethod
+    def _display_engagement_section(engagement_analysis: dict) -> None:
+        """Display engagement analysis section."""
+        if not engagement_analysis:
+            return
+        print(f"\n{'='*60}")
+        print("[ENGAGEMENT ANALYSIS]")
+        print(f"{'='*60}")
+        
+        ZoneConfigurationAnalyzer._display_dwell_configs(engagement_analysis)
+        ZoneConfigurationAnalyzer._display_dwell_deviations(engagement_analysis)
+        ZoneConfigurationAnalyzer._display_custom_names(engagement_analysis)
+        ZoneConfigurationAnalyzer._display_business_hours(engagement_analysis)
+    
+    @staticmethod
+    def _display_dwell_configs(engagement_analysis: dict) -> None:
+        """Display dwell tag configuration summary."""
+        most_common = engagement_analysis.get("most_common_config", (None, []))
+        dwell_configs = engagement_analysis.get("dwell_tag_configs", {})
+        print(f"\n[Dwell Tag Configurations]")
+        print(f"  Total unique configurations: {len(dwell_configs)}")
+        if most_common[0] and most_common[1]:
+            print(f"  Most common config ({len(most_common[1])} sites):")
+            sample_tags = most_common[1][0].get("dwell_tags", {})
+            print(f"    passerby: {sample_tags.get('passerby', 'N/A')}")
+            print(f"    bounce: {sample_tags.get('bounce', 'N/A')}")
+            print(f"    engaged: {sample_tags.get('engaged', 'N/A')}")
+            print(f"    stationed: {sample_tags.get('stationed', 'N/A')}")
+    
+    @staticmethod
+    def _display_dwell_deviations(engagement_analysis: dict) -> None:
+        """Display sites with dwell tag deviations."""
+        dwell_deviations = engagement_analysis.get("sites_with_dwell_deviations", {})
+        print(f"\n[Sites with Dwell Tag Deviations] ({len(dwell_deviations)} sites)")
+        if dwell_deviations:
+            for site_id, data in list(dwell_deviations.items())[:10]:
+                print(f"  - {data['site_name']}")
+                current = data.get("current_config", {})
+                print(f"    Current: passerby={current.get('passerby', 'N/A')}, bounce={current.get('bounce', 'N/A')}")
+                print(f"             engaged={current.get('engaged', 'N/A')}, stationed={current.get('stationed', 'N/A')}")
+            if len(dwell_deviations) > 10:
+                print(f"  ... and {len(dwell_deviations) - 10} more sites")
+        else:
+            print("  All sites have matching dwell tag configurations")
+    
+    @staticmethod
+    def _display_custom_names(engagement_analysis: dict) -> None:
+        """Display sites with custom dwell tag names."""
+        custom_names = engagement_analysis.get("sites_with_custom_names", {})
+        print(f"\n[Sites with Custom Dwell Tag Names] ({len(custom_names)} sites)")
+        if custom_names:
+            for site_id, data in list(custom_names.items())[:10]:
+                print(f"  - {data['site_name']}")
+                for tag_type, name in data.get("custom_names", {}).items():
+                    print(f"    {tag_type}: '{name}'")
+            if len(custom_names) > 10:
+                print(f"  ... and {len(custom_names) - 10} more sites")
+        else:
+            print("  No sites have custom dwell tag names configured")
+    
+    @staticmethod
+    def _display_business_hours(engagement_analysis: dict) -> None:
+        """Display sites with business hours configured."""
+        business_hours = engagement_analysis.get("sites_with_business_hours", {})
+        print(f"\n[Sites with Business Hours Configured] ({len(business_hours)} sites)")
+        if business_hours:
+            if len(business_hours) <= 5:
+                for site_id, data in business_hours.items():
+                    print(f"  - {data['site_name']}")
+            else:
+                print(f"  {len(business_hours)} sites have business hours configured")
+        else:
+            print("  No sites have business hours configured")
+    
+    @staticmethod
+    def _display_occupancy_section(occupancy_analysis: dict) -> None:
+        """Display occupancy analysis section."""
+        if not occupancy_analysis:
+            return
+        print(f"\n{'='*60}")
+        print("[OCCUPANCY ANALYSIS]")
+        print(f"{'='*60}")
+        
+        total_sites = occupancy_analysis.get("total_sites", 0)
+        enabled = occupancy_analysis.get("analytic_enabled_count", 0)
+        disabled = occupancy_analysis.get("analytic_disabled_count", 0)
+        
+        print(f"\n[Analytics Status]")
+        print(f"  Enabled: {enabled} sites ({enabled/total_sites*100 if total_sites else 0:.1f}%)")
+        print(f"  Disabled: {disabled} sites ({disabled/total_sites*100 if total_sites else 0:.1f}%)")
+        
+        ZoneConfigurationAnalyzer._display_occupancy_configs(occupancy_analysis)
+        ZoneConfigurationAnalyzer._display_occupancy_deviations(occupancy_analysis)
+    
+    @staticmethod
+    def _display_occupancy_configs(occupancy_analysis: dict) -> None:
+        """Display occupancy configuration summary."""
+        most_common = occupancy_analysis.get("most_common_config", (None, []))
+        occupancy_configs = occupancy_analysis.get("occupancy_configs", {})
+        print(f"\n[Occupancy Configurations]")
+        print(f"  Total unique configurations: {len(occupancy_configs)}")
+        if most_common[0] and most_common[1]:
+            print(f"  Most common config ({len(most_common[1])} sites):")
+            sample_occ = most_common[1][0].get("occupancy", {})
+            print(f"    min_duration: {sample_occ.get('min_duration', 'N/A')}")
+            print(f"    clients_enabled: {sample_occ.get('clients_enabled', 'N/A')}")
+            print(f"    sdkclients_enabled: {sample_occ.get('sdkclients_enabled', 'N/A')}")
+            print(f"    assets_enabled: {sample_occ.get('assets_enabled', 'N/A')}")
+            print(f"    unconnected_clients_enabled: {sample_occ.get('unconnected_clients_enabled', 'N/A')}")
+        
+        min_duration_values = occupancy_analysis.get("min_duration_values", {})
+        if len(min_duration_values) > 1:
+            print(f"\n[Min Duration Distribution]")
+            for duration, count in sorted(min_duration_values.items(), key=lambda x: -x[1]):
+                print(f"  {duration}: {count} sites")
+    
+    @staticmethod
+    def _display_occupancy_deviations(occupancy_analysis: dict) -> None:
+        """Display sites with occupancy config deviations."""
+        occ_deviations = occupancy_analysis.get("sites_with_occupancy_deviations", {})
+        print(f"\n[Sites with Occupancy Config Deviations] ({len(occ_deviations)} sites)")
+        if occ_deviations:
+            for site_id, data in list(occ_deviations.items())[:10]:
+                print(f"  - {data['site_name']}")
+                current = data.get("current_config", {})
+                print(f"    min_duration={current.get('min_duration', 'N/A')}, clients={current.get('clients_enabled', 'N/A')}, unconnected={current.get('unconnected_clients_enabled', 'N/A')}")
+            if len(occ_deviations) > 10:
+                print(f"  ... and {len(occ_deviations) - 10} more sites")
+        else:
+            print("  All sites have matching occupancy configurations")
+    
+    @staticmethod
     def _display_results(combined_analysis: dict):
         """Display analysis results to console."""
         print("\n" + "=" * 60)
         print("ZONE & ENGAGEMENT CONFIGURATION ANALYSIS RESULTS")
         print("=" * 60)
         
-        # Zone Analysis Section
-        zone_analysis = combined_analysis.get("zones", {})
-        if zone_analysis:
-            stats = zone_analysis.get("zone_count_stats", {})
-            print(f"\n{'='*60}")
-            print("[ZONE ANALYSIS]")
-            print(f"{'='*60}")
-            print(f"\n[Zone Summary]")
-            print(f"  Total sites scanned: {stats.get('total_sites', 0)}")
-            print(f"  Sites with zones: {stats.get('sites_with_zones', 0)}")
-            print(f"  Average zones per site: {stats.get('mean', 0):.1f}")
-            print(f"  Median zones per site: {stats.get('median', 0)}")
-            print(f"  Range: {stats.get('min', 0)} - {stats.get('max', 0)}")
-            print(f"  Standard deviation: {stats.get('std_dev', 0):.2f}")
-            
-            # Common zones
-            common_zones = zone_analysis.get("common_zones", set())
-            print(f"\n[Common Zones] (Present in 75%+ of sites with zones)")
-            if common_zones:
-                for zone_name in sorted(common_zones):
-                    frequency = zone_analysis.get("zone_frequency", {}).get(zone_name, 0)
-                    sites_with_zones = stats.get("sites_with_zones", 1) or 1
-                    percentage = (frequency / sites_with_zones * 100)
-                    print(f"  - {zone_name} ({frequency} sites, {percentage:.0f}%)")
-            else:
-                print("  No common zones found (high variation across sites)")
-            
-            # Sites missing common zones
-            missing_common = zone_analysis.get("sites_missing_common_zones", {})
-            print(f"\n[Sites Missing Common Zones] ({len(missing_common)} sites)")
-            if missing_common:
-                for site_id, data in list(missing_common.items())[:10]:
-                    print(f"  - {data['site_name']}")
-                    print(f"    Missing: {', '.join(sorted(data['missing_zones']))}")
-                if len(missing_common) > 10:
-                    print(f"  ... and {len(missing_common) - 10} more sites")
-            else:
-                print("  All sites have the common zones configured")
-            
-            # Zone count deviations
-            zone_deviations = zone_analysis.get("zone_count_deviations", {})
-            print(f"\n[Zone Count Deviations] ({len(zone_deviations)} sites)")
-            if zone_deviations:
-                for site_id, data in list(zone_deviations.items())[:10]:
-                    print(f"  - {data['site_name']}: {data['zone_count']} zones")
-                    print(f"    Expected range: {data['expected_range']}, Deviation: {data['deviation_score']}x std dev")
-                if len(zone_deviations) > 10:
-                    print(f"  ... and {len(zone_deviations) - 10} more sites")
-            else:
-                print("  All sites have zone counts within expected range")
-        
-        # Engagement Analysis Section
-        engagement_analysis = combined_analysis.get("engagement", {})
-        if engagement_analysis:
-            print(f"\n{'='*60}")
-            print("[ENGAGEMENT ANALYSIS]")
-            print(f"{'='*60}")
-            
-            # Dwell tag configuration summary
-            most_common = engagement_analysis.get("most_common_config", (None, []))
-            dwell_configs = engagement_analysis.get("dwell_tag_configs", {})
-            print(f"\n[Dwell Tag Configurations]")
-            print(f"  Total unique configurations: {len(dwell_configs)}")
-            if most_common[0]:
-                print(f"  Most common config ({len(most_common[1])} sites):")
-                if most_common[1]:
-                    sample_tags = most_common[1][0].get("dwell_tags", {})
-                    print(f"    passerby: {sample_tags.get('passerby', 'N/A')}")
-                    print(f"    bounce: {sample_tags.get('bounce', 'N/A')}")
-                    print(f"    engaged: {sample_tags.get('engaged', 'N/A')}")
-                    print(f"    stationed: {sample_tags.get('stationed', 'N/A')}")
-            
-            # Sites with dwell tag deviations
-            dwell_deviations = engagement_analysis.get("sites_with_dwell_deviations", {})
-            print(f"\n[Sites with Dwell Tag Deviations] ({len(dwell_deviations)} sites)")
-            if dwell_deviations:
-                for site_id, data in list(dwell_deviations.items())[:10]:
-                    print(f"  - {data['site_name']}")
-                    current = data.get("current_config", {})
-                    print(f"    Current: passerby={current.get('passerby', 'N/A')}, bounce={current.get('bounce', 'N/A')}")
-                    print(f"             engaged={current.get('engaged', 'N/A')}, stationed={current.get('stationed', 'N/A')}")
-                if len(dwell_deviations) > 10:
-                    print(f"  ... and {len(dwell_deviations) - 10} more sites")
-            else:
-                print("  All sites have matching dwell tag configurations")
-            
-            # Sites with custom dwell tag names
-            custom_names = engagement_analysis.get("sites_with_custom_names", {})
-            print(f"\n[Sites with Custom Dwell Tag Names] ({len(custom_names)} sites)")
-            if custom_names:
-                for site_id, data in list(custom_names.items())[:10]:
-                    print(f"  - {data['site_name']}")
-                    for tag_type, name in data.get("custom_names", {}).items():
-                        print(f"    {tag_type}: '{name}'")
-                if len(custom_names) > 10:
-                    print(f"  ... and {len(custom_names) - 10} more sites")
-            else:
-                print("  No sites have custom dwell tag names configured")
-            
-            # Sites with business hours
-            business_hours = engagement_analysis.get("sites_with_business_hours", {})
-            print(f"\n[Sites with Business Hours Configured] ({len(business_hours)} sites)")
-            if business_hours:
-                if len(business_hours) <= 5:
-                    for site_id, data in business_hours.items():
-                        print(f"  - {data['site_name']}")
-                else:
-                    print(f"  {len(business_hours)} sites have business hours configured")
-            else:
-                print("  No sites have business hours configured")
-        
-        # Occupancy Analysis Section
-        occupancy_analysis = combined_analysis.get("occupancy", {})
-        if occupancy_analysis:
-            print(f"\n{'='*60}")
-            print("[OCCUPANCY ANALYSIS]")
-            print(f"{'='*60}")
-            
-            total_sites = occupancy_analysis.get("total_sites", 0)
-            enabled = occupancy_analysis.get("analytic_enabled_count", 0)
-            disabled = occupancy_analysis.get("analytic_disabled_count", 0)
-            
-            print(f"\n[Analytics Status]")
-            print(f"  Enabled: {enabled} sites ({enabled/total_sites*100 if total_sites else 0:.1f}%)")
-            print(f"  Disabled: {disabled} sites ({disabled/total_sites*100 if total_sites else 0:.1f}%)")
-            
-            # Occupancy configuration summary
-            most_common = occupancy_analysis.get("most_common_config", (None, []))
-            occupancy_configs = occupancy_analysis.get("occupancy_configs", {})
-            print(f"\n[Occupancy Configurations]")
-            print(f"  Total unique configurations: {len(occupancy_configs)}")
-            if most_common[0] and most_common[1]:
-                print(f"  Most common config ({len(most_common[1])} sites):")
-                sample_occ = most_common[1][0].get("occupancy", {})
-                print(f"    min_duration: {sample_occ.get('min_duration', 'N/A')}")
-                print(f"    clients_enabled: {sample_occ.get('clients_enabled', 'N/A')}")
-                print(f"    sdkclients_enabled: {sample_occ.get('sdkclients_enabled', 'N/A')}")
-                print(f"    assets_enabled: {sample_occ.get('assets_enabled', 'N/A')}")
-                print(f"    unconnected_clients_enabled: {sample_occ.get('unconnected_clients_enabled', 'N/A')}")
-            
-            # Min duration distribution
-            min_duration_values = occupancy_analysis.get("min_duration_values", {})
-            if len(min_duration_values) > 1:
-                print(f"\n[Min Duration Distribution]")
-                for duration, count in sorted(min_duration_values.items(), key=lambda x: -x[1]):
-                    print(f"  {duration}: {count} sites")
-            
-            # Sites with occupancy deviations
-            occ_deviations = occupancy_analysis.get("sites_with_occupancy_deviations", {})
-            print(f"\n[Sites with Occupancy Config Deviations] ({len(occ_deviations)} sites)")
-            if occ_deviations:
-                for site_id, data in list(occ_deviations.items())[:10]:
-                    print(f"  - {data['site_name']}")
-                    current = data.get("current_config", {})
-                    print(f"    min_duration={current.get('min_duration', 'N/A')}, clients={current.get('clients_enabled', 'N/A')}, unconnected={current.get('unconnected_clients_enabled', 'N/A')}")
-                if len(occ_deviations) > 10:
-                    print(f"  ... and {len(occ_deviations) - 10} more sites")
-            else:
-                print("  All sites have matching occupancy configurations")
+        ZoneConfigurationAnalyzer._display_zone_section(combined_analysis.get("zones", {}))
+        ZoneConfigurationAnalyzer._display_engagement_section(combined_analysis.get("engagement", {}))
+        ZoneConfigurationAnalyzer._display_occupancy_section(combined_analysis.get("occupancy", {}))
         
         print("\n" + "=" * 60)
     
@@ -46843,10 +48820,13 @@ class SiteAnalyticsConfigurator:
         print("=" * 60)
         
         try:
-            confirmation = input("Type 'CONFIGURE' to apply standard settings to all deviating sites: ")
-        except EOFError:
-            logging.info("EOF detected - session disconnected")
-            sys.exit(0)
+            confirmation = InputUtils.safe_input(
+                "Type 'CONFIGURE' to apply standard settings to all deviating sites: ",
+                context="site_analytics_config"
+            )
+        except SystemExit:
+            logging.info("Site analytics configuration cancelled - session disconnected")
+            return
         
         if confirmation != "CONFIGURE":
             print("! Operation cancelled - confirmation not provided")
@@ -46911,6 +48891,82 @@ class SiteAnalyticsConfigurator:
         return deviations
     
     @staticmethod
+    def _check_rtsa_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check RTSA settings for deviations."""
+        current_rtsa = settings.get("rtsa", {})
+        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_rtsa, SiteAnalyticsConfigurator.STANDARD_RTSA, "rtsa"
+        )
+        if rtsa_deviations:
+            deviation_record["rtsa_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["rtsa"] = current_rtsa
+            deviation_record["deviation_details"].extend(rtsa_deviations)
+    
+    @staticmethod
+    def _check_rogue_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check Rogue settings for deviations."""
+        current_rogue = settings.get("rogue", {})
+        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_rogue, SiteAnalyticsConfigurator.STANDARD_ROGUE, "rogue"
+        )
+        if rogue_deviations:
+            deviation_record["rogue_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["rogue"] = current_rogue
+            deviation_record["deviation_details"].extend(rogue_deviations)
+    
+    @staticmethod
+    def _check_engagement_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check Engagement settings for deviations."""
+        current_engagement = settings.get("engagement", {})
+        engagement_deviations = SiteAnalyticsConfigurator._compare_engagement(current_engagement)
+        if engagement_deviations:
+            deviation_record["engagement_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["engagement"] = current_engagement
+            deviation_record["deviation_details"].extend(engagement_deviations)
+    
+    @staticmethod
+    def _check_analytic_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check Analytic settings for deviations."""
+        current_analytic = settings.get("analytic", {})
+        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_analytic, SiteAnalyticsConfigurator.STANDARD_ANALYTIC, "analytic"
+        )
+        if analytic_deviations:
+            deviation_record["analytic_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["analytic"] = current_analytic
+            deviation_record["deviation_details"].extend(analytic_deviations)
+    
+    @staticmethod
+    def _check_occupancy_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check Occupancy settings for deviations."""
+        current_occupancy = settings.get("occupancy", {})
+        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_occupancy, SiteAnalyticsConfigurator.STANDARD_OCCUPANCY, "occupancy"
+        )
+        if occupancy_deviations:
+            deviation_record["occupancy_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["occupancy"] = current_occupancy
+            deviation_record["deviation_details"].extend(occupancy_deviations)
+    
+    @staticmethod
+    def _check_wifi_deviations(deviation_record: dict, settings: dict) -> None:
+        """Check WiFi settings for deviations."""
+        current_wifi = settings.get("wifi", {})
+        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
+            current_wifi, SiteAnalyticsConfigurator.STANDARD_WIFI, "wifi"
+        )
+        if wifi_deviations:
+            deviation_record["wifi_deviation"] = True
+            deviation_record["has_deviations"] = True
+            deviation_record["current_settings"]["wifi"] = current_wifi
+            deviation_record["deviation_details"].extend(wifi_deviations)
+    
+    @staticmethod
     def _check_deviations(settings: dict, site_id: str, site_name: str) -> dict:
         """Check a single site's settings for deviations from standard."""
         deviation_record = {
@@ -46927,79 +48983,12 @@ class SiteAnalyticsConfigurator:
             "deviation_details": []
         }
         
-        # Check RTSA settings
-        current_rtsa = settings.get("rtsa", {})
-        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rtsa, 
-            SiteAnalyticsConfigurator.STANDARD_RTSA,
-            "rtsa"
-        )
-        if rtsa_deviations:
-            deviation_record["rtsa_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rtsa"] = current_rtsa
-            deviation_record["deviation_details"].extend(rtsa_deviations)
-        
-        # Check Rogue settings
-        current_rogue = settings.get("rogue", {})
-        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rogue,
-            SiteAnalyticsConfigurator.STANDARD_ROGUE,
-            "rogue"
-        )
-        if rogue_deviations:
-            deviation_record["rogue_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rogue"] = current_rogue
-            deviation_record["deviation_details"].extend(rogue_deviations)
-        
-        # Check Engagement settings
-        current_engagement = settings.get("engagement", {})
-        engagement_deviations = SiteAnalyticsConfigurator._compare_engagement(current_engagement)
-        if engagement_deviations:
-            deviation_record["engagement_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["engagement"] = current_engagement
-            deviation_record["deviation_details"].extend(engagement_deviations)
-        
-        # Check Analytic settings
-        current_analytic = settings.get("analytic", {})
-        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_analytic,
-            SiteAnalyticsConfigurator.STANDARD_ANALYTIC,
-            "analytic"
-        )
-        if analytic_deviations:
-            deviation_record["analytic_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["analytic"] = current_analytic
-            deviation_record["deviation_details"].extend(analytic_deviations)
-        
-        # Check Occupancy settings
-        current_occupancy = settings.get("occupancy", {})
-        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_occupancy,
-            SiteAnalyticsConfigurator.STANDARD_OCCUPANCY,
-            "occupancy"
-        )
-        if occupancy_deviations:
-            deviation_record["occupancy_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["occupancy"] = current_occupancy
-            deviation_record["deviation_details"].extend(occupancy_deviations)
-        
-        # Check WiFi settings
-        current_wifi = settings.get("wifi", {})
-        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_wifi,
-            SiteAnalyticsConfigurator.STANDARD_WIFI,
-            "wifi"
-        )
-        if wifi_deviations:
-            deviation_record["wifi_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["wifi"] = current_wifi
-            deviation_record["deviation_details"].extend(wifi_deviations)
+        SiteAnalyticsConfigurator._check_rtsa_deviations(deviation_record, settings)
+        SiteAnalyticsConfigurator._check_rogue_deviations(deviation_record, settings)
+        SiteAnalyticsConfigurator._check_engagement_deviations(deviation_record, settings)
+        SiteAnalyticsConfigurator._check_analytic_deviations(deviation_record, settings)
+        SiteAnalyticsConfigurator._check_occupancy_deviations(deviation_record, settings)
+        SiteAnalyticsConfigurator._check_wifi_deviations(deviation_record, settings)
         
         return deviation_record
     
@@ -47082,13 +49071,42 @@ class SiteAnalyticsConfigurator:
         return deviations
     
     @staticmethod
+    @staticmethod
+    def _get_deviation_types(site: dict) -> list:
+        """Get list of deviation type names for a site."""
+        deviation_types = []
+        if site["rtsa_deviation"]:
+            deviation_types.append("RTSA")
+        if site["rogue_deviation"]:
+            deviation_types.append("Rogue")
+        if site["engagement_deviation"]:
+            deviation_types.append("Engagement")
+        if site["analytic_deviation"]:
+            deviation_types.append("Analytic")
+        if site["occupancy_deviation"]:
+            deviation_types.append("Occupancy")
+        if site["wifi_deviation"]:
+            deviation_types.append("WiFi")
+        return deviation_types
+    
+    @staticmethod
+    def _print_standard_config() -> None:
+        """Print the standard configuration to be applied."""
+        print(f"\n[STANDARD CONFIGURATION TO BE APPLIED]")
+        print(f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}")
+        print(f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}")
+        print(f"  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
+        print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
+        print(f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}")
+        print(f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}")
+    
+    @staticmethod
     def _display_deviation_summary(deviations: list):
         """Display summary of deviations found."""
         print("\n" + "=" * 60)
         print("SITE ANALYTICS CONFIGURATION DEVIATIONS")
         print("=" * 60)
         
-        # Count by deviation type
         rtsa_count = sum(1 for site in deviations if site["rtsa_deviation"])
         rogue_count = sum(1 for site in deviations if site["rogue_deviation"])
         engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
@@ -47098,43 +49116,17 @@ class SiteAnalyticsConfigurator:
         
         print(f"\n[DEVIATION SUMMARY]")
         print(f"  Total sites with deviations: {len(deviations)}")
-        print(f"  - RTSA settings: {rtsa_count} sites")
-        print(f"  - Rogue settings: {rogue_count} sites")
-        print(f"  - Engagement settings: {engagement_count} sites")
-        print(f"  - Analytic settings: {analytic_count} sites")
-        print(f"  - Occupancy settings: {occupancy_count} sites")
-        print(f"  - WiFi settings: {wifi_count} sites")
+        print(f"  - RTSA: {rtsa_count}  - Rogue: {rogue_count}  - Engagement: {engagement_count}")
+        print(f"  - Analytic: {analytic_count}  - Occupancy: {occupancy_count}  - WiFi: {wifi_count}")
         
-        # Show first 10 sites with deviations
         print(f"\n[SITES WITH DEVIATIONS] (showing first 10)")
         for site in deviations[:10]:
-            deviation_types = []
-            if site["rtsa_deviation"]:
-                deviation_types.append("RTSA")
-            if site["rogue_deviation"]:
-                deviation_types.append("Rogue")
-            if site["engagement_deviation"]:
-                deviation_types.append("Engagement")
-            if site["analytic_deviation"]:
-                deviation_types.append("Analytic")
-            if site["occupancy_deviation"]:
-                deviation_types.append("Occupancy")
-            if site["wifi_deviation"]:
-                deviation_types.append("WiFi")
-            
+            deviation_types = SiteAnalyticsConfigurator._get_deviation_types(site)
             print(f"  - {site['site_name']}: {', '.join(deviation_types)}")
-        
         if len(deviations) > 10:
             print(f"  ... and {len(deviations) - 10} more sites")
         
-        # Show standard configuration
-        print(f"\n[STANDARD CONFIGURATION TO BE APPLIED]")
-        print(f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}")
-        print(f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}")
-        print(f"  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
-        print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
-        print(f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}")
-        print(f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}")
+        SiteAnalyticsConfigurator._print_standard_config()
     
     @staticmethod
     def _export_deviation_report(deviations: list):
@@ -47164,93 +49156,76 @@ class SiteAnalyticsConfigurator:
         print(f"\n! Preview report exported to {filename}")
     
     @staticmethod
+    @staticmethod
+    def _apply_standard_sections(site: dict, current_settings: dict, result: dict) -> None:
+        """Apply standard configuration for each deviating section."""
+        if site["rtsa_deviation"]:
+            current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()
+            result["sections_updated"].append("rtsa")
+        if site["rogue_deviation"]:
+            current_settings["rogue"] = SiteAnalyticsConfigurator.STANDARD_ROGUE.copy()
+            result["sections_updated"].append("rogue")
+        if site["engagement_deviation"]:
+            if "engagement" not in current_settings:
+                current_settings["engagement"] = {}
+            current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tags"].copy()
+            current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tag_names"].copy()
+            current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
+            result["sections_updated"].append("engagement")
+        if site["analytic_deviation"]:
+            current_settings["analytic"] = SiteAnalyticsConfigurator.STANDARD_ANALYTIC.copy()
+            result["sections_updated"].append("analytic")
+        if site["occupancy_deviation"]:
+            current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
+            result["sections_updated"].append("occupancy")
+        if site["wifi_deviation"]:
+            current_settings["wifi"] = SiteAnalyticsConfigurator.STANDARD_WIFI.copy()
+            result["sections_updated"].append("wifi")
+    
+    @staticmethod
+    def _apply_site_config(site: dict) -> dict:
+        """Apply standard configuration to a single site."""
+        site_id = site["site_id"]
+        site_name = site["site_name"]
+        result = {"site_id": site_id, "site_name": site_name, "status": "PENDING", "sections_updated": [], "error": None}
+        
+        try:
+            response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
+            if response.status_code != 200:
+                result["status"] = "FAILED"
+                result["error"] = f"Failed to fetch current settings: HTTP {response.status_code}"
+                return result
+            
+            current_settings = response.data if isinstance(response.data, dict) else {}
+            SiteAnalyticsConfigurator._apply_standard_sections(site, current_settings, result)
+            
+            update_response = mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=current_settings)
+            if update_response.status_code == 200:
+                result["status"] = "SUCCESS"
+                logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
+            else:
+                result["status"] = "FAILED"
+                result["error"] = f"API returned {update_response.status_code}"
+                logging.error(f"Failed to update {site_name}: HTTP {update_response.status_code}")
+        except Exception as error:
+            result["status"] = "ERROR"
+            result["error"] = str(error)
+            logging.error(f"Error updating {site_name}: {error}")
+        
+        return result
+    
+    @staticmethod
     def _apply_standard_configuration(deviations: list) -> list:
         """Apply standard configuration to all deviating sites."""
         print(f"\nApplying standard configuration to {len(deviations)} sites...")
         
         results = []
-        success_count = 0
-        failure_count = 0
-        
         for site in tqdm(deviations, desc="Configuring sites", unit="site"):
-            site_id = site["site_id"]
-            site_name = site["site_name"]
-            
-            result = {
-                "site_id": site_id,
-                "site_name": site_name,
-                "status": "PENDING",
-                "sections_updated": [],
-                "error": None
-            }
-            
-            try:
-                # Fetch current settings
-                response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
-                
-                if response.status_code != 200:
-                    result["status"] = "FAILED"
-                    result["error"] = f"Failed to fetch current settings: HTTP {response.status_code}"
-                    failure_count += 1
-                    results.append(result)
-                    continue
-                
-                current_settings = response.data if isinstance(response.data, dict) else {}
-                
-                # Apply standard configuration for each deviating section
-                if site["rtsa_deviation"]:
-                    current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()
-                    result["sections_updated"].append("rtsa")
-                
-                if site["rogue_deviation"]:
-                    current_settings["rogue"] = SiteAnalyticsConfigurator.STANDARD_ROGUE.copy()
-                    result["sections_updated"].append("rogue")
-                
-                if site["engagement_deviation"]:
-                    if "engagement" not in current_settings:
-                        current_settings["engagement"] = {}
-                    current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tags"].copy()
-                    current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tag_names"].copy()
-                    current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
-                    result["sections_updated"].append("engagement")
-                
-                if site["analytic_deviation"]:
-                    current_settings["analytic"] = SiteAnalyticsConfigurator.STANDARD_ANALYTIC.copy()
-                    result["sections_updated"].append("analytic")
-                
-                if site["occupancy_deviation"]:
-                    current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
-                    result["sections_updated"].append("occupancy")
-                
-                if site["wifi_deviation"]:
-                    current_settings["wifi"] = SiteAnalyticsConfigurator.STANDARD_WIFI.copy()
-                    result["sections_updated"].append("wifi")
-                
-                # Update site settings
-                update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
-                    apisession,
-                    site_id,
-                    body=current_settings
-                )
-                
-                if update_response.status_code == 200:
-                    result["status"] = "SUCCESS"
-                    success_count += 1
-                    logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
-                else:
-                    result["status"] = "FAILED"
-                    result["error"] = f"API returned {update_response.status_code}"
-                    failure_count += 1
-                    logging.error(f"Failed to update {site_name}: HTTP {update_response.status_code}")
-                    
-            except Exception as error:
-                result["status"] = "ERROR"
-                result["error"] = str(error)
-                failure_count += 1
-                logging.error(f"Error updating {site_name}: {error}")
-            
+            result = SiteAnalyticsConfigurator._apply_site_config(site)
             results.append(result)
         
+        success_count = sum(1 for r in results if r["status"] == "SUCCESS")
+        failure_count = len(results) - success_count
         print(f"\n[CONFIGURATION COMPLETE]")
         print(f"  SUCCESS: {success_count} sites")
         print(f"  FAILED: {failure_count} sites")
@@ -47483,7 +49458,7 @@ menu_actions = {
     # ==============================
     # ORG-LEVEL FIRMWARE OPERATIONS
     # ==============================
-    "116": (lambda: OrgLevelAPFirmwareUpgrader(ConfigUtils.get_cached_or_prompted_org_id(), dry_run=getattr(globals().get('args', None), 'dry_run', False)).execute(), " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), supports --dry-run"),
+    "116": (OrgLevelAPFirmwareUpgrader.run, " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), MSP multi-org support, supports --dry-run"),
     
     # ==============================
     # MSP OPERATIONS
@@ -47493,7 +49468,7 @@ menu_actions = {
     # ==============================
     # SITE AUTO-UPGRADE CONFIGURATION
     # ==============================
-    "118": (SiteAutoUpgradeConfigurator.execute, "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites (all sites, single, list, or range)"),
+    "118": (SiteAutoUpgradeConfigurator.execute, "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)"),
     
     # ==============================
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS

@@ -340,7 +340,98 @@ If `usaddress-scourgify` and `rapidfuzz` are installed, address comparison for i
 Before extending destructive workflows, replicate existing confirmation pattern and add SECURITY comments as per `agents.md`.
 
 ---
-## 14. Containers & SSH Remote Access
+## 14. MSP (Managed Service Provider) Support
+
+MistHelper supports MSP-level operations for users with Managed Service Provider privileges. This enables bulk operations across multiple organizations from a single session.
+
+### Enabling MSP Mode
+
+1. **Use Interactive Login (Menu 115)**: MSP privileges require email/password authentication, not API tokens
+   ```text
+   Select menu option: 115
+   ```
+   This switches from token-based auth to interactive login and automatically detects MSP privileges.
+
+2. **Automatic Detection**: On successful login, MistHelper detects and displays your MSP access:
+   ```text
+   + MSP access available: 2 MSP(s)
+   ```
+
+### MSP-Enabled Operations
+
+| Menu | Operation | MSP Capability |
+|------|-----------|----------------|
+| **90** | AP Firmware Upgrade | Mode 3: Upgrade across multiple orgs |
+| **116** | Org-Level AP Firmware | Mode 2: Multi-org upgrade with org-level API |
+| **118** | Site Auto-Upgrade Config | Mode 2: Configure ALL sites across multiple orgs |
+
+### Using MSP Multi-Org Mode
+
+When MSP privileges are detected, supported menus offer an additional mode:
+
+```text
+  MSP privileges detected. Select operation mode:
+
+    [1] Single Organization - upgrade APs in current org
+    [2] MSP Multi-Org - select orgs from your MSP(s)
+
+  Select mode (1-2) [1]: 2
+```
+
+### MSP Selection Interface
+
+Flexible selection patterns for MSPs and organizations:
+
+| Pattern | Example | Result |
+|---------|---------|--------|
+| Single index | `1` | First item |
+| Multiple indices | `1,3,5` | Items 1, 3, and 5 |
+| Range (dash) | `1-5` | Items 1 through 5 |
+| Range (word) | `1 through 5` | Items 1 through 5 |
+| All items | `all` | Every item |
+| Cancel | `q` | Exit selection |
+
+### Workflow Example: Multi-Org Firmware Upgrade
+
+```text
+1. Run menu 115 to switch to interactive login
+2. Run menu 116 (Org-Level AP Firmware Upgrade)
+3. Select mode 2 (MSP Multi-Org)
+4. Select MSP(s): "all" or "1,2"
+5. For each MSP, select organizations: "1-10" or "all"
+6. Configure upgrade settings (strategy, scheduling)
+7. Confirm and execute - upgrades run sequentially per org
+```
+
+### Workflow Example: Multi-Org Auto-Upgrade Configuration
+
+```text
+1. Run menu 115 to switch to interactive login
+2. Run menu 118 (Site Auto-Upgrade Configuration)
+3. Select mode 2 (MSP Multi-Org)
+4. Select MSP(s): "all" or "1,2"
+5. For each MSP, select organizations: "1-10" or "all"
+6. Configure shared schedule (day of week, time of day)
+7. Each org is processed: all sites auto-selected, latest stable firmware chosen
+8. Summary shows total sites configured across all orgs
+```
+
+### MSP Session Persistence
+
+Once you select an MSP in menu 115, MistHelper remembers it for subsequent operations:
+- Menu 116 offers your current MSP as the default
+- Press Enter to use the previously selected MSP
+- Or select different MSP(s) as needed
+
+### Technical Notes
+
+- **API Differences**: MSP operations use `mistapi.api.v1.msps.orgs.listMspOrgs()` to enumerate organizations
+- **Dry-Run Support**: All MSP upgrade modes support `--dry-run` for safe validation
+- **Global Variable**: MSP state stored in `msp_privileges` list and `selected_msp` dict
+- **Detection Function**: `detect_msp_privileges()` called after interactive login
+
+---
+## 15. Containers & SSH Remote Access
 
 ### Container Build Strategies
 Two build strategies:
@@ -458,7 +549,7 @@ ssh -p 2200 misthelper@127.0.0.1
 Persisted artifacts appear under local `data/` bind mount.
 
 ---
-## 15. Development Notes
+## 16. Development Notes
 Recommended incremental refactor targets (mirrors Agents Guide Section 18):
 * Extract API domain modules: `api_ops/`, `output/`, `ssh/`
 * Add unit tests for validators (hostname, port, command sanitation)
@@ -472,7 +563,7 @@ Coding Style Essentials:
 * Restrict broad except clauses; log with context
 
 ---
-## 16. Troubleshooting Quick Table
+## 17. Troubleshooting Quick Table
 | Symptom | Likely Cause | Action |
 |---------|--------------|--------|
 | Empty CSV | Missing org_id / expired token | Verify `.env`, re-run |
@@ -487,7 +578,7 @@ Coding Style Essentials:
 | **Multiple SSH sessions interfering** | **Session isolation problem** | **Each connection should get unique session ID - check logs** |
 
 ---
-## 17. Contributing
+## 18. Contributing
 1. Fork & branch (`feat/<topic>` or `fix/<issue>`)  
 2. Add/adjust tests where logic changes (start with validators)  
 3. Keep commits focused; annotate with tags (`[FEAT]`, `[FIX]`, `[REF]`, `[DOC]`)  
@@ -497,7 +588,7 @@ Coding Style Essentials:
 License: CC-BY-NC-SA-4.0 (Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International)
 
 ---
-## 18. Roadmap (Short Horizon)
+## 19. Roadmap (Short Horizon)
 * Structured operation registry + `--list-operations`
 * Modular extraction of SSH runner + validators
 * Optional JSON log output mode
@@ -505,7 +596,7 @@ License: CC-BY-NC-SA-4.0 (Creative Commons Attribution-NonCommercial-ShareAlike 
 * Address verification toggle documented (when externally validated)
 
 ---
-## 19. Support Flow
+## 20. Support Flow
 1. Run with `--debug` and reproduce
 2. Inspect `script.log` (search for failing menu ID)
 3. Confirm token validity (menu 11 success?)
@@ -554,11 +645,11 @@ The `maps_manager.py` module imports `MapsManager` from `MistHelper.py`, maintai
 - Container-friendly deployment with minimal dependencies
 
 ---
-## 20. Attribution
+## 21. Attribution
 Built for operational reliability and clarity in large enterprise / NOC contexts. See `agents.md` for internal safety and refactor guidance.
 
 ---
-## 21. Changelog
+## 22. Changelog
 
 ```json
 {
