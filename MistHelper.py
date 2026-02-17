@@ -5,9 +5,29 @@ A powerful utility for extracting and analyzing data from Juniper Mist cloud env
 """
 
 # ============================================================================
-# GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
+# PYTHON VERSION CHECK - MUST BE FIRST (before any other imports)
 # ============================================================================
 import sys
+
+# Enforce Python 3.13+ requirement
+MINIMUM_PYTHON_VERSION = (3, 13)
+if sys.version_info < MINIMUM_PYTHON_VERSION:
+    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"
+    warning_msg = (
+        f"WARNING: Python {version_str} detected. MistHelper requires Python {required_str} or newer.\n"
+        f"Some features may not work correctly. Please upgrade Python to {required_str}+.\n"
+        f"Download from: https://www.python.org/downloads/"
+    )
+    print(f"\n{'=' * 70}", file=sys.stderr)
+    print(warning_msg, file=sys.stderr)
+    print(f"{'=' * 70}\n", file=sys.stderr)
+    # Log will be configured later, but we can't use logging yet
+    # The warning is printed to stderr so it's visible regardless
+
+# ============================================================================
+# GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
+# ============================================================================
 import time
 import socket
 import argparse
@@ -165,6 +185,15 @@ logging.basicConfig(
     handlers=[_early_file_handler, _early_console_handler],
     force=True
 )
+
+# Log Python version warning if below minimum requirement
+if sys.version_info < MINIMUM_PYTHON_VERSION:
+    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"
+    logging.warning(
+        f"Python {version_str} detected. MistHelper requires Python {required_str}+. "
+        f"Some features may not work correctly."
+    )
 
 # Debug mode detection helper
 def is_debug_mode():
@@ -2197,9 +2226,11 @@ def detect_msp_privileges():
         
         privileges = user_data.get('privileges', [])
         detected_msps = []
+        logging.debug(f"MSP detection: parsing {len(privileges)} privilege entries")
         
         for priv in privileges:
             if isinstance(priv, dict) and priv.get('msp_id'):
+                logging.debug(f"MSP privilege found: scope={priv.get('scope')}, role={priv.get('role')}")
                 msp_id = priv.get('msp_id')
                 if not msp_id or not isinstance(msp_id, str):
                     continue
@@ -3607,7 +3638,9 @@ class WebSocketManager:
             if not mist_apitoken:
                 self.logger.error("No API token found in session or environment")
                 return False
-                
+            
+            self.logger.debug(f"WebSocket URL: {self.websocket_url}")
+            self.logger.debug(f"Auth token configured (length: {len(mist_apitoken)} chars)")
             auth_header = f"Authorization: Token {mist_apitoken}"
             headers = [auth_header]
             
@@ -3633,6 +3666,8 @@ class WebSocketManager:
             while not self.connected and timeout_counter < 10:
                 time.sleep(0.5)
                 timeout_counter += 1
+                if timeout_counter % 2 == 0:
+                    self.logger.debug(f"WebSocket handshake waiting... ({timeout_counter * 0.5:.1f}s)")
                 
             if self.connected:
                 self.logger.info("WebSocket connection established successfully")
@@ -4302,12 +4337,14 @@ class WebSocketManager:
     
     def _on_error(self, websocket_connection, error):
         """WebSocket error callback."""
+        self.logger.debug(f"WebSocket error type: {type(error).__name__}")
         self.logger.error(f"WebSocket error: {error}")
     
     def _on_close(self, websocket_connection, close_status_code, close_message):
         """WebSocket connection closed callback."""
         self.connected = False
-        self.logger.info("WebSocket connection closed")
+        self.logger.debug(f"WebSocket close details: status_code={close_status_code}, message={close_message}")
+        self.logger.info(f"WebSocket connection closed (status: {close_status_code})")
     
     def disconnect(self):
         """Close WebSocket connection and cleanup resources."""
@@ -4562,7 +4599,8 @@ class PacketCaptureManager:
         
         Presents user with capture type options and guides through configuration.
         """
-        logging.info("ENTRY: PacketCaptureManager.start_site_packet_capture()")
+        logging.info("Menu #9: Starting site packet capture manager")
+        logging.debug("ENTRY: PacketCaptureManager.start_site_packet_capture()")
         
         print("\n" + "=" * 80)
         print(" SITE PACKET CAPTURE MANAGER")
@@ -5985,7 +6023,8 @@ class PacketCaptureManager:
         NOTE: Organization-level captures are for Mist Edges only.
         Site-level Mist Edges should use site captures (option 9).
         """
-        logging.info("ENTRY: PacketCaptureManager.start_org_packet_capture()")
+        logging.info("Menu #10: Starting organization packet capture manager")
+        logging.debug("ENTRY: PacketCaptureManager.start_org_packet_capture()")
         
         print("\n" + "=" * 80)
         print(" ORGANIZATION PACKET CAPTURE MANAGER")
@@ -8690,6 +8729,7 @@ class DataExporter:
             bool: True if successful, False otherwise
         """
         output_format = format_override if format_override else OUTPUT_FORMAT
+        logging.debug(f"DataExporter.write_with_format_selection: rows={len(data) if data else 0}, target={filename_or_table}, format={output_format}, api_func={api_function_name}")
         
         if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
             return False
@@ -8728,6 +8768,7 @@ class DataExporter:
     def _write_sqlite_format(data: List[Dict[str, Any]], filename_or_table: str, api_function_name: Optional[str]) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith('.csv') else filename_or_table
+        logging.debug(f"SQLite write: table={table_name}, api_function={api_function_name}, strategy lookup initiated")
         logging.info(f"Writing {len(data)} rows to SQLite table: {table_name}")
         return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
     
@@ -11611,6 +11652,7 @@ class OrgExportUtils:
         """
         Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
         """
+        logging.info("Menu #1: Starting organization alarms export")
         logging.debug("ENTRY: OrgExportUtils.alarms()")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("open org alarms export", hours)
@@ -11622,9 +11664,10 @@ class OrgExportUtils:
                 filename="OrgAlarms.csv",
                 limit=1000,
                 duration=f"{hours}h",
-                status="open"
+                acked=False
             ).execute()
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
+            logging.info("Menu #1: Organization alarms export completed")
             logging.debug("EXIT: OrgExportUtils.alarms - success")
         except Exception as e:
             logging.error(f"Failed to export open org alarms: {e}")
@@ -11636,6 +11679,7 @@ class OrgExportUtils:
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
+        logging.info("Menu #2: Starting device events export")
         logging.info("Search Org Device Events:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
@@ -11654,6 +11698,7 @@ class OrgExportUtils:
         DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")
         logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
+        logging.info(f"Menu #2: Device events export completed - {len(events)} events")
         if events:
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
     
@@ -11684,8 +11729,8 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
+        logging.info("Menu #3: Starting audit logs export")
         logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
-        logging.info("Starting export of organization audit logs...")
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
             kwargs: Dict[str, Any] = {"limit": 1000}
@@ -11712,6 +11757,7 @@ class OrgExportUtils:
             DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
+            logging.info(f"Menu #3: Audit logs export completed - {len(data)} records")
             logging.debug("EXIT: OrgExportUtils.audit_logs - success")
         except Exception as e:
             logging.error(f"Failed to export audit logs: {e}")
@@ -14100,6 +14146,7 @@ class WebSocketCommands:
         SECURITY: Uses authenticated WebSocket connection with session-based
         command demultiplexing for concurrent command safety.
         """
+        logging.info("Menu #5: Starting WebSocket show MAC table operation")
         # Check for debug mode from command line arguments
         debug_mode = '--debug' in sys.argv or '-d' in sys.argv
         
@@ -14107,7 +14154,6 @@ class WebSocketCommands:
             logging.getLogger().setLevel(logging.DEBUG)
             print("[DEBUG] DEBUG MODE ENABLED")
         
-        logging.info("Starting WebSocket show MAC table operation...")
         logging.debug("ENTER: show_mac_table_websocket")
         
         try:
@@ -14698,6 +14744,7 @@ class WebSocketCommands:
         SECURITY: Uses authenticated WebSocket connection with session-based
         command demultiplexing for concurrent command safety.
         """
+        logging.info("Menu #6: Starting WebSocket show forwarding table operation")
         return RoutingUtils.execute_show_forwarding_table()
     
     @staticmethod
@@ -14718,6 +14765,7 @@ class WebSocketCommands:
         SECURITY: Uses authenticated WebSocket connection with session-based
         command demultiplexing for concurrent command safety.
         """
+        logging.info("Menu #7: Starting WebSocket show routing table operation")
         return RoutingUtils.execute_show_routing_table()
     
     @staticmethod
@@ -14743,6 +14791,7 @@ class WebSocketCommands:
         SECURITY: Uses authenticated API session with proper parameter validation
         and device capability checking for safe routing table operations.
         """
+        logging.info("Menu #8: Starting SSR/SRX routing table query")
         return RoutingUtils.execute_show_ssr_routes()
 
 
@@ -19163,7 +19212,7 @@ class GatewayExportUtils:
         Args:
             fast (bool): Enable fast mode for API calls
         """
-        logging.info("Starting export of gateway management overlay IPs...")
+        logging.info("Menu #4: Starting gateway management IPs export")
         print("Gateway Management IP Export:")
         print("Collecting data from inventory, templates, and configurations...")
         
@@ -27271,7 +27320,7 @@ class SiteConfigManager:
         Create test sites from NorthAmericanTestSites.csv in the data directory.
         DESTRUCTIVE: Creates new sites in the organization.
         """
-        logging.debug("ENTRY: SiteConfigManager.create_test_sites_from_csv")
+        logging.warning("Menu #107 DESTRUCTIVE: Create test sites from CSV operation started")
         SiteConfigManager._display_test_sites_header()
         
         if not SiteConfigManager._confirm_test_site_creation():
@@ -27289,7 +27338,7 @@ class SiteConfigManager:
         
         created, failed = SiteConfigManager._execute_site_creation(org_id, sites_data)
         SiteConfigManager._report_site_creation_results(sites_data, created, failed)
-        logging.debug("EXIT: SiteConfigManager.create_test_sites_from_csv")
+        logging.warning(f"Menu #107 complete: {len(created)} sites created, {len(failed)} failed")
     
     @staticmethod
     def _display_test_sites_header() -> None:
@@ -27427,7 +27476,7 @@ class SiteConfigManager:
         Create country-specific RF templates and assign sites to matching templates.
         DESTRUCTIVE: Creates RF templates and modifies site assignments.
         """
-        logging.debug("ENTRY: SiteConfigManager.create_country_rf_templates_and_assign")
+        logging.warning("Menu #108 DESTRUCTIVE: Create country RF templates operation started")
         SiteConfigManager._display_rf_template_header()
         
         if not apisession:
@@ -27475,7 +27524,7 @@ class SiteConfigManager:
             templates_to_create, templates_to_update, update_mode,
             success, failed, sites_without_country
         )
-        logging.debug("EXIT: SiteConfigManager.create_country_rf_templates_and_assign")
+        logging.warning(f"Menu #108 complete: {len(templates_to_create)} templates created, {len(success)} sites assigned, {len(failed)} failed")
     
     @staticmethod
     def _display_rf_template_header() -> None:
@@ -27730,7 +27779,7 @@ class SiteConfigManager:
         Create Device Profile for each unique AP model in the organization.
         DESTRUCTIVE: Creates new device profiles.
         """
-        logging.debug("ENTRY: SiteConfigManager.create_ap_model_device_profiles")
+        logging.warning("Menu #109 DESTRUCTIVE: Create AP model device profiles operation started")
         SiteConfigManager._display_device_profile_header()
         
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -27758,7 +27807,7 @@ class SiteConfigManager:
         
         created, failed = SiteConfigManager._execute_profile_creation(org_id, to_create)
         SiteConfigManager._report_profile_creation_results(created, failed, to_skip)
-        logging.debug("EXIT: SiteConfigManager.create_ap_model_device_profiles")
+        logging.warning(f"Menu #109 complete: {len(created)} profiles created, {len(failed)} failed")
     
     @staticmethod
     def _display_device_profile_header() -> None:
@@ -27900,7 +27949,7 @@ class SiteConfigManager:
         Assign AP devices to Device Profiles matching their model type.
         DESTRUCTIVE: Modifies device assignments.
         """
-        logging.debug("ENTRY: SiteConfigManager.assign_aps_to_matching_device_profiles")
+        logging.warning("Menu #110 DESTRUCTIVE: Assign APs to device profiles operation started")
         SiteConfigManager._display_profile_assignment_header()
         
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -27929,7 +27978,7 @@ class SiteConfigManager:
         
         success, failed = SiteConfigManager._execute_profile_assignment(org_id, with_profile)
         SiteConfigManager._report_profile_assignment_results(success, failed, without_profile, without_model)
-        logging.debug("EXIT: SiteConfigManager.assign_aps_to_matching_device_profiles")
+        logging.warning(f"Menu #110 complete: {len(success)} APs assigned, {len(failed)} failed")
     
     @staticmethod
     def _display_profile_assignment_header() -> None:
@@ -37685,7 +37734,7 @@ class FirmwareManager:
         Returns:
             Results of the selected upgrade operation
         """
-        logging.info("Starting SSR firmware upgrade with mode selection...")
+        logging.warning("Menu #100 DESTRUCTIVE: SSR firmware upgrade with mode selection started")
         logging.debug("FirmwareManager.execute_ssr_firmware_upgrade_with_mode_selection() initiated")
         
         print(" Advanced SSR Firmware Upgrade")
@@ -40976,6 +41025,7 @@ class MSPInventoryExporter:
     
     def _run(self) -> None:
         """Execute the MSP inventory export workflow."""
+        logging.info("Menu #117: Starting MSP-wide device inventory export")
         self._print_header()
         
         if not self._ensure_msp_privileges():
@@ -40983,6 +41033,7 @@ class MSPInventoryExporter:
         
         self._process_all_msps()
         self._finalize_export()
+        logging.info(f"Menu #117 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs")
     
     def _print_header(self):
         """Print export header banner."""
@@ -49506,11 +49557,13 @@ class MapsManagerLauncher:
     
     def launch(self) -> None:
         """Main entry point - orchestrates module import and execution."""
+        logging.info("Menu #112: Starting Maps Manager")
         if not self._import_module():
             return
         if not self._get_org_id():
             return
         self._run_interactive_menu()
+        logging.info("Menu #112: Maps Manager session completed")
     
     def _import_module(self) -> bool:
         """Import MapsManager from external module with error handling."""
@@ -49710,6 +49763,7 @@ def run_systematic_test():
         # Interactive operations requiring user input
         "9": "Packet capture - requires interactive configuration and site selection",
         "10": "Packet capture - requires interactive configuration and MxEdge ID",
+        "56": "MSP export - requires interactive MSP selection when MSP privileges available",
         "60": "Firmware upgrade status - requires interactive scope selection",
         "61": "CSV comparison - requires interactive file selection",
         "62": "Marvis troubleshooting - requires interactive option selection",
@@ -49758,8 +49812,8 @@ def run_systematic_test():
         
         # CLI and WebSocket operations
         "79": "Interactive CLI shell session",
-        "80": "WebSocket operation",
-        "81": "Shell command execution via WebSocket",
+        "80": "WebSocket ARP command - requires interactive site and device selection",
+        "81": "Site device insights - requires interactive site selection",
         
         # SSH operations requiring interactive host/command input
         "97": "Enhanced SSH Command Runner - requires interactive host and command input",
@@ -49787,8 +49841,11 @@ def run_systematic_test():
         "111": "DESTRUCTIVE: Clones gateway templates by state/country - requires uppercase confirmation",
         "113": "DESTRUCTIVE: Configures WAN probe override on templates - requires uppercase confirmation",
         "114": "DESTRUCTIVE: Configures WAN probe on device port overrides - requires uppercase confirmation",
+        "115": "Requires interactive login with email/password credentials",
         "116": "DESTRUCTIVE: Org-level AP firmware upgrade - requires uppercase confirmation",
         "117": "MSP Inventory Export - requires MSP privileges via --login",
+        "118": "DESTRUCTIVE: Site Auto-Upgrade Configuration - modifies site auto-upgrade settings",
+        "120": "DESTRUCTIVE: Site Analytics Configuration - modifies site analytics/engagement/occupancy settings",
         
         # Interactive visualization tools
         "112": "Maps Manager - requires interactive Dash web server and browser"
@@ -49995,6 +50052,7 @@ def run_interactive_test():
         "76": "Continuous data collection loop - not suitable for automated testing",
         "79": "Interactive CLI shell session - not suitable for automated testing",
         "80": "WebSocket operation - not suitable for automated testing",
+        "56": "MSP export - requires interactive MSP selection when MSP privileges available",
         "87": "WebSocket operation - not suitable for automated testing",
         "88": "WebSocket operation - not suitable for automated testing",
         "89": "WebSocket operation - not suitable for automated testing",
@@ -50019,6 +50077,12 @@ def run_interactive_test():
         "93": "DESTRUCTIVE: Virtual chassis conversion bulk",
         "99": "DESTRUCTIVE: Switch firmware upgrade",
         "100": "DESTRUCTIVE: SSR firmware upgrade",
+        "112": "Maps Manager - requires interactive Dash web server",
+        "115": "Requires interactive login with email/password credentials",
+        "116": "DESTRUCTIVE: Org-level AP firmware upgrade",
+        "117": "MSP Inventory Export - requires MSP privileges via --login",
+        "118": "DESTRUCTIVE: Site Auto-Upgrade Configuration - modifies site settings",
+        "120": "DESTRUCTIVE: Site Analytics Configuration - modifies site settings",
     }
     
     print(f"! Found {len(interactive_read_only_options)} interactive read-only options to test")
