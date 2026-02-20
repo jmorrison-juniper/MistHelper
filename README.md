@@ -274,6 +274,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 118 | Site Auto-Upgrade | Configure AP auto-upgrade settings for sites (all, single, list, or range) |
 | 119 | Site Config Analysis | Scan all sites for zone, engagement dwell tag, and occupancy setting deviations |
 | 120 | Site Analytics Config | **DESTRUCTIVE**: Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites |
+| 121 | Site Inventory Health | Find sites with APs missing switches/gateways, or with offline infrastructure |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -654,6 +655,17 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.02.18.19.30",
+      "date": "2026-02-18",
+      "changes": {
+        "features": [
+          "Menu 121: Site Inventory Health Analysis - Find sites with APs missing switches/gateways or with offline infrastructure",
+          "Generates two reports: SitesMissingInfrastructure and SitesWithOfflineInfrastructure",
+          "Uses org-level APIs for efficient bulk analysis across all sites"
+        ]
+      }
+    },
     {
       "version": "26.02.09.00.33",
       "date": "2026-02-09",

@@ -3243,6 +3243,22 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         'description': 'License summary data (aggregated, no stable primary key)'
     },
     
+    # Site Inventory Health Analysis reports
+    'sitesMissingInfrastructure': {
+        'type': 'natural_pk',
+        'primary_key': ['site_id'],
+        'indexes': ['site_name', 'missing_types', 'ap_count'],
+        'unique_constraints': [],
+        'description': 'Sites with APs but missing switches or gateways'
+    },
+    'sitesWithOfflineInfrastructure': {
+        'type': 'natural_pk',
+        'primary_key': ['site_id'],
+        'indexes': ['site_name', 'offline_switches', 'offline_gateways'],
+        'unique_constraints': [],
+        'description': 'Sites with APs where switches or gateways are offline'
+    },
+    
     # Default fallback strategy for unclassified endpoints
     # Uses auto-increment with unique constraint on API id field if present
     'default': {
@@ -41363,6 +41379,7 @@ class SiteAutoUpgradeConfigurator:
         self.is_single_site = False
         self.msp_all_sites_mode = False  # When True, auto-select all sites (MSP mode)
         self.org_name = ""  # For MSP mode display
+        self.shared_versions = None  # For MSP mode: pre-selected firmware versions to apply
         logging.debug(f"SiteAutoUpgradeConfigurator initialized: org_id={org_id}, dry_run={dry_run}")
     
     @staticmethod
@@ -41439,7 +41456,7 @@ class SiteAutoUpgradeConfigurator:
         print("")
         print("  What this does:")
         print("    - Enables auto-upgrade on all sites in selected orgs")
-        print("    - Selects latest stable firmware for each AP model")
+        print("    - Lets you select firmware per AP family or auto-select latest stable")
         print("    - Applies your chosen schedule (day/time) to all sites")
         print("")
         
@@ -41492,17 +41509,52 @@ class SiteAutoUpgradeConfigurator:
         print("")
         print(f"  + Confirmed - proceeding with {len(selected_orgs)} organization(s)")
         
-        # Step 4: Configure settings ONCE for all orgs (shared schedule/version settings)
+        # Step 4: Firmware Selection Mode
         print("")
         print("-" * 70)
-        print("  STEP 4: Schedule Configuration")
+        print("  STEP 4: Firmware Selection Mode")
+        print("-" * 70)
+        print("")
+        print("  How should firmware versions be selected?")
+        print("")
+        print("    [1] Auto-select latest stable firmware for each AP model")
+        print("    [2] Manually select firmware version per AP family")
+        print("")
+        
+        try:
+            firmware_mode = InputUtils.safe_input("  Selection mode (1-2) [1]: ", context="msp_firmware_mode").strip() or "1"
+        except SystemExit:
+            logging.debug("SystemExit during firmware mode selection")
+            return
+        
+        shared_versions = None  # None means auto-select per org
+        
+        if firmware_mode == "2":
+            logging.info("User selected manual firmware version selection")
+            # Fetch versions from first org and let user select per-family
+            shared_versions = SiteAutoUpgradeConfigurator._get_shared_firmware_versions(selected_orgs[0])
+            if shared_versions is None:
+                print("  X Cancelled firmware selection")
+                logging.warning("Firmware selection cancelled by user")
+                return
+            elif not shared_versions:
+                print("  X No firmware versions selected")
+                logging.warning("No firmware versions selected")
+                return
+            print(f"\n  + Selected firmware for {len(shared_versions)} AP model(s)")
+            logging.info(f"Manual firmware selection: {len(shared_versions)} models configured")
+        else:
+            print("  + Will auto-select latest stable firmware per model")
+            logging.info("User selected auto firmware selection mode")
+        
+        # Step 5: Configure schedule settings
+        print("")
+        print("-" * 70)
+        print("  STEP 5: Schedule Configuration")
         print("-" * 70)
         print("")
         print("  Configure schedule settings that will apply to ALL selected")
         print("  organizations and their sites.")
-        print("")
-        print("  Each org's available firmware versions will be detected automatically")
-        print("  and the latest stable version will be selected for each AP model.")
         print("")
         
         # Get shared schedule settings
@@ -41519,7 +41571,12 @@ class SiteAutoUpgradeConfigurator:
         print("  Configuration to apply:")
         print(f"    - Day of week: {shared_schedule.get('day_of_week', 'any')}.")
         print(f"    - Time of day: {shared_schedule.get('time_of_day', '02:00')} (site's local timezone)")
-        print(f"    - Firmware: Latest stable per model (auto-detected)")
+        if shared_versions:
+            print(f"    - Firmware: Manually selected ({len(shared_versions)} models)")
+            for model, version in sorted(shared_versions.items()):
+                print(f"        {model}: {version}")
+        else:
+            print(f"    - Firmware: Latest stable per model (auto-detected)")
         print(f"    - Organizations: {len(selected_orgs)}")
         print("")
         
@@ -41538,10 +41595,10 @@ class SiteAutoUpgradeConfigurator:
         
         logging.info("User confirmed - executing MSP multi-org configuration")
         
-        # Step 5: Execute configuration for each org
+        # Step 6: Execute configuration for each org
         print("")
         print("-" * 70)
-        print("  STEP 5: Applying Configuration")
+        print("  STEP 6: Applying Configuration")
         print("-" * 70)
         
         all_results = []
@@ -41558,6 +41615,7 @@ class SiteAutoUpgradeConfigurator:
             configurator.msp_all_sites_mode = True
             configurator.org_name = org_name
             configurator.schedule = shared_schedule.copy()
+            configurator.shared_versions = shared_versions  # None means auto-select, dict means use these
             
             success, site_count = configurator._run_msp_mode()
             all_results.append({
@@ -41616,6 +41674,131 @@ class SiteAutoUpgradeConfigurator:
         }
     
     @staticmethod
+    def _get_shared_firmware_versions(reference_org: dict) -> dict | None:
+        """
+        Fetch firmware versions from a reference org and let user select per AP family.
+        
+        Args:
+            reference_org: Dict with 'id' and 'name' keys for the reference organization
+            
+        Returns:
+            Dict mapping model to selected version, None if cancelled, empty dict if no selection
+        """
+        global apisession
+        
+        org_id = reference_org.get('id')
+        org_name = reference_org.get('name', 'Unknown')
+        
+        if not org_id or apisession is None:
+            logging.warning("Missing org_id or apisession for firmware version fetch")
+            print("  X Missing organization ID or API session")
+            return {}
+        
+        # Type narrowing for Pylance - org_id is confirmed non-None above
+        org_id_str: str = str(org_id)
+        
+        logging.debug(f"Fetching firmware versions from reference org: {org_name}")
+        print(f"\n  Fetching available firmware versions from: {org_name}")
+        
+        try:
+            import mistapi.api.v1.orgs.devices as org_devices_api
+            response = org_devices_api.listOrgAvailableDeviceVersions(apisession, org_id_str, type="ap")
+            
+            if not response or not hasattr(response, 'data'):
+                print("  X Failed to fetch available firmware versions")
+                logging.warning("Firmware version API returned no data")
+                return {}
+            
+            available_versions = response.data if isinstance(response.data, list) else []
+            
+        except Exception as error:
+            print(f"  X Error fetching firmware versions: {error}")
+            logging.error(f"Failed to fetch firmware versions: {error}")
+            return {}
+        
+        # Build model -> versions map
+        model_version_map = {}
+        for version_info in available_versions:
+            if not isinstance(version_info, dict):
+                continue
+            model = version_info.get('model')
+            version = version_info.get('version')
+            tag = version_info.get('tag', '')
+            if model and version:
+                if model not in model_version_map:
+                    model_version_map[model] = []
+                model_version_map[model].append({'version': version, 'tag': tag})
+        
+        if not model_version_map:
+            print("  X No AP firmware versions found")
+            logging.warning("No AP firmware versions available")
+            return {}
+        
+        print(f"  + Found firmware for {len(model_version_map)} AP model(s)")
+        
+        # Group models by family (AP41, AP43, AP45, etc.)
+        model_families = {}
+        for model in sorted(model_version_map.keys()):
+            family = model.rstrip('EP')  # AP43E -> AP43, AP45EP -> AP45
+            if family not in model_families:
+                model_families[family] = []
+            model_families[family].append(model)
+        
+        print("")
+        print("  Select firmware version for each AP model family.")
+        print("  Press Enter to skip a family (won't be configured).")
+        print("  Enter 'q' to cancel selection.")
+        
+        custom_versions = {}
+        
+        for family, models in sorted(model_families.items()):
+            # Get all versions available for this family
+            family_versions = set()
+            for model in models:
+                for v_info in model_version_map.get(model, []):
+                    family_versions.add((v_info['version'], v_info.get('tag', '')))
+            
+            if not family_versions:
+                continue
+            
+            # Sort versions (newest first based on version string)
+            sorted_versions = sorted(list(family_versions), key=lambda x: x[0], reverse=True)
+            
+            print(f"\n  {family} family ({', '.join(models)}):")
+            for idx, (version, tag) in enumerate(sorted_versions, 1):
+                tag_display = f" [{tag}]" if tag else ""
+                print(f"    [{idx:>2}] {version}{tag_display}")
+            print("    [Enter] Skip this family")
+            
+            try:
+                choice = InputUtils.safe_input(f"  Select version (1-{len(sorted_versions)}): ", context="msp_firmware_select").strip()
+            except SystemExit:
+                logging.debug("SystemExit during firmware version selection")
+                return None
+            
+            if choice.lower() == 'q':
+                logging.info("User cancelled firmware selection")
+                return None
+            
+            if choice and choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(sorted_versions):
+                    selected_version = sorted_versions[idx][0]
+                    # Apply to all models in this family that support this version
+                    for model in models:
+                        model_versions = [v['version'] for v in model_version_map.get(model, [])]
+                        if selected_version in model_versions:
+                            custom_versions[model] = selected_version
+                    print(f"    + Set {family} family to {selected_version}")
+                else:
+                    print(f"    - Invalid selection, skipped {family}")
+            else:
+                print(f"    - Skipped {family} family")
+        
+        logging.info(f"Manual firmware selection complete: {len(custom_versions)} models configured")
+        return custom_versions
+    
+    @staticmethod
     def _print_msp_summary(results: list, dry_run: bool = False):
         """Print summary of MSP multi-org auto-upgrade configuration."""
         logging.debug(f"Entering _print_msp_summary(): {len(results)} results, dry_run={dry_run}")
@@ -41672,13 +41855,21 @@ class SiteAutoUpgradeConfigurator:
         print(f"  + Auto-selected ALL {len(self.selected_sites)} site(s)")
         logging.info(f"Auto-selected all {len(self.selected_sites)} sites for configuration")
         
-        # Fetch available versions
-        if not self._step3_fetch_available_versions():
-            return (False, 0)
-        
-        # Auto-select custom versions (use latest stable for each model)
-        if not self._auto_select_versions():
-            return (False, 0)
+        # Check if shared firmware versions were pre-selected
+        if self.shared_versions:
+            # Use the pre-selected shared versions
+            self.custom_versions = self.shared_versions.copy()
+            print(f"\n  Using pre-selected firmware versions ({len(self.custom_versions)} models):")
+            for model, version in sorted(self.custom_versions.items()):
+                print(f"    {model}: {version}")
+            logging.info(f"Using shared versions for {len(self.custom_versions)} model(s)")
+        else:
+            # Auto-select mode: fetch versions and select latest stable
+            if not self._step3_fetch_available_versions():
+                return (False, 0)
+            
+            if not self._auto_select_versions():
+                return (False, 0)
         
         # Apply configuration (schedule was set before calling)
         success, count = self._apply_auto_upgrade_config()
@@ -41719,8 +41910,10 @@ class SiteAutoUpgradeConfigurator:
         fail_count = 0
         
         # Build auto_upgrade settings
+        # IMPORTANT: 'version' must be 'custom' when using custom_versions
         auto_upgrade_settings = {
             'enabled': True,
+            'version': 'custom',  # Required to use custom_versions
             'day_of_week': self.schedule.get('day_of_week', 'any'),
             'time_of_day': self.schedule.get('time_of_day', '02:00'),
             'custom_versions': self.custom_versions
@@ -49305,6 +49498,309 @@ class SiteAnalyticsConfigurator:
         logging.info(f"Site analytics configuration complete. {len([r for r in results if r['status'] == 'SUCCESS'])} sites updated.")
 
 
+class SiteInventoryHealthAnalyzer:
+    """
+    Analyzes site inventory health to identify gaps and offline devices.
+    
+    Generates two reports for sites that have APs in inventory:
+    1. Sites Missing Infrastructure - Sites with APs but no switch or gateway
+    2. Sites With Offline Infrastructure - Sites with APs where switch/gateway is offline
+    
+    SECURITY: Read-only analysis, no configuration changes
+    
+    Usage:
+        SiteInventoryHealthAnalyzer.analyze()
+    """
+    
+    @staticmethod
+    def analyze():
+        """
+        Main entry point for site inventory health analysis.
+        
+        Produces two CSV reports:
+        - SitesMissingInfrastructure_[timestamp].csv
+        - SitesWithOfflineInfrastructure_[timestamp].csv
+        """
+        print("Site Inventory Health Analyzer:")
+        print("=" * 60)
+        logging.info("Starting site inventory health analysis...")
+        
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+        
+        # Fetch all required data
+        sites_data = SiteInventoryHealthAnalyzer._fetch_sites(current_org_id)
+        devices_data = SiteInventoryHealthAnalyzer._fetch_devices(current_org_id)
+        
+        if not sites_data or not devices_data:
+            print("! Failed to fetch required data. Please verify API access.")
+            return
+        
+        # Build lookup structures
+        site_lookup = {site.get("id"): site.get("name", "Unnamed Site") for site in sites_data}
+        
+        # Analyze inventory by site (uses connected field from inventory)
+        site_inventory = SiteInventoryHealthAnalyzer._group_devices_by_site(devices_data)
+        
+        # Generate reports
+        missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(site_inventory, site_lookup)
+        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(site_inventory, site_lookup)
+        
+        # Display and export results
+        SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)
+        SiteInventoryHealthAnalyzer._export_results(missing_report, offline_report)
+        
+        logging.info("Site inventory health analysis complete.")
+    
+    @staticmethod
+    def _fetch_sites(org_id: str) -> list:
+        """Fetch all sites in the organization."""
+        print("! Fetching sites...")
+        logging.info("Fetching all organization sites...")
+        
+        try:
+            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            print(f"  Found {len(sites)} sites")
+            return sites
+        except Exception as error:
+            logging.error(f"Failed to fetch sites: {error}")
+            return []
+    
+    @staticmethod
+    def _fetch_devices(org_id: str) -> list:
+        """Fetch all devices (inventory) in the organization."""
+        print("! Fetching device inventory...")
+        logging.info("Fetching all organization devices from inventory...")
+        
+        try:
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+            devices = mistapi.get_all(response=response, mist_session=apisession) or []
+            
+            ap_count = sum(1 for d in devices if d.get("type") == "ap")
+            switch_count = sum(1 for d in devices if d.get("type") == "switch")
+            gateway_count = sum(1 for d in devices if d.get("type") == "gateway")
+            
+            # Count connected devices
+            connected_count = sum(1 for d in devices if d.get("connected") is True)
+            
+            print(f"  Found {len(devices)} devices: {ap_count} APs, {switch_count} switches, {gateway_count} gateways ({connected_count} connected)")
+            logging.info(f"Fetched {len(devices)} devices from organization inventory")
+            return devices
+        except Exception as error:
+            logging.error(f"Failed to fetch devices: {error}")
+            return []
+    
+    @staticmethod
+    def _group_devices_by_site(devices: list) -> dict:
+        """
+        Group devices by site_id and categorize by type.
+        Uses 'connected' field from inventory for status.
+        
+        Returns:
+            Dictionary mapping site_id to device categorization:
+            {
+                site_id: {
+                    "aps": [{"name": str, "status": str, ...}, ...],
+                    "switches": [...],
+                    "gateways": [...]
+                }
+            }
+        """
+        site_inventory = {}
+        
+        for device in devices:
+            site_id = device.get("site_id", "")
+            if not site_id:
+                continue
+            
+            if site_id not in site_inventory:
+                site_inventory[site_id] = {"aps": [], "switches": [], "gateways": []}
+            
+            device_type = device.get("type", "")
+            device_id = device.get("id", "")
+            device_mac = device.get("mac", "")
+            device_name = device.get("name", device_mac or device_id or "Unknown")
+            device_model = device.get("model", "Unknown")
+            device_serial = device.get("serial", "Unknown")
+            
+            # Get status directly from inventory 'connected' field
+            connected = device.get("connected")
+            if connected is True:
+                status = "connected"
+            elif connected is False:
+                status = "disconnected"
+            else:
+                status = "unknown"
+            
+            device_info = {
+                "id": device_id,
+                "mac": device_mac,
+                "name": device_name,
+                "model": device_model,
+                "serial": device_serial,
+                "status": status
+            }
+            
+            if device_type == "ap":
+                site_inventory[site_id]["aps"].append(device_info)
+            elif device_type == "switch":
+                site_inventory[site_id]["switches"].append(device_info)
+            elif device_type == "gateway":
+                site_inventory[site_id]["gateways"].append(device_info)
+        
+        return site_inventory
+    
+    @staticmethod
+    def _find_sites_missing_infrastructure(site_inventory: dict, site_lookup: dict) -> list:
+        """
+        Find sites that have APs but are missing switches or gateways.
+        
+        Returns:
+            List of dictionaries with site details and missing infrastructure info
+        """
+        missing_sites = []
+        
+        for site_id, inventory in site_inventory.items():
+            ap_count = len(inventory["aps"])
+            switch_count = len(inventory["switches"])
+            gateway_count = len(inventory["gateways"])
+            
+            # Only consider sites with APs
+            if ap_count == 0:
+                continue
+            
+            # Check if missing switch OR gateway
+            missing_switch = switch_count == 0
+            missing_gateway = gateway_count == 0
+            
+            if missing_switch or missing_gateway:
+                site_name = site_lookup.get(site_id, "Unknown Site")
+                missing_types = []
+                if missing_switch:
+                    missing_types.append("switch")
+                if missing_gateway:
+                    missing_types.append("gateway")
+                
+                missing_sites.append({
+                    "site_id": site_id,
+                    "site_name": site_name,
+                    "ap_count": ap_count,
+                    "switch_count": switch_count,
+                    "gateway_count": gateway_count,
+                    "missing_types": ", ".join(missing_types),
+                    "ap_names": ", ".join([ap["name"] for ap in inventory["aps"][:5]]) + ("..." if ap_count > 5 else "")
+                })
+        
+        return sorted(missing_sites, key=lambda x: x["site_name"])
+    
+    @staticmethod
+    def _find_sites_with_offline_infrastructure(site_inventory: dict, site_lookup: dict) -> list:
+        """
+        Find sites with APs where switch or gateway is offline.
+        
+        Returns:
+            List of dictionaries with site details and offline device info
+        """
+        offline_sites = []
+        
+        for site_id, inventory in site_inventory.items():
+            ap_count = len(inventory["aps"])
+            
+            # Only consider sites with APs
+            if ap_count == 0:
+                continue
+            
+            # Check for offline switches or gateways
+            offline_switches = [s for s in inventory["switches"] if s["status"] == "disconnected"]
+            offline_gateways = [g for g in inventory["gateways"] if g["status"] == "disconnected"]
+            
+            if offline_switches or offline_gateways:
+                site_name = site_lookup.get(site_id, "Unknown Site")
+                
+                offline_device_details = []
+                for switch in offline_switches:
+                    offline_device_details.append(f"Switch: {switch['name']} ({switch['model']})")
+                for gateway in offline_gateways:
+                    offline_device_details.append(f"Gateway: {gateway['name']} ({gateway['model']})")
+                
+                offline_sites.append({
+                    "site_id": site_id,
+                    "site_name": site_name,
+                    "ap_count": ap_count,
+                    "total_switches": len(inventory["switches"]),
+                    "offline_switches": len(offline_switches),
+                    "total_gateways": len(inventory["gateways"]),
+                    "offline_gateways": len(offline_gateways),
+                    "offline_devices": "; ".join(offline_device_details),
+                    "offline_switch_names": ", ".join([s["name"] for s in offline_switches]),
+                    "offline_gateway_names": ", ".join([g["name"] for g in offline_gateways])
+                })
+        
+        return sorted(offline_sites, key=lambda x: x["site_name"])
+    
+    @staticmethod
+    def _display_results(missing_report: list, offline_report: list):
+        """Display analysis results to console."""
+        print("\n" + "=" * 60)
+        print("ANALYSIS RESULTS")
+        print("=" * 60)
+        
+        # Missing infrastructure summary
+        print(f"\n[SITES MISSING INFRASTRUCTURE]")
+        print(f"  Sites with APs but missing switch/gateway: {len(missing_report)}")
+        if missing_report:
+            missing_switches = sum(1 for r in missing_report if "switch" in r["missing_types"])
+            missing_gateways = sum(1 for r in missing_report if "gateway" in r["missing_types"])
+            print(f"    - Missing switches: {missing_switches}")
+            print(f"    - Missing gateways: {missing_gateways}")
+            
+            # Show first few examples
+            print(f"\n  Sample sites (first 5):")
+            for site in missing_report[:5]:
+                print(f"    - {site['site_name']}: {site['ap_count']} APs, missing {site['missing_types']}")
+        
+        # Offline infrastructure summary
+        print(f"\n[SITES WITH OFFLINE INFRASTRUCTURE]")
+        print(f"  Sites with APs and offline switch/gateway: {len(offline_report)}")
+        if offline_report:
+            total_offline_switches = sum(r["offline_switches"] for r in offline_report)
+            total_offline_gateways = sum(r["offline_gateways"] for r in offline_report)
+            print(f"    - Total offline switches: {total_offline_switches}")
+            print(f"    - Total offline gateways: {total_offline_gateways}")
+            
+            # Show first few examples
+            print(f"\n  Sample sites (first 5):")
+            for site in offline_report[:5]:
+                print(f"    - {site['site_name']}: {site['ap_count']} APs, offline: {site['offline_devices'][:80]}{'...' if len(site['offline_devices']) > 80 else ''}")
+        
+        print("\n" + "=" * 60)
+    
+    @staticmethod
+    def _export_results(missing_report: list, offline_report: list):
+        """Export analysis results to CSV files."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Export sites missing infrastructure
+        if missing_report:
+            missing_filename = f"SitesMissingInfrastructure_{timestamp}.csv"
+            DataExporter.save_data_to_output(missing_report, missing_filename, api_function_name="sitesMissingInfrastructure")
+            print(f"! Missing infrastructure report exported to {missing_filename}")
+            logging.info(f"Exported {len(missing_report)} sites to {missing_filename}")
+        else:
+            print("! No sites found with missing infrastructure (all sites with APs have switches and gateways)")
+        
+        # Export sites with offline infrastructure
+        if offline_report:
+            offline_filename = f"SitesWithOfflineInfrastructure_{timestamp}.csv"
+            DataExporter.save_data_to_output(offline_report, offline_filename, api_function_name="sitesWithOfflineInfrastructure")
+            print(f"! Offline infrastructure report exported to {offline_filename}")
+            logging.info(f"Exported {len(offline_report)} sites to {offline_filename}")
+        else:
+            print("! No sites found with offline infrastructure (all switches and gateways are online)")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -49530,6 +50026,11 @@ menu_actions = {
     # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
     # ==============================
     "120": (SiteAnalyticsConfigurator.execute, " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites"),
+    
+    # ==============================
+    # SITE INVENTORY HEALTH ANALYSIS
+    # ==============================
+    "121": (SiteInventoryHealthAnalyzer.analyze, "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure"),
     
     # ==============================
     # MAPS MANAGER (External Module)
