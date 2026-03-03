@@ -1,7 +1,7 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 121 actionable menu entries (0–120) with some gaps for future expansion.
+**Operation Count:** The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -10,7 +10,7 @@ MistHelper is a production-focused Python application that streamlines large‑s
 ---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 115 actionable menu entries (0–114) with some gaps for future expansion.
+1. Operation Count: The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
@@ -275,6 +275,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 119 | Site Config Analysis | Scan all sites for zone, engagement dwell tag, and occupancy setting deviations |
 | 120 | Site Analytics Config | **DESTRUCTIVE**: Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites |
 | 121 | Site Inventory Health | Find sites with APs missing switches/gateways, or with offline infrastructure |
+| 122 | Bulk RADIUS WLAN Config | Configure RADIUS WLAN auth timers (timeout, retries, fast_dot1x) for org-level WLANs |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -655,6 +656,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.03.03.22.27",
+      "date": "2026-03-03",
+      "changes": {
+        "feature_additions": [
+          "Menu 122: Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",
+          "New BulkRadiusWLANConfigManager class with .env-configurable defaults (RADIUS_AUTH_TIMEOUT, RADIUS_AUTH_RETRIES, RADIUS_FAST_DOT1X)",
+          "Supports 'all', comma-separated, and range selection (e.g., '1,3,5-8')",
+          "Preview changes before apply with Type 'APPLY' confirmation pattern",
+          "CSV audit trail exported to data/RadiusWLANBulkConfig_YYYYMMDD_HHMMSS.csv"
+        ]
+      }
+    },
     {
       "version": "26.02.18.19.30",
       "date": "2026-02-18",

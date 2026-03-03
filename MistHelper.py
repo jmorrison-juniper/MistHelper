@@ -46058,6 +46058,368 @@ class WLANRadiusTimerManager:
 
 
 # ============================================================================
+# BULK RADIUS WLAN CONFIGURATION MANAGER - Menu 122
+# ============================================================================
+
+class BulkRadiusWLANConfigManager:
+    """
+    Bulk configuration of RADIUS authentication timer settings for org WLANs.
+    
+    Scans all WLANs in the organization, identifies those using RADIUS/RadSec
+    authentication, and allows bulk update of auth_servers_timeout, 
+    auth_servers_retries, and fast_dot1x_timers settings.
+    
+    Target values are read from .env with sensible defaults:
+    - RADIUS_AUTH_TIMEOUT: 3 seconds
+    - RADIUS_AUTH_RETRIES: 2
+    - RADIUS_FAST_DOT1X: true
+    
+    SECURITY: Destructive operation - requires explicit 'APPLY' confirmation.
+    Generates CSV audit trail in data/ directory.
+    
+    Usage:
+        BulkRadiusWLANConfigManager().manage()
+    """
+    
+    def __init__(self):
+        """Initialize manager and load configuration from .env."""
+        self.org_id: str = ""
+        self.all_wlans: List[Dict[str, Any]] = []
+        self.radius_wlans: List[Dict[str, Any]] = []
+        self.selected_wlans: List[Dict[str, Any]] = []
+        self.change_records: List[Dict[str, Any]] = []
+        self._load_env_config()
+    
+    def _load_env_config(self) -> None:
+        """Load RADIUS configuration from .env with defaults."""
+        self.target_timeout = int(os.getenv("RADIUS_AUTH_TIMEOUT", "3"))
+        self.target_retries = int(os.getenv("RADIUS_AUTH_RETRIES", "2"))
+        self.target_fast_dot1x = os.getenv("RADIUS_FAST_DOT1X", "true").lower() == "true"
+        logging.debug(f"Loaded RADIUS config: timeout={self.target_timeout}, retries={self.target_retries}, fast_dot1x={self.target_fast_dot1x}")
+    
+    def _display_config(self) -> None:
+        """Display loaded .env configuration values at startup."""
+        print("\n" + "=" * 70)
+        print("  BULK RADIUS WLAN CONFIGURATION (Menu 122)")
+        print("=" * 70)
+        print("\n  Target configuration loaded from .env:")
+        print(f"    - auth_servers_timeout: {self.target_timeout} seconds")
+        print(f"    - auth_servers_retries: {self.target_retries}")
+        print(f"    - fast_dot1x_timers:    {self.target_fast_dot1x}")
+        print("")
+    
+    def _safe_input(self, prompt: str, context: str = "bulk_radius_config") -> str:
+        """Universal input wrapper with EOF handling."""
+        try:
+            return input(prompt)
+        except EOFError:
+            logging.info(f"EOF detected in {context} - session disconnected")
+            sys.exit(0)
+    
+    def _get_org_id(self) -> bool:
+        """Get organization ID from cache or prompt."""
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not self.org_id:
+            logging.error("Could not determine organization ID")
+            print("\n[!] Unable to determine organization ID. Exiting.")
+            return False
+        return True
+    
+    def _scan_org_wlans(self) -> bool:
+        """Fetch all WLANs in the organization using listOrgWlans API."""
+        print("[*] Scanning organization for WLANs...")
+        logging.info(f"Fetching org WLANs for org_id: {self.org_id}")
+        try:
+            response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
+            if response.status_code != 200:
+                logging.error(f"Failed to fetch org WLANs: HTTP {response.status_code}")
+                print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
+                return False
+            self.all_wlans = response.data
+            logging.info(f"Found {len(self.all_wlans)} total WLANs in organization")
+            print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
+            return True
+        except Exception as e:
+            logging.error(f"Exception fetching org WLANs: {e}")
+            print(f"\n[!] Error fetching WLANs: {e}")
+            return False
+    
+    def _uses_radius_auth(self, wlan: Dict[str, Any]) -> bool:
+        """Check if WLAN uses RADIUS or RadSec authentication."""
+        has_auth_servers = bool(wlan.get('auth_servers'))
+        radsec_config = wlan.get('radsec', {})
+        has_radsec = radsec_config.get('enabled', False) if isinstance(radsec_config, dict) else False
+        auth_config = wlan.get('auth', {})
+        uses_eap = auth_config.get('type', '') in ['eap', 'eap192'] if isinstance(auth_config, dict) else False
+        return has_auth_servers or has_radsec or uses_eap
+    
+    def _already_configured(self, wlan: Dict[str, Any]) -> bool:
+        """Check if WLAN already has the target settings."""
+        current_timeout = wlan.get('auth_servers_timeout', 5)
+        current_retries = wlan.get('auth_servers_retries', 2)
+        current_fast = wlan.get('fast_dot1x_timers', False)
+        return (current_timeout == self.target_timeout and 
+                current_retries == self.target_retries and 
+                current_fast == self.target_fast_dot1x)
+    
+    def _filter_radius_wlans(self) -> None:
+        """Filter WLANs to RADIUS-enabled ones that need configuration."""
+        self.radius_wlans = []
+        skipped_configured = 0
+        for wlan in self.all_wlans:
+            if self._uses_radius_auth(wlan):
+                if self._already_configured(wlan):
+                    skipped_configured += 1
+                    logging.debug(f"Skipping already-configured WLAN: {wlan.get('ssid')}")
+                else:
+                    self._add_inheritance_metadata(wlan)
+                    self.radius_wlans.append(wlan)
+        logging.info(f"Found {len(self.radius_wlans)} RADIUS WLANs needing configuration, {skipped_configured} already configured")
+        print(f"[+] Found {len(self.radius_wlans)} RADIUS WLANs needing configuration")
+        if skipped_configured > 0:
+            print(f"[*] Skipped {skipped_configured} WLANs already at target settings")
+    
+    def _add_inheritance_metadata(self, wlan: Dict[str, Any]) -> None:
+        """Add inheritance level metadata to WLAN for display."""
+        template_id = wlan.get('template_id')
+        if template_id:
+            wlan['_inheritance_level'] = 'template'
+            wlan['_inheritance_source'] = f"Template ID: {template_id[:8]}..."
+        else:
+            wlan['_inheritance_level'] = 'org'
+            wlan['_inheritance_source'] = "Org-Level WLAN"
+    
+    def _display_wlans(self) -> None:
+        """Display numbered list of RADIUS WLANs with current settings."""
+        print("\n" + "-" * 70)
+        print("  RADIUS-ENABLED WLANs REQUIRING CONFIGURATION")
+        print("-" * 70)
+        print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")
+        print("-" * 70)
+        for idx, wlan in enumerate(self.radius_wlans, 1):
+            ssid = wlan.get('ssid', 'Unknown')[:24]
+            level = wlan.get('_inheritance_level', 'unknown')[:11]
+            timeout = wlan.get('auth_servers_timeout', 5)
+            retries = wlan.get('auth_servers_retries', 2)
+            fast = "Yes" if wlan.get('fast_dot1x_timers', False) else "No"
+            print(f"  {idx:<4} {ssid:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")
+        print("-" * 70)
+        print(f"  Total: {len(self.radius_wlans)} WLANs")
+        print("")
+    
+    def _parse_selection(self, user_input: str) -> List[int]:
+        """Parse user selection input into list of 0-based indices."""
+        if user_input.lower() == "all":
+            return list(range(len(self.radius_wlans)))
+        
+        selected_indices = []
+        max_count = len(self.radius_wlans)
+        normalized = user_input.lower().replace(' through ', '-').replace('through', '-')
+        parts = [part.strip() for part in normalized.split(',')]
+        
+        for part in parts:
+            if '-' in part and not part.startswith('-'):
+                try:
+                    range_parts = part.split('-')
+                    if len(range_parts) == 2:
+                        start = int(range_parts[0].strip()) - 1
+                        end = int(range_parts[1].strip()) - 1
+                        if start > end:
+                            start, end = end, start
+                        for idx in range(start, end + 1):
+                            if 0 <= idx < max_count and idx not in selected_indices:
+                                selected_indices.append(idx)
+                            elif idx >= max_count:
+                                print(f"    [!] Index {idx + 1} out of range (max: {max_count})")
+                except ValueError:
+                    logging.warning(f"Invalid range format: {part}")
+            else:
+                try:
+                    idx = int(part) - 1
+                    if 0 <= idx < max_count and idx not in selected_indices:
+                        selected_indices.append(idx)
+                    elif idx >= max_count:
+                        print(f"    [!] Index {idx + 1} out of range (max: {max_count})")
+                except ValueError:
+                    logging.warning(f"Invalid index: {part}")
+        
+        selected_indices.sort()
+        return selected_indices
+    
+    def _display_preview(self) -> None:
+        """Display preview of changes that will be applied."""
+        print("\n" + "=" * 70)
+        print("  PREVIEW: CHANGES TO BE APPLIED")
+        print("=" * 70)
+        print(f"\n  Target settings:")
+        print(f"    auth_servers_timeout: {self.target_timeout} seconds")
+        print(f"    auth_servers_retries: {self.target_retries}")
+        print(f"    fast_dot1x_timers:    {self.target_fast_dot1x}")
+        print(f"\n  WLANs to be updated ({len(self.selected_wlans)} total):")
+        print("-" * 70)
+        for wlan in self.selected_wlans:
+            ssid = wlan.get('ssid', 'Unknown')
+            curr_timeout = wlan.get('auth_servers_timeout', 5)
+            curr_retries = wlan.get('auth_servers_retries', 2)
+            curr_fast = wlan.get('fast_dot1x_timers', False)
+            print(f"\n  SSID: {ssid}")
+            print(f"    timeout: {curr_timeout} -> {self.target_timeout}")
+            print(f"    retries: {curr_retries} -> {self.target_retries}")
+            print(f"    fast_dot1x: {curr_fast} -> {self.target_fast_dot1x}")
+        print("\n" + "-" * 70)
+    
+    def _apply_changes(self) -> None:
+        """Apply configuration changes to selected WLANs with rate limiting."""
+        print(f"\n[*] Applying configuration to {len(self.selected_wlans)} WLANs...")
+        success_count = 0
+        fail_count = 0
+        
+        for idx, wlan in enumerate(self.selected_wlans, 1):
+            wlan_id = wlan.get('id')
+            ssid = wlan.get('ssid', 'Unknown')
+            
+            if not wlan_id:
+                logging.error(f"Missing WLAN ID for {ssid}")
+                self._record_change(wlan, "failed", "Missing WLAN ID")
+                fail_count += 1
+                continue
+            
+            payload = {
+                'auth_servers_timeout': self.target_timeout,
+                'auth_servers_retries': self.target_retries,
+                'fast_dot1x_timers': self.target_fast_dot1x
+            }
+            
+            print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")
+            logging.info(f"Updating org WLAN {wlan_id} ({ssid}) with payload: {payload}")
+            
+            try:
+                response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
+                    apisession, self.org_id, wlan_id, payload
+                )
+                if response.status_code == 200:
+                    print("OK")
+                    self._record_change(wlan, "success", "")
+                    success_count += 1
+                else:
+                    print(f"FAILED (HTTP {response.status_code})")
+                    self._record_change(wlan, "failed", f"HTTP {response.status_code}")
+                    fail_count += 1
+                    logging.error(f"Failed to update {ssid}: HTTP {response.status_code}")
+            except Exception as e:
+                print(f"ERROR ({e})")
+                self._record_change(wlan, "failed", str(e))
+                fail_count += 1
+                logging.error(f"Exception updating {ssid}: {e}")
+            
+            time.sleep(0.3)
+        
+        print(f"\n[+] Update complete: {success_count} successful, {fail_count} failed")
+        logging.info(f"Bulk update complete: {success_count} success, {fail_count} failed")
+    
+    def _record_change(self, wlan: Dict[str, Any], status: str, error_msg: str) -> None:
+        """Record a change for the audit trail."""
+        record = {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'wlan_id': wlan.get('id', ''),
+            'ssid': wlan.get('ssid', ''),
+            'site_name': wlan.get('_inheritance_source', 'Org-Level'),
+            'inheritance_level': wlan.get('_inheritance_level', 'unknown'),
+            'before_timeout': wlan.get('auth_servers_timeout', 5),
+            'after_timeout': self.target_timeout,
+            'before_retries': wlan.get('auth_servers_retries', 2),
+            'after_retries': self.target_retries,
+            'before_fast_dot1x': wlan.get('fast_dot1x_timers', False),
+            'after_fast_dot1x': self.target_fast_dot1x,
+            'status': status,
+            'error_message': error_msg
+        }
+        self.change_records.append(record)
+    
+    def _export_audit_trail(self) -> None:
+        """Export change records to CSV in data/ directory."""
+        if not self.change_records:
+            print("[*] No changes to export.")
+            return
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"RadiusWLANBulkConfig_{timestamp}.csv"
+        filepath = os.path.join("data", filename)
+        
+        os.makedirs("data", exist_ok=True)
+        
+        fieldnames = [
+            'timestamp', 'wlan_id', 'ssid', 'site_name', 'inheritance_level',
+            'before_timeout', 'after_timeout', 'before_retries', 'after_retries',
+            'before_fast_dot1x', 'after_fast_dot1x', 'status', 'error_message'
+        ]
+        
+        try:
+            with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(self.change_records)
+            print(f"\n[+] Audit trail exported to: {filepath}")
+            logging.info(f"Audit trail exported to {filepath} with {len(self.change_records)} records")
+        except Exception as e:
+            print(f"\n[!] Failed to export audit trail: {e}")
+            logging.error(f"Failed to export audit trail: {e}")
+    
+    def manage(self) -> None:
+        """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
+        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")
+        
+        self._display_config()
+        
+        if not self._get_org_id():
+            return
+        
+        if not self._scan_org_wlans():
+            return
+        
+        self._filter_radius_wlans()
+        
+        if not self.radius_wlans:
+            print("\n[*] No RADIUS-enabled WLANs found that need configuration.")
+            print("[*] All WLANs may already have the target settings.")
+            logging.info("No RADIUS WLANs found needing configuration")
+            return
+        
+        self._display_wlans()
+        
+        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5', '1-3,5,7-10'):")
+        selection = self._safe_input("  > ", "wlan_selection")
+        
+        if not selection.strip():
+            print("\n[*] No selection made. Exiting.")
+            return
+        
+        selected_indices = self._parse_selection(selection)
+        
+        if not selected_indices:
+            print("\n[!] Invalid selection. Please use valid indices.")
+            return
+        
+        self.selected_wlans = [self.radius_wlans[i] for i in selected_indices]
+        
+        self._display_preview()
+        
+        print("\n  WARNING: This will modify WLAN authentication settings.")
+        confirm = self._safe_input("  Type 'APPLY' to proceed or any other key to cancel: ", "apply_confirm")
+        
+        if confirm.strip() != "APPLY":
+            print("\n[*] Operation cancelled by user.")
+            logging.info("Bulk RADIUS config cancelled by user")
+            return
+        
+        self._apply_changes()
+        self._export_audit_trail()
+        
+        print("\n[+] Bulk RADIUS WLAN configuration completed.")
+        logging.info("Bulk RADIUS WLAN Configuration completed successfully")
+
+
+# ============================================================================
 # TERMINAL USER INTERFACE (TUI) CLASS - Hierarchical Mist API Explorer
 # ============================================================================
 
@@ -50031,6 +50393,11 @@ menu_actions = {
     # SITE INVENTORY HEALTH ANALYSIS
     # ==============================
     "121": (SiteInventoryHealthAnalyzer.analyze, "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure"),
+    
+    # ==============================
+    # BULK RADIUS WLAN CONFIGURATION
+    # ==============================
+    "122": (lambda: BulkRadiusWLANConfigManager().manage(), "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs"),
     
     # ==============================
     # MAPS MANAGER (External Module)
