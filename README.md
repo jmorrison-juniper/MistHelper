@@ -657,6 +657,19 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.03.03.23.35",
+      "date": "2026-03-03",
+      "changes": {
+        "enhancements": [
+          "Menu 122: Show ALL RADIUS WLANs including compliant ones marked '(COMPLIANT)' for full org visibility",
+          "Menu 122: Accept 'q', 'quit', 'cancel', 'back' at selection prompt for safe exit without changes",
+          "Menu 122: Respect --dry-run flag (preview without API calls, DRYRUN_ CSV prefix)",
+          "Menu 122: Respect --debug flag (verbose API response and compliance evaluation logging)",
+          "Menu 122: DRY-RUN and DEBUG mode banners displayed at startup when flags are active"
+        ]
+      }
+    },
+    {
       "version": "26.03.03.22.27",
       "date": "2026-03-03",
       "changes": {

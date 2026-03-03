@@ -46079,15 +46079,20 @@ class BulkRadiusWLANConfigManager:
     
     Usage:
         BulkRadiusWLANConfigManager().manage()
+        BulkRadiusWLANConfigManager().manage(dry_run=True)
     """
+    
+    CANCEL_KEYWORDS = {'q', 'quit', 'cancel', 'back'}
     
     def __init__(self):
         """Initialize manager and load configuration from .env."""
         self.org_id: str = ""
         self.all_wlans: List[Dict[str, Any]] = []
         self.radius_wlans: List[Dict[str, Any]] = []
+        self.compliant_wlans: List[Dict[str, Any]] = []
         self.selected_wlans: List[Dict[str, Any]] = []
         self.change_records: List[Dict[str, Any]] = []
+        self.dry_run: bool = False
         self._load_env_config()
     
     def _load_env_config(self) -> None:
@@ -46102,6 +46107,10 @@ class BulkRadiusWLANConfigManager:
         print("\n" + "=" * 70)
         print("  BULK RADIUS WLAN CONFIGURATION (Menu 122)")
         print("=" * 70)
+        if self.dry_run:
+            print("\n  >> DRY-RUN MODE: No changes will be made <<")
+        if is_debug_mode():
+            print("\n  >> DEBUG MODE: Verbose logging enabled <<")
         print("\n  Target configuration loaded from .env:")
         print(f"    - auth_servers_timeout: {self.target_timeout} seconds")
         print(f"    - auth_servers_retries: {self.target_retries}")
@@ -46136,6 +46145,8 @@ class BulkRadiusWLANConfigManager:
                 print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
                 return False
             self.all_wlans = response.data
+            if is_debug_mode():
+                logging.debug(f"API response data ({len(self.all_wlans)} WLANs): {self.all_wlans}")
             logging.info(f"Found {len(self.all_wlans)} total WLANs in organization")
             print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
             return True
@@ -46163,21 +46174,26 @@ class BulkRadiusWLANConfigManager:
                 current_fast == self.target_fast_dot1x)
     
     def _filter_radius_wlans(self) -> None:
-        """Filter WLANs to RADIUS-enabled ones that need configuration."""
+        """Filter WLANs to RADIUS-enabled, separating compliant from non-compliant."""
         self.radius_wlans = []
-        skipped_configured = 0
+        self.compliant_wlans = []
         for wlan in self.all_wlans:
-            if self._uses_radius_auth(wlan):
-                if self._already_configured(wlan):
-                    skipped_configured += 1
-                    logging.debug(f"Skipping already-configured WLAN: {wlan.get('ssid')}")
-                else:
-                    self._add_inheritance_metadata(wlan)
-                    self.radius_wlans.append(wlan)
-        logging.info(f"Found {len(self.radius_wlans)} RADIUS WLANs needing configuration, {skipped_configured} already configured")
-        print(f"[+] Found {len(self.radius_wlans)} RADIUS WLANs needing configuration")
-        if skipped_configured > 0:
-            print(f"[*] Skipped {skipped_configured} WLANs already at target settings")
+            if not self._uses_radius_auth(wlan):
+                continue
+            self._add_inheritance_metadata(wlan)
+            if self._already_configured(wlan):
+                wlan['_compliance_status'] = 'COMPLIANT'
+                self.compliant_wlans.append(wlan)
+                if is_debug_mode():
+                    logging.debug(f"COMPLIANT: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}")
+            else:
+                wlan['_compliance_status'] = 'NEEDS_UPDATE'
+                self.radius_wlans.append(wlan)
+                if is_debug_mode():
+                    logging.debug(f"NEEDS_UPDATE: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}")
+        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
+        logging.info(f"Found {total_radius} RADIUS WLANs: {len(self.radius_wlans)} needing config, {len(self.compliant_wlans)} compliant")
+        print(f"[+] Found {total_radius} RADIUS WLANs ({len(self.radius_wlans)} needing configuration, {len(self.compliant_wlans)} already compliant)")
     
     def _add_inheritance_metadata(self, wlan: Dict[str, Any]) -> None:
         """Add inheritance level metadata to WLAN for display."""
@@ -46190,26 +46206,43 @@ class BulkRadiusWLANConfigManager:
             wlan['_inheritance_source'] = "Org-Level WLAN"
     
     def _display_wlans(self) -> None:
-        """Display numbered list of RADIUS WLANs with current settings."""
+        """Display unified table of all RADIUS WLANs with compliance markers."""
         print("\n" + "-" * 70)
-        print("  RADIUS-ENABLED WLANs REQUIRING CONFIGURATION")
+        print("  RADIUS-ENABLED WLANs")
         print("-" * 70)
         print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")
         print("-" * 70)
-        for idx, wlan in enumerate(self.radius_wlans, 1):
-            ssid = wlan.get('ssid', 'Unknown')[:24]
+        display_index = 1
+        combined = []
+        for wlan in self.radius_wlans:
+            combined.append((wlan, display_index))
+            display_index += 1
+        for wlan in self.compliant_wlans:
+            combined.append((wlan, None))
+        combined.sort(key=lambda item: item[0].get('ssid', '').lower())
+        for wlan, idx in combined:
+            ssid = wlan.get('ssid', 'Unknown')
+            is_compliant = wlan.get('_compliance_status') == 'COMPLIANT'
+            suffix = " (COMPLIANT)" if is_compliant else ""
+            ssid_display = (ssid[:13] + suffix) if is_compliant else ssid[:24]
             level = wlan.get('_inheritance_level', 'unknown')[:11]
             timeout = wlan.get('auth_servers_timeout', 5)
             retries = wlan.get('auth_servers_retries', 2)
             fast = "Yes" if wlan.get('fast_dot1x_timers', False) else "No"
-            print(f"  {idx:<4} {ssid:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")
+            idx_str = str(idx) if idx is not None else "--"
+            print(f"  {idx_str:<4} {ssid_display:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")
         print("-" * 70)
-        print(f"  Total: {len(self.radius_wlans)} WLANs")
+        total = len(self.radius_wlans) + len(self.compliant_wlans)
+        print(f"  Total: {total} RADIUS WLANs ({len(self.radius_wlans)} selectable, {len(self.compliant_wlans)} compliant)")
         print("")
     
-    def _parse_selection(self, user_input: str) -> List[int]:
-        """Parse user selection input into list of 0-based indices."""
-        if user_input.lower() == "all":
+    def _parse_selection(self, user_input: str) -> list:
+        """Parse user selection input into list of 0-based indices, or None for cancel."""
+        cleaned = user_input.strip().lower()
+        if cleaned in self.CANCEL_KEYWORDS:
+            return None
+        
+        if cleaned == "all":
             return list(range(len(self.radius_wlans)))
         
         selected_indices = []
@@ -46270,7 +46303,8 @@ class BulkRadiusWLANConfigManager:
     
     def _apply_changes(self) -> None:
         """Apply configuration changes to selected WLANs with rate limiting."""
-        print(f"\n[*] Applying configuration to {len(self.selected_wlans)} WLANs...")
+        mode_label = "DRY-RUN: Simulating" if self.dry_run else "Applying"
+        print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")
         success_count = 0
         fail_count = 0
         
@@ -46291,7 +46325,15 @@ class BulkRadiusWLANConfigManager:
             }
             
             print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")
-            logging.info(f"Updating org WLAN {wlan_id} ({ssid}) with payload: {payload}")
+            logging.info(f"{'DRY-RUN: Would update' if self.dry_run else 'Updating'} org WLAN {wlan_id} ({ssid}) with payload: {payload}")
+            
+            if self.dry_run:
+                print("DRY-RUN (would update)")
+                self._record_change(wlan, "DRY-RUN", "")
+                success_count += 1
+                if is_debug_mode():
+                    logging.debug(f"DRY-RUN payload for {ssid}: {payload}")
+                continue
             
             try:
                 response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
@@ -46301,6 +46343,8 @@ class BulkRadiusWLANConfigManager:
                     print("OK")
                     self._record_change(wlan, "success", "")
                     success_count += 1
+                    if is_debug_mode():
+                        logging.debug(f"API response for {ssid}: {response.data}")
                 else:
                     print(f"FAILED (HTTP {response.status_code})")
                     self._record_change(wlan, "failed", f"HTTP {response.status_code}")
@@ -46314,8 +46358,9 @@ class BulkRadiusWLANConfigManager:
             
             time.sleep(0.3)
         
-        print(f"\n[+] Update complete: {success_count} successful, {fail_count} failed")
-        logging.info(f"Bulk update complete: {success_count} success, {fail_count} failed")
+        result_label = "DRY-RUN complete" if self.dry_run else "Update complete"
+        print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")
+        logging.info(f"{result_label}: {success_count} success, {fail_count} failed")
     
     def _record_change(self, wlan: Dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
@@ -46343,7 +46388,8 @@ class BulkRadiusWLANConfigManager:
             return
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"RadiusWLANBulkConfig_{timestamp}.csv"
+        prefix = "DRYRUN_" if self.dry_run else ""
+        filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"
         filepath = os.path.join("data", filename)
         
         os.makedirs("data", exist_ok=True)
@@ -46365,8 +46411,9 @@ class BulkRadiusWLANConfigManager:
             print(f"\n[!] Failed to export audit trail: {e}")
             logging.error(f"Failed to export audit trail: {e}")
     
-    def manage(self) -> None:
+    def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
+        self.dry_run = dry_run
         logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")
         
         self._display_config()
@@ -46379,15 +46426,21 @@ class BulkRadiusWLANConfigManager:
         
         self._filter_radius_wlans()
         
-        if not self.radius_wlans:
-            print("\n[*] No RADIUS-enabled WLANs found that need configuration.")
-            print("[*] All WLANs may already have the target settings.")
-            logging.info("No RADIUS WLANs found needing configuration")
+        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
+        if total_radius == 0:
+            print("\n[*] No RADIUS-enabled WLANs found in the organization.")
+            logging.info("No RADIUS WLANs found in organization")
+            return
+        
+        if not self.radius_wlans and self.compliant_wlans:
+            self._display_wlans()
+            print("[*] All RADIUS WLANs are already at target settings. No changes needed.")
+            logging.info("All RADIUS WLANs already compliant - no changes needed")
             return
         
         self._display_wlans()
         
-        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5', '1-3,5,7-10'):")
+        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")
         selection = self._safe_input("  > ", "wlan_selection")
         
         if not selection.strip():
@@ -46395,6 +46448,11 @@ class BulkRadiusWLANConfigManager:
             return
         
         selected_indices = self._parse_selection(selection)
+        
+        if selected_indices is None:
+            print("\n[*] Operation cancelled by user.")
+            logging.info("Menu 122 cancelled by user at selection prompt")
+            return
         
         if not selected_indices:
             print("\n[!] Invalid selection. Please use valid indices.")
@@ -46405,7 +46463,8 @@ class BulkRadiusWLANConfigManager:
         self._display_preview()
         
         print("\n  WARNING: This will modify WLAN authentication settings.")
-        confirm = self._safe_input("  Type 'APPLY' to proceed or any other key to cancel: ", "apply_confirm")
+        print("  Type 'APPLY' to proceed, or anything else to cancel.")
+        confirm = self._safe_input("  > ", "apply_confirm")
         
         if confirm.strip() != "APPLY":
             print("\n[*] Operation cancelled by user.")
@@ -50397,7 +50456,7 @@ menu_actions = {
     # ==============================
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
-    "122": (lambda: BulkRadiusWLANConfigManager().manage(), "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs"),
+    "122": (lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run), "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs"),
     
     # ==============================
     # MAPS MANAGER (External Module)
