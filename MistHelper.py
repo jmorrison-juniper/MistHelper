@@ -1054,7 +1054,7 @@ class GlobalImportManager:
         # Filter out None values (platform-incompatible packages)
         self.optional_packages = {k: v for k, v in optional_packages_raw.items() if v is not None}
         
-    def check_uv_installation(self) -> bool:
+    def _check_uv_installation(self) -> bool:
         """Check if UV package manager is installed and accessible (cached)."""
         # If UV checking is disabled, return False immediately
         if self.disable_uv_check:
@@ -1081,7 +1081,7 @@ class GlobalImportManager:
         self._uv_checked = True
         return self._uv_available
             
-    def install_uv(self) -> bool:
+    def _install_uv(self) -> bool:
         """Install UV package manager if not present."""
         if not self.auto_upgrade_uv:
             logging.info("Auto-upgrade of UV is disabled in configuration")
@@ -1102,7 +1102,7 @@ class GlobalImportManager:
             logging.error(f"Failed to install UV package manager: {e}")
             return False
             
-    def upgrade_uv(self) -> bool:
+    def _upgrade_uv(self) -> bool:
         """Upgrade UV package manager to latest version (only if needed)."""
         if not self.auto_upgrade_uv:
             return True
@@ -1148,7 +1148,7 @@ class GlobalImportManager:
             logging.warning(f"UV self-update failed: {e}")
             return True  # Non-critical failure
             
-    def install_package_with_uv(self, package_spec: str) -> bool:
+    def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
             logging.debug(f"Installing package with UV: {package_spec}")
@@ -1191,7 +1191,7 @@ class GlobalImportManager:
             logging.warning(f"Failed to install {package_spec} with UV: {e}")
             return False
             
-    def install_package_with_pip(self, package_spec: str) -> bool:
+    def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
         try:
             logging.info(f"Installing package with pip: {package_spec}")
@@ -1208,7 +1208,7 @@ class GlobalImportManager:
             logging.error(f"Failed to install {package_spec} with pip: {e}")
             return False
             
-    def should_check_uv_update(self) -> bool:
+    def _should_check_uv_update(self) -> bool:
         """Check if we should check for UV updates based on time since last check."""
         if not self.auto_upgrade_uv:
             return False
@@ -1220,7 +1220,7 @@ class GlobalImportManager:
         hours_since_check = time_since_check / 3600
         return hours_since_check >= self.uv_update_check_hours
     
-    def check_uv_needs_update(self) -> bool:
+    def _check_uv_needs_update(self) -> bool:
         """Check if UV actually needs an update by comparing versions."""
         try:
             # Get current UV version
@@ -1244,7 +1244,7 @@ class GlobalImportManager:
         except (subprocess.TimeoutExpired, subprocess.SubprocessError):
             return False
     
-    def upgrade_all_dependencies(self) -> bool:
+    def _upgrade_all_dependencies(self) -> bool:
         """Install missing dependencies and upgrade existing ones."""
         if not self.auto_upgrade_dependencies:
             logging.info("Auto-upgrade of dependencies is disabled in configuration")
@@ -1263,7 +1263,7 @@ class GlobalImportManager:
         logging.info(f"Processing {len(packages_to_process)} packages...")
         
         # Process packages individually for better error handling
-        uv_available = self.check_uv_installation()
+        uv_available = self._check_uv_installation()
         if uv_available:
             logging.info("Using UV package manager for installations")
         else:
@@ -1278,12 +1278,12 @@ class GlobalImportManager:
             try:
                 # Try UV first if available
                 if uv_available:
-                    if self.install_package_with_uv(pkg_spec):
+                    if self._install_package_with_uv(pkg_spec):
                         success_count += 1
                         continue
                 
                 # Fallback to pip
-                if self.install_package_with_pip(pkg_spec):
+                if self._install_package_with_pip(pkg_spec):
                     success_count += 1
                 else:
                     logging.warning(f"Failed to install/upgrade {pkg_spec}")
@@ -1383,7 +1383,7 @@ class GlobalImportManager:
                 logging.info(f"  Checking for updates to {package_name}...")
                 
                 # Use UV if available, otherwise pip
-                if self.check_uv_installation():
+                if self._check_uv_installation():
                     # Check if we're in a virtual environment and prefer venv's UV if available
                     uv_cmd = 'uv'
                     if hasattr(self, 'in_venv') and self.in_venv:
@@ -1474,14 +1474,14 @@ class GlobalImportManager:
                 installed = False
                 
                 # Try UV first if available (using cached check)
-                if self.check_uv_installation():
+                if self._check_uv_installation():
                     logging.debug(f"Trying UV installation for {package_spec}")
-                    installed = self.install_package_with_uv(package_spec)
+                    installed = self._install_package_with_uv(package_spec)
                 
                 # Fallback to pip if UV failed or not available
                 if not installed:
                     logging.debug(f"Trying pip installation for {package_spec}")
-                    installed = self.install_package_with_pip(package_spec)
+                    installed = self._install_package_with_pip(package_spec)
                     
                 if installed:
                     # Clear import caches to allow fresh import
@@ -1612,10 +1612,10 @@ class GlobalImportManager:
         else:
             # Only check UV if auto-upgrade is enabled
             if self.auto_upgrade_uv:
-                if not self.check_uv_installation():
-                    self.install_uv()
+                if not self._check_uv_installation():
+                    self._install_uv()
                 else:
-                    self.upgrade_uv()
+                    self._upgrade_uv()
         
         # Import all required packages (this will install missing ones automatically)
         logging.info("Importing required dependencies...")
