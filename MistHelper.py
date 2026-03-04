@@ -10666,6 +10666,144 @@ class DeviceUtils:
 
 
 # ============================================================================
+# ORGANIZATION ALARM & EVENT EXPORTER CLASS
+# ============================================================================
+class OrgAlarmEventExporter:
+    """
+    Focused exporter for alarm and event time-series data from the Mist API.
+
+    Contains exactly 5 public methods grouped by the 'event/alert' domain:
+      - alarms()            : Organization alarms (24h, unacknowledged)
+      - alarm_templates()   : Alarm rule templates
+      - events()            : Organization events (24h)
+      - device_events()     : Device events (24h)
+      - device_events_52w() : Device events (52 weeks)
+
+    Extraction Pattern (for decomposing OrgExportUtils further):
+      1. Identify up to 5 semantically related methods in OrgExportUtils
+      2. Create a new class immediately before OrgExportUtils
+      3. Duplicate _export_data() as a private helper if any methods use it
+      4. Move methods verbatim (preserve all logic, parameters, API calls)
+      5. Update menu_actions dict entries and cross-references
+      6. Remove the methods from OrgExportUtils
+    """
+
+    @staticmethod
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
+        """
+        Generic helper to export organization data via APIDataFetcher.
+
+        Args:
+            api_call: The mistapi function to call
+            data_type: Description of the data type
+            sort_key: Field to sort results by
+            **api_kwargs: Additional arguments for the API call
+        """
+        logging.info(f"Starting export of organization {data_type}...")
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
+        filename = f"Org{safe_data_type}.csv"
+        APIDataFetcher(
+            title=f"Organization {data_type.title()}:",
+            api_call=api_call,
+            filename=filename,
+            sort_key=sort_key,
+            limit=1000,
+            **api_kwargs
+        ).execute()
+
+    @staticmethod
+    def alarms():
+        """
+        Export open organization alarms from the past 24 hours to OrgAlarms.csv.
+        """
+        logging.info("Menu #1: Starting organization alarms export")
+        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("open org alarms export", hours)
+        try:
+            APIDataFetcher(
+                title="Search all Org Alarms:",
+                api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
+                filename="OrgAlarms.csv",
+                limit=1000,
+                duration=f"{hours}h",
+                acked=False
+            ).execute()
+            logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")
+        except Exception as error:
+            logging.error(f"Failed to export open org alarms: {error}")
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")
+            raise
+
+    @staticmethod
+    def alarm_templates():
+        """Export alarm templates to OrgAlarmTemplates.csv."""
+        OrgAlarmEventExporter._export_data(
+            api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
+            data_type="alarm templates",
+            sort_key="name"
+        )
+
+    @staticmethod
+    def events():
+        """Export organization events to OrgEvents.csv."""
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("org events export", hours)
+        OrgAlarmEventExporter._export_data(
+            api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
+            data_type="events",
+            sort_key="timestamp",
+            duration=f"{hours}h"
+        )
+
+    @staticmethod
+    def device_events():
+        """
+        Export all device events from the past 24 hours to OrgDeviceEvents.csv.
+        """
+        logging.info("Menu #2: Starting device events export")
+        logging.info("Search Org Device Events:")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
+        TimeUtils.log_dynamic_lookback("recent device events export", hours)
+        duration_param = f"{hours}h"
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession,
+            org_id,
+            device_type="all",
+            limit=1000,
+            duration=duration_param
+        )
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)
+        events = rawdata
+        logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
+        DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")
+        logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
+        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
+        logging.info(f"Menu #2: Device events export completed - {len(events)} events")
+        if events:
+            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
+
+    @staticmethod
+    def device_events_52w():
+        """
+        Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
+        """
+        logging.info("Exporting all org device events from the last 52 weeks...")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession, org_id, device_type="all", limit=1000, duration="52w"
+        )
+        events = mistapi.get_all(response=response, mist_session=apisession)
+        logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
+        events = DataProcessingUtils.flatten_nested_fields(events)
+        events = DataProcessingUtils.escape_multiline(events)
+        DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
+        logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+
+
+# ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
 class OrgExportUtils:
@@ -11533,15 +11671,6 @@ class OrgExportUtils:
         )
     
     @staticmethod
-    def alarm_templates():
-        """Export alarm templates to OrgAlarmTemplates.csv."""
-        OrgExportUtils.export_data(
-            api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
-            data_type="alarm templates",
-            sort_key="name"
-        )
-    
-    @staticmethod
     def security_intel_profiles():
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
         OrgExportUtils.export_data(
@@ -11557,18 +11686,6 @@ class OrgExportUtils:
             api_call=mistapi.api.v1.orgs.invites.listOrgInvites,
             data_type="invites",
             sort_key="email"
-        )
-    
-    @staticmethod
-    def events():
-        """Export organization events to OrgEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org events export", hours)
-        OrgExportUtils.export_data(
-            api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
-            data_type="events",
-            sort_key="timestamp",
-            duration=f"{hours}h"
         )
     
     @staticmethod
@@ -11662,79 +11779,6 @@ class OrgExportUtils:
             duration=f"{hours}h",
             limit=1000
         ).execute()
-    
-    @staticmethod
-    def alarms():
-        """
-        Fetches all open organization alarms from the past 24 hours and writes them to OrgAlarms.csv.
-        """
-        logging.info("Menu #1: Starting organization alarms export")
-        logging.debug("ENTRY: OrgExportUtils.alarms()")
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("open org alarms export", hours)
-        logging.info(f"Starting search for all open org alarms in the past {hours} hours...")
-        try:
-            APIDataFetcher(
-                title="Search all Org Alarms:",
-                api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
-                filename="OrgAlarms.csv",
-                limit=1000,
-                duration=f"{hours}h",
-                acked=False
-            ).execute()
-            logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
-            logging.info("Menu #1: Organization alarms export completed")
-            logging.debug("EXIT: OrgExportUtils.alarms - success")
-        except Exception as e:
-            logging.error(f"Failed to export open org alarms: {e}")
-            logging.debug("EXIT: OrgExportUtils.alarms - error")
-            raise
-    
-    @staticmethod
-    def device_events():
-        """
-        Export all device events from the past 24 hours to OrgDeviceEvents.csv.
-        """
-        logging.info("Menu #2: Starting device events export")
-        logging.info("Search Org Device Events:")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("recent device events export", hours)
-        duration_param = f"{hours}h"
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession,
-            org_id,
-            device_type="all",
-            limit=1000,
-            duration=duration_param
-        )
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        events = rawdata
-        logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")
-        logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
-        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
-        logging.info(f"Menu #2: Device events export completed - {len(events)} events")
-        if events:
-            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
-    
-    @staticmethod
-    def device_events_52w():
-        """
-        Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
-        Fetches all data into memory, then writes to CSV in one operation.
-        """
-        logging.info("Exporting all org device events from the last 52 weeks...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=1000, duration="52w"
-        )
-        events = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
-        events = DataProcessingUtils.flatten_nested_fields(events)
-        events = DataProcessingUtils.escape_multiline(events)
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")
-        logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
     
     @staticmethod
     def audit_logs(full_history=False, duration=None):
@@ -18512,8 +18556,8 @@ class DataCollectionManager:
     def _refresh_support_data() -> None:
         """Refresh all required CSV files for support package generation."""
         required_files = [
-            ("OrgAlarms.csv", OrgExportUtils.alarms),
-            ("OrgDeviceEvents.csv", OrgExportUtils.device_events),
+            ("OrgAlarms.csv", OrgAlarmEventExporter.alarms),
+            ("OrgDeviceEvents.csv", OrgAlarmEventExporter.device_events),
             ("SiteList.csv", OrgExportUtils.sites),
             ("OrgDevices.csv", OrgExportUtils.devices),
             ("OrgDeviceStats.csv", OrgExportUtils.device_stats),
@@ -50233,8 +50277,8 @@ menu_actions = {
     # ==============================
     
     # > Setup & Core Logs
-    "1": (OrgExportUtils.alarms, "Export all organization alarms from the past day"),
-    "2": (OrgExportUtils.device_events, "Export all device events from the past 24 hours"),
+    "1": (OrgAlarmEventExporter.alarms, "Export all organization alarms from the past day"),
+    "2": (OrgAlarmEventExporter.device_events, "Export all device events from the past 24 hours"),
     "3": (lambda: OrgExportUtils.audit_logs(full_history=False), "Export audit logs for the organization (last 24 hours)"),
     "4": (lambda fast=False: GatewayExportUtils.management_ips(fast=fast), "Export gateway management overlay IPs grouped by template association"),
     
@@ -50335,7 +50379,7 @@ menu_actions = {
     "62": (TroubleshootUtils.launch_interactive, "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"),
     
     # Work In Progress Features (Read-Only)
-    "63": (OrgExportUtils.device_events_52w, "WIP Export all org device events from the last 52 weeks"),
+    "63": (OrgAlarmEventExporter.device_events_52w, "WIP Export all org device events from the last 52 weeks"),
     "64": (lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"), "WIP Export ALL audit logs for the organization (last 52 weeks)"),
     "65": (GatewayExportUtils.device_configs, "WIP Export configuration details for all gateway devices across all sites"),
     

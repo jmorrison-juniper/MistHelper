@@ -657,6 +657,18 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.03.04.00.55",
+      "date": "2026-03-04",
+      "changes": {
+        "enhancements": [
+          "Extract OrgAlarmEventExporter from OrgExportUtils (5-Item Rule compliance)",
+          "New class contains 5 alarm/event methods: alarms(), alarm_templates(), events(), device_events(), device_events_52w()",
+          "OrgExportUtils reduced from 56 to 51 methods; documented extraction pattern for future decomposition",
+          "Consolidated redundant logging in alarms() (two start messages merged into one)"
+        ]
+      }
+    },
+    {
       "version": "26.03.03.23.35",
       "date": "2026-03-03",
       "changes": {
