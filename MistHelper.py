@@ -51303,7 +51303,7 @@ class EnhancedSSHRunner:
         self.logger.debug(f"EnhancedSSHRunner initialized with timeout={timeout}")
     
     @staticmethod
-    def validate_hostname(hostname: str) -> bool:
+    def _validate_hostname(hostname: str) -> bool:
         """
         Validate hostname or IP address format
         
@@ -51342,7 +51342,7 @@ class EnhancedSSHRunner:
         return bool(hostname_pattern.match(hostname))
     
     @staticmethod
-    def validate_port(port: int) -> bool:
+    def _validate_port(port: int) -> bool:
         """
         Validate port number is in valid range
         
@@ -51355,7 +51355,7 @@ class EnhancedSSHRunner:
         return isinstance(port, int) and 1 <= port <= 65535
     
     @staticmethod
-    def validate_timeout(timeout: int) -> bool:
+    def _validate_timeout(timeout: int) -> bool:
         """
         Validate timeout value is reasonable
         
@@ -51368,7 +51368,7 @@ class EnhancedSSHRunner:
         return isinstance(timeout, int) and 1 <= timeout <= 3600
     
     @staticmethod
-    def validate_username(username: str) -> bool:
+    def _validate_username(username: str) -> bool:
         """
         Validate SSH username format
         
@@ -51426,7 +51426,7 @@ class EnhancedSSHRunner:
         return sanitized
     
     @staticmethod
-    def validate_command(command: str) -> bool:
+    def _validate_command(command: str) -> bool:
         """
         Basic validation for SSH commands
         
@@ -51450,7 +51450,7 @@ class EnhancedSSHRunner:
         return True
     
     @staticmethod
-    def validate_thread_count(thread_count: int, max_hosts: int) -> int:
+    def _validate_thread_count(thread_count: int, max_hosts: int) -> int:
         """
         Validate and adjust thread count to reasonable limits
         
@@ -51469,7 +51469,7 @@ class EnhancedSSHRunner:
         return min(thread_count, max_reasonable_threads, max_hosts)
     
     @staticmethod
-    def parse_host_list(hosts_str: str) -> list:
+    def _parse_host_list(hosts_str: str) -> list:
         """
         Parse comma-separated host list from .env file with validation
         
@@ -51497,7 +51497,7 @@ class EnhancedSSHRunner:
                 continue
                 
             # Validate hostname/IP format
-            if EnhancedSSHRunner.validate_hostname(host):
+            if EnhancedSSHRunner._validate_hostname(host):
                 hosts.append(host)
             else:
                 invalid_hosts.append(host)
@@ -51517,7 +51517,7 @@ class EnhancedSSHRunner:
         return hosts
     
     @staticmethod
-    def parse_command_list(commands_str: str) -> list:
+    def _parse_command_list(commands_str: str) -> list:
         """
         Parse comma-separated command list from .env file with validation
         
@@ -51550,7 +51550,7 @@ class EnhancedSSHRunner:
                 continue
             
             # Validate command
-            if EnhancedSSHRunner.validate_command(clean_cmd):
+            if EnhancedSSHRunner._validate_command(clean_cmd):
                 commands.append(clean_cmd)
             else:
                 invalid_commands.append(clean_cmd[:50] + "..." if len(clean_cmd) > 50 else clean_cmd)
@@ -51631,7 +51631,7 @@ class EnhancedSSHRunner:
                     command = first_cell
                     
                     # Validate the command
-                    if EnhancedSSHRunner.validate_command(command):
+                    if EnhancedSSHRunner._validate_command(command):
                         commands.append(command)
                     else:
                         invalid_cmd = command[:50] + "..." if len(command) > 50 else command
@@ -51657,7 +51657,7 @@ class EnhancedSSHRunner:
             
         return commands
     
-    def create_secure_log_file(self, hostname: str) -> tuple:
+    def _create_secure_log_file(self, hostname: str) -> tuple:
         """
         Create a secure per-host log file with proper sanitization
         
@@ -51717,7 +51717,7 @@ class EnhancedSSHRunner:
         
         return host_log_file, write_to_host_log
     
-    def connect(self, hostname: str, username: str, password: str, port: int = 22) -> bool:
+    def _connect(self, hostname: str, username: str, password: str, port: int = 22) -> bool:
         """
         Establish SSH connection to remote host with input validation
         
@@ -51731,19 +51731,19 @@ class EnhancedSSHRunner:
             bool: True if connection successful, False otherwise
         """
         # Validate inputs before attempting connection
-        if not self.validate_hostname(hostname):
+        if not self._validate_hostname(hostname):
             error_msg = f"Invalid hostname format: {hostname}"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
             return False
         
-        if not self.validate_username(username):
+        if not self._validate_username(username):
             error_msg = f"Invalid username format: {username}"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
             return False
         
-        if not self.validate_port(port):
+        if not self._validate_port(port):
             error_msg = f"Invalid port number: {port} (must be 1-65535)"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
@@ -51827,7 +51827,7 @@ class EnhancedSSHRunner:
             print(f"[ERROR] Unexpected error: {e}")
             return False
     
-    def execute_command(self, command: str, use_shell: bool = False, hostname: str = "unknown") -> Tuple[bool, str, str]:
+    def _execute_command(self, command: str, use_shell: bool = False, hostname: str = "unknown") -> Tuple[bool, str, str]:
         """
         Execute command on remote host
         
@@ -52234,7 +52234,7 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg, exc_info=True)
             return False, "", error_msg
     
-    def disconnect(self):
+    def _disconnect(self):
         """Close SSH connection"""
         if self.client:
             self.logger.debug("Closing SSH connection")
@@ -52286,11 +52286,11 @@ class EnhancedSSHRunner:
                 load_dotenv(env_file)  # type: ignore[call-arg]
                 ssh_host = os.getenv('SSH_HOST')
                 if ssh_host:
-                    config['hosts'] = EnhancedSSHRunner.parse_host_list(ssh_host)
+                    config['hosts'] = EnhancedSSHRunner._parse_host_list(ssh_host)
                 
                 # Validate username
                 username = os.getenv('SSH_USER')
-                if username and EnhancedSSHRunner.validate_username(username):
+                if username and EnhancedSSHRunner._validate_username(username):
                     config['username'] = username
                 elif username:
                     print(f"[WARNING] Invalid username format in .env file: {username}")
@@ -52300,7 +52300,7 @@ class EnhancedSSHRunner:
                 # Parse SSH_COMMANDS
                 ssh_commands = os.getenv('SSH_COMMANDS')
                 if ssh_commands:
-                    config['commands'] = EnhancedSSHRunner.parse_command_list(ssh_commands)
+                    config['commands'] = EnhancedSSHRunner._parse_command_list(ssh_commands)
             except Exception as e:
                 print(f"[WARNING] Error loading .env with python-dotenv: {e}")
         else:
@@ -52342,16 +52342,16 @@ class EnhancedSSHRunner:
                         
                         # Process known keys with validation
                         if key == 'SSH_HOST':
-                            config['hosts'] = EnhancedSSHRunner.parse_host_list(value)
+                            config['hosts'] = EnhancedSSHRunner._parse_host_list(value)
                         elif key == 'SSH_USER':
-                            if EnhancedSSHRunner.validate_username(value):
+                            if EnhancedSSHRunner._validate_username(value):
                                 config['username'] = value
                             else:
                                 print(f"[WARNING] Invalid username format in .env file: {value}")
                         elif key == 'SSH_PASSWORD':
                             config['password'] = value
                         elif key == 'SSH_COMMANDS':
-                            config['commands'] = EnhancedSSHRunner.parse_command_list(value)
+                            config['commands'] = EnhancedSSHRunner._parse_command_list(value)
                             
             except UnicodeDecodeError as e:
                 print(f"[WARNING] .env file encoding error: {e}")
@@ -52363,7 +52363,7 @@ class EnhancedSSHRunner:
         return config
     
     @staticmethod
-    def setup_logging(log_level: str = 'INFO') -> logging.Logger:
+    def _setup_logging(log_level: str = 'INFO') -> logging.Logger:
         """
         Setup comprehensive logging configuration with syslog-style levels
         
@@ -52389,7 +52389,7 @@ class EnhancedSSHRunner:
         return logger
     
     @staticmethod
-    def run_multiple_ssh_commands_interactive(
+    def _run_multiple_ssh_commands_interactive(
         hostname: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -52732,7 +52732,7 @@ Log file: {host_log_file}
                     logger.error(f"Even simple interactive footer failed: {e2}")
 
     @staticmethod
-    def run_multiple_ssh_commands(
+    def _run_multiple_ssh_commands(
         hostname: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -52948,7 +52948,7 @@ Log file: {host_log_file}
                     logger.error(f"Even simple multi-command footer failed: {e2}")
     
     @staticmethod
-    def run_ssh_command(
+    def _run_ssh_command(
         hostname: Optional[str] = None,
         username: Optional[str] = None, 
         password: Optional[str] = None,
@@ -53134,7 +53134,7 @@ Log file: {host_log_file}
                     logger.error(f"Even simple footer failed: {e2}")
     
     @staticmethod
-    def run_ssh_command_on_host(
+    def _run_ssh_command_on_host(
         hostname: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -53188,7 +53188,7 @@ Log file: {host_log_file}
 
             if len(commands) == 1:
                 # Single command
-                host_success = EnhancedSSHRunner.run_ssh_command(hostname, username, password, commands[0], port, timeout, use_shell)
+                host_success = EnhancedSSHRunner._run_ssh_command(hostname, username, password, commands[0], port, timeout, use_shell)
                 return (hostname, host_success, f"Single command: {commands[0]}")
             else:
                 # Multiple commands - check if we need interactive mode
@@ -53211,11 +53211,11 @@ Log file: {host_log_file}
                 
                 if needs_interactive:
                     logger.info(f"[{hostname}] Using interactive mode for {len(commands)} commands")
-                    host_success = EnhancedSSHRunner.run_multiple_ssh_commands_interactive(hostname, username, password, commands, port, timeout, use_shell)
+                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands_interactive(hostname, username, password, commands, port, timeout, use_shell)
                     return (hostname, host_success, f"{len(commands)} interactive commands executed")
                 else:
                     # Standard sequential command execution
-                    host_success = EnhancedSSHRunner.run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
+                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
                     return (hostname, host_success, f"{len(commands)} commands executed")
 
         except Exception as e:
@@ -53293,7 +53293,7 @@ Log file: {host_log_file}
         with ThreadPoolExecutor(max_workers=max_threads, thread_name_prefix="SSH") as executor:
             # Submit all host tasks
             future_to_host = {
-                executor.submit(EnhancedSSHRunner.run_ssh_command_on_host, host, username, password, commands, 
+                executor.submit(EnhancedSSHRunner._run_ssh_command_on_host, host, username, password, commands, 
                                port, timeout, use_shell): host 
                 for host in hosts
             }
@@ -53367,7 +53367,7 @@ Log file: {host_log_file}
         log_level = 'DEBUG' if args.debug else args.log_level
         
         # Setup logging with specified level
-        logger = EnhancedSSHRunner.setup_logging(log_level)
+        logger = EnhancedSSHRunner._setup_logging(log_level)
 
         # Optional line-level tracing (only when debug enabled) to capture exact failing line
         tracer_installed = False
@@ -53396,7 +53396,7 @@ Log file: {host_log_file}
         
         # Interactive mode
         if args.interactive:
-            return EnhancedSSHRunner.interactive_mode()
+            return EnhancedSSHRunner._interactive_mode()
         
         # Determine if we should use .env file (default behavior unless --no-env is specified)
         use_env = not args.no_env
@@ -53439,7 +53439,7 @@ Log file: {host_log_file}
         invalid_hosts = []
         
         for host in final_hosts:
-            if EnhancedSSHRunner.validate_hostname(host):
+            if EnhancedSSHRunner._validate_hostname(host):
                 validated_hosts.append(host)
             else:
                 invalid_hosts.append(host)
@@ -53454,7 +53454,7 @@ Log file: {host_log_file}
                 final_hosts = validated_hosts
         
         # Validate username
-        if final_username and not EnhancedSSHRunner.validate_username(final_username):
+        if final_username and not EnhancedSSHRunner._validate_username(final_username):
             print(f"[ERROR] Invalid username format: {final_username}")
             return False
         
@@ -53534,7 +53534,7 @@ Log file: {host_log_file}
         invalid_commands = []
         
         for cmd in commands_to_run:
-            if EnhancedSSHRunner.validate_command(cmd):
+            if EnhancedSSHRunner._validate_command(cmd):
                 validated_commands.append(cmd)
             else:
                 invalid_cmd = cmd[:50] + "..." if len(cmd) > 50 else cmd
@@ -53567,7 +53567,7 @@ Log file: {host_log_file}
                 hostname = final_hosts[0]
                 if len(commands_to_run) == 1:
                     # Single command on single host
-                    ssh_success = EnhancedSSHRunner.run_ssh_command(
+                    ssh_success = EnhancedSSHRunner._run_ssh_command(
                         hostname,
                         str(final_username),
                         str(final_password),
@@ -53578,7 +53578,7 @@ Log file: {host_log_file}
                     )
                 else:
                     # Multiple commands on single host
-                    ssh_success = EnhancedSSHRunner.run_multiple_ssh_commands(
+                    ssh_success = EnhancedSSHRunner._run_multiple_ssh_commands(
                         hostname,
                         str(final_username),
                         str(final_password),
@@ -53594,7 +53594,7 @@ Log file: {host_log_file}
                 # Multiple host execution (multi-threaded)
                 default_threads = multiprocessing.cpu_count()
                 requested_threads = args.max_threads or default_threads
-                max_threads = EnhancedSSHRunner.validate_thread_count(requested_threads, len(final_hosts))
+                max_threads = EnhancedSSHRunner._validate_thread_count(requested_threads, len(final_hosts))
                 
                 if max_threads != requested_threads:
                     print(f"!? Adjusted thread count from {requested_threads} to {max_threads}")
@@ -53635,7 +53635,7 @@ Log file: {host_log_file}
                     logger.debug(f"[TRACE] Failed to remove line tracer: {_trace_cleanup_e}")
 
     @staticmethod
-    def create_argument_parser():
+    def _create_argument_parser():
         """Create and configure the argument parser"""
         parser = argparse.ArgumentParser(
             description="Enhanced SSH Command Runner v2 - Execute commands on remote hosts via SSH",
@@ -53694,13 +53694,13 @@ SECURITY NOTES:
         # Optional parameters with validation
         def validate_port_arg(value):
             ivalue = int(value)
-            if not EnhancedSSHRunner.validate_port(ivalue):
+            if not EnhancedSSHRunner._validate_port(ivalue):
                 raise argparse.ArgumentTypeError(f"Port must be between 1 and 65535, got {ivalue}")
             return ivalue
         
         def validate_timeout_arg(value):
             ivalue = int(value)
-            if not EnhancedSSHRunner.validate_timeout(ivalue):
+            if not EnhancedSSHRunner._validate_timeout(ivalue):
                 raise argparse.ArgumentTypeError(f"Timeout must be between 1 and 3600 seconds, got {ivalue}")
             return ivalue
         
@@ -53730,7 +53730,7 @@ SECURITY NOTES:
         return parser
 
     @staticmethod
-    def interactive_mode():
+    def _interactive_mode():
         """Interactive mode for SSH command execution with input validation"""
         print("- Enhanced SSH Command Runner v2 - Interactive Mode")
         print("=" * 60)
@@ -53741,7 +53741,7 @@ SECURITY NOTES:
             if not hostname:
                 print("X  Hostname is required")
                 continue
-            if not EnhancedSSHRunner.validate_hostname(hostname):
+            if not EnhancedSSHRunner._validate_hostname(hostname):
                 print("X  Invalid hostname or IP address format")
                 continue
             break
@@ -53751,7 +53751,7 @@ SECURITY NOTES:
             if not username:
                 print("X  Username is required")
                 continue
-            if not EnhancedSSHRunner.validate_username(username):
+            if not EnhancedSSHRunner._validate_username(username):
                 print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")
                 continue
             break
@@ -53769,7 +53769,7 @@ SECURITY NOTES:
                     port = 22
                     break
                 port = int(port_input)
-                if not EnhancedSSHRunner.validate_port(port):
+                if not EnhancedSSHRunner._validate_port(port):
                     print("X  Port must be between 1 and 65535")
                     continue
                 break
@@ -53783,7 +53783,7 @@ SECURITY NOTES:
                     timeout = 30
                     break
                 timeout = int(timeout_input)
-                if not EnhancedSSHRunner.validate_timeout(timeout):
+                if not EnhancedSSHRunner._validate_timeout(timeout):
                     print("X  Timeout must be between 1 and 3600 seconds")
                     continue
                 break
@@ -53800,7 +53800,7 @@ SECURITY NOTES:
             if not command:
                 print("X  Command is required")
                 continue
-            if not EnhancedSSHRunner.validate_command(command):
+            if not EnhancedSSHRunner._validate_command(command):
                 print("X  Invalid command (too long or contains null bytes)")
                 continue
             break
@@ -53808,7 +53808,7 @@ SECURITY NOTES:
         print(f"\n>> Starting SSH session (shell_mode={use_shell})...")
         
         # Execute
-        return EnhancedSSHRunner.run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
+        return EnhancedSSHRunner._run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
 
 
 
