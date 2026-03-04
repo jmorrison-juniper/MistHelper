@@ -4676,7 +4676,7 @@ class PacketCaptureManager:
         
         client_mac = None
         if client_choice == "1":
-            client_mac = PromptUtils.select_client_mac(site_id)
+            client_mac = PromptClientUtils.select_client_mac(site_id)
             if not client_mac:
                 print("\n! No client selected")
                 return
@@ -4697,7 +4697,7 @@ class PacketCaptureManager:
         
         ap_mac = None
         if ap_choice == "1":
-            ap_mac = PromptUtils.select_ap_mac(site_id)
+            ap_mac = PromptNetworkDeviceUtils.select_ap_mac(site_id)
             if ap_mac:
                 ap_mac = self.normalize_mac_address(ap_mac)
         elif ap_choice == "2":
@@ -4831,7 +4831,7 @@ class PacketCaptureManager:
         
         client_mac = None
         if client_choice == "1":
-            client_mac = PromptUtils.select_client_mac(site_id)
+            client_mac = PromptClientUtils.select_client_mac(site_id)
             if not client_mac:
                 print("\n! No client selected")
                 return
@@ -4938,7 +4938,7 @@ class PacketCaptureManager:
         
         # Gateway selection - interactive list
         logging.debug("Prompting for gateway selection from site inventory")
-        gateway_mac = PromptUtils.select_gateway_mac(site_id)
+        gateway_mac = PromptNetworkDeviceUtils.select_gateway_mac(site_id)
         if not gateway_mac:
             logging.warning("No gateway selected or gateway selection failed - aborting capture")
             return
@@ -4949,7 +4949,7 @@ class PacketCaptureManager:
         
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from gateway")
-        port_selection_result = PromptUtils.select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
+        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
         
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -5068,7 +5068,7 @@ class PacketCaptureManager:
         
         # Switch selection - interactive list
         logging.debug("Prompting for switch selection from site inventory")
-        switch_mac = PromptUtils.select_switch_mac(site_id)
+        switch_mac = PromptNetworkDeviceUtils.select_switch_mac(site_id)
         if not switch_mac:
             logging.warning("No switch selected or switch selection failed - aborting capture")
             return
@@ -5079,7 +5079,7 @@ class PacketCaptureManager:
         
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from switch")
-        port_selection_result = PromptUtils.select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
+        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
         
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -5274,7 +5274,7 @@ class PacketCaptureManager:
         
         # AP Selection - interactive list
         logging.debug("Prompting for AP selection from site inventory")
-        ap_mac = PromptUtils.select_ap_mac(site_id)
+        ap_mac = PromptNetworkDeviceUtils.select_ap_mac(site_id)
         if not ap_mac:
             logging.warning("No AP selected or AP selection failed - aborting capture")
             return
@@ -9351,195 +9351,14 @@ def execute_with_connection_pool_management(work_items: List[Any], worker_functi
 # ============================================================================
 # PROMPT UTILITIES CLASS
 # ============================================================================
-class PromptUtils:
+class PromptNetworkDeviceUtils:
     """
-    Centralized prompt utilities for user input and selection operations.
-    Groups all interactive selection functions (sites, devices, ports, clients).
-    All methods are static to avoid unnecessary object instantiation.
+    Network Device Selection Prompts
+    
+    Handles AP, gateway, switch MAC selection, and port selection prompts.
+    Extracted from PromptUtils.
     """
 
-    @staticmethod
-    def select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> Optional[str]:
-        """
-        Prompts the user to select a device by index or name from the device inventory at a given site.
-        Returns the corresponding device ID, or None if not found.
-        
-        SECURITY: Always fetch all device types from API first (type=all), then filter locally
-        to avoid Mist API's default behavior of only returning APs.
-        
-        Args:
-            site_id (str): The site ID to filter devices by
-            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
-            csv_filename (str): Name of the inventory CSV file
-            
-        Returns:
-            str: The selected device ID or None if no selection made
-        """
-        # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
-        # The Mist API defaults to only APs unless explicitly specified
-        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
-        if not rawdata:
-            print("No devices found for the selected site.")
-            logging.warning(f"No devices found for site_id: {site_id}")
-            return None
-
-        # Filter devices locally based on requested device types
-        if device_type != "all":
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]
-            filtered_data = []
-            for device in rawdata:
-                device_device_type = device.get("type", "").lower()
-                if device_device_type in requested_types:
-                    filtered_data.append(device)
-            rawdata = filtered_data
-            
-            if not rawdata:
-                print(f"No devices of type '{device_type}' found at the selected site.")
-                logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
-                return None
-
-        # Sort, flatten, and sanitize the inventory data for display and CSV export
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
-        inventory = DataProcessingUtils.escape_multiline(inventory)
-        DataExporter.save_data_to_output(inventory, csv_filename)
-        logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
-
-        # Prepare PrettyTable for user selection
-        table = PrettyTable()
-        table.field_names = ["Index", "name", "mac", "model", "serial"]
-        index_to_device = {}
-        name_to_device = {}
-
-        # Populate the table and lookup dictionaries
-        for idx, item in enumerate(inventory):
-            table.add_row([idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")])
-            index_to_device[idx] = item
-            name_to_device[item.get("name", "")] = item
-
-        print(table)
-        logging.info("Displayed device selection table to user.")
-
-        user_input = input("Enter the index or name of the device to view device: ").strip()
-        logging.debug(f"User input for device selection: {user_input}")
-
-        # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
-            if idx in index_to_device:
-                device_id = index_to_device[idx].get("id")
-                logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
-                return device_id
-            else:
-                logging.error(" Invalid index.")
-                return None
-
-        # Try name selection
-        if user_input in name_to_device:
-            device_id = name_to_device[user_input].get("id")
-            logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
-            return device_id
-
-        logging.error(" Device not found by name or index.")
-        return None
-    
-    @staticmethod
-    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> Optional[str]:
-        """
-        Prompts the user to select a site by index or name from SiteList.csv.
-        Returns the corresponding site ID.
-        
-        Args:
-            csv_file (str): Name of the site list CSV file
-            
-        Returns:
-            str: The selected site ID or None if no selection made
-        """
-        # Ensure the site list CSV is fresh or generate it if missing/stale
-        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)
-
-        # Get the full path to the CSV file in the data directory
-        csv_file_path = FilePathUtils.get_csv_path(csv_file)
-        
-        # Load the site list from CSV
-        with open(csv_file_path, mode='r', encoding='utf-8') as file:
-            reader = list(csv.DictReader(file))
-            index_to_site = {i: row for i, row in enumerate(reader)}
-            name_to_site = {row["name"]: row for row in reader if "name" in row}
-
-        # Display available sites to the user
-        print("\nAvailable Sites:")
-        for idx, row in index_to_site.items():
-            print(f"[{idx}] {row.get('name', 'Unnamed')}")
-
-        user_input = input("\nEnter site index or name: ").strip()
-        logging.debug(f"User input for site selection: {user_input}")
-
-        # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
-            if idx in index_to_site:
-                site_id = index_to_site[idx].get("id")
-                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-                logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
-                return site_id
-            else:
-                print(" Invalid index.")
-                logging.warning(f"Invalid site index entered: {idx}")
-                return None
-
-        # Try name selection
-        if user_input in name_to_site:
-            site_id = name_to_site[user_input].get("id")
-            print(f"! Selected site: {user_input} (ID: {site_id})")
-            logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
-            return site_id
-
-        print(" Site not found by name or index.")
-        logging.warning(f"Site not found by name or index: {user_input}")
-        return None
-    
-    @staticmethod
-    def select_site() -> Optional[str]:
-        """
-        Prompts the user to select a site and returns the site_id.
-        Uses the existing CSV-based site selection functionality.
-        
-        Returns:
-            str: The selected site ID or None if no selection made
-        """
-        return PromptUtils.select_site_id_from_csv()
-    
-    @staticmethod
-    def select_site_with_logging() -> Optional[str]:
-        """
-        Prompts the user to select a site from the CSV list and logs the selection.
-        
-        Returns:
-            str: The selected site ID or None if no selection made
-        """
-        logging.info("Prompting user to select a site from SiteList.csv...")
-        site_id = PromptUtils.select_site_id_from_csv()
-        if site_id:
-            logging.info(f"! Selected site ID: {site_id}")
-        else:
-            logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
-        return site_id
-    
-    @staticmethod
-    def select_device(site_id: str, device_type: str = "all") -> Optional[str]:
-        """
-        Prompts the user to select a device from the specified site and returns the device_id.
-        
-        Args:
-            site_id (str): The site ID to filter devices by
-            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
-            
-        Returns:
-            str: The selected device ID or None if no selection made
-        """
-        return PromptUtils.select_device_id_from_inventory(site_id, device_type)
-    
     @staticmethod
     def select_ap_mac(site_id: str) -> Optional[str]:
         """
@@ -9617,132 +9436,10 @@ class PromptUtils:
                 
         except Exception as error:
             print(f"\n! Error fetching APs: {error}")
-            logging.error(f"Exception in PromptUtils.select_ap_mac: {error}", exc_info=True)
+            logging.error(f"Exception in PromptNetworkDeviceUtils.select_ap_mac: {error}", exc_info=True)
             return None
     
-    @staticmethod
-    def select_client_mac(site_id: str) -> Optional[str]:
-        """
-        Prompts the user to select a client from currently connected clients at the site.
-        
-        Args:
-            site_id (str): The site ID to fetch clients from
-            
-        Returns:
-            str: The selected client MAC address (normalized) or None if no selection made
-        """
-        logging.debug(f"Fetching connected clients for site: {site_id}")
-        
-        try:
-            # Fetch wireless clients using search endpoint (from clients module)
-            wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
-            wireless_clients = wireless_response.data.get('results', []) if hasattr(wireless_response.data, 'get') else wireless_response.data
-            
-            # Fetch wired clients using search endpoint (from separate wired_clients module)
-            wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
-            wired_clients = wired_response.data.get('results', []) if hasattr(wired_response.data, 'get') else wired_response.data
-            
-            all_clients = []
-            
-            # Process wireless clients
-            if wireless_clients:
-                for client in wireless_clients:
-                    client['connection_type'] = 'Wireless'
-                    all_clients.append(client)
-            
-            # Process wired clients
-            if wired_clients:
-                for client in wired_clients:
-                    client['connection_type'] = 'Wired'
-                    all_clients.append(client)
-            
-            if not all_clients:
-                print("\n! No connected clients found at the selected site.")
-                logging.warning(f"No clients found for site_id: {site_id}")
-                return None
-            
-            logging.info(f"Found {len(all_clients)} connected clients at site ({len(wireless_clients or [])} wireless, {len(wired_clients or [])} wired)")
-            
-            # Sort by hostname/username for easier selection
-            all_clients = sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("username", "")))
-            
-            # Prepare selection table
-            table = PrettyTable()
-            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]
-            table.max_width["Hostname/User"] = 25
-            index_to_client = {}
-            
-            for idx, client in enumerate(all_clients):
-                hostname = client.get("hostname", client.get("username", "Unknown"))[:25]
-                mac = client.get("mac", "Unknown")
-                ip = client.get("ip", "Unknown")
-                conn_type = client.get("connection_type", "Unknown")
-                
-                # SSID for wireless, VLAN for wired
-                if conn_type == "Wireless":
-                    network = client.get("ssid", "N/A")
-                else:
-                    network = f"VLAN {client.get('vlan_id', 'N/A')}"
-                
-                table.add_row([
-                    idx,
-                    hostname,
-                    mac,
-                    ip,
-                    conn_type,
-                    network
-                ])
-                index_to_client[idx] = client
-            
-            print("\n" + "=" * 80)
-            print(" SELECT CONNECTED CLIENT")
-            print("=" * 80)
-            print(f"  Found {len(all_clients)} connected clients")
-            print("=" * 80)
-            print(table)
-            print("\nOptions:")
-            print("  - Enter index number to select a client")
-            print("  - Enter 'm' to manually type MAC address")
-            print("  - Enter 'c' to cancel")
-            
-            user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug(f"User input for client selection: {user_input}")
-            
-            # Check for manual entry
-            if user_input.lower() == 'm':
-                manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
-                logging.info(f"User chose manual MAC entry: {manual_mac}")
-                return manual_mac
-            
-            # Check for cancel
-            if user_input.lower() == 'c':
-                logging.info("User cancelled client selection")
-                return None
-            
-            # Validate index selection
-            if user_input.isdigit():
-                idx = int(user_input)
-                if idx in index_to_client:
-                    client_mac = index_to_client[idx].get("mac")
-                    client_hostname = index_to_client[idx].get("hostname", index_to_client[idx].get("username", "Unknown"))
-                    conn_type = index_to_client[idx].get("connection_type", "Unknown")
-                    print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
-                    logging.info(f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})")
-                    return client_mac
-                else:
-                    print("\n! Invalid index")
-                    logging.error(f"Invalid client index: {idx}")
-                    return None
-            else:
-                print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
-                logging.error(f"Invalid client selection input: {user_input}")
-                return None
-                
-        except Exception as error:
-            print(f"\n! Error fetching clients: {error}")
-            logging.error(f"Exception in PromptUtils.select_client_mac: {error}", exc_info=True)
-            return None
-    
+
     @staticmethod
     def select_gateway_mac(site_id: str) -> Optional[str]:
         """
@@ -9812,9 +9509,10 @@ class PromptUtils:
                 
         except Exception as error:
             print(f"\n! Error fetching gateways: {error}")
-            logging.error(f"Exception in PromptUtils.select_gateway_mac: {error}", exc_info=True)
+            logging.error(f"Exception in PromptNetworkDeviceUtils.select_gateway_mac: {error}", exc_info=True)
             return None
     
+
     @staticmethod
     def select_switch_mac(site_id: str) -> Optional[str]:
         """
@@ -9884,9 +9582,10 @@ class PromptUtils:
                 
         except Exception as error:
             print(f"\n! Error fetching switches: {error}")
-            logging.error(f"Exception in PromptUtils.select_switch_mac: {error}", exc_info=True)
+            logging.error(f"Exception in PromptNetworkDeviceUtils.select_switch_mac: {error}", exc_info=True)
             return None
     
+
     @staticmethod
     def select_ports_from_device(site_id: str, device_mac: str, device_type: str = "switch", return_available: bool = False):
         """
@@ -10227,39 +9926,143 @@ class PromptUtils:
                 
         except Exception as error:
             print(f"\n! Error fetching port information: {error}")
-            logging.error(f"Exception in PromptUtils.select_ports_from_device: {error}", exc_info=True)
+            logging.error(f"Exception in PromptNetworkDeviceUtils.select_ports_from_device: {error}", exc_info=True)
             return None
 
+
+
+class PromptClientUtils:
+    """
+    Client Selection Prompts
+    
+    Handles client MAC selection, client selection, and combined site-device selection.
+    Extracted from PromptUtils.
+    """
+
     @staticmethod
-    def select_site_and_device_ids(site_id=None, device_id=None):
+    def select_client_mac(site_id: str) -> Optional[str]:
         """
-        Returns site_id and device_id, either from arguments or via interactive prompts.
+        Prompts the user to select a client from currently connected clients at the site.
         
         Args:
-            site_id: Optional pre-selected site ID
-            device_id: Optional pre-selected device ID
+            site_id (str): The site ID to fetch clients from
             
         Returns:
-            tuple: (site_id, device_id) or (None, None) if selection failed
+            str: The selected client MAC address (normalized) or None if no selection made
         """
-        if not site_id:
-            site_id = PromptUtils.select_site_id_from_csv()
-            if not site_id:
-                print(" No site selected.")
-                return None, None
-
-        if not device_id:
-            device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
-            if not device_id:
-                print(" No device selected.")
-                return None, None
-
-        return site_id, device_id
-
-    # ========================================================================
-    # CLIENT SELECTION METHODS
-    # ========================================================================
+        logging.debug(f"Fetching connected clients for site: {site_id}")
+        
+        try:
+            # Fetch wireless clients using search endpoint (from clients module)
+            wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
+            wireless_clients = wireless_response.data.get('results', []) if hasattr(wireless_response.data, 'get') else wireless_response.data
+            
+            # Fetch wired clients using search endpoint (from separate wired_clients module)
+            wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
+            wired_clients = wired_response.data.get('results', []) if hasattr(wired_response.data, 'get') else wired_response.data
+            
+            all_clients = []
+            
+            # Process wireless clients
+            if wireless_clients:
+                for client in wireless_clients:
+                    client['connection_type'] = 'Wireless'
+                    all_clients.append(client)
+            
+            # Process wired clients
+            if wired_clients:
+                for client in wired_clients:
+                    client['connection_type'] = 'Wired'
+                    all_clients.append(client)
+            
+            if not all_clients:
+                print("\n! No connected clients found at the selected site.")
+                logging.warning(f"No clients found for site_id: {site_id}")
+                return None
+            
+            logging.info(f"Found {len(all_clients)} connected clients at site ({len(wireless_clients or [])} wireless, {len(wired_clients or [])} wired)")
+            
+            # Sort by hostname/username for easier selection
+            all_clients = sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("username", "")))
+            
+            # Prepare selection table
+            table = PrettyTable()
+            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]
+            table.max_width["Hostname/User"] = 25
+            index_to_client = {}
+            
+            for idx, client in enumerate(all_clients):
+                hostname = client.get("hostname", client.get("username", "Unknown"))[:25]
+                mac = client.get("mac", "Unknown")
+                ip = client.get("ip", "Unknown")
+                conn_type = client.get("connection_type", "Unknown")
+                
+                # SSID for wireless, VLAN for wired
+                if conn_type == "Wireless":
+                    network = client.get("ssid", "N/A")
+                else:
+                    network = f"VLAN {client.get('vlan_id', 'N/A')}"
+                
+                table.add_row([
+                    idx,
+                    hostname,
+                    mac,
+                    ip,
+                    conn_type,
+                    network
+                ])
+                index_to_client[idx] = client
+            
+            print("\n" + "=" * 80)
+            print(" SELECT CONNECTED CLIENT")
+            print("=" * 80)
+            print(f"  Found {len(all_clients)} connected clients")
+            print("=" * 80)
+            print(table)
+            print("\nOptions:")
+            print("  - Enter index number to select a client")
+            print("  - Enter 'm' to manually type MAC address")
+            print("  - Enter 'c' to cancel")
+            
+            user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
+            logging.debug(f"User input for client selection: {user_input}")
+            
+            # Check for manual entry
+            if user_input.lower() == 'm':
+                manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
+                logging.info(f"User chose manual MAC entry: {manual_mac}")
+                return manual_mac
+            
+            # Check for cancel
+            if user_input.lower() == 'c':
+                logging.info("User cancelled client selection")
+                return None
+            
+            # Validate index selection
+            if user_input.isdigit():
+                idx = int(user_input)
+                if idx in index_to_client:
+                    client_mac = index_to_client[idx].get("mac")
+                    client_hostname = index_to_client[idx].get("hostname", index_to_client[idx].get("username", "Unknown"))
+                    conn_type = index_to_client[idx].get("connection_type", "Unknown")
+                    print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
+                    logging.info(f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})")
+                    return client_mac
+                else:
+                    print("\n! Invalid index")
+                    logging.error(f"Invalid client index: {idx}")
+                    return None
+            else:
+                print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
+                logging.error(f"Invalid client selection input: {user_input}")
+                return None
+                
+        except Exception as error:
+            print(f"\n! Error fetching clients: {error}")
+            logging.error(f"Exception in PromptClientUtils.select_client_mac: {error}", exc_info=True)
+            return None
     
+
     @staticmethod
     def select_client(site_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
@@ -10296,6 +10099,227 @@ class PromptUtils:
             logging.error(f"Error during client selection: {exception}")
             print(f"! Error searching for clients: {exception}")
             return None, None, None
+    
+
+    @staticmethod
+    def select_site_and_device_ids(site_id=None, device_id=None):
+        """
+        Returns site_id and device_id, either from arguments or via interactive prompts.
+        
+        Args:
+            site_id: Optional pre-selected site ID
+            device_id: Optional pre-selected device ID
+            
+        Returns:
+            tuple: (site_id, device_id) or (None, None) if selection failed
+        """
+        if not site_id:
+            site_id = PromptUtils.select_site_id_from_csv()
+            if not site_id:
+                print(" No site selected.")
+                return None, None
+
+        if not device_id:
+            device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
+            if not device_id:
+                print(" No device selected.")
+                return None, None
+
+        return site_id, device_id
+
+    # ========================================================================
+    # CLIENT SELECTION METHODS
+    # ========================================================================
+    
+
+class PromptUtils:
+    """
+    Centralized prompt utilities for user input and selection operations.
+    Groups all interactive selection functions (sites, devices, ports, clients).
+    All methods are static to avoid unnecessary object instantiation.
+    """
+
+    @staticmethod
+    def select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> Optional[str]:
+        """
+        Prompts the user to select a device by index or name from the device inventory at a given site.
+        Returns the corresponding device ID, or None if not found.
+        
+        SECURITY: Always fetch all device types from API first (type=all), then filter locally
+        to avoid Mist API's default behavior of only returning APs.
+        
+        Args:
+            site_id (str): The site ID to filter devices by
+            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
+            csv_filename (str): Name of the inventory CSV file
+            
+        Returns:
+            str: The selected device ID or None if no selection made
+        """
+        # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
+        # The Mist API defaults to only APs unless explicitly specified
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+        if not rawdata:
+            print("No devices found for the selected site.")
+            logging.warning(f"No devices found for site_id: {site_id}")
+            return None
+
+        # Filter devices locally based on requested device types
+        if device_type != "all":
+            requested_types = [dtype.strip() for dtype in device_type.split(",")]
+            filtered_data = []
+            for device in rawdata:
+                device_device_type = device.get("type", "").lower()
+                if device_device_type in requested_types:
+                    filtered_data.append(device)
+            rawdata = filtered_data
+            
+            if not rawdata:
+                print(f"No devices of type '{device_type}' found at the selected site.")
+                logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+                return None
+
+        # Sort, flatten, and sanitize the inventory data for display and CSV export
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+        inventory = DataProcessingUtils.escape_multiline(inventory)
+        DataExporter.save_data_to_output(inventory, csv_filename)
+        logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
+
+        # Prepare PrettyTable for user selection
+        table = PrettyTable()
+        table.field_names = ["Index", "name", "mac", "model", "serial"]
+        index_to_device = {}
+        name_to_device = {}
+
+        # Populate the table and lookup dictionaries
+        for idx, item in enumerate(inventory):
+            table.add_row([idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")])
+            index_to_device[idx] = item
+            name_to_device[item.get("name", "")] = item
+
+        print(table)
+        logging.info("Displayed device selection table to user.")
+
+        user_input = input("Enter the index or name of the device to view device: ").strip()
+        logging.debug(f"User input for device selection: {user_input}")
+
+        # Try index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_device:
+                device_id = index_to_device[idx].get("id")
+                logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
+                return device_id
+            else:
+                logging.error(" Invalid index.")
+                return None
+
+        # Try name selection
+        if user_input in name_to_device:
+            device_id = name_to_device[user_input].get("id")
+            logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
+            return device_id
+
+        logging.error(" Device not found by name or index.")
+        return None
+    
+    @staticmethod
+    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> Optional[str]:
+        """
+        Prompts the user to select a site by index or name from SiteList.csv.
+        Returns the corresponding site ID.
+        
+        Args:
+            csv_file (str): Name of the site list CSV file
+            
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        # Ensure the site list CSV is fresh or generate it if missing/stale
+        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)
+
+        # Get the full path to the CSV file in the data directory
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)
+        
+        # Load the site list from CSV
+        with open(csv_file_path, mode='r', encoding='utf-8') as file:
+            reader = list(csv.DictReader(file))
+            index_to_site = {i: row for i, row in enumerate(reader)}
+            name_to_site = {row["name"]: row for row in reader if "name" in row}
+
+        # Display available sites to the user
+        print("\nAvailable Sites:")
+        for idx, row in index_to_site.items():
+            print(f"[{idx}] {row.get('name', 'Unnamed')}")
+
+        user_input = input("\nEnter site index or name: ").strip()
+        logging.debug(f"User input for site selection: {user_input}")
+
+        # Try index selection
+        if user_input.isdigit():
+            idx = int(user_input)
+            if idx in index_to_site:
+                site_id = index_to_site[idx].get("id")
+                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
+                logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                return site_id
+            else:
+                print(" Invalid index.")
+                logging.warning(f"Invalid site index entered: {idx}")
+                return None
+
+        # Try name selection
+        if user_input in name_to_site:
+            site_id = name_to_site[user_input].get("id")
+            print(f"! Selected site: {user_input} (ID: {site_id})")
+            logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            return site_id
+
+        print(" Site not found by name or index.")
+        logging.warning(f"Site not found by name or index: {user_input}")
+        return None
+    
+    @staticmethod
+    def select_site() -> Optional[str]:
+        """
+        Prompts the user to select a site and returns the site_id.
+        Uses the existing CSV-based site selection functionality.
+        
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        return PromptUtils.select_site_id_from_csv()
+    
+    @staticmethod
+    def select_site_with_logging() -> Optional[str]:
+        """
+        Prompts the user to select a site from the CSV list and logs the selection.
+        
+        Returns:
+            str: The selected site ID or None if no selection made
+        """
+        logging.info("Prompting user to select a site from SiteList.csv...")
+        site_id = PromptUtils.select_site_id_from_csv()
+        if site_id:
+            logging.info(f"! Selected site ID: {site_id}")
+        else:
+            logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
+        return site_id
+    
+    @staticmethod
+    def select_device(site_id: str, device_type: str = "all") -> Optional[str]:
+        """
+        Prompts the user to select a device from the specified site and returns the device_id.
+        
+        Args:
+            site_id (str): The site ID to filter devices by
+            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
+            
+        Returns:
+            str: The selected device ID or None if no selection made
+        """
+        return PromptUtils.select_device_id_from_inventory(site_id, device_type)
     
     @staticmethod
     def _determine_search_scope(site_id: Optional[str]) -> Optional[str]:
@@ -10575,6 +10599,7 @@ class PromptUtils:
 # ============================================================================
 # DEVICE UTILITIES CLASS
 # ============================================================================
+
 class DeviceUtils:
     """
     Centralized device-related utilities.
@@ -13672,7 +13697,7 @@ class SiteAnomalyExporter:
             site_name = site_id
         
         # Use the guided client selection function with the site_id
-        client_mac, client_type, selected_site_id = PromptUtils.select_client(site_id)
+        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)
         if not client_mac:
             print("! No client selected. Exiting.")
             return
@@ -20112,7 +20137,7 @@ class TroubleshootUtils:
         print("=" * 50)
         
         # Use guided client selection
-        client_mac, client_type, site_id = PromptUtils.select_client()
+        client_mac, client_type, site_id = PromptClientUtils.select_client()
         if not client_mac:
             print(" No client selected. Returning to main menu.")
             return
@@ -21788,7 +21813,7 @@ class CLIShellManager:
             device_id: Optional device ID (prompts if not provided)
             debug: Enable debug mode for WebSocket tracing
         """
-        site_id, device_id = PromptUtils.select_site_and_device_ids(site_id, device_id)
+        site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)
         if not site_id or not device_id:
             return
         
@@ -21919,7 +21944,7 @@ class ARPCommandManager:
             device_id: Optional device ID (prompts if not provided)
         """
         if not site_id or not device_id:
-            site_id, device_id = PromptUtils.select_site_and_device_ids(site_id, device_id)
+            site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)
         if not site_id or not device_id:
             return
 
