@@ -36948,7 +36948,7 @@ class FirmwareManager:
             logging.error(f"Error in monitoring check: {e}", exc_info=True)
             return None
     
-    def upgrade_ap_firmware_by_gateway_template(self):
+    def _upgrade_ap_firmware_by_gateway_template(self):
         """
         Advanced AP firmware upgrade organized by Gateway Template assignment.
         
@@ -36968,7 +36968,7 @@ class FirmwareManager:
         - Maintains all existing safety confirmations and audit trails
         """
         logging.info("Starting template-based AP firmware upgrade...")
-        logging.debug("FirmwareManager.upgrade_ap_firmware_by_gateway_template() initiated")
+        logging.debug("FirmwareManager._upgrade_ap_firmware_by_gateway_template() initiated")
         
         print(" Advanced AP Firmware Upgrade by Gateway Template")
         print("=" * 70)
@@ -37167,7 +37167,7 @@ class FirmwareManager:
         
         # Use the existing bulk upgrade functionality
         # We'll call the refactored bulk_upgrade method with our site list
-        return self.bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)
+        return self._bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)
     
     def execute_firmware_upgrade_with_mode_selection(self):
         """
@@ -37211,11 +37211,11 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based upgrade mode")
                     print("\n  Site-based upgrade mode selected")
-                    return self.bulk_upgrade_ap_firmware_by_site()
+                    return self._bulk_upgrade_ap_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based upgrade mode")
                     print("\n  Template-based upgrade mode selected")
-                    return self.upgrade_ap_firmware_by_gateway_template()
+                    return self._upgrade_ap_firmware_by_gateway_template()
                 elif mode_choice == "3" and msp_mode_available:
                     logging.info("User selected MSP multi-org upgrade mode")
                     print("\n  MSP Multi-Organization upgrade mode selected")
@@ -37807,7 +37807,7 @@ class FirmwareManager:
         msps = self._select_msps_for_upgrade()
         return msps[0] if msps and len(msps) == 1 else None
     
-    def bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
+    def _bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
         """
         Advanced bulk upgrade AP firmware for APs at selected site(s).
         
@@ -37906,11 +37906,11 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based switch upgrade mode")
                     print("\n  Site-based switch upgrade mode selected")
-                    return self.bulk_upgrade_switch_firmware_by_site()
+                    return self._bulk_upgrade_switch_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based switch upgrade mode")
                     print("\n  Template-based switch upgrade mode selected")
-                    return self.upgrade_switch_firmware_by_gateway_template()
+                    return self._upgrade_switch_firmware_by_gateway_template()
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
@@ -37919,7 +37919,7 @@ class FirmwareManager:
                 logging.info("Switch firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
                 return
 
-    def bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):
+    def _bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):
         """
         Advanced bulk switch firmware upgrade for switches at selected site(s).
         
@@ -37940,11 +37940,11 @@ class FirmwareManager:
             Upgrade execution results and tracking information
         """
         logging.info("Starting bulk switch firmware upgrade by site...")
-        logging.debug("FirmwareManager.bulk_upgrade_switch_firmware_by_site() initiated")
+        logging.debug("FirmwareManager._bulk_upgrade_switch_firmware_by_site() initiated")
         
         BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
 
-    def upgrade_switch_firmware_by_gateway_template(self):
+    def _upgrade_switch_firmware_by_gateway_template(self):
         """
         Advanced switch firmware upgrade organized by Gateway Template assignment.
         
@@ -37965,7 +37965,7 @@ class FirmwareManager:
         - Enhanced network disruption warnings for production environments
         """
         logging.info("Starting template-based switch firmware upgrade...")
-        logging.debug("FirmwareManager.upgrade_switch_firmware_by_gateway_template() initiated")
+        logging.debug("FirmwareManager._upgrade_switch_firmware_by_gateway_template() initiated")
         
         print(" Advanced Switch Firmware Upgrade by Gateway Template")
         print("=" * 70)
@@ -38004,7 +38004,7 @@ class FirmwareManager:
         print(f"  Target sites: {len(sites_to_upgrade)}")
         
         # Use the switch-specific bulk upgrade implementation
-        return self.bulk_upgrade_switch_firmware_by_site(sites_to_upgrade)
+        return self._bulk_upgrade_switch_firmware_by_site(sites_to_upgrade)
 
     # ===============================================================================
     # SSR FIRMWARE UPGRADE METHODS
@@ -38058,11 +38058,11 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based SSR upgrade mode")
                     print("\n  Site-based SSR upgrade mode selected")
-                    return self.bulk_upgrade_ssr_firmware_by_site()
+                    return self._bulk_upgrade_ssr_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based SSR upgrade mode")
                     print("\n  Template-based SSR upgrade mode selected")
-                    return self.upgrade_ssr_firmware_by_gateway_template()
+                    return self._upgrade_ssr_firmware_by_gateway_template()
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
@@ -38071,7 +38071,7 @@ class FirmwareManager:
                 logging.info("SSR firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
                 return
 
-    def bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):
+    def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):
         """
         DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
         
@@ -38700,7 +38700,7 @@ class FirmwareManager:
             
             return upgrade_results
 
-    def upgrade_ssr_firmware_by_gateway_template(self):
+    def _upgrade_ssr_firmware_by_gateway_template(self):
         """
         Advanced SSR firmware upgrade organized by Gateway Template assignment.
         
@@ -38725,7 +38725,7 @@ class FirmwareManager:
         Ensure adequate maintenance windows and backup connectivity before proceeding.
         """
         logging.info("Starting template-based SSR firmware upgrade...")
-        logging.debug("FirmwareManager.upgrade_ssr_firmware_by_gateway_template() initiated")
+        logging.debug("FirmwareManager._upgrade_ssr_firmware_by_gateway_template() initiated")
         
         print(" Advanced SSR Firmware Upgrade by Gateway Template")
         print("=" * 70)
@@ -38764,7 +38764,7 @@ class FirmwareManager:
         print(f"  Target sites: {len(sites_to_upgrade)}")
         
         # Use the SSR-specific bulk upgrade implementation
-        return self.bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
+        return self._bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
 # NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly
