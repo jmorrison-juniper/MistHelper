@@ -18769,7 +18769,7 @@ class DataCollectionManager:
             ("OrgDevices.csv", OrgInventoryExporter.devices),
             ("OrgDeviceStats.csv", OrgDeviceStatsExporter.device_stats),
             ("OrgDevicePortStats.csv", OrgDeviceStatsExporter.device_port_stats),
-            ("AllGatewayTestResults.csv", GatewayExportUtils.test_results_by_site),
+            ("AllGatewayTestResults.csv", GatewayTestExporter.test_results_by_site),
         ]
         
         for filename, func in required_files:
@@ -18897,13 +18897,14 @@ class InteractiveDisplayUtils:
 # ============================================================================
 # GATEWAY EXPORT UTILITIES CLASS
 # ============================================================================
-class GatewayExportUtils:
+class GatewayTestExporter:
     """
-    Centralized gateway data export utilities.
-    Groups all export_gateway_* functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    Gateway Synthetic Test Exports
     
+    Handles synthetic test result exports and site-level test aggregation for gateways.
+    Extracted from GatewayExportUtils.
+    """
+
     @staticmethod
     def synthetic_tests(fast=False):
         """
@@ -18915,13 +18916,13 @@ class GatewayExportUtils:
                         to minimize API calls.
         """
         # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug(f"[DEBUG] GatewayExportUtils.synthetic_tests invoked with fast={fast}")
+        logging.debug(f"[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast={fast}")
         logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
         
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtils.get_devices_with_sites(org_id, fast=fast)
+        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
         all_stats = []
 
         if not gateway_devices:
@@ -19055,6 +19056,7 @@ class GatewayExportUtils:
             logging.warning(" No synthetic test results found. CSV not created.")
             print("! No synthetic test results found. CSV not created.")
     
+
     @staticmethod
     def test_results_by_site(fast: bool = False):
         """Export all synthetic test results (including speed tests) for all sites with gateways.
@@ -19094,7 +19096,7 @@ class GatewayExportUtils:
                 site_ids = []  # Force fallback
 
         if not site_ids:
-            site_ids = GatewayExportUtils.get_site_ids_with_devices(org_id)
+            site_ids = GatewayExportUtils._get_site_ids_with_devices(org_id)
 
         if not site_ids:
             logging.warning(" No sites with gateways found.")
@@ -19105,7 +19107,7 @@ class GatewayExportUtils:
         def fetch_site_tests(site_id, connection_semaphore):
             """Worker to fetch all synthetic test results for one site (with optional semaphore)."""
             try:
-                ValidationUtils.validate_site_id(site_id, "GatewayExportUtils.test_results_by_site")
+                ValidationUtils.validate_site_id(site_id, "GatewayTestExporter.test_results_by_site")
                 if connection_semaphore:
                     with connection_semaphore:
                         response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)
@@ -19164,6 +19166,16 @@ class GatewayExportUtils:
             logging.warning(" No test results found. CSV not created.")
             print("! No gateway test results found. CSV not created.")
     
+
+
+class GatewayStatsExporter:
+    """
+    Gateway Device Statistics Exports
+    
+    Handles gateway device stats, stats with freshness tracking, and WAN port conflict analysis.
+    Extracted from GatewayExportUtils.
+    """
+
     @staticmethod
     def device_stats(fast=False):
         """
@@ -19180,7 +19192,7 @@ class GatewayExportUtils:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing")
         
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtils.get_devices_with_sites(org_id, fast=fast)
+        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
         all_stats = []
 
         if not gateway_devices:
@@ -19314,6 +19326,7 @@ class GatewayExportUtils:
         else:
             logging.warning(" No gateway device statistics found. CSV not created.")
     
+
     @staticmethod
     def device_stats_with_freshness(fast=False):
         """
@@ -19327,14 +19340,12 @@ class GatewayExportUtils:
         output_file = "AllGatewayDeviceStats.csv"
         
         # Check if file exists and is fresh
-        if CacheUtils.check_and_generate_csv(output_file, lambda: GatewayExportUtils.device_stats(fast=fast)):
+        if CacheUtils.check_and_generate_csv(output_file, lambda: GatewayStatsExporter.device_stats(fast=fast)):
             logging.info(f"! {output_file} already exists and is fresh - using cached data")
         else:
             logging.info(f"! {output_file} was generated or refreshed")
     
-    # WAN port columns used for conflict analysis
-    WAN_PORT_COLUMNS = [f'if_stat_ge-{port}_ips' for port in ['0/0/0', '0/0/1', '0/0/2']]
-    
+
     @staticmethod
     def wan_port_conflicts():
         """
@@ -19350,11 +19361,22 @@ class GatewayExportUtils:
         conflicts_found = GatewayExportUtils._analyze_all_gateway_conflicts(gateway_data)
         GatewayExportUtils._export_conflict_results(conflicts_found)
     
+
+class GatewayExportUtils:
+    """
+    Centralized gateway data export utilities.
+    Groups all export_gateway_* functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    # WAN port columns used for conflict analysis
+    WAN_PORT_COLUMNS = [f'if_stat_ge-{port}_ips' for port in ['0/0/0', '0/0/1', '0/0/2']]
+    
     @staticmethod
     def _load_gateway_stats_for_conflicts():
         """Load gateway device stats CSV for conflict analysis."""
         stats_file = "AllGatewayDeviceStats.csv"
-        CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayExportUtils.device_stats(fast=True))
+        CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayStatsExporter.device_stats(fast=True))
         
         stats_path = FilePathUtils.get_csv_path(stats_file)
         try:
@@ -19460,7 +19482,7 @@ class GatewayExportUtils:
             print(f"... and {len(conflicts_found) - 10} more conflicted ports")
     
     @staticmethod
-    def with_site_info():
+    def _with_site_info():
         """Exports gateways with their associated site information."""
         OrgInventoryExporter.gateways_with_site_info()
     
@@ -20015,7 +20037,7 @@ class GatewayExportUtils:
             print(" No template overrides found - all gateways are compliant with their assigned templates!")
 
     @staticmethod
-    def get_devices_with_sites(org_id: str, fast: bool = False) -> List[Tuple[str, str, str, str]]:
+    def _get_devices_with_sites(org_id: str, fast: bool = False) -> List[Tuple[str, str, str, str]]:
         """
         Efficiently fetches all gateway devices with their site information.
         Uses cached data when fast=True to minimize API calls.
@@ -20091,7 +20113,7 @@ class GatewayExportUtils:
         return gateway_devices
     
     @staticmethod
-    def get_site_ids_with_devices(org_id: str) -> List[str]:
+    def _get_site_ids_with_devices(org_id: str) -> List[str]:
         """
         Fetches all sites in the organization that have at least one gateway device.
 
@@ -20120,6 +20142,7 @@ class GatewayExportUtils:
 # ============================================================================
 # TROUBLESHOOTING UTILITIES CLASS
 # ============================================================================
+
 class TroubleshootUtils:
     """
     Centralized troubleshooting utilities using Marvis AI.
@@ -50508,10 +50531,10 @@ menu_actions = {
 
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
-    "16": (GatewayExportUtils.synthetic_tests, "Export synthetic test results for all gateways"),
+    "16": (GatewayTestExporter.synthetic_tests, "Export synthetic test results for all gateways"),
     "17": (OrgInventoryExporter.devices, "Export a list of all devices in the organization"),
     "18": (SiteConfigExporter.settings, "Export configuration settings for all sites"),
-    "19": (GatewayExportUtils.test_results_by_site, "Export all synthetic test results (including speed tests) for gateways"),
+    "19": (GatewayTestExporter.test_results_by_site, "Export all synthetic test results (including speed tests) for gateways"),
 
     # > Location-Enriched Exports
     "20": (OrgSiteExporter.sites_with_location, "Export a list of sites with location and timezone info"),
@@ -50620,8 +50643,8 @@ menu_actions = {
     "92": (VirtualChassisManager.convert_single, " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"),
     "93": (VirtualChassisManager.convert_by_site_list, " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"),
     "94": (VirtualChassisManager.check_status, "Check virtual chassis to virtual MAC conversion status for all switches"),
-    "95": (lambda fast=False: GatewayExportUtils.device_stats_with_freshness(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
-    "96": (GatewayExportUtils.wan_port_conflicts, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
+    "95": (lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast), "Export detailed device statistics for all gateways (with freshness check)"),
+    "96": (GatewayStatsExporter.wan_port_conflicts, "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"),
     "97": (SSHRunnerManager.interactive, "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH"),
     "98": (SSHRunnerManager.by_gateway_template, "SSH Runner - Target gateways by template name (online gateways with management IPs only)"),
 
@@ -53972,7 +53995,7 @@ def main():
             "get_gateway_devices_with_sites",
             "export_gateway_device_stats_to_csv_with_freshness_check",
             "export_gateway_device_stats_to_csv",
-            "GatewayExportUtils.test_results_by_site",
+            "GatewayTestExporter.test_results_by_site",
             "OrgInventoryExporter.devices_with_site_info",
             "export_gateway_device_configs_to_csv",
             "APIFetchUtils.gateway_device_configs",
