@@ -22361,7 +22361,7 @@ class AddressUtils:
         return zip_digits[:5]
     
     @staticmethod
-    def normalize_state(state_str):
+    def _normalize_state(state_str):
         """
         Normalizes state names and abbreviations to a consistent format.
         Converts both full state names and abbreviations to lowercase abbreviations.
@@ -22407,7 +22407,7 @@ class AddressUtils:
         return state_mapping.get(state, state)
     
     @staticmethod
-    def normalize_address(address_str):
+    def _normalize_address(address_str):
         """
         Normalizes an address string for comparison by:
         - Converting to lowercase
@@ -22472,7 +22472,7 @@ class AddressUtils:
         return normalized
     
     @staticmethod
-    def parse_components(address_string, debug=False):
+    def _parse_components(address_string, debug=False):
         """
         Parse address components with defensive parsing and robust heuristics.
         
@@ -22600,7 +22600,7 @@ class AddressUtils:
                     remaining_parts = remaining_parts[:-1]
                 elif len(remaining_parts) > 1:
                     # Check if it's a full state name
-                    state_normalized = AddressUtils.normalize_state(last_part)
+                    state_normalized = AddressUtils._normalize_state(last_part)
                     if state_normalized:
                         state = state_normalized.upper()
                         remaining_parts = remaining_parts[:-1]
@@ -22655,7 +22655,7 @@ class AddressUtils:
         if normalize_address_record is None:
             if debug:
                 logging.debug("USADDRESS_PARSE: usaddress-scourgify not available, using heuristic parsing")
-            return AddressUtils.parse_components(address_string, debug=debug)
+            return AddressUtils._parse_components(address_string, debug=debug)
         
         try:
             if debug:
@@ -22691,10 +22691,10 @@ class AddressUtils:
                 logging.debug(f"USADDRESS_PARSE: Failed with: {usaddress_error}")
             
             # Fall back to heuristic parsing
-            return AddressUtils.parse_components(address_string, debug=debug)
+            return AddressUtils._parse_components(address_string, debug=debug)
     
     @staticmethod
-    def calculate_similarity(str1, str2):
+    def _calculate_similarity(str1, str2):
         """
         Calculate similarity percentage between two strings using RapidFuzz for better performance.
         Falls back to difflib if RapidFuzz is not available.
@@ -22712,8 +22712,8 @@ class AddressUtils:
             return 0.0    # One empty, one not, no match
         
         # Normalize both strings
-        norm_str1 = AddressUtils.normalize_address(str1)
-        norm_str2 = AddressUtils.normalize_address(str2)
+        norm_str1 = AddressUtils._normalize_address(str1)
+        norm_str2 = AddressUtils._normalize_address(str2)
         
         # Try RapidFuzz for better performance and accuracy if available
         if fuzz is not None:
@@ -22884,12 +22884,12 @@ class AddressUtils:
                 similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
             elif field == 'state':
                 # Use normalized state comparison (handles abbreviations vs full names)
-                mist_norm = AddressUtils.normalize_state(mist_value)
-                comp_norm = AddressUtils.normalize_state(comp_value)
+                mist_norm = AddressUtils._normalize_state(mist_value)
+                comp_norm = AddressUtils._normalize_state(comp_value)
                 similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
             else:
                 # Use enhanced string similarity for address and city fields
-                similarity = AddressUtils.calculate_similarity(mist_value, comp_value)
+                similarity = AddressUtils._calculate_similarity(mist_value, comp_value)
             
             field_similarities[field] = similarity
             
