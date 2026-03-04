@@ -21972,9 +21972,9 @@ class RateLimitingUtils:
     """
     
     @staticmethod
-    def load_pid_tuning_data():
+    def _load_pid_tuning_data():
         """Load PID tuning data from file with comprehensive logging."""
-        logging.debug(f"ENTRY: RateLimitingUtils.load_pid_tuning_data()")
+        logging.debug(f"ENTRY: RateLimitingUtils._load_pid_tuning_data()")
         
         if os.path.exists(tuning_data_file):
             try:
@@ -21993,7 +21993,7 @@ class RateLimitingUtils:
                     data["error"] = []
                     
                 logging.debug(f"File I/O: Successfully loaded PID tuning data from {tuning_data_file}")
-                logging.debug(f"EXIT: RateLimitingUtils.load_pid_tuning_data - loaded from file")
+                logging.debug(f"EXIT: RateLimitingUtils._load_pid_tuning_data - loaded from file")
                 return data
             except json.JSONDecodeError as json_error:
                 logging.error(f"File I/O: Failed to parse JSON in {tuning_data_file}: {json_error}. Using defaults.")
@@ -22004,31 +22004,31 @@ class RateLimitingUtils:
         else:
             logging.debug(f"File I/O: {tuning_data_file} does not exist, using defaults")
             
-        logging.debug(f"EXIT: RateLimitingUtils.load_pid_tuning_data - using defaults")
+        logging.debug(f"EXIT: RateLimitingUtils._load_pid_tuning_data - using defaults")
         return {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}
     
     @staticmethod
-    def save_pid_tuning_data(data):
+    def _save_pid_tuning_data(data):
         """Save PID tuning data to file with comprehensive logging."""
-        logging.debug(f"ENTRY: RateLimitingUtils.save_pid_tuning_data(data_keys={list(data.keys()) if data else []})")
+        logging.debug(f"ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys={list(data.keys()) if data else []})")
         
         try:
             logging.debug(f"File I/O: Attempting to write PID tuning data to {tuning_data_file}")
             with open(tuning_data_file, 'w') as file_handle:
                 json.dump(data, file_handle, indent=2)
             logging.debug(f"File I/O: Successfully wrote PID tuning data to {tuning_data_file}")
-            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - success")
+            logging.debug(f"EXIT: RateLimitingUtils._save_pid_tuning_data - success")
         except OSError as os_error:
             logging.error(f"File I/O: OS error writing to {tuning_data_file}: {os_error}")
-            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - OS error")
+            logging.debug(f"EXIT: RateLimitingUtils._save_pid_tuning_data - OS error")
             raise
         except Exception as unexpected_error:
             logging.error(f"File I/O: Unexpected error writing to {tuning_data_file}: {unexpected_error}")
-            logging.debug(f"EXIT: RateLimitingUtils.save_pid_tuning_data - unexpected error")
+            logging.debug(f"EXIT: RateLimitingUtils._save_pid_tuning_data - unexpected error")
             raise
     
     @staticmethod
-    def adjust_gains(data):
+    def _adjust_gains(data):
         """
         Adjusts PID gains based on the trend of recent errors.
         If error is increasing (positive trend), increase gains.
@@ -22052,7 +22052,7 @@ class RateLimitingUtils:
         data["k_i"] = min(max(data["k_i"], 1e-8), 0.01)
     
     @staticmethod
-    def compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
+    def _compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
         """
         Computes a dynamic smoothing factor alpha based on the standard deviation of recent errors.
         """
@@ -22073,13 +22073,13 @@ class RateLimitingUtils:
             return 0.3
     
     @staticmethod
-    def append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100):
+    def _append_delay_metrics_log(delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100):
         """
         Appends delay metrics, API cache, and tuning data to a JSON file.
         Each call writes a new line with a timestamped entry.
         Maintains only the last max_entries (default 100) to prevent unlimited file growth.
         """
-        logging.debug(f"ENTRY: RateLimitingUtils.append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
+        logging.debug(f"ENTRY: RateLimitingUtils._append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
         
         # SECURITY: File path is forced into data/ directory unless caller provides an explicit path.
         # This prevents creating arbitrary files in the application root (permission errors in container) or unsafe paths.
@@ -22128,13 +22128,13 @@ class RateLimitingUtils:
                     file_handle.write("\n")
             
             logging.debug(f"File I/O: Successfully updated delay metrics in {filename}")
-            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - success")
+            logging.debug(f"EXIT: RateLimitingUtils._append_delay_metrics_log - success")
         except OSError as os_error:
             logging.error(f"File I/O: OS error writing delay metrics to {filename}: {os_error}")
-            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - OS error")
+            logging.debug(f"EXIT: RateLimitingUtils._append_delay_metrics_log - OS error")
         except Exception as unexpected_error:
             logging.error(f"File I/O: Failed to write delay metrics to {filename}: {unexpected_error}")
-            logging.debug(f"EXIT: RateLimitingUtils.append_delay_metrics_log - error")
+            logging.debug(f"EXIT: RateLimitingUtils._append_delay_metrics_log - error")
     
     @staticmethod
     def get_rate_limited_delay(smoothed_delay=None):
@@ -22145,7 +22145,7 @@ class RateLimitingUtils:
         logging.debug(f"ENTRY: RateLimitingUtils.get_rate_limited_delay(smoothed_delay={smoothed_delay})")
         
         global _api_usage_cache
-        tuning_data = RateLimitingUtils.load_pid_tuning_data()
+        tuning_data = RateLimitingUtils._load_pid_tuning_data()
         logging.debug(f"Loaded PID tuning data: k_p={tuning_data.get('k_p')}, k_i={tuning_data.get('k_i')}, integral={tuning_data.get('integral')}")
         
         # Reset gains if out of bounds
@@ -22252,7 +22252,7 @@ class RateLimitingUtils:
                     continue
             
             logging.debug(f"About to call compute_dynamic_alpha with cleaned_error_history={cleaned_error_history} (length: {len(cleaned_error_history)})")
-            alpha = RateLimitingUtils.compute_dynamic_alpha(cleaned_error_history)
+            alpha = RateLimitingUtils._compute_dynamic_alpha(cleaned_error_history)
             logging.debug(f"compute_dynamic_alpha returned: {alpha} (type: {type(alpha)})")
             
             # Defensive type checking - ensure alpha is a valid float
@@ -22269,8 +22269,8 @@ class RateLimitingUtils:
             tuning_data["error"] = cleaned_error_history[-20:]  # Use cleaned history and keep only last 20 entries
             tuning_data["integral"] = delay_integral
             tuning_data["back_calc_gain"] = back_calc_gain
-            RateLimitingUtils.adjust_gains(tuning_data)
-            RateLimitingUtils.save_pid_tuning_data(tuning_data)
+            RateLimitingUtils._adjust_gains(tuning_data)
+            RateLimitingUtils._save_pid_tuning_data(tuning_data)
             
             delay_metrics = {
                 "used": used,
@@ -22281,7 +22281,7 @@ class RateLimitingUtils:
                 "final_delay": delay_in_seconds,
                 "alpha": alpha
             }
-            RateLimitingUtils.append_delay_metrics_log(delay_metrics, _api_usage_cache, tuning_data)
+            RateLimitingUtils._append_delay_metrics_log(delay_metrics, _api_usage_cache, tuning_data)
             
             logging.debug(f"EXIT: RateLimitingUtils.get_rate_limited_delay - delay: {delay_in_seconds:.3f}s")
             return smoothed_delay, delay_in_seconds
