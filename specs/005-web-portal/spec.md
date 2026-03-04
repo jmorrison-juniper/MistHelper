@@ -5,17 +5,29 @@
 **Status**: Draft
 **Input**: User description: "I would like to use gunicorn to create a web interface for our script so instead of using the CLI or SSHing in, a user can interact and view the results, and/or download the data from the web portal. The web interface needs to support the ENV file for portal styling. It needs to use CSS style sheets, with different themes contained within, that we can set the default using the ENV, but a user can change them within browser. Look into my other local or remote repositories for inspiration, especially mist sitedashboard."
 
+## Clarifications
+
+### Session 2026-03-04
+
+- Q: What security posture should the web portal adopt given no auth in MVP? → A: Full hardening (CSRF tokens, XSS output escaping, CSP headers, IP allowlisting via ENV) but no rate limiting
+- Q: What concurrency model for operation execution (serial queue, serial-reject, or fully concurrent)? → A: Fully concurrent with file locking to prevent conflicts
+- Q: How does the web portal coexist with the existing Dash map viewer on port 8050? → A: Web portal absorbs map viewer functionality; embed maps into Flask portal, retire standalone Dash
+- Q: How does the browser receive real-time operation status updates (polling, SSE, or WebSocket)? → A: WebSocket for full-duplex bidirectional real-time communication
+- Q: How should the portal collect operation input parameters (free text, guided dropdowns, or saved presets)? → A: Guided dropdowns and selectors pre-populated from API data with validation before submission
+
 ## Assumptions
 
 - **Web framework**: Flask served via Gunicorn (WSGI), following the same pattern as MistSiteDashboard, MistCircuitStats, and MistGuestAuthorizations
 - **Coexistence with SSH**: The web portal runs alongside the existing SSH service in the container; both access the same MistHelper backend and data directory
-- **Port**: Web portal defaults to port 8055 (already reserved in the container for the Dash map viewer; web portal replaces/coexists with Dash on this port)
-- **Authentication**: No login/auth for the web portal in MVP. The portal is already behind corporate network / container access controls. Future feature if needed.
+- **Port**: Web portal defaults to port 8055 (`WEB_PORT` ENV variable). The standalone Dash map viewer (formerly port 8050) is retired; map functionality is absorbed into the web portal.
+- **Map viewer absorption**: The existing `maps_manager.py` Dash-based map viewer is replaced by an equivalent page within the Flask web portal. The standalone Dash dependency is removed from the container.
+- **Authentication**: No login/auth for the web portal in MVP. The portal is already behind corporate network / container access controls. Security hardening (CSRF, XSS, CSP, IP allowlisting) is applied regardless. Future login/auth feature if needed.
+- **Security hardening**: CSRF tokens on all form submissions, Jinja2 auto-escaping for XSS prevention, Content-Security-Policy headers, and optional IP allowlisting via `PORTAL_ALLOWED_IPS` ENV variable. No rate limiting.
 - **Non-destructive only**: The web portal only exposes data extraction operations (menus 1-89). Destructive operations (90-100) remain CLI/SSH-only for safety.
 - **Existing data**: The portal reads from the existing `data/` directory (CSV files, SQLite database) and can trigger new data extraction operations
 - **Theme persistence**: User theme preferences stored in browser localStorage (no server-side session for theme)
 - **Bootstrap 5**: UI framework, consistent with MistSiteDashboard's NOC-optimized dark mode approach
-- **Template pattern**: Flask Jinja2 templates with separate CSS stylesheets, following MistSiteDashboard file structure
+- **Real-time communication**: WebSocket connections provide full-duplex bidirectional communication between the browser and server for operation status updates, progress reporting, and log streaming
 - **Gunicorn workers**: Default 2-4 worker processes for concurrent request handling; configurable via ENV
 
 ## User Scenarios & Testing *(mandatory)*
@@ -50,7 +62,7 @@ A NOC engineer wants to extract fresh data from the Mist API. They select an ope
 1. **Given** the portal is running with valid API credentials, **When** a user browses the operations menu, **Then** they see all non-destructive operations (1-89) organized by category (Data Extraction, WebSocket Commands, Packet Captures, etc.)
 2. **Given** a user selects an operation, **When** the operation starts, **Then** they see a progress indicator showing the operation is running
 3. **Given** an operation completes, **When** the user views the results, **Then** the output data is available for preview and download
-4. **Given** an operation requires input parameters (e.g., site selection), **When** the user starts it, **Then** the portal presents the required inputs as form fields before execution
+4. **Given** an operation requires input parameters (e.g., site selection), **When** the user starts it, **Then** the portal presents guided dropdowns and selectors pre-populated from API data (e.g., site list, device types) with validation before execution
 
 ---
 
@@ -111,7 +123,7 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - How does the portal handle very large CSV files (>100MB)? Preview paginates and limits rows displayed (first 1000 rows), while full download remains available.
 - What happens when the Mist API credentials are missing or invalid? The portal displays a clear error message on the operations page and still allows browsing/downloading existing data files.
 - What happens when the data directory is empty (fresh deployment)? The portal shows a friendly empty state with guidance to run a data extraction operation.
-- How does the portal handle concurrent users? Gunicorn worker processes handle multiple simultaneous browser sessions. Operations use file locks to prevent duplicate concurrent runs of the same operation.
+- How does the portal handle concurrent users? Gunicorn worker processes handle multiple simultaneous browser sessions. Multiple operations can run simultaneously; file locks prevent write conflicts on shared output files.
 - What happens if the user's browser does not support localStorage? Theme falls back to the ENV default on each page load; no error is shown.
 
 ## Requirements *(mandatory)*
@@ -124,7 +136,7 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - **FR-004**: System MUST allow users to preview SQLite database tables in a sortable, searchable HTML table with pagination
 - **FR-005**: System MUST allow users to download any data file directly from the browser
 - **FR-006**: System MUST display non-destructive menu operations (1-89) organized by category
-- **FR-007**: System MUST execute selected operations in the background and report completion status to the user
+- **FR-007**: System MUST execute selected operations in the background with full concurrency (multiple operations can run simultaneously) using file locks to prevent write conflicts, and report completion status to the user via WebSocket
 - **FR-008**: System MUST support multiple CSS themes (minimum: dark, light, high-contrast)
 - **FR-009**: System MUST read the default theme from the ENV file (`PORTAL_THEME` variable)
 - **FR-010**: System MUST allow users to switch themes in the browser without page reload
@@ -135,6 +147,13 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - **FR-015**: System MUST NOT expose destructive operations (menus 90-100) through the web interface
 - **FR-016**: System MUST use external CSS stylesheets (not inline styles) for all theming
 - **FR-017**: System MUST provide a CSV export/download button for any table displayed in the portal
+- **FR-018**: System MUST include CSRF tokens on all form submissions that trigger operations
+- **FR-019**: System MUST auto-escape all user-facing output to prevent XSS
+- **FR-020**: System MUST send Content-Security-Policy headers on all responses
+- **FR-021**: System MUST support optional IP allowlisting via `PORTAL_ALLOWED_IPS` ENV variable (comma-separated CIDRs; empty = allow all)
+- **FR-022**: System MUST include a map viewer page that replaces the standalone Dash map viewer (formerly `maps_manager.py` on port 8050), rendering site/floor plan maps within the portal
+- **FR-023**: System MUST use WebSocket connections for real-time bidirectional communication between browser and server (operation progress, status updates, log streaming)
+- **FR-024**: System MUST present operation input parameters as guided dropdowns and selectors pre-populated from API data (sites, device types, time ranges) with client-side validation before submission
 
 ### Key Entities
 
