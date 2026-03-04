@@ -7412,13 +7412,14 @@ class ConfigUtils:
 # ============================================================================
 # API FETCH UTILITIES CLASS
 # ============================================================================
-class APIFetchUtils:
+class APICoreFetchUtils:
     """
-    Centralized API fetch utilities.
-    Groups all data fetching functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    Core API Fetch Utilities
     
+    Handles site and inventory fetching with pagination.
+    Extracted from APIFetchUtils.
+    """
+
     @staticmethod
     def all_sites_with_limit(org_id: str) -> List[Dict]:
         """
@@ -7435,6 +7436,7 @@ class APIFetchUtils:
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
         return mistapi.get_all(response=response, mist_session=apisession)
     
+
     @staticmethod
     def all_inventory_with_limit(org_id: str) -> List[Dict]:
         """
@@ -7451,51 +7453,16 @@ class APIFetchUtils:
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
         return mistapi.get_all(response=response, mist_session=apisession)
     
-    @staticmethod
-    def organization_services() -> List[Dict[str, Any]]:
-        """
-        Fetch all services defined at the organization level using the Mist API.
-        
-        Returns:
-            list: List of service dictionaries with service definitions, or empty list if error
-            
-        SECURITY: Read-only operation fetching configuration data only.
-        """
-        try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            logging.info(f"Fetching organization services for org_id: {org_id}")
-            
-            # Call the Mist API to get organization services
-            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
-            
-            if hasattr(response, 'data') and response.data:
-                services_data = response.data
-                logging.info(f"Successfully retrieved {len(services_data)} organization services")
-                
-                # Extract service names and types for easier display
-                services_list = []
-                for service in services_data:
-                    if isinstance(service, dict):
-                        service_name = service.get('name', 'unnamed')
-                        service_type = service.get('type', 'custom')
-                        service_desc = service.get('description', '')
-                        services_list.append({
-                            'name': service_name,
-                            'type': service_type,
-                            'description': service_desc,
-                            'full_config': service  # Keep full config for reference
-                        })
-                        
-                return services_list
-                
-            else:
-                logging.warning("No organization services found or response data is empty")
-                return []
-                
-        except Exception as error:
-            logging.error(f"Failed to fetch organization services: {error}")
-            return []
+
+
+class APITenantFetchUtils:
+    """
+    Tenant Fetch Utilities
     
+    Handles tenant fetching for orgs, sites, service policies, and gateway templates.
+    Extracted from APIFetchUtils.
+    """
+
     @staticmethod
     def organization_tenants() -> List[str]:
         """
@@ -7549,6 +7516,7 @@ class APIFetchUtils:
             logging.error(f"Error fetching organization tenants from networks: {error}")
             return []
     
+
     @staticmethod
     def site_tenants(site_id: str) -> List[str]:
         """
@@ -7604,6 +7572,7 @@ class APIFetchUtils:
             logging.error(f"Error fetching site tenants from derived networks: {error}")
             return []
     
+
     @staticmethod
     def service_policy_tenants(site_id=None):
         """
@@ -7710,6 +7679,7 @@ class APIFetchUtils:
             logging.error(f"Error fetching tenants from service policies: {error}")
             return []
     
+
     @staticmethod
     def gateway_template_tenants(site_id=None):
         """
@@ -7834,6 +7804,59 @@ class APIFetchUtils:
             logging.error(f"Error fetching tenants from gateway templates: {error}")
             return []
     
+
+class APIFetchUtils:
+    """
+    Centralized API fetch utilities.
+    Groups all data fetching functions for better code organization.
+    All methods are static to avoid unnecessary object instantiation.
+    """
+    
+    @staticmethod
+    def organization_services() -> List[Dict[str, Any]]:
+        """
+        Fetch all services defined at the organization level using the Mist API.
+        
+        Returns:
+            list: List of service dictionaries with service definitions, or empty list if error
+            
+        SECURITY: Read-only operation fetching configuration data only.
+        """
+        try:
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()
+            logging.info(f"Fetching organization services for org_id: {org_id}")
+            
+            # Call the Mist API to get organization services
+            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
+            
+            if hasattr(response, 'data') and response.data:
+                services_data = response.data
+                logging.info(f"Successfully retrieved {len(services_data)} organization services")
+                
+                # Extract service names and types for easier display
+                services_list = []
+                for service in services_data:
+                    if isinstance(service, dict):
+                        service_name = service.get('name', 'unnamed')
+                        service_type = service.get('type', 'custom')
+                        service_desc = service.get('description', '')
+                        services_list.append({
+                            'name': service_name,
+                            'type': service_type,
+                            'description': service_desc,
+                            'full_config': service  # Keep full config for reference
+                        })
+                        
+                return services_list
+                
+            else:
+                logging.warning("No organization services found or response data is empty")
+                return []
+                
+        except Exception as error:
+            logging.error(f"Failed to fetch organization services: {error}")
+            return []
+    
     @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):
         """
@@ -7850,7 +7873,7 @@ class APIFetchUtils:
         logging.info("Fetching all site settings...")
 
         # Use mistapi.get_all to ensure pagination is handled for all sites
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
 
         all_configs = []
         for site in tqdm(sites, desc="Sites", unit="site"):
@@ -7989,6 +8012,7 @@ class APIFetchUtils:
 # ============================================================================
 # DATA PROCESSING UTILITIES CLASS
 # ============================================================================
+
 class DataProcessingUtils:
     """
     Centralized data processing utilities.
@@ -10383,7 +10407,7 @@ class PromptUtils:
         """Loads site ID to name mapping for display purposes."""
         try:
             print(" Loading site information...")
-            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             cache = {site["id"]: site["name"] for site in sites}
             logging.info(f"Cached {len(cache)} sites for client display")
             return cache
@@ -11720,7 +11744,7 @@ class OrgExportUtils:
         logging.info("Fetching all sites using the 'list' sites API endpoint...")
         print("Fetching all sites using the 'list' sites API endpoint...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         if not sites:
             logging.warning(" No sites returned from API.")
             print(" No sites returned from API.")
@@ -12026,7 +12050,7 @@ class OrgExportUtils:
         logging.info("Listing Sites with Full Info:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         logging.debug(f"Using org_id: {org_id} for site location export.")
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         logging.info(f"Fetched {len(sites)} sites from the organization.")
         flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)
@@ -12184,7 +12208,7 @@ class OrgExportUtils:
             except Exception as exception:
                 logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {exception}")
                 # Fallback to API if cached data fails
-                sites = APIFetchUtils.all_sites_with_limit(org_id)
+                sites = APICoreFetchUtils.all_sites_with_limit(org_id)
                 site_lookup = {
                     site["id"]: {
                         "name": site.get("name", ""),
@@ -12204,12 +12228,12 @@ class OrgExportUtils:
             except Exception as exception:
                 logging.warning(f"Failed to load from cached OrgInventory.csv, falling back to API: {exception}")
                 # Fallback to API if cached data fails
-                inventory = APIFetchUtils.all_inventory_with_limit(org_id)
+                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
                 logging.debug(f"Loaded {len(inventory)} devices from API fallback")
         else:
             # Original behavior: fetch directly from API
             # Fetch all sites and build a lookup dictionary for site info
-            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             site_lookup = {
                 site["id"]: {
                     "name": site.get("name", ""),
@@ -12219,7 +12243,7 @@ class OrgExportUtils:
             logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
 
             # Fetch org inventory (all devices)
-            inventory = APIFetchUtils.all_inventory_with_limit(org_id)
+            inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
             logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
         def split_address(address):
@@ -12293,7 +12317,7 @@ class OrgExportUtils:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
         # Fetch site list and build a lookup dictionary for site info
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         site_lookup = {
             site["id"]: {
                 "name": site.get("name", ""),
@@ -12303,7 +12327,7 @@ class OrgExportUtils:
         logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
 
         # Fetch org inventory (all devices)
-        inventory = APIFetchUtils.all_inventory_with_limit(org_id)
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
         logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
         def split_address(address):
@@ -12955,7 +12979,7 @@ class SiteExportUtils:
         if not current_org_id:
             logging.error("No org_id available. Exiting.")
             return
-        sites = APIFetchUtils.all_sites_with_limit(current_org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
         logging.info(f"Exporting client statistics for site: {site_name}")
         try:
@@ -12986,7 +13010,7 @@ class SiteExportUtils:
         if not current_org_id:
             logging.error("No org_id available. Exiting.")
             return
-        sites = APIFetchUtils.all_sites_with_limit(current_org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
         logging.info(f"Exporting device list for site: {site_name}")
         try:
@@ -13017,7 +13041,7 @@ class SiteExportUtils:
         if not current_org_id:
             logging.error("No org_id available. Exiting.")
             return
-        sites = APIFetchUtils.all_sites_with_limit(current_org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
         logging.info(f"Exporting device statistics for site: {site_name}")
         try:
@@ -15002,7 +15026,7 @@ class ServicePingManager:
     
     def _fetch_org_tenants(self) -> None:
         """Fetch organization-level tenants."""
-        tenants = APIFetchUtils.organization_tenants()
+        tenants = APITenantFetchUtils.organization_tenants()
         if tenants:
             self.org_tenants = tenants
             print(f"   -> Found {len(self.org_tenants)} organization-level tenants")
@@ -15014,7 +15038,7 @@ class ServicePingManager:
         """Fetch site-level tenants."""
         if self.site_id is None:
             return
-        tenants = APIFetchUtils.site_tenants(self.site_id)
+        tenants = APITenantFetchUtils.site_tenants(self.site_id)
         if tenants:
             self.site_tenants = tenants
             print(f"   -> Found {len(self.site_tenants)} site-level tenants")
@@ -15024,7 +15048,7 @@ class ServicePingManager:
     
     def _fetch_policy_tenants(self) -> None:
         """Fetch service policy tenants."""
-        tenants = APIFetchUtils.service_policy_tenants(self.site_id)
+        tenants = APITenantFetchUtils.service_policy_tenants(self.site_id)
         if tenants:
             self.policy_tenants = tenants
             print(f"   -> Found {len(self.policy_tenants)} service policy tenants")
@@ -15034,7 +15058,7 @@ class ServicePingManager:
     
     def _fetch_template_tenants(self) -> None:
         """Fetch gateway template tenants."""
-        tenants = APIFetchUtils.gateway_template_tenants(self.site_id)
+        tenants = APITenantFetchUtils.gateway_template_tenants(self.site_id)
         if tenants:
             self.template_tenants = tenants
             print(f"   -> Found {len(self.template_tenants)} gateway template tenants")
@@ -19864,7 +19888,7 @@ class GatewayExportUtils:
     def _get_devices_from_api(org_id: str) -> List[Tuple[str, str, str, str]]:
         """Fetches gateway devices directly from the API."""
         logging.info("[INFO] Fetching org inventory to find gateway devices...")
-        devices = APIFetchUtils.all_inventory_with_limit(org_id)
+        devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
         logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
         
         site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
@@ -19895,7 +19919,7 @@ class GatewayExportUtils:
             List of site IDs that have at least one gateway device.
         """
         logging.info("[INFO] Fetching org inventory to find sites with gateways...")
-        devices = APIFetchUtils.all_inventory_with_limit(org_id)
+        devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
         logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
 
         gateway_sites = {device["site_id"] for device in devices 
@@ -29932,7 +29956,7 @@ class MapsManager:
         
         try:
             # Fetch all sites
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites:
                 print("\n! No sites found in organization")
                 return
@@ -30049,7 +30073,7 @@ class MapsManager:
         print("-" * 80)
         
         try:
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites:
                 print("\n! No sites found in organization")
                 return
@@ -30105,7 +30129,7 @@ class MapsManager:
         print("-" * 80)
         
         try:
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites:
                 print("\n! No sites found in organization")
                 return
@@ -30167,7 +30191,7 @@ class MapsManager:
                 return
             
             # Get site name for display
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             site_name = next((s.get('name', 'Unknown') for s in sites if s['id'] == site_id), 'Unknown')
             
             print(f"\nFetching maps for site: {site_name}")
@@ -30759,7 +30783,7 @@ class MapsManager:
         print("-" * 80)
         
         try:
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites:
                 print("\n! No sites found in organization")
                 return
@@ -31229,7 +31253,7 @@ class MapsManager:
         print("-" * 80)
         
         try:
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites:
                 print("\n! No sites found in organization")
                 return
@@ -38687,7 +38711,7 @@ class FirmwareUpgradeStatusChecker:
         """Fetch site information for device enrichment."""
         print(f"   Fetching site information for device enrichment...")
         try:
-            all_sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            all_sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             for site in all_sites:
                 site_id = site.get('id')
                 site_name = site.get('name', 'Unknown')
@@ -39536,7 +39560,7 @@ class BulkAPFirmwareUpgrader:
         """Fetch organization sites for name-to-ID lookup."""
         print(f"   Fetching organization sites for name-to-ID lookup...")
         try:
-            all_org_sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            all_org_sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             site_name_to_id = {}
             for site in all_org_sites:
                 site_name = site.get("name", "").strip()
@@ -39766,7 +39790,7 @@ class BulkAPFirmwareUpgrader:
     def _get_site_name(self, site_id: str) -> str:
         """Get site name from site ID."""
         try:
-            sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             return next((s["name"] for s in sites if s.get("id") == site_id), site_id)
         except Exception:
             return site_id
@@ -41314,7 +41338,7 @@ class MSPInventoryExporter:
     def _build_site_lookup(self, org_id: str) -> dict:
         """Build a site_id -> site_name lookup for an org."""
         try:
-            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             return {s.get('id'): s.get('name', 'Unknown') for s in sites}
         except Exception as e:
             logging.debug(f"Failed to build site lookup for org {org_id}: {e}")
@@ -42068,7 +42092,7 @@ class SiteAutoUpgradeConfigurator:
         print("-" * 70)
         
         try:
-            self.all_sites = APIFetchUtils.all_sites_with_limit(self.org_id)
+            self.all_sites = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             
             if not self.all_sites:
                 print("  X No sites found in organization")
@@ -43155,7 +43179,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _fetch_sorted_sites(self) -> list | None:
         """Fetch and sort sites by name."""
         try:
-            sites_data = APIFetchUtils.all_sites_with_limit(self.org_id)
+            sites_data = APICoreFetchUtils.all_sites_with_limit(self.org_id)
             if not sites_data:
                 print("  X No sites found in organization")
                 return None
@@ -48620,7 +48644,7 @@ class ZoneConfigurationAnalyzer:
             }
         """
         logging.info("Fetching site settings for engagement/occupancy analysis...")
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         
         if not sites:
             logging.warning("No sites found in organization.")
@@ -48882,7 +48906,7 @@ class ZoneConfigurationAnalyzer:
             }
         """
         logging.info("Fetching all sites in organization...")
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         
         if not sites:
             logging.warning("No sites found in organization.")
@@ -49557,7 +49581,7 @@ class SiteAnalyticsConfigurator:
             List of deviation records with site info and specific deviations
         """
         logging.info("Fetching all sites for analytics configuration scan...")
-        sites = APIFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         
         if not sites:
             logging.warning("No sites found in organization.")
@@ -50026,7 +50050,7 @@ class SiteInventoryHealthAnalyzer:
         logging.info("Fetching all organization sites...")
         
         try:
-            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             print(f"  Found {len(sites)} sites")
             return sites
         except Exception as error:
@@ -53938,7 +53962,7 @@ def main():
         site_id = None
         if args.site:
             logging.info(f"Resolving site name '{args.site}' to site_id using unified pagination limit {DEFAULT_API_PAGE_LIMIT}...")
-            sites = APIFetchUtils.all_sites_with_limit(org_id)
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             site_lookup = {site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")}
             site_id = site_lookup.get(args.site)
             if not site_id:
