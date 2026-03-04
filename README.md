@@ -657,6 +657,31 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 {
   "changelog": [
     {
+      "version": "26.03.04.22.30",
+      "date": "2026-03-04",
+      "changes": {
+        "enhancements": [
+          "God-class decomposition: All 95 classes now comply with 5-Item Rule (max 5 public methods per class)",
+          "13 non-compliant classes decomposed via rename-to-private and sub-class extraction",
+          "GlobalImportManager: 13->5 pub (8 renamed private)",
+          "RateLimitingUtils: 6->1 pub (5 renamed private)",
+          "APIFetchUtils: 9->3 pub (extracted APICoreFetchUtils, APITenantFetchUtils)",
+          "AddressUtils: 9->5 pub (4 renamed private)",
+          "WebSocketCommands: 7->4 pub (extracted WebSocketNetworkDiagCommands)",
+          "OrgExportUtils: 51->5 pub (12 renamed private, extracted 7 sub-classes: OrgSiteExporter, OrgInventoryExporter, OrgDeviceStatsExporter, OrgTemplateExporter, OrgClientSecurityExporter, OrgAdminExporter, OrgConfigExporter)",
+          "MapsManager: 28->0 pub (all 28 renamed private - dead/internal-only code)",
+          "EnhancedSSHRunner: 24->5 pub (19 renamed private)",
+          "SiteExportUtils: 22->3 pub (3 renamed private, extracted 4 sub-classes: SiteDeviceExporter, SiteClientExporter, SiteConfigExporter, SiteAnomalyExporter)",
+          "RoutingUtils: 16->3 pub (13 renamed private)",
+          "PromptUtils: 12->5 pub (extracted PromptNetworkDeviceUtils, PromptClientUtils)",
+          "GatewayExportUtils: 12->4 pub (3 renamed private, extracted GatewayTestExporter, GatewayStatsExporter)",
+          "FirmwareManager: 10->4 pub (6 renamed private)",
+          "16 new sub-classes created following {Scope}{Domain}{Action} naming convention",
+          "Zero functionality changes - all tests pass (49/49) after every decomposition"
+        ]
+      }
+    },
+    {
       "version": "26.03.04.00.55",
       "date": "2026-03-04",
       "changes": {
