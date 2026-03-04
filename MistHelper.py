@@ -29499,7 +29499,7 @@ class MapsManager:
             logging.error(f"MapsManager._fetch_sites error: {e}")
             return []
     
-    def select_site(self):
+    def _select_site(self):
         """Prompt user to select a site and cache the selection"""
         # Use instance method to fetch sites (works in standalone mode)
         sites = self._fetch_sites()
@@ -29553,11 +29553,11 @@ class MapsManager:
             logging.info("EOF detected during site selection")
             return False
     
-    def get_current_site(self):
+    def _get_current_site(self):
         """Get current site selection, prompting if not set"""
         if not self.current_site_id:
             print("\n! No site currently selected. Please select a site first.")
-            if not self.select_site():
+            if not self._select_site():
                 return None, None
         return self.current_site_id, self.current_site_name
     
@@ -29894,14 +29894,14 @@ class MapsManager:
             print(f"\n   [!] Warning: Could not backup map geometry: {backup_error}")
             return None
     
-    def run_interactive_menu(self):
+    def _run_interactive_menu(self):
         """Main interactive menu loop for Maps Manager"""
         # Initial site selection
         print("\n" + "=" * 80)
         print("MAPS MANAGER - Initial Site Selection")
         print("=" * 80)
         print("\nPlease select a site to work with:")
-        if not self.select_site():
+        if not self._select_site():
             print("\n! Site selection required. Returning to main menu.")
             return
         
@@ -29955,64 +29955,64 @@ class MapsManager:
                 logging.info("Exiting Maps Manager")
                 return
             elif choice == "S":
-                self.select_site()
+                self._select_site()
             elif choice == "1":
-                self.list_site_maps()
+                self._list_site_maps()
             elif choice == "2":
-                self.export_site_maps()
+                self._export_site_maps()
             elif choice == "3":
-                self.view_map_details()
+                self._view_map_details()
             elif choice == "4":
-                self.create_site_map()
+                self._create_site_map()
             elif choice == "5":
-                self.update_map_properties()
+                self._update_map_properties()
             elif choice == "6":
-                self.delete_site_map()
+                self._delete_site_map()
             elif choice == "7":
-                self.upload_map_image()
+                self._upload_map_image()
             elif choice == "8":
-                self.view_devices_on_map()
+                self._view_devices_on_map()
             elif choice == "9":
-                self.auto_place_aps()
+                self._auto_place_aps()
             elif choice == "10":
-                self.auto_orient_aps()
+                self._auto_orient_aps()
             elif choice == "11":
-                self.set_device_location()
+                self._set_device_location()
             elif choice == "12":
-                self.clone_map()
+                self._clone_map()
             elif choice == "13":
-                self.intelligent_map_replacement_wizard()
+                self._intelligent_map_replacement_wizard()
             elif choice == "20":
-                self.list_all_org_maps()
+                self._list_all_org_maps()
             elif choice == "21":
-                self.export_all_site_maps()
+                self._export_all_site_maps()
             elif choice == "22":
-                self.export_maps_with_images()
+                self._export_maps_with_images()
             elif choice == "23":
-                self.bulk_download_org_images()
+                self._bulk_download_org_images()
             elif choice == "24":
-                self.backup_all_maps()
+                self._backup_all_maps()
             elif choice == "25":
-                self.maps_without_images_report()
+                self._maps_without_images_report()
             elif choice == "30":
-                self.map_coverage_analytics()
+                self._map_coverage_analytics()
             elif choice == "31":
-                self.device_density_analytics()
+                self._device_density_analytics()
             elif choice == "32":
-                self.map_usage_statistics()
+                self._map_usage_statistics()
             elif choice == "40":
-                self.interactive_map_viewer()
+                self._interactive_map_viewer()
             else:
                 print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
                 logging.warning(f"Invalid Maps Manager menu selection: {choice}")
     
-    def list_site_maps(self):
+    def _list_site_maps(self):
         """Display list of maps for currently selected site"""
         print("\n" + "-" * 80)
         print("LIST SITE MAPS - Current Site")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -30055,7 +30055,7 @@ class MapsManager:
             logging.error(f"Error listing site maps: {e}", exc_info=True)
             print(f"\n! Error listing maps: {e}")
     
-    def list_all_org_maps(self):
+    def _list_all_org_maps(self):
         """Display summary list of all maps across organization sites"""
         print("\n" + "-" * 80)
         print("LIST ALL ORGANIZATION MAPS - All Sites")
@@ -30120,13 +30120,13 @@ class MapsManager:
             logging.error(f"Error listing site maps: {e}", exc_info=True)
             print(f"\n! Error listing maps: {e}")
     
-    def export_site_maps(self):
+    def _export_site_maps(self):
         """Export maps for currently selected site to CSV/SQLite"""
         print("\n" + "-" * 80)
         print("EXPORT SITE MAPS - Current Site")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -30173,7 +30173,7 @@ class MapsManager:
             logging.error(f"Error exporting site maps: {e}", exc_info=True)
             print(f"\n! Error during export: {e}")
     
-    def export_all_site_maps(self):
+    def _export_all_site_maps(self):
         """Export all site maps across organization to CSV/SQLite with full metadata"""
         print("\n" + "-" * 80)
         print("EXPORT ALL ORGANIZATION MAPS - All Sites")
@@ -30229,7 +30229,7 @@ class MapsManager:
             logging.error(f"Error exporting site maps: {e}", exc_info=True)
             print(f"\n! Error during export: {e}")
     
-    def export_maps_with_images(self):
+    def _export_maps_with_images(self):
         """Export maps metadata focusing on image information"""
         print("\n" + "-" * 80)
         print("EXPORT MAPS WITH IMAGE METADATA")
@@ -30284,7 +30284,7 @@ class MapsManager:
             logging.error(f"Error exporting maps with images: {e}", exc_info=True)
             print(f"\n! Error during export: {e}")
     
-    def download_site_map_images(self):
+    def _download_site_map_images(self):
         """Download map images to local disk"""
         print("\n" + "-" * 80)
         print("DOWNLOAD SITE MAP IMAGES")
@@ -30371,13 +30371,13 @@ class MapsManager:
             logging.error(f"Error downloading map images: {e}", exc_info=True)
             print(f"\n! Error downloading images: {e}")
     
-    def view_map_details(self):
+    def _view_map_details(self):
         """View detailed information for a specific map"""
         print("\n" + "-" * 80)
         print("VIEW MAP DETAILS")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -30473,14 +30473,14 @@ class MapsManager:
             logging.error(f"Error viewing map details: {e}", exc_info=True)
             print(f"\n! Error viewing map details: {e}")
     
-    def create_site_map(self):
+    def _create_site_map(self):
         """Create a new site map with basic configuration"""
         print("\n" + "-" * 80)
         print("CREATE NEW SITE MAP")
         print("-" * 80)
         print("\n! Note: This creates a map placeholder. Upload image separately (Menu 7)")
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -30562,7 +30562,7 @@ class MapsManager:
             logging.error(f"Error creating site map: {e}", exc_info=True)
             print(f"\n! Error creating map: {e}")
     
-    def clone_map(self):
+    def _clone_map(self):
         """Clone/duplicate an existing map at the current site including image, walls, paths, and zones"""
         logging.info("clone_map operation initiated")
         print("\n" + "-" * 80)
@@ -30570,7 +30570,7 @@ class MapsManager:
         print("-" * 80)
         print("! This will clone ALL map data: image, walls, paths, zones, wayfinding, etc.")
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             logging.warning("clone_map aborted: No site selected")
             return
@@ -30878,12 +30878,12 @@ class MapsManager:
             logging.error(f"Error cloning map: {e}", exc_info=True)
             print(f"\n! Error cloning map: {e}")
     
-    def intelligent_map_replacement_wizard(self):
+    def _intelligent_map_replacement_wizard(self):
         """Entry point for Intelligent Map Replacement Wizard."""
         wizard = MapReplacementWizard(self)
         wizard.execute()
 
-    def maps_without_images_report(self):
+    def _maps_without_images_report(self):
         """Generate report of maps that don't have uploaded images"""
         print("\n" + "-" * 80)
         print("MAPS WITHOUT IMAGES REPORT")
@@ -30963,13 +30963,13 @@ class MapsManager:
             print(f"\n! Error generating report: {e}")
     
     # Placeholder methods for future implementation
-    def update_map_properties(self):
+    def _update_map_properties(self):
         """Update existing map properties (name, dimensions, orientation, etc.)"""
         print("\n" + "-" * 80)
         print("UPDATE MAP PROPERTIES")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -31086,14 +31086,14 @@ class MapsManager:
             logging.error(f"Error updating map properties: {e}", exc_info=True)
             print(f"\n! Error updating map: {e}")
     
-    def delete_site_map(self):
+    def _delete_site_map(self):
         """Delete a site map with confirmation"""
         print("\n" + "-" * 80)
         print("DELETE SITE MAP")
         print("-" * 80)
         print("\n! WARNING: This action cannot be undone!")
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -31157,14 +31157,14 @@ class MapsManager:
             logging.error(f"Error deleting site map: {e}", exc_info=True)
             print(f"\n! Error deleting map: {e}")
     
-    def upload_map_image(self):
+    def _upload_map_image(self):
         """Upload or replace map image file (multipart upload)"""
         logging.info("upload_map_image operation initiated")
         print("\n" + "-" * 80)
         print("UPLOAD/REPLACE MAP IMAGE")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             logging.warning("upload_map_image aborted: No site selected")
             return
@@ -31253,13 +31253,13 @@ class MapsManager:
             logging.error(f"Error uploading map image: {e}", exc_info=True)
             print(f"\n! Error uploading image: {e}")
     
-    def view_devices_on_map(self):
+    def _view_devices_on_map(self):
         """Display all devices placed on a specific map"""
         print("\n" + "-" * 80)
         print("VIEW DEVICES ON MAP")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             return
         
@@ -31338,22 +31338,22 @@ class MapsManager:
             logging.error(f"Error viewing devices on map: {e}", exc_info=True)
             print(f"\n! Error viewing devices: {e}")
     
-    def auto_place_aps(self):
+    def _auto_place_aps(self):
         """Automatically place APs on map using Mist auto-placement"""
         print("\n! Feature coming soon: Auto-place APs")
         logging.info("auto_place_aps called (placeholder)")
     
-    def auto_orient_aps(self):
+    def _auto_orient_aps(self):
         """Automatically orient APs on map"""
         print("\n! Feature coming soon: Auto-orient APs")
         logging.info("auto_orient_aps called (placeholder)")
     
-    def set_device_location(self):
+    def _set_device_location(self):
         """Manually set AP/device coordinates on map"""
         print("\n! Feature coming soon: Set device location")
         logging.info("set_device_location called (placeholder)")
     
-    def bulk_download_org_images(self):
+    def _bulk_download_org_images(self):
         """Download all map images across entire organization"""
         print("\n" + "-" * 80)
         print("BULK DOWNLOAD ORG MAP IMAGES")
@@ -31453,27 +31453,27 @@ class MapsManager:
             logging.error(f"Error bulk downloading map images: {e}", exc_info=True)
             print(f"\n! Error during bulk download: {e}")
     
-    def backup_all_maps(self):
+    def _backup_all_maps(self):
         """Complete backup of all maps (metadata + images)"""
         print("\n! Feature coming soon: Backup all maps")
         logging.info("backup_all_maps called (placeholder)")
     
-    def map_coverage_analytics(self):
+    def _map_coverage_analytics(self):
         """Analyze RF coverage patterns by map"""
         print("\n! Feature coming soon: Map coverage analytics")
         logging.info("map_coverage_analytics called (placeholder)")
     
-    def device_density_analytics(self):
+    def _device_density_analytics(self):
         """Analyze device density and distribution by map"""
         print("\n! Feature coming soon: Device density analytics")
         logging.info("device_density_analytics called (placeholder)")
     
-    def map_usage_statistics(self):
+    def _map_usage_statistics(self):
         """Generate usage statistics for maps"""
         print("\n! Feature coming soon: Map usage statistics")
         logging.info("map_usage_statistics called (placeholder)")
     
-    def interactive_map_viewer(self):
+    def _interactive_map_viewer(self):
         """
         Interactive map viewer with Plotly/Dash for viewing and editing:
         - Floor plan image display
@@ -31487,7 +31487,7 @@ class MapsManager:
         print("INTERACTIVE MAP VIEWER")
         print("-" * 80)
         
-        site_id, site_name = self.get_current_site()
+        site_id, site_name = self._get_current_site()
         if not site_id:
             logging.warning("Interactive map viewer aborted: No site selected")
             return
@@ -36231,7 +36231,7 @@ class MapsManager:
         plt.show()
         logging.info("Matplotlib map viewer closed by user")
 
-    def launch_viewer_standalone(self, requested_site_id: Optional[str] = None, requested_map_id: Optional[str] = None):
+    def _launch_viewer_standalone(self, requested_site_id: Optional[str] = None, requested_map_id: Optional[str] = None):
         """
         Launch the interactive map viewer directly without CLI site selection.
         
