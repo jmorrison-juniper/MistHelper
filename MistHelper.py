@@ -16048,7 +16048,7 @@ class RoutingUtils:
     """
     
     @staticmethod
-    def parse_forwarding_table(raw_output):
+    def _parse_forwarding_table(raw_output):
         """
         Parse the raw JSON forwarding table output into structured data.
         
@@ -16097,7 +16097,7 @@ class RoutingUtils:
         return entries
     
     @staticmethod
-    def display_forwarding_summary(entries):
+    def _display_forwarding_summary(entries):
         """
         Display a user-friendly summary of forwarding table entries.
         
@@ -16154,7 +16154,7 @@ class RoutingUtils:
         # Display detailed table for all prefixes
         print(f"\n-> Detailed forwarding table by IP prefix:")
         for prefix in sorted(prefix_groups.keys()):
-            RoutingUtils.display_prefix_table_impl(prefix, prefix_groups[prefix])
+            RoutingUtils._display_prefix_table_impl(prefix, prefix_groups[prefix])
         
         # Show interface summary
         if interfaces:
@@ -16165,7 +16165,7 @@ class RoutingUtils:
                     print(f"   {interface}: {len(interface_entries)} routes")
     
     @staticmethod
-    def display_prefix_table_impl(prefix, entries):
+    def _display_prefix_table_impl(prefix, entries):
         """
         Display a formatted table for entries with a specific IP prefix.
         
@@ -16213,7 +16213,7 @@ class RoutingUtils:
                 print(f"   {port:<6} | {protocol:<8} | {service:<20} | {tenant:<16} | {interface}")
     
     @staticmethod
-    def parse_routing_table(raw_output):
+    def _parse_routing_table(raw_output):
         """
         Parse raw routing table output into structured data.
         
@@ -16234,7 +16234,7 @@ class RoutingUtils:
         
         # Detect Juniper routing table format and use specialized parser
         if any(pattern in raw_output for pattern in ['inet.0:', 'inet6.0:', 'Limit/Threshold:']):
-            return RoutingUtils.parse_juniper_routing(raw_output)
+            return RoutingUtils._parse_juniper_routing(raw_output)
         
         # Fallback to generic parsing for other device types
         routes = []
@@ -16247,13 +16247,13 @@ class RoutingUtils:
                 
             # Pattern 1: Standard route entry with prefix, next-hop, protocol
             if ' via ' in line or ' dev ' in line or ' proto ' in line:
-                route_entry = RoutingUtils.parse_standard_route_line(line)
+                route_entry = RoutingUtils._parse_standard_route_line(line)
                 if route_entry:
                     routes.append(route_entry)
                     
             # Pattern 2: Tabular format with columns
             elif any(indicator in line.lower() for indicator in ['bgp', 'ospf', 'static', 'direct', 'connected']):
-                route_entry = RoutingUtils.parse_protocol_route_line(line)
+                route_entry = RoutingUtils._parse_protocol_route_line(line)
                 if route_entry:
                     routes.append(route_entry)
                     
@@ -16261,7 +16261,7 @@ class RoutingUtils:
             elif line.startswith('{') and line.endswith('}'):
                 try:
                     route_data = json.loads(line)
-                    route_entry = RoutingUtils.normalize_json_route_entry(route_data)
+                    route_entry = RoutingUtils._normalize_json_route_entry(route_data)
                     if route_entry:
                         routes.append(route_entry)
                 except Exception:
@@ -16269,14 +16269,14 @@ class RoutingUtils:
                     
             # Pattern 4: Space-separated tabular data
             elif len(line.split()) >= 3:
-                route_entry = RoutingUtils.parse_tabular_route_line(line)
+                route_entry = RoutingUtils._parse_tabular_route_line(line)
                 if route_entry:
                     routes.append(route_entry)
         
         return routes
     
     @staticmethod
-    def parse_standard_route_line(line):
+    def _parse_standard_route_line(line):
         """Parse a standard route line with via/dev/proto keywords."""
         try:
             parts = line.split()
@@ -16322,7 +16322,7 @@ class RoutingUtils:
             return None
     
     @staticmethod
-    def parse_protocol_route_line(line):
+    def _parse_protocol_route_line(line):
         """Parse a route line containing protocol information."""
         try:
             parts = line.split()
@@ -16364,7 +16364,7 @@ class RoutingUtils:
             return None
     
     @staticmethod
-    def parse_tabular_route_line(line):
+    def _parse_tabular_route_line(line):
         """Parse a space-separated tabular route line."""
         try:
             parts = line.split()
@@ -16404,7 +16404,7 @@ class RoutingUtils:
             return None
     
     @staticmethod
-    def normalize_json_route_entry(route_data):
+    def _normalize_json_route_entry(route_data):
         """Normalize a JSON route entry to standard format."""
         try:
             route_entry = {
@@ -16420,7 +16420,7 @@ class RoutingUtils:
             return None
     
     @staticmethod
-    def parse_juniper_routing(raw_output):
+    def _parse_juniper_routing(raw_output):
         """
         Parse Juniper-specific routing table output format.
         
@@ -16527,7 +16527,7 @@ class RoutingUtils:
         return routes
     
     @staticmethod
-    def parse_ssr_routing(json_data):
+    def _parse_ssr_routing(json_data):
         """
         Parse SSR/SRX routing table JSON data from the dedicated API.
         
@@ -16577,7 +16577,7 @@ class RoutingUtils:
             return []
     
     @staticmethod
-    def display_routing_summary(route_entries, query_params):
+    def _display_routing_summary(route_entries, query_params):
         """
         Display a formatted summary of routing table entries.
         
@@ -16636,10 +16636,10 @@ class RoutingUtils:
         
         # Display detailed routing table
         print(f"\n-> Detailed routing table:")
-        RoutingUtils.display_routing_details(route_entries)
+        RoutingUtils._display_routing_details(route_entries)
     
     @staticmethod
-    def display_routing_details(route_entries):
+    def _display_routing_details(route_entries):
         """
         Display detailed routing table in a formatted table.
         
@@ -16701,7 +16701,7 @@ class RoutingUtils:
             print("  > = Active route, * = Selected route")
     
     @staticmethod
-    def display_ssr_routing(route_entries, query_params):
+    def _display_ssr_routing(route_entries, query_params):
         """
         Display SSR/SRX routing table with enhanced BGP-specific information.
         
@@ -17056,16 +17056,16 @@ class RoutingUtils:
         
         raw_output = result.get("raw", "")
         if raw_output:
-            entries = RoutingUtils.parse_forwarding_table(raw_output)
-            RoutingUtils.display_forwarding_summary(entries)
+            entries = RoutingUtils._parse_forwarding_table(raw_output)
+            RoutingUtils._display_forwarding_summary(entries)
         
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
             print("\n" + "=" * 40)
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
-            additional_entries = RoutingUtils.parse_forwarding_table(output_fields)
-            RoutingUtils.display_forwarding_summary(additional_entries)
+            additional_entries = RoutingUtils._parse_forwarding_table(output_fields)
+            RoutingUtils._display_forwarding_summary(additional_entries)
         
         if debug_mode:
             available_fields = [k for k in result.keys() if k not in ['raw', 'Output', 'session']]
@@ -17370,16 +17370,16 @@ class RoutingUtils:
         
         raw_output = result.get("raw", "")
         if raw_output:
-            entries = RoutingUtils.parse_routing_table(raw_output)
-            RoutingUtils.display_routing_summary(entries, payload)
+            entries = RoutingUtils._parse_routing_table(raw_output)
+            RoutingUtils._display_routing_summary(entries, payload)
         
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
             print("\n" + "=" * 40)
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
-            additional_entries = RoutingUtils.parse_routing_table(output_fields)
-            RoutingUtils.display_routing_summary(additional_entries, payload)
+            additional_entries = RoutingUtils._parse_routing_table(output_fields)
+            RoutingUtils._display_routing_summary(additional_entries, payload)
         
         if debug_mode:
             available_fields = [k for k in result.keys() if k not in ['raw', 'Output', 'session']]
@@ -17639,24 +17639,24 @@ class RoutingUtils:
         
         raw_output = result.get("raw", "")
         if raw_output:
-            entries = RoutingUtils.parse_ssr_routing(raw_output)
+            entries = RoutingUtils._parse_ssr_routing(raw_output)
             if entries:
-                RoutingUtils.display_ssr_routing(entries, request_body)
+                RoutingUtils._display_ssr_routing(entries, request_body)
             else:
-                entries = RoutingUtils.parse_routing_table(raw_output)
-                RoutingUtils.display_routing_summary(entries, request_body)
+                entries = RoutingUtils._parse_routing_table(raw_output)
+                RoutingUtils._display_routing_summary(entries, request_body)
         
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
             print("\n" + "=" * 40)
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
-            additional_entries = RoutingUtils.parse_ssr_routing(output_fields)
+            additional_entries = RoutingUtils._parse_ssr_routing(output_fields)
             if additional_entries:
-                RoutingUtils.display_ssr_routing(additional_entries, request_body)
+                RoutingUtils._display_ssr_routing(additional_entries, request_body)
             else:
-                additional_entries = RoutingUtils.parse_routing_table(output_fields)
-                RoutingUtils.display_routing_summary(additional_entries, request_body)
+                additional_entries = RoutingUtils._parse_routing_table(output_fields)
+                RoutingUtils._display_routing_summary(additional_entries, request_body)
         
         if debug_mode:
             available_fields = [k for k in result.keys() if k not in ['raw', 'Output', 'session']]
