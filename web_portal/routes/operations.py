@@ -190,11 +190,21 @@ def _build_replay(executor, run_id: str):
     if not status or status["status"] not in ("completed", "failed"):
         return None
     events = []
-    for msg in status.get("log_messages") or []:
+    for entry in status.get("log_messages") or []:
+        msg = entry.get("message", entry) if isinstance(entry, dict) else entry
+        lvl = entry.get("level", "info") if isinstance(entry, dict) else "info"
         events.append(_format_sse("log", {
             "run_id": run_id,
             "message": msg,
-            "level": "info",
+            "level": lvl,
+        }))
+    for entry in status.get("debug_messages") or []:
+        msg = entry.get("message", entry) if isinstance(entry, dict) else entry
+        lvl = entry.get("level", "debug") if isinstance(entry, dict) else "debug"
+        events.append(_format_sse("debug_log", {
+            "run_id": run_id,
+            "message": msg,
+            "level": lvl,
         }))
     if status["status"] == "completed":
         events.append(_format_sse("complete", {

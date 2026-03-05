@@ -601,6 +601,11 @@ function startSSEStream(runId) {
         appendLog(data.message, data.level || 'INFO');
     });
 
+    source.addEventListener('debug_log', function(event) {
+        var data = JSON.parse(event.data);
+        appendDebugLog(data.message, data.level || 'DEBUG');
+    });
+
     source.addEventListener('status', function(event) {
         var data = JSON.parse(event.data);
         if (data.status === 'running') {
@@ -673,6 +678,10 @@ function resetExecutionPanel() {
     var panel = document.getElementById('executionPanel');
     panel.style.display = '';
     document.getElementById('logViewer').innerHTML = '';
+    document.getElementById('debugLogViewer').innerHTML = '';
+    document.getElementById('debugLogToggle').style.display = 'none';
+    document.getElementById('debugLogPanel').style.display = 'none';
+    document.getElementById('debugLogCount').textContent = '0';
     document.getElementById('outputFiles').style.display = 'none';
     document.getElementById('outputFileList').innerHTML = '';
     updateProgress(0, '');
@@ -692,6 +701,39 @@ function appendLog(message, level) {
     line.textContent = '[' + ts + '] ' + message;
     viewer.appendChild(line);
     viewer.scrollTop = viewer.scrollHeight;
+}
+
+function appendDebugLog(message, level) {
+    var toggle = document.getElementById('debugLogToggle');
+    var viewer = document.getElementById('debugLogViewer');
+    var counter = document.getElementById('debugLogCount');
+    toggle.style.display = '';
+    var count = parseInt(counter.textContent || '0', 10) + 1;
+    counter.textContent = count;
+    var line = document.createElement('div');
+    line.className = 'log-line text-muted';
+    var ts = new Date().toLocaleTimeString();
+    line.textContent = '[' + ts + '] ' + message;
+    viewer.appendChild(line);
+    if (document.getElementById('debugLogPanel').style.display !== 'none') {
+        viewer.scrollTop = viewer.scrollHeight;
+    }
+}
+
+function toggleDebugLog() {
+    var panel = document.getElementById('debugLogPanel');
+    var btn = document.getElementById('debugLogToggle');
+    var viewer = document.getElementById('debugLogViewer');
+    if (panel.style.display === 'none') {
+        panel.style.display = '';
+        btn.innerHTML = '&#9660; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
+            document.getElementById('debugLogCount').textContent + '</span>';
+        viewer.scrollTop = viewer.scrollHeight;
+    } else {
+        panel.style.display = 'none';
+        btn.innerHTML = '&#9654; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
+            document.getElementById('debugLogCount').textContent + '</span>';
+    }
 }
 
 function updateProgress(percent, message) {

@@ -122,6 +122,13 @@
     word-break: break-all;
 }
 
+/* Debug Log Viewer (collapsible, smaller) */
+.debug-log-viewer {
+    max-height: 250px;
+    font-size: 0.72rem;
+    opacity: 0.8;
+}
+
 /* Progress Bar */
 .portal-progress {
     height: 1.5rem;

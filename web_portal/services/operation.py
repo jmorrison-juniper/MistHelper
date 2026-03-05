@@ -402,6 +402,7 @@ class OperationExecutor:
             "completed_at": None,
             "progress_pct": 0,
             "log_messages": [],
+            "debug_messages": [],
             "error_message": None,
             "output_files": [],
         }
@@ -502,6 +503,7 @@ class OperationExecutor:
             "error_message": run["error_message"],
             "output_files": run["output_files"],
             "log_messages": list(run.get("log_messages", [])),
+            "debug_messages": list(run.get("debug_messages", [])),
         }
 
     def _run_to_summary(self, run: dict) -> dict:
@@ -530,7 +532,12 @@ class OperationExecutor:
 
 
 class _RunLogHandler(logging.Handler):
-    """Logging handler that captures log lines to an OperationRun."""
+    """Logging handler that captures log lines to an OperationRun.
+
+    Splits log output into two tiers:
+    - INFO and above: published as 'log' events (main execution log)
+    - DEBUG: published as 'debug_log' events (collapsible debug panel)
+    """
 
     def __init__(self, run: dict, event_bus):
         """Initialize with the run record and event bus."""
@@ -539,15 +546,20 @@ class _RunLogHandler(logging.Handler):
         self._event_bus = event_bus
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Capture a log record and publish as SSE log event."""
+        """Capture a log record and route to appropriate SSE channel."""
         message = self.format(record)
-        self._run["log_messages"].append(message)
+        level = record.levelname.lower()
+        timestamp = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)
+        )
+        is_main = record.levelno >= logging.INFO
+        event_type = "log" if is_main else "debug_log"
+        storage = "log_messages" if is_main else "debug_messages"
+        self._run[storage].append({"message": message, "level": level})
         if self._event_bus:
-            self._event_bus.publish("log", {
+            self._event_bus.publish(event_type, {
                 "run_id": self._run["run_id"],
                 "message": message,
-                "level": record.levelname.lower(),
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)
-                ),
+                "level": level,
+                "timestamp": timestamp,
             })
