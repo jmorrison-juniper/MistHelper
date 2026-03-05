@@ -3,8 +3,9 @@
 Used by Gunicorn in the container:
     gunicorn wsgi:app -w 1 -k gthread --threads 4
 
-Bootstraps API authentication from .env and loads the static
-menu registry so the portal is fully functional at startup.
+Imports MistHelper as a module (safe: __name__ guard exists),
+bootstraps API authentication, injects session globals, and
+exposes the real menu_actions with working callables.
 """
 
 import logging
@@ -15,7 +16,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from web_portal.app import WebPortalApp
-from web_portal.menu_registry import build_static_menu_actions
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,8 +66,31 @@ def _resolve_org_id(apisession) -> str:
     return ""
 
 
+def _load_menu_actions(wsgi_session, wsgi_org_id):
+    """Import MistHelper and extract real menu_actions with live callables.
+
+    Sets MistHelper module globals so lambdas and class methods
+    resolve apisession/org_id at call time.  Falls back to the
+    static description-only registry on import failure.
+    """
+    try:
+        import MistHelper
+        if wsgi_session is not None:
+            MistHelper.apisession = wsgi_session
+        if wsgi_org_id:
+            MistHelper.org_id = wsgi_org_id
+            os.environ["ORG_ID"] = wsgi_org_id
+        logging.info("WSGI: MistHelper imported - %d menu actions loaded",
+                     len(MistHelper.menu_actions))
+        return MistHelper.menu_actions
+    except Exception as exc:
+        logging.warning("WSGI: MistHelper import failed (%s) - using static registry", exc)
+        from web_portal.menu_registry import build_static_menu_actions
+        return build_static_menu_actions()
+
+
 apisession, org_id = _bootstrap_api_session()
-menu_actions = build_static_menu_actions()
+menu_actions = _load_menu_actions(apisession, org_id)
 
 app = WebPortalApp.create_app(
     apisession=apisession,
