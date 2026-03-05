@@ -123,5 +123,5 @@ class WebPortalApp:
                 "portal_logo": portal.get("logo_url", "/static/img/logo-default.svg"),
                 "portal_accent": portal.get("accent_color", "#0d6efd"),
                 "portal_theme": portal.get("theme", "dark"),
-                "available_themes": theme_mgr.list_themes() if theme_mgr else [],
+                "available_themes": theme_mgr.get_themes() if theme_mgr else [],
             }
