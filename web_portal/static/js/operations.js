@@ -59,7 +59,7 @@ function renderAccordion(categories) {
 // ---------------------------------------------------------------------------
 
 function selectOperation(menuNumber, element) {
-    selectedMenuNumber = menuNumber;
+    selectedMenuNumber = String(menuNumber);
 
     // Highlight active item
     document.querySelectorAll('.op-item').forEach(function(el) {

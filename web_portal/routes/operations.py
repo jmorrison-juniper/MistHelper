@@ -39,7 +39,7 @@ def list_operations():
 def run_operation():
     """Start an operation execution in a background thread."""
     data = request.get_json(silent=True) or {}
-    menu_number = data.get("menu_number", "")
+    menu_number = str(data.get("menu_number", ""))
     parameters = data.get("parameters", {})
     executor = _get_executor()
     result = executor.start_operation(menu_number, parameters)
