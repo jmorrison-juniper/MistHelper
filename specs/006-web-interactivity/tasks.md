@@ -114,7 +114,7 @@
 - [X] T036 Validate Python syntax with python -m py_compile MistHelper.py and verify no import errors in web_portal modules
 - [ ] T037 Run manual test scenarios from specs/006-web-interactivity/quickstart.md — interactive operation (Menu 31), modal preview (CSV), operation results preview
 - [X] T038 Commit all changes to 006-web-interactivity branch with message "006-web-interactivity: implement interactive operations, modal preview, results preview"
-- [ ] T039 Push to origin, wait for container build, pull new image, restart container, verify with podman ps
+- [X] T039 Push to origin, wait for container build, pull new image, restart container, verify with podman ps
 
 ---
 
