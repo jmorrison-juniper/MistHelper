@@ -2151,6 +2151,12 @@ AUTO_UPGRADE_UV: bool = config['auto_upgrade_uv']
 AUTO_UPGRADE_DEPENDENCIES: bool = config['auto_upgrade_dependencies']
 UPGRADE_CHECK_TIMEOUT: int = config['upgrade_check_timeout']
 
+# API Request Timeout (seconds) - prevents indefinite hangs on slow/dropped connections
+# Default 120s is generous; most Mist API calls return within 30s
+API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))
+API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))
+API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))
+
 # Fast Mode Configuration from .env
 FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
 FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))
@@ -2471,6 +2477,9 @@ def initialize_mist_session_interactive():
         print("")
         print("  + Login successful!")
         logging.info(f"Interactive login successful for {email} to {host}")
+        
+        # Configure read timeout on the underlying requests session
+        _configure_session_timeout(apisession)
         
         # Detect MSP privileges
         print("  Checking for MSP privileges...")
@@ -2998,6 +3007,9 @@ def initialize_mist_session():
             logging.error(f"  - {variant}")
         return False
 
+    # Configure read timeout on the underlying requests session
+    _configure_session_timeout(apisession)
+
     # Validate that required request method exists (mist_get is used by code)
     if not hasattr(apisession, 'mist_get'):
         # Some versions expose 'get' instead; we can wrap it for compatibility
@@ -3030,6 +3042,43 @@ def initialize_mist_session():
         logging.debug("Session has readable token attribute - authentication appears configured")
 
     return True
+
+def _configure_session_timeout(session_obj: Any) -> None:
+    """Set read timeout on the mistapi session's underlying requests session.
+
+    mistapi does not pass a timeout to requests.Session.get(), so API calls
+    can hang indefinitely when the Mist cloud is slow or the connection drops.
+    This patches the session to use a default timeout via a transport adapter.
+
+    Args:
+        session_obj: The mistapi APISession object.
+    """
+    try:
+        from requests.adapters import HTTPAdapter
+        inner = getattr(session_obj, '_session', None)
+        if inner is None:
+            logging.warning("Cannot configure timeout - session has no _session attribute")
+            return
+
+        class TimeoutAdapter(HTTPAdapter):
+            """HTTPAdapter that injects a default timeout."""
+
+            def __init__(self, default_timeout: int, **kwargs):
+                self.default_timeout = default_timeout
+                super().__init__(**kwargs)
+
+            def send(self, request, **kwargs):
+                if kwargs.get('timeout') is None:
+                    kwargs['timeout'] = self.default_timeout
+                return super().send(request, **kwargs)
+
+        adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
+        inner.mount('https://', adapter)
+        inner.mount('http://', adapter)
+        logging.info(f"Configured API request timeout: {API_REQUEST_TIMEOUT}s")
+    except Exception as timeout_err:
+        logging.warning(f"Failed to configure session timeout: {timeout_err}")
+
 
 # ============================================================================
 # ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
@@ -9006,14 +9055,14 @@ class APIDataFetcher:
     # =========================================================================
     
     def _fetch_api_data(self) -> None:
-        """Make API call and retrieve paginated results."""
+        """Make API call and retrieve paginated results with retry on timeout."""
         api_name = self.api_call.__name__
         logging.debug(f"Making API call: {api_name} with kwargs: {self.kwargs}")
-        
-        response = self.api_call(apisession, self.org_id, **self.kwargs)
+
+        response = self._call_api_with_retry(api_name)
         self._apply_rate_limiting()
         self._log_response_structure(response)
-        
+
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
             record_count = len(self.rawdata) if self.rawdata else 0
@@ -9022,6 +9071,53 @@ class APIDataFetcher:
             self._handle_key_error(response, error)
         except Exception as error:
             self._handle_api_exception(error)
+
+    def _call_api_with_retry(self, api_name: str) -> Any:
+        """Call API with retry logic for timeout and connection errors.
+
+        Detects failures by checking response.status_code (None when mistapi
+        swallows a timeout/connection exception). Retries up to
+        API_REQUEST_MAX_RETRIES times with exponential backoff.
+
+        Args:
+            api_name: Name of the API function for logging.
+
+        Returns:
+            The API response object.
+        """
+        last_response = None
+        for attempt in range(API_REQUEST_MAX_RETRIES + 1):
+            response = self.api_call(apisession, self.org_id, **self.kwargs)
+            last_response = response
+
+            if self._is_response_valid(response):
+                return response
+
+            if attempt < API_REQUEST_MAX_RETRIES:
+                delay = API_REQUEST_RETRY_DELAY * (2 ** attempt)
+                logging.warning(
+                    f"API call {api_name} failed (attempt {attempt + 1}/{API_REQUEST_MAX_RETRIES + 1}) "
+                    f"- retrying in {delay:.0f}s"
+                )
+                print(f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})")
+                time.sleep(delay)
+
+        logging.error(f"API call {api_name} failed after {API_REQUEST_MAX_RETRIES + 1} attempts")
+        return last_response
+
+    @staticmethod
+    def _is_response_valid(response: Any) -> bool:
+        """Check if an API response indicates a successful call.
+
+        Returns False when status_code is None (timeout/connection error
+        swallowed by mistapi) or when it indicates a server error.
+        """
+        status = getattr(response, 'status_code', None)
+        if status is None:
+            return False
+        if status >= 500:
+            return False
+        return True
     
     def _apply_rate_limiting(self) -> None:
         """Apply rate limiting delay between API calls."""
