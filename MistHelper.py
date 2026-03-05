@@ -28900,7 +28900,7 @@ class MapReplacementWizard:
     
     def _select_site(self) -> bool:
         """Select site for map replacement."""
-        self.site_id, self.site_name = self.maps_manager.get_current_site()
+        self.site_id, self.site_name = self.maps_manager._get_current_site()
         if not self.site_id:
             logging.warning("Map replacement wizard aborted: No site selected")
             return False
@@ -46510,7 +46510,7 @@ class BulkRadiusWLANConfigManager:
         print(f"  Total: {total} RADIUS WLANs ({len(self.radius_wlans)} selectable, {len(self.compliant_wlans)} compliant)")
         print("")
     
-    def _parse_selection(self, user_input: str) -> list:
+    def _parse_selection(self, user_input: str) -> Optional[list]:
         """Parse user selection input into list of 0-based indices, or None for cancel."""
         cleaned = user_input.strip().lower()
         if cleaned in self.CANCEL_KEYWORDS:
@@ -46639,7 +46639,7 @@ class BulkRadiusWLANConfigManager:
     def _record_change(self, wlan: Dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
         record = {
-            'timestamp': datetime.datetime.now().isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'wlan_id': wlan.get('id', ''),
             'ssid': wlan.get('ssid', ''),
             'site_name': wlan.get('_inheritance_source', 'Org-Level'),
@@ -46661,7 +46661,7 @@ class BulkRadiusWLANConfigManager:
             print("[*] No changes to export.")
             return
         
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         prefix = "DRYRUN_" if self.dry_run else ""
         filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"
         filepath = os.path.join("data", filename)
@@ -52637,7 +52637,7 @@ Commands/responses to execute: {len(commands)}
         
         try:
             # Connect once for all commands
-            if not runner.connect(hostname, username, password, port):
+            if not runner._connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
                 write_to_host_log(f"[ERROR] {error_msg}")
@@ -52803,7 +52803,7 @@ Commands/responses to execute: {len(commands)}
             write_to_host_log(error_msg)
             return False
         finally:
-            runner.disconnect()
+            runner._disconnect()
             logger.debug(f"[{hostname}] SSH interactive session completed")
             
             # Write session footer to host log with safer success check
@@ -52945,7 +52945,7 @@ Commands to execute: {len(commands)}
         
         try:
             # Connect once for all commands
-            if not runner.connect(hostname, username, password, port):
+            if not runner._connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
                 write_to_host_log(f"X  {error_msg}")
@@ -52967,7 +52967,7 @@ Commands to execute: {len(commands)}
                     write_to_host_log(separator_line)
                     
                     print(f"!? [{hostname}] Executing command: {command}")
-                    success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
+                    success, stdout, stderr = runner._execute_command(command, use_shell=use_shell, hostname=hostname)
                     
                     if stdout:
                         write_to_host_log("-> OUTPUT:")
@@ -53019,7 +53019,7 @@ Commands to execute: {len(commands)}
             write_to_host_log(error_msg)
             return False
         finally:
-            runner.disconnect()
+            runner._disconnect()
             logger.debug(f"[{hostname}] SSH multi-command session completed")
             
             # Write session footer to host log with safer success check
@@ -53155,7 +53155,7 @@ Command: {command}
         
         try:
             # Connect
-            if not runner.connect(hostname, username, password, port):
+            if not runner._connect(hostname, username, password, port):
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
                 write_to_host_log(f"X  {error_msg}")
@@ -53164,7 +53164,7 @@ Command: {command}
             logger.debug(f"SSH connected to {hostname}, executing single command")
             
             # Execute command
-            single_cmd_success, stdout, stderr = runner.execute_command(command, use_shell=use_shell, hostname=hostname)
+            single_cmd_success, stdout, stderr = runner._execute_command(command, use_shell=use_shell, hostname=hostname)
             
             # Display results
             separator = "\n" + "=" * 60
@@ -53205,7 +53205,7 @@ Command: {command}
             write_to_host_log(error_msg)
             return False
         finally:
-            runner.disconnect()
+            runner._disconnect()
             logger.debug(f"[{hostname}] SSH single command session completed")
             
             # Write session footer to host log with safer success check
@@ -53921,8 +53921,9 @@ def _launch_web_portal(args):
     from web_portal.app import WebPortalApp
     from web_portal.services.security import PortalConfigLoader
 
-    config = PortalConfigLoader()
-    port = config.web_port
+    loader = PortalConfigLoader()
+    config = loader.load_config()
+    port = config["web_port"]
     host = "0.0.0.0"
 
     app = WebPortalApp.create_app(
@@ -53931,7 +53932,7 @@ def _launch_web_portal(args):
         org_id=org_id,
     )
 
-    in_container = ConfigUtils.is_running_in_container()
+    in_container = EnvironmentUtils.is_running_in_container()
     if in_container:
         logging.info(
             "WEB_PORTAL: Container detected - use wsgi.py with Gunicorn"
