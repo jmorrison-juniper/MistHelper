@@ -16,10 +16,6 @@
                placeholder="Filter files..." aria-label="Filter files">
     </div>
     <div class="col-md-8 text-end">
-        <button class="btn btn-sm btn-outline-secondary btn-export" id="exportTableBtn"
-                onclick="exportCurrentTable()" style="display:none;">
-            Export CSV
-        </button>
     </div>
 </div>
 
@@ -41,33 +37,7 @@
     </table>
 </div>
 
-<!-- Preview Panel -->
-<div id="previewPanel" class="preview-panel" style="display:none;">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 id="previewTitle" class="mb-0">Preview</h6>
-        <div>
-            <button class="btn btn-sm btn-outline-secondary btn-export" onclick="exportPreviewTable()">
-                Export CSV
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="closePreview()">
-                Close
-            </button>
-        </div>
-    </div>
-
-    <!-- Search within preview -->
-    <input type="text" class="form-control form-control-sm mb-2" id="previewSearch"
-           placeholder="Search rows..." style="max-width:250px;">
-
-    <div id="previewContent"></div>
-
-    <!-- Pagination -->
-    <div class="portal-pagination" id="previewPagination" style="display:none;">
-        <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)">Prev</button>
-        <span class="page-info" id="pageInfo"></span>
-        <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)">Next</button>
-    </div>
-</div>
+<!-- Preview Panel (replaced by modal) -->
 
 <!-- SQLite Table List Panel -->
 <div id="sqlitePanel" class="preview-panel" style="display:none;">
@@ -85,6 +55,51 @@
     <p class="text-muted">Run an operation to generate data files.</p>
 </div>
 
+<!-- Data Preview Modal -->
+<div class="modal fade modal-fullscreen-custom" id="dataPreviewModal" tabindex="-1"
+     aria-labelledby="dataPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dataPreviewModalLabel">Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Search row -->
+                <div id="dataPreviewSearchRow" class="mb-2" style="display:none;">
+                    <input type="text" class="form-control form-control-sm" id="dataPreviewSearch"
+                           placeholder="Search rows..." style="max-width:300px;">
+                </div>
+
+                <!-- Loading spinner -->
+                <div id="dataPreviewLoading" class="modal-loading" style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading preview...</p>
+                </div>
+
+                <!-- Content area -->
+                <div id="dataPreviewBody"></div>
+
+                <!-- Pagination -->
+                <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
+                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                            onclick="DataPreviewModal.changePage(-1)">Prev</button>
+                    <span class="page-info" id="dataPreviewPageInfo"></span>
+                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
+                            onclick="DataPreviewModal.changePage(1)">Next</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-outline-secondary btn-export"
+                        onclick="DataPreviewModal.exportCsv()">Export CSV</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -96,7 +111,6 @@ var currentPerPage = 50;
 document.addEventListener('DOMContentLoaded', function() {
     loadFileList();
     document.getElementById('fileSearch').addEventListener('input', filterFileTable);
-    document.getElementById('previewSearch').addEventListener('input', debounce(searchPreview, 400));
 });
 
 function loadFileList() {
@@ -133,13 +147,10 @@ function buildActions(file) {
         return '<span class="text-muted">folder</span>';
     }
     var actions = '';
-    if (file.file_type === 'csv' || file.file_type === 'json' || file.file_type === 'log') {
+    var previewTypes = ['csv', 'json', 'log', 'db', 'sqlite'];
+    if (previewTypes.indexOf(file.file_type) >= 0) {
         actions += '<button class="btn btn-sm btn-outline-primary me-1" onclick="previewFile(\'' +
                    escapeJs(file.path) + '\')">Preview</button>';
-    }
-    if (file.file_type === 'db' || file.file_type === 'sqlite') {
-        actions += '<button class="btn btn-sm btn-outline-primary me-1" onclick="previewSqlite(\'' +
-                   escapeJs(file.path) + '\')">Tables</button>';
     }
     actions += '<a class="btn btn-sm btn-accent" href="/api/data/download/' +
                encodeURIComponent(file.path) + '">Download</a>';
@@ -147,121 +158,11 @@ function buildActions(file) {
 }
 
 function previewFile(path) {
-    currentPreviewPath = path;
-    currentPage = 1;
-    document.getElementById('previewSearch').value = '';
-    loadPreview();
-}
-
-function loadPreview() {
-    var search = document.getElementById('previewSearch').value;
-    var url = '/api/data/preview/' + encodeURIComponent(currentPreviewPath) +
-              '?page=' + currentPage + '&per_page=' + currentPerPage;
-    if (search) url += '&search=' + encodeURIComponent(search);
-
-    fetch(url)
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-            renderPreviewTable(data);
-            document.getElementById('previewPanel').style.display = 'block';
-            document.getElementById('previewTitle').textContent = 'Preview: ' + currentPreviewPath;
-            document.getElementById('exportTableBtn').style.display = 'inline-block';
-        })
-        .catch(function() { alert('Failed to load preview'); });
-}
-
-function renderPreviewTable(data) {
-    var html = '<table class="table table-sm portal-table" id="previewTable"><thead><tr>';
-    data.columns.forEach(function(col) {
-        html += '<th data-sort>' + escapeHtml(col) + '</th>';
-    });
-    html += '</tr></thead><tbody>';
-    data.rows.forEach(function(row) {
-        html += '<tr>';
-        row.forEach(function(cell) {
-            html += '<td>' + escapeHtml(String(cell)) + '</td>';
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    document.getElementById('previewContent').innerHTML = html;
-
-    var pag = document.getElementById('previewPagination');
-    if (data.total_pages > 1) {
-        pag.style.display = 'flex';
-        document.getElementById('pageInfo').textContent =
-            'Page ' + data.page + ' of ' + data.total_pages + ' (' + data.total_rows + ' rows)';
-        document.getElementById('prevPage').disabled = (data.page <= 1);
-        document.getElementById('nextPage').disabled = (data.page >= data.total_pages);
-    } else {
-        pag.style.display = 'none';
-    }
-    currentPage = data.page;
-
-    var previewTbl = document.getElementById('previewTable');
-    if (previewTbl) makeSortable(previewTbl);
-}
-
-function changePage(delta) {
-    currentPage += delta;
-    loadPreview();
-}
-
-function searchPreview() { currentPage = 1; loadPreview(); }
-function closePreview() {
-    document.getElementById('previewPanel').style.display = 'none';
-    document.getElementById('exportTableBtn').style.display = 'none';
+    DataPreviewModal.openPreview(path);
 }
 
 function previewSqlite(path) {
-    fetch('/api/data/preview/' + encodeURIComponent(path))
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.error) { alert(data.error); return; }
-            renderSqliteTables(data.tables, path);
-            document.getElementById('sqlitePanel').style.display = 'block';
-            document.getElementById('sqliteTitle').textContent = 'Tables: ' + path;
-        })
-        .catch(function() { alert('Failed to load tables'); });
-}
-
-function renderSqliteTables(tables, dbPath) {
-    var html = '<table class="table table-sm portal-table"><thead><tr>' +
-               '<th>Table</th><th>Rows</th><th>Columns</th><th>Actions</th>' +
-               '</tr></thead><tbody>';
-    tables.forEach(function(t) {
-        html += '<tr><td>' + escapeHtml(t.table_name) + '</td>' +
-                '<td>' + t.row_count + '</td>' +
-                '<td>' + t.column_names.length + '</td>' +
-                '<td><button class="btn btn-sm btn-outline-primary" onclick="previewSqliteTable(\'' +
-                escapeJs(dbPath) + "','" + escapeJs(t.table_name) +
-                '\')">Preview</button></td></tr>';
-    });
-    html += '</tbody></table>';
-    document.getElementById('sqliteContent').innerHTML = html;
-}
-
-function previewSqliteTable(dbPath, tableName) {
-    currentPreviewPath = dbPath + '/' + tableName;
-    currentPage = 1;
-    document.getElementById('previewSearch').value = '';
-    var url = '/api/data/preview/' + encodeURIComponent(dbPath) + '/' +
-              encodeURIComponent(tableName) + '?page=1&per_page=' + currentPerPage;
-    fetch(url)
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.error) { alert(data.error); return; }
-            renderPreviewTable(data);
-            document.getElementById('previewPanel').style.display = 'block';
-            document.getElementById('previewTitle').textContent =
-                'Preview: ' + dbPath + ' > ' + tableName;
-            document.getElementById('exportTableBtn').style.display = 'inline-block';
-        })
-        .catch(function() { alert('Failed to load table'); });
+    DataPreviewModal.openPreview(path);
 }
 
 function closeSqlite() { document.getElementById('sqlitePanel').style.display = 'none'; }
@@ -275,16 +176,6 @@ function filterFileTable() {
     });
 }
 
-function exportCurrentTable() {
-    var table = document.getElementById('previewTable');
-    if (table) exportTableToCSV(table, 'data_export.csv');
-}
-
-function exportPreviewTable() {
-    var table = document.getElementById('previewTable');
-    if (table) exportTableToCSV(table, 'preview_export.csv');
-}
-
 function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
@@ -293,14 +184,6 @@ function escapeHtml(str) {
 
 function escapeJs(str) {
     return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
-function debounce(fn, delay) {
-    var timer;
-    return function() {
-        clearTimeout(timer);
-        timer = setTimeout(fn, delay);
-    };
 }
 </script>
 {% endblock %}

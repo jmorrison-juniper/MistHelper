@@ -29,6 +29,242 @@ CATEGORY_RANGES = [
 
 DESTRUCTIVE_THRESHOLD = 90
 
+# --- Parameter Definitions -------------------------------------------------
+# Each entry maps a menu number to its category and ordered parameter list.
+# param_type: site, device, client, choice, text, number
+# depends_on: name of parameter this depends on (for cascading dropdowns)
+# device_filter: ap, switch, gateway, all (only for param_type=device)
+
+PARAMETER_REGISTRY = {}
+
+
+def _site_param(required: bool = True) -> dict:
+    """Build a site-type parameter definition."""
+    return {
+        "name": "site_id",
+        "label": "Site",
+        "param_type": "site",
+        "required": required,
+    }
+
+
+def _device_param(device_filter: str = "all") -> dict:
+    """Build a device-type parameter definition."""
+    return {
+        "name": "device_id",
+        "label": "Device",
+        "param_type": "device",
+        "required": True,
+        "depends_on": "site_id",
+        "device_filter": device_filter,
+    }
+
+
+def _text_param(name: str, label: str, **kwargs) -> dict:
+    """Build a text-type parameter definition."""
+    param = {"name": name, "label": label, "param_type": "text", "required": False}
+    param.update(kwargs)
+    return param
+
+
+def _number_param(name: str, label: str, **kwargs) -> dict:
+    """Build a number-type parameter definition."""
+    param = {"name": name, "label": label, "param_type": "number", "required": False}
+    param.update(kwargs)
+    return param
+
+
+def _choice_param(name: str, label: str, options: list, **kwargs) -> dict:
+    """Build a choice-type parameter definition."""
+    param = {
+        "name": name,
+        "label": label,
+        "param_type": "choice",
+        "required": True,
+        "options": options,
+    }
+    param.update(kwargs)
+    return param
+
+
+def _build_registry() -> dict:
+    """Build the full PARAMETER_REGISTRY mapping."""
+    registry = {}
+
+    # --- Simple site-only operations (1 prompt: site) ---
+    site_only_menus = [
+        "29", "30", "31", "32", "34", "49", "50",
+        "51", "52", "53", "68", "70", "71", "84",
+    ]
+    for menu in site_only_menus:
+        registry[menu] = {
+            "category": "interactive",
+            "parameters": [_site_param()],
+        }
+
+    # --- Site + device (all types) ---
+    site_device_all_menus = ["72", "74", "80", "81", "85"]
+    for menu in site_device_all_menus:
+        registry[menu] = {
+            "category": "interactive",
+            "parameters": [_site_param(), _device_param("all")],
+        }
+
+    # --- Site + switch ---
+    for menu in ["5", "33"]:
+        registry[menu] = {
+            "category": "interactive",
+            "parameters": [_site_param(), _device_param("switch")],
+        }
+
+    # --- Site + gateway ---
+    registry["73"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("gateway")],
+    }
+
+    # --- Forwarding table (menu 6): gateway + text fields ---
+    registry["6"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            _device_param("gateway"),
+            _text_param("prefix", "IP Prefix", placeholder="0.0.0.0/0", default="0.0.0.0/0"),
+            _text_param("service_name", "Service Name", placeholder="press Enter to skip"),
+            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
+            _text_param("node", "Node", placeholder="node0/node1 for HA"),
+        ],
+    }
+
+    # --- Routing table (menu 7): switch + text fields ---
+    registry["7"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            _device_param("switch"),
+            _text_param("prefix", "Route Prefix", placeholder="press Enter to show all"),
+            _text_param("protocol", "Protocol Filter", placeholder="press Enter for any"),
+            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
+            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
+        ],
+    }
+
+    # --- SSR routes (menu 8): gateway + many params ---
+    registry["8"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            _device_param("gateway"),
+            _text_param("protocol", "Protocol", placeholder="press Enter for API default"),
+            _text_param("prefix", "Route Prefix", placeholder="e.g. 192.168.1.0/24"),
+            _text_param("vrf", "VRF Name", placeholder="press Enter for default VRF"),
+            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
+        ],
+    }
+
+    # --- Ping device (menu 87) ---
+    registry["87"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            _device_param("all"),
+            _text_param("target_host", "Target Host/IP", default="8.8.8.8", placeholder="8.8.8.8"),
+            _number_param("ping_count", "Ping Count", default="4", min_value=1, max_value=100),
+        ],
+    }
+
+    # --- ARP device (menu 88) ---
+    registry["88"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("all")],
+    }
+
+    # --- Client operations ---
+    registry["69"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            {"name": "client_mac", "label": "Client", "param_type": "client",
+             "required": True, "depends_on": "site_id"},
+        ],
+    }
+    registry["86"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            {"name": "client_mac", "label": "Client", "param_type": "client",
+             "required": True, "depends_on": "site_id"},
+        ],
+    }
+
+    # --- Service ping (menu 89): gateway + many params ---
+    registry["89"] = {
+        "category": "interactive",
+        "parameters": [
+            _site_param(),
+            _device_param("gateway"),
+            _text_param("tenant", "Tenant", placeholder="select index or skip"),
+            _text_param("service", "Service", placeholder="select index or enter custom"),
+            _text_param("host", "Target Host/IP", default="8.8.8.8", placeholder="8.8.8.8"),
+            _number_param("count", "Ping Count", default="4", min_value=1, max_value=100),
+        ],
+    }
+
+    # --- Packet captures (complex interactive) ---
+    registry["9"] = {
+        "category": "interactive",
+        "parameters": [
+            _choice_param("capture_type", "Capture Type", [
+                {"value": "1", "label": "Wireless Client"},
+                {"value": "2", "label": "Wired Client"},
+                {"value": "3", "label": "Gateway"},
+                {"value": "4", "label": "Switch"},
+                {"value": "5", "label": "New Association"},
+                {"value": "6", "label": "Scan Radio"},
+            ]),
+            _site_param(),
+            _text_param("client_mac", "Client MAC", placeholder="e.g. aa:bb:cc:dd:ee:ff"),
+            _number_param("duration", "Duration (seconds)", default="60", min_value=10, max_value=300),
+            _number_param("num_packets", "Packet Count", default="100", min_value=1, max_value=10000),
+            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=64, max_value=1500),
+        ],
+    }
+
+    registry["10"] = {
+        "category": "interactive",
+        "parameters": [
+            _text_param("mxedge_index", "MxEdge Index", placeholder="select MxEdge index"),
+            _text_param("port_index", "Port Index", placeholder="select port index"),
+            _text_param("tcpdump_filter", "Tcpdump Filter", placeholder="press Enter for none"),
+            _number_param("duration", "Duration (seconds)", default="30", min_value=1, max_value=86400),
+            _number_param("num_packets", "Packet Count", default="1024", min_value=0, max_value=10000),
+            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=1, max_value=2048),
+        ],
+    }
+
+    # --- CLI-only operations ---
+    registry["62"] = {
+        "category": "cli_only",
+        "parameters": [],
+        "cli_only_message": (
+            "Interactive troubleshooting requires multi-step keyboard input. "
+            "Use SSH access on port 2200."
+        ),
+    }
+    registry["79"] = {
+        "category": "cli_only",
+        "parameters": [],
+        "cli_only_message": (
+            "Interactive CLI shell requires persistent keyboard input. "
+            "Use SSH access on port 2200."
+        ),
+    }
+
+    return registry
+
+
+PARAMETER_REGISTRY = _build_registry()
+
 
 class OperationExecutor:
     """Execute MistHelper menu operations in background threads.
@@ -91,11 +327,14 @@ class OperationExecutor:
                 continue
             category = self._get_category(num)
             desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
+            reg_entry = PARAMETER_REGISTRY.get(key)
+            op_category = reg_entry["category"] if reg_entry else "non_interactive"
             if category not in categories:
                 categories[category] = []
             categories[category].append({
                 "menu_number": key,
                 "description": desc,
+                "category": op_category,
             })
         return [
             {"name": name, "operations": ops}
@@ -108,9 +347,21 @@ class OperationExecutor:
             return None
         value = self._menu_actions[menu_number]
         desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
+        entry = PARAMETER_REGISTRY.get(menu_number)
+        if entry is not None:
+            result = {
+                "menu_number": menu_number,
+                "description": desc,
+                "category": entry.get("category", "interactive"),
+                "parameters": entry.get("parameters", []),
+            }
+            if "cli_only_message" in entry:
+                result["cli_only_message"] = entry["cli_only_message"]
+            return result
         return {
             "menu_number": menu_number,
             "description": desc,
+            "category": "non_interactive",
             "parameters": [],
         }
 
@@ -160,10 +411,17 @@ class OperationExecutor:
 
     def _execute_operation(self, run: dict, parameters: dict) -> None:
         """Execute the operation function in a background thread."""
+        from web_portal.services.input_hook import web_input_context
+
         self._update_status(run, "running", 0)
+        input_answers = parameters.get("input_answers", [])
         try:
             func = self._menu_actions[run["menu_number"]][0]
-            self._capture_and_run(run, func)
+            if input_answers:
+                with web_input_context(input_answers):
+                    self._capture_and_run(run, func)
+            else:
+                self._capture_and_run(run, func)
             self._update_status(run, "completed", 100)
             self._publish_complete(run)
         except (EOFError, SystemExit):

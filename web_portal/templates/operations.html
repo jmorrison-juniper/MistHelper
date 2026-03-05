@@ -28,9 +28,22 @@
             <h5 id="selectedOpTitle"></h5>
             <p class="text-muted mb-2" id="selectedOpDesc"></p>
 
+            <!-- CLI-Only Message -->
+            <div id="cliOnlyPanel" class="alert alert-info" style="display:none;">
+                <strong>SSH Required</strong>
+                <p id="cliOnlyMessage" class="mb-0 mt-1"></p>
+            </div>
+
             <!-- Parameter Form (if applicable) -->
             <div id="parameterForm" style="display:none;">
                 <div id="parameterFields"></div>
+                <div id="parameterLoading" class="text-center text-muted py-2" style="display:none;">
+                    Loading parameters...
+                </div>
+                <div id="parameterError" class="alert alert-danger mt-2" style="display:none;">
+                    <span id="parameterErrorMsg"></span>
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="retryLoadParameters()">Retry</button>
+                </div>
             </div>
 
             <button class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()">
@@ -69,6 +82,44 @@
             <div id="outputFiles" style="display:none;" class="mt-2">
                 <strong>Output Files:</strong>
                 <ul id="outputFileList" class="list-unstyled mt-1"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Preview Modal (reused from data_preview.js) -->
+<div class="modal fade modal-fullscreen-custom" id="dataPreviewModal" tabindex="-1"
+     aria-labelledby="dataPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dataPreviewModalLabel">Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dataPreviewSearchRow" class="mb-2" style="display:none;">
+                    <input type="text" class="form-control form-control-sm" id="dataPreviewSearch"
+                           placeholder="Search rows..." style="max-width:300px;">
+                </div>
+                <div id="dataPreviewLoading" class="modal-loading" style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading preview...</p>
+                </div>
+                <div id="dataPreviewBody"></div>
+                <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
+                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                            onclick="DataPreviewModal.changePage(-1)">Prev</button>
+                    <span class="page-info" id="dataPreviewPageInfo"></span>
+                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
+                            onclick="DataPreviewModal.changePage(1)">Next</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-outline-secondary btn-export"
+                        onclick="DataPreviewModal.exportCsv()">Export CSV</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>

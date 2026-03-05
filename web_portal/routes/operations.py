@@ -41,6 +41,9 @@ def run_operation():
     data = request.get_json(silent=True) or {}
     menu_number = str(data.get("menu_number", ""))
     parameters = data.get("parameters", {})
+    input_answers = parameters.get("input_answers", [])
+    if input_answers:
+        parameters["input_answers"] = input_answers
     executor = _get_executor()
     result = executor.start_operation(menu_number, parameters)
     if "error" in result:
@@ -126,6 +129,40 @@ def operation_parameters(menu_number):
     return jsonify(params)
 
 
+@operations_bp.route("/api/operations/sites")
+def list_sites():
+    """Return org sites for site selector dropdowns."""
+    apisession = current_app.config.get("APISESSION")
+    org_id = current_app.config.get("ORG_ID")
+    sites = _fetch_org_sites(apisession, org_id)
+    return jsonify({"sites": sites, "total_count": len(sites)})
+
+
+@operations_bp.route("/api/operations/sites/<site_id>/devices")
+def list_site_devices(site_id):
+    """Return devices at a site, filtered by type."""
+    device_type = request.args.get("type", "all")
+    apisession = current_app.config.get("APISESSION")
+    devices = _fetch_site_devices(apisession, site_id, device_type)
+    return jsonify({
+        "devices": devices,
+        "total_count": len(devices),
+        "site_id": site_id,
+    })
+
+
+@operations_bp.route("/api/operations/sites/<site_id>/clients")
+def list_site_clients(site_id):
+    """Return clients at a site (wireless + wired merged)."""
+    apisession = current_app.config.get("APISESSION")
+    clients = _fetch_site_clients(apisession, site_id)
+    return jsonify({
+        "clients": clients,
+        "total_count": len(clients),
+        "site_id": site_id,
+    })
+
+
 def _get_executor():
     """Retrieve or create the OperationExecutor singleton."""
     executor = current_app.config.get("OPERATION_EXECUTOR")
@@ -190,3 +227,114 @@ def _format_sse(event_type: str, data: dict) -> str:
     """Format a dict as an SSE event string."""
     payload = json.dumps(data)
     return f"event: {event_type}\ndata: {payload}\n\n"
+
+
+def _fetch_org_sites(apisession, org_id: str) -> list:
+    """Fetch organization sites from Mist API."""
+    if not apisession or not org_id:
+        return []
+    try:
+        import mistapi
+        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+        sites = response.data if hasattr(response, "data") else []
+        return [
+            {
+                "id": site.get("id", ""),
+                "name": site.get("name", ""),
+                "address": site.get("address", ""),
+                "country_code": site.get("country_code", ""),
+                "timezone": site.get("timezone", ""),
+            }
+            for site in sites
+        ]
+    except Exception:
+        return []
+
+
+def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
+    """Fetch devices for a site from Mist API."""
+    if not apisession or not site_id:
+        return []
+    try:
+        import mistapi
+        kwargs = {"site_id": site_id}
+        if device_type and device_type != "all":
+            kwargs["type"] = device_type
+        else:
+            kwargs["type"] = "all"
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, **kwargs)
+        devices = response.data if hasattr(response, "data") else []
+        return [
+            {
+                "id": device.get("id", ""),
+                "mac": device.get("mac", ""),
+                "name": device.get("name", ""),
+                "model": device.get("model", ""),
+                "type": device.get("type", ""),
+                "status": device.get("status", ""),
+            }
+            for device in devices
+        ]
+    except Exception:
+        return []
+
+
+def _fetch_site_clients(apisession, site_id: str) -> list:
+    """Fetch wireless and wired clients for a site."""
+    if not apisession or not site_id:
+        return []
+    clients = []
+    try:
+        import mistapi
+        wireless = _fetch_wireless_clients(mistapi, apisession, site_id)
+        wired = _fetch_wired_clients(mistapi, apisession, site_id)
+        clients = wireless + wired
+    except Exception:
+        pass
+    return clients
+
+
+def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
+    """Fetch wireless clients for a site."""
+    try:
+        response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
+            apisession, site_id
+        )
+        raw = response.data if hasattr(response, "data") else []
+        results = raw.get("results", []) if isinstance(raw, dict) else raw
+        return [
+            {
+                "mac": client.get("mac", ""),
+                "hostname": client.get("hostname", ""),
+                "ip": client.get("ip", ""),
+                "type": "wireless",
+                "ssid": client.get("ssid", ""),
+                "ap_name": client.get("ap", [None])[0] if isinstance(client.get("ap"), list) else client.get("ap_name", ""),
+            }
+            for client in results
+        ]
+    except Exception:
+        return []
+
+
+def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
+    """Fetch wired clients for a site."""
+    try:
+        response = mistapi.api.v1.sites.clients.searchSiteWiredClients(
+            apisession, site_id
+        )
+        raw = response.data if hasattr(response, "data") else []
+        results = raw.get("results", []) if isinstance(raw, dict) else raw
+        return [
+            {
+                "mac": client.get("mac", ""),
+                "hostname": client.get("hostname", ""),
+                "ip": client.get("ip", ""),
+                "type": "wired",
+                "ssid": "",
+                "ap_name": "",
+            }
+            for client in results
+        ]
+    except Exception:
+        return []

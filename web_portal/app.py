@@ -11,8 +11,8 @@ from typing import Any, Optional
 
 from flask import Flask
 
-from web_portal.services.security import PortalConfigLoader, SecurityMiddleware
-from web_portal.services.theme import ThemeManager
+from web_portal.services.config import PortalConfigLoader, SecurityMiddleware, ThemeManager
+from web_portal.services.input_hook import InputInterceptor
 
 
 class WebPortalApp:
@@ -41,6 +41,7 @@ class WebPortalApp:
         WebPortalApp._apply_security(app, config)
         WebPortalApp._register_blueprints(app)
         WebPortalApp._register_context_processor(app)
+        InputInterceptor.install()
         return app
 
     @staticmethod

@@ -53919,7 +53919,7 @@ def _launch_web_portal(args):
     and menu_actions.
     """
     from web_portal.app import WebPortalApp
-    from web_portal.services.security import PortalConfigLoader
+    from web_portal.services.config import PortalConfigLoader
 
     loader = PortalConfigLoader()
     config = loader.load_config()
