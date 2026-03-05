@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4>Dashboard</h4>
+        <p class="text-muted">Welcome to {{ config.PORTAL.title }} Web Portal</p>
+    </div>
+</div>
+
+<!-- Summary Cards Row -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="portal-card">
+            <div class="card-title">Data Files</div>
+            <div class="fs-2 fw-bold">{{ summary.file_count }}</div>
+            <small class="text-muted">files in data directory</small>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="portal-card">
+            <div class="card-title">Status</div>
+            <div class="fs-5 fw-bold text-success">Healthy</div>
+            <small class="text-muted">All services running</small>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="portal-card">
+            <div class="card-title">Data Directory</div>
+            <div class="fs-6 text-truncate" title="{{ summary.data_dir }}">{{ summary.data_dir }}</div>
+            <small class="text-muted">output location</small>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Files -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h5>Recent Files</h5>
+        {% if summary.recent_files %}
+        <table class="table table-sm portal-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in summary.recent_files %}
+                <tr>
+                    <td>{{ file.name }}</td>
+                    <td class="file-size">
+                        <script>document.write(formatFileSize({{ file.size_bytes }}))</script>
+                    </td>
+                    <td class="file-size">
+                        <script>document.write(formatTimestamp({{ file.last_modified }}))</script>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No data files yet. Run an operation to get started.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('data.data_browser') }}" class="quick-link">
+            <div class="link-icon">[D]</div>
+            <div class="fw-bold">Data Browser</div>
+            <small class="text-muted">Browse and download files</small>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('operations.operations_page') }}" class="quick-link">
+            <div class="link-icon">[O]</div>
+            <div class="fw-bold">Operations</div>
+            <small class="text-muted">Run data extraction operations</small>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('maps.maps_page') }}" class="quick-link">
+            <div class="link-icon">[M]</div>
+            <div class="fw-bold">Map Viewer</div>
+            <small class="text-muted">View site floor plans</small>
+        </a>
+    </div>
+</div>
+{% endblock %}

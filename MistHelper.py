@@ -53910,6 +53910,42 @@ SECURITY NOTES:
         return EnhancedSSHRunner._run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
 
 
+def _launch_web_portal(args):
+    """Launch the Flask web portal.
+
+    Determines whether to use Gunicorn (container)
+    or Flask dev server (local Windows) and starts
+    the portal with the current apisession, org_id,
+    and menu_actions.
+    """
+    from web_portal.app import WebPortalApp
+    from web_portal.services.security import PortalConfigLoader
+
+    config = PortalConfigLoader()
+    port = config.web_port
+    host = "0.0.0.0"
+
+    app = WebPortalApp.create_app(
+        apisession=apisession,
+        menu_actions=menu_actions,
+        org_id=org_id,
+    )
+
+    in_container = ConfigUtils.is_running_in_container()
+    if in_container:
+        logging.info(
+            "WEB_PORTAL: Container detected - use wsgi.py with Gunicorn"
+        )
+        print(f">> Running Flask dev server on {host}:{port}")
+        print(">> For production, use: gunicorn wsgi:app")
+        app.run(host=host, port=port, debug=False)
+    else:
+        logging.info(
+            f"WEB_PORTAL: Local mode - Flask dev server on {host}:{port}"
+        )
+        print(f">> Web portal starting at http://127.0.0.1:{port}")
+        app.run(host=host, port=port, debug=args.debug)
+
 
 def main():
     """Main entry point for MistHelper CLI application."""
@@ -53966,6 +54002,7 @@ def main():
     parser.add_argument("--no-env", action="store_true", help="Disable .env file loading for SSH operations (require explicit command line parameters)")
     parser.add_argument("--tui", action="store_true", help="Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library")
     parser.add_argument("--login", action="store_true", help="Use interactive login (email/password) instead of API token - enables MSP-level API access")
+    parser.add_argument("--web-portal", action="store_true", help="Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu")
     args = parser.parse_args()
 
     # Store args globally for menu functions to access CLI flags
@@ -54150,6 +54187,13 @@ def main():
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             logging.debug(f"TUI_DEBUG: [{timestamp}] TUI mode completed successfully - about to exit")
         logging.info("TUI_MODE: TUI mode completed successfully")
+        sys.exit(0)
+    
+    # Handle Web Portal mode
+    if getattr(args, 'web_portal', False):
+        logging.info("WEB_PORTAL: Starting web portal mode")
+        print(">> Web Portal mode activated")
+        _launch_web_portal(args)
         sys.exit(0)
     
     logging.debug(f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}, skip_deps={args.skip_deps}, output_format={args.output_format}, test={args.test}, address_check={args.address_check}, tui={args.tui}")

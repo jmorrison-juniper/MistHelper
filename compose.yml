@@ -9,8 +9,8 @@ services:
     ports:
       # SSH access for interactive sessions
       - "2200:2200"
-      # Dash web viewer for interactive map viewer (menu option 40)
-      - "8050:8050"
+      # Web portal for data browsing and operations
+      - "8055:8055"
     volumes:
       # Mount local data directory to persist SQLite database and logs
       # The container writes to /app/data, this maps it to ./data on host
@@ -22,8 +22,8 @@ services:
       - OUTPUT_FORMAT=sqlite
       - DATABASE_PATH=/app/data/mist_data.db
       - PYTHONUNBUFFERED=1
-      # Dash web viewer port (must match exposed port)
-      - DASH_PORT=8050
+      # Web portal port (must match exposed port)
+      - WEB_PORT=8055
       # SSL settings for UV downloads (if needed)
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}{{ config.PORTAL.title }}{% endblock %}</title>
+
+    <!-- Vendor CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+
+    <!-- Theme CSS (swapped by portal.js) -->
+    <link rel="stylesheet" id="theme-css"
+          href="{{ url_for('static', filename='css/themes/' + config.PORTAL.theme + '.css') }}">
+
+    <!-- Portal CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/portal.css') }}">
+
+    <!-- Accent color injection -->
+    <style>
+        :root {
+            --portal-accent: {{ config.PORTAL.accent_color }};
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg portal-navbar sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.dashboard') }}">
+                <img src="{{ config.PORTAL.logo_url }}" alt="Logo" height="32" class="me-2">
+                <span>{{ config.PORTAL.title }}</span>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#portalNav" aria-controls="portalNav"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="portalNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/' %}active{% endif %}"
+                           href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path.startswith('/data') %}active{% endif %}"
+                           href="{{ url_for('data.data_browser') }}">Data</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path.startswith('/operations') %}active{% endif %}"
+                           href="{{ url_for('operations.operations_page') }}">Operations</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path.startswith('/maps') %}active{% endif %}"
+                           href="{{ url_for('maps.maps_page') }}">Maps</a>
+                    </li>
+                </ul>
+
+                <!-- Theme Switcher -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                            id="themeSwitcher" data-bs-toggle="dropdown" aria-expanded="false">
+                        Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="themeMenu">
+                        <!-- Populated by portal.js -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container-fluid portal-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="portal-footer text-center text-muted py-2">
+        <small>{{ config.PORTAL.title }} Web Portal</small>
+    </footer>
+
+    <!-- Vendor JS -->
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+
+    <!-- Portal JS -->
+    <script src="{{ url_for('static', filename='js/portal.js') }}"
+            data-default-theme="{{ config.PORTAL.theme }}"></script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

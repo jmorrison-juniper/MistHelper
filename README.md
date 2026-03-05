@@ -187,6 +187,7 @@ Primary flags (from argparse block near end of file):
 | `--dry-run` | Preview destructive operations without making changes |
 | `--tui` | Launch Terminal User Interface mode for visual API navigation |
 | `--login` | Use interactive login (email/password) instead of API token - enables MSP-level API access |
+| `--web-portal` | Launch the web portal interface on port 8055 (or WEB_PORT env var) |
 | `--testinteractive` | Run systematic test of read-only interactive menu options |
 
 Examples (PowerShell friendly):
@@ -466,7 +467,7 @@ podman build -t misthelper -f Containerfile .
 # directory must be writable by that user
 chmod -R 777 data/   # Or use appropriate ownership/permissions for your setup
 
-podman run -d --name misthelper -p 2200:2200 -p 8050:8050 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
@@ -549,6 +550,55 @@ ssh -p 2200 misthelper@127.0.0.1
 | Port conflict | Ensure port 2200 is available |
 
 Persisted artifacts appear under local `data/` bind mount.
+
+### Web Portal (NEW)
+MistHelper includes a Flask-based web portal for browser access to data, operations, and map viewing.
+
+#### Quick Start - Web Portal
+```powershell
+# Local development (Windows)
+python MistHelper.py --web-portal
+
+# Container (runs automatically alongside SSH)
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
+  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
+  ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+Open http://localhost:8055 in your browser.
+
+#### Portal Features
+- **Data Browser**: Browse, preview, search, and download CSV/SQLite output files
+- **Operations**: Run non-destructive data extraction operations (menus 1-89) with real-time SSE progress
+- **Map Viewer**: Interactive Plotly.js floor plan viewer with device markers
+- **Themes**: Dark, Light, and High Contrast themes with instant switching (persisted in localStorage)
+- **Branding**: Customize title, logo, and accent color via ENV variables
+
+#### Portal ENV Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORTAL_TITLE` | `MistHelper` | Browser tab and navbar title |
+| `PORTAL_LOGO_URL` | `/static/img/logo-default.svg` | Logo image URL |
+| `PORTAL_ACCENT_COLOR` | `#0d6efd` | Accent color for buttons and highlights |
+| `PORTAL_THEME` | `dark` | Default theme (dark, light, high-contrast) |
+| `WEB_PORT` | `8055` | Web portal listen port |
+| `PORTAL_ALLOWED_IPS` | *(empty = all)* | Comma-separated CIDR allowlist |
+| `PORTAL_SECRET_KEY` | *(auto-generated)* | Flask session secret key |
+
+#### Portal Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Dashboard with data summary |
+| `/data` | GET | Data browser page |
+| `/operations` | GET | Operations page |
+| `/maps` | GET | Map viewer page |
+| `/health` | GET | JSON health check |
+| `/api/data/files` | GET | List data files |
+| `/api/operations/list` | GET | List available operations |
+| `/api/operations/run` | POST | Run an operation |
+| `/api/operations/stream` | GET | SSE event stream |
 
 ---
 ## 16. Development Notes
@@ -656,6 +706,28 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.03.05.02.49",
+      "date": "2026-03-05",
+      "changes": {
+        "features": [
+          "Web Portal: Flask-based browser interface on port 8055 (--web-portal CLI flag)",
+          "Data Browser: Browse, search, preview, and download CSV/SQLite output files",
+          "Operations: Run data extraction operations (menus 1-89) with real-time SSE progress",
+          "Map Viewer: Interactive Plotly.js floor plan viewer with device markers",
+          "Theme System: Dark, Light, and High Contrast themes with instant switching and localStorage persistence",
+          "Portal Branding: Customizable title, logo, and accent color via ENV variables",
+          "Container Integration: Dual-process startup (Gunicorn + sshd) on ports 8055 and 2200",
+          "Security: CSP headers, CSRF protection, IP allowlist, path traversal guard"
+        ],
+        "enhancements": [
+          "Replaced Dash dependency with Flask + Gunicorn for lighter footprint",
+          "Updated Containerfile: EXPOSE 8055, COPY web_portal/, bundled vendor assets",
+          "Updated compose.yml: Port 8055:8055 replaces 8050:8050, WEB_PORT env var",
+          "Container start.sh: Dual-process with SIGTERM trap for clean shutdown"
+        ]
+      }
+    },
     {
       "version": "26.03.04.22.30",
       "date": "2026-03-04",

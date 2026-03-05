@@ -32,9 +32,13 @@ pyte>=0.8.0
 usaddress-scourgify>=0.6.0
 rapidfuzz>=3.8.0
 
-# Interactive visualization (map viewer)
+# Web portal (Flask + Gunicorn)
+Flask>=3.0.0
+gunicorn>=22.0.0
+flask-wtf>=1.2.0
+
+# Interactive visualization (map viewer — Plotly.js bundled as static vendor)
 plotly>=5.14.0
-dash>=2.9.0
 matplotlib>=3.5.0
 pillow>=9.0.0
 kaleido>=0.2.1

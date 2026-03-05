@@ -48,5 +48,37 @@ echo "[SSH] Each SSH connection spawns its own MistHelper session." >> /app/data
 echo "[SSH] Connect with: ssh -p 2200 $USERNAME@<container-ip>" >> /app/data/ssh.log
 echo "[SSH] Use option 0 in MistHelper to disconnect." >> /app/data/ssh.log
 
-# Run SSH daemon in foreground
-exec /usr/sbin/sshd -D
+# Determine web portal port (default 8055)
+WEB_PORT="${WEB_PORT:-8055}"
+
+# Start Gunicorn web portal in the background
+echo "[PORTAL] Starting web portal on port $WEB_PORT..." >> /app/data/ssh.log
+su - misthelper -c "cd /app && gunicorn wsgi:app \
+    --bind 0.0.0.0:${WEB_PORT} \
+    --workers 1 \
+    --worker-class gthread \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile /app/data/portal_access.log \
+    --error-logfile /app/data/portal_error.log" &
+GUNICORN_PID=$!
+
+# Trap signals to stop both processes
+cleanup() {
+    echo "[CONTAINER] Shutting down..." >> /app/data/ssh.log
+    kill "$GUNICORN_PID" 2>/dev/null || true
+    kill "$SSHD_PID" 2>/dev/null || true
+    wait "$GUNICORN_PID" 2>/dev/null || true
+    wait "$SSHD_PID" 2>/dev/null || true
+    exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+# Start SSH daemon in the background
+/usr/sbin/sshd -D &
+SSHD_PID=$!
+
+# Wait for either process to exit
+wait -n "$GUNICORN_PID" "$SSHD_PID" 2>/dev/null || true
+echo "[CONTAINER] A service exited unexpectedly" >> /app/data/ssh.log
+cleanup

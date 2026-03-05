@@ -1,0 +1,222 @@
+"""Data browser service for the MistHelper web portal.
+
+Lists files in the data directory, previews CSV and SQLite content
+with pagination, and enforces path traversal guards.
+"""
+
+import csv
+import math
+import os
+import sqlite3
+
+
+ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
+
+
+class DataBrowserService:
+    """Browse, preview, and download files from the data directory.
+
+    All file access is restricted to the configured data directory
+    to prevent path traversal attacks.
+    """
+
+    def __init__(self, data_dir: str):
+        """Initialize with the absolute path to the data directory."""
+        self._data_dir = os.path.abspath(data_dir)
+
+    def list_files(self) -> list:
+        """List all browsable files and directories in data dir."""
+        if not os.path.isdir(self._data_dir):
+            return []
+        entries = []
+        for item in os.scandir(self._data_dir):
+            if item.name.startswith("."):
+                continue
+            entry = self._build_file_entry(item)
+            if entry is not None:
+                entries.append(entry)
+        entries.sort(key=lambda e: e["last_modified"], reverse=True)
+        return entries
+
+    def preview_file(self, rel_path: str, page: int, per_page: int, search: str) -> dict:
+        """Preview a CSV or return SQLite table list."""
+        resolved = self.resolve_safe_path(rel_path)
+        if resolved is None:
+            return {"error": "File not found"}
+        ext = os.path.splitext(resolved)[1].lower()
+        if ext == ".csv":
+            return self._preview_csv(resolved, page, per_page, search)
+        if ext in (".db", ".sqlite"):
+            return self._list_sqlite_tables(resolved)
+        return {"error": "Preview not supported for this file type"}
+
+    def preview_sqlite_table(
+        self, rel_path: str, table_name: str, page: int, per_page: int, search: str
+    ) -> dict:
+        """Preview rows from a specific SQLite table."""
+        resolved = self.resolve_safe_path(rel_path)
+        if resolved is None:
+            return {"error": "File not found"}
+        return self._preview_sqlite(resolved, table_name, page, per_page, search)
+
+    def resolve_safe_path(self, rel_path: str) -> str:
+        """Resolve a relative path safely within the data directory."""
+        if ".." in rel_path.split("/") or ".." in rel_path.split("\\"):
+            return None
+        full = os.path.normpath(os.path.join(self._data_dir, rel_path))
+        if not full.startswith(self._data_dir):
+            return None
+        if not os.path.exists(full):
+            return None
+        return full
+
+    def _build_file_entry(self, entry) -> dict:
+        """Build metadata dict for a directory entry."""
+        if entry.is_dir():
+            return {
+                "name": entry.name,
+                "path": entry.name,
+                "size_bytes": 0,
+                "last_modified": entry.stat().st_mtime,
+                "file_type": "directory",
+                "is_directory": True,
+            }
+        ext = os.path.splitext(entry.name)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return None
+        stat = entry.stat()
+        return {
+            "name": entry.name,
+            "path": entry.name,
+            "size_bytes": stat.st_size,
+            "last_modified": stat.st_mtime,
+            "file_type": ext.lstrip("."),
+            "is_directory": False,
+        }
+
+    def _preview_csv(self, filepath: str, page: int, per_page: int, search: str) -> dict:
+        """Read and paginate a CSV file."""
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                reader = csv.reader(fh)
+                columns = next(reader, [])
+                all_rows = list(reader)
+        except Exception as exc:
+            return {"error": f"Failed to read CSV: {exc}"}
+        filtered = self._filter_rows(all_rows, search)
+        total = len(filtered)
+        total_pages = max(1, math.ceil(total / per_page))
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        page_rows = filtered[start:start + per_page]
+        return {
+            "columns": columns,
+            "rows": page_rows,
+            "total_rows": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+
+    def _filter_rows(self, rows: list, search: str) -> list:
+        """Filter rows by search string (case-insensitive)."""
+        if not search:
+            return rows
+        search_lower = search.lower()
+        return [
+            row for row in rows
+            if any(search_lower in cell.lower() for cell in row)
+        ]
+
+    def _list_sqlite_tables(self, filepath: str) -> dict:
+        """List tables and metadata in a SQLite database."""
+        try:
+            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+            tables = []
+            for (name,) in cursor.fetchall():
+                info = self._get_table_info(conn, name)
+                tables.append(info)
+            conn.close()
+            return {"tables": tables}
+        except Exception as exc:
+            return {"error": f"Failed to read SQLite: {exc}"}
+
+    def _get_table_info(self, conn, table_name: str) -> dict:
+        """Get row count and column names for a SQLite table."""
+        cursor = conn.cursor()
+        cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+        row_count = cursor.fetchone()[0]
+        cursor.execute(f'PRAGMA table_info("{table_name}")')
+        columns = [row[1] for row in cursor.fetchall()]
+        return {
+            "table_name": table_name,
+            "row_count": row_count,
+            "column_names": columns,
+        }
+
+    def _preview_sqlite(
+        self, filepath: str, table_name: str, page: int, per_page: int, search: str
+    ) -> dict:
+        """Read and paginate rows from a SQLite table."""
+        try:
+            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute(f'PRAGMA table_info("{table_name}")')
+            col_info = cursor.fetchall()
+            if not col_info:
+                conn.close()
+                return {"error": "Table not found"}
+            columns = [row[1] for row in col_info]
+            result = self._query_sqlite_page(
+                conn, table_name, columns, page, per_page, search
+            )
+            conn.close()
+            return result
+        except Exception as exc:
+            return {"error": f"Failed to read SQLite table: {exc}"}
+
+    def _query_sqlite_page(
+        self, conn, table_name: str, columns: list,
+        page: int, per_page: int, search: str
+    ) -> dict:
+        """Execute paginated query on a SQLite table."""
+        cursor = conn.cursor()
+        if search:
+            where = " OR ".join(
+                f'CAST("{col}" AS TEXT) LIKE ?' for col in columns
+            )
+            pattern = f"%{search}%"
+            params = [pattern] * len(columns)
+            cursor.execute(
+                f'SELECT COUNT(*) FROM "{table_name}" WHERE {where}', params
+            )
+            total = cursor.fetchone()[0]
+            offset = (max(1, min(page, max(1, math.ceil(total / per_page)))) - 1) * per_page
+            cursor.execute(
+                f'SELECT * FROM "{table_name}" WHERE {where} LIMIT ? OFFSET ?',
+                params + [per_page, offset],
+            )
+        else:
+            cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+            total = cursor.fetchone()[0]
+            total_pages = max(1, math.ceil(total / per_page))
+            page = max(1, min(page, total_pages))
+            offset = (page - 1) * per_page
+            cursor.execute(
+                f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?',
+                [per_page, offset],
+            )
+        rows = [list(row) for row in cursor.fetchall()]
+        total_pages = max(1, math.ceil(total / per_page))
+        return {
+            "columns": columns,
+            "rows": rows,
+            "total_rows": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }

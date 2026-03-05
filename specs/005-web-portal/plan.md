@@ -62,7 +62,7 @@ No standalone wrapper functions. Each class has single responsibility.
 - CSP headers on all responses — FR-020
 - IP allowlisting guard — FR-021
 - Operation parameters validated server-side before execution
-- No `input()` calls in web context (all interaction via HTTP/WebSocket)
+- No `input()` calls in web context (all interaction via HTTP/SSE)
 
 **Status**: PASS
 
@@ -107,7 +107,7 @@ specs/005-web-portal/
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output
 ├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output (REST + WebSocket)
+├── contracts/           # Phase 1 output (REST + SSE)
 │   ├── rest-api.md      # HTTP endpoint contracts
 │   └── sse-events.md    # SSE event contracts
 └── tasks.md             # Phase 2 output (NOT created by /speckit.plan)

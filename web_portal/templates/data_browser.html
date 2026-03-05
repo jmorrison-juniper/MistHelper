@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}Data Browser - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h4>Data Browser</h4>
+        <p class="text-muted">Browse, preview, and download data files.</p>
+    </div>
+</div>
+
+<!-- Controls Row -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input type="text" class="form-control portal-search" id="fileSearch"
+               placeholder="Filter files..." aria-label="Filter files">
+    </div>
+    <div class="col-md-8 text-end">
+        <button class="btn btn-sm btn-outline-secondary btn-export" id="exportTableBtn"
+                onclick="exportCurrentTable()" style="display:none;">
+            Export CSV
+        </button>
+    </div>
+</div>
+
+<!-- File List -->
+<div id="fileListArea">
+    <table class="table portal-table" id="fileTable">
+        <thead>
+            <tr>
+                <th data-sort>Name</th>
+                <th data-sort>Type</th>
+                <th data-sort>Size</th>
+                <th data-sort>Modified</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="fileTableBody">
+            <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Preview Panel -->
+<div id="previewPanel" class="preview-panel" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 id="previewTitle" class="mb-0">Preview</h6>
+        <div>
+            <button class="btn btn-sm btn-outline-secondary btn-export" onclick="exportPreviewTable()">
+                Export CSV
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="closePreview()">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Search within preview -->
+    <input type="text" class="form-control form-control-sm mb-2" id="previewSearch"
+           placeholder="Search rows..." style="max-width:250px;">
+
+    <div id="previewContent"></div>
+
+    <!-- Pagination -->
+    <div class="portal-pagination" id="previewPagination" style="display:none;">
+        <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)">Prev</button>
+        <span class="page-info" id="pageInfo"></span>
+        <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)">Next</button>
+    </div>
+</div>
+
+<!-- SQLite Table List Panel -->
+<div id="sqlitePanel" class="preview-panel" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 id="sqliteTitle" class="mb-0">Tables</h6>
+        <button class="btn btn-sm btn-outline-secondary" onclick="closeSqlite()">Close</button>
+    </div>
+    <div id="sqliteContent"></div>
+</div>
+
+<!-- Empty State -->
+<div id="emptyState" class="empty-state" style="display:none;">
+    <div class="empty-icon">[ ]</div>
+    <p>No data files found.</p>
+    <p class="text-muted">Run an operation to generate data files.</p>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var currentPreviewPath = '';
+var currentPage = 1;
+var currentPerPage = 50;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadFileList();
+    document.getElementById('fileSearch').addEventListener('input', filterFileTable);
+    document.getElementById('previewSearch').addEventListener('input', debounce(searchPreview, 400));
+});
+
+function loadFileList() {
+    fetch('/api/data/files')
+        .then(function(res) { return res.json(); })
+        .then(function(data) { renderFileTable(data.files || []); })
+        .catch(function() { renderFileTable([]); });
+}
+
+function renderFileTable(files) {
+    var tbody = document.getElementById('fileTableBody');
+    var empty = document.getElementById('emptyState');
+    if (files.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = '';
+    files.forEach(function(file) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td>' + escapeHtml(file.name) + '</td>' +
+            '<td><span class="badge bg-secondary">' + escapeHtml(file.file_type) + '</span></td>' +
+            '<td class="file-size">' + (file.is_directory ? '--' : formatFileSize(file.size_bytes)) + '</td>' +
+            '<td class="file-size">' + formatTimestamp(file.last_modified) + '</td>' +
+            '<td>' + buildActions(file) + '</td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function buildActions(file) {
+    if (file.is_directory) {
+        return '<span class="text-muted">folder</span>';
+    }
+    var actions = '';
+    if (file.file_type === 'csv' || file.file_type === 'json' || file.file_type === 'log') {
+        actions += '<button class="btn btn-sm btn-outline-primary me-1" onclick="previewFile(\'' +
+                   escapeJs(file.path) + '\')">Preview</button>';
+    }
+    if (file.file_type === 'db' || file.file_type === 'sqlite') {
+        actions += '<button class="btn btn-sm btn-outline-primary me-1" onclick="previewSqlite(\'' +
+                   escapeJs(file.path) + '\')">Tables</button>';
+    }
+    actions += '<a class="btn btn-sm btn-accent" href="/api/data/download/' +
+               encodeURIComponent(file.path) + '">Download</a>';
+    return actions;
+}
+
+function previewFile(path) {
+    currentPreviewPath = path;
+    currentPage = 1;
+    document.getElementById('previewSearch').value = '';
+    loadPreview();
+}
+
+function loadPreview() {
+    var search = document.getElementById('previewSearch').value;
+    var url = '/api/data/preview/' + encodeURIComponent(currentPreviewPath) +
+              '?page=' + currentPage + '&per_page=' + currentPerPage;
+    if (search) url += '&search=' + encodeURIComponent(search);
+
+    fetch(url)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            renderPreviewTable(data);
+            document.getElementById('previewPanel').style.display = 'block';
+            document.getElementById('previewTitle').textContent = 'Preview: ' + currentPreviewPath;
+            document.getElementById('exportTableBtn').style.display = 'inline-block';
+        })
+        .catch(function() { alert('Failed to load preview'); });
+}
+
+function renderPreviewTable(data) {
+    var html = '<table class="table table-sm portal-table" id="previewTable"><thead><tr>';
+    data.columns.forEach(function(col) {
+        html += '<th data-sort>' + escapeHtml(col) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    data.rows.forEach(function(row) {
+        html += '<tr>';
+        row.forEach(function(cell) {
+            html += '<td>' + escapeHtml(String(cell)) + '</td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('previewContent').innerHTML = html;
+
+    var pag = document.getElementById('previewPagination');
+    if (data.total_pages > 1) {
+        pag.style.display = 'flex';
+        document.getElementById('pageInfo').textContent =
+            'Page ' + data.page + ' of ' + data.total_pages + ' (' + data.total_rows + ' rows)';
+        document.getElementById('prevPage').disabled = (data.page <= 1);
+        document.getElementById('nextPage').disabled = (data.page >= data.total_pages);
+    } else {
+        pag.style.display = 'none';
+    }
+    currentPage = data.page;
+
+    var previewTbl = document.getElementById('previewTable');
+    if (previewTbl) makeSortable(previewTbl);
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    loadPreview();
+}
+
+function searchPreview() { currentPage = 1; loadPreview(); }
+function closePreview() {
+    document.getElementById('previewPanel').style.display = 'none';
+    document.getElementById('exportTableBtn').style.display = 'none';
+}
+
+function previewSqlite(path) {
+    fetch('/api/data/preview/' + encodeURIComponent(path))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            renderSqliteTables(data.tables, path);
+            document.getElementById('sqlitePanel').style.display = 'block';
+            document.getElementById('sqliteTitle').textContent = 'Tables: ' + path;
+        })
+        .catch(function() { alert('Failed to load tables'); });
+}
+
+function renderSqliteTables(tables, dbPath) {
+    var html = '<table class="table table-sm portal-table"><thead><tr>' +
+               '<th>Table</th><th>Rows</th><th>Columns</th><th>Actions</th>' +
+               '</tr></thead><tbody>';
+    tables.forEach(function(t) {
+        html += '<tr><td>' + escapeHtml(t.table_name) + '</td>' +
+                '<td>' + t.row_count + '</td>' +
+                '<td>' + t.column_names.length + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-primary" onclick="previewSqliteTable(\'' +
+                escapeJs(dbPath) + "','" + escapeJs(t.table_name) +
+                '\')">Preview</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('sqliteContent').innerHTML = html;
+}
+
+function previewSqliteTable(dbPath, tableName) {
+    currentPreviewPath = dbPath + '/' + tableName;
+    currentPage = 1;
+    document.getElementById('previewSearch').value = '';
+    var url = '/api/data/preview/' + encodeURIComponent(dbPath) + '/' +
+              encodeURIComponent(tableName) + '?page=1&per_page=' + currentPerPage;
+    fetch(url)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            renderPreviewTable(data);
+            document.getElementById('previewPanel').style.display = 'block';
+            document.getElementById('previewTitle').textContent =
+                'Preview: ' + dbPath + ' > ' + tableName;
+            document.getElementById('exportTableBtn').style.display = 'inline-block';
+        })
+        .catch(function() { alert('Failed to load table'); });
+}
+
+function closeSqlite() { document.getElementById('sqlitePanel').style.display = 'none'; }
+
+function filterFileTable() {
+    var search = document.getElementById('fileSearch').value.toLowerCase();
+    var rows = document.querySelectorAll('#fileTableBody tr');
+    rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = text.indexOf(search) >= 0 ? '' : 'none';
+    });
+}
+
+function exportCurrentTable() {
+    var table = document.getElementById('previewTable');
+    if (table) exportTableToCSV(table, 'data_export.csv');
+}
+
+function exportPreviewTable() {
+    var table = document.getElementById('previewTable');
+    if (table) exportTableToCSV(table, 'preview_export.csv');
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function escapeJs(str) {
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function debounce(fn, delay) {
+    var timer;
+    return function() {
+        clearTimeout(timer);
+        timer = setTimeout(fn, delay);
+    };
+}
+</script>
+{% endblock %}

@@ -75,7 +75,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host files.pythonhosted.org
 
 # Copy application files
-COPY MistHelper.py __init__.py maps_manager.py ./
+COPY MistHelper.py __init__.py maps_manager.py wsgi.py ./
+COPY web_portal/ ./web_portal/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app
@@ -99,14 +100,14 @@ ENV DISABLE_UV_CHECK=true
 ENV DISABLE_AUTO_INSTALL=true
 ENV AUTO_UPGRADE_UV=false
 ENV AUTO_UPGRADE_DEPENDENCIES=false
-# Dash web viewer port (must match EXPOSE)
-ENV DASH_PORT=8050
+# Web portal port (must match EXPOSE)
+ENV WEB_PORT=8055
 
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 and Dash web viewer port 8050
-EXPOSE 2200 8050
+# Expose SSH port 2200 and web portal port 8055
+EXPOSE 2200 8055
 
 # Note: HEALTHCHECK removed for OCI/Podman compatibility
 # For health monitoring, use external tools or docker format

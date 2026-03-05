@@ -1,0 +1,215 @@
+/* MistHelper Web Portal - Core Layout Styles */
+
+/* Navbar */
+.portal-navbar {
+    border-bottom: 2px solid var(--portal-accent, #0077B6);
+    padding: 0.5rem 1rem;
+}
+
+.portal-navbar .navbar-brand {
+    font-weight: 700;
+    font-size: 1.15rem;
+}
+
+.portal-navbar .nav-link.active {
+    border-bottom: 2px solid var(--portal-accent, #0077B6);
+    font-weight: 600;
+}
+
+/* Main Content */
+.portal-main {
+    padding: 1.5rem;
+    min-height: calc(100vh - 120px);
+}
+
+/* Footer */
+.portal-footer {
+    border-top: 1px solid rgba(128, 128, 128, 0.2);
+    font-size: 0.8rem;
+}
+
+/* Cards */
+.portal-card {
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    transition: border-color 0.2s;
+}
+
+.portal-card:hover {
+    border-color: var(--portal-accent, #0077B6);
+}
+
+.portal-card .card-title {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+/* Tables */
+.portal-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.portal-table th {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 2px solid rgba(128, 128, 128, 0.3);
+}
+
+.portal-table th:hover {
+    color: var(--portal-accent, #0077B6);
+}
+
+.portal-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+    word-break: break-word;
+}
+
+.portal-table tr:hover td {
+    background-color: rgba(128, 128, 128, 0.05);
+}
+
+/* Sort indicators */
+.sort-asc::after { content: " \2191"; }
+.sort-desc::after { content: " \2193"; }
+
+/* Pagination */
+.portal-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.portal-pagination .page-info {
+    font-size: 0.85rem;
+    color: rgba(128, 128, 128, 0.8);
+}
+
+/* Search / Filter Input */
+.portal-search {
+    max-width: 300px;
+    margin-bottom: 1rem;
+}
+
+/* Preview Panel */
+.preview-panel {
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+    max-height: 500px;
+    overflow: auto;
+}
+
+/* Operation Log Viewer */
+.log-viewer {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Progress Bar */
+.portal-progress {
+    height: 1.5rem;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    margin: 0.75rem 0;
+}
+
+.portal-progress .progress-bar {
+    transition: width 0.3s ease;
+    background-color: var(--portal-accent, #0077B6);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: rgba(128, 128, 128, 0.6);
+}
+
+.empty-state .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+/* Quick Link Cards (Dashboard) */
+.quick-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 1.25rem;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 0.5rem;
+    text-align: center;
+    transition: border-color 0.2s, transform 0.15s;
+}
+
+.quick-link:hover {
+    border-color: var(--portal-accent, #0077B6);
+    transform: translateY(-2px);
+    color: inherit;
+}
+
+.quick-link .link-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* File Size Badge */
+.file-size {
+    font-size: 0.8rem;
+    color: rgba(128, 128, 128, 0.7);
+    white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .portal-main { padding: 0.75rem; }
+    .portal-table { font-size: 0.85rem; }
+    .portal-search { max-width: 100%; }
+}
+
+/* Accent color buttons */
+.btn-accent {
+    background-color: var(--portal-accent, #0077B6);
+    border-color: var(--portal-accent, #0077B6);
+    color: #fff;
+}
+
+.btn-accent:hover {
+    filter: brightness(1.15);
+    color: #fff;
+}
+
+/* Accordion (Operations) */
+.portal-accordion .accordion-button:not(.collapsed) {
+    color: var(--portal-accent, #0077B6);
+}
+
+/* Category badge */
+.category-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+/* Export button */
+.btn-export {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+}

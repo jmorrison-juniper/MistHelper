@@ -12,7 +12,7 @@
 - Q: What security posture should the web portal adopt given no auth in MVP? → A: Full hardening (CSRF tokens, XSS output escaping, CSP headers, IP allowlisting via ENV) but no rate limiting
 - Q: What concurrency model for operation execution (serial queue, serial-reject, or fully concurrent)? → A: Fully concurrent with file locking to prevent conflicts
 - Q: How does the web portal coexist with the existing Dash map viewer on port 8050? → A: Web portal absorbs map viewer functionality; embed maps into Flask portal, retire standalone Dash
-- Q: How does the browser receive real-time operation status updates (polling, SSE, or WebSocket)? → A: WebSocket for full-duplex bidirectional real-time communication
+- Q: How does the browser receive real-time operation status updates (polling, SSE, or WebSocket)? → A: SSE (Server-Sent Events) for real-time server-to-client streaming; HTTP POST for client-to-server commands (per research.md R1)
 - Q: How should the portal collect operation input parameters (free text, guided dropdowns, or saved presets)? → A: Guided dropdowns and selectors pre-populated from API data with validation before submission
 
 ## Assumptions
@@ -23,12 +23,12 @@
 - **Map viewer absorption**: The existing `maps_manager.py` Dash-based map viewer is replaced by an equivalent page within the Flask web portal. The standalone Dash dependency is removed from the container.
 - **Authentication**: No login/auth for the web portal in MVP. The portal is already behind corporate network / container access controls. Security hardening (CSRF, XSS, CSP, IP allowlisting) is applied regardless. Future login/auth feature if needed.
 - **Security hardening**: CSRF tokens on all form submissions, Jinja2 auto-escaping for XSS prevention, Content-Security-Policy headers, and optional IP allowlisting via `PORTAL_ALLOWED_IPS` ENV variable. No rate limiting.
-- **Non-destructive only**: The web portal only exposes data extraction operations (menus 1-89). Destructive operations (90-100) remain CLI/SSH-only for safety.
+- **Non-destructive only**: The web portal only exposes data extraction operations (menus 1-89). Destructive operations (menus 90 and above) remain CLI/SSH-only for safety.
 - **Existing data**: The portal reads from the existing `data/` directory (CSV files, SQLite database) and can trigger new data extraction operations
 - **Theme persistence**: User theme preferences stored in browser localStorage (no server-side session for theme)
 - **Bootstrap 5**: UI framework, consistent with MistSiteDashboard's NOC-optimized dark mode approach
-- **Real-time communication**: WebSocket connections provide full-duplex bidirectional communication between the browser and server for operation status updates, progress reporting, and log streaming
-- **Gunicorn workers**: Default 2-4 worker processes for concurrent request handling; configurable via ENV
+- **Real-time communication**: SSE (Server-Sent Events) provides real-time server-to-client streaming for operation status updates, progress reporting, and log streaming. Client-to-server commands use standard HTTP POST requests (per research.md R1 — eventlet deprecated, gevent incompatible with Python 3.13 free-threading)
+- **Gunicorn workers**: Single worker process with 4 threads (`-w 1 -k gthread --threads 4`) to prevent `apisession` fork-safety issues (per research.md R2); thread count configurable via ENV
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -136,7 +136,7 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - **FR-004**: System MUST allow users to preview SQLite database tables in a sortable, searchable HTML table with pagination
 - **FR-005**: System MUST allow users to download any data file directly from the browser
 - **FR-006**: System MUST display non-destructive menu operations (1-89) organized by category
-- **FR-007**: System MUST execute selected operations in the background with full concurrency (multiple operations can run simultaneously) using file locks to prevent write conflicts, and report completion status to the user via WebSocket
+- **FR-007**: System MUST execute selected operations in the background with full concurrency (multiple operations can run simultaneously) using file locks to prevent write conflicts, and report completion status to the user via SSE (Server-Sent Events)
 - **FR-008**: System MUST support multiple CSS themes (minimum: dark, light, high-contrast)
 - **FR-009**: System MUST read the default theme from the ENV file (`PORTAL_THEME` variable)
 - **FR-010**: System MUST allow users to switch themes in the browser without page reload
@@ -144,7 +144,7 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - **FR-012**: System MUST support portal branding via ENV variables (`PORTAL_TITLE`, `PORTAL_LOGO_URL`, `PORTAL_ACCENT_COLOR`)
 - **FR-013**: System MUST provide a health check endpoint (`/health`) for container orchestration
 - **FR-014**: System MUST coexist with the existing SSH service in the same container
-- **FR-015**: System MUST NOT expose destructive operations (menus 90-100) through the web interface
+- **FR-015**: System MUST NOT expose destructive operations (menus 90 and above) through the web interface
 - **FR-016**: System MUST use external CSS stylesheets (not inline styles) for all theming
 - **FR-017**: System MUST provide a CSV export/download button for any table displayed in the portal
 - **FR-018**: System MUST include CSRF tokens on all form submissions that trigger operations
@@ -152,7 +152,7 @@ The web portal runs inside the existing MistHelper container alongside the SSH s
 - **FR-020**: System MUST send Content-Security-Policy headers on all responses
 - **FR-021**: System MUST support optional IP allowlisting via `PORTAL_ALLOWED_IPS` ENV variable (comma-separated CIDRs; empty = allow all)
 - **FR-022**: System MUST include a map viewer page that replaces the standalone Dash map viewer (formerly `maps_manager.py` on port 8050), rendering site/floor plan maps within the portal
-- **FR-023**: System MUST use WebSocket connections for real-time bidirectional communication between browser and server (operation progress, status updates, log streaming)
+- **FR-023**: System MUST use SSE (Server-Sent Events) for real-time server-to-client communication (operation progress, status updates, log streaming) with HTTP POST for client-to-server commands
 - **FR-024**: System MUST present operation input parameters as guided dropdowns and selectors pre-populated from API data (sites, device types, time ranges) with client-side validation before submission
 
 ### Key Entities

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Map Viewer - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h4>Map Viewer</h4>
+        <p class="text-muted">View site floor plans and device placements.</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: Site / Map Selector -->
+    <div class="col-md-3">
+        <div class="portal-card mb-3 p-3">
+            <label class="form-label" for="siteSelect">Site</label>
+            <select class="form-select" id="siteSelect" onchange="onSiteChange()">
+                <option value="">-- Select a site --</option>
+            </select>
+
+            <label class="form-label mt-3" for="mapSelect">Floor Plan</label>
+            <select class="form-select" id="mapSelect" onchange="onMapChange()" disabled>
+                <option value="">-- Select a map --</option>
+            </select>
+        </div>
+
+        <!-- Device List -->
+        <div class="portal-card p-3" id="devicePanel" style="display:none;">
+            <h6>Devices (<span id="deviceCount">0</span>)</h6>
+            <ul class="list-group list-group-flush" id="deviceList"></ul>
+        </div>
+    </div>
+
+    <!-- Right: Map Render Area -->
+    <div class="col-md-9">
+        <div class="portal-card p-2" id="mapContainer">
+            <div id="plotArea" style="min-height:500px;">
+                <div class="text-center text-muted py-5" id="mapPlaceholder">
+                    Select a site and floor plan to view the map.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='vendor/plotly/plotly.min.js') }}"></script>
+<script>
+/* global Plotly */
+
+var currentDevices = [];
+
+function loadSites() {
+    fetch('/api/maps/sites')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('siteSelect');
+            (data.sites || []).forEach(function(site) {
+                var opt = document.createElement('option');
+                opt.value = site.id;
+                opt.textContent = site.name;
+                sel.appendChild(opt);
+            });
+        });
+}
+
+function onSiteChange() {
+    var siteId = document.getElementById('siteSelect').value;
+    var mapSel = document.getElementById('mapSelect');
+    mapSel.innerHTML = '<option value="">-- Select a map --</option>';
+    mapSel.disabled = true;
+    clearMap();
+    if (!siteId) { return; }
+
+    fetch('/api/maps/site/' + siteId + '/maps')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            (data.maps || []).forEach(function(m) {
+                var opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.name + (m.has_image ? '' : ' (no image)');
+                opt.dataset.width = m.width;
+                opt.dataset.height = m.height;
+                mapSel.appendChild(opt);
+            });
+            mapSel.disabled = false;
+        });
+}
+
+function onMapChange() {
+    var siteId = document.getElementById('siteSelect').value;
+    var mapId = document.getElementById('mapSelect').value;
+    clearMap();
+    if (!siteId || !mapId) { return; }
+
+    fetch('/api/maps/site/' + siteId + '/map/' + mapId + '/data')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                document.getElementById('mapPlaceholder').textContent = data.error;
+                return;
+            }
+            renderMap(data);
+        })
+        .catch(function() {
+            document.getElementById('mapPlaceholder').textContent = 'Failed to load map data.';
+        });
+}
+
+function renderMap(data) {
+    document.getElementById('mapPlaceholder').style.display = 'none';
+    currentDevices = data.devices || [];
+
+    var xCoords = [];
+    var yCoords = [];
+    var labels = [];
+    var colors = [];
+
+    currentDevices.forEach(function(d) {
+        xCoords.push(d.x);
+        yCoords.push(d.y);
+        labels.push(d.name || d.mac || 'Unknown');
+        colors.push(deviceColor(d.type));
+    });
+
+    var trace = {
+        x: xCoords,
+        y: yCoords,
+        mode: 'markers+text',
+        type: 'scatter',
+        text: labels,
+        textposition: 'top center',
+        textfont: { size: 10, color: '#ffffff' },
+        marker: { size: 12, color: colors, symbol: 'circle' },
+        hovertemplate: '%{text}<br>x=%{x}, y=%{y}<extra></extra>'
+    };
+
+    var imgUrl = data.image_url || '';
+    var mapW = data.width || 100;
+    var mapH = data.height || 100;
+
+    var images = [];
+    if (imgUrl) {
+        images.push({
+            source: imgUrl,
+            xref: 'x',
+            yref: 'y',
+            x: 0,
+            y: 0,
+            sizex: mapW,
+            sizey: mapH,
+            sizing: 'stretch',
+            layer: 'below',
+            opacity: 0.8
+        });
+    }
+
+    var layout = {
+        title: data.name || 'Floor Plan',
+        xaxis: { range: [0, mapW], showgrid: false, zeroline: false, visible: false },
+        yaxis: { range: [mapH, 0], showgrid: false, zeroline: false, visible: false, scaleanchor: 'x' },
+        images: images,
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        margin: { l: 20, r: 20, t: 40, b: 20 },
+        showlegend: false
+    };
+
+    Plotly.newPlot('plotArea', [trace], layout, {
+        responsive: true,
+        scrollZoom: true
+    });
+
+    renderDeviceList(currentDevices);
+}
+
+function deviceColor(type) {
+    var map = { ap: '#0dcaf0', switch: '#ffc107', gateway: '#198754' };
+    return map[type] || '#6c757d';
+}
+
+function renderDeviceList(devices) {
+    var panel = document.getElementById('devicePanel');
+    var list = document.getElementById('deviceList');
+    document.getElementById('deviceCount').textContent = devices.length;
+    list.innerHTML = '';
+
+    if (devices.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = '';
+    devices.forEach(function(d) {
+        var li = document.createElement('li');
+        li.className = 'list-group-item py-1';
+        var dot = '<span style="color:' + deviceColor(d.type) + '">&#9679;</span> ';
+        li.innerHTML = dot + (d.name || d.mac || 'Unknown') +
+            ' <small class="text-muted">(' + d.type + ')</small>';
+        list.appendChild(li);
+    });
+}
+
+function clearMap() {
+    var area = document.getElementById('plotArea');
+    Plotly.purge(area);
+    area.innerHTML = '';
+    var ph = document.createElement('div');
+    ph.className = 'text-center text-muted py-5';
+    ph.id = 'mapPlaceholder';
+    ph.textContent = 'Select a site and floor plan to view the map.';
+    area.appendChild(ph);
+    document.getElementById('devicePanel').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSites();
+});
+</script>
+{% endblock %}
