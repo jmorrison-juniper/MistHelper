@@ -11,7 +11,7 @@
 
 A NOC engineer opens the web portal Operations page and selects an interactive operation (e.g., Menu 71 — "View device inventory for a selected site"). Instead of seeing an error ("Operation requires interactive input"), the portal presents a guided form: first a site selector dropdown populated from the organization's sites, then (if the operation requires it) a device selector dropdown populated from that site's devices. The engineer makes their selections, clicks Run, and sees the operation execute with real-time progress in the Execution Log — just like non-interactive operations already work.
 
-This covers the ~35 interactive operations (menus 5-10, 29-34, 49-53, 68-74, 79-89) that currently fail in the web portal. These operations represent the majority of MistHelper's value — site-specific data extraction, device diagnostics, packet captures, and WebSocket commands.
+This covers the ~35 interactive operations (menus 5-10, 29-34, 49-53, 68-74, 80-81, 84-89 interactive; 62, 79 CLI-only) that currently fail in the web portal. These operations represent the majority of MistHelper's value — site-specific data extraction, device diagnostics, packet captures, and WebSocket commands.
 
 **Why this priority**: Without interactive support, the web portal can only run ~25 org-wide bulk exports. The remaining ~35 operations (site/device-specific) are the primary reason NOC engineers use MistHelper. This is the core gap.
 
@@ -31,7 +31,7 @@ This covers the ~35 interactive operations (menus 5-10, 29-34, 49-53, 68-74, 79-
 
 A NOC engineer is on the Data Browser page (or on the Operations page viewing results). They click a Preview button next to a CSV file. Instead of being navigated away or seeing a cramped inline panel that pushes content around, a full-screen modal overlay appears showing the file contents in a sortable, searchable, paginated table. The engineer can browse the data, search for specific rows, export the view as CSV, and close the modal to return exactly where they were — no page navigation, no lost context.
 
-This also applies to JSON, JSONL, LOG, and SQLite files. SQLite files show a table list in the modal, and clicking a table name shows that table's contents within the same modal.
+This also applies to JSON, LOG, and SQLite files. SQLite files show a table list in the modal, and clicking a table name shows that table's contents within the same modal.
 
 **Why this priority**: Equal to US1. The current preview panel is an inline div that disrupts the page layout, is easy to miss, and provides a poor experience. A modal is the standard pattern for previewing content without losing context.
 
@@ -84,7 +84,7 @@ After a NOC engineer runs an operation from the Operations page and it completes
 - **FR-001**: System MUST present parameter input forms for interactive operations instead of failing with an error message.
 - **FR-002**: System MUST provide a site selector control populated with all organization sites (name and ID) for operations that require site selection.
 - **FR-003**: System MUST provide a device selector control that dynamically populates based on the selected site, filtered by device type (AP, switch, gateway) as required by the operation.
-- **FR-004**: System MUST provide appropriate form controls for all interactive parameters (dropdowns for selections, number inputs for durations/counts, checkboxes for yes/no options, text fields for free-form input like MAC addresses).
+- **FR-004**: System MUST provide appropriate form controls for all interactive parameters (dropdowns for selections, number inputs for durations/counts, dropdowns with Yes/No options for binary choices, text fields for free-form input like MAC addresses).
 - **FR-005**: System MUST inject user-selected parameter values into the operation execution context so that input prompts receive the pre-filled answers without user interaction during execution.
 - **FR-006**: System MUST keep the Run button disabled until all required parameters are populated, with visual indicators on unfilled required fields.
 - **FR-007**: System MUST continue to block destructive operations (menu 90+) from web portal execution regardless of parameter support.
@@ -102,7 +102,7 @@ After a NOC engineer runs an operation from the Operations page and it completes
 
 ### Key Entities
 
-- **Operation Parameter**: A named input that an interactive operation requires before execution. Has a type (site, device, client, text, number, boolean, choice), an optional dependency (e.g., device depends on site), and validation rules.
+- **Operation Parameter**: A named input that an interactive operation requires before execution. Has a type (site, device, client, text, number, choice), an optional dependency (e.g., device depends on site), and validation rules. Yes/no options use the `choice` type with two static options.
 - **Parameter Form**: The collection of all parameters required by a specific operation, rendered as a web form in the operation detail panel.
 - **Preview Modal**: A full-viewport overlay component that displays file contents with search, sort, pagination, and export capabilities.
 - **Site**: An organizational grouping with a name and UUID, fetched from the Mist API or cached data. Used as the primary parameter for most interactive operations.
@@ -112,7 +112,7 @@ After a NOC engineer runs an operation from the Operations page and it completes
 
 ### Measurable Outcomes
 
-- **SC-001**: All ~35 interactive operations (menus 5-10, 29-34, 49-53, 68-74, 79-89) can be executed from the web portal without errors, compared to zero today.
+- **SC-001**: All ~35 interactive operations (menus 5-10, 29-34, 49-53, 68-74, 80-81, 84-89) can be executed from the web portal without errors, compared to zero today. CLI-only operations (62, 79) show a message directing users to SSH.
 - **SC-002**: Users can complete any interactive operation (select parameters and run) in under 60 seconds, matching the CLI experience.
 - **SC-003**: File preview opens in under 2 seconds for files up to 10MB, displaying the first page of results.
 - **SC-004**: Users can preview, search, and export data without navigating away from their current page.
@@ -126,5 +126,5 @@ After a NOC engineer runs an operation from the Operations page and it completes
 - **Input injection mechanism**: Rather than modifying every input call in the main codebase, the system will use a thread-local input queue to intercept input calls and provide pre-filled responses from the web form. This avoids touching the main application code extensively.
 - **Parameter discovery**: Operation parameter requirements will be defined in a configuration mapping (operation number to list of required parameters with types), maintained in the web portal codebase. This is a one-time manual mapping effort based on the ~35 interactive operations.
 - **Modal component**: The preview modal will use the modal component already bundled as a vendor asset, requiring no additional dependencies.
-- **CLI-only operations**: Operations 62 (Troubleshoot), 75-76 (Loop), and 79 (CLI Shell) are truly interactive (free-form ongoing input, not pre-fillable parameters). They will be marked as "CLI-only" with a clear message explaining they require SSH access. All other interactive operations use predictable, pre-fillable parameter patterns.
-- **Packet capture operations (9-10)**: These have the most parameters (~15 inputs) but all are pre-fillable (dropdowns, numbers, checkboxes). They will render as a multi-section form.
+- **CLI-only operations**: Operations 62 (Troubleshoot) and 79 (CLI Shell) are truly interactive (free-form ongoing input, not pre-fillable parameters). They will be marked as "CLI-only" with a clear message explaining they require SSH access. Operations 75-78 are non-interactive and already work without parameters. All other interactive operations use predictable, pre-fillable parameter patterns.
+- **Packet capture operations (9-10)**: These have the most parameters (~15 inputs) but all are pre-fillable (dropdowns, numbers, Yes/No choice dropdowns). They will render as a multi-section form.

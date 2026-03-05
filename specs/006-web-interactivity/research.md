@@ -45,7 +45,7 @@
 | `site` | Dropdown | `/api/maps/sites` (existing) | 29-34, 49-53, 68-74, 84-86 |
 | `device` | Dropdown (depends on site) | New `/api/operations/devices` | 33, 72-74, 79-81, 85, 87-89 |
 | `client` | Dropdown (depends on site) | New `/api/operations/clients` | 69, 86 |
-| `choice` | Dropdown (static options) | Registry `options` field | 9 (capture type), 62 (troubleshoot sub-menu) |
+| `choice` | Dropdown (static options) | Registry `options` field | 9 (capture type), yes/no binary options |
 | `text` | Text input | User-entered | 87 (hostname), 89 (service name) |
 | `number` | Number input | User-entered | 9-10 (duration, packet count) |
 
@@ -70,10 +70,10 @@
 
 ## R5: Site/Device Data Source
 
-**Decision**: Reuse existing `/api/maps/sites` endpoint for site list; add new device/client endpoints
+**Decision**: Create new `/api/operations/sites` endpoint alongside existing `/api/maps/sites`; add new device/client endpoints
 
 **Rationale**:
-- `/api/maps/sites` already fetches organization sites via `mistapi.api.v1.orgs.sites.listOrgSites()`. No duplication needed.
+- A dedicated `/api/operations/sites` endpoint (defined in contracts/api.md) returns a minimal site list optimized for dropdown population. While `/api/maps/sites` exists, the operations endpoint returns a simpler payload (id, name, address, country_code, timezone) without map-specific data.
 - Device and client lists are site-specific and need new endpoints: `/api/operations/sites/<site_id>/devices` and `/api/operations/sites/<site_id>/clients`.
 - Device endpoint must accept a `type` query parameter (ap/switch/gateway/all) to match how operations filter devices.
 
@@ -137,9 +137,8 @@ services/
 
 **Rationale**:
 - Menu 9 (Site Packet Capture) has 6 sub-types, each with different parameter sets (3-8 fields per type).
-- A "capture type" dropdown (choice parameter) shows/hides relevant fields dynamically.
-- All fields are pre-fillable (dropdowns, numbers, checkboxes) — no free-form interaction needed.
-- The parameter registry uses a `depends_on` field to express conditional visibility.
+- All packet capture fields render in the form simultaneously. Optional fields (those not relevant to the selected capture type) are left blank by the user — the input queue sends empty strings for skipped prompts. This avoids introducing conditional visibility logic beyond the existing `depends_on` (which handles data-fetching dependencies like device→site).
+- All fields are pre-fillable (dropdowns, numbers, choice) — no free-form interaction needed.
 
 ---
 
