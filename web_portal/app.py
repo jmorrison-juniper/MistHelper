@@ -72,11 +72,18 @@ class WebPortalApp:
         org_id: Optional[str],
     ) -> None:
         """Store shared MistHelper objects on app.config."""
+        from web_portal.services.event_bus import PortalEventBus
+
         app.config["APISESSION"] = apisession
         app.config["MENU_ACTIONS"] = menu_actions
         app.config["ORG_ID"] = org_id
         data_dir = os.environ.get("DATA_DIR", "data")
         app.config["DATA_DIR"] = os.path.abspath(data_dir)
+
+        event_bus = PortalEventBus()
+        event_bus.start()
+        app.config["EVENT_BUS"] = event_bus
+        logging.info("Event bus started for SSE streaming")
 
     @staticmethod
     def _setup_theme_manager(app: Flask, config: dict) -> None:

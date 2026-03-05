@@ -199,6 +199,13 @@ function startSSEStream(runId) {
         appendLog(data.message, data.level || 'INFO');
     });
 
+    source.addEventListener('status', function(event) {
+        var data = JSON.parse(event.data);
+        if (data.status === 'running') {
+            setStatus('running', data.description || 'Running...');
+        }
+    });
+
     source.addEventListener('progress', function(event) {
         var data = JSON.parse(event.data);
         updateProgress(data.percent || 0, data.message || '');
@@ -238,12 +245,14 @@ function checkRunStatus(runId) {
     fetch('/api/operations/status/' + encodeURIComponent(runId))
         .then(function(response) { return response.json(); })
         .then(function(data) {
-            if (data.status === 'complete') {
+            if (data.status === 'completed') {
                 setStatus('complete', 'Operation completed');
                 updateProgress(100, 'Done');
+                showOutputFiles(data.output_files || []);
                 finishRun();
-            } else if (data.status === 'error') {
-                setStatus('error', data.error || 'Operation failed');
+            } else if (data.status === 'failed') {
+                setStatus('error', data.error_message || 'Operation failed');
+                appendLog('ERROR: ' + (data.error_message || 'Unknown error'), 'ERROR');
                 finishRun();
             }
             // If still running, SSE reconnect will handle it

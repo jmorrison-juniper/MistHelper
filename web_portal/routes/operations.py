@@ -69,22 +69,39 @@ def active_operations():
 
 @operations_bp.route("/api/operations/stream")
 def operation_stream():
-    """SSE endpoint for real-time operation progress events."""
+    """SSE endpoint for real-time operation progress events.
+
+    Handles the race condition where fast operations complete before the
+    SSE subscriber connects by checking run status on initial connect
+    and on each heartbeat timeout.
+    """
     run_id = request.args.get("run_id")
     event_bus = current_app.config.get("EVENT_BUS")
+    executor = current_app.config.get("OPERATION_EXECUTOR")
     if event_bus is None:
         return jsonify({"error": "Event bus not available"}), 503
 
     def generate():
         subscriber_id = event_bus.subscribe(run_id)
         try:
+            # Check if operation already completed before SSE connected
+            replay = _build_replay(executor, run_id)
+            if replay:
+                yield from replay
+                return
+
             while True:
-                event = event_bus.poll(subscriber_id, timeout=35)
+                event = event_bus.poll(subscriber_id, timeout=5)
                 if event is None:
+                    # Check if operation completed while waiting
+                    replay = _build_replay(executor, run_id)
+                    if replay:
+                        yield from replay
+                        break
                     yield _format_sse("heartbeat", {"timestamp": ""})
                     continue
                 yield _format_sse(event["type"], event["data"])
-                if event["type"] in ("complete", "error"):
+                if event["type"] in ("complete", "error_event"):
                     break
         finally:
             event_bus.unsubscribe(subscriber_id)
@@ -122,6 +139,51 @@ def _get_executor():
         )
         current_app.config["OPERATION_EXECUTOR"] = executor
     return executor
+
+
+def _build_replay(executor, run_id: str):
+    """Build replay events if the operation already finished.
+
+    Returns a list of SSE-formatted strings (log lines + final event)
+    if the run is terminal, or None if still in progress.
+    """
+    if not run_id or not executor:
+        return None
+    status = executor.get_run_status(run_id)
+    if not status or status["status"] not in ("completed", "failed"):
+        return None
+    events = []
+    for msg in status.get("log_messages") or []:
+        events.append(_format_sse("log", {
+            "run_id": run_id,
+            "message": msg,
+            "level": "info",
+        }))
+    if status["status"] == "completed":
+        events.append(_format_sse("complete", {
+            "run_id": run_id,
+            "status": "completed",
+            "message": "Operation completed",
+            "output_files": status.get("output_files", []),
+            "duration_seconds": _calc_duration(status),
+        }))
+    else:
+        events.append(_format_sse("error_event", {
+            "run_id": run_id,
+            "status": "failed",
+            "message": status.get("error_message", "Operation failed"),
+            "duration_seconds": _calc_duration(status),
+        }))
+    return events
+
+
+def _calc_duration(status: dict) -> float:
+    """Calculate operation duration from started/completed timestamps."""
+    started = status.get("started_at") or 0
+    completed = status.get("completed_at") or 0
+    if started and completed:
+        return round(completed - started, 1)
+    return 0
 
 
 def _format_sse(event_type: str, data: dict) -> str:

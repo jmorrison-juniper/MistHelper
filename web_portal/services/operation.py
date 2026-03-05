@@ -4,7 +4,6 @@ Dispatches menu operations in background threads, tracks run state,
 captures log output, and publishes SSE events via PortalEventBus.
 """
 
-import io
 import logging
 import threading
 import time
@@ -211,6 +210,7 @@ class OperationExecutor:
         self._event_bus.publish("complete", {
             "run_id": run["run_id"],
             "status": "completed",
+            "message": "Operation completed",
             "output_files": run["output_files"],
             "duration_seconds": round(duration, 1),
         })
@@ -223,9 +223,10 @@ class OperationExecutor:
             run["completed_at"] = time.time()
         if self._event_bus:
             duration = run["completed_at"] - run["started_at"]
-            self._event_bus.publish("error", {
+            self._event_bus.publish("error_event", {
                 "run_id": run["run_id"],
                 "status": "failed",
+                "message": message,
                 "error_message": message,
                 "duration_seconds": round(duration, 1),
             })
@@ -242,6 +243,7 @@ class OperationExecutor:
             "progress_pct": run["progress_pct"],
             "error_message": run["error_message"],
             "output_files": run["output_files"],
+            "log_messages": list(run.get("log_messages", [])),
         }
 
     def _run_to_summary(self, run: dict) -> dict:
