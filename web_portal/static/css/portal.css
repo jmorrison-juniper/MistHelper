@@ -54,6 +54,7 @@
 
 .portal-table th {
     cursor: pointer;
+    -webkit-user-select: none;
     user-select: none;
     white-space: nowrap;
     padding: 0.6rem 0.75rem;

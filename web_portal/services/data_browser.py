@@ -39,7 +39,7 @@ class DataBrowserService:
         return entries
 
     def preview_file(self, rel_path: str, page: int, per_page: int, search: str) -> dict:
-        """Preview a CSV or return SQLite table list."""
+        """Preview a CSV, JSON, log, or return SQLite table list."""
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
             return {"error": "File not found"}
@@ -48,6 +48,10 @@ class DataBrowserService:
             return self._preview_csv(resolved, page, per_page, search)
         if ext in (".db", ".sqlite"):
             return self._list_sqlite_tables(resolved)
+        if ext == ".json":
+            return self._preview_json(resolved, page, per_page, search)
+        if ext == ".log":
+            return self._preview_log(resolved, page, per_page, search)
         return {"error": "Preview not supported for this file type"}
 
     def preview_sqlite_table(
@@ -104,14 +108,69 @@ class DataBrowserService:
         except Exception as exc:
             return {"error": f"Failed to read CSV: {exc}"}
         filtered = self._filter_rows(all_rows, search)
-        total = len(filtered)
+        return self._paginate_rows(columns, filtered, page, per_page)
+
+    def _preview_json(self, filepath: str, page: int, per_page: int, search: str) -> dict:
+        """Read and paginate a JSON or JSONL file as tabular data."""
+        try:
+            import json
+            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+            data = self._parse_json_or_jsonl(content)
+        except Exception as exc:
+            return {"error": f"Failed to read JSON: {exc}"}
+        rows, columns = self._json_to_rows(data)
+        filtered = self._filter_rows(rows, search)
+        return self._paginate_rows(columns, filtered, page, per_page)
+
+    def _parse_json_or_jsonl(self, content: str):
+        """Parse standard JSON, falling back to JSONL (one object per line)."""
+        import json
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            items = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    items.append(json.loads(stripped))
+            return items if len(items) != 1 else items[0]
+
+    def _json_to_rows(self, data) -> tuple:
+        """Convert JSON data to a list of rows and column headers."""
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            seen = {}
+            for item in data:
+                for key in item:
+                    if key not in seen:
+                        seen[key] = len(seen)
+            columns = sorted(seen, key=lambda k: seen[k])
+            rows = [[str(item.get(col, "")) for col in columns] for item in data]
+            return rows, columns
+        if isinstance(data, dict):
+            return [[str(k), str(v)] for k, v in data.items()], ["Key", "Value"]
+        return [[str(data)]], ["Content"]
+
+    def _preview_log(self, filepath: str, page: int, per_page: int, search: str) -> dict:
+        """Read and paginate a log file as line-by-line preview."""
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                all_lines = fh.readlines()
+        except Exception as exc:
+            return {"error": f"Failed to read log: {exc}"}
+        rows = [[str(i + 1), line.rstrip("\n")] for i, line in enumerate(all_lines)]
+        filtered = self._filter_rows(rows, search)
+        return self._paginate_rows(["Line", "Content"], filtered, page, per_page)
+
+    def _paginate_rows(self, columns: list, rows: list, page: int, per_page: int) -> dict:
+        """Return a paginated slice of rows with metadata."""
+        total = len(rows)
         total_pages = max(1, math.ceil(total / per_page))
         page = max(1, min(page, total_pages))
         start = (page - 1) * per_page
-        page_rows = filtered[start:start + per_page]
         return {
             "columns": columns,
-            "rows": page_rows,
+            "rows": rows[start:start + per_page],
             "total_rows": total,
             "page": page,
             "per_page": per_page,

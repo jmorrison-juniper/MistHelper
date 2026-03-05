@@ -122,6 +122,10 @@ class OperationExecutor:
         num = self._parse_menu_number(menu_number)
         if num is not None and num >= DESTRUCTIVE_THRESHOLD:
             return {"error": f"Menu number {menu_number} is a destructive operation and cannot be run from the portal"}
+        value = self._menu_actions[menu_number]
+        func = value[0] if isinstance(value, tuple) else value
+        if func is None:
+            return {"error": "API not authenticated. Connect via SSH to run operations."}
         return None
 
     def _check_conflict(self, menu_number: str) -> Optional[dict]:

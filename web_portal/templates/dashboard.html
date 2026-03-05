@@ -51,12 +51,8 @@
                 {% for file in summary.recent_files %}
                 <tr>
                     <td>{{ file.name }}</td>
-                    <td class="file-size">
-                        <script>document.write(formatFileSize({{ file.size_bytes }}))</script>
-                    </td>
-                    <td class="file-size">
-                        <script>document.write(formatTimestamp({{ file.last_modified }}))</script>
-                    </td>
+                    <td class="file-size">{{ file.size_display }}</td>
+                    <td class="file-size">{{ file.modified_display }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

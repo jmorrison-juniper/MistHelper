@@ -5,6 +5,7 @@ Serves the home dashboard page and health check endpoint.
 
 import os
 import time
+from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, render_template
 
@@ -70,7 +71,30 @@ def _get_recent_files(data_dir: str, limit: int = 5) -> list:
         files.append({
             "name": entry.name,
             "size_bytes": stat.st_size,
+            "size_display": _format_file_size(stat.st_size),
             "last_modified": stat.st_mtime,
+            "modified_display": _format_timestamp(stat.st_mtime),
         })
     files.sort(key=lambda f: f["last_modified"], reverse=True)
     return files[:limit]
+
+
+def _format_file_size(size_bytes: int) -> str:
+    """Format bytes into human-readable size string."""
+    if size_bytes == 0:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB"]
+    index = 0
+    size = float(size_bytes)
+    while size >= 1024 and index < len(units) - 1:
+        size /= 1024
+        index += 1
+    return f"{size:.1f} {units[index]}"
+
+
+def _format_timestamp(epoch: float) -> str:
+    """Format epoch timestamp into readable date string."""
+    if not epoch:
+        return ""
+    date = datetime.fromtimestamp(epoch, tz=timezone.utc)
+    return date.strftime("%Y-%m-%d %H:%M:%S UTC")
