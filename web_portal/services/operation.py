@@ -6,7 +6,6 @@ captures log output, and publishes SSE events via PortalEventBus.
 
 import io
 import logging
-import sys
 import threading
 import time
 import uuid
@@ -174,17 +173,18 @@ class OperationExecutor:
             self._handle_failure(run, str(exc))
 
     def _capture_and_run(self, run: dict, func) -> None:
-        """Run function with stdout and log capture via handlers."""
+        """Run function with log capture via a logging handler.
+
+        Captures logging output from the operation function and publishes
+        it via SSE. Print output goes to container stdout (not captured)
+        since MistHelper logs all meaningful progress via logging.info().
+        """
         handler = _RunLogHandler(run, self._event_bus)
         root_logger = logging.getLogger()
         root_logger.addHandler(handler)
-        stdout_capture = _StdoutCapture(run, self._event_bus)
-        old_stdout = sys.stdout
-        sys.stdout = stdout_capture
         try:
             func()
         finally:
-            sys.stdout = old_stdout
             root_logger.removeHandler(handler)
 
     def _update_status(self, run: dict, status: str, progress: int) -> None:
@@ -267,48 +267,6 @@ class OperationExecutor:
             if low <= num <= high:
                 return name
         return "Other"
-
-
-class _StdoutCapture(io.TextIOBase):
-    """Capture print() output and publish via SSE."""
-
-    def __init__(self, run: dict, event_bus):
-        """Initialize with the run record and event bus."""
-        super().__init__()
-        self._run = run
-        self._event_bus = event_bus
-        self._buffer = ""
-
-    def write(self, text: str) -> int:
-        """Capture written text, publish complete lines via SSE."""
-        if not text:
-            return 0
-        self._buffer += text
-        while "\n" in self._buffer:
-            line, self._buffer = self._buffer.split("\n", 1)
-            line = line.rstrip()
-            if line:
-                self._publish_line(line)
-        return len(text)
-
-    def flush(self) -> None:
-        """Flush remaining buffer content."""
-        if self._buffer.strip():
-            self._publish_line(self._buffer.strip())
-            self._buffer = ""
-
-    def _publish_line(self, message: str) -> None:
-        """Append line to run log and publish as SSE event."""
-        self._run["log_messages"].append(message)
-        if self._event_bus:
-            self._event_bus.publish("log", {
-                "run_id": self._run["run_id"],
-                "message": message,
-                "level": "info",
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-                ),
-            })
 
 
 class _RunLogHandler(logging.Handler):
