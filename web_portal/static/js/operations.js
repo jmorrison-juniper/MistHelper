@@ -885,11 +885,100 @@ function renderActiveOps(runs) {
     runs.forEach(function(run) {
         var div = document.createElement('div');
         div.className = 'portal-card mb-2 p-2';
-        div.innerHTML = '<strong>Menu ' + run.menu_number + '</strong> ' +
+        div.style.cursor = 'pointer';
+        div.title = 'Click to view logs and manage this operation';
+        var isActive = (currentRunId === run.run_id);
+        if (isActive) {
+            div.style.borderLeft = '3px solid var(--accent-color, #0d6efd)';
+        }
+        div.innerHTML = '<div class="d-flex justify-content-between align-items-center">' +
+            '<div><strong>Menu ' + escapeHtml(run.menu_number) + '</strong> ' +
             '<span class="badge bg-primary">Running</span>' +
-            '<br><small class="text-muted">' +
-            escapeHtml(run.run_id || '') + '</small>';
+            '<br><small class="text-muted">' + escapeHtml(run.description || '') + '</small>' +
+            '<br><small class="text-muted" style="font-size:0.7rem">' +
+            escapeHtml(run.run_id || '') + '</small></div>' +
+            '<button class="btn btn-sm btn-outline-danger ms-2 stop-active-btn" ' +
+            'title="Stop this operation" ' +
+            'onclick="event.stopPropagation(); stopActiveOperation(\'' +
+            escapeHtml(run.run_id) + '\')">' +
+            'Stop</button></div>';
+        div.addEventListener('click', function() {
+            reconnectToOperation(run.run_id, run.menu_number, run.description);
+        });
         list.appendChild(div);
+    });
+}
+
+function reconnectToOperation(runId, menuNumber, description) {
+    if (currentSSE) { currentSSE.close(); }
+    currentRunId = runId;
+    selectedMenuNumber = menuNumber;
+
+    var titleEl = document.getElementById('selectedOpTitle');
+    var descEl = document.getElementById('selectedOpDesc');
+    var selectedPanel = document.getElementById('selectedOp');
+    titleEl.textContent = 'Menu ' + menuNumber;
+    descEl.textContent = description || '';
+    selectedPanel.style.display = '';
+
+    document.getElementById('parameterForm').style.display = 'none';
+    document.getElementById('cliOnlyPanel').style.display = 'none';
+    document.getElementById('runBtn').disabled = true;
+    document.getElementById('runBtn').textContent = 'Running...';
+    document.getElementById('stopBtn').style.display = '';
+
+    resetExecutionPanel();
+    setStatus('running', 'Reconnected to Menu ' + menuNumber);
+    replayExistingLogs(runId);
+    startSSEStream(runId);
+}
+
+function replayExistingLogs(runId) {
+    fetch('/api/operations/status/' + encodeURIComponent(runId))
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.log_messages) {
+                data.log_messages.forEach(function(entry) {
+                    appendLog(entry.message, entry.level || 'INFO');
+                });
+            }
+            if (data.debug_messages) {
+                data.debug_messages.forEach(function(entry) {
+                    appendDebugLog(entry.message, entry.level || 'DEBUG');
+                });
+            }
+            if (data.output_files && data.output_files.length > 0) {
+                showOutputFiles(data.output_files);
+            }
+            if (data.status === 'completed') {
+                setStatus('complete', 'Operation completed');
+                updateProgress(100, 'Done');
+                finishRun();
+            } else if (data.status === 'failed') {
+                setStatus('error', data.error_message || 'Operation failed');
+                finishRun();
+            }
+        })
+        .catch(function(err) {
+            appendLog('Could not load existing logs: ' + err.message, 'WARNING');
+        });
+}
+
+function stopActiveOperation(runId) {
+    fetch('/api/operations/stop/' + encodeURIComponent(runId), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfToken() }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.error) {
+            alert('Stop failed: ' + data.error);
+        } else {
+            refreshActiveOps();
+        }
+    })
+    .catch(function(err) {
+        alert('Stop request error: ' + err.message);
     });
 }
 
@@ -928,4 +1017,5 @@ document.addEventListener('DOMContentLoaded', function() {
     loadOperations();
     setupSearch();
     refreshActiveOps();
+    setInterval(refreshActiveOps, 5000);
 });
