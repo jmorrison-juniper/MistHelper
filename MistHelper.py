@@ -11551,7 +11551,6 @@ class OrgDeviceStatsExporter:
                             response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
                                 apisession, 
                                 site_id, 
-                                duration=f"{hours}h",
                                 limit=1000
                             )
                             port_stats = mistapi.get_all(response=response, mist_session=apisession)
@@ -11680,7 +11679,6 @@ class OrgDeviceStatsExporter:
                 api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
                 filename=output_file,
                 sort_key="mac",
-                duration=f"{hours}h",
                 limit=1000
             ).execute()
     

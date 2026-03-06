@@ -5,6 +5,7 @@ captures log output, and publishes SSE events via PortalEventBus.
 """
 
 import logging
+import os
 import re
 import threading
 import time
@@ -318,6 +319,32 @@ class OperationExecutor:
                 for run in self._runs.values()
                 if run["status"] in ("pending", "running")
             ]
+
+    def stop_operation(self, run_id: str) -> dict:
+        """Request graceful stop of a running operation.
+
+        Creates the ``stop_loop.txt`` sentinel file that loop-style
+        operations (Menu 75/76) check between iterations.  Also sets
+        a ``_stop_requested`` flag on the run for UI feedback.
+
+        Returns:
+            Dict with status message or error.
+        """
+        with self._lock:
+            run = self._runs.get(run_id)
+        if run is None:
+            return {"error": "Run not found"}
+        if run["status"] not in ("pending", "running"):
+            return {"error": "Operation is not running"}
+        run["_stop_requested"] = True
+        try:
+            stop_path = os.path.join(os.getcwd(), "stop_loop.txt")
+            with open(stop_path, "w", encoding="utf-8") as fh:
+                fh.write("stop requested by web portal\n")
+            logging.info("Stop signal sent for run %s (stop_loop.txt created)", run_id)
+        except OSError as exc:
+            logging.warning("Could not create stop_loop.txt: %s", exc)
+        return {"status": "stop_requested", "run_id": run_id}
 
     def build_category_list(self, menu_actions: dict) -> list:
         """Build categorized operation list for the UI."""

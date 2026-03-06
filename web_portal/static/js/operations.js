@@ -565,6 +565,7 @@ function runSelectedOperation() {
         }
         currentRunId = data.run_id;
         setStatus('running', 'Operation started');
+        document.getElementById('stopBtn').style.display = '';
         startSSEStream(data.run_id);
     })
     .catch(function(err) {
@@ -581,6 +582,33 @@ function collectInputAnswers() {
         answers.push(control ? (control.value || '') : '');
     });
     return answers;
+}
+
+function stopRunningOperation() {
+    if (!currentRunId) return;
+    var btn = document.getElementById('stopBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+
+    fetch('/api/operations/stop/' + encodeURIComponent(currentRunId), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfToken() }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.error) {
+            appendLog('Stop request failed: ' + data.error, 'WARNING');
+            btn.disabled = false;
+            btn.textContent = 'Stop Operation';
+        } else {
+            appendLog('Stop signal sent - operation will stop after current cycle.', 'WARNING');
+        }
+    })
+    .catch(function(err) {
+        appendLog('Stop request error: ' + err.message, 'WARNING');
+        btn.disabled = false;
+        btn.textContent = 'Stop Operation';
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -818,6 +846,10 @@ function finishRun() {
     var btn = document.getElementById('runBtn');
     btn.disabled = false;
     btn.textContent = 'Run Operation';
+    var stopBtn = document.getElementById('stopBtn');
+    stopBtn.style.display = 'none';
+    stopBtn.disabled = false;
+    stopBtn.textContent = 'Stop Operation';
     refreshActiveOps();
 }
 

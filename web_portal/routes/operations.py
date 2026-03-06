@@ -70,6 +70,16 @@ def active_operations():
     return jsonify({"active": active})
 
 
+@operations_bp.route("/api/operations/stop/<run_id>", methods=["POST"])
+def stop_operation(run_id):
+    """Request graceful stop of a running operation."""
+    executor = _get_executor()
+    result = executor.stop_operation(run_id)
+    if "error" in result:
+        return jsonify(result), 404
+    return jsonify(result)
+
+
 @operations_bp.route("/api/operations/stream")
 def operation_stream():
     """SSE endpoint for real-time operation progress events.
