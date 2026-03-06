@@ -9,6 +9,7 @@ on:
       - 'Containerfile'
       - 'Dockerfile'
       - '__init__.py'
+      - 'web_portal/**'
   workflow_dispatch:
     inputs:
       version_override:

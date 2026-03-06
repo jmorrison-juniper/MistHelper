@@ -5,6 +5,7 @@ captures log output, and publishes SSE events via PortalEventBus.
 """
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -534,10 +535,37 @@ class OperationExecutor:
 class _RunLogHandler(logging.Handler):
     """Logging handler that captures log lines to an OperationRun.
 
-    Splits log output into two tiers:
-    - INFO and above: published as 'log' events (main execution log)
-    - DEBUG: published as 'debug_log' events (collapsible debug panel)
+    Routes log output into two tiers based on source and content:
+    - Main log: user-facing progress messages (fetched N records, wrote file)
+    - Debug log: library internals, rate limiter, API plumbing
+
+    Also auto-detects output file paths from log messages so the
+    Output Files section populates without changes to legacy menu code.
     """
+
+    # Logger name prefixes whose output always goes to debug panel
+    _DEBUG_LOGGERS = frozenset((
+        "urllib3", "requests", "werkzeug", "flask", "mistapi",
+    ))
+
+    # Message prefixes that indicate internal plumbing (even at INFO)
+    _INTERNAL_PREFIXES = (
+        "apiresponse:", "apirequest:", "apitoken:",
+        "Rate limiting:", "Hour boundary crossed",
+        "Adaptive delay", "PID controller",
+        "request headers:", "_gen_query:", "_check_next", "_url:",
+        "Processing ", "Connection-aware threading:",
+        "CPU-aware threading:", "Connection pool protection:",
+        "API Optimization:", "Fast mode:",
+        "Retry ", "FAST RETRY",
+    )
+
+    # Regex to extract output filenames from log messages
+    _OUTPUT_FILE_RE = re.compile(
+        r"(?:wrote \d+ rows to|written to|wrote results to)"
+        r"\s+(?:data[/\\])?(\S+\.(?:csv|db|json|sqlite))",
+        re.IGNORECASE,
+    )
 
     def __init__(self, run: dict, event_bus):
         """Initialize with the run record and event bus."""
@@ -552,10 +580,12 @@ class _RunLogHandler(logging.Handler):
         timestamp = time.strftime(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)
         )
-        is_main = record.levelno >= logging.INFO
+        is_main = self._is_user_facing(record, message)
         event_type = "log" if is_main else "debug_log"
         storage = "log_messages" if is_main else "debug_messages"
         self._run[storage].append({"message": message, "level": level})
+        if is_main:
+            self._check_output_file(message)
         if self._event_bus:
             self._event_bus.publish(event_type, {
                 "run_id": self._run["run_id"],
@@ -563,3 +593,31 @@ class _RunLogHandler(logging.Handler):
                 "level": level,
                 "timestamp": timestamp,
             })
+
+    def _is_user_facing(self, record: logging.LogRecord, message: str) -> bool:
+        """Decide if a message belongs in the main execution log."""
+        if record.levelno >= logging.WARNING:
+            return True
+        if record.levelno < logging.INFO:
+            return False
+        logger_root = record.name.split(".")[0]
+        if logger_root in self._DEBUG_LOGGERS:
+            return False
+        if any(message.startswith(prefix) for prefix in self._INTERNAL_PREFIXES):
+            return False
+        if self._looks_like_http_log(message):
+            return False
+        return True
+
+    @staticmethod
+    def _looks_like_http_log(message: str) -> bool:
+        """Detect urllib3-style HTTP request log lines."""
+        return message.startswith("http") and "HTTP/" in message
+
+    def _check_output_file(self, message: str) -> None:
+        """Extract output filenames from log messages."""
+        match = self._OUTPUT_FILE_RE.search(message)
+        if match:
+            filename = match.group(1)
+            if filename not in self._run["output_files"]:
+                self._run["output_files"].append(filename)
