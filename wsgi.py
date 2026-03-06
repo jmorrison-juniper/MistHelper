@@ -77,6 +77,8 @@ def _load_menu_actions(wsgi_session, wsgi_org_id):
         import MistHelper
         if wsgi_session is not None:
             MistHelper.apisession = wsgi_session
+            # Apply timeout adapter so API calls don't hang indefinitely
+            MistHelper._configure_session_timeout(wsgi_session)
         if wsgi_org_id:
             MistHelper.org_id = wsgi_org_id
             os.environ["ORG_ID"] = wsgi_org_id

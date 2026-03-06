@@ -602,6 +602,8 @@ function stopRunningOperation() {
             btn.textContent = 'Stop Operation';
         } else {
             appendLog('Stop signal sent - operation will stop after current cycle.', 'WARNING');
+            setStatus('failed', 'Stopped by user');
+            finishRun();
         }
     })
     .catch(function(err) {

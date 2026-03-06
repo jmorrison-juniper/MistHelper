@@ -324,8 +324,9 @@ class OperationExecutor:
         """Request graceful stop of a running operation.
 
         Creates the ``stop_loop.txt`` sentinel file that loop-style
-        operations (Menu 75/76) check between iterations.  Also sets
-        a ``_stop_requested`` flag on the run for UI feedback.
+        operations (Menu 75/76) check between iterations.  Also marks
+        the run as ``failed`` so that ``_check_conflict`` no longer
+        blocks a fresh start of the same menu number.
 
         Returns:
             Dict with status message or error.
@@ -337,6 +338,8 @@ class OperationExecutor:
         if run["status"] not in ("pending", "running"):
             return {"error": "Operation is not running"}
         run["_stop_requested"] = True
+        self._update_status(run, "failed", 100)
+        run["error_message"] = "Stopped by user"
         try:
             stop_path = os.path.join(os.getcwd(), "stop_loop.txt")
             with open(stop_path, "w", encoding="utf-8") as fh:
@@ -451,12 +454,15 @@ class OperationExecutor:
                     self._capture_and_run(run, func)
             else:
                 self._capture_and_run(run, func)
-            self._update_status(run, "completed", 100)
-            self._publish_complete(run)
+            if not run.get("_stop_requested"):
+                self._update_status(run, "completed", 100)
+                self._publish_complete(run)
         except (EOFError, SystemExit):
-            self._handle_failure(run, "Operation requires interactive input (not available in web portal)")
+            if not run.get("_stop_requested"):
+                self._handle_failure(run, "Operation requires interactive input (not available in web portal)")
         except Exception as exc:
-            self._handle_failure(run, str(exc))
+            if not run.get("_stop_requested"):
+                self._handle_failure(run, str(exc))
 
     def _capture_and_run(self, run: dict, func) -> None:
         """Run function with log capture via a logging handler.
