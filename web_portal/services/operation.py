@@ -289,7 +289,14 @@ class OperationExecutor:
         self._event_bus = event_bus
         self._runs = {}
         self._lock = threading.Lock()
-        self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="op")
+        cpu_count = os.cpu_count() or 2
+        max_workers = max(1, cpu_count - 1)
+        logging.info(
+            "Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count
+        )
+        self._pool = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="op"
+        )
 
     def start_operation(self, menu_number: str, parameters: dict) -> dict:
         """Validate and start an operation in a background thread."""
