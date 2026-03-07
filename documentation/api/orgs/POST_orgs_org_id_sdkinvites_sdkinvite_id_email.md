@@ -1,0 +1,88 @@
+# sendSdkInviteEmail
+
+> sendSdkInviteEmail
+
+## HTTP
+
+`POST /api/v1/orgs/{org_id}/sdkinvites/{sdkinvite_id}/email`
+
+## Description
+
+Send SDK Invite by Email
+
+## Authentication
+
+Requires API token authentication (`Authorization: Token {api_token}` header or `X-CSRFToken` cookie). See Mist API authentication documentation.
+
+## Parameters
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| org_id | string | Yes |  |
+| sdkinvite_id | string | Yes |  |
+
+## Request Body
+
+Content-Type: `application/json`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "email"
+  ],
+  "description": "Request Body"
+}
+```
+
+## Response
+
+### 200
+
+OK
+
+## Errors
+
+| Status | Description |
+|--------|-------------|
+| 400 | Bad Syntax |
+| 401 | Unauthorized |
+| 403 | Permission Denied |
+| 404 | Not found. The API endpoint doesn’t exist or resource doesn’ t exist |
+| 429 | Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold |
+
+## Pagination
+
+Not paginated.
+
+## Rate Limiting
+
+Standard Mist API rate limits apply.
+
+## mistapi SDK
+
+`mistapi.api.v1.orgs.sdk_invites.sendSdkInviteEmail()`
+
+## Usage Context
+
+Sends an email invitation for a specific SDK invite.
+
+## Gotchas
+
+- Requires valid email configuration in the org.
+
+## Related Endpoints
+
+- [GET_orgs_org_id_sdkinvites_id.md](GET_orgs_org_id_sdkinvites_id.md) — Get SDK invite
+- [POST_orgs_org_id_sdkinvites_sdkinvite_id_sms.md](POST_orgs_org_id_sdkinvites_sdkinvite_id_sms.md) — Send SMS
+
+## MistHelper Notes
+
+Not currently used by MistHelper directly.
