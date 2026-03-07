@@ -130,7 +130,7 @@ Updates an existing Security Intelligence profile.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_secintelprofiles_id.md](GET_orgs_org_id_secintelprofiles_id.md) — Get profile
+- [GET_orgs_org_id_secintelprofiles_secintelprofile_id.md](GET_orgs_org_id_secintelprofiles_secintelprofile_id.md) — Get profile
 - [POST_orgs_org_id_secintelprofiles.md](POST_orgs_org_id_secintelprofiles.md) — Create profile
 
 ## MistHelper Notes

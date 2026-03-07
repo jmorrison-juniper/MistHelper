@@ -67,7 +67,7 @@ Deletes a specific image from a Mist Edge appliance.
 ## Related Endpoints
 
 - [GET_orgs_org_id_mxedges_mxedge_id.md](GET_orgs_org_id_mxedges_mxedge_id.md) — Mist Edge details
-- [POST_orgs_org_id_mxedges_mxedge_id_image.md](POST_orgs_org_id_mxedges_mxedge_id_image.md) — Upload image
+- [POST_orgs_org_id_mxedges_mxedge_id_image.md](POST_orgs_org_id_mxedges_mxedge_id_image_image_number.md) — Upload image
 
 ## MistHelper Notes
 

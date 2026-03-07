@@ -205,7 +205,7 @@ Deletes the old passphrase from a PSK after a passphrase rotation.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_psks_id.md](GET_orgs_org_id_psks_id.md) — Get PSK
+- [GET_orgs_org_id_psks_psk_id.md](GET_orgs_org_id_psks_psk_id.md) — Get PSK
 - [PUT_orgs_org_id_psks_psk_id.md](PUT_orgs_org_id_psks_psk_id.md) — Update PSK
 
 ## MistHelper Notes

@@ -105,7 +105,7 @@ Configures Zscaler cloud security integration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_setting_zscaler.md](GET_orgs_org_id_setting_zscaler.md) — Get Zscaler config
+- [GET_orgs_org_id_setting_zscaler.md](GET_orgs_org_id_setting_zscaler_setup.md) — Get Zscaler config
 - [GET_orgs_org_id_setting.md](GET_orgs_org_id_setting.md) — Get org settings
 
 ## MistHelper Notes

@@ -64,7 +64,7 @@ Deletes a subscription from a site. Removes webhook or event subscriptions.
 
 ## Related Endpoints
 
-- [GET_sites_site_id_subscriptions.md](GET_sites_site_id_subscriptions.md) — List subscriptions
+- [GET_sites_site_id_subscriptions.md](POST_sites_site_id_subscriptions.md) — List subscriptions
 - [POST_sites_site_id_subscriptions.md](POST_sites_site_id_subscriptions.md) — Create subscription
 
 ## MistHelper Notes

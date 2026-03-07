@@ -361,7 +361,7 @@ Creates a new support ticket for the organization.
 ## Related Endpoints
 
 - [GET_orgs_org_id_tickets.md](GET_orgs_org_id_tickets.md) — List tickets
-- [GET_orgs_org_id_tickets_id.md](GET_orgs_org_id_tickets_id.md) — Get ticket
+- [GET_orgs_org_id_tickets_ticket_id.md](GET_orgs_org_id_tickets_ticket_id.md) — Get ticket
 
 ## MistHelper Notes
 

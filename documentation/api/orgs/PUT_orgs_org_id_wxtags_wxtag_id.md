@@ -353,7 +353,7 @@ Updates an existing WxTag.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_wxtags_id.md](GET_orgs_org_id_wxtags_id.md) — Get WxTag
+- [GET_orgs_org_id_wxtags_wxtag_id.md](GET_orgs_org_id_wxtags_wxtag_id.md) — Get WxTag
 - [POST_orgs_org_id_wxtags.md](POST_orgs_org_id_wxtags.md) — Create WxTag
 
 ## MistHelper Notes

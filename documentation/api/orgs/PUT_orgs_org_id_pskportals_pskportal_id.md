@@ -475,7 +475,7 @@ Updates an existing PSK portal configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_pskportals_id.md](GET_orgs_org_id_pskportals_id.md) — Get PSK portal
+- [GET_orgs_org_id_pskportals_pskportal_id.md](GET_orgs_org_id_pskportals_pskportal_id.md) — Get PSK portal
 - [POST_orgs_org_id_pskportals.md](POST_orgs_org_id_pskportals.md) — Create PSK portal
 
 ## MistHelper Notes

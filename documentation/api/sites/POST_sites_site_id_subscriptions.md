@@ -64,7 +64,7 @@ Creates event subscriptions for a site. Subscriptions send real-time notificatio
 
 ## Related Endpoints
 
-- [GET_sites_site_id_subscriptions.md](GET_sites_site_id_subscriptions.md) — List subscriptions
+- [GET_sites_site_id_subscriptions.md](POST_sites_site_id_subscriptions.md) — List subscriptions
 - [POST_sites_site_id_webhooks.md](POST_sites_site_id_webhooks.md) — Create webhook
 
 ## MistHelper Notes

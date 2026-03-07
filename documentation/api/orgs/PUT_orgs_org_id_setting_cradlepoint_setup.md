@@ -100,7 +100,7 @@ Updates the Cradlepoint integration configuration.
 ## Related Endpoints
 
 - [POST_orgs_org_id_setting_cradlepoint_setup.md](POST_orgs_org_id_setting_cradlepoint_setup.md) — Initial setup
-- [GET_orgs_org_id_setting_cradlepoint.md](GET_orgs_org_id_setting_cradlepoint.md) — Get config
+- [GET_orgs_org_id_setting_cradlepoint.md](GET_orgs_org_id_setting_cradlepoint_setup.md) — Get config
 
 ## MistHelper Notes
 

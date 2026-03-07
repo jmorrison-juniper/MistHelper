@@ -91,7 +91,7 @@ Bulk-updates "other device" entries in the organization.
 ## Related Endpoints
 
 - [PUT_orgs_org_id_otherdevices_device_mac.md](PUT_orgs_org_id_otherdevices_device_mac.md) — Update single
-- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_stats_otherdevices.md) — Stats
+- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_otherdevices.md) — Stats
 
 ## MistHelper Notes
 

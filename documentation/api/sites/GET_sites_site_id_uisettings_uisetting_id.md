@@ -386,7 +386,7 @@ Retrieves a specific UI setting by ID.
 ## Related Endpoints
 
 - [GET_sites_site_id_uisettings.md](GET_sites_site_id_uisettings.md) — List UI settings
-- [PUT_sites_site_id_uisettings_uisetting_id.md](PUT_sites_site_id_uisettings_uisetting_id.md) — Update UI setting
+- [PUT_sites_site_id_uisettings_uisetting_id.md](POST_sites_site_id_uisettings_uisetting_id.md) — Update UI setting
 
 ## MistHelper Notes
 

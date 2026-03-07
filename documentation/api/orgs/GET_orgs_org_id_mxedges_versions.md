@@ -117,7 +117,7 @@ Retrieves available firmware versions for Mist Edge appliances.
 ## Related Endpoints
 
 - [GET_orgs_org_id_mxedges.md](GET_orgs_org_id_mxedges.md) — List edges
-- [POST_orgs_org_id_mxedges_mxedge_id_upgrade.md](POST_orgs_org_id_mxedges_mxedge_id_upgrade.md) — Upgrade edge
+- [POST_orgs_org_id_mxedges_mxedge_id_upgrade.md](GET_orgs_org_id_mxedges_mxedge_id.md) — Upgrade edge
 
 ## MistHelper Notes
 

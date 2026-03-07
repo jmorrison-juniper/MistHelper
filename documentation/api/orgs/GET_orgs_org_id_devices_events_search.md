@@ -266,4 +266,4 @@ Searches device events across the organization with filtering by type, device, t
 
 ## MistHelper Notes
 
-Used by MistHelper via `searchOrgDeviceEvents` in Menus 13, 15, 83.
+Used by MistHelper via `searchOrgDeviceEvents` in Menus **2** (device events 24h) and **63** (device events 52w).

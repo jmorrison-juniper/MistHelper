@@ -489,7 +489,7 @@ Updates an existing WxLAN tunnel configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_wxtunnels_id.md](GET_orgs_org_id_wxtunnels_id.md) — Get WxTunnel
+- [GET_orgs_org_id_wxtunnels_wxtunnel_id.md](GET_orgs_org_id_wxtunnels_wxtunnel_id.md) — Get WxTunnel
 - [POST_orgs_org_id_wxtunnels.md](POST_orgs_org_id_wxtunnels.md) — Create WxTunnel
 
 ## MistHelper Notes

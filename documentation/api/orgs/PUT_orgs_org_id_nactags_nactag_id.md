@@ -346,7 +346,7 @@ Updates an existing NAC tag.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_nactags_id.md](GET_orgs_org_id_nactags_id.md) — Get NAC tag
+- [GET_orgs_org_id_nactags_nactag_id.md](GET_orgs_org_id_nactags_nactag_id.md) — Get NAC tag
 - [POST_orgs_org_id_nactags.md](POST_orgs_org_id_nactags.md) — Create NAC tag
 
 ## MistHelper Notes

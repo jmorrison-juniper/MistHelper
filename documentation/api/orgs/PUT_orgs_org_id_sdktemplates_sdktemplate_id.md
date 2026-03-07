@@ -213,7 +213,7 @@ Updates an existing SDK template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sdktemplates_id.md](GET_orgs_org_id_sdktemplates_id.md) — Get template
+- [GET_orgs_org_id_sdktemplates_sdktemplate_id.md](GET_orgs_org_id_sdktemplates_sdktemplate_id.md) — Get template
 - [POST_orgs_org_id_sdktemplates.md](POST_orgs_org_id_sdktemplates.md) — Create template
 
 ## MistHelper Notes

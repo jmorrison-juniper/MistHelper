@@ -364,7 +364,7 @@ Updates or creates a specific UI setting entry.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_uisettings_id.md](GET_orgs_org_id_uisettings_id.md) — Get UI setting
+- [GET_orgs_org_id_uisettings_uisetting_id.md](GET_orgs_org_id_uisettings_uisetting_id.md) — Get UI setting
 - [GET_orgs_org_id_uisettings.md](GET_orgs_org_id_uisettings.md) — List UI settings
 
 ## MistHelper Notes

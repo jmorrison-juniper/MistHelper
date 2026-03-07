@@ -84,7 +84,7 @@ Uploads a portal image for a specific org-level WLAN.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_wlans_id.md](GET_orgs_org_id_wlans_id.md) — Get WLAN
+- [GET_orgs_org_id_wlans_wlan_id.md](GET_orgs_org_id_wlans_wlan_id.md) — Get WLAN
 - [POST_orgs_org_id_wlans.md](POST_orgs_org_id_wlans.md) — Create WLAN
 
 ## MistHelper Notes

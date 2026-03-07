@@ -8378,4 +8378,4 @@ Lists all devices (APs, switches, gateways) assigned to a site. Core endpoint fo
 
 ## MistHelper Notes
 
-Used extensively across Menus **5-9, 29-34, 50-52, 71, 87-93, 99, 112** and more via `listSiteDevices`.
+Used extensively across Menus **5-9, 29-34, 50-52, 71, 87-89, 90, 99, 112** and more via `listSiteDevices`.

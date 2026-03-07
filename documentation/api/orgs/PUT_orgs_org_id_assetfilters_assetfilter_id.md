@@ -317,7 +317,7 @@ Updates an existing asset filter for BLE asset tracking.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_assetfilters_id.md](GET_orgs_org_id_assetfilters_id.md) — Get filter
+- [GET_orgs_org_id_assetfilters_assetfilter_id.md](GET_orgs_org_id_assetfilters_assetfilter_id.md) — Get filter
 - [POST_orgs_org_id_assetfilters.md](POST_orgs_org_id_assetfilters.md) — Create filter
 
 ## MistHelper Notes

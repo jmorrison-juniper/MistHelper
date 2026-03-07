@@ -134,7 +134,7 @@ Configures Juniper Sky ATP (Advanced Threat Prevention) integration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_setting_skyatp.md](GET_orgs_org_id_setting_skyatp.md) — Get Sky ATP config
+- [GET_orgs_org_id_setting_skyatp.md](GET_orgs_org_id_setting_skyatp_setup.md) — Get Sky ATP config
 - [GET_orgs_org_id_setting.md](GET_orgs_org_id_setting.md) — Get org settings
 
 ## MistHelper Notes

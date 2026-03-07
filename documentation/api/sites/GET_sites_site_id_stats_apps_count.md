@@ -131,7 +131,7 @@ Returns the count of application statistics entries at a site.
 ## Related Endpoints
 
 - [GET_sites_site_id_stats.md](GET_sites_site_id_stats.md) — Site stats overview
-- [GET_sites_site_id_insights_client_client_mac.md](GET_sites_site_id_insights_client_client_mac.md) — Per-client app insights
+- [GET_sites_site_id_insights_client_client_mac.md](GET_sites_site_id_insights_client_client_mac_metric.md) — Per-client app insights
 
 ## MistHelper Notes
 

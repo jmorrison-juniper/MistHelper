@@ -83,7 +83,7 @@ Updates an "other device" (non-Juniper) entry by MAC address.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_stats_otherdevices.md) — Stats
+- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_otherdevices.md) — Stats
 - [PUT_orgs_org_id_otherdevices.md](PUT_orgs_org_id_otherdevices.md) — Bulk update
 
 ## MistHelper Notes

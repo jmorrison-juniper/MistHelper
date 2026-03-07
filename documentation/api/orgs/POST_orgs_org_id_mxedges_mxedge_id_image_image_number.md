@@ -85,7 +85,7 @@ Uploads a VM image to a specific Mist Edge appliance.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_mxedges_mxedge_id.md](GET_orgs_org_id_mxedge_id.md) — Get Mist Edge
+- [GET_orgs_org_id_mxedges_mxedge_id.md](GET_orgs_org_id_mxedges_mxedge_id.md) — Get Mist Edge
 - [GET_orgs_org_id_mxedges.md](GET_orgs_org_id_mxedges.md) — List Mist Edges
 
 ## MistHelper Notes

@@ -91,7 +91,7 @@ Updates the portal template for a specific NAC portal.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_nacportals_id.md](GET_orgs_org_id_nacportals_id.md) — Get NAC portal
+- [GET_orgs_org_id_nacportals_nacportal_id.md](GET_orgs_org_id_nacportals_nacportal_id.md) — Get NAC portal
 - [PUT_orgs_org_id_nacportals_nacportal_id.md](PUT_orgs_org_id_nacportals_nacportal_id.md) — Update NAC portal
 
 ## MistHelper Notes

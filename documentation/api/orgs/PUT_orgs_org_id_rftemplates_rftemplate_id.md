@@ -1629,7 +1629,7 @@ Updates an existing RF (Radio Frequency) template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_rftemplates_id.md](GET_orgs_org_id_rftemplates_id.md) — Get RF template
+- [GET_orgs_org_id_rftemplates_rftemplate_id.md](GET_orgs_org_id_rftemplates_rftemplate_id.md) — Get RF template
 - [POST_orgs_org_id_rftemplates.md](POST_orgs_org_id_rftemplates.md) — Create RF template
 
 ## MistHelper Notes

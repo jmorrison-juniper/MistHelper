@@ -127,7 +127,7 @@ Updates an existing site group.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sitegroups_id.md](GET_orgs_org_id_sitegroups_id.md) — Get group
+- [GET_orgs_org_id_sitegroups_sitegroup_id.md](GET_orgs_org_id_sitegroups_sitegroup_id.md) — Get group
 - [POST_orgs_org_id_sitegroups.md](POST_orgs_org_id_sitegroups.md) — Create group
 
 ## MistHelper Notes

@@ -122,7 +122,7 @@ Retrieves SLE (Service Level Expectation) metrics at the MSP level, providing ag
 
 - [GET_msps_msp_id_stats_orgs.md](GET_msps_msp_id_stats_orgs.md) — Org operational statistics
 - [../constants/GET_const_insight_metrics.md](../constants/GET_const_insight_metrics.md) — Available metric definitions
-- [../orgs/GET_orgs_org_id_sle.md](../orgs/GET_orgs_org_id_sle.md) — Org-level SLE data
+- [../orgs/GET_orgs_org_id_sle.md](../orgs/GET_orgs_org_id_insights_sites-sle.md) — Org-level SLE data
 
 ## MistHelper Notes
 

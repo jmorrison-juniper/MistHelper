@@ -194,7 +194,7 @@ Updates a specific user MAC entry.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_usermacs_id.md](GET_orgs_org_id_usermacs_id.md) — Get user MAC
+- [GET_orgs_org_id_usermacs_usermac_id.md](GET_orgs_org_id_usermacs_usermac_id.md) — Get user MAC
 - [GET_orgs_org_id_usermacs_search.md](GET_orgs_org_id_usermacs_search.md) — Search user MACs
 
 ## MistHelper Notes

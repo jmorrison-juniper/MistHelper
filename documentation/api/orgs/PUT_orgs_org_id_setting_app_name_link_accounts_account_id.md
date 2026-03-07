@@ -100,7 +100,7 @@ Updates a linked third-party application account.
 ## Related Endpoints
 
 - [POST_orgs_org_id_setting_app_name_link_accounts.md](POST_orgs_org_id_setting_app_name_link_accounts.md) — Link account
-- [DELETE_orgs_org_id_setting_app_name_link_accounts.md](DELETE_orgs_org_id_setting_app_name_link_accounts.md) — Unlink
+- [DELETE_orgs_org_id_setting_app_name_link_accounts.md](DELETE_orgs_org_id_setting_app_name_link_accounts_account_id.md) — Unlink
 
 ## MistHelper Notes
 

@@ -339,7 +339,7 @@ Updates an existing VPN (WAN overlay) configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_vpns_id.md](GET_orgs_org_id_vpns_id.md) — Get VPN
+- [GET_orgs_org_id_vpns_vpn_id.md](GET_orgs_org_id_vpns_vpn_id.md) — Get VPN
 - [POST_orgs_org_id_vpns.md](POST_orgs_org_id_vpns.md) — Create VPN
 
 ## MistHelper Notes

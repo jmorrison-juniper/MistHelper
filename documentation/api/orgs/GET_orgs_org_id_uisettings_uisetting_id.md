@@ -215,7 +215,7 @@ Retrieves a specific UI settings object by ID.
 ## Related Endpoints
 
 - [GET_orgs_org_id_uisettings.md](GET_orgs_org_id_uisettings.md) — List UI settings
-- [PUT_orgs_org_id_uisettings_uisetting_id.md](PUT_orgs_org_id_uisettings_uisetting_id.md) — Update UI settings
+- [PUT_orgs_org_id_uisettings_uisetting_id.md](POST_orgs_org_id_uisettings_uisetting_id.md) — Update UI settings
 
 ## MistHelper Notes
 

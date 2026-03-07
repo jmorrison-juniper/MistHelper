@@ -464,7 +464,7 @@ Updates an existing service policy.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_servicepolicies_id.md](GET_orgs_org_id_servicepolicies_id.md) — Get policy
+- [GET_orgs_org_id_servicepolicies_servicepolicy_id.md](GET_orgs_org_id_servicepolicies_servicepolicy_id.md) — Get policy
 - [POST_orgs_org_id_servicepolicies.md](POST_orgs_org_id_servicepolicies.md) — Create policy
 
 ## MistHelper Notes

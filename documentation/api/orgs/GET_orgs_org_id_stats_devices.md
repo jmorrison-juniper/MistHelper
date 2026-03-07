@@ -7615,4 +7615,4 @@ Retrieves device statistics across the entire organization.
 
 ## MistHelper Notes
 
-Not currently used by MistHelper directly.
+Used by MistHelper via `listOrgDevicesStats` in Menus **13** (device stats), **90** (AP firmware), **95** (gateway stats with freshness), and **99** (switch firmware).

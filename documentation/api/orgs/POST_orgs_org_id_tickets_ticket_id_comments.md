@@ -231,7 +231,7 @@ Adds a comment to an existing support ticket.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_tickets_id.md](GET_orgs_org_id_tickets_id.md) — Get ticket
+- [GET_orgs_org_id_tickets_ticket_id.md](GET_orgs_org_id_tickets_ticket_id.md) — Get ticket
 - [POST_orgs_org_id_tickets_ticket_id_attachments.md](POST_orgs_org_id_tickets_ticket_id_attachments.md) — Add attachment
 
 ## MistHelper Notes

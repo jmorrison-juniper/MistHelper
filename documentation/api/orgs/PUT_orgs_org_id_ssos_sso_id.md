@@ -889,7 +889,7 @@ Updates an existing SSO configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_ssos_id.md](GET_orgs_org_id_ssos_id.md) — Get SSO config
+- [GET_orgs_org_id_ssos_sso_id.md](GET_orgs_org_id_ssos_sso_id.md) — Get SSO config
 - [POST_orgs_org_id_ssos.md](POST_orgs_org_id_ssos.md) — Create SSO config
 
 ## MistHelper Notes

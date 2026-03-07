@@ -80,7 +80,7 @@ Sends an email invitation for a specific SDK invite.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sdkinvites_id.md](GET_orgs_org_id_sdkinvites_id.md) — Get SDK invite
+- [GET_orgs_org_id_sdkinvites_sdkinvite_id.md](GET_orgs_org_id_sdkinvites_sdkinvite_id.md) — Get SDK invite
 - [POST_orgs_org_id_sdkinvites_sdkinvite_id_sms.md](POST_orgs_org_id_sdkinvites_sdkinvite_id_sms.md) — Send SMS
 
 ## MistHelper Notes

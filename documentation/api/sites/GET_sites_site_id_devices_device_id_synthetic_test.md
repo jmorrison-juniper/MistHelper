@@ -152,7 +152,7 @@ Retrieves synthetic test configuration for a device. Synthetic tests validate ne
 ## Related Endpoints
 
 - [POST_sites_site_id_devices_device_id_synthetic_test.md](POST_sites_site_id_devices_device_id_synthetic_test.md) — Run synthetic test
-- [GET_sites_site_id_synthetic_test.md](GET_sites_site_id_synthetic_test.md) — Site-level synthetic test config
+- [GET_sites_site_id_synthetic_test.md](GET_sites_site_id_synthetic_test_search.md) — Site-level synthetic test config
 
 ## MistHelper Notes
 

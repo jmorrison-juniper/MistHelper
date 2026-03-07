@@ -78,7 +78,7 @@ Retrieves detailed statistics for a specific wireless client identified by MAC a
 ## Related Endpoints
 
 - [GET_sites_site_id_stats_clients.md](GET_sites_site_id_stats_clients.md) — All client stats
-- [GET_sites_site_id_insights_client_client_mac.md](GET_sites_site_id_insights_client_client_mac.md) — Client insights
+- [GET_sites_site_id_insights_client_client_mac.md](GET_sites_site_id_insights_client_client_mac_metric.md) — Client insights
 
 ## MistHelper Notes
 

@@ -77,7 +77,7 @@ Updates an existing SDK client entry.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sdkclients_search.md](GET_orgs_org_id_sdkclients_search.md) — Search SDK clients
+- [GET_orgs_org_id_sdkclients_search.md](PUT_orgs_org_id_sdkclients_sdkclient_id.md) — Search SDK clients
 - [PUT_orgs_org_id_sdkinvites_sdkinvite_id.md](PUT_orgs_org_id_sdkinvites_sdkinvite_id.md) — Update invite
 
 ## MistHelper Notes

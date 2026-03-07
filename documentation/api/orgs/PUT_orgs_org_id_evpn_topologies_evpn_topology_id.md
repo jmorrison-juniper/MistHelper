@@ -2897,7 +2897,7 @@ Updates an existing EVPN topology configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_evpn_topologies_id.md](GET_orgs_org_id_evpn_topologies_id.md) — Get topology
+- [GET_orgs_org_id_evpn_topologies_evpn_topology_id.md](GET_orgs_org_id_evpn_topologies_evpn_topology_id.md) — Get topology
 - [POST_orgs_org_id_evpn_topologies.md](POST_orgs_org_id_evpn_topologies.md) — Create topology
 
 ## MistHelper Notes

@@ -6587,7 +6587,7 @@ Updates an existing network template (switch configuration template).
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_networktemplates_id.md](GET_orgs_org_id_networktemplates_id.md) — Get template
+- [GET_orgs_org_id_networktemplates_networktemplate_id.md](GET_orgs_org_id_networktemplates_networktemplate_id.md) — Get template
 - [POST_orgs_org_id_networktemplates.md](POST_orgs_org_id_networktemplates.md) — Create template
 
 ## MistHelper Notes

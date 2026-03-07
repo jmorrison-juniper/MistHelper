@@ -159,8 +159,8 @@ Retrieves metric-level anomalies at a site (e.g., unusual latency spikes, throug
 
 ## Related Endpoints
 
-- [GET_sites_site_id_anomaly_client.md](GET_sites_site_id_anomaly_client.md) — Client anomalies
-- [GET_sites_site_id_anomaly_device.md](GET_sites_site_id_anomaly_device.md) — Device anomalies
+- [GET_sites_site_id_anomaly_client.md](GET_sites_site_id_anomaly_client_client_mac_metric.md) — Client anomalies
+- [GET_sites_site_id_anomaly_device.md](GET_sites_site_id_anomaly_device_device_mac_metric.md) — Device anomalies
 
 ## MistHelper Notes
 

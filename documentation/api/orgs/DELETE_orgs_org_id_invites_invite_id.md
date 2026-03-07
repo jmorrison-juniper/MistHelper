@@ -65,7 +65,7 @@ Revokes a pending admin invitation for the organization.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_invites.md](GET_orgs_org_id_invites.md) — List invitations
+- [GET_orgs_org_id_invites.md](POST_orgs_org_id_invites.md) — List invitations
 - [POST_orgs_org_id_invites.md](POST_orgs_org_id_invites.md) — Create invitation
 
 ## MistHelper Notes

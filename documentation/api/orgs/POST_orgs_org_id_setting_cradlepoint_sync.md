@@ -65,7 +65,7 @@ Triggers a sync with the Cradlepoint integration.
 ## Related Endpoints
 
 - [POST_orgs_org_id_setting_cradlepoint_setup.md](POST_orgs_org_id_setting_cradlepoint_setup.md) — Setup
-- [GET_orgs_org_id_setting_cradlepoint.md](GET_orgs_org_id_setting_cradlepoint.md) — Get config
+- [GET_orgs_org_id_setting_cradlepoint.md](GET_orgs_org_id_setting_cradlepoint_setup.md) — Get config
 
 ## MistHelper Notes
 

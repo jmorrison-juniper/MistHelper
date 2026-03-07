@@ -744,7 +744,7 @@ Lists Mist Edge appliances at a site. Returns edge device status, tunnel counts,
 ## Related Endpoints
 
 - [GET_sites_site_id_mxedges_mxedge_id.md](GET_sites_site_id_mxedges_mxedge_id.md) — Get specific edge
-- [POST_sites_site_id_mxedges.md](POST_sites_site_id_mxedges.md) — Create edge
+- [POST_sites_site_id_mxedges.md](GET_sites_site_id_mxedges.md) — Create edge
 
 ## MistHelper Notes
 

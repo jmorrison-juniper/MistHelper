@@ -361,7 +361,7 @@ Updates an existing support ticket.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_tickets_id.md](GET_orgs_org_id_tickets_id.md) — Get ticket
+- [GET_orgs_org_id_tickets_ticket_id.md](GET_orgs_org_id_tickets_ticket_id.md) — Get ticket
 - [POST_orgs_org_id_tickets.md](POST_orgs_org_id_tickets.md) — Create ticket
 
 ## MistHelper Notes

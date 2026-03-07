@@ -301,7 +301,7 @@ Updates an existing SSO role mapping.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_ssoroles_id.md](GET_orgs_org_id_ssoroles_id.md) — Get SSO role
+- [GET_orgs_org_id_ssoroles_ssorole_id.md](GET_orgs_org_id_ssoroles_ssorole_id.md) — Get SSO role
 - [POST_orgs_org_id_ssoroles.md](POST_orgs_org_id_ssoroles.md) — Create SSO role
 
 ## MistHelper Notes

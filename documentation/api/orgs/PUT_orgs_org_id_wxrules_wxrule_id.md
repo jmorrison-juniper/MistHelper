@@ -363,7 +363,7 @@ Updates an existing WxLAN rule.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_wxrules_id.md](GET_orgs_org_id_wxrules_id.md) — Get WxRule
+- [GET_orgs_org_id_wxrules_wxrule_id.md](GET_orgs_org_id_wxrules_wxrule_id.md) — Get WxRule
 - [POST_orgs_org_id_wxrules.md](POST_orgs_org_id_wxrules.md) — Create WxRule
 
 ## MistHelper Notes

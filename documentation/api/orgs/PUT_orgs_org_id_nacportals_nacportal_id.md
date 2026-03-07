@@ -556,7 +556,7 @@ Updates an existing NAC portal configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_nacportals_id.md](GET_orgs_org_id_nacportals_id.md) — Get NAC portal
+- [GET_orgs_org_id_nacportals_nacportal_id.md](GET_orgs_org_id_nacportals_nacportal_id.md) — Get NAC portal
 - [POST_orgs_org_id_nacportals.md](POST_orgs_org_id_nacportals.md) — Create NAC portal
 
 ## MistHelper Notes

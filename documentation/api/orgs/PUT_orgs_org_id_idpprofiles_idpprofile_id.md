@@ -265,7 +265,7 @@ Updates an existing IDP (Intrusion Detection and Prevention) profile.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_idpprofiles_id.md](GET_orgs_org_id_idpprofiles_id.md) — Get profile
+- [GET_orgs_org_id_idpprofiles_idpprofile_id.md](GET_orgs_org_id_idpprofiles_idpprofile_id.md) — Get profile
 - [POST_orgs_org_id_idpprofiles.md](POST_orgs_org_id_idpprofiles.md) — Create profile
 
 ## MistHelper Notes

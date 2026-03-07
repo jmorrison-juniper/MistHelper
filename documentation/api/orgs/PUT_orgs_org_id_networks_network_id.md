@@ -791,7 +791,7 @@ Updates an existing network (subnet/VLAN) definition.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_networks_id.md](GET_orgs_org_id_networks_id.md) — Get network
+- [GET_orgs_org_id_networks_network_id.md](GET_orgs_org_id_networks_network_id.md) — Get network
 - [POST_orgs_org_id_networks.md](POST_orgs_org_id_networks.md) — Create network
 
 ## MistHelper Notes

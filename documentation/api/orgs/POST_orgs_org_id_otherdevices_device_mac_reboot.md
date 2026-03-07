@@ -65,7 +65,7 @@ Reboots an "other device" (non-Juniper) by MAC address.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_stats_otherdevices.md) — Other device stats
+- [GET_orgs_org_id_stats_otherdevices.md](GET_orgs_org_id_otherdevices.md) — Other device stats
 
 ## MistHelper Notes
 

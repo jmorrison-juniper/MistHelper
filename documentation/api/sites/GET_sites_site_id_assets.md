@@ -146,7 +146,7 @@ Lists BLE assets tracked at a site. Returns discovered asset beacons matching co
 
 - [POST_sites_site_id_assets.md](POST_sites_site_id_assets.md) — Create asset record
 - [GET_sites_site_id_assetfilters.md](GET_sites_site_id_assetfilters.md) — Asset filter configuration
-- [GET_sites_site_id_assets_search.md](GET_sites_site_id_assets_search.md) — Search assets
+- [GET_sites_site_id_assets_search.md](GET_sites_site_id_stats_assets_search.md) — Search assets
 
 ## MistHelper Notes
 

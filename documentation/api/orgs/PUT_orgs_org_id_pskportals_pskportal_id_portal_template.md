@@ -130,7 +130,7 @@ Updates the portal template for a specific PSK portal.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_pskportals_id.md](GET_orgs_org_id_pskportals_id.md) — Get PSK portal
+- [GET_orgs_org_id_pskportals_pskportal_id.md](GET_orgs_org_id_pskportals_pskportal_id.md) — Get PSK portal
 - [PUT_orgs_org_id_pskportals_pskportal_id.md](PUT_orgs_org_id_pskportals_pskportal_id.md) — Update PSK portal
 
 ## MistHelper Notes

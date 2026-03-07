@@ -123,7 +123,7 @@ Removes the SCEP (Simple Certificate Enrollment Protocol) configuration from the
 
 ## Related Endpoints
 
-- [POST_orgs_org_id_setting_mist_scep.md](POST_orgs_org_id_setting_mist_scep.md) — Setup SCEP
+- [POST_orgs_org_id_setting_mist_scep.md](GET_orgs_org_id_setting_mist_scep.md) — Setup SCEP
 - [GET_orgs_org_id_setting.md](GET_orgs_org_id_setting.md) — Org settings
 
 ## MistHelper Notes

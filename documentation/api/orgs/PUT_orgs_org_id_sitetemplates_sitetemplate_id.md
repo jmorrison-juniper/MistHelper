@@ -152,7 +152,7 @@ Updates an existing site template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sitetemplates_id.md](GET_orgs_org_id_sitetemplates_id.md) — Get template
+- [GET_orgs_org_id_sitetemplates_sitetemplate_id.md](GET_orgs_org_id_sitetemplates_sitetemplate_id.md) — Get template
 - [POST_orgs_org_id_sitetemplates.md](POST_orgs_org_id_sitetemplates.md) — Create template
 
 ## MistHelper Notes

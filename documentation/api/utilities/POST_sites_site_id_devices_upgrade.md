@@ -269,4 +269,4 @@ Initiates a firmware upgrade for devices at a specific site. Allows targeting by
 
 ## MistHelper Notes
 
-Used by Menu **90** (`FirmwareManager`) for site-specific AP firmware upgrades. Requires explicit `UPGRADE` confirmation from the user.
+Used by Menu **90** (`FirmwareManager`) for site-specific AP firmware upgrades and Menu **99** for switch firmware upgrades. Requires explicit `UPGRADE` confirmation from the user.

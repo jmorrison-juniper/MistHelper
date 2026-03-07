@@ -108,7 +108,7 @@ Updates license assignments or subscriptions for the organization.
 ## Related Endpoints
 
 - [GET_orgs_org_id_licenses.md](GET_orgs_org_id_licenses.md) — Get licenses
-- [GET_orgs_org_id_licenses_summary.md](GET_orgs_org_id_licenses_summary.md) — License summary
+- [GET_orgs_org_id_licenses_summary.md](GET_orgs_org_id_licenses.md) — License summary
 
 ## MistHelper Notes
 

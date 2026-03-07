@@ -635,7 +635,7 @@ Updates an existing NAC rule.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_nacrules_id.md](GET_orgs_org_id_nacrules_id.md) — Get NAC rule
+- [GET_orgs_org_id_nacrules_nacrule_id.md](GET_orgs_org_id_nacrules_nacrule_id.md) — Get NAC rule
 - [POST_orgs_org_id_nacrules.md](POST_orgs_org_id_nacrules.md) — Create NAC rule
 
 ## MistHelper Notes

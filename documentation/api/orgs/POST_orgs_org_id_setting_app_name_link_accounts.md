@@ -380,7 +380,7 @@ Links third-party application accounts to the org settings.
 ## Related Endpoints
 
 - [GET_orgs_org_id_setting.md](GET_orgs_org_id_setting.md) — Get org settings
-- [DELETE_orgs_org_id_setting_app_name_link_accounts.md](DELETE_orgs_org_id_setting_app_name_link_accounts.md) — Unlink
+- [DELETE_orgs_org_id_setting_app_name_link_accounts.md](DELETE_orgs_org_id_setting_app_name_link_accounts_account_id.md) — Unlink
 
 ## MistHelper Notes
 

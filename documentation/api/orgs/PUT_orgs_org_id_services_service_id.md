@@ -503,7 +503,7 @@ Updates an existing service (application definition).
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_services_id.md](GET_orgs_org_id_services_id.md) — Get service
+- [GET_orgs_org_id_services_service_id.md](GET_orgs_org_id_services_service_id.md) — Get service
 - [POST_orgs_org_id_services.md](POST_orgs_org_id_services.md) — Create service
 
 ## MistHelper Notes

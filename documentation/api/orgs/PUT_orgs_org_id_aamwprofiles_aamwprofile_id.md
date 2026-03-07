@@ -230,7 +230,7 @@ Updates an existing Advanced Anti-Malware (AAMW) profile.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_aamwprofiles_id.md](GET_orgs_org_id_aamwprofiles_id.md) — Get profile
+- [GET_orgs_org_id_aamwprofiles_aamwprofile_id.md](GET_orgs_org_id_aamwprofiles_aamwprofile_id.md) — Get profile
 - [POST_orgs_org_id_aamwprofiles.md](POST_orgs_org_id_aamwprofiles.md) — Create profile
 
 ## MistHelper Notes

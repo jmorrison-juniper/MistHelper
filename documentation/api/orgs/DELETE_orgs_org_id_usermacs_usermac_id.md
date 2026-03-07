@@ -65,7 +65,7 @@ Deletes a user MAC address label from the organization.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_usermacs.md](GET_orgs_org_id_usermacs.md) — List user MACs
+- [GET_orgs_org_id_usermacs.md](GET_orgs_org_id_usermacs_search.md) — List user MACs
 - [POST_orgs_org_id_usermacs.md](POST_orgs_org_id_usermacs.md) — Create user MAC
 
 ## MistHelper Notes

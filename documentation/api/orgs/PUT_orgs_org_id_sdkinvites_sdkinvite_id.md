@@ -203,7 +203,7 @@ Updates an existing SDK invitation.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_sdkinvites_id.md](GET_orgs_org_id_sdkinvites_id.md) — Get invite
+- [GET_orgs_org_id_sdkinvites_sdkinvite_id.md](GET_orgs_org_id_sdkinvites_sdkinvite_id.md) — Get invite
 - [POST_orgs_org_id_sdkinvites.md](POST_orgs_org_id_sdkinvites.md) — Create invite
 
 ## MistHelper Notes

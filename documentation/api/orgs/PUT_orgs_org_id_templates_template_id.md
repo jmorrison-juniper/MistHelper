@@ -277,7 +277,7 @@ Updates an existing configuration template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_templates_id.md](GET_orgs_org_id_templates_id.md) — Get template
+- [GET_orgs_org_id_templates_template_id.md](GET_orgs_org_id_templates_template_id.md) — Get template
 - [POST_orgs_org_id_templates.md](POST_orgs_org_id_templates.md) — Create template
 
 ## MistHelper Notes

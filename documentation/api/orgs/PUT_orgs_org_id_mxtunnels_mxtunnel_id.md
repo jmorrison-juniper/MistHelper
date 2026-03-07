@@ -431,7 +431,7 @@ Updates an existing Mist Tunnel configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_mxtunnels_id.md](GET_orgs_org_id_mxtunnels_id.md) — Get tunnel
+- [GET_orgs_org_id_mxtunnels_mxtunnel_id.md](GET_orgs_org_id_mxtunnels_mxtunnel_id.md) — Get tunnel
 - [POST_orgs_org_id_mxtunnels.md](POST_orgs_org_id_mxtunnels.md) — Create tunnel
 
 ## MistHelper Notes

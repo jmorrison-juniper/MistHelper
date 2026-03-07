@@ -26871,7 +26871,7 @@ Updates the captive portal template for an org-level WLAN.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_wlans_id.md](GET_orgs_org_id_wlans_id.md) — Get WLAN
+- [GET_orgs_org_id_wlans_wlan_id.md](GET_orgs_org_id_wlans_wlan_id.md) — Get WLAN
 - [PUT_orgs_org_id_wlans_wlan_id.md](PUT_orgs_org_id_wlans_wlan_id.md) — Update WLAN
 
 ## MistHelper Notes

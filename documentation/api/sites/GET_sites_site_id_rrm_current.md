@@ -1249,7 +1249,7 @@ Retrieves the current RRM (Radio Resource Management) state for a site, includin
 ## Related Endpoints
 
 - [GET_sites_site_id_rrm_events.md](GET_sites_site_id_rrm_events.md) — RRM change events
-- [GET_sites_site_id_rrm_neighbors.md](GET_sites_site_id_rrm_neighbors.md) — RF neighbor data
+- [GET_sites_site_id_rrm_neighbors.md](GET_sites_site_id_rrm_neighbors_band_band.md) — RF neighbor data
 
 ## MistHelper Notes
 

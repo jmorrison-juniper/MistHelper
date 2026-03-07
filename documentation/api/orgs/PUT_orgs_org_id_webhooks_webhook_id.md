@@ -370,7 +370,7 @@ Updates an existing webhook configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_webhooks_id.md](GET_orgs_org_id_webhooks_id.md) — Get webhook
+- [GET_orgs_org_id_webhooks_webhook_id.md](GET_orgs_org_id_webhooks_webhook_id.md) — Get webhook
 - [POST_orgs_org_id_webhooks_webhook_id_ping.md](POST_orgs_org_id_webhooks_webhook_id_ping.md) — Test ping
 
 ## MistHelper Notes

@@ -293,7 +293,7 @@ Sends an admin invite to join the organization.
 ## Related Endpoints
 
 - [GET_orgs_org_id_admins.md](GET_orgs_org_id_admins.md) — List admins
-- [GET_orgs_org_id_invites.md](GET_orgs_org_id_invites.md) — List invites
+- [GET_orgs_org_id_invites.md](POST_orgs_org_id_invites.md) — List invites
 
 ## MistHelper Notes
 

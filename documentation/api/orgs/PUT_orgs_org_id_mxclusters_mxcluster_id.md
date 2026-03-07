@@ -995,7 +995,7 @@ Updates an existing Mist Edge cluster configuration.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_mxclusters_id.md](GET_orgs_org_id_mxclusters_id.md) — Get cluster
+- [GET_orgs_org_id_mxclusters_mxcluster_id.md](GET_orgs_org_id_mxclusters_mxcluster_id.md) — Get cluster
 - [POST_orgs_org_id_mxclusters.md](POST_orgs_org_id_mxclusters.md) — Create cluster
 
 ## MistHelper Notes

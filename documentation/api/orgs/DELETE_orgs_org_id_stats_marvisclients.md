@@ -64,7 +64,7 @@ Clears cached Marvis client statistics for the organization.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_stats_marvisclients.md](GET_orgs_org_id_stats_marvisclients.md) — Get Marvis client stats
+- [GET_orgs_org_id_stats_marvisclients.md](DELETE_orgs_org_id_stats_marvisclients.md) — Get Marvis client stats
 
 ## MistHelper Notes
 

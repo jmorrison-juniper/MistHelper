@@ -72,7 +72,7 @@ Use this endpoint to trigger RRM (Radio Resource Management) optimization after 
 
 - [GET_installer_orgs_org_id_sites.md](GET_installer_orgs_org_id_sites.md) -- List sites to find the site name
 - [GET_installer_orgs_org_id_sites_site_name_maps.md](GET_installer_orgs_org_id_sites_site_name_maps.md) -- Verify maps and AP placement before optimization
-- [../sites/POST_sites_site_id_rrm_optimize.md](../sites/POST_sites_site_id_rrm_optimize.md) -- Full admin RRM optimization
+- [../sites/POST_sites_site_id_rrm_optimize.md](../sites/GET_sites_site_id_rrm_current.md) -- Full admin RRM optimization
 
 ## MistHelper Notes
 

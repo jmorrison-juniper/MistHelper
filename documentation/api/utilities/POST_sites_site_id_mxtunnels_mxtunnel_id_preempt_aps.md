@@ -86,7 +86,7 @@ Preempts APs connected to a Mist Tunnel cluster, forcing them to reconnect to th
 
 ## Related Endpoints
 
-- [../sites/GET_sites_site_id_mxtunnels.md](../sites/GET_sites_site_id_mxtunnels.md) — List site tunnels
+- [GET_orgs_org_id_mxtunnels.md](../orgs/GET_orgs_org_id_mxtunnels.md) — List org tunnels
 
 ## MistHelper Notes
 

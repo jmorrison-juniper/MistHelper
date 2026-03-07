@@ -113,7 +113,7 @@ Returns definitions of all device event types (AP, switch, gateway), including d
 - [GET_const_alarm_defs.md](GET_const_alarm_defs.md) — Alarm definitions (alarms are a subset of events with severity)
 - [GET_const_client_events.md](GET_const_client_events.md) — Client-side event definitions
 - [GET_const_mxedge_events.md](GET_const_mxedge_events.md) — Mist Edge event definitions
-- [../orgs/POST_orgs_org_id_devices_events_search.md](../orgs/POST_orgs_org_id_devices_events_search.md) — Search actual device events
+- [../orgs/POST_orgs_org_id_devices_events_search.md](../orgs/GET_orgs_org_id_devices_events_search.md) — Search actual device events
 
 ## MistHelper Notes
 

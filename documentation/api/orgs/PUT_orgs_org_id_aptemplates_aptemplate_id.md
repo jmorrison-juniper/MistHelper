@@ -1191,7 +1191,7 @@ Updates an existing AP template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_aptemplates_id.md](GET_orgs_org_id_aptemplates_id.md) — Get AP template
+- [GET_orgs_org_id_aptemplates_aptemplate_id.md](GET_orgs_org_id_aptemplates_aptemplate_id.md) — Get AP template
 - [POST_orgs_org_id_aptemplates.md](POST_orgs_org_id_aptemplates.md) — Create AP template
 
 ## MistHelper Notes

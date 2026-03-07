@@ -4101,7 +4101,7 @@ Updates an existing security policy.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_secpolicies_id.md](GET_orgs_org_id_secpolicies_id.md) — Get policy
+- [GET_orgs_org_id_secpolicies_secpolicy_id.md](GET_orgs_org_id_secpolicies_secpolicy_id.md) — Get policy
 - [POST_orgs_org_id_secpolicies.md](POST_orgs_org_id_secpolicies.md) — Create policy
 
 ## MistHelper Notes

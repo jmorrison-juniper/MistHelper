@@ -251,7 +251,7 @@ Updates an existing Antivirus profile.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_avprofiles_id.md](GET_orgs_org_id_avprofiles_id.md) — Get profile
+- [GET_orgs_org_id_avprofiles_avprofile_id.md](GET_orgs_org_id_avprofiles_avprofile_id.md) — Get profile
 - [POST_orgs_org_id_avprofiles.md](POST_orgs_org_id_avprofiles.md) — Create profile
 
 ## MistHelper Notes

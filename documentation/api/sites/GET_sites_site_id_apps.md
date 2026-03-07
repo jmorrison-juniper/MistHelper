@@ -104,7 +104,7 @@ Retrieves the list of discovered applications at a site, including traffic class
 
 ## Related Endpoints
 
-- [GET_sites_site_id_stats_apps.md](GET_sites_site_id_stats_apps.md) — App traffic stats
+- [GET_sites_site_id_stats_apps.md](GET_sites_site_id_stats_apps_count.md) — App traffic stats
 - [GET_sites_site_id_services_derived.md](GET_sites_site_id_services_derived.md) — Service definitions
 
 ## MistHelper Notes

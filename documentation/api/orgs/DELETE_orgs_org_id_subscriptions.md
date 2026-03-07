@@ -65,7 +65,7 @@ Removes alert subscriptions for the organization.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_subscriptions.md](GET_orgs_org_id_subscriptions.md) — List subscriptions
+- [GET_orgs_org_id_subscriptions.md](POST_orgs_org_id_subscriptions.md) — List subscriptions
 - [POST_orgs_org_id_subscriptions.md](POST_orgs_org_id_subscriptions.md) — Create subscription
 
 ## MistHelper Notes

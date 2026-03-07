@@ -6337,7 +6337,7 @@ Updates an existing gateway template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_gatewaytemplates_id.md](GET_orgs_org_id_gatewaytemplates_id.md) — Get template
+- [GET_orgs_org_id_gatewaytemplates_gatewaytemplate_id.md](GET_orgs_org_id_gatewaytemplates_gatewaytemplate_id.md) — Get template
 - [POST_orgs_org_id_gatewaytemplates.md](POST_orgs_org_id_gatewaytemplates.md) — Create template
 
 ## MistHelper Notes

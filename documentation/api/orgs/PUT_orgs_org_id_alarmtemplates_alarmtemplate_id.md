@@ -385,7 +385,7 @@ Updates an existing alarm template.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_alarmtemplates_id.md](GET_orgs_org_id_alarmtemplates_id.md) — Get template
+- [GET_orgs_org_id_alarmtemplates_alarmtemplate_id.md](GET_orgs_org_id_alarmtemplates_alarmtemplate_id.md) — Get template
 - [POST_orgs_org_id_alarmtemplates.md](POST_orgs_org_id_alarmtemplates.md) — Create template
 
 ## MistHelper Notes

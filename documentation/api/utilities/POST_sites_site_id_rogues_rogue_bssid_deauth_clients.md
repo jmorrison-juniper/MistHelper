@@ -67,7 +67,7 @@ Deauthenticates wireless clients that are connected to a rogue access point. Use
 
 ## Related Endpoints
 
-- [../sites/GET_sites_site_id_rogues.md](../sites/GET_sites_site_id_rogues.md) — List detected rogues to find the BSSID
+- [../sites/GET_sites_site_id_rogues.md](../sites/GET_sites_site_id_insights_rogues.md) — List detected rogues to find the BSSID
 
 ## MistHelper Notes
 

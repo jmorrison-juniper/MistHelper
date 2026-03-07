@@ -181,7 +181,7 @@ Updates the Sky ATP SecIntel blocklist (blocked domains/IPs).
 ## Related Endpoints
 
 - [PUT_orgs_org_id_setting_skyatp_secintel_allowlist.md](PUT_orgs_org_id_setting_skyatp_secintel_allowlist.md) — Allowlist
-- [GET_orgs_org_id_setting_skyatp.md](GET_orgs_org_id_setting_skyatp.md) — Get Sky ATP config
+- [GET_orgs_org_id_setting_skyatp.md](GET_orgs_org_id_setting_skyatp_setup.md) — Get Sky ATP config
 
 ## MistHelper Notes
 

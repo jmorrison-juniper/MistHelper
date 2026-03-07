@@ -107,7 +107,7 @@ Triggers a synthetic network test from a site device. Tests include connectivity
 
 ## Related Endpoints
 
-- [GET_sites_site_id_synthetic_test.md](GET_sites_site_id_synthetic_test.md) — Get test results
+- [GET_sites_site_id_synthetic_test.md](GET_sites_site_id_synthetic_test_search.md) — Get test results
 - [GET_sites_site_id_stats_devices.md](GET_sites_site_id_stats_devices.md) — Device stats
 
 ## MistHelper Notes

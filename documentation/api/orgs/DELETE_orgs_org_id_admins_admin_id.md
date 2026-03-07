@@ -66,7 +66,7 @@ Removes an administrator from an organization.
 ## Related Endpoints
 
 - [GET_orgs_org_id_admins.md](GET_orgs_org_id_admins.md) — List admins
-- [POST_orgs_org_id_admins.md](POST_orgs_org_id_admins.md) — Invite admin
+- [POST_orgs_org_id_admins.md](POST_orgs_org_id_invites.md) — Invite admin
 
 ## MistHelper Notes
 

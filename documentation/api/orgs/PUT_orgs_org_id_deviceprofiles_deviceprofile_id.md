@@ -78,7 +78,7 @@ Updates an existing device profile.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_deviceprofiles_id.md](GET_orgs_org_id_deviceprofiles_id.md) — Get profile
+- [GET_orgs_org_id_deviceprofiles_deviceprofile_id.md](GET_orgs_org_id_deviceprofiles_deviceprofile_id.md) — Get profile
 - [POST_orgs_org_id_deviceprofiles.md](POST_orgs_org_id_deviceprofiles.md) — Create profile
 
 ## MistHelper Notes

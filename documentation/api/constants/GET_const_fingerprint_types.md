@@ -107,8 +107,8 @@ Returns the list of device fingerprinting types used by the Mist platform to ide
 
 ## Related Endpoints
 
-- [../orgs/POST_orgs_org_id_clients_search.md](../orgs/POST_orgs_org_id_clients_search.md) — Search clients with fingerprint data
-- [../sites/GET_sites_site_id_clients.md](../sites/GET_sites_site_id_clients.md) — Site client list with fingerprint info
+- [../orgs/POST_orgs_org_id_clients_search.md](../orgs/GET_orgs_org_id_clients_search.md) — Search clients with fingerprint data
+- [../sites/GET_sites_site_id_clients.md](../sites/GET_sites_site_id_clients_search.md) — Site client list with fingerprint info
 
 ## MistHelper Notes
 

@@ -343,7 +343,7 @@ Updates an existing PSK (passphrase, expiration, SSID binding, etc.).
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_psks_id.md](GET_orgs_org_id_psks_id.md) — Get PSK
+- [GET_orgs_org_id_psks_psk_id.md](GET_orgs_org_id_psks_psk_id.md) — Get PSK
 - [POST_orgs_org_id_psks.md](POST_orgs_org_id_psks.md) — Create PSK
 
 ## MistHelper Notes

@@ -65,7 +65,7 @@ Sends a test ping to a webhook endpoint to verify connectivity.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_webhooks_id.md](GET_orgs_org_id_webhooks_id.md) — Get webhook
+- [GET_orgs_org_id_webhooks_webhook_id.md](GET_orgs_org_id_webhooks_webhook_id.md) — Get webhook
 - [GET_orgs_org_id_webhooks.md](GET_orgs_org_id_webhooks.md) — List webhooks
 
 ## MistHelper Notes

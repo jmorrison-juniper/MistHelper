@@ -300,7 +300,7 @@ Lists all administrators for the organization.
 
 ## Related Endpoints
 
-- [POST_orgs_org_id_admins.md](POST_orgs_org_id_admins.md) — Invite admin
+- [POST_orgs_org_id_admins.md](POST_orgs_org_id_invites.md) — Invite admin
 - [DELETE_orgs_org_id_admins_admin_id.md](DELETE_orgs_org_id_admins_admin_id.md) — Remove admin
 
 ## MistHelper Notes

@@ -228,8 +228,8 @@ Returns the list of all available insight/SLE (Service Level Expectation) metric
 
 ## Related Endpoints
 
-- [../orgs/GET_orgs_org_id_sle.md](../orgs/GET_orgs_org_id_sle.md) — Org-level SLE metrics
-- [../sites/GET_sites_site_id_sle.md](../sites/GET_sites_site_id_sle.md) — Site-level SLE metrics
+- [../orgs/GET_orgs_org_id_sle.md](../orgs/GET_orgs_org_id_insights_sites-sle.md) — Org-level SLE metrics
+- [../sites/GET_sites_site_id_sle.md](../sites/GET_sites_site_id_sle_scope_scope_id_metrics.md) — Site-level SLE metrics
 
 ## MistHelper Notes
 

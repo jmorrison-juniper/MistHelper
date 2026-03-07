@@ -157,7 +157,7 @@ Updates machine-learning location model for a specific device.
 ## Related Endpoints
 
 - [PUT_sites_site_id_location_ml_map_map_id.md](PUT_sites_site_id_location_ml_map_map_id.md) — Update map ML
-- [POST_sites_site_id_location_ml_reset.md](POST_sites_site_id_location_ml_reset.md) — Reset ML model
+- [POST_sites_site_id_location_ml_reset.md](POST_sites_site_id_location_ml_reset_map_map_id.md) — Reset ML model
 
 ## MistHelper Notes
 

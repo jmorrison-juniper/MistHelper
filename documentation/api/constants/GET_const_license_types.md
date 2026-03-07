@@ -119,7 +119,7 @@ Returns the list of Mist license types and their descriptions (e.g., SUB-MAN, SU
 ## Related Endpoints
 
 - [../orgs/GET_orgs_org_id_licenses.md](../orgs/GET_orgs_org_id_licenses.md) — Org license inventory (actual licenses owned)
-- [../orgs/GET_orgs_org_id_licenses_summary.md](../orgs/GET_orgs_org_id_licenses_summary.md) — License usage summary
+- [../orgs/GET_orgs_org_id_licenses_summary.md](../orgs/GET_orgs_org_id_licenses.md) — License usage summary
 
 ## MistHelper Notes
 

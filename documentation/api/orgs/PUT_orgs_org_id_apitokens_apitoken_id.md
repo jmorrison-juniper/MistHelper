@@ -220,7 +220,7 @@ Updates an existing org API token's name or privileges.
 
 ## Related Endpoints
 
-- [GET_orgs_org_id_apitokens_id.md](GET_orgs_org_id_apitokens_id.md) — Get token
+- [GET_orgs_org_id_apitokens_apitoken_id.md](GET_orgs_org_id_apitokens_apitoken_id.md) — Get token
 - [POST_orgs_org_id_apitokens.md](POST_orgs_org_id_apitokens.md) — Create token
 
 ## MistHelper Notes
