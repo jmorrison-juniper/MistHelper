@@ -3067,10 +3067,10 @@ def _configure_session_timeout(session_obj: Any) -> None:
                 self.default_timeout = default_timeout
                 super().__init__(**kwargs)
 
-            def send(self, request, **kwargs):
-                if kwargs.get('timeout') is None:
-                    kwargs['timeout'] = self.default_timeout
-                return super().send(request, **kwargs)
+            def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):
+                if timeout is None:
+                    timeout = self.default_timeout
+                return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
 
         adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
         inner.mount('https://', adapter)
