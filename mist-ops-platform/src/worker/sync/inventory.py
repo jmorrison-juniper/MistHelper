@@ -58,9 +58,8 @@ class InventorySyncService:
 
     def _sync_sites(self, org_uuid: UUID) -> int:
         """Fetch and upsert sites for the org."""
-        result = self._mist.list_entities(
-            api_module="orgs.sites",
-            list_method="listOrgSites",
+        result = self._mist.list_all_entities(
+            "org_site_list",
             ids={"org_id": self._org_id},
         )
         sites = result.data if isinstance(result.data, list) else []
@@ -71,9 +70,8 @@ class InventorySyncService:
 
     def _sync_devices(self, org_uuid: UUID) -> int:
         """Fetch and upsert devices for all sites in the org."""
-        result = self._mist.list_entities(
-            api_module="orgs.inventory",
-            list_method="getOrgInventory",
+        result = self._mist.list_all_entities(
+            "org_inventory",
             ids={"org_id": self._org_id},
         )
         devices = result.data if isinstance(result.data, list) else []

@@ -45,9 +45,8 @@ class StatusSyncService:
 
     def _capture_status(self, device: Device) -> None:
         """Fetch and store one device status snapshot."""
-        result = self._mist.list_entities(
-            api_module="sites.stats",
-            list_method="getSiteDeviceStats",
+        result = self._mist.read_entity(
+            "device_stats",
             ids={
                 "site_id": str(device.site_id),
                 "device_id": str(device.device_id),

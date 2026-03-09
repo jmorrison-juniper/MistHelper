@@ -81,8 +81,7 @@ class ConfigPushExecutor:
             )
 
         result = self._mist.write_entity(
-            api_module=endpoint.api_module,
-            write_method=endpoint.write_method,
+            entity_type=entity_type,
             ids=entity_ids,
             body=config_payload,
         )

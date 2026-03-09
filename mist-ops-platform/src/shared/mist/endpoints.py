@@ -26,6 +26,20 @@ class ApiResult:
     status_code: int
     data: dict[str, Any] | list[dict[str, Any]]
 
+    @property
+    def success(self) -> bool:
+        """True when status_code is in the 2xx range."""
+        return 200 <= self.status_code < 300
+
+    @property
+    def error(self) -> str | None:
+        """Extract error detail from data on non-2xx responses."""
+        if self.success:
+            return None
+        if isinstance(self.data, dict):
+            return self.data.get("detail", str(self.data))
+        return str(self.data)
+
 
 class MistEndpointService:
     """Read and write Mist configuration via the SDK."""
@@ -42,6 +56,9 @@ class MistEndpointService:
     ) -> ApiResult:
         """Fetch a single entity's current configuration from Mist."""
         endpoint = MistEntityRegistry.get(entity_type)
+        if endpoint.read_method is None:
+            msg = f"No read_method for entity type: {entity_type!r}"
+            raise AttributeError(msg)
         func = self._resolve_func(endpoint, endpoint.read_method)
         args = self._build_args(endpoint, ids)
         response = func(self._session, **args)
@@ -55,22 +72,28 @@ class MistEndpointService:
     ) -> ApiResult:
         """Push a full config payload to a single Mist entity."""
         endpoint = MistEntityRegistry.get(entity_type)
+        if endpoint.write_method is None:
+            msg = f"No write_method for entity type: {entity_type!r}"
+            raise AttributeError(msg)
         func = self._resolve_func(endpoint, endpoint.write_method)
         args = self._build_args(endpoint, ids)
         response = func(self._session, **args, body=body)
         return self._wrap(response)
 
-    def list_entities(
+    def list_all_entities(
         self,
-        api_module: str,
-        list_method: str,
+        entity_type: str,
         ids: dict[str, str],
     ) -> ApiResult:
-        """Call a list/search SDK method with arbitrary ids."""
-        module = self._import_module(api_module)
-        func = getattr(module, list_method)
-        response = func(self._session, **ids)
-        return self._wrap(response)
+        """Fetch all pages of a list operation via the registry."""
+        endpoint = MistEntityRegistry.get(entity_type)
+        if not endpoint.list_method:
+            msg = f"No list_method for entity type: {entity_type!r}"
+            raise AttributeError(msg)
+        func = self._resolve_func(endpoint, endpoint.list_method)
+        args = self._build_args(endpoint, ids)
+        all_data = self._paginate(func, args)
+        return ApiResult(status_code=200, data=all_data)
 
     # -- internal helpers ------------------------------------------------
 
@@ -84,12 +107,6 @@ class MistEndpointService:
         mod_path = f"mistapi.api.v1.{'.'.join(parts)}"
         module = importlib.import_module(mod_path)
         return getattr(module, method_name)
-
-    @staticmethod
-    def _import_module(api_module: str) -> Any:
-        """Import an arbitrary mistapi submodule."""
-        mod_path = f"mistapi.api.v1.{api_module}"
-        return importlib.import_module(mod_path)
 
     @staticmethod
     def _build_args(
@@ -113,3 +130,21 @@ class MistEndpointService:
         if isinstance(data, str):
             data = {}
         return ApiResult(status_code=status, data=data)
+
+    def _paginate(self, func: Any, args: dict[str, str]) -> list:
+        """Follow SDK pagination until all pages retrieved."""
+        all_data: list = []
+        response = func(self._session, **args)
+        all_data.extend(self._extract_list(response))
+        while getattr(response, "next", None):
+            response = func(self._session, **args, next=response.next)
+            all_data.extend(self._extract_list(response))
+        return all_data
+
+    @staticmethod
+    def _extract_list(response: Any) -> list:
+        """Extract list data from an SDK response."""
+        data = getattr(response, "data", response)
+        if isinstance(data, list):
+            return data
+        return [data] if data else []

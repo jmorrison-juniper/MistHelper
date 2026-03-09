@@ -99,8 +99,7 @@ class RollbackService:
             return None
 
         result = self._mist.read_entity(
-            api_module=endpoint.api_module,
-            read_method=endpoint.read_method,
+            entity_type=entity_type,
             ids=entity_ids,
         )
         if result.success and isinstance(result.data, dict):

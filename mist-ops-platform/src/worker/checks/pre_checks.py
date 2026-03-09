@@ -68,19 +68,21 @@ class PreCheckService:
     def _ping_device(self, org_id: str, device_id: str) -> CheckResult:
         """Check a single device's connectivity status."""
         try:
-            api_result = self._mist.list_entities(
-                api_module="orgs.devices",
-                list_method="getOrgDevice",
-                ids={"org_id": org_id, "device_id": device_id},
+            api_result = self._mist.list_all_entities(
+                "org_device_list",
+                ids={"org_id": org_id},
             )
-            if not api_result.success:
+            data_list = api_result.data if isinstance(api_result.data, list) else []
+            device_data = next(
+                (d for d in data_list if d.get("id") == device_id), None
+            )
+            if device_data is None:
                 return CheckResult(
                     name=f"reachability:{device_id}",
                     passed=False,
                     message=f"Device {device_id} not found",
                 )
-            data = api_result.data if isinstance(api_result.data, dict) else {}
-            status_val = data.get("status", "unknown")
+            status_val = device_data.get("status", "unknown")
             is_connected = status_val == "connected"
             return CheckResult(
                 name=f"reachability:{device_id}",

@@ -82,7 +82,7 @@ class DriftScanner:
         revision: ConfigRevision,
     ) -> list[dict]:
         """Compute field-level diffs between baseline and actual."""
-        result = self._diff.compute(
+        result = self._diff.compute_diff(
             baseline.config_payload,
             revision.config_blob,
         )

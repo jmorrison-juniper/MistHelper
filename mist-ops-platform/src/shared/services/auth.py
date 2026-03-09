@@ -12,6 +12,7 @@ from typing import Any
 
 import mistapi
 
+from src.shared.mist.endpoints import MistEndpointService
 from src.shared.mist.session import MistSessionFactory, get_session_factory
 
 logger = logging.getLogger(__name__)
@@ -60,8 +61,11 @@ class AuthService:
             apitoken=token,
         )
         try:
-            response = mistapi.api.v1.self.self.getSelf(session)
-            data = getattr(response, "data", {}) or {}
+            mist_service = MistEndpointService(session)
+            result = mist_service.list_all_entities(
+                "self_identity", {},
+            )
+            data = result.data[0] if result.data else {}
             return self._parse_privileges(data)
         except Exception:
             logger.exception("Failed to validate Mist token")

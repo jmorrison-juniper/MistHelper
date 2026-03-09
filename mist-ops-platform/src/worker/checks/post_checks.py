@@ -60,15 +60,17 @@ class PostCheckService:
     ) -> CheckResult:
         """Check a single device's health metrics."""
         try:
-            api_result = self._mist.list_entities(
-                api_module="orgs.devices",
-                list_method="getOrgDevice",
-                ids={"org_id": org_id, "device_id": device_id},
+            api_result = self._mist.list_all_entities(
+                "org_device_list",
+                ids={"org_id": org_id},
             )
-            data: dict[str, Any] = (
-                api_result.data if isinstance(api_result.data, dict) else {}
+            data_list = (
+                api_result.data if isinstance(api_result.data, list) else []
             )
-            status_val = data.get("status", "unknown")
+            device_data: dict[str, Any] = next(
+                (d for d in data_list if d.get("id") == device_id), {}
+            )
+            status_val = device_data.get("status", "unknown")
             is_healthy = status_val == "connected"
             return CheckResult(
                 name=f"health:{device_id}",

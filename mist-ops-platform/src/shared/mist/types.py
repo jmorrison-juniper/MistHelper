@@ -15,9 +15,10 @@ class MistEndpoint:
 
     entity_type: str
     api_module: str
-    read_method: str
-    write_method: str
+    read_method: str | None
+    write_method: str | None
     id_params: tuple[str, ...]
+    list_method: str | None = None
 
 
 # -----------------------------------------------------------------------
@@ -77,7 +78,7 @@ ENTITY_ENDPOINT_MAP: dict[str, MistEndpoint] = {
     "org_wlan": MistEndpoint(
         entity_type="org_wlan",
         api_module="orgs.wlans",
-        read_method="getOrgWlan",
+        read_method="getOrgWLAN",
         write_method="updateOrgWlan",
         id_params=("org_id", "wlan_id"),
     ),
@@ -104,7 +105,7 @@ ENTITY_ENDPOINT_MAP: dict[str, MistEndpoint] = {
     ),
     "site_info": MistEndpoint(
         entity_type="site_info",
-        api_module="sites.site",
+        api_module="sites.sites",
         read_method="getSiteInfo",
         write_method="updateSiteInfo",
         id_params=("site_id",),
@@ -122,6 +123,75 @@ ENTITY_ENDPOINT_MAP: dict[str, MistEndpoint] = {
         read_method="getSiteWlan",
         write_method="updateSiteWlan",
         id_params=("site_id", "wlan_id"),
+    ),
+    # ---- New entity types added by 011-mist-ops-api-audit ----
+    "audit_log": MistEndpoint(
+        entity_type="audit_log",
+        api_module="orgs.logs",
+        read_method=None,
+        write_method=None,
+        id_params=("org_id",),
+        list_method="listOrgAuditLogs",
+    ),
+    "device_stats": MistEndpoint(
+        entity_type="device_stats",
+        api_module="sites.stats",
+        read_method="getSiteDeviceStats",
+        write_method=None,
+        id_params=("site_id", "device_id"),
+    ),
+    "firmware_device": MistEndpoint(
+        entity_type="firmware_device",
+        api_module="sites.devices",
+        read_method=None,
+        write_method="upgradeDevice",
+        id_params=("site_id", "device_id"),
+    ),
+    "firmware_org": MistEndpoint(
+        entity_type="firmware_org",
+        api_module="orgs.devices",
+        read_method=None,
+        write_method="upgradeOrgDevices",
+        id_params=("org_id",),
+    ),
+    "firmware_site": MistEndpoint(
+        entity_type="firmware_site",
+        api_module="sites.devices",
+        read_method=None,
+        write_method="upgradeSiteDevices",
+        id_params=("site_id",),
+    ),
+    "org_device_list": MistEndpoint(
+        entity_type="org_device_list",
+        api_module="orgs.devices",
+        read_method=None,
+        write_method=None,
+        id_params=("org_id",),
+        list_method="listOrgDevices",
+    ),
+    "org_inventory": MistEndpoint(
+        entity_type="org_inventory",
+        api_module="orgs.inventory",
+        read_method=None,
+        write_method=None,
+        id_params=("org_id",),
+        list_method="getOrgInventory",
+    ),
+    "org_site_list": MistEndpoint(
+        entity_type="org_site_list",
+        api_module="orgs.sites",
+        read_method=None,
+        write_method=None,
+        id_params=("org_id",),
+        list_method="listOrgSites",
+    ),
+    "self_identity": MistEndpoint(
+        entity_type="self_identity",
+        api_module="self.self",
+        read_method=None,
+        write_method=None,
+        id_params=(),
+        list_method="getSelf",
     ),
 }
 

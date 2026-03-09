@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.shared.config.constants import GoldenImageStatus
+from src.shared.mist.endpoints import ApiResult, MistEndpointService
 from src.shared.models.governance import GoldenImage
 from src.shared.models.inventory import Device
 
@@ -26,8 +27,11 @@ class FirmwareOrchestrator:
     device model and that the image is in approved state.
     """
 
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self, db: Session, mist: MistEndpointService,
+    ) -> None:
         self._db = db
+        self._mist = mist
 
     def validate_upgrade(
         self, image_id: UUID, target_device_ids: list[UUID],
@@ -62,6 +66,40 @@ class FirmwareOrchestrator:
             "target_device_ids": [str(d) for d in target_device_ids],
             "content_hash": image.content_hash,
         }
+
+    def execute_upgrade(
+        self,
+        site_id: str,
+        image_id: UUID,
+        target_device_ids: list[UUID],
+    ) -> ApiResult:
+        """Execute firmware upgrade via Mist SDK (safety-gated).
+
+        MUST call validate_upgrade() before this method.
+        Constitution III: firmware is a destructive operation.
+        """
+        validation = self.validate_upgrade(image_id, target_device_ids)
+        if not validation["valid"]:
+            msg = f"Pre-upgrade validation failed: {validation['errors']}"
+            raise RuntimeError(msg)
+
+        payload = self.build_upgrade_payload(image_id, target_device_ids)
+        result = self._mist.write_entity(
+            entity_type="firmware_site",
+            ids={"site_id": site_id},
+            body=payload,
+        )
+        if result.success:
+            logger.info(
+                "Firmware upgrade initiated: site=%s devices=%d",
+                site_id, len(target_device_ids),
+            )
+        else:
+            logger.error(
+                "Firmware upgrade failed: site=%s error=%s",
+                site_id, result.error,
+            )
+        return result
 
     # -- Private ---
 

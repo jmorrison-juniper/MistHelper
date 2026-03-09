@@ -42,9 +42,8 @@ class EventSyncService:
 
     def _fetch_events(self) -> list[dict[str, Any]]:
         """Call Mist audit logs API."""
-        result = self._mist.list_entities(
-            api_module="orgs.logs",
-            list_method="listOrgAuditLogs",
+        result = self._mist.list_all_entities(
+            "audit_log",
             ids={"org_id": str(self._org_id)},
         )
         return result.data if isinstance(result.data, list) else []
