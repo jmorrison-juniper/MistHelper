@@ -24,6 +24,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - File system — reads/writes markdown files in documentation/api/{category}/ (009-api-docs-enrichment)
 - N/A — this is documentation enrichment, not code development. The AI agent edits existing markdown files directly via tool calls. + None — reads existing markdown files and cross-references MistHelper.py source (009-api-docs-enrichment)
 - File system — reads/writes markdown files in `documentation/api/{category}/` (009-api-docs-enrichment)
+- Python 3.13+ (analysis target), no runtime code produced + Static code analysis of MistHelper.py (~44K lines), maps_manager.py, wsgi.py; enriched API docs (1,013 .md files in `documentation/api/`) (010-endpoint-usage-audit)
+- Output as JSON + Markdown files in `specs/010-endpoint-usage-audit/` (010-endpoint-usage-audit)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -43,9 +45,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 010-endpoint-usage-audit: Added Python 3.13+ (analysis target), no runtime code produced + Static code analysis of MistHelper.py (~44K lines), maps_manager.py, wsgi.py; enriched API docs (1,013 .md files in `documentation/api/`)
 - 009-api-docs-enrichment: Added N/A — this is documentation enrichment, not code development. The AI agent edits existing markdown files directly via tool calls. + None — reads existing markdown files and cross-references MistHelper.py source
 - 009-api-docs-enrichment: Added Python 3.13+ (stdlib only — json, pathlib, re, logging, argparse) + None (reads existing markdown files and OpenAPI spec)
-- 008-mist-api-docs: Added Python 3.13+ + `json` (stdlib) for OpenAPI parsing; `pathlib` for file I/O; `re` for operationId-to-mistapi mapping
 
 
 <!-- MANUAL ADDITIONS START -->

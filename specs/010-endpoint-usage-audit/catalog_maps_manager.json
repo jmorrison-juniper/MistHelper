@@ -1,0 +1,548 @@
+[
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 262,
+    "source_file": "maps_manager.py",
+    "code_context": "resp = mistapi.api.v1.orgs.sites.listOrgSites(  # type: ignore[union-attr]"
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 338,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 420,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 527,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 560,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.listSiteBeacons",
+    "line": 579,
+    "source_file": "maps_manager.py",
+    "code_context": "beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.listSiteVBeacons",
+    "line": 597,
+    "source_file": "maps_manager.py",
+    "code_context": "vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 798,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 831,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 867,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1010,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1065,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1124,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1182,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1238,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1294,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 1376,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 1424,
+    "source_file": "maps_manager.py",
+    "code_context": "detail_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 1525,
+    "source_file": "maps_manager.py",
+    "code_context": "create_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 1586,
+    "source_file": "maps_manager.py",
+    "code_context": "source_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 1673,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_check = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 1735,
+    "source_file": "maps_manager.py",
+    "code_context": "clone_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 1767,
+    "source_file": "maps_manager.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(  # type: ignore[union-attr]"
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 1794,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 1822,
+    "source_file": "maps_manager.py",
+    "code_context": "zone_response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 1930,
+    "source_file": "maps_manager.py",
+    "code_context": "current_map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 1965,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 1979,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.listSiteBeacons",
+    "line": 1992,
+    "source_file": "maps_manager.py",
+    "code_context": "beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.listSiteVBeacons",
+    "line": 1999,
+    "source_file": "maps_manager.py",
+    "code_context": "vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 2290,
+    "source_file": "maps_manager.py",
+    "code_context": "update_response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 2310,
+    "source_file": "maps_manager.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.updateSiteDevice",
+    "line": 2346,
+    "source_file": "maps_manager.py",
+    "code_context": "update_dev_response = mistapi.api.v1.sites.devices.updateSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.updateSiteZone",
+    "line": 2389,
+    "source_file": "maps_manager.py",
+    "code_context": "update_zone_response = mistapi.api.v1.sites.zones.updateSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.updateSiteBeacon",
+    "line": 2429,
+    "source_file": "maps_manager.py",
+    "code_context": "update_beacon_response = mistapi.api.v1.sites.beacons.updateSiteBeacon("
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.updateSiteVBeacon",
+    "line": 2466,
+    "source_file": "maps_manager.py",
+    "code_context": "update_vbeacon_response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 2537,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 2616,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 2699,
+    "source_file": "maps_manager.py",
+    "code_context": "update_response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 2740,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.deleteSiteMap",
+    "line": 2771,
+    "source_file": "maps_manager.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.maps.deleteSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 2866,
+    "source_file": "maps_manager.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 2907,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 3018,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 3221,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 3258,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 3287,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 3312,
+    "source_file": "maps_manager.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 5122,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 5204,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 5413,
+    "source_file": "maps_manager.py",
+    "code_context": "fresh_maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 5436,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 5453,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 5462,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 5471,
+    "source_file": "maps_manager.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 6464,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 6491,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 6514,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 6541,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 6563,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 6590,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 6612,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 6632,
+    "source_file": "maps_manager.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 6650,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.deleteSiteZone",
+    "line": 6674,
+    "source_file": "maps_manager.py",
+    "code_context": "del_response = mistapi.api.v1.sites.zones.deleteSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.deleteSiteMap",
+    "line": 6814,
+    "source_file": "maps_manager.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.maps.deleteSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.deleteSiteZone",
+    "line": 6934,
+    "source_file": "maps_manager.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.zones.deleteSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 7106,
+    "source_file": "maps_manager.py",
+    "code_context": "source_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 7177,
+    "source_file": "maps_manager.py",
+    "code_context": "clone_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 7197,
+    "source_file": "maps_manager.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 7218,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 7238,
+    "source_file": "maps_manager.py",
+    "code_context": "zone_response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 7294,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 7365,
+    "source_file": "maps_manager.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 7478,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 7495,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 8732,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 8751,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 8798,
+    "source_file": "maps_manager.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 8894,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 8918,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 8935,
+    "source_file": "maps_manager.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteUnconnectedClientStats",
+    "line": 8956,
+    "source_file": "maps_manager.py",
+    "code_context": "unconnected_response = mistapi.api.v1.sites.stats.listSiteUnconnectedClientStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDiscoveredAssets",
+    "line": 8976,
+    "source_file": "maps_manager.py",
+    "code_context": "ble_response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteAssetsStats",
+    "line": 8994,
+    "source_file": "maps_manager.py",
+    "code_context": "assets_response = mistapi.api.v1.sites.stats.listSiteAssetsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteSdkStatsByMap",
+    "line": 9013,
+    "source_file": "maps_manager.py",
+    "code_context": "sdk_response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 9358,
+    "source_file": "maps_manager.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 9401,
+    "source_file": "maps_manager.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 9417,
+    "source_file": "maps_manager.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 9431,
+    "source_file": "maps_manager.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.self.self.getSelf",
+    "line": 9535,
+    "source_file": "maps_manager.py",
+    "code_context": "self_info = mistapi.api.v1.self.self.getSelf(apisession)"
+  }
+]
