@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { deployQueries } from '@/api/deploy';
-import type { RolloutStatus } from '@/api/deploy';
+import type { Rollout, RolloutStatus } from '@/api/deploy';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 
 const STATUS_BADGE: Record<RolloutStatus, string> = {
   draft: 'bg-neutral-200 text-neutral-700',
@@ -10,6 +12,16 @@ const STATUS_BADGE: Record<RolloutStatus, string> = {
   paused: 'bg-status-warning/20 text-status-warning',
   completed: 'bg-status-success/20 text-status-success',
   cancelled: 'bg-neutral-200 text-neutral-500',
+};
+
+type RolloutSortKey = 'name' | 'status' | 'waves' | 'progress' | 'createdAt';
+
+const ROLLOUT_SORT_ACCESSORS: Record<RolloutSortKey, (r: Rollout) => string | number | null> = {
+  name: (r) => r.name,
+  status: (r) => r.status,
+  waves: (r) => r.waves.length,
+  progress: (r) => r.waves.length > 0 ? Math.round((r.waves.filter((w) => w.status === 'completed').length / r.waves.length) * 100) : 0,
+  createdAt: (r) => r.createdAt,
 };
 
 export default function RolloutListPage() {
@@ -21,8 +33,9 @@ export default function RolloutListPage() {
     select: (response) => ({ data: response.data, meta: response.meta }),
   });
 
-  const rollouts = rolloutsQuery.data?.data ?? [];
+  const rollouts = useMemo(() => rolloutsQuery.data?.data ?? [], [rolloutsQuery.data]);
   const meta = rolloutsQuery.data?.meta;
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<Rollout, RolloutSortKey>(rollouts, 'createdAt', ROLLOUT_SORT_ACCESSORS, 'desc');
 
   return (
     <div className="p-6 space-y-4">
@@ -40,15 +53,15 @@ export default function RolloutListPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default text-left text-text-muted">
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Waves</th>
-              <th className="px-4 py-2">Progress</th>
-              <th className="px-4 py-2">Created</th>
+              <SortableHeader label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Waves" sortKey="waves" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Progress" sortKey="progress" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Created" sortKey="createdAt" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
-            {rollouts.map((rollout) => {
+            {sortedData.map((rollout) => {
               const completedWaves = rollout.waves.filter((w) => w.status === 'completed').length;
               const progressPct = rollout.waves.length > 0 ? Math.round((completedWaves / rollout.waves.length) * 100) : 0;
 

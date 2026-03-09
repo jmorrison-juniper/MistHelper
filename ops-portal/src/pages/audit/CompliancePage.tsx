@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { auditMutations, auditQueries } from '@/api/audit';
 import { useSettings } from '@/hooks/useSettings';
 import ProgressTracker from '@/components/ProgressTracker';
+import DateRangeFilter from '@/components/DateRangeFilter';
 
 const FRAMEWORKS = ['SOX', 'PCI-DSS', 'SOC2'] as const;
 
@@ -44,20 +45,14 @@ export default function CompliancePage() {
           </select>
         </div>
 
-        <div className="flex gap-4">
-          <div>
-            <label htmlFor="pack-start" className="block text-sm font-medium text-text-primary mb-1">Start Date</label>
-            <input id="pack-start" type="date" value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="border border-border-default rounded px-2 py-1 text-sm bg-surface-primary text-text-primary" />
-          </div>
-          <div>
-            <label htmlFor="pack-end" className="block text-sm font-medium text-text-primary mb-1">End Date</label>
-            <input id="pack-end" type="date" value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-              className="border border-border-default rounded px-2 py-1 text-sm bg-surface-primary text-text-primary" />
-          </div>
-        </div>
+        <DateRangeFilter
+          startDate={startDate}
+          endDate={endDate}
+          onStartChange={setStartDate}
+          onEndChange={setEndDate}
+          startLabel="Start Date"
+          endLabel="End Date"
+        />
 
         <button
           type="button"

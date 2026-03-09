@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { deployQueries } from '@/api/deploy';
-import type { JobStatus } from '@/api/deploy';
+import type { DeployJob, JobStatus } from '@/api/deploy';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-neutral-200 text-neutral-700',
@@ -21,6 +23,17 @@ const STATUSES: JobStatus[] = [
   'running', 'completed', 'failed', 'cancelled', 'rolled_back',
 ];
 
+type JobSortKey = 'name' | 'status' | 'scheduledAt' | 'targetDevices' | 'createdBy' | 'createdAt';
+
+const JOB_SORT_ACCESSORS: Record<JobSortKey, (j: DeployJob) => string | number | null> = {
+  name: (j) => j.name,
+  status: (j) => j.status,
+  scheduledAt: (j) => j.scheduledAt,
+  targetDevices: (j) => j.targetDevices.length,
+  createdBy: (j) => j.createdBy,
+  createdAt: (j) => j.createdAt,
+};
+
 export default function JobsListPage() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -31,8 +44,9 @@ export default function JobsListPage() {
     select: (response) => ({ data: response.data, meta: response.meta }),
   });
 
-  const jobs = jobsQuery.data?.data ?? [];
+  const jobs = useMemo(() => jobsQuery.data?.data ?? [], [jobsQuery.data]);
   const meta = jobsQuery.data?.meta;
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<DeployJob, JobSortKey>(jobs, 'createdAt', JOB_SORT_ACCESSORS, 'desc');
 
   return (
     <div className="p-6 space-y-4">
@@ -68,16 +82,16 @@ export default function JobsListPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default text-left text-text-muted">
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Scheduled</th>
-              <th className="px-4 py-2">Targets</th>
-              <th className="px-4 py-2">Created By</th>
-              <th className="px-4 py-2">Created</th>
+              <SortableHeader label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Scheduled" sortKey="scheduledAt" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Targets" sortKey="targetDevices" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Created By" sortKey="createdBy" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Created" sortKey="createdAt" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
-            {jobs.map((job) => (
+            {sortedData.map((job) => (
               <tr
                 key={job.id}
                 onClick={() => navigate(`/deploy/jobs/${job.id}`)}

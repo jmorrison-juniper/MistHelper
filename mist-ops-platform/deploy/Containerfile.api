@@ -34,6 +34,7 @@ COPY --from=builder /install /usr/local
 
 COPY src/ ./src/
 COPY migrations/ ./migrations/
+COPY alembic.ini ./
 
 RUN useradd --create-home --shell /bin/bash mistops
 USER mistops

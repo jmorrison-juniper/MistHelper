@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
 import { syncQueries } from '@/api/sync';
 import { useNavigationContext } from '@/hooks/useNavigationContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 import type { InventoryDevice } from '@/api/sync';
 
 type DeviceType = 'all' | 'ap' | 'switch' | 'gateway';
@@ -52,6 +54,17 @@ function DeviceRow({ device, orgId, siteId }: { device: InventoryDevice; orgId: 
   );
 }
 
+type DeviceSortKey = 'name' | 'type' | 'model' | 'connectionStatus' | 'firmwareVersion' | 'uptime';
+
+const DEVICE_SORT_ACCESSORS: Record<DeviceSortKey, (d: InventoryDevice) => string | number | null> = {
+  name: (d) => d.name,
+  type: (d) => d.type,
+  model: (d) => d.model,
+  connectionStatus: (d) => d.connectionStatus,
+  firmwareVersion: (d) => d.firmwareVersion,
+  uptime: (d) => d.uptime,
+};
+
 export default function SiteDetailPage() {
   const { orgId, siteId } = useParams<{ orgId: string; siteId: string }>();
   const { setSite } = useNavigationContext();
@@ -78,7 +91,11 @@ export default function SiteDetailPage() {
   }, [site, setSite]);
 
   const allDevices = devicesQuery.data ?? [];
-  const devices = typeFilter === 'all' ? allDevices : allDevices.filter((d) => d.type === typeFilter);
+  const devices = useMemo(
+    () => typeFilter === 'all' ? allDevices : allDevices.filter((d) => d.type === typeFilter),
+    [allDevices, typeFilter],
+  );
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<InventoryDevice, DeviceSortKey>(devices, 'name', DEVICE_SORT_ACCESSORS);
 
   if (devicesQuery.isLoading) {
     return <div className="p-6 text-text-muted">Loading devices...</div>;
@@ -110,16 +127,16 @@ export default function SiteDetailPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default text-left text-text-muted">
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Model</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Firmware</th>
-              <th className="px-4 py-2">Uptime</th>
+              <SortableHeader label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Type" sortKey="type" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Model" sortKey="model" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Status" sortKey="connectionStatus" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Firmware" sortKey="firmwareVersion" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Uptime" sortKey="uptime" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
-            {devices.map((device) => (
+            {sortedData.map((device) => (
               <DeviceRow key={device.id} device={device} orgId={orgId!} siteId={siteId!} />
             ))}
           </tbody>

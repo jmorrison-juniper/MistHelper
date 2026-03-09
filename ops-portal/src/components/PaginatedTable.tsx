@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PaginationMeta } from '@/api/client';
+import SortableHeader from '@/components/SortableHeader';
+import type { SortDir } from '@/hooks/useTableSort';
 
 export interface ColumnDef<T> {
   key: string;
@@ -27,7 +29,7 @@ interface PaginatedTableProps<T> {
   onRowClick?: (row: T) => void;
 }
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export default function PaginatedTable<T extends { id?: string }>({
   queryKey,
@@ -39,6 +41,17 @@ export default function PaginatedTable<T extends { id?: string }>({
 }: PaginatedTableProps<T>) {
   const [page, setPage] = useState(1);
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (key: string) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: [...queryKey, page, filterValues],
@@ -47,6 +60,29 @@ export default function PaginatedTable<T extends { id?: string }>({
 
   const rows = data?.data ?? [];
   const meta = data?.meta;
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows;
+    const col = columns.find((c) => c.key === sortKey && c.sortable);
+    if (!col) return rows;
+
+    const sorted = [...rows].sort((a, b) => {
+      const aVal = (a as Record<string, unknown>)[sortKey];
+      const bVal = (b as Record<string, unknown>)[sortKey];
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return aVal - bVal;
+      }
+
+      return String(aVal).toLowerCase().localeCompare(String(bVal).toLowerCase());
+    });
+
+    return sortDir === 'desc' ? sorted.reverse() : sorted;
+  }, [rows, sortKey, sortDir, columns]);
 
   function handleFilterChange(key: string, value: string) {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
@@ -103,14 +139,26 @@ export default function PaginatedTable<T extends { id?: string }>({
             <thead className="bg-surface-tertiary">
               <tr>
                 {columns.map((col) => (
-                  <th key={col.key} className="text-left px-4 py-2 font-medium text-text-secondary border-b border-border-default">
-                    {col.header}
-                  </th>
+                  col.sortable ? (
+                    <SortableHeader
+                      key={col.key}
+                      label={col.header}
+                      sortKey={col.key}
+                      activeKey={sortKey ?? ''}
+                      dir={sortDir}
+                      onSort={handleSort}
+                      className="text-left px-4 py-2 font-medium text-text-secondary border-b border-border-default"
+                    />
+                  ) : (
+                    <th key={col.key} className="text-left px-4 py-2 font-medium text-text-secondary border-b border-border-default">
+                      {col.header}
+                    </th>
+                  )
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
+              {sortedRows.map((row, index) => (
                 <tr
                   key={row.id ?? index}
                   onClick={() => onRowClick?.(row)}

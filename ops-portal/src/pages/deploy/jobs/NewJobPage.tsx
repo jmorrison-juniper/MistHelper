@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deployMutations, deployQueries } from '@/api/deploy';
 import { syncQueries } from '@/api/sync';
+import type { InventoryDevice } from '@/api/sync';
 import { DryRunPanel } from '@/features/deploy/jobs/DryRunPanel';
 
 type WizardStep = 'targets' | 'payload' | 'schedule' | 'checks' | 'review';
@@ -44,11 +45,23 @@ export default function NewJobPage() {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<WizardStep>('targets');
   const [draft, setDraft] = useState<JobDraft>(INITIAL_DRAFT);
-  const [deviceSearch, setDeviceSearch] = useState('');
+  const [selectedOrgId, setSelectedOrgId] = useState('');
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [deviceFilter, setDeviceFilter] = useState('');
+
+  const orgsQuery = useQuery({
+    ...syncQueries.orgs(),
+    enabled: step === 'targets',
+  });
+
+  const sitesQuery = useQuery({
+    ...syncQueries.sites(selectedOrgId),
+    enabled: step === 'targets' && Boolean(selectedOrgId),
+  });
 
   const devicesQuery = useQuery({
-    ...syncQueries.devices(deviceSearch || ''),
-    enabled: step === 'targets',
+    ...syncQueries.devices(selectedSiteId),
+    enabled: step === 'targets' && Boolean(selectedSiteId),
   });
 
   const templatesQuery = useQuery({
@@ -60,14 +73,13 @@ export default function NewJobPage() {
   const createMutation = useMutation({
     mutationFn: () =>
       deployMutations.createJob({
-        name: draft.name,
-        targetDevices: draft.targetDevices,
-        changePayload: JSON.parse(draft.changePayload),
-        scheduledAt: draft.scheduledAt || null,
-        scheduledTz: draft.scheduledTz,
-        preChecks: JSON.parse(draft.preChecks),
-        postChecks: JSON.parse(draft.postChecks),
-        autoRollback: draft.autoRollback,
+        org_id: selectedOrgId,
+        target_entities: draft.targetDevices.map((id) => ({ entity_type: 'device', entity_id: id })),
+        change_payload: JSON.parse(draft.changePayload),
+        scheduled_at: draft.scheduledAt || new Date().toISOString(),
+        pre_check_defs: JSON.parse(draft.preChecks),
+        post_check_defs: JSON.parse(draft.postChecks),
+        auto_rollback_on_failure: draft.autoRollback,
       }),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['deploy', 'jobs'] });
@@ -127,8 +139,14 @@ export default function NewJobPage() {
           <TargetsStep
             draft={draft}
             setDraft={setDraft}
-            deviceSearch={deviceSearch}
-            setDeviceSearch={setDeviceSearch}
+            selectedOrgId={selectedOrgId}
+            setSelectedOrgId={(id) => { setSelectedOrgId(id); setSelectedSiteId(''); }}
+            selectedSiteId={selectedSiteId}
+            setSelectedSiteId={setSelectedSiteId}
+            deviceFilter={deviceFilter}
+            setDeviceFilter={setDeviceFilter}
+            orgs={orgsQuery.data?.data ?? []}
+            sites={sitesQuery.data?.data ?? []}
             devices={devicesQuery.data?.data ?? []}
             toggleDevice={toggleDevice}
           />
@@ -169,21 +187,35 @@ export default function NewJobPage() {
 
       {createMutation.isError && (
         <div className="text-sm text-status-error">
-          Failed to create job: {createMutation.error instanceof Error ? createMutation.error.message : 'Unknown error'}
+          Failed to create job: {createMutation.error instanceof Error ? createMutation.error.message : JSON.stringify(createMutation.error)}
         </div>
       )}
     </div>
   );
 }
 
-function TargetsStep({ draft, setDraft, deviceSearch, setDeviceSearch, devices, toggleDevice }: {
+function TargetsStep({ draft, setDraft, selectedOrgId, setSelectedOrgId, selectedSiteId, setSelectedSiteId, deviceFilter, setDeviceFilter, orgs, sites, devices, toggleDevice }: {
   draft: JobDraft;
   setDraft: React.Dispatch<React.SetStateAction<JobDraft>>;
-  deviceSearch: string;
-  setDeviceSearch: (value: string) => void;
-  devices: { id: string; name: string; type: string }[];
+  selectedOrgId: string;
+  setSelectedOrgId: (id: string) => void;
+  selectedSiteId: string;
+  setSelectedSiteId: (id: string) => void;
+  deviceFilter: string;
+  setDeviceFilter: (value: string) => void;
+  orgs: { id: string; name: string }[];
+  sites: { id: string; name: string }[];
+  devices: InventoryDevice[];
   toggleDevice: (id: string) => void;
 }) {
+  const filteredDevices = useMemo(() => {
+    if (!deviceFilter) return devices;
+    const lower = deviceFilter.toLowerCase();
+    return devices.filter((d) =>
+      d.name.toLowerCase().includes(lower) || d.mac.toLowerCase().includes(lower)
+    );
+  }, [devices, deviceFilter]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -193,23 +225,83 @@ function TargetsStep({ draft, setDraft, deviceSearch, setDeviceSearch, devices, 
           className="w-full border border-border-default rounded px-3 py-2 text-sm bg-surface-primary text-text-primary"
           placeholder="e.g. AP firmware upgrade - Building A" />
       </div>
-      <div>
-        <label htmlFor="device-search" className="block text-sm font-medium text-text-primary mb-1">Search Devices</label>
-        <input id="device-search" type="search" value={deviceSearch}
-          onChange={(event) => setDeviceSearch(event.target.value)}
-          className="w-full border border-border-default rounded px-3 py-2 text-sm bg-surface-primary text-text-primary"
-          placeholder="Search by name or MAC..." />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="org-select" className="block text-sm font-medium text-text-primary mb-1">Organization</label>
+          <select id="org-select" value={selectedOrgId}
+            onChange={(event) => setSelectedOrgId(event.target.value)}
+            className="w-full border border-border-default rounded px-3 py-2 text-sm bg-surface-primary text-text-primary">
+            <option value="">Select organization...</option>
+            {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="site-select" className="block text-sm font-medium text-text-primary mb-1">Site</label>
+          <select id="site-select" value={selectedSiteId}
+            onChange={(event) => setSelectedSiteId(event.target.value)}
+            disabled={!selectedOrgId}
+            className="w-full border border-border-default rounded px-3 py-2 text-sm bg-surface-primary text-text-primary disabled:opacity-50">
+            <option value="">Select site...</option>
+            {sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+          </select>
+        </div>
       </div>
-      <div className="text-sm text-text-secondary">{draft.targetDevices.length} device(s) selected</div>
-      <div className="max-h-64 overflow-y-auto border border-border-default rounded">
-        {devices.map((device) => (
-          <label key={device.id} className="flex items-center gap-2 px-3 py-2 hover:bg-surface-secondary cursor-pointer">
-            <input type="checkbox" checked={draft.targetDevices.includes(device.id)} onChange={() => toggleDevice(device.id)} />
-            <span className="text-sm text-text-primary">{device.name}</span>
-            <span className="text-xs text-text-muted ml-auto">{device.type}</span>
-          </label>
-        ))}
-      </div>
+
+      {selectedSiteId && (
+        <>
+          <div>
+            <label htmlFor="device-filter" className="block text-sm font-medium text-text-primary mb-1">Filter Devices</label>
+            <input id="device-filter" type="text" value={deviceFilter}
+              onChange={(event) => setDeviceFilter(event.target.value)}
+              className="w-full border border-border-default rounded px-3 py-2 text-sm bg-surface-primary text-text-primary"
+              placeholder="Filter by name or MAC..." />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-text-secondary">{draft.targetDevices.length} device(s) selected</span>
+            {filteredDevices.length > 0 && (
+              <button type="button" className="text-xs text-brand-600 hover:underline"
+                onClick={() => {
+                  const allIds = filteredDevices.map((d) => d.id);
+                  const allSelected = allIds.every((id) => draft.targetDevices.includes(id));
+                  setDraft((prev) => ({
+                    ...prev,
+                    targetDevices: allSelected
+                      ? prev.targetDevices.filter((id) => !allIds.includes(id))
+                      : [...new Set([...prev.targetDevices, ...allIds])],
+                  }));
+                }}>
+                {filteredDevices.every((d) => draft.targetDevices.includes(d.id)) ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto border border-border-default rounded">
+            {filteredDevices.length === 0 && (
+              <div className="px-3 py-4 text-sm text-text-muted text-center">No devices found for this site.</div>
+            )}
+            {filteredDevices.map((device) => (
+              <label key={device.id} className="flex items-center gap-2 px-3 py-2 hover:bg-surface-secondary cursor-pointer border-b border-border-default last:border-b-0">
+                <input type="checkbox" checked={draft.targetDevices.includes(device.id)} onChange={() => toggleDevice(device.id)} />
+                <span className="text-sm text-text-primary">{device.name}</span>
+                <span className="text-xs text-text-muted">{device.model}</span>
+                <span className={`text-xs ml-auto px-1.5 py-0.5 rounded ${device.connectionStatus === 'connected' ? 'bg-status-success/20 text-status-success' : 'bg-status-error/20 text-status-error'}`}>
+                  {device.connectionStatus}
+                </span>
+                <span className="text-xs text-text-muted">{device.type}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!selectedSiteId && selectedOrgId && (
+        <div className="text-sm text-text-muted text-center py-4">Select a site to view devices.</div>
+      )}
+      {!selectedOrgId && (
+        <div className="text-sm text-text-muted text-center py-4">Select an organization to get started.</div>
+      )}
     </div>
   );
 }

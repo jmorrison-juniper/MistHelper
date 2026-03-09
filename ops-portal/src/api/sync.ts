@@ -85,6 +85,11 @@ export const syncQueries = {
     queryFn: () => apiClient.get<InventoryDevice[]>('/inventory/devices', { params: { site_id: siteId } }),
   }),
 
+  searchDevices: (search: string) => ({
+    queryKey: ['sync', 'inventory', 'devices', 'search', search] as const,
+    queryFn: () => apiClient.get<InventoryDevice[]>('/inventory/devices', { params: search ? { search } : undefined }),
+  }),
+
   device: (deviceId: string) => ({
     queryKey: ['sync', 'inventory', 'devices', 'detail', deviceId] as const,
     queryFn: () => apiClient.get<InventoryDevice>(`/inventory/devices/${deviceId}`),

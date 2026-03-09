@@ -1,4 +1,17 @@
+import { useMemo } from 'react';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 import type { SyncStatus, EntitySyncCount } from '@/api/sync';
+
+type SyncSortKey = 'entityType' | 'total' | 'synced' | 'stale' | 'error';
+
+const SYNC_SORT_ACCESSORS: Record<SyncSortKey, (e: EntitySyncCount) => string | number | null> = {
+  entityType: (e) => e.entityType,
+  total: (e) => e.total,
+  synced: (e) => e.synced,
+  stale: (e) => e.stale,
+  error: (e) => e.error,
+};
 
 const STATE_DOT: Record<string, string> = {
   synced: 'bg-sync-synced',
@@ -50,24 +63,33 @@ export function SyncStatusCard({ statuses }: { statuses: SyncStatus[] }) {
       </div>
 
       {primary.entityCounts.length > 0 && (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left text-text-muted">
-              <th className="px-3 py-1">Type</th>
-              <th className="px-3 py-1">Total</th>
-              <th className="px-3 py-1">Synced</th>
-              <th className="px-3 py-1">Stale</th>
-              <th className="px-3 py-1">Error</th>
-              <th className="px-3 py-1">Progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            {primary.entityCounts.map((entity) => (
-              <EntityRow key={entity.entityType} entity={entity} />
-            ))}
-          </tbody>
-        </table>
+        <SortableEntityTable entities={primary.entityCounts} />
       )}
     </div>
+  );
+}
+
+function SortableEntityTable({ entities }: { entities: EntitySyncCount[] }) {
+  const data = useMemo(() => entities, [entities]);
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<EntitySyncCount, SyncSortKey>(data, 'entityType', SYNC_SORT_ACCESSORS);
+
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="text-left text-text-muted">
+          <SortableHeader label="Type" sortKey="entityType" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="px-3 py-1" />
+          <SortableHeader label="Total" sortKey="total" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="px-3 py-1" />
+          <SortableHeader label="Synced" sortKey="synced" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="px-3 py-1" />
+          <SortableHeader label="Stale" sortKey="stale" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="px-3 py-1" />
+          <SortableHeader label="Error" sortKey="error" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="px-3 py-1" />
+          <th className="px-3 py-1">Progress</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sortedData.map((entity) => (
+          <EntityRow key={entity.entityType} entity={entity} />
+        ))}
+      </tbody>
+    </table>
   );
 }

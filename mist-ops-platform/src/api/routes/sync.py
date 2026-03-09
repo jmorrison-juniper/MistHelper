@@ -192,14 +192,18 @@ async def list_sites(
 async def list_devices(
     org_id: UUID | None = Query(None),
     site_id: UUID | None = Query(None),
+    search: str | None = Query(None),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[list[DeviceResponse]]:
-    """List devices (filtered by org and/or site)."""
+    """List devices (filtered by org, site, and/or name/MAC search)."""
     stmt = select(Device)
     if org_id:
         stmt = stmt.where(Device.org_id == org_id)
     if site_id:
         stmt = stmt.where(Device.site_id == site_id)
+    if search:
+        pattern = f"%{search}%"
+        stmt = stmt.where(Device.name.ilike(pattern) | Device.mac_address.ilike(pattern))
     rows = (await db.execute(stmt)).scalars().all()
     items = [
         DeviceResponse(
@@ -213,6 +217,8 @@ async def list_devices(
             mac=d.mac_address,
             firmwareVersion=d.firmware_version,
             connectionStatus=d.status or "disconnected",
+            uptime=d.uptime,
+            lastSeenAt=d.last_seen_at.isoformat() if d.last_seen_at else None,
         )
         for d in rows
     ]
@@ -242,6 +248,8 @@ async def get_device(
         mac=row.mac_address,
         firmwareVersion=row.firmware_version,
         connectionStatus=row.status or "disconnected",
+        uptime=row.uptime,
+        lastSeenAt=row.last_seen_at.isoformat() if row.last_seen_at else None,
     )
     return ResponseEnvelope(data=item)
 

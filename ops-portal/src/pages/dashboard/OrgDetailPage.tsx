@@ -2,8 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
 import { syncQueries } from '@/api/sync';
 import { useNavigationContext } from '@/hooks/useNavigationContext';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 import type { InventorySite } from '@/api/sync';
+
+type SortKey = 'name' | 'location' | 'deviceCount';
+
+const SORT_ACCESSORS: Record<SortKey, (s: InventorySite) => string | number | null> = {
+  name: (s) => s.name,
+  location: (s) => s.location ?? '',
+  deviceCount: (s) => s.deviceCount,
+};
 
 function SiteRow({ site, orgId }: { site: InventorySite; orgId: string }) {
   const navigate = useNavigate();
@@ -46,7 +56,8 @@ export default function OrgDetailPage() {
     }
   }, [org, setOrg]);
 
-  const sites = sitesQuery.data ?? [];
+  const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<InventorySite, SortKey>(sites, 'name', SORT_ACCESSORS);
 
   if (sitesQuery.isLoading) {
     return <div className="p-6 text-text-muted">Loading sites...</div>;
@@ -63,13 +74,13 @@ export default function OrgDetailPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default text-left text-text-muted">
-              <th className="px-4 py-2">Site Name</th>
-              <th className="px-4 py-2">Location</th>
-              <th className="px-4 py-2">Devices</th>
+              <SortableHeader label="Site Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Location" sortKey="location" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Devices" sortKey="deviceCount" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
-            {sites.map((site) => (
+            {sortedData.map((site) => (
               <SiteRow key={site.id} site={site} orgId={orgId!} />
             ))}
           </tbody>

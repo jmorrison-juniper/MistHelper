@@ -7454,6 +7454,11 @@ class ConfigUtils:
         # 4. Prompt if still not set
         logging.info("* No org_id found in .env or CLI. Prompting user...")
         org_id_list = mistapi.cli.select_org(apisession)
+        if not org_id_list:
+            logging.error("Failed to retrieve org list. Check your API token and authentication.")
+            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
+            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
+            sys.exit(1)
         org_id = org_id_list[0]
         return org_id
 

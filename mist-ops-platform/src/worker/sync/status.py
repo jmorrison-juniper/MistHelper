@@ -62,6 +62,19 @@ class StatusSyncService:
             captured_at=datetime.now(UTC),
         )
         self._db.add(snapshot)
+        self._update_device_live_fields(device, data)
+
+    def _update_device_live_fields(
+        self, device: Device, data: dict,
+    ) -> None:
+        """Push uptime and last_seen from stats into the Device row."""
+        raw_uptime = data.get("uptime")
+        device.uptime = int(raw_uptime) if raw_uptime is not None else None
+        raw_last_seen = data.get("last_seen")
+        if raw_last_seen is not None:
+            device.last_seen_at = datetime.fromtimestamp(
+                float(raw_last_seen), tz=UTC,
+            )
 
     def _load_devices(self) -> list[Device]:
         """Load all devices for the current org."""

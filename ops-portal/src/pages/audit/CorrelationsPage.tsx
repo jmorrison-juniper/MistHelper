@@ -1,12 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { auditQueries } from '@/api/audit';
-import type { AuditFilters } from '@/api/audit';
+import type { AuditFilters, IncidentCorrelation } from '@/api/audit';
+import { useTableSort } from '@/hooks/useTableSort';
+import SortableHeader from '@/components/SortableHeader';
 
 const INCIDENT_BADGE: Record<string, string> = {
   alarm: 'bg-status-error/20 text-status-error',
   sle_degradation: 'bg-status-warning/20 text-status-warning',
+};
+
+type CorrelationSortKey = 'incidentType' | 'summary' | 'confidenceScore' | 'detectionMethod' | 'timestamp';
+
+const CORRELATION_SORT_ACCESSORS: Record<CorrelationSortKey, (c: IncidentCorrelation) => string | number | null> = {
+  incidentType: (c) => c.incidentType,
+  summary: (c) => c.summary,
+  confidenceScore: (c) => c.confidenceScore,
+  detectionMethod: (c) => c.detectionMethod,
+  timestamp: (c) => c.timestamp,
 };
 
 export default function CorrelationsPage() {
@@ -18,8 +30,9 @@ export default function CorrelationsPage() {
     select: (response) => ({ data: response.data, meta: response.meta }),
   });
 
-  const correlations = correlationsQuery.data?.data ?? [];
+  const correlations = useMemo(() => correlationsQuery.data?.data ?? [], [correlationsQuery.data]);
   const meta = correlationsQuery.data?.meta;
+  const { sortKey, sortDir, handleSort, sortedData } = useTableSort<IncidentCorrelation, CorrelationSortKey>(correlations, 'timestamp', CORRELATION_SORT_ACCESSORS, 'desc');
 
   return (
     <div className="space-y-4">
@@ -31,16 +44,16 @@ export default function CorrelationsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default text-left text-text-muted">
-              <th className="px-4 py-2">Incident Type</th>
-              <th className="px-4 py-2">Summary</th>
-              <th className="px-4 py-2">Confidence</th>
-              <th className="px-4 py-2">Method</th>
-              <th className="px-4 py-2">Timestamp</th>
+              <SortableHeader label="Incident Type" sortKey="incidentType" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Summary" sortKey="summary" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Confidence" sortKey="confidenceScore" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Method" sortKey="detectionMethod" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Timestamp" sortKey="timestamp" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
               <th className="px-4 py-2">Links</th>
             </tr>
           </thead>
           <tbody>
-            {correlations.map((correlation) => (
+            {sortedData.map((correlation) => (
               <tr key={correlation.id} className="border-b border-border-default hover:bg-surface-secondary">
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${INCIDENT_BADGE[correlation.incidentType] ?? ''}`}>
