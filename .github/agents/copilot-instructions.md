@@ -1,4 +1,4 @@
-﻿# MistHelper Development Guidelines
+# MistHelper Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-03
 
@@ -28,6 +28,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - Output as JSON + Markdown files in `specs/010-endpoint-usage-audit/` (010-endpoint-usage-audit)
 - Python 3.13 + mistapi 0.60.4 (Mist API SDK), FastAPI, Celery, SQLAlchemy (011-mist-ops-api-audit)
 - PostgreSQL 16, Redis 7 (011-mist-ops-api-audit)
+- Python 3.13+ + mistapi 0.59+, pytest (new — unit tests only) (012-automated-testing)
+- NDJSON files in `data/` directory (`test_events.jsonl`, timestamped variants) (012-automated-testing)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -47,9 +49,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 012-automated-testing: Added Python 3.13+ + mistapi 0.59+, pytest (new — unit tests only)
 - 011-mist-ops-api-audit: Added Python 3.13 + mistapi 0.60.4 (Mist API SDK), FastAPI, Celery, SQLAlchemy
 - 010-endpoint-usage-audit: Added Python 3.13+ (analysis target), no runtime code produced + Static code analysis of MistHelper.py (~44K lines), maps_manager.py, wsgi.py; enriched API docs (1,013 .md files in `documentation/api/`)
-- 009-api-docs-enrichment: Added N/A — this is documentation enrichment, not code development. The AI agent edits existing markdown files directly via tool calls. + None — reads existing markdown files and cross-references MistHelper.py source
 
 
 <!-- MANUAL ADDITIONS START -->

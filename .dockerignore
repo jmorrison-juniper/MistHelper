@@ -115,6 +115,10 @@ uv.lock
 *.bak
 *.backup
 
+# Test files (not needed in container)
+tests/
+specs/
+
 # Other unnecessary files
 MIGRATION.md
 READY_FOR_MIGRATION.md

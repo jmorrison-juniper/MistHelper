@@ -28,6 +28,9 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:
 # ============================================================================
 # GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
 # ============================================================================
+import warnings
+warnings.filterwarnings('ignore', message='invalid escape sequence', category=SyntaxWarning)
+
 import time
 import socket
 import argparse
@@ -315,6 +318,9 @@ PACKAGE_IMPORT_MAP = {
     'pyyaml': 'yaml',
     'python-dateutil': 'dateutil',
     'msgpack-python': 'msgpack',
+    'flask': 'flask',
+    'flask-wtf': 'flask_wtf',
+    'gunicorn': 'gunicorn',
 }
 
 def _get_installed_version(package_name: str) -> str:
@@ -387,13 +393,22 @@ def _version_satisfies(installed: str, spec: str) -> bool:
     return True
 
 def _get_latest_pypi_version(package_name: str) -> str:
-    """Query PyPI for the latest version of a package."""
+    """Query PyPI for the latest version of a package.
+
+    Uses a bounded read to prevent hangs behind corporate
+    proxies (e.g. Zscaler SSL inspection).
+    """
     try:
         import urllib.request
         import json as json_mod
+        import ssl
         url = f"https://pypi.org/pypi/{package_name}/json"
-        with urllib.request.urlopen(url, timeout=5) as response:
-            data = json_mod.loads(response.read().decode())
+        ctx = ssl.create_default_context()
+        request = urllib.request.Request(url)
+        max_bytes = 256 * 1024
+        with urllib.request.urlopen(request, timeout=5, context=ctx) as response:
+            raw = response.read(max_bytes)
+            data = json_mod.loads(raw.decode())
             return data.get('info', {}).get('version', '')
     except Exception:
         return ""
@@ -490,8 +505,11 @@ def _early_dependency_check():
                 outdated_packages.append((package_name, package_spec, installed_version))
                 logging.info(f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})")
             elif auto_upgrade_to_latest and installed_version:
-                # Check PyPI for newer version
-                latest_version = _get_latest_pypi_version(package_name)
+                # Check PyPI for newer version (best-effort, skip on any error)
+                try:
+                    latest_version = _get_latest_pypi_version(package_name)
+                except Exception:
+                    latest_version = ""
                 if latest_version and _parse_version(latest_version) > _parse_version(installed_version):
                     outdated_packages.append((package_name, package_spec, installed_version))
                     logging.info(f"Newer version available: {package_name} {installed_version} -> {latest_version}")
@@ -2187,6 +2205,9 @@ MIST_SITE_EXCLUDE_PREFIX = os.getenv("MIST_SITE_EXCLUDE_PREFIX", "")
 # Default to CSV for general use, can be overridden by CLI flag
 OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
 DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
+
+# Global progress telemetry emitter (initialized in main(), best-effort per FR-008)
+PROGRESS_EMITTER = None
 
 # ============================================================================
 # GLOBAL SESSION INITIALIZATION
@@ -7462,6 +7483,27 @@ class ConfigUtils:
         org_id = org_id_list[0]
         return org_id
 
+    @staticmethod
+    def check_stop_signal() -> bool:
+        """Check for stop_loop.txt signal file and remove if found.
+
+        Any long-running loop that iterates over sites or devices with API
+        calls should call this once per iteration so the user can cancel
+        gracefully by creating the stop file.
+
+        Returns:
+            True if the stop signal was detected (caller should break).
+        """
+        if os.path.exists("stop_loop.txt"):
+            try:
+                os.remove("stop_loop.txt")
+            except OSError:
+                pass
+            print(" Stop signal detected. Ending operation early.")
+            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")
+            return True
+        return False
+
 
 # ============================================================================
 # API FETCH UTILITIES CLASS
@@ -7931,6 +7973,8 @@ class APIFetchUtils:
 
         all_configs = []
         for site in tqdm(sites, desc="Sites", unit="site"):
+            if ConfigUtils.check_stop_signal():
+                break
             site_id = site.get("id")
             site_name = site.get("name", "Unnamed Site")
             try:
@@ -10972,6 +11016,10 @@ class OrgSiteExporter:
         Uses APIDataFetcher to handle API call and output writing.
         """
         logging.info("Starting export of organization site list...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("11", "sites", 1)
+        op_start = time.time()
         APIDataFetcher(
             title="Site List:",
             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
@@ -10981,6 +11029,8 @@ class OrgSiteExporter:
         ).execute()
         output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
         logging.info(f"Completed site list export and wrote results to {output_desc}.")
+        if emitter:
+            emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -11084,6 +11134,10 @@ class OrgInventoryExporter:
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         logging.info("Starting export of organization device inventory...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("12", "inventory", 1)
+        op_start = time.time()
         APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
@@ -11092,6 +11146,8 @@ class OrgInventoryExporter:
             limit=1000
         ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
+        if emitter:
+            emitter.emit_progress_complete("12", "inventory", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -11101,6 +11157,10 @@ class OrgInventoryExporter:
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         logging.info("Starting export of all organization devices...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("17", "devices", 1)
+        op_start = time.time()
         APIDataFetcher(
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
@@ -11108,6 +11168,8 @@ class OrgInventoryExporter:
             sort_key="type"
         ).execute()
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
+        if emitter:
+            emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -11476,6 +11538,10 @@ class OrgDeviceStatsExporter:
             except Exception as e:
                 logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
         logging.info("Starting export of organization device statistics...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("13", "device_stats", 1)
+        op_start = time.time()
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org device statistics export", hours)
         APIDataFetcher(
@@ -11487,6 +11553,8 @@ class OrgDeviceStatsExporter:
             duration=f"{hours}h",
             limit=1000
         ).execute()
+        if emitter:
+            emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -11709,6 +11777,10 @@ class OrgDeviceStatsExporter:
             except Exception as e:
                 logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
         logging.info("Starting export of organization VPN peer path statistics...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("15", "vpn_peer_stats", 1)
+        op_start = time.time()
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)
         APIDataFetcher(
@@ -11719,6 +11791,8 @@ class OrgDeviceStatsExporter:
             duration=f"{hours}h",
             limit=1000
         ).execute()
+        if emitter:
+            emitter.emit_progress_complete("15", "vpn_peer_stats", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -11738,6 +11812,8 @@ class OrgDeviceStatsExporter:
             return
         all_vc_stats = []
         for switch in tqdm(switches, desc="Switches", unit="switch"):
+            if ConfigUtils.check_stop_signal():
+                break
             site_id = switch.get("site_id")
             device_id = switch.get("id")
             name = switch.get("name", "")
@@ -11947,10 +12023,42 @@ class OrgClientSecurityExporter:
     
 
     @staticmethod
-    def security_events():
-        """Export security policies, intelligence profiles, and rogue data."""
+    def security_events(fast: bool = False):
+        """Export security policies, intelligence profiles, and rogue data.
+
+        Fast Mode Behavior:
+            - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
+            - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
+            - Reduced sleep: 0.05s inter-site delay instead of 0.2s.
+        """
+        output_files = ["OrgSecurityPolicies.csv", "OrgSecIntelProfiles.csv", "OrgRogueData.csv"]
+        if fast:
+            all_fresh = True
+            for output_file in output_files:
+                try:
+                    path = FilePathUtils.get_csv_path(output_file)
+                    if os.path.exists(path):
+                        age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
+                        if age_minutes >= CSV_FRESHNESS_MINUTES:
+                            all_fresh = False
+                            break
+                    else:
+                        all_fresh = False
+                        break
+                except Exception:
+                    all_fresh = False
+                    break
+            if all_fresh:
+                logging.info("Fast mode cache hit: All security data CSVs are fresh; skipping fetch.")
+                print("* Fast mode: Using cached security data (all files fresh)")
+                return
         print("Export Organization Security Data:")
         logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("42", "security_events", 3)
+        op_start = time.time()
+        sections_done = 0
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         policies = []
         try:
@@ -11988,6 +12096,10 @@ class OrgClientSecurityExporter:
             print("! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)")
             logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
             DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
+        rogue_duration = f"{lookback_hours}h"
+        inter_site_delay = 0.05 if fast else 0.5
+        TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
         logging.info("Fetching rogue APs and clients from all sites via insights...")
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_aps = []
@@ -11997,19 +12109,21 @@ class OrgClientSecurityExporter:
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 site_id = site.get("id")
                 site_name = site.get("name", "Unknown Site")
                 if not site_id:
                     continue
                 try:
-                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration="7d", limit=1000)
+                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration=rogue_duration, limit=1000)
                     site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
                     for rogue_access_point in site_rogue_aps:
                         rogue_access_point["site_id"] = site_id
                         rogue_access_point["site_name"] = site_name
                         rogue_access_point["rogue_type"] = "AP"
                     all_rogue_aps.extend(site_rogue_aps)
-                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration="7d", limit=1000)
+                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration=rogue_duration, limit=1000)
                     site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession) or []
                     for client in site_rogue_clients:
                         client["site_id"] = site_id
@@ -12020,7 +12134,7 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
                     continue
-                time.sleep(0.2)
+                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue data: {e}")
         all_rogue_data = all_rogue_aps + all_rogue_clients
@@ -12036,12 +12150,36 @@ class OrgClientSecurityExporter:
             DataExporter.save_data_to_output([], "OrgRogueData.csv")
         print("Security data export completed (3 files generated)")
         logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
+        if emitter:
+            emitter.emit_progress_complete("42", "security_events", 3, 3, False, time.time() - op_start)
     
 
     @staticmethod
-    def rogue_clients():
-        """Export rogue clients to OrgRogueClients.csv."""
+    def rogue_clients(fast: bool = False):
+        """Export rogue clients to OrgRogueClients.csv.
+
+        Fast Mode Behavior:
+            - Cache hit: If fresh CSV exists, skip fetch entirely.
+            - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
+            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
+        """
+        output_file = "OrgRogueClients.csv"
+        if fast:
+            try:
+                path = FilePathUtils.get_csv_path(output_file)
+                if os.path.exists(path):
+                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
+                    if age_minutes < CSV_FRESHNESS_MINUTES:
+                        logging.info(f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch.")
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                        return
+            except Exception as cache_error:
+                logging.debug(f"Fast mode freshness check failed for {output_file}: {cache_error}")
         logging.info("Starting export of rogue clients from all sites...")
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
+        rogue_duration = f"{lookback_hours}h"
+        inter_site_delay = 0.05 if fast else 0.5
+        TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_clients = []
         try:
@@ -12049,13 +12187,15 @@ class OrgClientSecurityExporter:
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 site_id = site.get("id")
                 site_name = site.get("name", "Unknown Site")
                 if not site_id:
                     continue
                 try:
                     response = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        apisession, site_id, duration="7d", limit=1000
+                        apisession, site_id, duration=rogue_duration, limit=1000
                     )
                     clients = mistapi.get_all(response=response, mist_session=apisession)
                     for client in clients:
@@ -12066,7 +12206,7 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
                     continue
-                time.sleep(0.5)
+                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue clients: {e}")
             return
@@ -12082,9 +12222,31 @@ class OrgClientSecurityExporter:
     
 
     @staticmethod
-    def rogue_aps():
-        """Export rogue APs to OrgRogueAps.csv."""
+    def rogue_aps(fast: bool = False):
+        """Export rogue APs to OrgRogueAps.csv.
+
+        Fast Mode Behavior:
+            - Cache hit: If fresh CSV exists, skip fetch entirely.
+            - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
+            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
+        """
+        output_file = "OrgRogueAPs.csv"
+        if fast:
+            try:
+                path = FilePathUtils.get_csv_path(output_file)
+                if os.path.exists(path):
+                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
+                    if age_minutes < CSV_FRESHNESS_MINUTES:
+                        logging.info(f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch.")
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                        return
+            except Exception as cache_error:
+                logging.debug(f"Fast mode freshness check failed for {output_file}: {cache_error}")
         logging.info("Starting export of rogue APs from all sites...")
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
+        rogue_duration = f"{lookback_hours}h"
+        inter_site_delay = 0.05 if fast else 0.5
+        TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_aps = []
         try:
@@ -12092,13 +12254,15 @@ class OrgClientSecurityExporter:
             with open(site_list_path, mode="r", encoding="utf-8") as f:
                 sites = list(csv.DictReader(f))
             for site in tqdm(sites, desc="Sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 site_id = site.get("id")
                 site_name = site.get("name", "Unknown Site")
                 if not site_id:
                     continue
                 try:
                     response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        apisession, site_id, duration="7d", limit=1000
+                        apisession, site_id, duration=rogue_duration, limit=1000
                     )
                     aps = mistapi.get_all(response=response, mist_session=apisession)
                     for access_point in aps:
@@ -12109,7 +12273,7 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
                     continue
-                time.sleep(0.5)
+                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue APs: {e}")
             return
@@ -12439,6 +12603,11 @@ class OrgExportUtils:
         # SLE types to export
         sle_types = ["wifi", "wired", "wan"]
         all_sites_sle_data = []
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))
+        op_start = time.time()
+        items_done = 0
         
         for sle_type in sle_types:
             try:
@@ -12454,6 +12623,10 @@ class OrgExportUtils:
             except Exception as exception:
                 logging.warning(f"Failed to get sites SLE data for type {sle_type}: {exception}")
                 continue
+            finally:
+                items_done += 1
+                if emitter:
+                    emitter.emit_progress_tick("67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done)
         
         if all_sites_sle_data:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
@@ -12465,6 +12638,8 @@ class OrgExportUtils:
             print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
             logging.warning("No sites SLE data available for organization")
             DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")
+        if emitter:
+            emitter.emit_progress_complete("67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start)
     
     @staticmethod
     def insight_metrics():
@@ -12832,6 +13007,13 @@ class OrgExportUtils:
             "worst-sites-by-sle", # Worst performing sites SLE analysis
         ]
         
+        total_items = len(org_sle_specialized_metrics) + len(sle_categories)
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("66", "sle_metrics", total_items)
+        op_start = time.time()
+        items_done = 0
+        
         all_sle_data = []
         metrics_retrieved = 0
         metrics_failed = 0
@@ -12904,6 +13086,10 @@ class OrgExportUtils:
                     metrics_failed += 1
                     logging.debug(f"Failed to get specialized SLE data for metric '{metric}': {metric_error}")
                     continue
+                finally:
+                    items_done += 1
+                    if emitter:
+                        emitter.emit_progress_tick("66", "sle_metrics", total_items, metric, items_done, total_items - items_done)
             
             # Second, get aggregated SLE data for each service category
             for sle_category in sle_categories:
@@ -12941,6 +13127,10 @@ class OrgExportUtils:
                     metrics_failed += 1
                     logging.debug(f"Failed to get SLE data for category '{sle_category}': {category_error}")
                     continue
+                finally:
+                    items_done += 1
+                    if emitter:
+                        emitter.emit_progress_tick("66", "sle_metrics", total_items, sle_category, items_done, total_items - items_done)
             
             # Report results
             print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
@@ -12961,6 +13151,8 @@ class OrgExportUtils:
             print(f"! Error exporting organization SLE metrics: {exception}")
             logging.error(f"Failed to export org SLE metrics: {exception}")
             DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")
+        if emitter:
+            emitter.emit_progress_complete("66", "sle_metrics", total_items, items_done, False, time.time() - op_start)
 
 
 # ============================================================================
@@ -13068,11 +13260,17 @@ class SiteDeviceExporter:
     @staticmethod
     def port_stats():
         """Export port statistics for a site to SitePortStats.csv."""
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("29", "port_stats", 1)
+        op_start = time.time()
         SiteExportUtils._export_data(
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts,
             data_type="port stats",
             sort_key="mac"
         )
+        if emitter:
+            emitter.emit_progress_complete("29", "port_stats", 1, 1, False, time.time() - op_start)
     
 
     @staticmethod
@@ -18795,11 +18993,7 @@ class DataCollectionManager:
     @staticmethod
     def _check_stop_signal() -> bool:
         """Check for stop file signal and remove if found."""
-        if os.path.exists("stop_loop.txt"):
-            print(" Stop file detected. Ending continuous loop.")
-            os.remove("stop_loop.txt")
-            return True
-        return False
+        return ConfigUtils.check_stop_signal()
     
     @staticmethod
     def _execute_collection_cycle(loop_count: int) -> None:
@@ -19020,6 +19214,11 @@ class GatewayTestExporter:
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
         
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("16", "synthetic_tests", 1)
+        op_start = time.time()
+        
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
         all_stats = []
@@ -19154,6 +19353,8 @@ class GatewayTestExporter:
         else:
             logging.warning(" No synthetic test results found. CSV not created.")
             print("! No synthetic test results found. CSV not created.")
+        if emitter:
+            emitter.emit_progress_complete("16", "synthetic_tests", len(gateway_devices) if gateway_devices else 0, len(all_stats), False, time.time() - op_start)
     
 
     @staticmethod
@@ -21596,6 +21797,10 @@ class SSHRunnerManager:
         SSH Runner wrapper for menu system integration.
         Runs with auto-detection and interactive prompts.
         """
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("97", "ssh_runner", 1)
+        op_start = time.time()
         try:
             print("\n>> Enhanced SSH Command Runner")
             print("=" * 60)
@@ -21618,6 +21823,8 @@ class SSHRunnerManager:
             )
             
             if not hosts or not username or not password:
+                if emitter:
+                    emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
                 return False
             
             # Show summary
@@ -21626,14 +21833,21 @@ class SSHRunnerManager:
             print(f"!? Commands: {len(commands) if commands else 0} command(s)")
             
             # Execute
-            return SSHRunnerManager._execute_ssh(hosts, username, password, commands)
+            result = SSHRunnerManager._execute_ssh(hosts, username, password, commands)
+            if emitter:
+                emitter.emit_progress_complete("97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start)
+            return result
             
         except KeyboardInterrupt:
             print("\n[INTERRUPT] Operation cancelled by user")
+            if emitter:
+                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
             return False
         except Exception as error:
             print(f"[ERROR] Fatal error: {error}")
             logging.error(f"SSH Runner error: {error}", exc_info=True)
+            if emitter:
+                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, False, time.time() - op_start)
             return False
     
     @staticmethod
@@ -25400,6 +25614,8 @@ class WAN2MigrationManager:
         print("\n  Processing sites...")
         
         for site in tqdm(sites_to_configure, desc="Configuring sites", unit="site"):
+            if ConfigUtils.check_stop_signal():
+                break
             result = self._set_variable_for_site(site)
             results.append(result)
         
@@ -26936,6 +27152,8 @@ class WANProbeDeviceOverrideManager:
         # First pass: Find all gateway devices in template sites
         all_gateways = []
         for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):
+            if ConfigUtils.check_stop_signal():
+                break
             site_id = site_info["site_id"]
             site_name = site_info["site_name"]
             
@@ -27068,6 +27286,8 @@ class WANProbeDeviceOverrideManager:
         results = []
         
         for device in tqdm(devices_with_overrides, desc="Updating devices", unit="device"):
+            if ConfigUtils.check_stop_signal():
+                break
             result = self._update_single_device(device, dry_run)
             results.append(result)
         
@@ -28118,6 +28338,8 @@ class SiteConfigManager:
             template_name = template_mapping[country]["name"]
             
             for site_info in sites:
+                if ConfigUtils.check_stop_signal():
+                    return success, failed
                 try:
                     response = mistapi.api.v1.sites.sites.updateSiteInfo(
                         apisession, site_info["id"],
@@ -30270,6 +30492,8 @@ class MapsManager:
             all_maps = []
             
             for site in tqdm(sites, desc="Scanning sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 try:
                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
                         self.apisession,
@@ -30387,6 +30611,8 @@ class MapsManager:
             all_maps_data = []
             
             for site in tqdm(sites, desc="Exporting maps", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 try:
                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
                         self.apisession,
@@ -30443,6 +30669,8 @@ class MapsManager:
             maps_with_images = []
             
             for site in tqdm(sites, desc="Scanning for images", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 try:
                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
                         self.apisession,
@@ -31098,6 +31326,8 @@ class MapsManager:
             total_maps_scanned = 0
             
             for site in tqdm(sites, desc="Scanning sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 try:
                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
                         self.apisession,
@@ -31576,6 +31806,8 @@ class MapsManager:
             total_downloaded = 0
             
             for site in tqdm(sites, desc="Processing sites", unit="site"):
+                if ConfigUtils.check_stop_signal():
+                    break
                 try:
                     site_id = site['id']
                     site_name = site.get('name', 'Unknown')
@@ -37284,6 +37516,9 @@ class FirmwareManager:
         
         logging.info("Starting firmware upgrade with mode selection...")
         logging.debug("FirmwareManager.execute_firmware_upgrade_with_mode_selection() initiated")
+        emitter = PROGRESS_EMITTER
+        if emitter:
+            emitter.emit_progress_start("90", "firmware_upgrade", 1)
         
         print(" Advanced AP Firmware Upgrade")
         print("=" * 60)
@@ -40109,6 +40344,8 @@ class BulkAPFirmwareUpgrader:
         print(f"\n  Fetching APs across {len(self.sites_to_upgrade)} site(s)...")
         
         for site_info in self.sites_to_upgrade:
+            if ConfigUtils.check_stop_signal():
+                break
             self._fetch_aps_for_site(site_info)
         
         if not self.all_aps:
@@ -41272,6 +41509,8 @@ class BulkAPFirmwareUpgrader:
         failed = 0
         
         for site in self.sites_to_upgrade:
+            if ConfigUtils.check_stop_signal():
+                break
             site_id = site['id']
             site_name = site['name']
             
@@ -42305,6 +42544,9 @@ class SiteAutoUpgradeConfigurator:
             site_id = site.get('id')
             site_name = site.get('name', 'Unknown')
             
+            if ConfigUtils.check_stop_signal():
+                break
+            
             if not site_id:
                 logging.warning(f"Skipping site {site_name} - no site ID")
                 fail_count += 1
@@ -42854,6 +43096,8 @@ class SiteAutoUpgradeConfigurator:
         successful = 0
         failed = 0
         for site in self.selected_sites:
+            if ConfigUtils.check_stop_signal():
+                break
             site_id = site['id']
             site_name = site.get('name', 'Unknown')
             try:
@@ -43683,6 +43927,8 @@ class OrgLevelAPFirmwareUpgrader:
         """Collect APs from each selected site."""
         all_aps = []
         for site in self.selected_sites:
+            if ConfigUtils.check_stop_signal():
+                break
             site_aps = self._fetch_site_aps(site['id'], site.get('name', 'Unknown'))
             all_aps.extend(site_aps)
         return all_aps
@@ -48962,6 +49208,8 @@ class ZoneConfigurationAnalyzer:
         for site in tqdm(sites, desc="Fetching site settings", unit="site"):
             site_id = site.get("id")
             site_name = site.get("name", "Unnamed Site")
+            if ConfigUtils.check_stop_signal():
+                break
             
             try:
                 response = mistapi.api.v1.sites.setting.getSiteSetting(
@@ -49225,6 +49473,8 @@ class ZoneConfigurationAnalyzer:
         for site in tqdm(sites, desc="Scanning sites", unit="site"):
             site_id = site.get("id")
             site_name = site.get("name", "Unnamed Site")
+            if ConfigUtils.check_stop_signal():
+                break
             
             try:
                 response = mistapi.api.v1.sites.zones.listSiteZones(
@@ -49904,6 +50154,9 @@ class SiteAnalyticsConfigurator:
                 logging.warning(f"Invalid site_id for {site_name}")
                 continue
             
+            if ConfigUtils.check_stop_signal():
+                break
+            
             try:
                 response = mistapi.api.v1.sites.setting.getSiteSetting(
                     apisession,
@@ -50259,6 +50512,8 @@ class SiteAnalyticsConfigurator:
         
         results = []
         for site in tqdm(deviations, desc="Configuring sites", unit="site"):
+            if ConfigUtils.check_stop_signal():
+                break
             result = SiteAnalyticsConfigurator._apply_site_config(site)
             results.append(result)
         
@@ -51020,6 +51275,370 @@ class TUILauncher:
         print("\n>> Returned from TUI mode to main menu")
 
 
+# ============================================================================
+# TELEMETRY EMITTER CLASS
+# ============================================================================
+class TelemetryEmitter:
+    """Append-only NDJSON event writer for test and progress telemetry.
+
+    Writes one JSON object per line to the target file.  All writes are
+    best-effort: an I/O failure is logged but never interrupts the
+    primary operation (FR-008).
+
+    Usage::
+
+        with TelemetryEmitter("data/test_events.jsonl") as emitter:
+            emitter.emit({"event_type": "test_pass", ...})
+    """
+
+    RETENTION_LIMIT = 10
+
+    def __init__(self, file_path: str):
+        self._path = file_path
+        self._handle = None
+        try:
+            parent = os.path.dirname(file_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            self._handle = open(file_path, "a", encoding="utf-8")
+        except OSError as exc:
+            logging.warning(f"TelemetryEmitter: cannot open {file_path}: {exc}")
+
+    # -- core write ----------------------------------------------------------
+
+    def emit(self, event: dict) -> None:
+        """Write *event* as a single JSON line (best-effort)."""
+        if self._handle is None:
+            return
+        try:
+            self._handle.write(json.dumps(event, default=str) + "\n")
+            self._handle.flush()
+        except OSError as exc:
+            logging.warning(f"TelemetryEmitter: write failed: {exc}")
+
+    def close(self) -> None:
+        """Flush and close the underlying file handle."""
+        if self._handle is not None:
+            try:
+                self._handle.close()
+            except OSError:
+                pass
+            self._handle = None
+
+    # -- context manager -----------------------------------------------------
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    # -- test event helpers ---------------------------------------------------
+
+    def emit_test_start(self, menu_option, operation_name, test_mode):
+        """Emit a test_start event."""
+        self.emit({
+            "event_type": "test_start",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "operation_name": operation_name,
+            "test_mode": test_mode,
+        })
+
+    def emit_test_pass(self, menu_option, operation_name, duration, test_mode):
+        """Emit a test_pass event."""
+        self.emit({
+            "event_type": "test_pass",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "status": "pass",
+            "operation_name": operation_name,
+            "duration_seconds": round(duration, 3),
+            "test_mode": test_mode,
+        })
+
+    def emit_test_fail(self, menu_option, operation_name, duration, error, test_mode):
+        """Emit a test_fail event."""
+        self.emit({
+            "event_type": "test_fail",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "status": "fail",
+            "operation_name": operation_name,
+            "duration_seconds": round(duration, 3),
+            "error_type": type(error).__name__,
+            "error_message": str(error)[:500],
+            "test_mode": test_mode,
+        })
+
+    def emit_test_skip(self, menu_option, operation_name, reason, category, test_mode):
+        """Emit a test_skip event."""
+        self.emit({
+            "event_type": "test_skip",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "status": "skip",
+            "operation_name": operation_name,
+            "duration_seconds": 0.0,
+            "skip_reason": reason,
+            "skip_category": category,
+            "test_mode": test_mode,
+        })
+
+    def emit_test_summary(self, total, passed, failed, skipped, elapsed, test_mode):
+        """Emit a test_summary event."""
+        overall = "pass" if failed == 0 else "fail"
+        self.emit({
+            "event_type": "test_summary",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": "0",
+            "status": overall,
+            "total_operations": total,
+            "pass_count": passed,
+            "fail_count": failed,
+            "skip_count": skipped,
+            "total_elapsed_seconds": round(elapsed, 3),
+            "test_mode": test_mode,
+        })
+
+    # -- progress event helpers -----------------------------------------------
+
+    def emit_progress_start(self, menu_option, operation_name, total_items):
+        """Emit a progress_start event."""
+        self.emit({
+            "event_type": "progress_start",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "operation_name": operation_name,
+            "total_items": total_items,
+        })
+
+    def emit_progress_tick(self, menu_option, operation_name, total, current, completed, remaining):
+        """Emit a progress_tick event."""
+        self.emit({
+            "event_type": "progress_tick",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "operation_name": operation_name,
+            "total_items": total,
+            "current_item": str(current),
+            "items_completed": completed,
+            "items_remaining": remaining,
+        })
+
+    def emit_progress_complete(self, menu_option, operation_name, total, processed, was_stopped, duration):
+        """Emit a progress_complete event."""
+        self.emit({
+            "event_type": "progress_complete",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "menu_option": str(menu_option),
+            "operation_name": operation_name,
+            "total_items": total,
+            "items_processed": processed,
+            "was_stopped": was_stopped,
+            "duration_seconds": round(duration, 3),
+        })
+
+    # -- retention ------------------------------------------------------------
+
+    def enforce_retention(self, directory: str = "data", prefix: str = "test_events_", limit: int = None):
+        """Delete oldest timestamped JSONL files when count exceeds *limit*."""
+        if limit is None:
+            limit = self.RETENTION_LIMIT
+        try:
+            pattern = os.path.join(directory, f"{prefix}*.jsonl")
+            import glob
+            files = sorted(glob.glob(pattern))
+            while len(files) > limit:
+                oldest = files.pop(0)
+                os.remove(oldest)
+                logging.info(f"TelemetryEmitter: removed old file {oldest}")
+        except OSError as exc:
+            logging.warning(f"TelemetryEmitter: retention cleanup failed: {exc}")
+
+    # -- timestamped filename helper -----------------------------------------
+
+    @staticmethod
+    def timestamped_path(directory: str = "data") -> str:
+        """Return a timestamped JSONL path for a test run."""
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        return os.path.join(directory, f"test_events_{stamp}.jsonl")
+
+
+# ============================================================================
+# OPERATION REGISTRY CLASS
+# ============================================================================
+class OperationRegistry:
+    """Centralised classification of all menu operations.
+
+    Replaces the inline ``unsafe_options`` and ``interactive_read_only_options``
+    dictionaries with a single authoritative source.  Each entry maps a menu
+    option string to a dict with ``category`` and optional ``skip_reason``.
+
+    Categories
+    ----------
+    safe             Automated GET -- runs in ``--test``
+    interactive_safe Read-only but needs site/device -- runs in ``--testinteractive``
+    destructive      Modifies state -- always skipped
+    wip              Work in progress -- unstable
+    resource_intensive  Takes >1 h or hits rate limits
+    websocket        Requires WebSocket + interactive selection
+    continuous_loop  Never terminates without user stop
+    interactive      Needs user input not automatable
+    """
+
+    _REGISTRY: dict = {
+        # --- control --------------------------------------------------------
+        "0":   {"category": "interactive", "skip_reason": "Exit option"},
+        # --- resource intensive ---------------------------------------------
+        "14":  {"category": "resource_intensive", "skip_reason": "Port-level statistics - extremely resource intensive (8+ hours)"},
+        "18":  {"category": "resource_intensive", "skip_reason": "Site configurations - hits API rate limits after 7+ hours"},
+        # --- websocket ------------------------------------------------------
+        "5":   {"category": "websocket", "skip_reason": "WebSocket ping - requires interactive site and device selection"},
+        "6":   {"category": "websocket", "skip_reason": "WebSocket traceroute - requires interactive site and device selection"},
+        "7":   {"category": "websocket", "skip_reason": "WebSocket release DHCP - requires interactive site and device selection"},
+        "8":   {"category": "websocket", "skip_reason": "WebSocket cable test - requires interactive site and device selection"},
+        "87":  {"category": "websocket", "skip_reason": "WebSocket bounce port - requires interactive site and device selection"},
+        "88":  {"category": "websocket", "skip_reason": "WebSocket ARP - requires interactive site and device selection"},
+        "89":  {"category": "websocket", "skip_reason": "WebSocket service ping - requires interactive site and device selection"},
+        "80":  {"category": "websocket", "skip_reason": "WebSocket ARP command - requires interactive site and device selection"},
+        # --- interactive (needs user input, not automatable) -----------------
+        "9":   {"category": "interactive", "skip_reason": "Packet capture - requires interactive configuration and site selection"},
+        "10":  {"category": "interactive", "skip_reason": "Packet capture - requires interactive configuration and MxEdge ID"},
+        "56":  {"category": "interactive", "skip_reason": "MSP export - requires interactive MSP selection"},
+        "60":  {"category": "interactive", "skip_reason": "Firmware upgrade status - requires interactive scope selection"},
+        "61":  {"category": "interactive", "skip_reason": "CSV comparison - requires interactive file selection"},
+        "62":  {"category": "interactive", "skip_reason": "Marvis troubleshooting - requires interactive option selection"},
+        "70":  {"category": "interactive_safe", "skip_reason": "Interactive site selection"},
+        "71":  {"category": "interactive_safe", "skip_reason": "Interactive site inventory browser"},
+        "72":  {"category": "interactive_safe", "skip_reason": "Interactive device stats viewer"},
+        "73":  {"category": "interactive_safe", "skip_reason": "Interactive device tests viewer"},
+        "74":  {"category": "interactive_safe", "skip_reason": "Interactive device config viewer"},
+        "79":  {"category": "interactive", "skip_reason": "Interactive CLI shell session"},
+        "101": {"category": "interactive", "skip_reason": "Interactive TUI API browser - keyboard navigation required"},
+        "102": {"category": "interactive", "skip_reason": "WLAN RADIUS timer management - requires interactive site selection"},
+        "103": {"category": "interactive", "skip_reason": "Requires interactive site selection for WAN2 variable configuration"},
+        "105": {"category": "interactive", "skip_reason": "Requires interactive template selection for configuration extraction"},
+        "112": {"category": "interactive", "skip_reason": "Maps Manager - requires interactive Dash web server and browser"},
+        "115": {"category": "interactive", "skip_reason": "Requires interactive login with email/password credentials"},
+        "117": {"category": "interactive", "skip_reason": "MSP Inventory Export - requires MSP privileges via --login"},
+        # --- interactive_safe (read-only, need site/device, automatable) -----
+        "29":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "30":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "31":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "32":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "33":  {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
+        "34":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "49":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "50":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "51":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "52":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "53":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "68":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "69":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "81":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "84":  {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "85":  {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
+        "86":  {"category": "interactive_safe", "skip_reason": "Requires site and client selection"},
+        # --- continuous loop ------------------------------------------------
+        "75":  {"category": "continuous_loop", "skip_reason": "Continuous loop operation"},
+        "76":  {"category": "continuous_loop", "skip_reason": "Continuous data collection loop"},
+        # --- resource intensive (file/support) ------------------------------
+        "77":  {"category": "resource_intensive", "skip_reason": "File processing operation - potentially resource intensive"},
+        "78":  {"category": "resource_intensive", "skip_reason": "Support package generation - potentially resource intensive"},
+        # --- wip ------------------------------------------------------------
+        "63":  {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
+        "64":  {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
+        "65":  {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
+        # --- destructive ----------------------------------------------------
+        "90":  {"category": "destructive", "skip_reason": "DESTRUCTIVE: AP firmware upgrade operation"},
+        "91":  {"category": "destructive", "skip_reason": "DESTRUCTIVE: Device reboot operation"},
+        "92":  {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - WIP"},
+        "93":  {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - bulk operation"},
+        "97":  {"category": "destructive", "skip_reason": "Enhanced SSH Command Runner - requires interactive host and command input"},
+        "98":  {"category": "destructive", "skip_reason": "SSH Runner by gateway template - requires interactive template and command input"},
+        "99":  {"category": "destructive", "skip_reason": "DESTRUCTIVE: Switch firmware upgrade operation"},
+        "100": {"category": "destructive", "skip_reason": "DESTRUCTIVE: SSR firmware upgrade operation"},
+        "104": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Updates gateway templates with WAN2 variable"},
+        "106": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Applies gateway template configuration"},
+        "107": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates 137 test sites from CSV"},
+        "108": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates country-specific RF templates"},
+        "109": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates device profiles for AP models"},
+        "110": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Assigns APs to device profiles"},
+        "111": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clones gateway templates by state/country"},
+        "113": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe override on templates"},
+        "114": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe on device port overrides"},
+        "116": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Org-level AP firmware upgrade"},
+        "118": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Auto-Upgrade Configuration"},
+        "120": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Analytics Configuration"},
+        "122": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Bulk RADIUS WLAN Configuration - modifies WLAN auth settings"},
+    }
+
+    # Categories that are safe for --test (fully automated, no user input)
+    SAFE_CATEGORIES = frozenset({"safe"})
+    # Categories that are safe for --testinteractive (need site but automatable)
+    INTERACTIVE_SAFE_CATEGORIES = frozenset({"interactive_safe"})
+    # Categories always skipped
+    SKIP_CATEGORIES = frozenset({
+        "destructive", "wip", "resource_intensive",
+        "websocket", "continuous_loop", "interactive",
+    })
+
+    @classmethod
+    def get(cls, option: str) -> dict:
+        """Return classification for *option*, defaulting to safe with warning."""
+        entry = cls._REGISTRY.get(str(option))
+        if entry is not None:
+            return entry
+        logging.warning(f"OperationRegistry: option {option} not registered, defaulting to safe")
+        return {"category": "safe"}
+
+    @classmethod
+    def is_safe(cls, option: str) -> bool:
+        """True if *option* can run in ``--test`` mode."""
+        return cls.get(option)["category"] in cls.SAFE_CATEGORIES
+
+    @classmethod
+    def is_interactive_safe(cls, option: str) -> bool:
+        """True if *option* can run in ``--testinteractive`` mode."""
+        return cls.get(option)["category"] in cls.INTERACTIVE_SAFE_CATEGORIES
+
+    @classmethod
+    def skip_reason(cls, option: str) -> str:
+        """Return skip reason or empty string."""
+        return cls.get(option).get("skip_reason", "")
+
+    @classmethod
+    def skip_category(cls, option: str) -> str:
+        """Return skip category name."""
+        return cls.get(option)["category"]
+
+    @classmethod
+    def safe_options(cls, all_options) -> list:
+        """Return sorted list of options safe for ``--test``."""
+        return sorted(
+            [o for o in all_options if cls.is_safe(o)],
+            key=lambda x: float(x.replace("a", ".1")),
+        )
+
+    @classmethod
+    def interactive_safe_options(cls, all_options) -> list:
+        """Return sorted list of options safe for ``--testinteractive``."""
+        return sorted(
+            [o for o in all_options if cls.is_interactive_safe(o)],
+            key=lambda x: float(x.replace("a", ".1")),
+        )
+
+    @classmethod
+    def unsafe_options(cls, all_options) -> list:
+        """Return sorted list of options NOT safe for ``--test``."""
+        return sorted(
+            [o for o in all_options if not cls.is_safe(o)],
+            key=lambda x: float(x.replace("a", ".1")),
+        )
+
+
 def run_systematic_test():
     """
     Run systematic test of all safe menu options.
@@ -51042,7 +51661,8 @@ def run_systematic_test():
     print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     
-    # Define unsafe menu options that should be skipped during testing
+    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
+    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
     unsafe_options = {
         # Control operations that should not be tested
         "0": "Exit option - would terminate the test prematurely",
@@ -51180,32 +51800,51 @@ def run_systematic_test():
         # have been moved to unsafe_options due to excessive resource consumption
     ]
     
-    # Create optimized safe options list, preserving any additional options not in the predefined order
-    safe_options_set = set(opt for opt in all_options if opt not in unsafe_options)
+    # Create optimized safe options list using OperationRegistry
+    unsafe_list = OperationRegistry.unsafe_options(all_options)
+    safe_options_set = set(OperationRegistry.safe_options(all_options))
     safe_options = []
+    remaining = set(safe_options_set)
     
     # Add options in optimized order first
     for opt in optimized_test_order:
-        if opt in safe_options_set:
+        if opt in remaining:
             safe_options.append(opt)
-            safe_options_set.remove(opt)
+            remaining.discard(opt)
     
     # Add any remaining safe options at the end (for future additions)
-    safe_options.extend(sorted(safe_options_set, key=lambda x: float(x.replace('a', '.1'))))
+    safe_options.extend(sorted(remaining, key=lambda x: float(x.replace('a', '.1'))))
     
     print(f"! Found {len(all_options)} total menu options")
     print(f"! {len(safe_options)} safe options will be tested")
-    print(f"!  {len(unsafe_options)} unsafe options will be skipped")
+    print(f"!  {len(unsafe_list)} unsafe options will be skipped")
     print()
     
     # Show which options will be skipped and why
     print(" Skipping unsafe operations:")
-    for opt in sorted(unsafe_options.keys(), key=lambda x: float(x.replace('a', '.1'))):
+    for opt in unsafe_list:
         if opt in menu_actions:
             _, description = menu_actions[opt]
-            reason = unsafe_options[opt]
-            print(f"   {opt:2}: {description[:60]}... (Reason: {reason})")
+            reason = OperationRegistry.skip_reason(opt)
+            print(f"   {opt:>3}: {description[:60]}... (Reason: {reason})")
     print()
+    
+    # Open telemetry emitter with timestamped path
+    telemetry_path = TelemetryEmitter.timestamped_path("data")
+    emitter = TelemetryEmitter(telemetry_path)
+    
+    # Emit skip events for all non-safe operations
+    skip_count = 0
+    for opt in unsafe_list:
+        if opt in menu_actions:
+            _, op_name = menu_actions[opt]
+            emitter.emit_test_skip(
+                opt, op_name,
+                OperationRegistry.skip_reason(opt),
+                OperationRegistry.skip_category(opt),
+                "systematic",
+            )
+            skip_count += 1
     
     # Test safe options
     print(" Testing safe operations:")
@@ -51218,7 +51857,9 @@ def run_systematic_test():
     
     for i, option in enumerate(safe_options, 1):
         func, description = menu_actions[option]
-        print(f"   [{i:2}/{len(safe_options)}] Testing option {option:2}: {description[:60]}...")
+        print(f"   [{i:2}/{len(safe_options)}] Testing option {option:>3}: {description[:60]}...")
+        emitter.emit_test_start(option, description, "systematic")
+        op_start = time.time()
         # Determine if fast mode is globally enabled and if function supports it
         fast_enabled = False
         try:
@@ -51256,27 +51897,36 @@ def run_systematic_test():
         try:
             logging.info(f"SYSTEMATIC_TEST: Starting test of menu option {option} (fast_applied={invoke_kwargs.get('fast', False)})")
             func(**invoke_kwargs)
+            duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
+            emitter.emit_test_pass(option, description, duration, "systematic")
             logging.info(f"SYSTEMATIC_TEST: Successfully completed menu option {option}")
         except Exception as e:
+            duration = time.time() - op_start
             print(f"   [FAILED]  Option {option} failed: {str(e)[:100]}...")
             error_count += 1
+            emitter.emit_test_fail(option, description, duration, e, "systematic")
             logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
             
         # Small delay between tests to be respectful to the API
         time.sleep(1)
     
-    # Summary
+    # Emit summary and clean up telemetry
     total_time = time.time() - start_time
+    total_ops = len(all_options)
+    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "systematic")
+    emitter.close()
+    emitter.enforce_retention()
     print()
     print("=" * 80)
     print(" Systematic Test Summary:")
     print(f"   Successful operations: {success_count}")
     print(f"   Failed operations: {error_count}")
-    print(f"   Skipped unsafe operations: {len(unsafe_options)}")
-    print(f"   Total coverage: {success_count}/{len(all_options)} ({success_count/len(all_options)*100:.1f}%)")
+    print(f"   Skipped unsafe operations: {skip_count}")
+    print(f"   Total coverage: {success_count}/{total_ops} ({success_count/total_ops*100:.1f}%)")
     print(f"    Total execution time: {total_time:.2f} seconds")
+    print(f"   Telemetry written to: {telemetry_path}")
     print(f"   Detailed logs in: script.log")
     
     if error_count == 0:
@@ -51310,8 +51960,13 @@ def run_interactive_test():
     print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     
-    # Define interactive read-only options that should be tested
-    # These require user input but are safe (no destructive operations)
+    # Use OperationRegistry for centralized classification
+    all_options = sorted(menu_actions.keys(), key=lambda x: float(x.replace('a', '.1')))
+    interactive_options = OperationRegistry.interactive_safe_options(all_options)
+    skip_list = [o for o in all_options if not OperationRegistry.is_interactive_safe(o)]
+    
+    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
+    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
     interactive_read_only_options = {
         "29": "Export port statistics for a selected site",
         "30": "Export client statistics for a selected site",
@@ -51337,8 +51992,8 @@ def run_interactive_test():
         "86": "Export Site Client Anomaly Events for selected site and client",
     }
     
-    # Define operations that are interactive but should be skipped
-    # (destructive, websocket, continuous, or WIP)
+    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
+    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
     skip_interactive_options = {
         "5": "WebSocket operation - not suitable for automated testing",
         "6": "WebSocket operation - not suitable for automated testing",
@@ -51385,23 +52040,43 @@ def run_interactive_test():
         "120": "DESTRUCTIVE: Site Analytics Configuration - modifies site settings",
     }
     
-    print(f"! Found {len(interactive_read_only_options)} interactive read-only options to test")
-    print(f"! {len(skip_interactive_options)} interactive options will be skipped (destructive/websocket/continuous)")
+    print(f"! Found {len(interactive_options)} interactive read-only options to test")
+    print(f"! {len(skip_list)} options will be skipped")
     print()
     
     # Show which interactive options will be tested
     print(" Testing interactive read-only operations:")
-    for opt in sorted(interactive_read_only_options.keys(), key=lambda x: int(x)):
-        description = interactive_read_only_options[opt]
-        print(f"   {opt:2}: {description}")
+    for opt in interactive_options:
+        if opt in menu_actions:
+            _, description = menu_actions[opt]
+            print(f"   {opt:>3}: {description}")
     print()
     
-    # Show which interactive options will be skipped
-    print(" Skipping unsafe/unsuitable interactive operations:")
-    for opt in sorted(skip_interactive_options.keys(), key=lambda x: int(x)):
-        reason = skip_interactive_options[opt]
-        print(f"   {opt:2}: {reason}")
+    # Show which operations will be skipped
+    print(" Skipping non-interactive-safe operations:")
+    for opt in skip_list:
+        if opt in menu_actions:
+            reason = OperationRegistry.skip_reason(opt)
+            if reason:
+                print(f"   {opt:>3}: {reason}")
     print()
+    
+    # Open telemetry emitter with timestamped path
+    telemetry_path = TelemetryEmitter.timestamped_path("data")
+    emitter = TelemetryEmitter(telemetry_path)
+    
+    # Emit skip events for non-interactive-safe operations
+    skip_count = 0
+    for opt in skip_list:
+        if opt in menu_actions:
+            _, op_name = menu_actions[opt]
+            emitter.emit_test_skip(
+                opt, op_name,
+                OperationRegistry.skip_reason(opt),
+                OperationRegistry.skip_category(opt),
+                "interactive",
+            )
+            skip_count += 1
     
     # Test interactive options
     success_count = 0
@@ -51424,54 +52099,62 @@ def run_interactive_test():
         else:
             print("[ERROR] No sites found in organization - cannot run interactive tests")
             logging.error("INTERACTIVE_TEST: No sites available for testing")
+            emitter.close()
             return False
     except Exception as error:
         print(f"[ERROR] Failed to fetch test site: {error}")
         logging.error(f"INTERACTIVE_TEST: Failed to fetch test site: {error}")
+        emitter.close()
         return False
     
     print()
     
-    for i, option in enumerate(sorted(interactive_read_only_options.keys(), key=lambda x: int(x)), 1):
+    for i, option in enumerate(interactive_options, 1):
+        if option not in menu_actions:
+            continue
         func, description = menu_actions[option]
-        print(f"   [{i:2}/{len(interactive_read_only_options)}] Testing option {option:2}: {description[:60]}...")
+        print(f"   [{i:2}/{len(interactive_options)}] Testing option {option:>3}: {description[:60]}...")
         
+        emitter.emit_test_start(option, description, "interactive")
+        op_start = time.time()
         logging.info(f"INTERACTIVE_TEST: Starting test of menu option {option} description='{description}'")
         
         try:
-            # Most interactive functions accept site_id parameter
-            # We'll use introspection to determine if the function accepts parameters
             sig = inspect.signature(func)
             invoke_kwargs = {}
-            
-            # Check what parameters the function accepts
             if 'site_id' in sig.parameters:
                 invoke_kwargs['site_id'] = test_site_id
-            
-            # Invoke the function with appropriate parameters
             func(**invoke_kwargs)
-            
+            duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
+            emitter.emit_test_pass(option, description, duration, "interactive")
             logging.info(f"INTERACTIVE_TEST: Successfully completed menu option {option}")
         except Exception as error:
+            duration = time.time() - op_start
             print(f"   [FAILED]  Option {option} failed: {str(error)[:100]}...")
             error_count += 1
+            emitter.emit_test_fail(option, description, duration, error, "interactive")
             logging.error(f"INTERACTIVE_TEST: Failed menu option {option}: {error}")
         
         # Small delay between tests to be respectful to the API
         time.sleep(1)
     
-    # Summary
+    # Emit summary and clean up telemetry
     total_time = time.time() - start_time
+    total_ops = len(all_options)
+    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "interactive")
+    emitter.close()
+    emitter.enforce_retention()
     print()
     print("=" * 80)
     print(" Interactive Test Summary:")
     print(f"   Successful operations: {success_count}")
     print(f"   Failed operations: {error_count}")
-    print(f"   Skipped operations: {len(skip_interactive_options)}")
-    print(f"   Total interactive read-only coverage: {success_count}/{len(interactive_read_only_options)} ({success_count/len(interactive_read_only_options)*100:.1f}%)")
+    print(f"   Skipped operations: {skip_count}")
+    print(f"   Total interactive read-only coverage: {success_count}/{len(interactive_options)} ({success_count/len(interactive_options)*100:.1f}%)")
     print(f"   Total execution time: {total_time:.2f} seconds")
+    print(f"   Telemetry written to: {telemetry_path}")
     print(f"   Detailed logs in: script.log")
     
     if error_count == 0:
@@ -51480,7 +52163,7 @@ def run_interactive_test():
         return True
     else:
         print(f"   {error_count} operations failed - check logs for details")
-        logging.warning(f"INTERACTIVE_TEST: {error_count} operations failed out of {len(interactive_read_only_options)} tested")
+        logging.warning(f"INTERACTIVE_TEST: {error_count} operations failed out of {len(interactive_options)} tested")
         return False
 
 
@@ -54203,6 +54886,15 @@ def main():
     OUTPUT_FORMAT = args.output_format
     timestamp = datetime.now(timezone.utc).isoformat()
     logging.info(f"Output format set to: {OUTPUT_FORMAT} at {timestamp}")
+    
+    # Initialize global progress telemetry emitter (best-effort per FR-008)
+    global PROGRESS_EMITTER
+    try:
+        PROGRESS_EMITTER = TelemetryEmitter(os.path.join("data", "test_events.jsonl"))
+        logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")
+    except Exception as emitter_exc:
+        logging.warning(f"Progress telemetry emitter init failed (non-blocking): {emitter_exc}")
+        PROGRESS_EMITTER = None
     
     # Enable debug logging if --debug flag is provided
     if args.debug:
