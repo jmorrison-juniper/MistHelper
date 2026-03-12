@@ -52,9 +52,9 @@ jobs:
         if: matrix.check == 'pip-audit'
         run: pip-audit -r requirements.txt
 
-  playwright:
+  e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,10 +68,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-timeout playwright
-
-      - name: Install Playwright browsers
-        run: playwright install --with-deps chromium
+          pip install pytest pytest-timeout
 
       - name: Run E2E smoke tests (Flask test client)
         run: pytest tests/e2e/ -v --timeout=60
