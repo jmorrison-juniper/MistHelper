@@ -24217,10 +24217,10 @@ class NominatimValidator:
 
                 response = requests.get(
                     self.NOMINATIM_URL,
-                    params=params,
+                    params=params,  # type: ignore[arg-type]
                     headers=headers,
                     timeout=actual_timeout,
-                    verify=verify_ssl,  # type: ignore[arg-type]
+                    verify=verify_ssl,
                 )
 
                 if self.debug:
