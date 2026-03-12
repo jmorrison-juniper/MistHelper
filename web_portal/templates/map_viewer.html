@@ -14,18 +14,18 @@
     <div class="col-md-3">
         <div class="portal-card mb-3 p-3">
             <label class="form-label" for="siteSelect">Site</label>
-            <select class="form-select" id="siteSelect" onchange="onSiteChange()">
+            <select class="form-select" id="siteSelect" onchange="onSiteChange()" data-testid="site-select">
                 <option value="">-- Select a site --</option>
             </select>
 
             <label class="form-label mt-3" for="mapSelect">Floor Plan</label>
-            <select class="form-select" id="mapSelect" onchange="onMapChange()" disabled>
+            <select class="form-select" id="mapSelect" onchange="onMapChange()" disabled data-testid="map-select">
                 <option value="">-- Select a map --</option>
             </select>
         </div>
 
         <!-- Device List -->
-        <div class="portal-card p-3" id="devicePanel" style="display:none;">
+        <div class="portal-card p-3" id="devicePanel" style="display:none;" data-testid="device-panel">
             <h6>Devices (<span id="deviceCount">0</span>)</h6>
             <ul class="list-group list-group-flush" id="deviceList"></ul>
         </div>
@@ -33,7 +33,7 @@
 
     <!-- Right: Map Render Area -->
     <div class="col-md-9">
-        <div class="portal-card p-2" id="mapContainer">
+        <div class="portal-card p-2" id="mapContainer" data-testid="map-container">
             <div id="plotArea" style="min-height:500px;">
                 <div class="text-center text-muted py-5" id="mapPlaceholder">
                     Select a site and floor plan to view the map.

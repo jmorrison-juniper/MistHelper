@@ -13,9 +13,9 @@
     <!-- Left: Operation List -->
     <div class="col-md-5">
         <input type="text" class="form-control portal-search mb-3" id="opSearch"
-               placeholder="Search operations...">
+               placeholder="Search operations..." data-testid="op-search">
 
-        <div class="accordion portal-accordion" id="operationAccordion">
+        <div class="accordion portal-accordion" id="operationAccordion" data-testid="operation-accordion">
             <!-- Populated by operations.js -->
             <div class="text-center text-muted py-3" id="opLoading">Loading operations...</div>
         </div>
@@ -24,7 +24,7 @@
     <!-- Right: Execution Panel -->
     <div class="col-md-7">
         <!-- Selected Operation -->
-        <div class="portal-card" id="selectedOp" style="display:none;">
+        <div class="portal-card" id="selectedOp" style="display:none;" data-testid="selected-op-panel">
             <h5 id="selectedOpTitle"></h5>
             <p class="text-muted mb-2" id="selectedOpDesc"></p>
 
@@ -46,10 +46,10 @@
                 </div>
             </div>
 
-            <button class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()">
+            <button class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
                 Run Operation
             </button>
-            <button class="btn btn-outline-danger mt-2 ms-2" id="stopBtn" style="display:none;" onclick="stopRunningOperation()">
+            <button class="btn btn-outline-danger mt-2 ms-2" id="stopBtn" style="display:none;" onclick="stopRunningOperation()" data-testid="stop-btn">
                 Stop Operation
             </button>
         </div>
@@ -61,7 +61,7 @@
         </div>
 
         <!-- Execution Log -->
-        <div id="executionPanel" style="display:none;">
+        <div id="executionPanel" style="display:none;" data-testid="execution-panel">
             <h6 class="mt-3">Execution Log</h6>
 
             <!-- Progress Bar -->
@@ -79,7 +79,7 @@
             </div>
 
             <!-- Log Output -->
-            <div class="log-viewer" id="logViewer"></div>
+            <div class="log-viewer" id="logViewer" data-testid="log-viewer"></div>
 
             <!-- Debug Log (collapsible) -->
             <div class="mt-2">

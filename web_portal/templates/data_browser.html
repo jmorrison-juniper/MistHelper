@@ -13,7 +13,7 @@
 <div class="row mb-3">
     <div class="col-md-4">
         <input type="text" class="form-control portal-search" id="fileSearch"
-               placeholder="Filter files..." aria-label="Filter files">
+               placeholder="Filter files..." aria-label="Filter files" data-testid="file-search">
     </div>
     <div class="col-md-8 text-end">
     </div>
@@ -21,7 +21,7 @@
 
 <!-- File List -->
 <div id="fileListArea">
-    <table class="table portal-table" id="fileTable">
+    <table class="table portal-table" id="fileTable" data-testid="file-table">
         <thead>
             <tr>
                 <th data-sort>Name</th>
