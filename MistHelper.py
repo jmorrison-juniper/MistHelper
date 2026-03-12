@@ -35180,7 +35180,7 @@ class MapsManager:
         )
 
         # Clientside callback for map switching - triggers page reload with new map_id in URL
-        app.clientside_callback(
+        app.clientside_callback(  # type: ignore[no-untyped-call]
             """
             function(selected_map_id, config) {
                 var current_map_id = config ? config.map_id : null;
@@ -35214,7 +35214,7 @@ class MapsManager:
         )
 
         # Clientside callback to reload page after clone/delete to get fresh map data
-        app.clientside_callback(
+        app.clientside_callback(  # type: ignore[no-untyped-call]
             """
             function(cache_bust_data) {
                 if (!cache_bust_data || !cache_bust_data.trigger) {
