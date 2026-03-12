@@ -102,10 +102,25 @@ body:
     id: ui-behavior-testing
     attributes:
       label: UI Behavior & Automated Testing Expectations
-      description: For features involving the web UI (Maps Manager, ops portal), describe expected browser interactions and Playwright test scenarios.
+      description: |
+        For features involving the web UI (Gunicorn portal on port 8055, Maps Manager, ops portal).
+        The AI agent uses VS Code Browser Agent Tools to autonomously open, interact with, and test these pages.
+        See agents.md "Web UI Autonomy" section for the full capability reference.
       placeholder: |
-        Page load expectations, navigation flows, form interactions.
-        AI browser agent should verify: page renders, buttons respond, data displays correctly.
-        Playwright test scenarios: open page, click element, verify content.
+        1. Target URL(s): e.g., http://localhost:8055/, /dashboard, /jobs
+        2. Critical user journeys:
+           - Click "Start Workflow" button -> verify job row appears in table
+           - Fill site filter form -> submit -> verify filtered results
+           - Navigate to settings -> toggle feature flag -> verify saved state
+        3. Assertions:
+           - Page title contains "MistHelper"
+           - Table rows update after API call completes
+           - Error banner appears on invalid input
+        4. Stability contracts (data-testid attributes):
+           - data-testid="workflow-start-btn"
+           - data-testid="site-filter-input"
+           - data-testid="job-results-table"
+        5. Artifacts: screenshots on failure, Playwright traces
+        6. Non-goals: flows not covered by this feature
     validations:
       required: false

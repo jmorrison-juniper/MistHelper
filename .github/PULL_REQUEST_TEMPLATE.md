@@ -24,6 +24,12 @@
 - [ ] `.env` changes documented in `deploy/.env.example` (if applicable)
 - [ ] Container builds successfully (if Containerfile changed)
 
+### UI / E2E Testing (if web UI changed)
+- [ ] Playwright E2E tests added/updated for changed UI flows in `tests/e2e/`
+- [ ] Stable `data-testid` attributes added for new interactive elements
+- [ ] AI agent verified selectors via VS Code Browser Agent Tools
+- [ ] Screenshots/traces captured for main UI flows (attached or in CI artifacts)
+
 ### Documentation
 - [ ] README.md updated (if user-facing changes)
 - [ ] Changelog entry added with version `YY.MM.DD.HH.MM` format
