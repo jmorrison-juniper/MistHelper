@@ -50,7 +50,6 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import pi
-from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal
 
 # Type stubs for dynamically imported modules
