@@ -4,9 +4,6 @@ Provides test isolation: temp directories, no network, no .env loading.
 Unit tests must run offline with zero API credentials in under 30 seconds.
 """
 
-import os
-import tempfile
-
 import pytest
 
 

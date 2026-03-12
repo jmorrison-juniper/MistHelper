@@ -27,7 +27,11 @@ def test_flatten_dict_produces_string_keys(input_dict: dict) -> None:
         assert isinstance(key, str), f"Expected string key, got {type(key)}: {key}"
 
 
-@given(st.text(min_size=1, max_size=253, alphabet=st.characters(whitelist_categories=("L", "N"), whitelist_characters="-.")))
+@given(
+    st.text(
+        min_size=1, max_size=253, alphabet=st.characters(whitelist_categories=("L", "N"), whitelist_characters="-.")
+    )
+)
 @settings(max_examples=50)
 def test_hostname_chars_are_preserved(hostname: str) -> None:
     """Property: hostname normalization preserves alphanumeric chars and hyphens."""

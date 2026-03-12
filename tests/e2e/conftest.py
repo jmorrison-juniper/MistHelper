@@ -29,10 +29,15 @@ def gunicorn_server():
     port = _find_free_port()
     process = subprocess.Popen(
         [
-            sys.executable, "-m", "gunicorn",
-            "--bind", f"127.0.0.1:{port}",
-            "--timeout", "30",
-            "--workers", "1",
+            sys.executable,
+            "-m",
+            "gunicorn",
+            "--bind",
+            f"127.0.0.1:{port}",
+            "--timeout",
+            "30",
+            "--workers",
+            "1",
             "wsgi:app",
         ],
         stdout=subprocess.PIPE,

@@ -4,15 +4,13 @@ Duplicates flatten_dict(), escape_multiline(), and get_unique_keys() from
 MistHelper.py to avoid import side effects (research.md R1 pattern).
 """
 
-from typing import Any, Dict
-
-import pytest
+from typing import Any
 
 
 # ---------------------------------------------------------------------------
 # Duplicated pure functions (R1: avoid MistHelper.py import side effects)
 # ---------------------------------------------------------------------------
-def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
+def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
     """Mirror of DataProcessingUtils.flatten_dict() from MistHelper.py."""
     items = []
     for k, v in d.items():
@@ -25,7 +23,7 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dic
                 for idx, item in enumerate(v):
                     items.extend(flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
             else:
-                items.append((new_key, ','.join(map(str, v))))
+                items.append((new_key, ",".join(map(str, v))))
         else:
             items.append((new_key, v))
     return dict(items)
@@ -44,9 +42,9 @@ def escape_multiline(data):
     for entry in data:
         for key, value in entry.items():
             if isinstance(value, list):
-                entry[key] = ','.join(map(str, value))
+                entry[key] = ",".join(map(str, value))
             elif isinstance(value, str):
-                entry[key] = value.replace('\n', '\\n').replace('\r', '')
+                entry[key] = value.replace("\n", "\\n").replace("\r", "")
     return data
 
 
@@ -89,7 +87,7 @@ class TestFlattenDict:
         assert result == {"a": 1, "b_c": "hello", "d": "1,2"}
 
     def test_custom_separator(self):
-        result = flatten_dict({"a": {"b": 1}}, sep='.')
+        result = flatten_dict({"a": {"b": 1}}, sep=".")
         assert result == {"a.b": 1}
 
     def test_parent_key(self):

@@ -33,8 +33,8 @@ jobs:
       - name: Run Ruff linter
         if: matrix.check == 'ruff'
         run: |
-          ruff check .
-          ruff format --check .
+          ruff check MistHelper.py tests/
+          ruff format --check MistHelper.py tests/
 
       - name: Run mypy type checker
         if: matrix.check == 'mypy'

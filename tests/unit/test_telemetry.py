@@ -7,9 +7,7 @@ Duplicates TelemetryEmitter from MistHelper.py to avoid import side effects
 import glob
 import json
 import os
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 
 # ---------------------------------------------------------------------------
@@ -56,98 +54,114 @@ class TelemetryEmitter:
         return False
 
     def emit_test_start(self, menu_option, operation_name, test_mode):
-        self.emit({
-            "event_type": "test_start",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "operation_name": operation_name,
-            "test_mode": test_mode,
-        })
+        self.emit(
+            {
+                "event_type": "test_start",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "operation_name": operation_name,
+                "test_mode": test_mode,
+            }
+        )
 
     def emit_test_pass(self, menu_option, operation_name, duration, test_mode):
-        self.emit({
-            "event_type": "test_pass",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "status": "pass",
-            "operation_name": operation_name,
-            "duration_seconds": round(duration, 3),
-            "test_mode": test_mode,
-        })
+        self.emit(
+            {
+                "event_type": "test_pass",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "status": "pass",
+                "operation_name": operation_name,
+                "duration_seconds": round(duration, 3),
+                "test_mode": test_mode,
+            }
+        )
 
     def emit_test_fail(self, menu_option, operation_name, duration, error, test_mode):
-        self.emit({
-            "event_type": "test_fail",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "status": "fail",
-            "operation_name": operation_name,
-            "duration_seconds": round(duration, 3),
-            "error_type": type(error).__name__,
-            "error_message": str(error)[:500],
-            "test_mode": test_mode,
-        })
+        self.emit(
+            {
+                "event_type": "test_fail",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "status": "fail",
+                "operation_name": operation_name,
+                "duration_seconds": round(duration, 3),
+                "error_type": type(error).__name__,
+                "error_message": str(error)[:500],
+                "test_mode": test_mode,
+            }
+        )
 
     def emit_test_skip(self, menu_option, operation_name, reason, category, test_mode):
-        self.emit({
-            "event_type": "test_skip",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "status": "skip",
-            "operation_name": operation_name,
-            "duration_seconds": 0.0,
-            "skip_reason": reason,
-            "skip_category": category,
-            "test_mode": test_mode,
-        })
+        self.emit(
+            {
+                "event_type": "test_skip",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "status": "skip",
+                "operation_name": operation_name,
+                "duration_seconds": 0.0,
+                "skip_reason": reason,
+                "skip_category": category,
+                "test_mode": test_mode,
+            }
+        )
 
     def emit_test_summary(self, total, passed, failed, skipped, elapsed, test_mode):
         overall = "pass" if failed == 0 else "fail"
-        self.emit({
-            "event_type": "test_summary",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": "0",
-            "status": overall,
-            "total_operations": total,
-            "pass_count": passed,
-            "fail_count": failed,
-            "skip_count": skipped,
-            "total_elapsed_seconds": round(elapsed, 3),
-            "test_mode": test_mode,
-        })
+        self.emit(
+            {
+                "event_type": "test_summary",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": "0",
+                "status": overall,
+                "total_operations": total,
+                "pass_count": passed,
+                "fail_count": failed,
+                "skip_count": skipped,
+                "total_elapsed_seconds": round(elapsed, 3),
+                "test_mode": test_mode,
+            }
+        )
 
     def emit_progress_start(self, menu_option, operation_name, total_items):
-        self.emit({
-            "event_type": "progress_start",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "operation_name": operation_name,
-            "total_items": total_items,
-        })
+        self.emit(
+            {
+                "event_type": "progress_start",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "operation_name": operation_name,
+                "total_items": total_items,
+            }
+        )
 
     def emit_progress_tick(self, menu_option, operation_name, total, current, completed, remaining):
-        self.emit({
-            "event_type": "progress_tick",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "operation_name": operation_name,
-            "total_items": total,
-            "current_item": str(current),
-            "items_completed": completed,
-            "items_remaining": remaining,
-        })
+        self.emit(
+            {
+                "event_type": "progress_tick",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "operation_name": operation_name,
+                "total_items": total,
+                "current_item": str(current),
+                "items_completed": completed,
+                "items_remaining": remaining,
+            }
+        )
 
     def emit_progress_complete(self, menu_option, operation_name, total, processed, was_stopped, duration):
-        self.emit({
-            "event_type": "progress_complete",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "menu_option": str(menu_option),
-            "operation_name": operation_name,
-            "total_items": total,
-            "items_processed": processed,
-            "was_stopped": was_stopped,
-            "duration_seconds": round(duration, 3),
-        })
+        self.emit(
+            {
+                "event_type": "progress_complete",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "menu_option": str(menu_option),
+                "operation_name": operation_name,
+                "total_items": total,
+                "items_processed": processed,
+                "was_stopped": was_stopped,
+                "duration_seconds": round(duration, 3),
+            }
+        )
 
     def enforce_retention(self, directory: str = "data", prefix: str = "test_events_", limit: int = None):
         if limit is None:
@@ -163,7 +177,7 @@ class TelemetryEmitter:
 
     @staticmethod
     def timestamped_path(directory: str = "data") -> str:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         return os.path.join(directory, f"test_events_{stamp}.jsonl")
 
 
@@ -173,7 +187,7 @@ class TelemetryEmitter:
 def read_events(path: str) -> list:
     """Read all NDJSON events from a file."""
     events = []
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
             if line:
