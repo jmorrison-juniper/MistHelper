@@ -24216,7 +24216,11 @@ class NominatimValidator:
                     logging.debug(f"GEOCODE [{source}]: Retry attempt {attempt} with timeout {actual_timeout}s")
 
                 response = requests.get(
-                    self.NOMINATIM_URL, params=params, headers=headers, timeout=actual_timeout, verify=verify_ssl
+                    self.NOMINATIM_URL,
+                    params=params,
+                    headers=headers,
+                    timeout=actual_timeout,
+                    verify=verify_ssl,  # type: ignore[arg-type]
                 )
 
                 if self.debug:
@@ -54603,7 +54607,7 @@ class EnhancedSSHRunner:
             print(f">> Connecting to {hostname}:{port} as {username}...")
 
             # Create SSH client  # nosec B101
-            self.client = SSHClient()  # type: ignore[misc]  # SSHClient confirmed non-None above
+            self.client = SSHClient()  # type: ignore[assignment,misc]  # SSHClient confirmed non-None above
             assert self.client is not None  # nosec B101
             # Load existing host keys if available
             self.client.load_system_host_keys()
