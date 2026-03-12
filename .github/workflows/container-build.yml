@@ -71,7 +71,7 @@ jobs:
 
   # Third job: Build and push container (only if tests pass)
   build-and-push:
-    needs: test
+    needs: [validate, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read

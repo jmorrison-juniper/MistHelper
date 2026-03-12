@@ -1,9 +1,34 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
+[![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
+[![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+**Operation Count:** The code currently defines 123 actionable menu entries (0-122) with some gaps for future expansion.
+
+MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+
+## Quality Gates
+
+Every PR runs these checks in parallel via GitHub Actions:
+
+| Gate | Tool | Threshold |
+|------|------|-----------|
+| Lint | Ruff | Zero violations |
+| Type Check | mypy --strict | Phased enforcement |
+| Tests | pytest + coverage | >= 70% |
+| Security | Bandit | Zero findings |
+| Dependencies | pip-audit | Zero vulnerabilities |
+
+## Deployment Options
+
+| Method | File | Description |
+|--------|------|-------------|
+| Systemd | `deploy/misthelper.service` | Standalone host deployment |
+| Podman Quadlet | `deploy/misthelper.container` | Containerized with auto-restart |
+| Docker Compose | `compose.yml` | Container orchestration |
+
+See `deploy/.env.example` for environment variable documentation.
 
 **NEW: SSH Remote Access** - MistHelper now supports containerized deployment with SSH server for remote access. Connect via SSH to run MistHelper in isolated sessions with automatic session management and multi-user support.
 

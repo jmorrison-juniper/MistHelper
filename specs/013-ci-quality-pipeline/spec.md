@@ -2,7 +2,7 @@
 
 **Feature Branch**: `013-ci-quality-pipeline`
 **Created**: 2026-03-11
-**Status**: Draft
+**Status**: In Review
 **Input**: User description: "Complete CI/CD pipeline with GitHub Issue/PR templates, Python quality gates (Ruff, mypy, pytest, Hypothesis, Bandit, pip-audit), CodeQL scanning, Dependabot, GitHub Actions workflows (CI gates, release artifacts, container images), deployment infrastructure (systemd standalone, Docker Compose, Podman Quadlet), and AI-driven autonomous browser testing of the Gunicorn web UI using VS Code browser agent tools and Playwright."
 
 ## Clarifications
@@ -126,7 +126,7 @@ The MistHelper Gunicorn web UI (Maps Manager, ops portal) can be tested by an AI
 
 - **FR-004**: CI quality gate checks (Ruff, mypy, pytest-cov, Bandit, pip-audit) MUST run in parallel via a GitHub Actions matrix strategy, with a maximum total wall-clock time of 10 minutes
 - **FR-004a**: CI pipeline MUST run Ruff for linting and format checking on every PR and push to main
-- **FR-005**: CI pipeline MUST run mypy in strict mode (`--strict`) for static type checking on every PR and push to main, requiring full type annotations on all functions with no implicit `Any`
+- **FR-005**: CI pipeline MUST run mypy in strict mode (`--strict`) for static type checking on every PR and push to main. Initial deployment phases in with `--allow-untyped-defs` and `--allow-untyped-calls` overrides to avoid blocking legacy code; these overrides MUST be tightened incrementally as annotations are added (see R-002 for phased plan)
 - **FR-006**: CI pipeline MUST run pytest with coverage reporting and enforce a configurable coverage threshold on every PR and push to main
 - **FR-007**: CI pipeline MUST run Bandit for security linting on every PR and push to main
 - **FR-008**: CI pipeline MUST run pip-audit for dependency vulnerability scanning on every PR and push to main

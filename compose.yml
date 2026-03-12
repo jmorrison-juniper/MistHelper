@@ -15,10 +15,10 @@ services:
       # Mount local data directory to persist SQLite database and logs
       # The container writes to /app/data, this maps it to ./data on host
       - ./data:/app/data:rw
-      # Mount .env file for API credentials (optional - container works without it)
-      - ./.env:/app/.env:ro
+    env_file:
+      - .env
     environment:
-      # Container-specific environment variables
+      # Container-specific environment variables (override .env if needed)
       - OUTPUT_FORMAT=sqlite
       - DATABASE_PATH=/app/data/mist_data.db
       - PYTHONUNBUFFERED=1
