@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import pi
 from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -797,25 +797,27 @@ from collections import defaultdict
 from datetime import UTC, timedelta, timezone
 
 # Third-party imports for static analysis (with fallbacks)
+# Pattern: try/except imports use type: ignore[assignment] to suppress no-redef
+# errors from mypy strict mode — these are intentional conditional imports.
 try:
     from prettytable import PrettyTable
 except ImportError:
-    PrettyTable: Any = None  # Will be installed by GlobalImportManager
+    PrettyTable = None  # type: ignore[assignment, misc]  # Installed by GlobalImportManager
 
 try:
     import numpy as np
 except ImportError:
-    np: Any = None  # Optional - some analytics features may be limited
+    np = None  # type: ignore[assignment]  # Optional - analytics features limited
 
 try:
     import websocket
 except ImportError:
-    websocket: Any = None  # Optional - WebSocket features disabled if unavailable
+    websocket = None  # type: ignore[assignment]  # Optional - WebSocket disabled
 
 try:
     from difflib import SequenceMatcher
 except ImportError:
-    SequenceMatcher: Any | None = None
+    SequenceMatcher = None  # type: ignore[assignment, misc]
 
 # Import mistapi later through GlobalImportManager for better dependency management
 # Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
@@ -832,36 +834,36 @@ def tqdm(iterable, *args, **kwargs):
 try:
     import requests
 except ImportError:
-    requests: Any = None  # Will be installed by GlobalImportManager
+    requests = None  # type: ignore[assignment]  # Installed by GlobalImportManager
 
 try:
     import urllib3
 except ImportError:
-    urllib3: Any = None  # Optional - SSL warning suppression disabled if unavailable
+    urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression
 
 try:
     import pyte
 except ImportError:
-    pyte: Any = None  # Optional - terminal emulation features disabled if unavailable
+    pyte = None  # type: ignore[assignment]  # Optional - terminal emulation
 
 try:
     import paramiko
     from paramiko import AutoAddPolicy, SSHClient
 except ImportError:
-    paramiko: ModuleType | None = None
-    SSHClient: Any | None = None
-    AutoAddPolicy: Any | None = None
+    paramiko = None  # type: ignore[assignment]
+    SSHClient = None  # type: ignore[assignment, misc]
+    AutoAddPolicy = None  # type: ignore[assignment, misc]
 
 # Optional imports with fallbacks
 try:
     from scourgify import normalize_address_record
 except ImportError:
-    normalize_address_record: Any | None = None
+    normalize_address_record = None  # type: ignore[assignment, misc]
 
 try:
     from rapidfuzz import fuzz
 except ImportError:
-    fuzz: Any | None = None
+    fuzz = None  # type: ignore[assignment]
 
 # Keyboard listener functionality has been removed for simplicity
 # These functions are no-op fallbacks
@@ -976,6 +978,9 @@ class GlobalImportManager:
 
         # Deferred initialization tracking
         self._deferred_init_done: bool = False
+        self._initialization_complete: bool = False
+        self._initialization_success: bool = False
+        self._cached_global_assignments: dict[str, Any] = {}
 
         # Import name mappings for cases where package name != import name
         self.import_name_mappings = {
@@ -1668,7 +1673,7 @@ class GlobalImportManager:
             Tuple of (success: bool, global_assignments: dict)
         """
         # Check if already initialized to avoid duplicate work
-        if hasattr(self, "_initialization_complete"):
+        if self._initialization_complete:
             logging.debug("Import initialization already completed, returning cached results")
             return self._initialization_success, self._cached_global_assignments
 
@@ -2263,6 +2268,7 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_C
 FAST_MODE_USE_CONNECTION_AWARE_THREADING = (
     os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
 )
+FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 # WAN Port Configuration from .env (REQUIRED - no defaults)
 # MIST_WAN_TARGET_PORTS: Comma-separated list of WAN port names to target
@@ -3189,7 +3195,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
             logging.warning("Cannot configure timeout - session has no _session attribute")
             return
 
-        class TimeoutAdapter(HTTPAdapter):
+        class TimeoutAdapter(HTTPAdapter):  # type: ignore[misc]  # requests lacks type stubs
             """HTTPAdapter that injects a default timeout."""
 
             def __init__(self, default_timeout: int, **kwargs):
@@ -3819,6 +3825,7 @@ class WebSocketManager:
         self.mist_host = mist_host or getattr(mist_session, "host", None) or os.getenv("MIST_HOST", "api.mist.com")
 
         # Convert API host to WebSocket host
+        assert self.mist_host is not None, "mist_host must be set"
         websocket_host = self.mist_host.replace("api.", "api-ws.")
         self.websocket_url = f"wss://{websocket_host}/api-ws/v1/stream"
         self.websocket_connection = None
@@ -4399,7 +4406,7 @@ class WebSocketManager:
                 print(f"[DEBUG] Total checks performed: {check_count}")
 
             combined_raw = ""
-            combined_other = {}
+            combined_other: dict[str, Any] = {}
 
             for index, result in enumerate(final_results):
                 raw_content = result.get("raw", "")
@@ -5291,8 +5298,8 @@ class PacketCaptureManager:
         }
 
         # Build gateways structure with actual port names
-        gateways_config = {}
-        ports_config = {}
+        gateways_config: dict[str, Any] = {}
+        ports_config: dict[str, Any] = {}
 
         # Always list actual port names (never empty dict)
         for port in port_list:
@@ -5428,8 +5435,8 @@ class PacketCaptureManager:
         }
 
         # Build switches structure with actual port names
-        switches_config = {}
-        ports_config = {}
+        switches_config: dict[str, Any] = {}
+        ports_config: dict[str, Any] = {}
 
         # Always list actual port names (never empty dict)
         for port in port_list:
@@ -6158,7 +6165,7 @@ class PacketCaptureManager:
                 print("\n[Step 3/3] Checking if ready to start new capture...")
 
                 should_capture = False
-                wait_time = 0
+                wait_time: float = 0
 
                 if last_capture_time is None:
                     should_capture = True
@@ -6516,7 +6523,7 @@ class PacketCaptureManager:
         print("\n  Port Selection:")
         print("  ! API Limitation: Only 1 port can be captured at a time")
 
-        selected_ports_by_mxedge = {}
+        selected_ports_by_mxedge: dict[str, list[str]] = {}
         for mxedge_id, port_info in all_ports_by_mxedge.items():
             mxedge_name = port_info["name"]
             port_list = port_info["ports"]
@@ -6633,7 +6640,7 @@ class PacketCaptureManager:
             tzsp_port = None
 
         # Build payload for multiple MxEdges with selected ports
-        payload = {
+        payload: dict[str, Any] = {
             "type": "mxedge",
             "duration": duration,
             "num_packets": num_packets,
@@ -8416,7 +8423,7 @@ class DataProcessingUtils:
         Returns:
             dict: Flattened dictionary
         """
-        items = []
+        items: list[tuple[str, Any]] = []
         for k, v in d.items():
             k_str = str(k)
             new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
@@ -8703,7 +8710,7 @@ class DatabaseSchemaUtils:
             return strategy
 
         # If no specific strategy, use intelligent defaults based on data structure
-        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()
+        strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()
 
         # Enhance default strategy based on available fields
         if "id" in data_fields:
@@ -10167,10 +10174,10 @@ class PromptNetworkDeviceUtils:
                 port_config = device_config.get("port_config", {})
             except Exception as cfg_error:
                 logging.warning(f"Could not fetch device config for port details: {cfg_error}")
-                port_config = {}
+                port_config: dict[str, Any] = {}
 
             # Build a mapping from individual port names to their config
-            port_to_config = {}
+            port_to_config: dict[str, Any] = {}
             if port_config:
                 logging.info(f"Building port_to_config mapping from {len(port_config)} port_config entries")
                 for port_range_key, cfg in port_config.items():
@@ -10811,7 +10818,7 @@ class PromptUtils:
         return PromptUtils.select_device_id_from_inventory(site_id, device_type)
 
     @staticmethod
-    def _determine_search_scope(site_id: str | None) -> str | None:
+    def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:
         """
         Determines whether to search site-specific or org-wide.
 
@@ -10828,7 +10835,7 @@ class PromptUtils:
             selected_site = PromptUtils.select_site()
             if not selected_site:
                 print(" No site selected.")
-                return None
+                return False
             return selected_site
 
         return None  # Org-wide search
@@ -11543,8 +11550,8 @@ class OrgInventoryExporter:
         os.makedirs(output_folder, exist_ok=True)
 
         # Initialize data structures for weekly grouping and summary
-        weekly_data = defaultdict(list)
-        summary_data = defaultdict(int)
+        weekly_data: defaultdict[str, list] = defaultdict(list)
+        summary_data: defaultdict[tuple[int, int], int] = defaultdict(int)
 
         # Process each device entry
         for device in site_configs:
@@ -11600,10 +11607,10 @@ class OrgInventoryExporter:
         # Write summary report
         summary_file = os.path.join(output_folder, "CombinedInventory_Summary.csv")
         with open(summary_file, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow(["Year", "Week", "Device Count"])
+            summary_writer = csv.writer(file)
+            summary_writer.writerow(["Year", "Week", "Device Count"])
             for (year, week), count in sorted(summary_data.items()):
-                writer.writerow([year, week, count])
+                summary_writer.writerow([year, week, count])
 
         # Export master CSV with simplified column headers
         master_csv_data = []
@@ -12049,7 +12056,7 @@ class OrgDeviceStatsExporter:
 
                     retry_futures_list = list(retry_futures.keys())
                     # Type ignore needed: tqdm stubs incorrectly require iterable param
-                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[arg-type]
+                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg]
                         for future in concurrent.futures.as_completed(retry_futures_list):
                             site_info = retry_futures[future]
                             try:
@@ -12447,7 +12454,7 @@ class OrgClientSecurityExporter:
             emitter.emit_progress_start("42", "security_events", 3)
         op_start = time.time()
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        policies = []
+        policies: list[dict[str, Any]] = []
         try:
             logging.info("Fetching organization security policies (secpolicies)...")
             resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, current_org_id, limit=1000)
@@ -12465,7 +12472,7 @@ class OrgClientSecurityExporter:
             print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")
             logging.warning("No data to export for OrgSecurityPolicies.csv (zero policies returned).")
             DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")
-        secintel_profiles = []
+        secintel_profiles: list[dict[str, Any]] = []
         try:
             logging.info("Fetching organization security intelligence profiles...")
             resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, current_org_id)
@@ -12489,8 +12496,8 @@ class OrgClientSecurityExporter:
         TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
         logging.info("Fetching rogue APs and clients from all sites via insights...")
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_aps = []
-        all_rogue_clients = []
+        all_rogue_aps: list[dict[str, Any]] = []
+        all_rogue_clients: list[dict[str, Any]] = []
         try:
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, encoding="utf-8") as f:
@@ -12575,7 +12582,7 @@ class OrgClientSecurityExporter:
         inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_clients = []
+        all_rogue_clients: list[dict[str, Any]] = []
         try:
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, encoding="utf-8") as f:
@@ -12643,7 +12650,7 @@ class OrgClientSecurityExporter:
         inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_aps = []
+        all_rogue_aps: list[dict[str, Any]] = []
         try:
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, encoding="utf-8") as f:
@@ -13766,7 +13773,7 @@ class SiteClientExporter:
         sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
 
         # Get available clients for the site to help user selection
-        clients = []
+        clients: list[dict[str, Any]] = []
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)
             clients = mistapi.get_all(response=response, mist_session=apisession) or []
@@ -13938,7 +13945,7 @@ class SiteClientExporter:
                 return
 
             # Create a dictionary to store session data by MAC address for easy lookup
-            sessions_by_mac = {}
+            sessions_by_mac: dict[str, Any] = {}
             if sessions:
                 for session in sessions:
                     mac = session.get("mac")
@@ -13997,7 +14004,7 @@ class SiteClientExporter:
                         session["data_source"] = "session_only"
                         session["session_count"] = 1
                         # Prefix session-specific fields to avoid conflicts
-                        session_data = {}
+                        session_data: dict[str, Any] = {}
                         for key, value in session.items():
                             if key not in ["site_id", "site_name", "data_source", "session_count"]:
                                 session_data[f"session_{key}"] = value
@@ -15241,12 +15248,12 @@ class WebSocketNetworkDiagCommands:
                                 columns = gateway_data.get("columns", [])
                                 if columns:
                                     # Create header row
-                                    headers = [col.get("display_name", col.get("id", "Unknown")) for col in columns]
+                                    column_headers = [col.get("display_name", col.get("id", "Unknown")) for col in columns]
 
                                     # Calculate column widths
                                     rows = gateway_data.get("rows", [])
                                     col_widths = []
-                                    for idx, header in enumerate(headers):
+                                    for idx, header in enumerate(column_headers):
                                         max_width = len(header)
                                         for row in rows:
                                             col_id = columns[idx].get("id", "")
@@ -15256,7 +15263,7 @@ class WebSocketNetworkDiagCommands:
 
                                     # Print header
                                     header_line = " | ".join(
-                                        header.ljust(col_widths[idx]) for idx, header in enumerate(headers)
+                                        header.ljust(col_widths[idx]) for idx, header in enumerate(column_headers)
                                     )
                                     print(header_line)
                                     print("-" * len(header_line))
@@ -15486,7 +15493,7 @@ class WebSocketCommands:
             time.sleep(1)
 
             # Issue show MAC table command via REST API
-            mac_table_payload = {}  # show_mac_table typically doesn't require additional parameters
+            mac_table_payload: dict[str, Any] = {}  # show_mac_table typically doesn't require additional parameters
 
             print("-> Issuing show MAC table command...")
             logging.debug(f"MAC table payload: {mac_table_payload}")
@@ -16703,7 +16710,7 @@ class RoutingUtils:
         Returns:
             list: List of parsed forwarding table entries
         """
-        entries = []
+        entries: list[dict[str, Any]] = []
 
         if not raw_output or not raw_output.strip():
             return entries
@@ -16763,11 +16770,11 @@ class RoutingUtils:
         print(f"-> Total forwarding table entries: {len(entries)}")
 
         # Analyze the data for summary statistics
-        prefixes = set()
-        services = set()
-        tenants = set()
-        protocols = set()
-        interfaces = set()
+        prefixes: set[str] = set()
+        services: set[str] = set()
+        tenants: set[str] = set()
+        protocols: set[str] = set()
+        interfaces: set[str] = set()
 
         for entry in entries:
             if entry.get("ip_prefix") and entry["ip_prefix"] != "-":
@@ -16789,7 +16796,7 @@ class RoutingUtils:
         print(f"-> Next-hop interfaces: {len(interfaces)}")
 
         # Group entries by IP prefix for better readability
-        prefix_groups = {}
+        prefix_groups: dict[str, list[dict[str, Any]]] = {}
         for entry in entries:
             prefix = entry.get("ip_prefix", "Unknown")
             if prefix not in prefix_groups:
@@ -17252,11 +17259,11 @@ class RoutingUtils:
         print(f"-> Total routing table entries: {len(route_entries)}")
 
         # Group routes by protocol for summary
-        protocols = {}
-        destinations = set()
-        next_hops = set()
-        interfaces = set()
-        tables = set()
+        protocols: dict[str, int] = {}
+        destinations: set[str] = set()
+        next_hops: set[str] = set()
+        interfaces: set[str] = set()
+        tables: set[str] = set()
         active_routes = 0
 
         for entry in route_entries:
@@ -17375,9 +17382,9 @@ class RoutingUtils:
 
         # Count and categorize routes
         total_routes = len(route_entries)
-        protocols = {}
-        vrfs = {}
-        next_hops = set()
+        protocols: dict[str, int] = {}
+        vrfs: dict[str, int] = {}
+        next_hops: set[str] = set()
 
         for entry in route_entries:
             protocol = entry.get("protocol", "Unknown")
@@ -18198,7 +18205,7 @@ class RoutingUtils:
         print("  X  Neighbor: BGP neighbor IP for route analysis")
         print("  X  Node: For HA clusters (node0/node1)")
 
-        request_body = {}
+        request_body: dict[str, Any] = {}
 
         print("\nProtocol options: bgp, any, ospf, static, direct, evpn, (none)")
         protocol_input = input("Enter protocol (press Enter for API default): ").strip().lower()
@@ -19120,7 +19127,7 @@ class InsightMetricsUtils:
         Returns:
             Dict containing 'summary', 'time_series', 'results', 'sites_data' lists
         """
-        normalized_data = {"summary": [], "time_series": [], "results": [], "sites_data": []}
+        normalized_data: dict[str, list] = {"summary": [], "time_series": [], "results": [], "sites_data": []}
 
         try:
             metric_type = metric_data.get("metric_type", "unknown")
@@ -19437,7 +19444,7 @@ class DataCollectionManager:
         ]
 
         for filename, func in required_files:
-            CacheUtils.check_and_generate_csv(filename, func)
+            CacheUtils.check_and_generate_csv(filename, func)  # type: ignore[arg-type]  # function is Callable
 
     @staticmethod
     def _load_support_data_sources() -> dict:
@@ -20127,7 +20134,7 @@ class GatewayExportUtils:
     @staticmethod
     def _collect_device_wan_ips(row):
         """Collect IP addresses from WAN ports for a device."""
-        device_ips = {}
+        device_ips: dict[str, list[str]] = {}
         for col in GatewayExportUtils.WAN_PORT_COLUMNS:
             if col in row and row[col] and str(row[col]).strip():
                 ip_value = str(row[col]).strip()
@@ -20850,8 +20857,8 @@ class GatewayExportUtils:
 
             gateway_devices = []
             for device in gateways:
-                site_id = device.get("site_id")
-                device_id = device.get("id")
+                site_id = device.get("site_id", "")
+                device_id = device.get("id", "")
                 device_name = device.get("name", "")
                 site_name = site_name_lookup.get(site_id, "Unknown Site")
                 gateway_devices.append((site_id, device_id, device_name, site_name))
@@ -20878,8 +20885,8 @@ class GatewayExportUtils:
         gateway_devices = []
         for device in devices:
             if device.get("type") == "gateway" and device.get("site_id") and device.get("id"):
-                site_id = device.get("site_id")
-                device_id = device.get("id")
+                site_id = device.get("site_id", "")
+                device_id = device.get("id", "")
                 device_name = device.get("name", "")
                 site_name = site_name_lookup.get(site_id, "Unknown Site")
                 gateway_devices.append((site_id, device_id, device_name, site_name))
@@ -22303,7 +22310,7 @@ class SSHRunnerManager:
             cli_args = globals().get("args") if "args" in globals() else None
             no_env_flag = cli_args.no_env if cli_args and hasattr(cli_args, "no_env") else False
 
-            env_config = {}
+            env_config: dict[str, Any] = {}
             if not no_env_flag:
                 env_config = EnhancedSSHRunner.load_ssh_config_from_env()
 
@@ -22449,7 +22456,7 @@ class SSHRunnerManager:
             return {"hosts": hosts, "username": username, "password": password, "commands": commands}
 
         try:
-            EnhancedSSHRunner.load_ssh_config_from_env = mock_load
+            EnhancedSSHRunner.load_ssh_config_from_env = mock_load  # type: ignore[method-assign]  # monkey-patching for interactive SSH
 
             if len(hosts) > 1 or len(commands) > 1:
                 print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
@@ -22489,7 +22496,7 @@ class SSHRunnerManager:
 
                 return EnhancedSSHRunner.run_application(MockArgs())
         finally:
-            EnhancedSSHRunner.load_ssh_config_from_env = original_load
+            EnhancedSSHRunner.load_ssh_config_from_env = original_load  # type: ignore[method-assign]  # restoring original method
 
     @staticmethod
     def _load_gateway_data():
@@ -22835,7 +22842,7 @@ class ARPCommandManager:
         headers = [f"Authorization: Token {mist_apitoken}"]
         subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}
 
-        output_lines = []
+        output_lines: list[str] = []
         buffer = ""
         last_message_time = time.time()
 
@@ -22965,8 +22972,8 @@ class ARPCommandManager:
                 raw_text = f.read()
 
             lines = raw_text.splitlines()
-            dataset1 = []
-            dataset2 = []
+            dataset1: list[list[str]] = []
+            dataset2: list[list[str]] = []
             current_dataset = dataset1
 
             for line in lines:
@@ -26613,7 +26620,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
 
     logging.info(f"Processing {len(sites)} sites for template assignment counts")
 
-    template_site_counts = {}
+    template_site_counts: dict[str, int] = {}
     for site in sites:
         template_id = site.get("gatewaytemplate_id", "").strip()
         if template_id:
@@ -27274,7 +27281,7 @@ class WANProbeConfigManager:
         self.org_id = None
         self.templates = []
         self.sites = []
-        self.template_site_counts = {}
+        self.template_site_counts: dict[str, int] = {}
         self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
         self.probe_profile = self.DEFAULT_PROBE_PROFILE
 
@@ -27803,7 +27810,7 @@ class WANProbeDeviceOverrideManager:
         templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
 
         # Build site counts per template (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
-        template_site_counts = {}
+        template_site_counts: dict[str, int] = {}
         for site in self.sites:
             if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue
@@ -28916,8 +28923,8 @@ class SiteConfigManager:
             return None
 
         # Extract unique country codes
-        sites_by_country = {}
-        sites_without_country = []
+        sites_by_country: dict[str, list[dict[str, Any]]] = {}
+        sites_without_country: list[dict[str, Any]] = []
 
         for site in sites:
             country_code = site.get("country_code", "").strip().upper()
@@ -29070,8 +29077,8 @@ class SiteConfigManager:
     @staticmethod
     def _assign_sites_to_rf_templates(sites_by_country: dict, template_mapping: dict) -> tuple[list, list]:
         """Assign sites to their country RF templates."""
-        success = []
-        failed = []
+        success: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
 
         for country, sites in sites_by_country.items():
             if country not in template_mapping:
@@ -29253,8 +29260,8 @@ class SiteConfigManager:
     @staticmethod
     def _execute_profile_creation(org_id: str, to_create: list) -> tuple[list, list]:
         """Execute device profile creation. Returns (created, failed) lists."""
-        created = []
-        failed = []
+        created: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
 
         print(f"\n  Step 3: Creating {len(to_create)} new Device Profiles...")
 
@@ -29443,8 +29450,8 @@ class SiteConfigManager:
     @staticmethod
     def _execute_profile_assignment(org_id: str, with_profile: list) -> tuple[list, list]:
         """Execute profile assignment API calls."""
-        success = []
-        failed = []
+        success: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
 
         print(f"\n  Step 3: Assigning {len(with_profile)} APs to Device Profiles...")
 
@@ -29735,7 +29742,7 @@ class DeviceRebootManager:
         print("-" * 100)
 
         # Group devices by template
-        devices_by_template = {}
+        devices_by_template: dict[str, list[dict[str, Any]]] = {}
         for target in targets:
             template_name = target["template_name"]
             if template_name not in devices_by_template:
@@ -30828,7 +30835,7 @@ class MapsManager:
             map_data = map_response.data
 
             # Extract ALL map data needed for complete reconstruction
-            geometry_backup = {
+            geometry_backup: dict[str, Any] = {
                 "backup_info": {
                     "timestamp": datetime.now().isoformat(),
                     "reason": backup_reason,
@@ -32115,7 +32122,7 @@ class MapsManager:
             print(f"{'-' * 80}")
 
             # Build update payload
-            update_payload = {}
+            update_payload: dict[str, Any] = {}
 
             print("\nEnter new values (press Enter to keep current value):")
 
@@ -32726,7 +32733,7 @@ class MapsManager:
                 logging.info(f"Devices on selected map: {len(devices_on_map)}")
 
                 # Log device type breakdown
-                device_type_counts = {}
+                device_type_counts: dict[str, int] = {}
                 for device in devices_on_map:
                     device_type = device.get("type", "unknown")
                     device_type_counts[device_type] = device_type_counts.get(device_type, 0) + 1
@@ -33492,7 +33499,7 @@ class MapsManager:
             logging.info("No connected clients found on this map")
 
         # Add devices by type with LARGER, more visible markers
-        device_types = {"ap": [], "switch": [], "gateway": []}
+        device_types: dict[str, list] = {"ap": [], "switch": [], "gateway": []}
         for device in devices:
             device_type = device.get("type", "unknown")
             if device_type in device_types and "x" in device and "y" in device:
@@ -33500,7 +33507,7 @@ class MapsManager:
 
         # Enhanced colors and symbols for device types - with status-based coloring
         # Status colors: connected (green), disconnected (red), upgrading (orange/amber)
-        type_config = {
+        type_config: dict[str, dict[str, Any]] = {
             "ap": {
                 "symbol": "triangle-up",
                 "name": "Access Points",
@@ -35740,7 +35747,7 @@ class MapsManager:
 
                 # Add devices (APs, Switches, Gateways) with status-based colors
                 # Device type configurations matching original styling
-                device_type_config = {
+                device_type_config: dict[str, dict[str, Any]] = {
                     "ap": {
                         "symbol": "triangle-up",
                         "name": "Access Points",
@@ -35774,7 +35781,7 @@ class MapsManager:
                 }
 
                 # Group devices by type
-                device_types = {"ap": [], "switch": [], "gateway": []}
+                device_types: dict[str, list] = {"ap": [], "switch": [], "gateway": []}
                 for device in new_devices:
                     device_type = device.get("type", "ap")
                     if device.get("x") is not None and device.get("y") is not None:
@@ -36767,7 +36774,7 @@ class MapsManager:
                             # Create new path
                             import uuid
 
-                            new_path = {
+                            new_path: dict[str, Any] = {
                                 "id": str(uuid.uuid4()),
                                 "name": f"Path_{len(existing_paths) + 1}",
                                 "coordinate": "actual",
@@ -36843,7 +36850,8 @@ class MapsManager:
                 )
                 try:
                     # Clear all wayfinding_path via updateSiteMap
-                    update_data = {"wayfinding_path": {"coordinate": "actual", "nodes": []}}
+                    wayfinding_data: dict[str, Any] = {"coordinate": "actual", "nodes": []}
+                    update_data = {"wayfinding_path": wayfinding_data}
                     logging.info(f"Drawing tool: Calling updateSiteMap with {update_data}")
                     response = mistapi.api.v1.sites.maps.updateSiteMap(
                         api_session_ref, config_site_id, config_map_id, update_data
@@ -36868,7 +36876,8 @@ class MapsManager:
             elif button_id == "delete-walls-btn":
                 try:
                     # Clear wall_path via updateSiteMap
-                    update_data = {"wall_path": {"coordinate": "actual", "nodes": []}}
+                    wall_data: dict[str, Any] = {"coordinate": "actual", "nodes": []}
+                    update_data = {"wall_path": wall_data}
                     response = mistapi.api.v1.sites.maps.updateSiteMap(
                         api_session_ref, config_site_id, config_map_id, update_data
                     )
@@ -38247,9 +38256,9 @@ class MapsManager:
             print("  Launching viewer anyway - select a different site in browser")
             # Create empty map data for initial load
             map_data = {"id": None, "name": "No Map Selected", "width": 1000, "height": 800}
-            devices = []
-            zones = []
-            clients = []
+            devices: list[dict[str, Any]] = []
+            zones: list[dict[str, Any]] = []
+            clients: list[dict[str, Any]] = []
             coverage_data = None
             map_id = None
         else:
@@ -38881,8 +38890,8 @@ class FirmwareManager:
         Returns:
             tuple: (template_name_to_id dict, template_sites_mapping dict)
         """
-        template_name_to_id = {}
-        template_sites_mapping = {}  # template_id -> list of site info dicts
+        template_name_to_id: dict[str, str] = {}
+        template_sites_mapping: dict[str, list[dict[str, Any]]] = {}  # template_id -> list of site info dicts
 
         try:
             # Load gateway templates
@@ -39560,7 +39569,7 @@ class FirmwareManager:
                 # Create a BulkAPFirmwareUpgrader with pre-selected sites
                 sites_for_upgrader = [{"id": s["id"], "name": s.get("name", "Unknown")} for s in sites]
                 upgrader = BulkAPFirmwareUpgrader(target_org_id, sites_for_upgrader, dry_run=dry_run)
-                result = upgrader.execute()
+                upgrader.execute()
 
                 results.append(
                     {
@@ -39569,7 +39578,7 @@ class FirmwareManager:
                         "org_name": target_org_name,
                         "sites_count": len(sites),
                         "status": "completed",
-                        "result": result,
+                        "result": None,
                         "dry_run": dry_run,
                     }
                 )
@@ -39717,7 +39726,7 @@ class FirmwareManager:
         # Check for dry_run flag from global args
         dry_run = getattr(globals().get("args", None), "dry_run", False)
         upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)
-        return upgrader.execute()
+        upgrader.execute()
 
     def _execute_status_check(self, scope_choice, site_filter):
         """Execute the firmware status check using FirmwareUpgradeStatusChecker."""
@@ -40025,7 +40034,7 @@ class FirmwareManager:
                     selected_sites = all_sites
                     print(f"-> Selected all {len(selected_sites)} sites")
                 elif site_choice == "S":
-                    selected_sites = []
+                    selected_sites: list[dict[str, Any]] = []
                     print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
                     site_input = input("Sites: ").strip()
 
@@ -40148,7 +40157,7 @@ class FirmwareManager:
                 logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
                 return {"error": "Failed to retrieve SSR firmware versions"}
 
-            available_versions = []
+            available_versions: list[dict[str, Any]] = []
             if hasattr(versions_response, "data") and versions_response.data:
                 for version_obj in versions_response.data:
                     if isinstance(version_obj, dict):
@@ -41975,7 +41984,7 @@ class BulkAPFirmwareUpgrader:
                 print(f"   {site_name}: No APs (will be skipped)")
             else:
                 # Count models at this site
-                model_counts = {}
+                model_counts: dict[str, int] = {}
                 for ap in site_data.get("aps", []):
                     model = ap.get("model", "Unknown")
                     model_counts[model] = model_counts.get(model, 0) + 1
@@ -42141,7 +42150,7 @@ class BulkAPFirmwareUpgrader:
 
     def _find_universal_versions(self, models: set) -> list:
         """Find versions compatible with all models."""
-        all_versions = set()
+        all_versions: set[str] = set()
         for model in models:
             if model in self.model_version_ranges:
                 all_versions.update(self.model_version_ranges[model])
@@ -42679,7 +42688,7 @@ class BulkAPFirmwareUpgrader:
         print("      Multiple versions - grouping by target version...")
 
         # Group devices by target version (not by model)
-        devices_by_version = {}
+        devices_by_version: dict[str, dict[str, list[Any]]] = {}
         for model, model_info in site_data["models"].items():
             version = model_info["version"]
             if version not in devices_by_version:
@@ -42800,7 +42809,7 @@ class BulkAPFirmwareUpgrader:
             all_models = getattr(response, "data", response) or []
 
             # Filter to APs only and group by ap_type
-            ap_type_to_models = {}
+            ap_type_to_models: dict[str, list[str]] = {}
             for model_info in all_models:
                 if not isinstance(model_info, dict):
                     continue
@@ -42993,7 +43002,7 @@ class BulkAPFirmwareUpgrader:
         cover all requested models.
         """
         # First, build a map of version -> set of compatible models
-        version_to_compatible_models = {}
+        version_to_compatible_models: dict[str, set[str]] = {}
 
         for version_info in self.available_versions:
             if not isinstance(version_info, dict):
@@ -43020,14 +43029,14 @@ class BulkAPFirmwareUpgrader:
 
         return list(set(universal))
 
-    def _version_sort_key(self, version_string: str) -> list:
+    def _version_sort_key(self, version_string: str) -> list[int | str]:
         """Create sort key for proper semantic version number ordering.
 
         Converts version strings like '0.14.30052' into comparable tuples.
         Handles mixed numeric/text parts gracefully.
         """
         try:
-            parts = []
+            parts: list[int | str] = []
             for part in version_string.split("."):
                 try:
                     parts.append(int(part))
@@ -43039,7 +43048,7 @@ class BulkAPFirmwareUpgrader:
 
     def _configure_auto_upgrade_schedule(self) -> dict:
         """Configure auto-upgrade scheduling options."""
-        schedule = {}
+        schedule: dict[str, Any] = {}
 
         print("\n  Auto-Upgrade Scheduling")
         print("-" * 60)
@@ -43455,7 +43464,7 @@ class MSPInventoryExporter:
 
     def _count_device_types(self, devices_data: list) -> dict:
         """Count devices by type and return type_counts dict."""
-        type_counts = {}
+        type_counts: dict[str, int] = {}
         for device in devices_data:
             device_type = device.get("type", "unknown")
             type_counts[device_type] = type_counts.get(device_type, 0) + 1
@@ -43547,7 +43556,7 @@ class MSPInventoryExporter:
         priority_fields = self._get_priority_fields()
         flattened = DataProcessingUtils.flatten_nested_fields(self.all_devices)
 
-        all_fields = set()
+        all_fields: set[str] = set()
         for device in flattened:
             all_fields.update(device.keys())
 
@@ -43613,17 +43622,17 @@ class SiteAutoUpgradeConfigurator:
         """Initialize the configurator."""
         self.org_id = org_id
         self.dry_run = dry_run
-        self.all_sites = []
-        self.selected_sites = []
-        self.available_versions = []
-        self.model_version_map = {}  # model -> list of available versions
-        self.custom_versions = {}  # model -> selected version
-        self.schedule = {}
-        self.current_site_versions = {}  # For single-site: model -> current version
+        self.all_sites: list[dict[str, Any]] = []
+        self.selected_sites: list[dict[str, Any]] = []
+        self.available_versions: list[str] = []
+        self.model_version_map: dict[str, list[str]] = {}  # model -> list of available versions
+        self.custom_versions: dict[str, str] = {}  # model -> selected version
+        self.schedule: dict[str, Any] = {}
+        self.current_site_versions: dict[str, str] = {}  # For single-site: model -> current version
         self.is_single_site = False
         self.msp_all_sites_mode = False  # When True, auto-select all sites (MSP mode)
         self.org_name = ""  # For MSP mode display
-        self.shared_versions = None  # For MSP mode: pre-selected firmware versions to apply
+        self.shared_versions: dict[str, str] | None = None  # For MSP mode: pre-selected firmware versions to apply
         logging.debug(f"SiteAutoUpgradeConfigurator initialized: org_id={org_id}, dry_run={dry_run}")
 
     @staticmethod
@@ -43980,7 +43989,7 @@ class SiteAutoUpgradeConfigurator:
             return {}
 
         # Build model -> versions map
-        model_version_map = {}
+        model_version_map: dict[str, list[dict[str, Any]]] = {}
         for version_info in available_versions:
             if not isinstance(version_info, dict):
                 continue
@@ -44000,7 +44009,7 @@ class SiteAutoUpgradeConfigurator:
         print(f"  + Found firmware for {len(model_version_map)} AP model(s)")
 
         # Group models by family (AP41, AP43, AP45, etc.)
-        model_families = {}
+        model_families: dict[str, list[str]] = {}
         for model in sorted(model_version_map.keys()):
             family = model.rstrip("EP")  # AP43E -> AP43, AP45EP -> AP45
             if family not in model_families:
@@ -44012,7 +44021,7 @@ class SiteAutoUpgradeConfigurator:
         print("  Press Enter to skip a family (won't be configured).")
         print("  Enter 'q' to cancel selection.")
 
-        custom_versions = {}
+        custom_versions: dict[str, str] = {}
 
         for family, models in sorted(model_families.items()):
             # Get all versions available for this family
@@ -44462,7 +44471,7 @@ class SiteAutoUpgradeConfigurator:
 
     def _parse_index_selection(self, selection: str) -> list:
         """Parse index selection string into list of integers."""
-        indices = set()
+        indices: set[int] = set()
         parts = selection.replace(" ", "").split(",")
 
         for part in parts:
@@ -44550,7 +44559,7 @@ class SiteAutoUpgradeConfigurator:
 
     def _group_models_by_family(self) -> dict:
         """Group models by family prefix (AP41, AP43, etc.)."""
-        model_families = {}
+        model_families: dict[str, list[str]] = {}
         for model in sorted(self.model_version_map.keys()):
             family = model.rstrip("EP")
             if family not in model_families:
@@ -45258,7 +45267,7 @@ class OrgLevelAPFirmwareUpgrader:
     @staticmethod
     def _parse_selection(selection: str, max_items: int) -> list:
         """Parse selection string into list of indices."""
-        indices = []
+        indices: list[int] = []
         parts = selection.replace(",", " ").split()
 
         for part in parts:
@@ -45467,7 +45476,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _parse_selection_input(self, selection: str, max_items: int) -> list:
         """Parse selection input with support for ranges and multiple selections."""
-        indices = []
+        indices: list[int] = []
         parts = [part.strip() for part in selection.replace(",", " ").split()]
 
         for part in parts:
@@ -45728,7 +45737,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _count_versions_by_mac(self) -> dict:
         """Count devices by version using MAC address lookup."""
-        version_counts = {}
+        version_counts: dict[str, int] = {}
         for ap in self.all_aps:
             version = self.ap_versions.get(ap.get("mac")) or "Unknown"
             version_counts[version] = version_counts.get(version, 0) + 1
@@ -47233,11 +47242,11 @@ class BulkSwitchFirmwareUpgrader:
         )
 
     @staticmethod
-    def _version_sort_key(version_string: str) -> list:
+    def _version_sort_key(version_string: str) -> list[int | str]:
         """Create sort key for proper version number ordering."""
         try:
             normalized = version_string.replace("-S", ".").replace("R", ".")
-            parts = []
+            parts: list[int | str] = []
             for part in normalized.split("."):
                 try:
                     parts.append(int(part))
@@ -47735,7 +47744,7 @@ class WLANRadiusTimerManager:
     def __init__(self, debug: bool = False):
         """Initialize manager with debug mode setting."""
         self.debug = debug
-        self.original_log_level = None
+        self.original_log_level: int | None = None
         self.site_id: str | None = ""
         self.org_id: str | None = ""
         self.site_name: str = ""
@@ -48555,7 +48564,7 @@ class BulkRadiusWLANConfigManager:
         print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")
         print("-" * 70)
         display_index = 1
-        combined = []
+        combined: list[tuple[dict[str, Any], int | None]] = []
         for wlan in self.radius_wlans:
             combined.append((wlan, display_index))
             display_index += 1
@@ -48915,7 +48924,7 @@ class MistHelperTUI:
         self.param_list = []  # List of parameters to collect
         self.current_param_index = 0  # Current parameter being prompted
         self.input_buffer = ""  # Current input being typed
-        self.output_lines = []  # Lines to display in output panel
+        self.output_lines: list[str] = []  # Lines to display in output panel
         self.results_scroll_offset = 0  # Scroll position for results grid (which result)
         self.result_row_scroll = 0  # Scroll position within current result (which row)
 
@@ -48951,7 +48960,7 @@ class MistHelperTUI:
         Returns:
             dict: Key-value pairs from .env file only
         """
-        dotenv_dict = {}
+        dotenv_dict: dict[str, str] = {}
         env_file = ".env"
 
         if not os.path.exists(env_file):
@@ -51098,10 +51107,10 @@ class ZoneConfigurationAnalyzer:
         logging.info("Analyzing engagement patterns...")
 
         # Track dwell tag configurations
-        dwell_tag_configs = {}  # Maps config string to list of sites
-        dwell_tag_name_usage = {}  # Maps tag name to custom name -> sites
-        sites_with_custom_names = {}
-        sites_with_business_hours = {}
+        dwell_tag_configs: dict[str, list[str]] = {}  # Maps config string to list of sites
+        dwell_tag_name_usage: dict[str, dict[str, list[str]]] = {}  # Maps tag name to custom name -> sites
+        sites_with_custom_names: dict[str, str] = {}
+        sites_with_business_hours: dict[str, str] = {}
 
         for site_id, data in site_settings.items():
             site_name = data["site_name"]
@@ -51186,8 +51195,8 @@ class ZoneConfigurationAnalyzer:
         logging.info("Analyzing occupancy patterns...")
 
         # Track occupancy configurations
-        occupancy_configs = {}  # Maps config string to list of sites
-        min_duration_values = {}  # Maps min_duration value to site count
+        occupancy_configs: dict[str, list[str]] = {}  # Maps config string to list of sites
+        min_duration_values: dict[int, int] = {}  # Maps min_duration value to site count
         analytic_enabled_count = 0
         analytic_disabled_count = 0
 
@@ -51330,9 +51339,9 @@ class ZoneConfigurationAnalyzer:
         logging.info("Analyzing zone patterns...")
 
         # Count zone name frequency across all sites
-        zone_frequency = {}
-        all_zone_names = set()
-        zone_counts = []
+        zone_frequency: dict[str, int] = {}
+        all_zone_names: set[str] = set()
+        zone_counts: list[int] = []
 
         for site_id, data in site_zones.items():
             zone_counts.append(data["zone_count"])
@@ -52486,7 +52495,7 @@ class SiteInventoryHealthAnalyzer:
                 }
             }
         """
-        site_inventory = {}
+        site_inventory: dict[str, dict[str, Any]] = {}
 
         for device in devices:
             site_id = device.get("site_id", "")
@@ -53877,7 +53886,7 @@ def run_systematic_test():
         # Introspect signature to see if 'fast' is accepted
         supports_fast = False
         try:
-            sig = inspect.signature(func)
+            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
             supports_fast = "fast" in sig.parameters
         except Exception:
             supports_fast = False
@@ -53895,7 +53904,7 @@ def run_systematic_test():
             logging.info(
                 f"SYSTEMATIC_TEST: Starting test of menu option {option} (fast_applied={invoke_kwargs.get('fast', False)})"
             )
-            func(**invoke_kwargs)
+            func(**invoke_kwargs)  # type: ignore[operator]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -54053,11 +54062,11 @@ def run_interactive_test():
         logging.info(f"INTERACTIVE_TEST: Starting test of menu option {option} description='{description}'")
 
         try:
-            sig = inspect.signature(func)
+            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
             invoke_kwargs = {}
             if "site_id" in sig.parameters:
                 invoke_kwargs["site_id"] = test_site_id
-            func(**invoke_kwargs)
+            func(**invoke_kwargs)  # type: ignore[operator]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -54361,8 +54370,8 @@ class EnhancedSSHRunner:
         commands_str = commands_str.strip("'\"")
 
         # Split by comma and validate each command
-        commands = []
-        invalid_commands = []
+        commands: list[str] = []
+        invalid_commands: list[str] = []
 
         for cmd in commands_str.split(","):
             # Remove quotes and whitespace
@@ -54416,7 +54425,7 @@ class EnhancedSSHRunner:
         """
         import csv
 
-        commands = []
+        commands: list[str] = []
 
         if not os.path.exists(csv_file_path):
             # Legacy fallback: check previous root location if default data path missing
@@ -54592,7 +54601,8 @@ class EnhancedSSHRunner:
             print(f">> Connecting to {hostname}:{port} as {username}...")
 
             # Create SSH client
-            self.client = SSHClient()
+            self.client = SSHClient()  # type: ignore[misc]  # SSHClient confirmed non-None above
+            assert self.client is not None
             # Load existing host keys if available
             self.client.load_system_host_keys()
             try:
@@ -54603,7 +54613,7 @@ class EnhancedSSHRunner:
 
             # For internal networks: Auto-accept new host keys
             # NOTE: Only use this for trusted internal networks, not internet-facing connections
-            self.client.set_missing_host_key_policy(AutoAddPolicy())  # type: ignore[union-attr]
+            self.client.set_missing_host_key_policy(AutoAddPolicy())  # type: ignore[misc]  # AutoAddPolicy confirmed non-None above
             self.logger.debug("SSH client created with AutoAddPolicy for internal network use")
 
             # Attempt connection
@@ -54696,10 +54706,11 @@ class EnhancedSSHRunner:
 
     def _execute_direct(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:
         """Execute command using exec_command with PTY support"""
+        assert self.client is not None, "No active SSH connection"
         try:
             # Try with PTY first (better for network devices)
             self.logger.debug("Attempting exec_command with get_pty=True")
-            stdin, stdout, stderr = self.client.exec_command(  # type: ignore[union-attr]
+            stdin, stdout, stderr = self.client.exec_command(
                 command, timeout=self.timeout, get_pty=True
             )
 
@@ -54729,7 +54740,7 @@ class EnhancedSSHRunner:
             # If PTY fails, try without PTY
             self.logger.warning(f"exec_command with PTY failed: {e}, trying without PTY")
             try:
-                stdin, stdout, stderr = self.client.exec_command(command, timeout=self.timeout)  # type: ignore[union-attr]
+                stdin, stdout, stderr = self.client.exec_command(command, timeout=self.timeout)
                 stdout_output = stdout.read().decode("utf-8", errors="ignore")
                 stderr_output = stderr.read().decode("utf-8", errors="ignore")
                 exit_status = stdout.channel.recv_exit_status()
@@ -54746,17 +54757,18 @@ class EnhancedSSHRunner:
 
     def _execute_with_shell(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:
         """Execute command using interactive shell with device type detection"""
+        assert self.client is not None, "No active SSH connection"
         try:
             self.logger.debug("Using interactive shell mode")
 
             # Start interactive shell
-            shell = self.client.invoke_shell(term="vt100", width=120, height=24)  # type: ignore[union-attr]
+            shell = self.client.invoke_shell(term="vt100", width=120, height=24)
             shell.settimeout(self.timeout)
 
             # Wait for initial prompt
             max_wait = 3  # Maximum wait time
             wait_increment = 0.2
-            total_wait = 0
+            total_wait: float = 0
             initial_sample = "(no initial data)"
 
             while total_wait < max_wait:
@@ -54781,7 +54793,7 @@ class EnhancedSSHRunner:
 
             # Wait for command execution with adaptive timing
             max_cmd_wait = 6  # Increased maximum command wait time
-            cmd_wait = 0
+            cmd_wait: float = 0
 
             while cmd_wait < max_cmd_wait:
                 time.sleep(wait_increment)
@@ -55126,7 +55138,7 @@ class EnhancedSSHRunner:
         Returns:
             dict: SSH configuration with keys: hosts, username, password, commands
         """
-        config = {"hosts": [], "username": None, "password": None, "commands": []}
+        config: dict[str, Any] = {"hosts": [], "username": None, "password": None, "commands": []}
 
         # Validate env_file path to prevent directory traversal
         if not env_file or ".." in env_file or env_file.startswith("/") or "\\" in env_file:
@@ -55304,7 +55316,7 @@ class EnhancedSSHRunner:
         if hostname is None or username is None or password is None:
             raise ValueError("hostname, username, and password are required")
         if commands is None:
-            commands = []
+            commands: list[str] = []
 
         # Get the already-configured logger
         logger = logging.getLogger("ssh_runner_v2")
@@ -55421,7 +55433,8 @@ Commands/responses to execute: {len(commands)}
                 use_shell = True
 
             # Start interactive shell
-            shell = runner.client.invoke_shell(term="vt100", width=120, height=24)  # type: ignore[union-attr]
+            assert runner.client is not None, "No active SSH connection"
+            shell = runner.client.invoke_shell(term="vt100", width=120, height=24)
             shell.settimeout(timeout)
 
             # Wait for initial prompt
@@ -55469,7 +55482,7 @@ Commands/responses to execute: {len(commands)}
                     # Wait for and collect response
                     max_wait_time = 10  # Maximum wait for response
                     wait_increment = 0.1
-                    total_wait = 0
+                    total_wait: float = 0
                     response_output = ""
                     last_data_time = time.time()
                     no_data_timeout = 3.0  # Wait 3 seconds after no new data
@@ -55650,7 +55663,7 @@ Log file: {host_log_file}
         if hostname is None or username is None or password is None:
             raise ValueError("hostname, username, and password are required")
         if commands is None:
-            commands = []
+            commands: list[str] = []
 
         # Get the already-configured logger
         logger = logging.getLogger("ssh_runner_v2")
@@ -56060,7 +56073,7 @@ Log file: {host_log_file}
         if hostname is None or username is None or password is None:
             raise ValueError("hostname, username, and password are required")
         if commands is None:
-            commands = []
+            commands: list[str] = []
 
         # Use the unified SSH runner logger (propagates to script.log)
         logger = logging.getLogger("ssh_runner_v2")
@@ -56155,11 +56168,11 @@ Log file: {host_log_file}
 
         # Validate required parameters
         if hosts is None:
-            hosts = []
+            hosts: list[str] = []
         if username is None or password is None:
             raise ValueError("username and password are required")
         if commands is None:
-            commands = []
+            commands: list[str] = []
 
         logger = logging.getLogger("ssh_runner_v2")
         # Debug diagnostic for mysterious dict+float TypeError
@@ -56305,7 +56318,7 @@ Log file: {host_log_file}
         use_env = not args.no_env
 
         # Try to load .env configuration
-        env_config = {}
+        env_config: dict[str, Any] = {}
         if use_env:
             logger.info("Loading SSH credentials from .env file (default behavior)")
             env_config = EnhancedSSHRunner.load_ssh_config_from_env()
@@ -57142,7 +57155,7 @@ def main():
                 "address_check": args.address_check,
                 "skip_ssl_verify": args.skip_ssl_verify,
             }
-            sig = inspect.signature(func)
+            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
             accepted_args = {k: v for k, v in func_args.items() if k in sig.parameters and v is not None}
             func(**accepted_args)
         else:
@@ -57219,7 +57232,7 @@ def main():
                 # (session management operations that change context)
                 session_management_options = {"115"}  # Switch to interactive login
 
-                func()
+                func()  # type: ignore[operator]  # func is a callable from menu_actions
                 logging.info(f"Menu option '{iwant}' execution complete.")
 
                 # In container mode, return to menu. In direct mode, exit (unless session management)
