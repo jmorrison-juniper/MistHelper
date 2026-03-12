@@ -88,12 +88,12 @@ extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "starlink-api
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 # Phase 1 ignores (2026-03-12) — tighten these incrementally:
-#   E501: line-too-long (797 instances) — add back after reformatting long lines
+#   E501: line-too-long (294 instances) — add back after reformatting long lines
 #   E402: module-import-not-at-top (33) — intentional: version check runs before imports
-#   F402: import-shadowed-by-loop-var (8) — rename loop vars from 'field' to avoid shadow
-#   B007: unused-loop-control-variable (9) — prefix unused vars with underscore
+#   PLR0915/C901/PLR0912/PLR0913: complexity rules — 28K-line monolith, defer to refactor phase
+#   RESOLVED: F402 (renamed loop vars), B007 (prefixed unused vars)
 # Phase 2 goal: re-enable T20 (print) after migrating prints to logging
-ignore = ["PLR0915", "C901", "PLR0912", "PLR0913", "E501", "E402", "F402", "B007"]
+ignore = ["PLR0915", "C901", "PLR0912", "PLR0913", "E501", "E402"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
@@ -103,9 +103,9 @@ python_version = "3.13"
 strict = true
 # --- Phased strict compliance (started 2025-07-12) ---
 # Phase 1 (current): strict=true with annotation deferral
-#   disallow_untyped_defs/calls/incomplete_defs: deferred (629 functions need annotations)
-#   disallow_any_generics: deferred (370 generic types need type parameters)
-#   warn_return_any: deferred (37 functions return untyped values)
+#   disallow_untyped_defs/calls/incomplete_defs: deferred (560 functions need annotations)
+#   disallow_any_generics: deferred (369 generic types need type parameters)
+#   RESOLVED: warn_return_any (36 returns annotated with type: ignore[no-any-return])
 #   All other strict checks ARE enforced (assignment, attr-defined, arg-type, etc.)
 # Phase 2: Add type annotations to functions (remove disallow_untyped_* = false)
 #   Track: python -m mypy MistHelper.py 2>&1 | Select-String 'no-untyped' | Measure
@@ -116,7 +116,7 @@ disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_untyped_calls = false
 disallow_any_generics = false
-warn_return_any = false
+warn_return_any = true
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = false

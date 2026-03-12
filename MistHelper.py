@@ -419,7 +419,7 @@ def _get_latest_pypi_version(package_name: str) -> str:
         with urllib.request.urlopen(request, timeout=5, context=ctx) as response:  # nosec B310
             raw = response.read(max_bytes)
             data = json_mod.loads(raw.decode())
-            return data.get("info", {}).get("version", "")
+            return data.get("info", {}).get("version", "")  # type: ignore[no-any-return]
     except Exception:
         return ""
 
@@ -646,7 +646,7 @@ def _early_dependency_check():
     success_count = 0
     failure_count = 0
 
-    for package_name, package_spec in missing_packages:
+    for _package_name, package_spec in missing_packages:
         installed = False
 
         # Try UV first if available
@@ -1329,7 +1329,7 @@ class GlobalImportManager:
 
         success_count = 0
 
-        for pkg_name, pkg_spec in packages_to_process:
+        for _pkg_name, pkg_spec in packages_to_process:
             # Extract base package name from spec (e.g., "requests>=2.28.0" -> "requests")
             pkg_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
 
@@ -3577,7 +3577,7 @@ class CacheUtils:
             writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)
             writer.writeheader()
             row_count = 0
-            for section_name, section in data.items():
+            for _section_name, section in data.items():
                 for row in section:
                     writer.writerow(row)
                     row_count += 1
@@ -7584,7 +7584,7 @@ class EnvironmentUtils:
         Returns:
             bool: True if --debug or -d flag is present in sys.argv
         """
-        return is_debug_mode()
+        return is_debug_mode()  # type: ignore[no-any-return]
 
 
 # ============================================================================
@@ -7705,7 +7705,7 @@ class ConfigUtils:
         # 1. Check global variable
         if org_id:
             logging.info(f"! Using org_id from global variable: {org_id}")
-            return org_id
+            return org_id  # type: ignore[no-any-return]
         # 2. Check environment variable (set by dotenv or OS)
         org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
         if org_id_env:
@@ -7732,7 +7732,7 @@ class ConfigUtils:
             print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
             sys.exit(1)
         org_id = org_id_list[0]
-        return org_id
+        return org_id  # type: ignore[no-any-return]
 
     @staticmethod
     def check_stop_signal() -> bool:
@@ -7781,7 +7781,7 @@ class APICoreFetchUtils:
         SECURITY: Read-only; no sensitive data logged.
         """
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
-        return mistapi.get_all(response=response, mist_session=apisession)
+        return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
 
     @staticmethod
     def all_inventory_with_limit(org_id: str) -> list[dict]:
@@ -7797,7 +7797,7 @@ class APICoreFetchUtils:
         SECURITY: Read-only; no secrets in inventory object fields.
         """
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
-        return mistapi.get_all(response=response, mist_session=apisession)
+        return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
 
 
 class APITenantFetchUtils:
@@ -8720,9 +8720,9 @@ class DatabaseSchemaUtils:
 
         # Add common indexes for frequently queried fields
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]
-        for field in common_index_fields:
-            if field in data_fields and field not in strategy["indexes"]:
-                strategy["indexes"].append(field)  # type: ignore[attr-defined]
+        for field_name in common_index_fields:
+            if field_name in data_fields and field_name not in strategy["indexes"]:
+                strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
 
         logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
         return strategy
@@ -8852,9 +8852,9 @@ class DatabaseSchemaUtils:
         index_sqls = []
 
         # Create indexes for fields specified in strategy
-        for field in strategy.get("indexes", []):
-            if field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
+        for field_name in strategy.get("indexes", []):
+            if field_name in fields:
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))
                 index_name = f"idx_{safe_table_name}_{safe_field}"
                 index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
                 index_sqls.append(index_sql)
@@ -9091,8 +9091,8 @@ class SQLiteDatabaseWriter:
     def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:
         """Prepare values for a single row including metadata."""
         values = []
-        for field in self.fields:
-            value = row.get(field, "")
+        for field_name in self.fields:
+            value = row.get(field_name, "")
             values.append("" if value is None else str(value))
         values.extend([current_time, current_time])
         return values
@@ -9545,7 +9545,7 @@ class APIDataFetcher:
             if "data" in response.data:
                 recovered = response.data.get("data", [])
                 logging.info(f"Recovered {len(recovered)} records from response.data['data']")
-                return recovered
+                return recovered  # type: ignore[no-any-return]
 
         if isinstance(response.data, list):
             logging.info(f"Recovered {len(response.data)} records from response.data (list)")
@@ -9671,7 +9671,7 @@ class APIDataFetcher:
 
         data = DataProcessingUtils.flatten_nested_fields(data)
         data = DataProcessingUtils.escape_multiline(data)
-        return data
+        return data  # type: ignore[no-any-return]
 
     def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:
         """Build PrettyTable from processed data."""
@@ -9900,7 +9900,7 @@ class PromptNetworkDeviceUtils:
                     ap_name = index_to_ap[idx].get("name", "Unknown")
                     print(f"\n! Selected AP: {ap_name} (MAC: {ap_mac})")
                     logging.info(f"User selected AP by index: {idx} (name: {ap_name}, mac: {ap_mac})")
-                    return ap_mac
+                    return ap_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
                     logging.error(f"Invalid AP index: {idx}")
@@ -9976,7 +9976,7 @@ class PromptNetworkDeviceUtils:
                     gateway_name = index_to_gateway[idx].get("name", "Unknown")
                     print(f"\n! Selected gateway: {gateway_name} (MAC: {gateway_mac})")
                     logging.info(f"User selected gateway by index: {idx} (name: {gateway_name}, mac: {gateway_mac})")
-                    return gateway_mac
+                    return gateway_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
                     logging.error(f"Invalid gateway index: {idx}")
@@ -10052,7 +10052,7 @@ class PromptNetworkDeviceUtils:
                     switch_name = index_to_switch[idx].get("name", "Unknown")
                     print(f"\n! Selected switch: {switch_name} (MAC: {switch_mac})")
                     logging.info(f"User selected switch by index: {idx} (name: {switch_name}, mac: {switch_mac})")
-                    return switch_mac
+                    return switch_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
                     logging.error(f"Invalid switch index: {idx}")
@@ -10540,7 +10540,7 @@ class PromptClientUtils:
                     logging.info(
                         f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})"
                     )
-                    return client_mac
+                    return client_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
                     logging.error(f"Invalid client index: {idx}")
@@ -10705,7 +10705,7 @@ class PromptUtils:
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
                 logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
-                return device_id
+                return device_id  # type: ignore[no-any-return]
             else:
                 logging.error(" Invalid index.")
                 return None
@@ -10714,7 +10714,7 @@ class PromptUtils:
         if user_input in name_to_device:
             device_id = name_to_device[user_input].get("id")
             logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
-            return device_id
+            return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
         return None
@@ -11192,21 +11192,21 @@ class DeviceUtils:
         # Try name first
         name = device.get("name", "").strip()
         if name:
-            return name
+            return name  # type: ignore[no-any-return]
 
         # Fall back to serial
         serial = device.get("serial", "").strip()
         if serial:
             if warn_on_missing:
                 logging.warning(f"Device {serial} missing name field, using serial as identifier")
-            return serial
+            return serial  # type: ignore[no-any-return]
 
         # Fall back to device_id
         device_id = device.get("id", "").strip()
         if device_id:
             if warn_on_missing:
                 logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
-            return device_id
+            return device_id  # type: ignore[no-any-return]
 
         # Last resort
         if warn_on_missing:
@@ -16480,7 +16480,7 @@ class ServicePingManager:
         if result:
             self._debug_print(f"Result keys: {list(result.keys())}")
 
-        return result
+        return result  # type: ignore[no-any-return]
 
     def _display_results(self, result: dict | None, payload: dict) -> None:
         """Display service ping results."""
@@ -19203,9 +19203,9 @@ class InsightMetricsUtils:
             "time-to-connect",
         ]
 
-        for field in scalar_fields:
-            if field in metric_data:
-                summary_data[field] = metric_data[field]
+        for field_name in scalar_fields:
+            if field_name in metric_data:
+                summary_data[field_name] = metric_data[field_name]
 
         return summary_data
 
@@ -19221,8 +19221,8 @@ class InsightMetricsUtils:
         timestamps = rt_field.split(",")
         time_series_fields = ["num_clients", "num_aps", "num_gateways", "num_switches", "num_mxedges", "num_mxtunnels"]
 
-        for field in time_series_fields:
-            field_data = metric_data.get(field, "")
+        for field_name in time_series_fields:
+            field_data = metric_data.get(field_name, "")
             if field_data and isinstance(field_data, str) and "," in field_data:
                 values = field_data.split(",")
                 for index, (timestamp, value) in enumerate(zip(timestamps, values, strict=False)):
@@ -19233,7 +19233,7 @@ class InsightMetricsUtils:
                                 "metric_type": metric_type,
                                 "timestamp": timestamp.strip(),
                                 "value": value.strip(),
-                                "value_type": field,
+                                "value_type": field_name,
                                 "sequence_order": index,
                             }
                         )
@@ -20539,10 +20539,10 @@ class GatewayExportUtils:
 
                 # Check for non-empty values (excluding vpn_paths which are template-inherited)
                 override_fields = []
-                for field in port_config_fields:
-                    value = row.get(field, "").strip().lower()
-                    if value not in ["", "null", "none"] and "_vpn_paths_" not in field:
-                        override_fields.append(f"{field}={value}")
+                for field_name in port_config_fields:
+                    value = row.get(field_name, "").strip().lower()
+                    if value not in ["", "null", "none"] and "_vpn_paths_" not in field_name:
+                        override_fields.append(f"{field_name}={value}")
 
                 is_overridden = len(override_fields) > 0
                 if is_overridden:
@@ -22685,7 +22685,7 @@ class CLIShellManager:
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device_id)
             shell_data = response.data
-            return shell_data.get("url")
+            return shell_data.get("url")  # type: ignore[no-any-return]
         except Exception as exception:
             print(f"! Failed to create shell session: {exception}")
             return None
@@ -23980,9 +23980,9 @@ class AddressUtils:
             logging.debug(f"ENHANCED_COMPARE: Comparison address: {comparison_address}")
 
         # Check for unparseable addresses
-        for field in field_weights.keys():
-            mist_value = mist_address.get(field, "")
-            comp_value = comparison_address.get(field, "")
+        for field_name in field_weights.keys():
+            mist_value = mist_address.get(field_name, "")
+            comp_value = comparison_address.get(field_name, "")
 
             # Check if either address appears to be unparseable
             if str(mist_value).strip().lower() in ["unknown", "n/a", "na", "none", "null", ""]:
@@ -24007,16 +24007,16 @@ class AddressUtils:
             }
 
         # Compare address fields using enhanced similarity
-        for field, _weight in field_weights.items():
-            mist_value = str(mist_address.get(field, "")).strip()
-            comp_value = str(comparison_address.get(field, "")).strip()
+        for field_name, _weight in field_weights.items():
+            mist_value = str(mist_address.get(field_name, "")).strip()
+            comp_value = str(comparison_address.get(field_name, "")).strip()
 
-            if field == "zip":
+            if field_name == "zip":
                 # Use normalized zip comparison
                 mist_norm = AddressUtils.normalize_zip(mist_value)
                 comp_norm = AddressUtils.normalize_zip(comp_value)
                 similarity = 100.0 if mist_norm == comp_norm and mist_norm else 0.0
-            elif field == "state":
+            elif field_name == "state":
                 # Use normalized state comparison (handles abbreviations vs full names)
                 mist_norm = AddressUtils._normalize_state(mist_value)
                 comp_norm = AddressUtils._normalize_state(comp_value)
@@ -24025,16 +24025,16 @@ class AddressUtils:
                 # Use enhanced string similarity for address and city fields
                 similarity = AddressUtils._calculate_similarity(mist_value, comp_value)
 
-            field_similarities[field] = similarity
+            field_similarities[field_name] = similarity
 
             # Use a more forgiving threshold for individual fields (75% of the overall threshold)
             field_threshold = threshold * 0.75
             if similarity < field_threshold:
-                failed_fields.append(field)
+                failed_fields.append(field_name)
 
             if debug:
                 logging.debug(
-                    f"ENHANCED_COMPARE: {field} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)"
+                    f"ENHANCED_COMPARE: {field_name} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)"
                 )
 
         # Calculate weighted overall similarity
@@ -25548,7 +25548,7 @@ class InventoryCSVComparator:
                 org_name = org_response.data.get("name", "").strip()
                 if self.debug:
                     logging.debug(f"Organization name retrieved: '{org_name}'")
-                return org_name
+                return org_name  # type: ignore[no-any-return]
 
             if self.debug:
                 logging.warning(f"Failed to retrieve org info: HTTP {org_response.status_code}")
@@ -25816,7 +25816,7 @@ class InventoryCSVComparator:
         if not validation_result:
             return "N/A"
         key = f"{source}_validation"
-        return validation_result[key]["valid"]
+        return validation_result[key]["valid"]  # type: ignore[no-any-return]
 
     def _get_validation_confidence(self, validation_result: dict[str, Any] | None, source: str) -> str:
         """Get validation confidence for mist or comparison address."""
@@ -26309,10 +26309,10 @@ class WAN2MigrationManager:
                     subif_col = f"port_config_{port_identifier}_ip_config_type"
                     subif_type = template_row.get(subif_col, "").strip().lower()
                     if subif_type:
-                        return subif_type
+                        return subif_type  # type: ignore[no-any-return]
                     break
 
-        return template_ip_type
+        return template_ip_type  # type: ignore[no-any-return]
 
     def _classify_override_severity(self, template_ip_type: str, device_ip_type: str) -> str:
         """Classify override severity based on IP type mismatch."""
@@ -28337,7 +28337,7 @@ class VirtualChassisManager:
         try:
             response = mistapi.api.v1.sites.getSite(apisession, site_id)
             if response.data:
-                return response.data.get("name", site_id)
+                return response.data.get("name", site_id)  # type: ignore[no-any-return]
         except Exception as exception:
             logging.warning(f"Could not fetch site name for {site_id}: {exception}")
         return "Unknown Site"
@@ -29851,7 +29851,7 @@ class DeviceRebootManager:
         """Parse reboot API response into status string."""
         if hasattr(response, "data") and response.data:
             if isinstance(response.data, dict):
-                return response.data.get("status", f"SUCCESS - {response.data}")
+                return response.data.get("status", f"SUCCESS - {response.data}")  # type: ignore[no-any-return]
             return f"SUCCESS - {response.data}"
         elif hasattr(response, "status_code"):
             return f"SUCCESS - HTTP {response.status_code}"
@@ -33659,7 +33659,7 @@ class MapsManager:
 
                 # Add Mist-style orientation indicators: crosshair + directional dot
                 # Use status-based colors for crosshair and orientation dot
-                for _i, (x, y, angle, device, device_color, device_status) in enumerate(
+                for _i, (x, y, angle, _device, device_color, _device_status) in enumerate(
                     zip(x_coords, y_coords, orientations, type_devices, colors, statuses, strict=False)
                 ):
                     # Crosshair at device location (always visible) - LARGER SIZE with status color
@@ -40914,7 +40914,7 @@ class FirmwareUpgradeStatusChecker:
 
         try:
             upgrade_age_hours = (time.time() - fw_timestamp) / 3600
-            return upgrade_age_hours > self.STALE_UPGRADE_HOURS
+            return upgrade_age_hours > self.STALE_UPGRADE_HOURS  # type: ignore[no-any-return]
         except (ValueError, OSError, TypeError):
             return False
 
@@ -41005,7 +41005,7 @@ class FirmwareUpgradeStatusChecker:
                 return False
             return is_active
         elif self.scope_choice == "4":  # Failed upgrades only
-            return fw_status == "failed"
+            return fw_status == "failed"  # type: ignore[no-any-return]
         return True
 
     def _create_progress_display(self, fw_info: dict[str, Any]) -> str:
@@ -42060,7 +42060,7 @@ class BulkAPFirmwareUpgrader:
             if key and key in stats_lookup:
                 stats = stats_lookup[key]
                 if isinstance(stats, dict):
-                    return stats.get("version", "Unknown")
+                    return stats.get("version", "Unknown")  # type: ignore[no-any-return]
         return "Unknown"
 
     def _display_model_summary(self) -> None:
@@ -42476,7 +42476,7 @@ class BulkAPFirmwareUpgrader:
         upgrade_calls = 0
         breakdown = []
 
-        for site_id, site_info in devices_by_site.items():
+        for _site_id, site_info in devices_by_site.items():
             # API calls are grouped by VERSION, not by model
             # If all devices at site use same version: 1 call
             # If different versions: 1 call per unique version
@@ -42788,7 +42788,7 @@ class BulkAPFirmwareUpgrader:
         """Get target version for a device."""
         for _model, plan in self.upgrade_plan.items():
             if device in plan["devices"]:
-                return plan["version"]
+                return plan["version"]  # type: ignore[no-any-return]
         return "Unknown"
 
     # =========================================================================
@@ -46146,7 +46146,7 @@ class OrgLevelAPFirmwareUpgrader:
             else:
                 # Offset from now
                 target_dt = datetime.now(UTC) + relative_offset
-            return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # type: ignore[no-any-return]
 
         # Check for "X after download" pattern (only valid for UTC mode or download time)
         time_str_lower = time_str.lower()
@@ -46160,7 +46160,7 @@ class OrgLevelAPFirmwareUpgrader:
             relative_offset = self._parse_relative_offset(time_portion)
             if relative_offset and base_datetime:
                 target_dt = base_datetime + relative_offset
-                return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # type: ignore[no-any-return]
             return None
 
         # Check for UTC suffix on absolute time
@@ -47185,7 +47185,7 @@ class BulkSwitchFirmwareUpgrader:
             # Save to cache
             self._save_to_cache(firmware_data)
 
-            return firmware_data
+            return firmware_data  # type: ignore[no-any-return]
 
         except Exception as api_error:
             self.logger.error(f"Failed to query switch firmware versions: {api_error}")
@@ -48516,7 +48516,7 @@ class BulkRadiusWLANConfigManager:
         current_timeout = wlan.get("auth_servers_timeout", 5)
         current_retries = wlan.get("auth_servers_retries", 2)
         current_fast = wlan.get("fast_dot1x_timers", False)
-        return (
+        return (  # type: ignore[no-any-return]
             current_timeout == self.target_timeout
             and current_retries == self.target_retries
             and current_fast == self.target_fast_dot1x
@@ -50380,12 +50380,12 @@ class MistHelperTUI:
             )
 
         # Add only visible rows to table
-        for field, value, row_type in all_rows[start_row:end_row]:
+        for field_name, value, row_type in all_rows[start_row:end_row]:
             if row_type == "separator":
                 # Visual separator between major sections
                 table.add_row("[dim]" + "-" * 40 + "[/dim]", "[dim]" + "-" * 60 + "[/dim]")
             else:
-                table.add_row(field, value)
+                table.add_row(field_name, value)
 
         # Get metadata
         total = self.last_parsed_data.get("total", len(results))
@@ -50541,7 +50541,7 @@ class MistHelperTUI:
                 output.append(f"{indent_str}dict ({len(value)} keys)")
 
             # Show each key-value pair
-            for idx, (k, v) in enumerate(value.items()):
+            for _idx, (k, v) in enumerate(value.items()):
                 if isinstance(v, (dict, list)):
                     # Nested structure - recurse
                     self._format_value_hierarchical(v, output, indent + 1, key_name=k)
@@ -51349,7 +51349,7 @@ class ZoneConfigurationAnalyzer:
         all_zone_names: set[str] = set()
         zone_counts: list[int] = []
 
-        for site_id, data in site_zones.items():
+        for _site_id, data in site_zones.items():
             zone_counts.append(data["zone_count"])
             for zone_name in data["zone_names"]:
                 all_zone_names.add(zone_name)
@@ -53710,7 +53710,7 @@ class OperationRegistry:
         """Return classification for *option*, defaulting to safe with warning."""
         entry = cls._REGISTRY.get(str(option))
         if entry is not None:
-            return entry
+            return entry  # type: ignore[no-any-return]
         logging.warning(f"OperationRegistry: option {option} not registered, defaulting to safe")
         return {"category": "safe"}
 
@@ -53727,12 +53727,12 @@ class OperationRegistry:
     @classmethod
     def skip_reason(cls, option: str) -> str:
         """Return skip reason or empty string."""
-        return cls.get(option).get("skip_reason", "")
+        return cls.get(option).get("skip_reason", "")  # type: ignore[no-any-return]
 
     @classmethod
     def skip_category(cls, option: str) -> str:
         """Return skip category name."""
-        return cls.get(option)["category"]
+        return cls.get(option)["category"]  # type: ignore[no-any-return]
 
     @classmethod
     def safe_options(cls, all_options) -> list:
@@ -56254,7 +56254,7 @@ Log file: {host_log_file}
             except Exception as loop_e:
                 logger.error(f"[TRACE] Multi-host wait loop failure: {type(loop_e).__name__}: {loop_e}", exc_info=True)
                 # Fallback: mark any remaining hosts as failed
-                for future, host in future_to_host.items():
+                for _future, host in future_to_host.items():
                     if host not in ssh_execution_results:
                         ssh_execution_results[host] = {"success": False, "summary": f"Loop failure: {loop_e}"}
                         failed_hosts.append(host)
