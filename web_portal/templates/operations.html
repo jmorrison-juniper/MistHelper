@@ -42,14 +42,14 @@
                 </div>
                 <div id="parameterError" class="alert alert-danger mt-2" style="display:none;">
                     <span id="parameterErrorMsg"></span>
-                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="retryLoadParameters()">Retry</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="retryLoadParameters()">Retry</button>
                 </div>
             </div>
 
-            <button class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
+            <button type="button" class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
                 Run Operation
             </button>
-            <button class="btn btn-outline-danger mt-2 ms-2" id="stopBtn" style="display:none;" onclick="stopRunningOperation()" data-testid="stop-btn">
+            <button type="button" class="btn btn-outline-danger mt-2 ms-2" id="stopBtn" style="display:none;" onclick="stopRunningOperation()" data-testid="stop-btn">
                 Stop Operation
             </button>
         </div>
@@ -124,15 +124,15 @@
                 </div>
                 <div id="dataPreviewBody"></div>
                 <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
-                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
                             onclick="DataPreviewModal.changePage(-1)">Prev</button>
                     <span class="page-info" id="dataPreviewPageInfo"></span>
-                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
                             onclick="DataPreviewModal.changePage(1)">Next</button>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-outline-secondary btn-export"
+                <button type="button" class="btn btn-sm btn-outline-secondary btn-export"
                         onclick="DataPreviewModal.exportCsv()">Export CSV</button>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>

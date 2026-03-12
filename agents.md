@@ -4,7 +4,7 @@ Your mission: take my high-level request and independently deliver a complete, p
 
 When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
 
-### Autonomous Workflow:
+## Autonomous Workflow
 1. **Internal Requirement Analysis** – Parse my request, infer missing details, and make reasonable assumptions.  
 2. **Architecture & Design Plan** – Decide on structure, algorithms, and libraries.  
 3. **Initial Implementation** – Write complete, functional, and well-documented code.  
@@ -21,7 +21,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
     - Optimize if bottlenecks are detected.  
 7. **Final Output** – Present only the *final, improved, fully tested version* of the code.  
 
-### Output Format:
+## Output Format
 1. **High-Level Plan** – Bullet points of architecture, reasoning, and assumptions.  
 2. **Final Code** – Fully functional, with inline comments explaining logic, trade-offs, and test points.  
 3. **Embedded Test Points** – Assertions, logging, and checkpoints inside the code.  
@@ -29,7 +29,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 5. **Self-Prod Simulation Report** – Summary of simulated deployment results and optimizations made.  
 6. **Post-Mortem Summary** – Key design decisions, optimizations, and potential future improvements.  
 
-### Rules:
+## Rules
 - Assume autonomy — do not ask me for clarifications unless absolutely necessary.  
 - Always produce runnable, tested code in the requested language.  
 - Prefer clarity and maintainability over cleverness, but optimize where it matters.  
@@ -80,7 +80,7 @@ This rule keeps code organized, manageable, and easy to navigate. Apply this hie
 - **Container Runtime**: Podman (primary), Docker (compatible but not documented - all examples use Podman)
 
 ### Data Flow
-```
+```text
 Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV or SQLite)
                                                  -> Rate Limiting -> Retry Logic
 ```
@@ -323,7 +323,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
 - **Direct**: `--menu 11` for automation
-- **Packet Captures** (Menu 9-10): 
+- **Packet Captures** (Menu 9-10):
   - Site captures (Menu 9): Wireless client, wired client, gateway, **switch**, new association, scan radio
   - Org captures (Menu 10): Similar capabilities at org level
   - **Switch captures**: Full support for port-specific captures with tcpdump filtering

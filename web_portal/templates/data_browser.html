@@ -43,7 +43,7 @@
 <div id="sqlitePanel" class="preview-panel" style="display:none;">
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 id="sqliteTitle" class="mb-0">Tables</h6>
-        <button class="btn btn-sm btn-outline-secondary" onclick="closeSqlite()">Close</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeSqlite()">Close</button>
     </div>
     <div id="sqliteContent"></div>
 </div>
@@ -84,7 +84,7 @@
 
                 <!-- Pagination -->
                 <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
-                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
                             onclick="DataPreviewModal.changePage(-1)">Prev</button>
                     <span class="page-info" id="dataPreviewPageInfo"></span>
                     <button class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
