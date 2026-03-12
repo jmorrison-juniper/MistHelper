@@ -29,7 +29,12 @@ def test_flatten_dict_produces_string_keys(input_dict: dict) -> None:
 
 @given(
     st.text(
-        min_size=1, max_size=253, alphabet=st.characters(whitelist_categories=(), whitelist_characters="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.")
+        min_size=1,
+        max_size=253,
+        alphabet=st.characters(
+            whitelist_categories=(),
+            whitelist_characters="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.",
+        ),
     )
 )
 @settings(max_examples=50)

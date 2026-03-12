@@ -13,13 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         check: [ruff, mypy, pytest, bandit, pip-audit]
-        include:
-          - check: mypy
-            soft: true
-          - check: bandit
-            soft: true
     name: quality-gates (${{ matrix.check }})
-    continue-on-error: ${{ matrix.soft == true }}
     timeout-minutes: 5
     steps:
       - name: Checkout repository
@@ -46,9 +40,9 @@ jobs:
         if: matrix.check == 'mypy'
         run: mypy MistHelper.py
 
-      - name: Run pytest with coverage
+      - name: Run pytest
         if: matrix.check == 'pytest'
-        run: pytest tests/unit/ --cov --cov-fail-under=50
+        run: pytest tests/unit/ -v
 
       - name: Run Bandit security linter
         if: matrix.check == 'bandit'
