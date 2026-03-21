@@ -23,7 +23,7 @@ function loadOperations() {
         .then(function(response) { return response.json(); })
         .then(function(data) {
             renderAccordion(data.categories || []);
-            document.getElementById('opLoading').style.display = 'none';
+            document.getElementById('opLoading').classList.add('d-none');
         })
         .catch(function() {
             document.getElementById('opLoading').textContent = 'Failed to load operations.';
@@ -71,10 +71,10 @@ function buildOperationItem(op) {
 
 function buildCategoryBadge(category) {
     if (category === 'interactive') {
-        return ' <span class="badge bg-info" style="font-size:0.65rem">interactive</span>';
+        return ' <span class="badge bg-info badge-op-category">interactive</span>';
     }
     if (category === 'cli_only') {
-        return ' <span class="badge bg-warning text-dark" style="font-size:0.65rem">SSH only</span>';
+        return ' <span class="badge bg-warning text-dark badge-op-category">SSH only</span>';
     }
     return '';
 }
@@ -102,7 +102,7 @@ function highlightActiveItem(element) {
 
 function showSelectedPanel(menuNumber, element) {
     var panel = document.getElementById('selectedOp');
-    panel.style.display = '';
+    panel.classList.remove('d-none');
     document.getElementById('selectedOpTitle').textContent = 'Menu ' + menuNumber;
     document.getElementById('selectedOpDesc').textContent = element
         ? element.textContent.trim().replace(/interactive|SSH only/g, '').trim()
@@ -110,9 +110,9 @@ function showSelectedPanel(menuNumber, element) {
 }
 
 function resetParameterPanels() {
-    document.getElementById('cliOnlyPanel').style.display = 'none';
-    document.getElementById('parameterForm').style.display = 'none';
-    document.getElementById('parameterError').style.display = 'none';
+    document.getElementById('cliOnlyPanel').classList.add('d-none');
+    document.getElementById('parameterForm').classList.add('d-none');
+    document.getElementById('parameterError').classList.add('d-none');
     document.getElementById('parameterFields').innerHTML = '';
     currentParameters = [];
 }
@@ -127,17 +127,17 @@ function loadParameters(menuNumber) {
     var loadingDiv = document.getElementById('parameterLoading');
 
     fieldsDiv.innerHTML = '';
-    loadingDiv.style.display = 'block';
-    formDiv.style.display = '';
+    loadingDiv.classList.remove('d-none');
+    formDiv.classList.remove('d-none');
 
     fetch('/api/operations/parameters/' + menuNumber)
         .then(function(response) { return response.json(); })
         .then(function(data) {
-            loadingDiv.style.display = 'none';
+            loadingDiv.classList.add('d-none');
             handleParameterResponse(data, formDiv, fieldsDiv);
         })
         .catch(function(err) {
-            loadingDiv.style.display = 'none';
+            loadingDiv.classList.add('d-none');
             showParameterError('Failed to load parameters: ' + err.message);
         });
 }
@@ -148,39 +148,39 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
     if (data.category === 'cli_only') {
         showCliOnlyPanel(data.cli_only_message);
         runBtn.disabled = true;
-        runBtn.style.display = 'none';
-        formDiv.style.display = 'none';
+        runBtn.classList.add('d-none');
+        formDiv.classList.add('d-none');
         return;
     }
 
-    runBtn.style.display = '';
+    runBtn.classList.remove('d-none');
     if (data.parameters && data.parameters.length > 0) {
         currentParameters = data.parameters;
         renderParameterFields(data.parameters, fieldsDiv);
-        formDiv.style.display = '';
+        formDiv.classList.remove('d-none');
         validateForm();
     } else {
-        formDiv.style.display = 'none';
+        formDiv.classList.add('d-none');
     }
 }
 
 function showCliOnlyPanel(message) {
     var cliPanel = document.getElementById('cliOnlyPanel');
-    cliPanel.style.display = '';
+    cliPanel.classList.remove('d-none');
     document.getElementById('cliOnlyMessage').textContent =
         message || 'This operation requires SSH access on port 2200.';
 }
 
 function retryLoadParameters() {
-    document.getElementById('parameterError').style.display = 'none';
+    document.getElementById('parameterError').classList.add('d-none');
     if (selectedMenuNumber) loadParameters(selectedMenuNumber);
 }
 
 function showParameterError(msg) {
     var errorDiv = document.getElementById('parameterError');
     document.getElementById('parameterErrorMsg').textContent = msg;
-    errorDiv.style.display = '';
-    document.getElementById('parameterForm').style.display = '';
+    errorDiv.classList.remove('d-none');
+    document.getElementById('parameterForm').classList.remove('d-none');
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ function buildParameterGroup(param) {
     var control = createParameterControl(param);
     div.appendChild(control);
 
-    if (param.depends_on) div.style.display = 'none';
+    if (param.depends_on) div.classList.add('d-none');
     return div;
 }
 
@@ -479,10 +479,10 @@ function updateDependentField(param, parentValue) {
     if (!group || !control) return;
 
     if (!parentValue) {
-        group.style.display = 'none';
+        group.classList.add('d-none');
         return;
     }
-    group.style.display = '';
+    group.classList.remove('d-none');
 
     var siteSelect = document.getElementById('param-site_id');
     if (param.param_type === 'device' && siteSelect) {
@@ -516,7 +516,7 @@ function isFieldInvalid(param) {
     if (!control || !param.required) return false;
 
     var group = document.getElementById('param-group-' + param.name);
-    if (group && group.style.display === 'none') return false;
+    if (group && group.classList.contains('d-none')) return false;
 
     var empty = !control.value || control.value === '';
     if (empty) {
@@ -565,7 +565,7 @@ function runSelectedOperation() {
         }
         currentRunId = data.run_id;
         setStatus('running', 'Operation started');
-        document.getElementById('stopBtn').style.display = '';
+        document.getElementById('stopBtn').classList.remove('d-none');
         startSSEStream(data.run_id);
     })
     .catch(function(err) {
@@ -706,13 +706,13 @@ function checkRunStatus(runId) {
 
 function resetExecutionPanel() {
     var panel = document.getElementById('executionPanel');
-    panel.style.display = '';
+    panel.classList.remove('d-none');
     document.getElementById('logViewer').innerHTML = '';
     document.getElementById('debugLogViewer').innerHTML = '';
-    document.getElementById('debugLogToggle').style.display = 'none';
-    document.getElementById('debugLogPanel').style.display = 'none';
+    document.getElementById('debugLogToggle').classList.add('d-none');
+    document.getElementById('debugLogPanel').classList.add('d-none');
     document.getElementById('debugLogCount').textContent = '0';
-    document.getElementById('outputFiles').style.display = 'none';
+    document.getElementById('outputFiles').classList.add('d-none');
     document.getElementById('outputFileList').innerHTML = '';
     updateProgress(0, '');
     setStatus('pending', 'Waiting...');
@@ -737,7 +737,7 @@ function appendDebugLog(message, level) {
     var toggle = document.getElementById('debugLogToggle');
     var viewer = document.getElementById('debugLogViewer');
     var counter = document.getElementById('debugLogCount');
-    toggle.style.display = '';
+    toggle.classList.remove('d-none');
     var count = parseInt(counter.textContent || '0', 10) + 1;
     counter.textContent = count;
     var line = document.createElement('div');
@@ -745,7 +745,7 @@ function appendDebugLog(message, level) {
     var ts = new Date().toLocaleTimeString();
     line.textContent = '[' + ts + '] ' + message;
     viewer.appendChild(line);
-    if (document.getElementById('debugLogPanel').style.display !== 'none') {
+    if (!document.getElementById('debugLogPanel').classList.contains('d-none')) {
         viewer.scrollTop = viewer.scrollHeight;
     }
 }
@@ -754,13 +754,13 @@ function toggleDebugLog() {
     var panel = document.getElementById('debugLogPanel');
     var btn = document.getElementById('debugLogToggle');
     var viewer = document.getElementById('debugLogViewer');
-    if (panel.style.display === 'none') {
-        panel.style.display = '';
+    if (panel.classList.contains('d-none')) {
+        panel.classList.remove('d-none');
         btn.innerHTML = '&#9660; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
             document.getElementById('debugLogCount').textContent + '</span>';
         viewer.scrollTop = viewer.scrollHeight;
     } else {
-        panel.style.display = 'none';
+        panel.classList.add('d-none');
         btn.innerHTML = '&#9654; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
             document.getElementById('debugLogCount').textContent + '</span>';
     }
@@ -809,7 +809,7 @@ function showOutputFiles(files) {
 
     var panel = document.getElementById('outputFiles');
     var list = document.getElementById('outputFileList');
-    panel.style.display = '';
+    panel.classList.remove('d-none');
 
     files.forEach(function(file) {
         var li = document.createElement('li');
@@ -849,7 +849,7 @@ function finishRun() {
     btn.disabled = false;
     btn.textContent = 'Run Operation';
     var stopBtn = document.getElementById('stopBtn');
-    stopBtn.style.display = 'none';
+    stopBtn.classList.add('d-none');
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop Operation';
     refreshActiveOps();
@@ -876,11 +876,11 @@ function renderActiveOps(runs) {
     var list = document.getElementById('activeOpsList');
 
     if (runs.length === 0) {
-        panel.style.display = 'none';
+        panel.classList.add('d-none');
         return;
     }
 
-    panel.style.display = '';
+    panel.classList.remove('d-none');
     list.innerHTML = '';
     runs.forEach(function(run) {
         var div = document.createElement('div');
@@ -895,7 +895,7 @@ function renderActiveOps(runs) {
             '<div><strong>Menu ' + escapeHtml(run.menu_number) + '</strong> ' +
             '<span class="badge bg-primary">Running</span>' +
             '<br><small class="text-muted">' + escapeHtml(run.description || '') + '</small>' +
-            '<br><small class="text-muted" style="font-size:0.7rem">' +
+            '<br><small class="text-muted text-xs">' +
             escapeHtml(run.run_id || '') + '</small></div>' +
             '<button class="btn btn-sm btn-outline-danger ms-2 stop-active-btn" ' +
             'title="Stop this operation" ' +
@@ -919,13 +919,13 @@ function reconnectToOperation(runId, menuNumber, description) {
     var selectedPanel = document.getElementById('selectedOp');
     titleEl.textContent = 'Menu ' + menuNumber;
     descEl.textContent = description || '';
-    selectedPanel.style.display = '';
+    selectedPanel.classList.remove('d-none');
 
-    document.getElementById('parameterForm').style.display = 'none';
-    document.getElementById('cliOnlyPanel').style.display = 'none';
+    document.getElementById('parameterForm').classList.add('d-none');
+    document.getElementById('cliOnlyPanel').classList.add('d-none');
     document.getElementById('runBtn').disabled = true;
     document.getElementById('runBtn').textContent = 'Running...';
-    document.getElementById('stopBtn').style.display = '';
+    document.getElementById('stopBtn').classList.remove('d-none');
 
     resetExecutionPanel();
     setStatus('running', 'Reconnected to Menu ' + menuNumber);

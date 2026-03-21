@@ -24,23 +24,23 @@
     <!-- Right: Execution Panel -->
     <div class="col-md-7">
         <!-- Selected Operation -->
-        <div class="portal-card" id="selectedOp" style="display:none;" data-testid="selected-op-panel">
+        <div class="portal-card d-none" id="selectedOp" data-testid="selected-op-panel">
             <h5 id="selectedOpTitle"></h5>
             <p class="text-muted mb-2" id="selectedOpDesc"></p>
 
             <!-- CLI-Only Message -->
-            <div id="cliOnlyPanel" class="alert alert-info" style="display:none;">
+            <div id="cliOnlyPanel" class="alert alert-info d-none">
                 <strong>SSH Required</strong>
                 <p id="cliOnlyMessage" class="mb-0 mt-1"></p>
             </div>
 
             <!-- Parameter Form (if applicable) -->
-            <div id="parameterForm" style="display:none;">
+            <div id="parameterForm" class="d-none">
                 <div id="parameterFields"></div>
-                <div id="parameterLoading" class="text-center text-muted py-2" style="display:none;">
+                <div id="parameterLoading" class="text-center text-muted py-2 d-none">
                     Loading parameters...
                 </div>
-                <div id="parameterError" class="alert alert-danger mt-2" style="display:none;">
+                <div id="parameterError" class="alert alert-danger mt-2 d-none">
                     <span id="parameterErrorMsg"></span>
                     <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="retryLoadParameters()">Retry</button>
                 </div>
@@ -49,25 +49,25 @@
             <button type="button" class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
                 Run Operation
             </button>
-            <button type="button" class="btn btn-outline-danger mt-2 ms-2" id="stopBtn" style="display:none;" onclick="stopRunningOperation()" data-testid="stop-btn">
+            <button type="button" class="btn btn-outline-danger mt-2 ms-2 d-none" id="stopBtn" onclick="stopRunningOperation()" data-testid="stop-btn">
                 Stop Operation
             </button>
         </div>
 
         <!-- Active Operations -->
-        <div id="activeOpsPanel" style="display:none;">
+        <div id="activeOpsPanel" class="d-none">
             <h6 class="mt-3">Active Operations</h6>
             <div id="activeOpsList"></div>
         </div>
 
         <!-- Execution Log -->
-        <div id="executionPanel" style="display:none;" data-testid="execution-panel">
+        <div id="executionPanel" class="d-none" data-testid="execution-panel">
             <h6 class="mt-3">Execution Log</h6>
 
             <!-- Progress Bar -->
             <div class="portal-progress">
                 <div class="progress-bar" id="progressBar" role="progressbar"
-                     style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                     aria-label="Operation progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                     0%
                 </div>
             </div>
@@ -83,18 +83,18 @@
 
             <!-- Debug Log (collapsible) -->
             <div class="mt-2">
-                <button class="btn btn-sm btn-outline-secondary" type="button"
-                        id="debugLogToggle" style="display:none;"
+                <button class="btn btn-sm btn-outline-secondary d-none" type="button"
+                        id="debugLogToggle"
                         onclick="toggleDebugLog()">
                     &#9654; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">0</span>
                 </button>
-                <div id="debugLogPanel" style="display:none;">
+                <div id="debugLogPanel" class="d-none">
                     <div class="log-viewer debug-log-viewer mt-1" id="debugLogViewer"></div>
                 </div>
             </div>
 
             <!-- Output Files -->
-            <div id="outputFiles" style="display:none;" class="mt-2">
+            <div id="outputFiles" class="mt-2 d-none">
                 <strong>Output Files:</strong>
                 <ul id="outputFileList" class="list-unstyled mt-1"></ul>
             </div>
@@ -112,18 +112,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="dataPreviewSearchRow" class="mb-2" style="display:none;">
-                    <input type="text" class="form-control form-control-sm" id="dataPreviewSearch"
-                           placeholder="Search rows..." style="max-width:300px;">
+                <div id="dataPreviewSearchRow" class="mb-2 d-none">
+                    <input type="text" class="form-control form-control-sm preview-search-input" id="dataPreviewSearch"
+                           placeholder="Search rows...">
                 </div>
-                <div id="dataPreviewLoading" class="modal-loading" style="display:none;">
+                <div id="dataPreviewLoading" class="modal-loading d-none">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                     <p class="mt-2">Loading preview...</p>
                 </div>
                 <div id="dataPreviewBody"></div>
-                <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
+                <div class="portal-pagination d-none" id="dataPreviewPagination">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
                             onclick="DataPreviewModal.changePage(-1)">Prev</button>
                     <span class="page-info" id="dataPreviewPageInfo"></span>

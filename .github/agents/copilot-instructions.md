@@ -32,6 +32,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - NDJSON files in `data/` directory (`test_events.jsonl`, timestamped variants) (012-automated-testing)
 - Python 3.13+ (existing `requires-python = ">=3.13"`) + Ruff, mypy, pytest + pytest-cov, Bandit, pip-audit, Hypothesis, Playwright (dev); mistapi, Flask, Gunicorn, Dash (runtime) (013-ci-quality-pipeline)
 - N/A (pipeline infrastructure, no new data storage) (013-ci-quality-pipeline)
+- Python 3.13+ + mistapi 0.59+ (Mist API SDK), websocket-client (WebSocket connections), requests (HTTP fallback for non-SDK endpoints) (014-device-utility-commands)
+- SQLite (`data/mist_data.db`) + CSV dual output via `DataExporter.write_with_format_selection()` (014-device-utility-commands)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -51,9 +53,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 014-device-utility-commands: Added Python 3.13+ + mistapi 0.59+ (Mist API SDK), websocket-client (WebSocket connections), requests (HTTP fallback for non-SDK endpoints)
 - 013-ci-quality-pipeline: Added Python 3.13+ (existing `requires-python = ">=3.13"`) + Ruff, mypy, pytest + pytest-cov, Bandit, pip-audit, Hypothesis, Playwright (dev); mistapi, Flask, Gunicorn, Dash (runtime)
 - 012-automated-testing: Added Python 3.13+ + mistapi 0.59+, pytest (new — unit tests only)
-- 011-mist-ops-api-audit: Added Python 3.13 + mistapi 0.60.4 (Mist API SDK), FastAPI, Celery, SQLAlchemy
 
 
 <!-- MANUAL ADDITIONS START -->
