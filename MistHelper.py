@@ -12411,7 +12411,7 @@ class OfflineDeviceReporter:
             return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
 
         for attempt in range(OfflineDeviceReporter.MAX_INPUT_RETRIES):
-            raw = safe_input(
+            raw = InputUtils.safe_input(
                 f"Enter offline threshold in hours (default {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS}): ",
                 default_value=str(OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS),
                 context="offline_threshold",
