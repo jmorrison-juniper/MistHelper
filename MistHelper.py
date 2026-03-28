@@ -54,8 +54,15 @@ from typing import TYPE_CHECKING, Any, Literal
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
+# Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:
-    pass
+    from prettytable import PrettyTable
+
+    import numpy as np
+    import pyte
+    import requests
+    import urllib3
+    import websocket
 
 # ============================================================================
 # EARLY LOGGING SETUP
@@ -795,23 +802,31 @@ from collections import defaultdict
 # Only import timezone, timedelta here to avoid shadowing datetime class
 from datetime import UTC, timedelta, timezone
 
-# Third-party imports for static analysis (with fallbacks)
-# Pattern: try/except imports use type: ignore[assignment] to suppress no-redef
-# errors from mypy strict mode — these are intentional conditional imports.
+# Third-party imports with fallbacks
+# Required dependencies: raise clear error if missing (auto-installed by early dependency check)
+# Optional dependencies: use _has_X availability flags for runtime guards
+# Pylance uses the TYPE_CHECKING imports above for type analysis.
 try:
     from prettytable import PrettyTable
-except ImportError:
-    PrettyTable = None  # type: ignore[assignment, misc]  # Installed by GlobalImportManager
+except ImportError as _pt_err:
+    raise ImportError(
+        "PrettyTable is required but not installed. Run: pip install prettytable"
+    ) from _pt_err
 
 try:
     import numpy as np
+
+    _has_numpy = True
 except ImportError:
     np = None  # type: ignore[assignment]  # Optional - analytics features limited
+    _has_numpy = False
 
 try:
     import websocket
-except ImportError:
-    websocket = None  # type: ignore[assignment]  # Optional - WebSocket disabled
+except ImportError as _ws_err:
+    raise ImportError(
+        "websocket-client is required but not installed. Run: pip install websocket-client"
+    ) from _ws_err
 
 try:
     from difflib import SequenceMatcher
@@ -832,18 +847,26 @@ def tqdm(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]
 
 try:
     import requests  # type: ignore[import-untyped]
-except ImportError:
-    requests = None  # type: ignore[assignment]  # Installed by GlobalImportManager
+except ImportError as _req_err:
+    raise ImportError(
+        "requests is required but not installed. Run: pip install requests"
+    ) from _req_err
 
 try:
     import urllib3
+
+    _has_urllib3 = True
 except ImportError:
     urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression
+    _has_urllib3 = False
 
 try:
     import pyte
+
+    _has_pyte = True
 except ImportError:
     pyte = None  # type: ignore[assignment]  # Optional - terminal emulation
+    _has_pyte = False
 
 try:
     import paramiko  # type: ignore[import-untyped]
@@ -12362,6 +12385,235 @@ class OrgDeviceStatsExporter:
             logging.debug("\n" + table.get_string())
 
 
+class OfflineDeviceReporter:
+    """
+    Offline Device Report (Menu 158)
+
+    Scans org inventory via listOrgDevicesStats, filters devices offline
+    beyond a user-configurable threshold (default 48h), displays summary
+    and PrettyTable on screen, saves human-readable CSV to data/.
+
+    Usage:
+        OfflineDeviceReporter.execute()
+    """
+
+    MAX_DISPLAY_ROWS = 50
+    DEFAULT_THRESHOLD_HOURS = 48
+    MIN_THRESHOLD_HOURS = 1
+    MAX_THRESHOLD_HOURS = 8760
+    MAX_INPUT_RETRIES = 3
+
+    @staticmethod
+    def _prompt_threshold() -> int:
+        """Prompt user for offline threshold in hours, with validation."""
+        if IS_TEST_MODE:
+            logging.debug("Test mode: using default threshold 48 hours")
+            return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
+
+        for attempt in range(OfflineDeviceReporter.MAX_INPUT_RETRIES):
+            raw = safe_input(
+                f"Enter offline threshold in hours (default {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS}): ",
+                default_value=str(OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS),
+                context="offline_threshold",
+            )
+            try:
+                hours = int(raw)
+                if OfflineDeviceReporter.MIN_THRESHOLD_HOURS <= hours <= OfflineDeviceReporter.MAX_THRESHOLD_HOURS:
+                    return hours
+                print(
+                    f"! Threshold must be between {OfflineDeviceReporter.MIN_THRESHOLD_HOURS}"
+                    f" and {OfflineDeviceReporter.MAX_THRESHOLD_HOURS} hours."
+                )
+            except ValueError:
+                print(f"! Invalid input '{raw}'. Please enter a number.")
+            remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1
+            if remaining > 0:
+                print(f"  ({remaining} attempt(s) remaining)")
+
+        logging.warning("Max retries exceeded for threshold input, using default 48 hours")
+        print(f"  Using default threshold: {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS} hours")
+        return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
+
+    @staticmethod
+    def _fetch_data(current_org_id: str) -> tuple[dict[str, str], list[dict]]:
+        """Fetch site lookup and device stats from Mist API."""
+        logging.info("Fetching site information for offline device report...")
+        print("  Fetching site information...")
+        all_sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
+        site_lookup: dict[str, str] = {}
+        for site in all_sites:
+            site_id = site.get("id")
+            if site_id:
+                site_lookup[site_id] = site.get("name", "Unknown Site")
+
+        logging.info("Fetching device stats for offline device report...")
+        print("  Fetching device statistics...")
+        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+            apisession, current_org_id, type="all", status="all", fields="*", limit=1000
+        )
+        all_devices: list[dict] = mistapi.get_all(response=stats_resp, mist_session=apisession)
+        logging.info(f"Retrieved stats for {len(all_devices)} devices")
+        print(f"  Retrieved {len(all_devices)} devices from API")
+        return site_lookup, all_devices
+
+    @staticmethod
+    def _process_devices(
+        all_devices: list[dict],
+        site_lookup: dict[str, str],
+        threshold_hours: int,
+    ) -> list[dict[str, str]]:
+        """Filter offline devices beyond threshold, enrich with site names."""
+        now = time.time()
+        threshold_seconds = threshold_hours * 3600
+        offline_records: list[dict[str, str]] = []
+
+        for device in all_devices:
+            if device.get("status") == "connected":
+                continue
+            last_seen_raw = device.get("last_seen") or 0
+            last_seen_epoch = float(last_seen_raw) if last_seen_raw else 0.0
+            offline_seconds = now - last_seen_epoch
+            if offline_seconds < threshold_seconds and last_seen_epoch > 0:
+                continue
+
+            # Format display values
+            never_connected = last_seen_epoch == 0.0
+            if never_connected:
+                last_seen_str = "Never Connected"
+                duration_str = "Never Connected"
+                sort_key = float("inf")
+            else:
+                last_seen_str = datetime.datetime.fromtimestamp(last_seen_epoch).strftime("%Y-%m-%d %H:%M:%S")
+                total_hours = int(offline_seconds // 3600)
+                days = total_hours // 24
+                hours = total_hours % 24
+                duration_str = f"{days} days {hours} hours" if days > 0 else f"{hours} hours"
+                sort_key = offline_seconds
+
+            device_type_raw = device.get("type", "unknown")
+            type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(
+                device_type_raw, device_type_raw.capitalize()
+            )
+            site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
+
+            offline_records.append({
+                "Device Name": device.get("name") or "(unnamed)",
+                "Device Type": type_display,
+                "Site Name": site_name,
+                "MAC Address": device.get("mac", ""),
+                "Serial Number": device.get("serial", ""),
+                "Model": device.get("model", ""),
+                "Last Seen": last_seen_str,
+                "Offline Duration": duration_str,
+                "Status": device.get("status", "disconnected"),
+                "_sort_key": str(sort_key),
+            })
+
+        offline_records.sort(key=lambda record: float(record["_sort_key"]), reverse=True)
+        return offline_records
+
+    @staticmethod
+    def _display_summary(
+        total_device_count: int,
+        offline_records: list[dict[str, str]],
+        threshold_hours: int,
+    ) -> None:
+        """Display summary statistics before the detail table."""
+        print(f"\n--- Summary ---")
+        print(f"Total devices in org: {total_device_count:,}")
+        print(f"Devices offline > {threshold_hours} hours: {len(offline_records)}")
+
+        type_counts: dict[str, int] = {}
+        site_counts: dict[str, int] = {}
+        for record in offline_records:
+            device_type = record["Device Type"]
+            type_counts[device_type] = type_counts.get(device_type, 0) + 1
+            site_name = record["Site Name"]
+            site_counts[site_name] = site_counts.get(site_name, 0) + 1
+
+        print("\nBy Type:")
+        for device_type in ["AP", "Switch", "Gateway"]:
+            count = type_counts.get(device_type, 0)
+            if count > 0:
+                print(f"  {device_type}s: {count}")
+
+        sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        if sorted_sites:
+            print("\nTop 5 Sites:")
+            for rank, (site_name, count) in enumerate(sorted_sites, 1):
+                print(f"  {rank}. {site_name}: {count} offline")
+
+    @staticmethod
+    def _present_results(offline_records: list[dict[str, str]]) -> None:
+        """Display PrettyTable and save CSV for offline devices."""
+        display_fields = [
+            "Device Name", "Device Type", "Site Name", "MAC Address",
+            "Serial Number", "Model", "Last Seen", "Offline Duration", "Status",
+        ]
+        total_count = len(offline_records)
+        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)
+
+        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")
+        table = PrettyTable()
+        table.field_names = display_fields
+        for record in offline_records[:show_count]:
+            table.add_row([record.get(field, "") for field in display_fields])
+        print(table)
+
+        # Save CSV with all records
+        csv_records = [{field: record.get(field, "") for field in display_fields} for record in offline_records]
+        timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"OfflineDeviceReport_{timestamp_str}.csv"
+        DataExporter.write_with_format_selection(
+            data=csv_records,
+            filename_or_table=filename,
+            api_function_name="listOrgDevicesStats",
+        )
+        logging.info(f"CSV saved: data/{filename} ({total_count} devices)")
+        print(f"\nCSV saved: data/{filename} ({total_count} devices)")
+
+    @staticmethod
+    def execute() -> None:
+        """Main entry point for offline device report (Menu 158)."""
+        print("\n=== Offline Device Report ===")
+        logging.info("Starting offline device report...")
+        start_time = time.time()
+
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+
+        threshold_hours = OfflineDeviceReporter._prompt_threshold()
+        print(f"Threshold: {threshold_hours} hours\n")
+
+        try:
+            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)
+        except Exception as error:
+            logging.error(f"Failed to fetch data from Mist API: {error}")
+            print("! Failed to fetch data. Please check your API credentials and network connection.")
+            return
+
+        if not all_devices:
+            logging.info("No devices found in organization")
+            print("No devices found in this organization.")
+            return
+
+        offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)
+
+        if not offline_records:
+            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")
+            logging.info(f"No devices offline beyond {threshold_hours}h threshold")
+            return
+
+        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)
+        OfflineDeviceReporter._present_results(offline_records)
+
+        elapsed = time.time() - start_time
+        logging.info(f"Offline device report completed in {elapsed:.1f} seconds")
+        print(f"\nReport completed in {elapsed:.1f} seconds")
+
+
 class OrgTemplateExporter:
     """
     Organization Template Exporter
@@ -14055,7 +14307,7 @@ class SiteClientExporter:
                 return
 
             # Create a dictionary to store session data by MAC address for easy lookup
-            sessions_by_mac: dict[str, Any] = {}
+            sessions_by_mac: dict[str, dict[str, Any] | list[dict[str, Any]]] = {}
             if sessions:
                 for session in sessions:
                     mac = session.get("mac")
@@ -19521,6 +19773,9 @@ class DeviceUtilityCommands:
     @staticmethod
     def readopt_device() -> None:
         """Menu 143: Re-adopt switch device."""
+        # TODO: Returns 400 "re-adopt only works for a VC" on non-VC switches.
+        #   Need to investigate: filter to VC-capable devices only, or add
+        #   pre-check for VC membership before calling API.
         logging.info("Menu #143: Re-adopt Device")
         selection = DeviceUtilityCommands._select_site_and_device(
             "readopt", "switch"
@@ -19719,6 +19974,9 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_session() -> None:
         """Menu 149: Clear session on SSR/SRX (typed 'CLEAR' confirmation)."""
+        # TODO: Returns 400 "Either clear session by service_name or by session_ids".
+        #   API requires service_name or session_ids param, not just session_id.
+        #   Need to add service_name prompt and fix body key to session_ids (list).
         logging.info("Menu #149: Clear Session")
         selection = DeviceUtilityCommands._select_site_and_device(
             "clear_session", "gateway"
@@ -19780,6 +20038,9 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_bpdu_error() -> None:
         """Menu 151: Clear BPDU errors on switch (typed 'CLEAR' confirmation)."""
+        # TODO: Returns 400 on Morrison-Switch EX4100. Investigate whether
+        #   port_id is required (not optional), or if API expects different
+        #   body format. May only work when BPDU errors are actively present.
         logging.info("Menu #151: Clear BPDU Errors")
         selection = DeviceUtilityCommands._select_site_and_device(
             "clear_bpdu_error", "switch"
@@ -19809,6 +20070,9 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_learned_macs() -> None:
         """Menu 152: Clear learned MACs from switch port (typed 'CLEAR')."""
+        # TODO: Returns 400 on Morrison-Switch EX4100 with port ge-0/0/0.
+        #   Investigate API body format - may need different key than port_id,
+        #   or port name format may differ from what if_stat returns.
         logging.info("Menu #152: Clear Learned MACs")
         selection = DeviceUtilityCommands._select_site_and_device(
             "clear_macs", "switch"
@@ -19841,6 +20105,8 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_policy_hit_count() -> None:
         """Menu 153: Clear policy hit count on SSR (typed 'CLEAR')."""
+        # TODO: Returns 400 on DC-West SSR120. Investigate API requirements -
+        #   may need node param, or may be unsupported on SSR120 model.
         logging.info("Menu #153: Clear Policy Hit Count")
         selection = DeviceUtilityCommands._select_site_and_device(
             "clear_policy_hit_count", "gateway"
@@ -24332,6 +24598,10 @@ class CLIShellManager:
             shell_url: The WebSocket URL for the shell session
             debug: Enable debug mode for WebSocket tracing
         """
+        if not _has_pyte or pyte is None:
+            print("! Terminal emulation requires pyte. Install: pip install pyte")
+            return
+
         if debug:
             websocket.enableTrace(True)
 
@@ -24357,7 +24627,7 @@ class CLIShellManager:
                         data = data.decode("utf-8", errors="ignore")
                     if debug:
                         print(f"[DEBUG] Raw recv: {repr(data)}")
-                    if data:
+                    if data and isinstance(data, str):
                         stream.feed(data)
                         for row_index in sorted(screen.dirty):
                             sys.stdout.write(f"\x1b[{row_index + 1};1H")
@@ -24382,8 +24652,9 @@ class CLIShellManager:
                 }
                 if key == "~":
                     print("\n## Exit from shell ##")
-                    ws.sock.shutdown(2)
-                    ws.sock.close()
+                    if ws.sock is not None:
+                        ws.sock.shutdown(2)
+                        ws.sock.close()
                     stop_listening()  # type: ignore[no-untyped-call]
                     return
                 mapped_key = keymap.get(key, key)
@@ -24741,11 +25012,18 @@ class RateLimitingUtils:
             return 0.3  # default fallback
 
         try:
-            # Ensure errors is a list of numbers and convert to numpy array safely
-            recent_errors = errors[-10:]
-            # Convert to float64 explicitly to avoid type conversion issues
-            error_array = np.array(recent_errors, dtype=np.float64)
-            standard_deviation = np.std(error_array)
+            if not _has_numpy or np is None:
+                # Fallback without numpy: use simple standard deviation calculation
+                recent_errors = errors[-10:]
+                mean_val = sum(recent_errors) / len(recent_errors)
+                variance = sum((x - mean_val) ** 2 for x in recent_errors) / len(recent_errors)
+                standard_deviation = variance ** 0.5
+            else:
+                # Ensure errors is a list of numbers and convert to numpy array safely
+                recent_errors = errors[-10:]
+                # Convert to float64 explicitly to avoid type conversion issues
+                error_array = np.array(recent_errors, dtype=np.float64)
+                standard_deviation = float(np.std(error_array))
             normalized = min(standard_deviation / 50, 1.0)  # adjust divisor to control sensitivity
             alpha = min_alpha + (max_alpha - min_alpha) * normalized
             return round(alpha, 3)
@@ -25787,7 +26065,7 @@ class NominatimValidator:
 
     def _suppress_ssl_warnings_if_needed(self):  # type: ignore[no-untyped-def]
         """Suppress SSL warnings when verification is disabled."""
-        if self.skip_ssl_verify:
+        if self.skip_ssl_verify and _has_urllib3 and urllib3 is not None:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             if self.debug:
                 logging.warning("SSL certificate verification disabled - urllib3 warnings suppressed")
@@ -54828,6 +55106,8 @@ menu_actions = {
     # > Hardware Commands
     "156": (DeviceUtilityCommands.poll_switch_stats, "Poll Fresh Statistics from Switch"),
     "157": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
+    # > Offline / Reporting
+    "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
 }
 
 
@@ -55437,6 +55717,7 @@ class OperationRegistry:
         "155": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Release SSR DHCP lease - releases active SSR DHCP lease"},
         "156": {"category": "interactive", "skip_reason": "Poll switch stats - requires interactive switch selection"},
         "157": {"category": "interactive", "skip_reason": "Create device snapshot - requires interactive switch selection"},
+        "158": {"category": "safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
@@ -56539,7 +56820,7 @@ class EnhancedSSHRunner:
             # Send command with improved buffering
             try:
                 command_with_newline = command + "\n"
-                shell.send(command_with_newline)
+                shell.send(command_with_newline.encode("utf-8"))
                 time.sleep(0.1)  # Small delay to ensure command is sent completely
                 self.logger.debug(f"Sent command to shell: {command}")
             except Exception as e:
@@ -56675,8 +56956,8 @@ class EnhancedSSHRunner:
             max_cleanup_time = 2.0  # Maximum 2 seconds for cleanup to prevent hangs
 
             try:
-                shell.send("exit\n")
-                shell.send("\n")  # Extra newline to ensure command completion
+                shell.send(b"exit\n")
+                shell.send(b"\n")  # Extra newline to ensure command completion
 
                 # Quick cleanup collection with timeout
                 cleanup_timeout = time.time() + max_cleanup_time
@@ -57232,7 +57513,7 @@ Commands/responses to execute: {num_commands}
 
                 try:
                     # Send command/response
-                    shell.send(current_item + "\n")
+                    shell.send((current_item + "\n").encode("utf-8"))
                     time.sleep(0.2)  # Brief pause to let command register
 
                     # Wait for and collect response
@@ -57320,7 +57601,7 @@ Commands/responses to execute: {num_commands}
 
             # Cleanup - close shell gracefully
             try:
-                shell.send("exit\n")
+                shell.send(b"exit\n")
                 time.sleep(0.5)
                 shell.close()
                 logger.debug(f"[{hostname}] Interactive shell closed gracefully")

@@ -4,7 +4,7 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 123 actionable menu entries (0-122) with some gaps for future expansion.
+**Operation Count:** The code currently defines 159 actionable menu entries (0-158) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -35,7 +35,7 @@ See `deploy/.env.example` for environment variable documentation.
 ---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
+1. Operation Count: The code currently defines 159 actionable menu entries (0–158) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
@@ -302,11 +302,47 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 120 | Site Analytics Config | **DESTRUCTIVE**: Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites |
 | 121 | Site Inventory Health | Find sites with APs missing switches/gateways, or with offline infrastructure |
 | 122 | Bulk RADIUS WLAN Config | Configure RADIUS WLAN auth timers (timeout, retries, fast_dot1x) for org-level WLANs |
+| 123 | Traceroute | Traceroute from device to destination host (AP/Switch/Gateway) |
+| 124 | OSPF Neighbors | Show OSPF neighbor adjacencies (Gateway) |
+| 125 | OSPF Interfaces | Show OSPF interface status (Gateway) |
+| 126 | OSPF Database | Show OSPF link-state database (Gateway) |
+| 127 | OSPF Summary | Show OSPF routing summary (Gateway) |
+| 128 | Show Sessions | Show active sessions on SSR/SRX gateway |
+| 129 | Show Service Path | Show SSR service path entries |
+| 130 | Show BGP Summary | Show BGP peer summary (Gateway/Switch) |
+| 131 | Show ARP Table | Show ARP table entries (Gateway/Switch) |
+| 132 | Show DHCP Leases | Show DHCP lease table (Gateway/Switch) |
+| 133 | Show 802.1X Table | Show 802.1X authenticated clients (Switch) |
+| 134 | Show EVPN Database | Show EVPN database entries (Switch/Gateway) |
+| 135 | Resolve DNS | Test DNS resolution on SSR device |
+| 136 | Monitor Traffic | Stream live traffic counters (AP/Switch/Gateway) |
+| 137 | Run Top | Stream top processes on SRX gateway |
+| 138 | Locate Device | Start LED blink for physical device locate (AP/Switch/Gateway) |
+| 139 | Unlocate Device | Stop LED blink on device (AP/Switch/Gateway) |
+| 140 | Bounce Port | **DESTRUCTIVE**: Bounce (disable/enable) a switch port |
+| 141 | Cable Test | Run cable diagnostics on a switch port |
+| 142 | Reprovision Device | **DESTRUCTIVE**: Reprovision Octerm-managed device |
+| 143 | Re-adopt Device | **DESTRUCTIVE**: Re-adopt Octerm-managed device |
+| 144 | Get ZTP Password | Retrieve ZTP password for a device |
+| 145 | Get Config Commands | Retrieve rendered CLI config commands for a device |
+| 146 | Upload Support File | Upload device support/debug file to Mist cloud |
+| 147 | Clear ARP Cache | **DESTRUCTIVE**: Clear ARP cache on SSR device |
+| 148 | Clear BGP Routes | **DESTRUCTIVE**: Clear BGP neighbor routes on SSR |
+| 149 | Clear Session | **DESTRUCTIVE**: Clear active session on device |
+| 150 | Clear MAC Table | **DESTRUCTIVE**: Clear MAC address table on Switch |
+| 151 | Clear BPDU Errors | **DESTRUCTIVE**: Clear BPDU errors on switch ports |
+| 152 | Clear Learned MACs | **DESTRUCTIVE**: Clear learned MACs from switch port |
+| 153 | Clear Policy Hit Count | **DESTRUCTIVE**: Clear policy hit counters on device |
+| 154 | Release DHCP Lease | **DESTRUCTIVE**: Release DHCP lease from device port |
+| 155 | Release DHCP SSR | **DESTRUCTIVE**: Release DHCP lease on SSR device |
+| 156 | Poll Switch Stats | Force immediate stats poll on switch |
+| 157 | Create Device Snapshot | Create configuration snapshot on switch |
+| 158 | Offline Device Report | Scan org inventory for devices offline beyond configurable threshold (default 48h), display summary + PrettyTable, save CSV |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
 * 63–65 intentionally marked WIP; expect evolution.
-* 90–93, 99–100, 104, 106–111, 113–114 should never be scripted unattended without explicit review.
+* 90–93, 99–100, 104, 106–111, 113–114, 140, 142–143, 147–155 should never be scripted unattended without explicit review.
 
 ---
 ## 9. Systematic Test Mode (`--test`)
@@ -765,6 +801,26 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.03.28.19.09",
+      "date": "2026-03-28",
+      "changes": {
+        "features": [
+          "Offline Device Report (Menu 158): New OfflineDeviceReporter class scans entire org via listOrgDevicesStats (type=all, status=all), filters devices offline beyond user-configurable threshold (default 48h), resolves site names via lookup dict, displays summary stats (total devices, per-type breakdown, top 5 sites) + PrettyTable (max 50 rows), saves human-readable CSV with timestamped filename to data/. Classified as safe in OperationRegistry for automated --test mode."
+        ]
+      }
+    },
+    {
+      "version": "26.03.20.22.31",
+      "date": "2026-03-20",
+      "changes": {
+        "features": [
+          "Device Utility Commands: 35 new operations (menus 123-157) covering traceroute, OSPF diagnostics, session/service-path inspection, BGP/ARP/DHCP/802.1X/EVPN show commands, DNS resolution, live traffic monitoring, device locate, port bounce, cable test, reprovision/re-adopt, ZTP password retrieval, config command export, support file upload, 7 clear/reset operations, DHCP lease release, stats polling, and device snapshots",
+          "DeviceUtilityCommands class: Uses mistapi SDK methods (not raw requests) with WebSocket result streaming, device-type validation, port selection from live stats, and three-tier destructive confirmation (none/y-N/typed keyword)",
+          "14 new ENDPOINT_PRIMARY_KEY_STRATEGIES entries for dual-output (CSV/SQLite) support on all device utility results"
+        ]
+      }
+    },
     {
       "version": "26.03.05.02.49",
       "date": "2026-03-05",
