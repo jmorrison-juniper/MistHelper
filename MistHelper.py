@@ -319,6 +319,23 @@ class DeviceFetchConfig:
 # This section attempts to auto-install critical dependencies BEFORE any imports
 # that might fail. This enables running the script directly without pre-setup.
 
+# Load .env BEFORE dependency check so DISABLE_AUTO_INSTALL and
+# AUTO_UPGRADE_TO_LATEST are honoured when set in .env.
+try:
+    from dotenv import load_dotenv as _early_load_dotenv
+    _early_load_dotenv()
+except Exception:
+    # Inline fallback: read .env manually so env vars are available
+    try:
+        with open(".env") as _ef:
+            for _line in _ef:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip())
+    except Exception:
+        pass
+
 # Package name to import name mapping for special cases
 PACKAGE_IMPORT_MAP = {
     "websocket-client": "websocket",
@@ -501,7 +518,10 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
         return
 
     # Check if we should upgrade to latest versions (not just meet minimum requirements)
-    auto_upgrade_to_latest = os.getenv("AUTO_UPGRADE_TO_LATEST", "true").lower() == "true"
+    # Accepts both AUTO_UPGRADE_TO_LATEST and AUTO_UPGRADE_DEPENDENCIES for compatibility
+    auto_upgrade_to_latest = (
+        os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower() == "true"
+    )
     if auto_upgrade_to_latest:
         logging.debug("AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions")
 
