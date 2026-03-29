@@ -50,7 +50,7 @@ jobs:
 
       - name: Run pip-audit dependency scan
         if: matrix.check == 'pip-audit'
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2026-4539  # No fix available yet for Pygments
 
       - name: Run diagram reference lint
         if: matrix.check == 'diagram-lint'
