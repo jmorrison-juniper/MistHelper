@@ -6,8 +6,6 @@ to avoid import side effects (standard MistHelper test pattern).
 
 import datetime
 import time
-from io import StringIO
-from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Duplicated pure functions from OfflineDeviceReporter
@@ -58,18 +56,20 @@ def process_devices(
         )
         site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
 
-        offline_records.append({
-            "Device Name": device.get("name") or "(unnamed)",
-            "Device Type": type_display,
-            "Site Name": site_name,
-            "MAC Address": device.get("mac", ""),
-            "Serial Number": device.get("serial", ""),
-            "Model": device.get("model", ""),
-            "Last Seen": last_seen_str,
-            "Offline Duration": duration_str,
-            "Status": device.get("status", "disconnected"),
-            "_sort_key": str(sort_key),
-        })
+        offline_records.append(
+            {
+                "Device Name": device.get("name") or "(unnamed)",
+                "Device Type": type_display,
+                "Site Name": site_name,
+                "MAC Address": device.get("mac", ""),
+                "Serial Number": device.get("serial", ""),
+                "Model": device.get("model", ""),
+                "Last Seen": last_seen_str,
+                "Offline Duration": duration_str,
+                "Status": device.get("status", "disconnected"),
+                "_sort_key": str(sort_key),
+            }
+        )
 
     offline_records.sort(key=lambda record: float(record["_sort_key"]), reverse=True)
     return offline_records
@@ -82,7 +82,7 @@ def display_summary(
 ) -> str:
     """Mirror of OfflineDeviceReporter._display_summary(), returns output as string."""
     lines: list[str] = []
-    lines.append(f"\n--- Summary ---")
+    lines.append("\n--- Summary ---")
     lines.append(f"Total devices in org: {total_device_count:,}")
     lines.append(f"Devices offline > {threshold_hours} hours: {len(offline_records)}")
 
@@ -123,6 +123,7 @@ def validate_threshold(raw: str) -> int | None:
 # ---------------------------------------------------------------------------
 # Test Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_device(
     name: str = "test-device",
@@ -324,8 +325,15 @@ class TestProcessDevicesEnrichment:
         devices = [_make_device(last_seen=time.time() - 200000)]
         result = process_devices(devices, SITE_LOOKUP, 48)
         expected_fields = {
-            "Device Name", "Device Type", "Site Name", "MAC Address",
-            "Serial Number", "Model", "Last Seen", "Offline Duration", "Status",
+            "Device Name",
+            "Device Type",
+            "Site Name",
+            "MAC Address",
+            "Serial Number",
+            "Model",
+            "Last Seen",
+            "Offline Duration",
+            "Status",
         }
         record_fields = set(result[0].keys()) - {"_sort_key"}
         assert record_fields == expected_fields
@@ -399,13 +407,35 @@ class TestDurationFormatting:
 # ---------------------------------------------------------------------------
 # Tests: display_summary
 # ---------------------------------------------------------------------------
+
+_EXTRA_KEYS = [
+    "Device Name",
+    "MAC Address",
+    "Serial Number",
+    "Model",
+    "Last Seen",
+    "Offline Duration",
+    "Status",
+    "_sort_key",
+]
+
+
+def _rec(device_type: str, site: str) -> dict:
+    """Build a minimal offline-device record for tests."""
+    return {
+        "Device Type": device_type,
+        "Site Name": site,
+        **{k: "" for k in _EXTRA_KEYS},
+    }
+
+
 class TestDisplaySummary:
     """Tests for summary statistics output."""
 
     def test_total_counts(self):
         records = [
-            {"Device Type": "AP", "Site Name": "NYC-Office", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}},
-            {"Device Type": "Switch", "Site Name": "NYC-Office", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}},
+            _rec("AP", "NYC-Office"),
+            _rec("Switch", "NYC-Office"),
         ]
         output = display_summary(100, records, 48)
         assert "Total devices in org: 100" in output
@@ -413,20 +443,17 @@ class TestDisplaySummary:
 
     def test_type_breakdown(self):
         records = [
-            {"Device Type": "AP", "Site Name": "A", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}},
-            {"Device Type": "AP", "Site Name": "A", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}},
-            {"Device Type": "Switch", "Site Name": "A", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}},
+            _rec("AP", "A"),
+            _rec("AP", "A"),
+            _rec("Switch", "A"),
         ]
         output = display_summary(500, records, 48)
         assert "APs: 2" in output
         assert "Switchs: 1" in output
 
     def test_top_5_sites(self):
-        records = []
-        for i in range(3):
-            records.append({"Device Type": "AP", "Site Name": "Site-A", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}})
-        for i in range(2):
-            records.append({"Device Type": "AP", "Site Name": "Site-B", **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}})
+        records = [_rec("AP", "Site-A") for _ in range(3)]
+        records += [_rec("AP", "Site-B") for _ in range(2)]
         output = display_summary(100, records, 48)
         assert "1. Site-A: 3 offline" in output
         assert "2. Site-B: 2 offline" in output
@@ -446,11 +473,10 @@ class TestDisplaySummary:
         records = []
         for i in range(7):
             site_name = f"Site-{chr(65 + i)}"
-            for j in range(7 - i):
-                records.append({"Device Type": "AP", "Site Name": site_name, **{k: "" for k in ["Device Name", "MAC Address", "Serial Number", "Model", "Last Seen", "Offline Duration", "Status", "_sort_key"]}})
+            records += [_rec("AP", site_name) for _ in range(7 - i)]
         output = display_summary(100, records, 48)
         assert "5." in output
-        # Site-F (index 5) has 2 devices, Site-G (index 6) has 1 - only top 5 shown
+        # Site-F (index 5) has 2, Site-G (index 6) has 1 - top 5 only
         assert "6." not in output
 
 
@@ -463,9 +489,18 @@ class TestPresentResultsDisplayCap:
     def test_display_cap_message_under_limit(self):
         """When records < 50, show all."""
         records = [
-            {"Device Name": f"dev-{i}", "Device Type": "AP", "Site Name": "A",
-             "MAC Address": "", "Serial Number": "", "Model": "", "Last Seen": "",
-             "Offline Duration": "", "Status": "disconnected", "_sort_key": "0"}
+            {
+                "Device Name": f"dev-{i}",
+                "Device Type": "AP",
+                "Site Name": "A",
+                "MAC Address": "",
+                "Serial Number": "",
+                "Model": "",
+                "Last Seen": "",
+                "Offline Duration": "",
+                "Status": "disconnected",
+                "_sort_key": "0",
+            }
             for i in range(10)
         ]
         # Just verify count logic
@@ -475,9 +510,18 @@ class TestPresentResultsDisplayCap:
     def test_display_cap_at_limit(self):
         """When records > 50, cap at 50."""
         records = [
-            {"Device Name": f"dev-{i}", "Device Type": "AP", "Site Name": "A",
-             "MAC Address": "", "Serial Number": "", "Model": "", "Last Seen": "",
-             "Offline Duration": "", "Status": "disconnected", "_sort_key": "0"}
+            {
+                "Device Name": f"dev-{i}",
+                "Device Type": "AP",
+                "Site Name": "A",
+                "MAC Address": "",
+                "Serial Number": "",
+                "Model": "",
+                "Last Seen": "",
+                "Offline Duration": "",
+                "Status": "disconnected",
+                "_sort_key": "0",
+            }
             for i in range(75)
         ]
         show_count = min(len(records), MAX_DISPLAY_ROWS)

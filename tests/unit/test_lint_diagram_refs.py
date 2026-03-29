@@ -1,11 +1,9 @@
 """Tests for the Mermaid diagram reference lint script."""
 
-import argparse
-from pathlib import Path
-from textwrap import dedent
-
 import importlib.util
 import sys
+from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
@@ -25,6 +23,7 @@ spec.loader.exec_module(lint_diagram_refs)
 DiagramReferenceValidator = lint_diagram_refs.DiagramReferenceValidator
 BUILT_IN_ALLOWLIST = lint_diagram_refs.BUILT_IN_ALLOWLIST
 
+
 @pytest.fixture
 def validator():
     """Create a fresh validator instance."""
@@ -35,11 +34,16 @@ def validator():
 def validator_with_symbols(validator):
     """Validator pre-loaded with sample Python symbols."""
     validator.python_symbols = {
-        "DataExporter", "write_with_format_selection",
-        "APIFetchUtils", "fetch_with_pagination",
-        "SQLiteDatabaseWriter", "upsert_records",
-        "OperationRegistry", "RateLimitingUtils",
-        "WebSocketManager", "PacketCaptureManager",
+        "DataExporter",
+        "write_with_format_selection",
+        "APIFetchUtils",
+        "fetch_with_pagination",
+        "SQLiteDatabaseWriter",
+        "upsert_records",
+        "OperationRegistry",
+        "RateLimitingUtils",
+        "WebSocketManager",
+        "PacketCaptureManager",
     }
     return validator
 
@@ -144,14 +148,16 @@ class TestPythonSymbolExtraction:
 
     def test_extracts_class_names(self, validator, tmp_path):
         source = tmp_path / "test_source.py"
-        source.write_text(dedent("""\
+        source.write_text(
+            dedent("""\
             class MyExporter:
                 def export_data(self):
                     pass
 
             class MyManager:
                 pass
-        """))
+        """)
+        )
         symbols = validator.extract_python_symbols(source)
         assert "MyExporter" in symbols
         assert "MyManager" in symbols
@@ -181,7 +187,7 @@ class TestAllowlistFiltering:
     def test_builtin_allowlist_skips_keywords(self, validator_with_symbols):
         v = validator_with_symbols
         block = "classDiagram\n    class WebSocket"
-        ids = v.extract_identifiers(block)
+        v.extract_identifiers(block)
         # WebSocket is in allowlist, should not cause stale reference
         assert "WebSocket" in BUILT_IN_ALLOWLIST
 
@@ -250,7 +256,5 @@ class TestExitCodes:
 
     def test_report_failure(self, validator):
         validator.files_scanned = 1
-        validator.stale_references = [
-            {"file": "test.md", "line": 1, "name": "Foo", "closest": None}
-        ]
+        validator.stale_references = [{"file": "test.md", "line": 1, "name": "Foo", "closest": None}]
         assert validator._report_results() == 1

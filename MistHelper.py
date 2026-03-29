@@ -56,13 +56,12 @@ from typing import TYPE_CHECKING, Any, Literal
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
 # Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:
-    from prettytable import PrettyTable
-
     import numpy as np
     import pyte
     import requests
     import urllib3
     import websocket
+    from prettytable import PrettyTable
 
 # ============================================================================
 # EARLY LOGGING SETUP
@@ -323,6 +322,7 @@ class DeviceFetchConfig:
 # AUTO_UPGRADE_TO_LATEST are honoured when set in .env.
 try:
     from dotenv import load_dotenv as _early_load_dotenv
+
     _early_load_dotenv()
 except Exception:
     # Inline fallback: read .env manually so env vars are available
@@ -333,7 +333,7 @@ except Exception:
                 if _line and not _line.startswith("#") and "=" in _line:
                     _k, _v = _line.split("=", 1)
                     os.environ.setdefault(_k.strip(), _v.strip())
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 # Package name to import name mapping for special cases
@@ -829,9 +829,7 @@ from datetime import UTC, timedelta, timezone
 try:
     from prettytable import PrettyTable
 except ImportError as _pt_err:
-    raise ImportError(
-        "PrettyTable is required but not installed. Run: pip install prettytable"
-    ) from _pt_err
+    raise ImportError("PrettyTable is required but not installed. Run: pip install prettytable") from _pt_err
 
 try:
     import numpy as np
@@ -844,9 +842,7 @@ except ImportError:
 try:
     import websocket
 except ImportError as _ws_err:
-    raise ImportError(
-        "websocket-client is required but not installed. Run: pip install websocket-client"
-    ) from _ws_err
+    raise ImportError("websocket-client is required but not installed. Run: pip install websocket-client") from _ws_err
 
 try:
     from difflib import SequenceMatcher
@@ -868,9 +864,7 @@ def tqdm(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]
 try:
     import requests  # type: ignore[import-untyped]
 except ImportError as _req_err:
-    raise ImportError(
-        "requests is required but not installed. Run: pip install requests"
-    ) from _req_err
+    raise ImportError("requests is required but not installed. Run: pip install requests") from _req_err
 
 try:
     import urllib3
@@ -3959,7 +3953,7 @@ class WebSocketManager:
     credential handling and session-based command demultiplexing.
     """
 
-    def __init__(self, mist_session, mist_host=None):  # type: ignore[no-untyped-def]
+    def __init__(self, mist_session: Any, mist_host: str | None = None) -> None:
         """
         Initialize WebSocket manager with Mist session.
 
@@ -3984,7 +3978,7 @@ class WebSocketManager:
         self.command_results = {}
         self.results_lock = threading.Lock()
 
-    def connect(self):  # type: ignore[no-untyped-def]
+    def connect(self) -> bool:
         """
         Establish WebSocket connection with proper authentication.
 
@@ -4036,7 +4030,7 @@ class WebSocketManager:
             self.logger.error(f"WebSocket connection failed: {connection_error}")
             return False
 
-    def subscribe_to_channel(self, channel_path):  # type: ignore[no-untyped-def]
+    def subscribe_to_channel(self, channel_path: str) -> bool:
         """
         Subscribe to a WebSocket channel for receiving command outputs.
 
@@ -4100,7 +4094,12 @@ class WebSocketManager:
         self.logger.warning(f"Timeout waiting for subscription confirmation: {channel_path}")
         return False
 
-    def wait_for_command_result(self, session_id, timeout_seconds=30, activity_timeout_seconds=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def wait_for_command_result(  # noqa: C901, PLR0912, PLR0915
+        self,
+        session_id: str,
+        timeout_seconds: int = 30,
+        activity_timeout_seconds: int | None = None,
+    ) -> dict[str, Any] | None:
         """
         Wait for command result with specific session ID.
 
@@ -4772,7 +4771,7 @@ class WebSocketManager:
         self.logger.debug(f"WebSocket close details: status_code={close_status_code}, message={close_message}")
         self.logger.info(f"WebSocket connection closed (status: {close_status_code})")
 
-    def disconnect(self):  # type: ignore[no-untyped-def]
+    def disconnect(self) -> None:
         """Close WebSocket connection and cleanup resources."""
         if self.websocket_connection:
             self.websocket_connection.close()
@@ -12455,7 +12454,7 @@ class OfflineDeviceReporter:
         return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
 
     @staticmethod
-    def _fetch_data(current_org_id: str) -> tuple[dict[str, str], list[dict]]:
+    def _fetch_data(current_org_id: str) -> tuple[dict[str, str], list[dict[str, Any]]]:
         """Fetch site lookup and device stats from Mist API."""
         logging.info("Fetching site information for offline device report...")
         print("  Fetching site information...")
@@ -12471,14 +12470,14 @@ class OfflineDeviceReporter:
         stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             apisession, current_org_id, type="all", status="all", fields="*", limit=1000
         )
-        all_devices: list[dict] = mistapi.get_all(response=stats_resp, mist_session=apisession)
+        all_devices: list[dict[str, Any]] = mistapi.get_all(response=stats_resp, mist_session=apisession)
         logging.info(f"Retrieved stats for {len(all_devices)} devices")
         print(f"  Retrieved {len(all_devices)} devices from API")
         return site_lookup, all_devices
 
     @staticmethod
     def _process_devices(
-        all_devices: list[dict],
+        all_devices: list[dict[str, Any]],
         site_lookup: dict[str, str],
         threshold_hours: int,
     ) -> list[dict[str, str]]:
@@ -12503,7 +12502,7 @@ class OfflineDeviceReporter:
                 duration_str = "Never Connected"
                 sort_key = float("inf")
             else:
-                last_seen_str = datetime.datetime.fromtimestamp(last_seen_epoch).strftime("%Y-%m-%d %H:%M:%S")
+                last_seen_str = datetime.fromtimestamp(last_seen_epoch).strftime("%Y-%m-%d %H:%M:%S")
                 total_hours = int(offline_seconds // 3600)
                 days = total_hours // 24
                 hours = total_hours % 24
@@ -12516,18 +12515,20 @@ class OfflineDeviceReporter:
             )
             site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
 
-            offline_records.append({
-                "Device Name": device.get("name") or "(unnamed)",
-                "Device Type": type_display,
-                "Site Name": site_name,
-                "MAC Address": device.get("mac", ""),
-                "Serial Number": device.get("serial", ""),
-                "Model": device.get("model", ""),
-                "Last Seen": last_seen_str,
-                "Offline Duration": duration_str,
-                "Status": device.get("status", "disconnected"),
-                "_sort_key": str(sort_key),
-            })
+            offline_records.append(
+                {
+                    "Device Name": device.get("name") or "(unnamed)",
+                    "Device Type": type_display,
+                    "Site Name": site_name,
+                    "MAC Address": device.get("mac", ""),
+                    "Serial Number": device.get("serial", ""),
+                    "Model": device.get("model", ""),
+                    "Last Seen": last_seen_str,
+                    "Offline Duration": duration_str,
+                    "Status": device.get("status", "disconnected"),
+                    "_sort_key": str(sort_key),
+                }
+            )
 
         offline_records.sort(key=lambda record: float(record["_sort_key"]), reverse=True)
         return offline_records
@@ -12539,7 +12540,7 @@ class OfflineDeviceReporter:
         threshold_hours: int,
     ) -> None:
         """Display summary statistics before the detail table."""
-        print(f"\n--- Summary ---")
+        print("\n--- Summary ---")
         print(f"Total devices in org: {total_device_count:,}")
         print(f"Devices offline > {threshold_hours} hours: {len(offline_records)}")
 
@@ -12567,8 +12568,15 @@ class OfflineDeviceReporter:
     def _present_results(offline_records: list[dict[str, str]]) -> None:
         """Display PrettyTable and save CSV for offline devices."""
         display_fields = [
-            "Device Name", "Device Type", "Site Name", "MAC Address",
-            "Serial Number", "Model", "Last Seen", "Offline Duration", "Status",
+            "Device Name",
+            "Device Type",
+            "Site Name",
+            "MAC Address",
+            "Serial Number",
+            "Model",
+            "Last Seen",
+            "Offline Duration",
+            "Status",
         ]
         total_count = len(offline_records)
         show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)
@@ -12582,7 +12590,7 @@ class OfflineDeviceReporter:
 
         # Save CSV with all records
         csv_records = [{field: record.get(field, "") for field in display_fields} for record in offline_records]
-        timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"OfflineDeviceReport_{timestamp_str}.csv"
         DataExporter.write_with_format_selection(
             data=csv_records,
@@ -14327,18 +14335,14 @@ class SiteClientExporter:
                 return
 
             # Create a dictionary to store session data by MAC address for easy lookup
-            sessions_by_mac: dict[str, dict[str, Any] | list[dict[str, Any]]] = {}
+            sessions_by_mac: dict[str, list[dict[str, Any]]] = {}
             if sessions:
                 for session in sessions:
                     mac = session.get("mac")
                     if mac:
-                        # If multiple sessions exist for the same MAC, store them in a list
-                        if mac in sessions_by_mac:
-                            if not isinstance(sessions_by_mac[mac], list):
-                                sessions_by_mac[mac] = [sessions_by_mac[mac]]
-                            sessions_by_mac[mac].append(session)
-                        else:
-                            sessions_by_mac[mac] = session
+                        if mac not in sessions_by_mac:
+                            sessions_by_mac[mac] = []
+                        sessions_by_mac[mac].append(session)
 
             # Merge client data with session data based on MAC address
             enriched_clients = []
@@ -14355,20 +14359,15 @@ class SiteClientExporter:
 
                     # Merge with session data if available
                     if client_mac and client_mac in sessions_by_mac:
-                        session_data = sessions_by_mac[client_mac]
-                        if isinstance(session_data, list):
-                            # Multiple sessions - merge with the most recent one
-                            latest_session = max(session_data, key=lambda x: x.get("start_time", 0))
-                            for key, value in latest_session.items():
-                                if key not in client:  # Don't overwrite client data
-                                    client[f"session_{key}"] = value
-                            client["session_count"] = len(session_data)
-                        else:
-                            # Single session
-                            for key, value in session_data.items():
-                                if key not in client:  # Don't overwrite client data
-                                    client[f"session_{key}"] = value
-                            client["session_count"] = 1
+                        session_list = sessions_by_mac[client_mac]
+                        latest_session = max(
+                            session_list,
+                            key=lambda x: x.get("start_time", 0),
+                        )
+                        for key, value in latest_session.items():
+                            if key not in client:
+                                client[f"session_{key}"] = value
+                        client["session_count"] = len(session_list)
                         processed_macs.add(client_mac)
                     else:
                         client["session_count"] = 0
@@ -18817,17 +18816,13 @@ class DeviceUtilityCommands:
         return True
 
     @staticmethod
-    def _select_site_and_device(
-        command_name: str, device_type_filter: str = "all"
-    ) -> tuple[str, str, str] | None:
+    def _select_site_and_device(command_name: str, device_type_filter: str = "all") -> tuple[str, str, str] | None:
         """Select site and device, validate type, warn if offline."""
         site_id = PromptUtils.select_site_id_from_csv()
         if not site_id:
             print("! No site selected. Operation cancelled.")
             return None
-        device_id = PromptUtils.select_device_id_from_inventory(
-            site_id, device_type=device_type_filter
-        )
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type=device_type_filter)
         if not device_id:
             print("! No device selected. Operation cancelled.")
             return None
@@ -18847,12 +18842,10 @@ class DeviceUtilityCommands:
         return (site_id, device_id, device_type)
 
     @staticmethod
-    def _get_device_info(site_id: str, device_id: str) -> dict | None:
+    def _get_device_info(site_id: str, device_id: str) -> dict[str, Any] | None:
         """Fetch device type and status from stats API (single call)."""
         try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
             if hasattr(response, "data") and isinstance(response.data, dict):
                 return response.data
         except Exception as error:
@@ -18863,9 +18856,7 @@ class DeviceUtilityCommands:
     def _select_port_from_device(site_id: str, device_id: str) -> str | None:
         """Fetch ports from device stats, display list, return selected port."""
         try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
             if not hasattr(response, "data") or not isinstance(response.data, dict):
                 return DeviceUtilityCommands._manual_port_entry()
             ports = response.data.get("ports", [])
@@ -18880,7 +18871,7 @@ class DeviceUtilityCommands:
             return DeviceUtilityCommands._manual_port_entry()
 
     @staticmethod
-    def _display_and_select_port(ports: list) -> str | None:
+    def _display_and_select_port(ports: list[dict[str, Any]]) -> str | None:
         """Display numbered port list and get selection."""
         print("\nAvailable ports:")
         for index, port in enumerate(ports, 1):
@@ -18889,27 +18880,23 @@ class DeviceUtilityCommands:
             status_str = "UP" if port_status else "DOWN"
             speed = port.get("speed", "")
             print(f"  {index}. {port_name} [{status_str}] {speed}")
-        selection = InputUtils.safe_input(
-            "\nSelect port by number or type port name: ", context="port_selection"
-        )
+        selection = InputUtils.safe_input("\nSelect port by number or type port name: ", context="port_selection")
         if not selection:
             print("! No port selected.")
             return None
         if selection.isdigit():
             idx = int(selection) - 1
             if 0 <= idx < len(ports):
-                return ports[idx].get("port_id", ports[idx].get("name", ""))
+                result: str = str(ports[idx].get("port_id", ports[idx].get("name", "")))
+                return result
             print("! Invalid port number.")
             return None
         return selection
 
     @staticmethod
-    def _display_and_select_ifstat(if_stat: dict) -> str | None:
+    def _display_and_select_ifstat(if_stat: dict[str, Any]) -> str | None:
         """Display interfaces from if_stat dict, filter to physical ports."""
-        physical = [
-            name for name in if_stat
-            if name.startswith(("ge-", "xe-", "et-", "mge-"))
-        ]
+        physical = [name for name in if_stat if name.startswith(("ge-", "xe-", "et-", "mge-"))]
         if not physical:
             physical = list(if_stat.keys())
         physical.sort()
@@ -18918,9 +18905,7 @@ class DeviceUtilityCommands:
             info = if_stat.get(name, {})
             up = "UP" if info.get("up") else "DOWN"
             print(f"  {idx}. {name} [{up}]")
-        selection = InputUtils.safe_input(
-            "\nSelect by number or type port name: ", context="ifstat_selection"
-        )
+        selection = InputUtils.safe_input("\nSelect by number or type port name: ", context="ifstat_selection")
         if not selection:
             print("! No port selected.")
             return None
@@ -18936,9 +18921,7 @@ class DeviceUtilityCommands:
     @staticmethod
     def _manual_port_entry() -> str | None:
         """Prompt for manual port name entry."""
-        port = InputUtils.safe_input(
-            "Enter port name (e.g., ge-0/0/0): ", context="manual_port_entry"
-        )
+        port = InputUtils.safe_input("Enter port name (e.g., ge-0/0/0): ", context="manual_port_entry")
         return port if port else None
 
     @staticmethod
@@ -18946,9 +18929,7 @@ class DeviceUtilityCommands:
         """Show port list and let user pick or skip. Returns port name or empty."""
         port_names: list[str] = []
         try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
             if hasattr(response, "data") and isinstance(response.data, dict):
                 ports = response.data.get("ports", [])
                 if ports:
@@ -18961,10 +18942,7 @@ class DeviceUtilityCommands:
                 else:
                     if_stat = response.data.get("if_stat", {})
                     if isinstance(if_stat, dict) and if_stat:
-                        physical = sorted(
-                            n for n in if_stat
-                            if n.startswith(("ge-", "xe-", "et-", "mge-"))
-                        )
+                        physical = sorted(n for n in if_stat if n.startswith(("ge-", "xe-", "et-", "mge-")))
                         if physical:
                             print("\nAvailable ports:")
                             for idx, name in enumerate(physical, 1):
@@ -18972,11 +18950,9 @@ class DeviceUtilityCommands:
                                 up = "UP" if info.get("up") else "DOWN"
                                 print(f"  {idx}. {name} [{up}]")
                                 port_names.append(name)
-        except Exception:
+        except Exception:  # nosec B110
             pass
-        selection = InputUtils.safe_input(
-            "Port (number, name, or Enter to skip): ", context="port_optional"
-        )
+        selection = InputUtils.safe_input("Port (number, name, or Enter to skip): ", context="port_optional")
         if not selection:
             return ""
         if selection.isdigit() and port_names:
@@ -18990,9 +18966,7 @@ class DeviceUtilityCommands:
     def _select_interface_from_device(site_id: str, device_id: str) -> str | None:
         """Fetch network interfaces from device stats, display list, return selection."""
         try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
             if not hasattr(response, "data") or not isinstance(response.data, dict):
                 return DeviceUtilityCommands._manual_interface_entry()
             if_stat = response.data.get("if_stat", {})
@@ -19007,10 +18981,7 @@ class DeviceUtilityCommands:
                 if iface_keys:
                     interfaces = iface_keys
             if not interfaces and ports:
-                interfaces = [
-                    p.get("port_id", p.get("name", ""))
-                    for p in ports if p.get("port_id") or p.get("name")
-                ]
+                interfaces = [p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")]
             if not interfaces:
                 return DeviceUtilityCommands._manual_interface_entry()
             print("\nAvailable interfaces:")
@@ -19028,8 +18999,7 @@ class DeviceUtilityCommands:
                         extra = f" ({ip_addr})"
                 print(f"  {idx}. {iface}{extra}")
             selection = InputUtils.safe_input(
-                "\nSelect interface by number or type name: ",
-                context="interface_selection"
+                "\nSelect interface by number or type name: ", context="interface_selection"
             )
             if not selection:
                 print("! No interface selected.")
@@ -19049,8 +19019,7 @@ class DeviceUtilityCommands:
     def _manual_interface_entry() -> str | None:
         """Prompt for manual interface name entry."""
         iface = InputUtils.safe_input(
-            "Enter interface name (e.g., ge-0/0/0, wan0): ",
-            context="manual_interface_entry", allow_empty=False
+            "Enter interface name (e.g., ge-0/0/0, wan0): ", context="manual_interface_entry", allow_empty=False
         )
         return iface if iface else None
 
@@ -19060,9 +19029,7 @@ class DeviceUtilityCommands:
         network_names: list[str] = []
         network_labels: list[str] = []
         try:
-            response = mistapi.api.v1.sites.devices.getSiteDevice(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
             if hasattr(response, "data") and isinstance(response.data, dict):
                 dhcpd_config = response.data.get("dhcpd_config", {})
                 if isinstance(dhcpd_config, dict):
@@ -19087,8 +19054,7 @@ class DeviceUtilityCommands:
                 print(f"\n-> Auto-selecting: {network_names[0]}")
                 return network_names[0]
         selection = InputUtils.safe_input(
-            "Select network (number or name, required): ",
-            context="dhcp_network", allow_empty=False
+            "Select network (number or name, required): ", context="dhcp_network", allow_empty=False
         )
         if not selection:
             return ""
@@ -19100,8 +19066,8 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def _run_websocket_command(
-        site_id: str, device_id: str, sdk_method: Any, body: dict | None = None
-    ) -> dict | None:
+        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         """Execute WebSocket command pattern: POST -> subscribe -> await result."""
         websocket_manager = WebSocketManager(apisession)
         if not websocket_manager.connect():
@@ -19130,9 +19096,7 @@ class DeviceUtilityCommands:
                 return None
             print(f"-> Command issued (session: {session_id[:8]}...)")
             print("-> Waiting for results...")
-            result = websocket_manager.wait_for_command_result(
-                session_id, timeout_seconds=120
-            )
+            result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=120)
             return result
         except Exception as error:
             logging.error(f"WebSocket command failed: {error}", exc_info=True)
@@ -19143,8 +19107,7 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def _run_streaming_command(
-        site_id: str, device_id: str, sdk_method: Any,
-        body: dict | None = None, timeout_seconds: int = 120
+        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None, timeout_seconds: int = 120
     ) -> None:
         """Execute streaming WebSocket command with incremental output display."""
         websocket_manager = WebSocketManager(apisession)
@@ -19173,8 +19136,7 @@ class DeviceUtilityCommands:
             print(f"-> Streaming started (session: {session_id[:8]}...)")
             print("-> Press Ctrl+C to stop.\n")
             result = websocket_manager.wait_for_command_result(
-                session_id, timeout_seconds=timeout_seconds,
-                activity_timeout_seconds=30
+                session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=30
             )
             if result:
                 raw = result.get("raw", "")
@@ -19190,8 +19152,12 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def _display_and_export_result(
-        result: dict | None, command_name: str, site_id: str,
-        device_id: str, api_function_name: str, filename: str
+        result: dict[str, Any] | None,
+        command_name: str,
+        site_id: str,
+        device_id: str,
+        api_function_name: str,
+        filename: str,
     ) -> None:
         """Display WebSocket result and write to dual output."""
         if not result:
@@ -19210,12 +19176,10 @@ class DeviceUtilityCommands:
             "device_id": device_id,
             "site_id": site_id,
             "command": command_name,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "raw_output": raw_output or other_output or str(result),
         }
-        DataExporter.write_with_format_selection(
-            [export_data], filename, api_function_name=api_function_name
-        )
+        DataExporter.write_with_format_selection([export_data], filename, api_function_name=api_function_name)
 
     @staticmethod
     def _confirm_destructive(prompt: str, keyword: str, context: str) -> bool:
@@ -19252,36 +19216,30 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         host = InputUtils.safe_input(
-            "Enter destination host or IP (required): ",
-            context="traceroute_host", allow_empty=False
+            "Enter destination host or IP (required): ", context="traceroute_host", allow_empty=False
         )
         if not host:
             print("! Destination host is required.")
             return
         protocol = InputUtils.safe_input(
-            "Protocol (udp/icmp, default: udp): ",
-            default_value="udp", context="traceroute_protocol"
+            "Protocol (udp/icmp, default: udp): ", default_value="udp", context="traceroute_protocol"
         )
         body: dict[str, Any] = {"host": host}
         if protocol and protocol.lower() in ("udp", "icmp"):
             body["protocol"] = protocol.lower()
         print(f"\n-> Running traceroute to {host}...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.tracerouteFromDevice, body
+            site_id, device_id, mistapi.api.v1.sites.devices.tracerouteFromDevice, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "Traceroute", site_id, device_id,
-            "tracerouteFromDevice", "DeviceTraceroute.csv"
+            result, "Traceroute", site_id, device_id, "tracerouteFromDevice", "DeviceTraceroute.csv"
         )
 
     @staticmethod
     def show_ospf_neighbors() -> None:
         """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
         logging.info("Menu #124: Show OSPF Neighbors")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_ospf_neighbors", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_neighbors", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19297,21 +19255,17 @@ class DeviceUtilityCommands:
             body["neighbor"] = neighbor
         print("\n-> Fetching OSPF neighbors...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Neighbors", site_id, device_id,
-            "showSiteGatewayOspfNeighbors", "DeviceOspfNeighbors.csv"
+            result, "OSPF Neighbors", site_id, device_id, "showSiteGatewayOspfNeighbors", "DeviceOspfNeighbors.csv"
         )
 
     @staticmethod
     def show_ospf_interfaces() -> None:
         """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
         logging.info("Menu #125: Show OSPF Interfaces")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_ospf_interfaces", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_interfaces", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19327,21 +19281,17 @@ class DeviceUtilityCommands:
             body["port_id"] = port_id
         print("\n-> Fetching OSPF interfaces...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Interfaces", site_id, device_id,
-            "showSiteGatewayOspfInterfaces", "DeviceOspfInterfaces.csv"
+            result, "OSPF Interfaces", site_id, device_id, "showSiteGatewayOspfInterfaces", "DeviceOspfInterfaces.csv"
         )
 
     @staticmethod
     def show_ospf_database() -> None:
         """Menu 126: Show OSPF database on SSR/SRX gateway."""
         logging.info("Menu #126: Show OSPF Database")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_ospf_database", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_database", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19352,28 +19302,22 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="ospf_node")
         if node:
             body["node"] = node
-        self_orig = InputUtils.safe_input(
-            "Show self-originated only? (y/N): ", context="ospf_self_originate"
-        )
+        self_orig = InputUtils.safe_input("Show self-originated only? (y/N): ", context="ospf_self_originate")
         if self_orig and self_orig.lower() == "y":
             body["self_originate"] = True
         print("\n-> Fetching OSPF database...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Database", site_id, device_id,
-            "showSiteGatewayOspfDatabase", "DeviceOspfDatabase.csv"
+            result, "OSPF Database", site_id, device_id, "showSiteGatewayOspfDatabase", "DeviceOspfDatabase.csv"
         )
 
     @staticmethod
     def show_ospf_summary() -> None:
         """Menu 127: Show OSPF summary on SSR/SRX gateway."""
         logging.info("Menu #127: Show OSPF Summary")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_ospf_summary", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_summary", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19386,41 +19330,33 @@ class DeviceUtilityCommands:
             body["node"] = node
         print("\n-> Fetching OSPF summary...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Summary", site_id, device_id,
-            "showSiteGatewayOspfSummary", "DeviceOspfSummary.csv"
+            result, "OSPF Summary", site_id, device_id, "showSiteGatewayOspfSummary", "DeviceOspfSummary.csv"
         )
 
     @staticmethod
     def resolve_dns() -> None:
         """Menu 135: Test DNS resolution on SSR gateway."""
         logging.info("Menu #135: Resolve DNS")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "resolve_dns", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("resolve_dns", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         print("\n-> Testing DNS resolution on device...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
+            site_id, device_id, mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "DNS Resolution", site_id, device_id,
-            "testSiteSsrDnsResolution", "DeviceDnsResolution.csv"
+            result, "DNS Resolution", site_id, device_id, "testSiteSsrDnsResolution", "DeviceDnsResolution.csv"
         )
 
     @staticmethod
     def monitor_traffic() -> None:
         """Menu 136: Monitor traffic on switch/SRX port (streaming)."""
         logging.info("Menu #136: Monitor Traffic (streaming)")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "monitor_traffic", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("monitor_traffic", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19429,8 +19365,7 @@ class DeviceUtilityCommands:
             return
         body: dict[str, Any] = {"port_id": port_id}
         duration_str = InputUtils.safe_input(
-            "Duration in seconds (default: 60): ",
-            default_value="60", context="monitor_duration"
+            "Duration in seconds (default: 60): ", default_value="60", context="monitor_duration"
         )
         try:
             duration = int(duration_str) if duration_str else 60
@@ -19439,26 +19374,24 @@ class DeviceUtilityCommands:
         body["duration"] = duration
         print(f"\n-> Monitoring traffic on port {port_id}...")
         DeviceUtilityCommands._run_streaming_command(
-            site_id, device_id,
+            site_id,
+            device_id,
             mistapi.api.v1.sites.devices.monitorSiteDeviceTraffic,
-            body, timeout_seconds=duration + 30
+            body,
+            timeout_seconds=duration + 30,
         )
 
     @staticmethod
     def run_top() -> None:
         """Menu 137: Run top command on switch/SRX (streaming)."""
         logging.info("Menu #137: Run Top (streaming)")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "run_top", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("run_top", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         print("\n-> Running top command...")
         DeviceUtilityCommands._run_streaming_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.runSiteSrxTopCommand,
-            timeout_seconds=120
+            site_id, device_id, mistapi.api.v1.sites.devices.runSiteSrxTopCommand, timeout_seconds=120
         )
 
     # ===== SHOW COMMANDS =====
@@ -19467,67 +19400,49 @@ class DeviceUtilityCommands:
     def show_session() -> None:
         """Menu 128: Show sessions on SSR/SRX gateway."""
         logging.info("Menu #128: Show Sessions")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_session", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_session", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        service = InputUtils.safe_input(
-            "Service name filter (Enter to skip): ", context="session_service"
-        )
+        service = InputUtils.safe_input("Service name filter (Enter to skip): ", context="session_service")
         if service:
             body["service_name"] = service
-        session = InputUtils.safe_input(
-            "Session ID filter (Enter to skip): ", context="session_id_filter"
-        )
+        session = InputUtils.safe_input("Session ID filter (Enter to skip): ", context="session_id_filter")
         if session:
             body["session_id"] = session
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="session_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="session_node")
         if node:
             body["node"] = node
         print("\n-> Fetching device sessions...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "Sessions", site_id, device_id,
-            "showSiteSsrAndSrxSessions", "DeviceSessions.csv"
+            result, "Sessions", site_id, device_id, "showSiteSsrAndSrxSessions", "DeviceSessions.csv"
         )
 
     @staticmethod
     def show_service_path() -> None:
         """Menu 129: Show service path on SSR gateway."""
         logging.info("Menu #129: Show Service Path")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_service_path", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_service_path", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        service = InputUtils.safe_input(
-            "Service name (Enter to skip): ", context="service_path_name"
-        )
+        service = InputUtils.safe_input("Service name (Enter to skip): ", context="service_path_name")
         if service:
             body["service_name"] = service
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="service_path_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="service_path_node")
         if node:
             body["node"] = node
         print("\n-> Fetching service path...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteSsrServicePath, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrServicePath, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "Service Path", site_id, device_id,
-            "showSiteSsrServicePath", "DeviceServicePath.csv"
+            result, "Service Path", site_id, device_id, "showSiteSsrServicePath", "DeviceServicePath.csv"
         )
 
     @staticmethod
@@ -19539,19 +19454,15 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="bgp_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="bgp_node")
         if node:
             body["node"] = node
         print("\n-> Fetching BGP summary...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "BGP Summary", site_id, device_id,
-            "showSiteDeviceBgpSummary", "DeviceBgpSummary.csv"
+            result, "BGP Summary", site_id, device_id, "showSiteDeviceBgpSummary", "DeviceBgpSummary.csv"
         )
 
     @staticmethod
@@ -19563,19 +19474,15 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="arp_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="arp_node")
         if node:
             body["node"] = node
         print("\n-> Fetching ARP table...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "ARP Table", site_id, device_id,
-            "showSiteDeviceArpTable", "DeviceArpTable.csv"
+            result, "ARP Table", site_id, device_id, "showSiteDeviceArpTable", "DeviceArpTable.csv"
         )
 
     @staticmethod
@@ -19590,45 +19497,35 @@ class DeviceUtilityCommands:
         network = DeviceUtilityCommands._select_network_from_device(site_id, device_id)
         if network:
             body["network"] = network
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="dhcp_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="dhcp_node")
         if node:
             body["node"] = node
         print("\n-> Fetching DHCP leases...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "DHCP Leases", site_id, device_id,
-            "showSiteDeviceDhcpLeases", "DeviceDhcpLeases.csv"
+            result, "DHCP Leases", site_id, device_id, "showSiteDeviceDhcpLeases", "DeviceDhcpLeases.csv"
         )
 
     @staticmethod
     def show_dot1x() -> None:
         """Menu 133: Show 802.1X table on switch."""
         logging.info("Menu #133: Show 802.1X Table")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "show_dot1x", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("show_dot1x", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="dot1x_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="dot1x_node")
         if node:
             body["node"] = node
         print("\n-> Fetching 802.1X table...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "802.1X Table", site_id, device_id,
-            "showSiteDeviceDot1xTable", "DeviceDot1xTable.csv"
+            result, "802.1X Table", site_id, device_id, "showSiteDeviceDot1xTable", "DeviceDot1xTable.csv"
         )
 
     @staticmethod
@@ -19640,19 +19537,15 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="evpn_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="evpn_node")
         if node:
             body["node"] = node
         print("\n-> Fetching EVPN database...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body
+            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "EVPN Database", site_id, device_id,
-            "showSiteDeviceEvpnDatabase", "DeviceEvpnDatabase.csv"
+            result, "EVPN Database", site_id, device_id, "showSiteDeviceEvpnDatabase", "DeviceEvpnDatabase.csv"
         )
 
     # ===== MANAGEMENT COMMANDS =====
@@ -19666,8 +19559,7 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         duration_str = InputUtils.safe_input(
-            "LED blink duration in minutes (1-120, default 5): ",
-            default_value="5", context="locate_duration"
+            "LED blink duration in minutes (1-120, default 5): ", default_value="5", context="locate_duration"
         )
         try:
             duration = max(1, min(120, int(duration_str)))
@@ -19675,12 +19567,9 @@ class DeviceUtilityCommands:
             duration = 5
         body: dict[str, Any] = {"duration": duration}
         try:
-            response = mistapi.api.v1.sites.devices.startSiteLocateDevice(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.startSiteLocateDevice(apisession, site_id, device_id, body)
             if DeviceUtilityCommands._print_api_result(
-                response, f"Device LED blinking for {duration} minutes.",
-                "Locate device failed"
+                response, f"Device LED blinking for {duration} minutes.", "Locate device failed"
             ):
                 print("-> Use 'Unlocate Device' (menu 139) to stop.")
         except Exception as error:
@@ -19696,12 +19585,8 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(
-                apisession, site_id, device_id
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "Device LED blinking stopped.", "Unlocate failed"
-            )
+            response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(apisession, site_id, device_id)
+            DeviceUtilityCommands._print_api_result(response, "Device LED blinking stopped.", "Unlocate failed")
         except Exception as error:
             logging.error(f"Unlocate device failed: {error}", exc_info=True)
             print(f"! Unlocate failed: {error}")
@@ -19722,8 +19607,7 @@ class DeviceUtilityCommands:
             print(f"! Port '{port_id}' cannot be bounced (management/aggregate/IRB port).")
             return
         confirm = InputUtils.safe_input(
-            f"Bounce port {port_id}? This will briefly disrupt traffic. (y/N): ",
-            context="bounce_port"
+            f"Bounce port {port_id}? This will briefly disrupt traffic. (y/N): ", context="bounce_port"
         )
         if confirm.lower() != "y":
             print("! Operation cancelled.")
@@ -19731,8 +19615,7 @@ class DeviceUtilityCommands:
         body: dict[str, Any] = {"ports": [port_id]}
         print(f"\n-> Bouncing port {port_id}...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.bounceDevicePort, body
+            site_id, device_id, mistapi.api.v1.sites.devices.bounceDevicePort, body
         )
         if result:
             print("-> Port bounce complete.")
@@ -19743,9 +19626,7 @@ class DeviceUtilityCommands:
     def cable_test() -> None:
         """Menu 141: Run cable test on switch port."""
         logging.info("Menu #141: Cable Test")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "cable_test", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("cable_test", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19755,12 +19636,10 @@ class DeviceUtilityCommands:
         body: dict[str, Any] = {"port": port_id}
         print(f"\n-> Running cable test on port {port_id}...")
         result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id,
-            mistapi.api.v1.sites.devices.cableTestFromSwitch, body
+            site_id, device_id, mistapi.api.v1.sites.devices.cableTestFromSwitch, body
         )
         DeviceUtilityCommands._display_and_export_result(
-            result, "Cable Test", site_id, device_id,
-            "cableTestFromSwitch", "DeviceCableTest.csv"
+            result, "Cable Test", site_id, device_id, "cableTestFromSwitch", "DeviceCableTest.csv"
         )
 
     @staticmethod
@@ -19772,20 +19651,14 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         confirm = InputUtils.safe_input(
-            "Reprovision this device? This will push fresh config. (y/N): ",
-            context="reprovision"
+            "Reprovision this device? This will push fresh config. (y/N): ", context="reprovision"
         )
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
         try:
-            response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(
-                apisession, site_id, device_id
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "Device reprovisioning initiated.",
-                "Reprovision failed"
-            )
+            response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(apisession, site_id, device_id)
+            DeviceUtilityCommands._print_api_result(response, "Device reprovisioning initiated.", "Reprovision failed")
         except Exception as error:
             logging.error(f"Reprovision failed: {error}", exc_info=True)
             print(f"! Reprovision failed: {error}")
@@ -19797,20 +19670,13 @@ class DeviceUtilityCommands:
         #   Need to investigate: filter to VC-capable devices only, or add
         #   pre-check for VC membership before calling API.
         logging.info("Menu #143: Re-adopt Device")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "readopt", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("readopt", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(
-                apisession, site_id, device_id
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "Device re-adoption initiated.",
-                "Re-adopt failed"
-            )
+            response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(apisession, site_id, device_id)
+            DeviceUtilityCommands._print_api_result(response, "Device re-adoption initiated.", "Re-adopt failed")
         except Exception as error:
             logging.error(f"Re-adopt failed: {error}", exc_info=True)
             print(f"! Re-adopt failed: {error}")
@@ -19824,9 +19690,7 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(apisession, site_id, device_id)
             if hasattr(response, "data"):
                 data = response.data if isinstance(response.data, dict) else {}
                 password = data.get("password", str(response.data))
@@ -19842,16 +19706,12 @@ class DeviceUtilityCommands:
     def get_config_commands() -> None:
         """Menu 145: Get configuration CLI commands for switch adoption."""
         logging.info("Menu #145: Get Config CLI Commands")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "config_cmd", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("config_cmd", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(apisession, site_id, device_id)
             if hasattr(response, "data"):
                 data = response.data
                 print("\n" + "=" * 60)
@@ -19877,16 +19737,12 @@ class DeviceUtilityCommands:
         if not selection:
             return
         site_id, device_id, _ = selection
-        file_types = [
-            "full", "process", "outbound-ssh", "messages",
-            "core-dumps", "var-logs", "jma-logs"
-        ]
+        file_types = ["full", "process", "outbound-ssh", "messages", "core-dumps", "var-logs", "jma-logs"]
         print("\nSupport file types:")
         for idx, ft in enumerate(file_types, 1):
             print(f"  {idx}. {ft}")
         type_input = InputUtils.safe_input(
-            "Select type (1-7, default: 1 = full): ",
-            default_value="1", context="support_type"
+            "Select type (1-7, default: 1 = full): ", default_value="1", context="support_type"
         )
         try:
             type_idx = int(type_input) - 1
@@ -19894,18 +19750,13 @@ class DeviceUtilityCommands:
         except (ValueError, IndexError):
             info = "full"
         body: dict[str, Any] = {"info": info}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter for both): ", context="support_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter for both): ", context="support_node")
         if node:
             body["node"] = node
         try:
-            response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(apisession, site_id, device_id, body)
             if DeviceUtilityCommands._print_api_result(
-                response, f"Support file upload ({info}) initiated.",
-                "Support file upload failed"
+                response, f"Support file upload ({info}) initiated.", "Support file upload failed"
             ):
                 print("-> Files will be available in the Mist dashboard.")
         except Exception as error:
@@ -19932,17 +19783,11 @@ class DeviceUtilityCommands:
         ip_addr = InputUtils.safe_input("IP address to clear (Enter for all): ", context="clear_arp_ip")
         if ip_addr:
             body["ip"] = ip_addr
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp"):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "ARP cache cleared.", "Clear ARP cache failed"
-            )
+            response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(apisession, site_id, device_id, body)
+            DeviceUtilityCommands._print_api_result(response, "ARP cache cleared.", "Clear ARP cache failed")
         except Exception as error:
             logging.error(f"Clear ARP cache failed: {error}", exc_info=True)
             print(f"! Clear ARP cache failed: {error}")
@@ -19951,9 +19796,7 @@ class DeviceUtilityCommands:
     def clear_bgp_routes() -> None:
         """Menu 148: Clear BGP routes (typed 'CLEAR' confirmation)."""
         logging.info("Menu #148: Clear BGP Routes")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "clear_bgp", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("clear_bgp", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -19965,9 +19808,7 @@ class DeviceUtilityCommands:
             print("! Neighbor IP is required.")
             return
         body["neighbor"] = neighbor
-        bgp_type = InputUtils.safe_input(
-            "Type (in/out, Enter for both): ", context="clear_bgp_type"
-        )
+        bgp_type = InputUtils.safe_input("Type (in/out, Enter for both): ", context="clear_bgp_type")
         if bgp_type and bgp_type.lower() in ("in", "out"):
             body["type"] = bgp_type.lower()
         vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="clear_bgp_vrf")
@@ -19976,17 +19817,11 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_bgp_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp"):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "BGP routes cleared.", "Clear BGP routes failed"
-            )
+            response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(apisession, site_id, device_id, body)
+            DeviceUtilityCommands._print_api_result(response, "BGP routes cleared.", "Clear BGP routes failed")
         except Exception as error:
             logging.error(f"Clear BGP routes failed: {error}", exc_info=True)
             print(f"! Clear BGP routes failed: {error}")
@@ -19998,16 +19833,12 @@ class DeviceUtilityCommands:
         #   API requires service_name or session_ids param, not just session_id.
         #   Need to add service_name prompt and fix body key to session_ids (list).
         logging.info("Menu #149: Clear Session")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "clear_session", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("clear_session", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        session_id = InputUtils.safe_input(
-            "Session ID to clear (Enter for all): ", context="clear_session_id"
-        )
+        session_id = InputUtils.safe_input("Session ID to clear (Enter for all): ", context="clear_session_id")
         if session_id:
             body["session_id"] = session_id
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
@@ -20018,12 +19849,8 @@ class DeviceUtilityCommands:
         ):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "Session(s) cleared.", "Clear session failed"
-            )
+            response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, body)
+            DeviceUtilityCommands._print_api_result(response, "Session(s) cleared.", "Clear session failed")
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
             print(f"! Clear session failed: {error}")
@@ -20045,12 +19872,8 @@ class DeviceUtilityCommands:
         ):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, "MAC table cleared.", "Clear MAC table failed"
-            )
+            response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(apisession, site_id, device_id, body)
+            DeviceUtilityCommands._print_api_result(response, "MAC table cleared.", "Clear MAC table failed")
         except Exception as error:
             logging.error(f"Clear MAC table failed: {error}", exc_info=True)
             print(f"! Clear MAC table failed: {error}")
@@ -20062,9 +19885,7 @@ class DeviceUtilityCommands:
         #   port_id is required (not optional), or if API expects different
         #   body format. May only work when BPDU errors are actively present.
         logging.info("Menu #151: Clear BPDU Errors")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "clear_bpdu_error", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("clear_bpdu_error", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -20080,9 +19901,7 @@ class DeviceUtilityCommands:
             response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
                 apisession, site_id, device_id, body
             )
-            DeviceUtilityCommands._print_api_result(
-                response, "BPDU errors cleared.", "Clear BPDU errors failed"
-            )
+            DeviceUtilityCommands._print_api_result(response, "BPDU errors cleared.", "Clear BPDU errors failed")
         except Exception as error:
             logging.error(f"Clear BPDU errors failed: {error}", exc_info=True)
             print(f"! Clear BPDU errors failed: {error}")
@@ -20094,9 +19913,7 @@ class DeviceUtilityCommands:
         #   Investigate API body format - may need different key than port_id,
         #   or port name format may differ from what if_stat returns.
         logging.info("Menu #152: Clear Learned MACs")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "clear_macs", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("clear_macs", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -20105,8 +19922,7 @@ class DeviceUtilityCommands:
             print("! Port selection is required for clearing learned MACs.")
             return
         if not DeviceUtilityCommands._confirm_destructive(
-            f"Type 'CLEAR' to clear learned MACs on port {port_id}: ",
-            "CLEAR", "clear_macs"
+            f"Type 'CLEAR' to clear learned MACs on port {port_id}: ", "CLEAR", "clear_macs"
         ):
             return
         body: dict[str, Any] = {"port_id": port_id}
@@ -20115,8 +19931,7 @@ class DeviceUtilityCommands:
                 apisession, site_id, device_id, body
             )
             DeviceUtilityCommands._print_api_result(
-                response, f"Learned MACs cleared from port {port_id}.",
-                "Clear learned MACs failed"
+                response, f"Learned MACs cleared from port {port_id}.", "Clear learned MACs failed"
             )
         except Exception as error:
             logging.error(f"Clear learned MACs failed: {error}", exc_info=True)
@@ -20128,16 +19943,12 @@ class DeviceUtilityCommands:
         # TODO: Returns 400 on DC-West SSR120. Investigate API requirements -
         #   may need node param, or may be unsupported on SSR120 model.
         logging.info("Menu #153: Clear Policy Hit Count")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "clear_policy_hit_count", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("clear_policy_hit_count", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        node = InputUtils.safe_input(
-            "Node (node0/node1, Enter to skip): ", context="clear_policy_node"
-        )
+        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_policy_node")
         if node:
             body["node"] = node
         if not DeviceUtilityCommands._confirm_destructive(
@@ -20145,12 +19956,9 @@ class DeviceUtilityCommands:
         ):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(apisession, site_id, device_id, body)
             DeviceUtilityCommands._print_api_result(
-                response, "Policy hit count cleared.",
-                "Clear policy hit count failed"
+                response, "Policy hit count cleared.", "Clear policy hit count failed"
             )
         except Exception as error:
             logging.error(f"Clear policy hit count failed: {error}", exc_info=True)
@@ -20172,19 +19980,14 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="release_dhcp_node")
         if node:
             body["node"] = node
-        confirm = InputUtils.safe_input(
-            f"Release DHCP lease on port {port_id}? (y/N): ", context="release_dhcp"
-        )
+        confirm = InputUtils.safe_input(f"Release DHCP lease on port {port_id}? (y/N): ", context="release_dhcp")
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
         try:
-            response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(apisession, site_id, device_id, body)
             DeviceUtilityCommands._print_api_result(
-                response, f"DHCP lease released on port {port_id}.",
-                "Release DHCP lease failed"
+                response, f"DHCP lease released on port {port_id}.", "Release DHCP lease failed"
             )
         except Exception as error:
             logging.error(f"Release DHCP lease failed: {error}", exc_info=True)
@@ -20194,9 +19997,7 @@ class DeviceUtilityCommands:
     def release_dhcp_ssr() -> None:
         """Menu 155: Release DHCP lease on SSR/SRX (y/N confirmation)."""
         logging.info("Menu #155: Release DHCP Lease (SSR)")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "release_dhcp_ssr", "gateway"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("release_dhcp_ssr", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
@@ -20209,19 +20010,15 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         confirm = InputUtils.safe_input(
-            f"Release DHCP lease on interface {port_id}? (y/N): ",
-            context="release_dhcp_ssr"
+            f"Release DHCP lease on interface {port_id}? (y/N): ", context="release_dhcp_ssr"
         )
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
         try:
-            response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(apisession, site_id, device_id, body)
             DeviceUtilityCommands._print_api_result(
-                response, f"SSR DHCP lease released on interface {port_id}.",
-                "Release SSR DHCP lease failed"
+                response, f"SSR DHCP lease released on interface {port_id}.", "Release SSR DHCP lease failed"
             )
         except Exception as error:
             logging.error(f"Release SSR DHCP lease failed: {error}", exc_info=True)
@@ -20233,19 +20030,14 @@ class DeviceUtilityCommands:
     def poll_switch_stats() -> None:
         """Menu 156: Poll fresh statistics from switch."""
         logging.info("Menu #156: Poll Switch Stats")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "poll_stats", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("poll_stats", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(apisession, site_id, device_id)
             if DeviceUtilityCommands._print_api_result(
-                response, "Fresh statistics polled from switch.",
-                "Poll switch stats failed"
+                response, "Fresh statistics polled from switch.", "Poll switch stats failed"
             ):
                 print("-> Updated stats will appear in next stats export.")
         except Exception as error:
@@ -20256,19 +20048,14 @@ class DeviceUtilityCommands:
     def create_device_snapshot() -> None:
         """Menu 157: Create device snapshot on switch."""
         logging.info("Menu #157: Create Device Snapshot")
-        selection = DeviceUtilityCommands._select_site_and_device(
-            "snapshot", "switch"
-        )
+        selection = DeviceUtilityCommands._select_site_and_device("snapshot", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
         try:
-            response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(apisession, site_id, device_id)
             DeviceUtilityCommands._print_api_result(
-                response, "Device snapshot created successfully.",
-                "Create snapshot failed"
+                response, "Device snapshot created successfully.", "Create snapshot failed"
             )
         except Exception as error:
             logging.error(f"Create snapshot failed: {error}", exc_info=True)
@@ -25037,7 +24824,7 @@ class RateLimitingUtils:
                 recent_errors = errors[-10:]
                 mean_val = sum(recent_errors) / len(recent_errors)
                 variance = sum((x - mean_val) ** 2 for x in recent_errors) / len(recent_errors)
-                standard_deviation = variance ** 0.5
+                standard_deviation = variance**0.5
             else:
                 # Ensure errors is a list of numbers and convert to numpy array safely
                 recent_errors = errors[-10:]
@@ -55702,41 +55489,146 @@ class OperationRegistry:
             "skip_reason": "DESTRUCTIVE: Bulk RADIUS WLAN Configuration - modifies WLAN auth settings",
         },
         # Device Utility Commands (123-157)
-        "123": {"category": "websocket", "skip_reason": "WebSocket traceroute - requires interactive site and device selection"},
-        "124": {"category": "websocket", "skip_reason": "WebSocket OSPF neighbors - requires interactive gateway selection"},
-        "125": {"category": "websocket", "skip_reason": "WebSocket OSPF interfaces - requires interactive gateway selection"},
-        "126": {"category": "websocket", "skip_reason": "WebSocket OSPF database - requires interactive gateway selection"},
-        "127": {"category": "websocket", "skip_reason": "WebSocket OSPF summary - requires interactive gateway selection"},
-        "128": {"category": "websocket", "skip_reason": "WebSocket show sessions - requires interactive gateway selection"},
-        "129": {"category": "websocket", "skip_reason": "WebSocket show service path - requires interactive gateway selection"},
-        "130": {"category": "websocket", "skip_reason": "WebSocket BGP summary - requires interactive device selection"},
-        "131": {"category": "websocket", "skip_reason": "WebSocket ARP table - requires interactive device selection"},
-        "132": {"category": "websocket", "skip_reason": "WebSocket DHCP leases - requires interactive device selection"},
-        "133": {"category": "websocket", "skip_reason": "WebSocket 802.1X table - requires interactive switch selection"},
-        "134": {"category": "websocket", "skip_reason": "WebSocket EVPN database - requires interactive device selection"},
-        "135": {"category": "websocket", "skip_reason": "WebSocket DNS resolution - requires interactive gateway selection"},
-        "136": {"category": "interactive", "skip_reason": "Monitor traffic streaming - requires interactive port selection and Ctrl+C"},
-        "137": {"category": "interactive", "skip_reason": "Run top streaming - requires interactive device selection and Ctrl+C"},
-        "138": {"category": "interactive", "skip_reason": "Locate device - requires interactive device selection"},
-        "139": {"category": "interactive", "skip_reason": "Unlocate device - requires interactive device selection"},
-        "140": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Bounce port - disrupts traffic on selected port"},
-        "141": {"category": "websocket", "skip_reason": "WebSocket cable test - requires interactive switch and port selection"},
-        "142": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Reprovision device - pushes fresh configuration"},
-        "143": {"category": "interactive", "skip_reason": "Re-adopt device - requires interactive switch selection"},
-        "144": {"category": "interactive", "skip_reason": "ZTP password - requires interactive device selection"},
-        "145": {"category": "interactive", "skip_reason": "Config CLI commands - requires interactive switch selection"},
-        "146": {"category": "interactive", "skip_reason": "Upload support file - requires interactive device and type selection"},
-        "147": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear ARP cache - removes cached ARP entries"},
-        "148": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear BGP routes - removes BGP routing state"},
-        "149": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear session - removes active sessions"},
-        "150": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear MAC table - removes learned MAC entries"},
-        "151": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear BPDU errors - clears spanning tree error state"},
-        "152": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear learned MACs - removes learned MAC entries from port"},
-        "153": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clear policy hit count - resets policy counters"},
-        "154": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Release DHCP lease - releases active DHCP lease"},
-        "155": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Release SSR DHCP lease - releases active SSR DHCP lease"},
-        "156": {"category": "interactive", "skip_reason": "Poll switch stats - requires interactive switch selection"},
-        "157": {"category": "interactive", "skip_reason": "Create device snapshot - requires interactive switch selection"},
+        "123": {
+            "category": "websocket",
+            "skip_reason": "WebSocket traceroute - interactive site/device",
+        },
+        "124": {
+            "category": "websocket",
+            "skip_reason": "WebSocket OSPF neighbors - interactive gateway",
+        },
+        "125": {
+            "category": "websocket",
+            "skip_reason": "WebSocket OSPF interfaces - interactive gateway",
+        },
+        "126": {
+            "category": "websocket",
+            "skip_reason": "WebSocket OSPF database - interactive gateway",
+        },
+        "127": {
+            "category": "websocket",
+            "skip_reason": "WebSocket OSPF summary - interactive gateway",
+        },
+        "128": {
+            "category": "websocket",
+            "skip_reason": "WebSocket show sessions - interactive gateway",
+        },
+        "129": {
+            "category": "websocket",
+            "skip_reason": "WebSocket show service path - interactive gateway",
+        },
+        "130": {
+            "category": "websocket",
+            "skip_reason": "WebSocket BGP summary - interactive device",
+        },
+        "131": {
+            "category": "websocket",
+            "skip_reason": "WebSocket ARP table - interactive device",
+        },
+        "132": {
+            "category": "websocket",
+            "skip_reason": "WebSocket DHCP leases - interactive device",
+        },
+        "133": {
+            "category": "websocket",
+            "skip_reason": "WebSocket 802.1X table - interactive switch",
+        },
+        "134": {
+            "category": "websocket",
+            "skip_reason": "WebSocket EVPN database - interactive device",
+        },
+        "135": {
+            "category": "websocket",
+            "skip_reason": "WebSocket DNS resolution - interactive gateway",
+        },
+        "136": {
+            "category": "interactive",
+            "skip_reason": "Monitor traffic streaming - interactive port + Ctrl+C",
+        },
+        "137": {
+            "category": "interactive",
+            "skip_reason": "Run top streaming - interactive device + Ctrl+C",
+        },
+        "138": {
+            "category": "interactive",
+            "skip_reason": "Locate device - interactive device selection",
+        },
+        "139": {
+            "category": "interactive",
+            "skip_reason": "Unlocate device - interactive device selection",
+        },
+        "140": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Bounce port - disrupts traffic",
+        },
+        "141": {
+            "category": "websocket",
+            "skip_reason": "WebSocket cable test - interactive switch/port",
+        },
+        "142": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Reprovision - pushes fresh config",
+        },
+        "143": {
+            "category": "interactive",
+            "skip_reason": "Re-adopt device - interactive switch selection",
+        },
+        "144": {
+            "category": "interactive",
+            "skip_reason": "ZTP password - interactive device selection",
+        },
+        "145": {
+            "category": "interactive",
+            "skip_reason": "Config CLI commands - interactive switch",
+        },
+        "146": {
+            "category": "interactive",
+            "skip_reason": "Upload support file - interactive device/type",
+        },
+        "147": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear ARP cache",
+        },
+        "148": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear BGP routes",
+        },
+        "149": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear session",
+        },
+        "150": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear MAC table",
+        },
+        "151": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear BPDU errors",
+        },
+        "152": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear learned MACs from port",
+        },
+        "153": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Clear policy hit count",
+        },
+        "154": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Release DHCP lease",
+        },
+        "155": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Release SSR DHCP lease",
+        },
+        "156": {
+            "category": "interactive",
+            "skip_reason": "Poll switch stats - interactive switch",
+        },
+        "157": {
+            "category": "interactive",
+            "skip_reason": "Create device snapshot - interactive switch",
+        },
         "158": {"category": "safe"},
     }
 
