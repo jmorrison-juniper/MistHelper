@@ -33,6 +33,118 @@ See `deploy/.env.example` for environment variable documentation.
 **NEW: SSH Remote Access** - MistHelper now supports containerized deployment with SSH server for remote access. Connect via SSH to run MistHelper in isolated sessions with automatic session management and multi-user support.
 
 ---
+
+## Visual Documentation
+
+MistHelper includes a comprehensive [visual documentation suite](documentation/diagrams/README.md) with 20 Mermaid diagram types covering architecture, class hierarchy, operations, and infrastructure -- all themed with T-Mobile dark-mode colors.
+
+<!-- INLINE DIAGRAM: Architecture Overview (architecture-beta) -->
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+architecture-beta
+    group misthelper[MistHelper Application]
+
+    service menu(server)[Menu System] in misthelper
+    service registry(server)[OperationRegistry] in misthelper
+    service api(cloud)[API Layer] in misthelper
+    service exporters(disk)[Data Exporters] in misthelper
+    service db(database)[SQLite Backend] in misthelper
+
+    group realtime[Real-Time Services] in misthelper
+    service websocket(internet)[WebSocket Manager] in realtime
+    service ssh_runner(server)[SSH Runner] in realtime
+    service pcap(server)[Packet Capture] in realtime
+
+    group infra[Infrastructure] in misthelper
+    service container(server)[Container Runtime] in infra
+    service web_portal(internet)[Web Portal 8055] in infra
+    service ssh_server(server)[SSH Server 2200] in infra
+
+    group external[External Systems]
+    service mist_api(cloud)[Mist Cloud API] in external
+    service devices(server)[Network Devices] in external
+
+    menu:R --> L:registry
+    registry:R --> L:api
+    api:R --> L:exporters
+    exporters:B --> T:db
+    api:B --> T:mist_api
+    websocket:B --> T:mist_api
+    ssh_runner:R --> L:devices
+    pcap:B --> T:mist_api
+    ssh_server:T --> B:menu
+    web_portal:T --> B:menu
+    container:R --> L:ssh_server
+    container:R --> L:web_portal
+```
+
+> See [detailed architecture diagrams](documentation/diagrams/core/architecture-overview.md) including C4 Context view.
+
+<!-- INLINE DIAGRAM: Menu Mindmap -->
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+mindmap
+  root((MistHelper<br/>159 Operations))
+    Safe (18)
+      Org Sites
+      Device Inventory
+      Licenses
+      Templates
+      Admin Users
+    Interactive Safe (15)
+      Site Configs
+      WLAN Settings
+      RF Templates
+      Webhooks
+    Interactive (21)
+      Packet Captures
+      SLE Metrics
+      Client Events
+      Alarms
+    WebSocket (18)
+      AP Commands
+      Switch Commands
+      Gateway Commands
+      Network Diag
+    Destructive (50)
+      ::icon(fa fa-warning)
+      AP Firmware
+      Switch Firmware
+      SSR Firmware
+      AP Reboots
+      VC Conversion
+    Resource Intensive (3)
+      Port Stats
+      Full Site Config
+    WIP (3)
+      Features 63-65
+    Continuous (2)
+      Monitoring Loops
+```
+
+> See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.
+
+> **[Browse all diagrams ->](documentation/diagrams/README.md)**
+
+---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
 1. Operation Count: The code currently defines 159 actionable menu entries (0–158) with some gaps for future expansion.
