@@ -27,9 +27,9 @@
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg portal-navbar sticky-top">
+    <nav class="navbar navbar-expand-lg portal-navbar sticky-top" data-testid="portal-navbar">
         <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.dashboard') }}">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.dashboard') }}" data-testid="navbar-brand">
                 <img src="{{ config.PORTAL.logo_url }}" alt="Logo" height="32" class="me-2">
                 <span>{{ config.PORTAL.title }}</span>
             </a>
@@ -44,26 +44,27 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link {% if request.path == '/' %}active{% endif %}"
-                           href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+                           href="{{ url_for('dashboard.dashboard') }}" data-testid="nav-dashboard">Dashboard</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path.startswith('/data') %}active{% endif %}"
-                           href="{{ url_for('data.data_browser') }}">Data</a>
+                           href="{{ url_for('data.data_browser') }}" data-testid="nav-data">Data</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path.startswith('/operations') %}active{% endif %}"
-                           href="{{ url_for('operations.operations_page') }}">Operations</a>
+                           href="{{ url_for('operations.operations_page') }}" data-testid="nav-operations">Operations</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path.startswith('/maps') %}active{% endif %}"
-                           href="{{ url_for('maps.maps_page') }}">Maps</a>
+                           href="{{ url_for('maps.maps_page') }}" data-testid="nav-maps">Maps</a>
                     </li>
                 </ul>
 
                 <!-- Theme Switcher -->
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-                            id="themeSwitcher" data-bs-toggle="dropdown" aria-expanded="false">
+                            id="themeSwitcher" data-bs-toggle="dropdown" aria-expanded="false"
+                            data-testid="theme-switcher">
                         Theme
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" id="themeMenu">
@@ -75,7 +76,7 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="container-fluid portal-main">
+    <main class="container-fluid portal-main" data-testid="portal-main">
         {% block content %}{% endblock %}
     </main>
 

@@ -1,0 +1,136 @@
+# countOrgInventory
+
+> countOrgInventory
+
+## HTTP
+
+`GET /api/v1/orgs/{org_id}/inventory/count`
+
+## Description
+
+Count by Distinct Attributes of in the Org Inventory
+
+## Authentication
+
+Requires API token authentication (`Authorization: Token {api_token}` header or `X-CSRFToken` cookie). See Mist API authentication documentation.
+
+## Parameters
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| org_id | string | Yes |  |
+
+### Query Parameters
+
+| Name | Type | Required | Default | Enum | Description |
+|------|------|----------|---------|------|-------------|
+| type | string | No |  |  |  |
+| distinct | string | No |  |  |  |
+| limit | integer | No | 100 |  |  |
+
+## Request Body
+
+None.
+
+## Response
+
+### 200
+
+Result of Count
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "distinct": {
+      "type": "string"
+    },
+    "end": {
+      "type": "integer",
+      "contentEncoding": "int32"
+    },
+    "limit": {
+      "type": "integer",
+      "contentEncoding": "int32"
+    },
+    "results": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "title": "count_result",
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "contentEncoding": "int32"
+          }
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "description": ""
+    },
+    "start": {
+      "type": "integer",
+      "contentEncoding": "int32"
+    },
+    "total": {
+      "type": "integer",
+      "contentEncoding": "int32"
+    }
+  },
+  "required": [
+    "distinct",
+    "end",
+    "limit",
+    "results",
+    "start",
+    "total"
+  ]
+}
+```
+
+## Errors
+
+| Status | Description |
+|--------|-------------|
+| 400 | Bad Syntax |
+| 401 | Unauthorized |
+| 403 | Permission Denied |
+| 404 | Not found. The API endpoint doesn’t exist or resource doesn’ t exist |
+| 429 | Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold |
+
+## Pagination
+
+Supports pagination. Use `limit` and `page` query parameters.
+
+## Rate Limiting
+
+Standard Mist API rate limits apply.
+
+## mistapi SDK
+
+`mistapi.api.v1.orgs.inventory.countOrgInventory()`
+
+## Usage Context
+
+Returns the count of inventory items grouped by specified fields.
+
+## Gotchas
+
+- Use `distinct` to group by model, type, site, etc.
+
+## Related Endpoints
+
+- [GET_orgs_org_id_inventory_search.md](GET_orgs_org_id_inventory_search.md) — Search inventory
+- [GET_orgs_org_id_inventory.md](GET_orgs_org_id_inventory.md) — Full inventory
+
+## MistHelper Notes
+
+Used by MistHelper via `getOrgInventory` in Menus 12, 17, 21, 22, 25, 61, 90, 99, 100, 110.

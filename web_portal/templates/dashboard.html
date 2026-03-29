@@ -4,29 +4,29 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h4>Dashboard</h4>
+        <h4 data-testid="dashboard-title">Dashboard</h4>
         <p class="text-muted">Welcome to {{ config.PORTAL.title }} Web Portal</p>
     </div>
 </div>
 
 <!-- Summary Cards Row -->
-<div class="row mb-4">
+<div class="row mb-4" data-testid="summary-cards">
     <div class="col-md-4 mb-3">
-        <div class="portal-card">
+        <div class="portal-card" data-testid="card-file-count">
             <div class="card-title">Data Files</div>
             <div class="fs-2 fw-bold">{{ summary.file_count }}</div>
             <small class="text-muted">files in data directory</small>
         </div>
     </div>
     <div class="col-md-4 mb-3">
-        <div class="portal-card">
+        <div class="portal-card" data-testid="card-status">
             <div class="card-title">Status</div>
             <div class="fs-5 fw-bold text-success">Healthy</div>
             <small class="text-muted">All services running</small>
         </div>
     </div>
     <div class="col-md-4 mb-3">
-        <div class="portal-card">
+        <div class="portal-card" data-testid="card-data-dir">
             <div class="card-title">Data Directory</div>
             <div class="fs-6 text-truncate" title="{{ summary.data_dir }}">{{ summary.data_dir }}</div>
             <small class="text-muted">output location</small>
@@ -39,7 +39,7 @@
     <div class="col-12">
         <h5>Recent Files</h5>
         {% if summary.recent_files %}
-        <table class="table table-sm portal-table">
+        <table class="table table-sm portal-table" data-testid="recent-files-table">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -64,23 +64,23 @@
 </div>
 
 <!-- Quick Links -->
-<div class="row">
+<div class="row" data-testid="quick-links">
     <div class="col-md-4 mb-3">
-        <a href="{{ url_for('data.data_browser') }}" class="quick-link">
+        <a href="{{ url_for('data.data_browser') }}" class="quick-link" data-testid="link-data-browser">
             <div class="link-icon">[D]</div>
             <div class="fw-bold">Data Browser</div>
             <small class="text-muted">Browse and download files</small>
         </a>
     </div>
     <div class="col-md-4 mb-3">
-        <a href="{{ url_for('operations.operations_page') }}" class="quick-link">
+        <a href="{{ url_for('operations.operations_page') }}" class="quick-link" data-testid="link-operations">
             <div class="link-icon">[O]</div>
             <div class="fw-bold">Operations</div>
             <small class="text-muted">Run data extraction operations</small>
         </a>
     </div>
     <div class="col-md-4 mb-3">
-        <a href="{{ url_for('maps.maps_page') }}" class="quick-link">
+        <a href="{{ url_for('maps.maps_page') }}" class="quick-link" data-testid="link-map-viewer">
             <div class="link-icon">[M]</div>
             <div class="fw-bold">Map Viewer</div>
             <small class="text-muted">View site floor plans</small>

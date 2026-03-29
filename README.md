@@ -1,16 +1,153 @@
 # MistHelper
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
-**Operation Count:** The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
+[![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
+[![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-MistHelper is a production-focused Python application that streamlines large‑scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior—aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+**Operation Count:** The code currently defines 159 actionable menu entries (0-158) with some gaps for future expansion.
+
+MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+
+## Quality Gates
+
+Every PR runs these checks in parallel via GitHub Actions:
+
+| Gate | Tool | Threshold |
+|------|------|-----------|
+| Lint | Ruff | Zero violations |
+| Type Check | mypy --strict | Phased enforcement |
+| Tests | pytest + coverage | >= 70% |
+| Security | Bandit | Zero findings |
+| Dependencies | pip-audit | Zero vulnerabilities |
+
+## Deployment Options
+
+| Method | File | Description |
+|--------|------|-------------|
+| Systemd | `deploy/misthelper.service` | Standalone host deployment |
+| Podman Quadlet | `deploy/misthelper.container` | Containerized with auto-restart |
+| Docker Compose | `compose.yml` | Container orchestration |
+
+See `deploy/.env.example` for environment variable documentation.
 
 **NEW: SSH Remote Access** - MistHelper now supports containerized deployment with SSH server for remote access. Connect via SSH to run MistHelper in isolated sessions with automatic session management and multi-user support.
 
 ---
+
+## Visual Documentation
+
+MistHelper includes a comprehensive [visual documentation suite](documentation/diagrams/README.md) with 20 Mermaid diagram types covering architecture, class hierarchy, operations, and infrastructure -- all themed with T-Mobile dark-mode colors.
+
+<!-- INLINE DIAGRAM: Architecture Overview (architecture-beta) -->
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+architecture-beta
+    group misthelper[MistHelper Application]
+
+    service menu(server)[Menu System] in misthelper
+    service registry(server)[OperationRegistry] in misthelper
+    service api(cloud)[API Layer] in misthelper
+    service exporters(disk)[Data Exporters] in misthelper
+    service db(database)[SQLite Backend] in misthelper
+
+    group realtime[Real-Time Services] in misthelper
+    service websocket(internet)[WebSocket Manager] in realtime
+    service ssh_runner(server)[SSH Runner] in realtime
+    service pcap(server)[Packet Capture] in realtime
+
+    group infra[Infrastructure] in misthelper
+    service container(server)[Container Runtime] in infra
+    service web_portal(internet)[Web Portal 8055] in infra
+    service ssh_server(server)[SSH Server 2200] in infra
+
+    group external[External Systems]
+    service mist_api(cloud)[Mist Cloud API] in external
+    service devices(server)[Network Devices] in external
+
+    menu:R --> L:registry
+    registry:R --> L:api
+    api:R --> L:exporters
+    exporters:B --> T:db
+    api:B --> T:mist_api
+    websocket:B --> T:mist_api
+    ssh_runner:R --> L:devices
+    pcap:B --> T:mist_api
+    ssh_server:T --> B:menu
+    web_portal:T --> B:menu
+    container:R --> L:ssh_server
+    container:R --> L:web_portal
+```
+
+> See [detailed architecture diagrams](documentation/diagrams/core/architecture-overview.md) including C4 Context view.
+
+<!-- INLINE DIAGRAM: Menu Mindmap -->
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+mindmap
+  root((MistHelper<br/>159 Operations))
+    Safe (18)
+      Org Sites
+      Device Inventory
+      Licenses
+      Templates
+      Admin Users
+    Interactive Safe (15)
+      Site Configs
+      WLAN Settings
+      RF Templates
+      Webhooks
+    Interactive (21)
+      Packet Captures
+      SLE Metrics
+      Client Events
+      Alarms
+    WebSocket (18)
+      AP Commands
+      Switch Commands
+      Gateway Commands
+      Network Diag
+    Destructive (50)
+      ::icon(fa fa-warning)
+      AP Firmware
+      Switch Firmware
+      SSR Firmware
+      AP Reboots
+      VC Conversion
+    Resource Intensive (3)
+      Port Stats
+      Full Site Config
+    WIP (3)
+      Features 63-65
+    Continuous (2)
+      Monitoring Loops
+```
+
+> See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.
+
+> **[Browse all diagrams ->](documentation/diagrams/README.md)**
+
+---
 ## 1. Why This Rewrite?
 The previous README was partially outdated. Key discrepancies corrected here:
-1. Operation Count: The code currently defines 123 actionable menu entries (0–122) with some gaps for future expansion.
+1. Operation Count: The code currently defines 159 actionable menu entries (0–158) with some gaps for future expansion.
 2. File Naming Differences: Actual code exports `OrgApiTokens.csv`, `OrgPsks.csv`, `OrgRfTemplates.csv`, etc. (case-sensitive differences from older docs). A weekly combined inventory is written under `CombinedInventory_ByWeek/` plus per‑operation CSVs in `data/`.
 3. SSH Command Runner: Enhanced SSH Runner (option `97`) now uses a fallback CSV at `data/SSH_COMMANDS.CSV` (legacy root location still accepted temporarily).
 4. Heavy / Long‑Running Operations: Options 14 (port stats) and 18 (full site config) are intentionally excluded from automated systematic test mode due to extreme duration and rate‑limit pressure.
@@ -277,11 +414,47 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 120 | Site Analytics Config | **DESTRUCTIVE**: Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites |
 | 121 | Site Inventory Health | Find sites with APs missing switches/gateways, or with offline infrastructure |
 | 122 | Bulk RADIUS WLAN Config | Configure RADIUS WLAN auth timers (timeout, retries, fast_dot1x) for org-level WLANs |
+| 123 | Traceroute | Traceroute from device to destination host (AP/Switch/Gateway) |
+| 124 | OSPF Neighbors | Show OSPF neighbor adjacencies (Gateway) |
+| 125 | OSPF Interfaces | Show OSPF interface status (Gateway) |
+| 126 | OSPF Database | Show OSPF link-state database (Gateway) |
+| 127 | OSPF Summary | Show OSPF routing summary (Gateway) |
+| 128 | Show Sessions | Show active sessions on SSR/SRX gateway |
+| 129 | Show Service Path | Show SSR service path entries |
+| 130 | Show BGP Summary | Show BGP peer summary (Gateway/Switch) |
+| 131 | Show ARP Table | Show ARP table entries (Gateway/Switch) |
+| 132 | Show DHCP Leases | Show DHCP lease table (Gateway/Switch) |
+| 133 | Show 802.1X Table | Show 802.1X authenticated clients (Switch) |
+| 134 | Show EVPN Database | Show EVPN database entries (Switch/Gateway) |
+| 135 | Resolve DNS | Test DNS resolution on SSR device |
+| 136 | Monitor Traffic | Stream live traffic counters (AP/Switch/Gateway) |
+| 137 | Run Top | Stream top processes on SRX gateway |
+| 138 | Locate Device | Start LED blink for physical device locate (AP/Switch/Gateway) |
+| 139 | Unlocate Device | Stop LED blink on device (AP/Switch/Gateway) |
+| 140 | Bounce Port | **DESTRUCTIVE**: Bounce (disable/enable) a switch port |
+| 141 | Cable Test | Run cable diagnostics on a switch port |
+| 142 | Reprovision Device | **DESTRUCTIVE**: Reprovision Octerm-managed device |
+| 143 | Re-adopt Device | **DESTRUCTIVE**: Re-adopt Octerm-managed device |
+| 144 | Get ZTP Password | Retrieve ZTP password for a device |
+| 145 | Get Config Commands | Retrieve rendered CLI config commands for a device |
+| 146 | Upload Support File | Upload device support/debug file to Mist cloud |
+| 147 | Clear ARP Cache | **DESTRUCTIVE**: Clear ARP cache on SSR device |
+| 148 | Clear BGP Routes | **DESTRUCTIVE**: Clear BGP neighbor routes on SSR |
+| 149 | Clear Session | **DESTRUCTIVE**: Clear active session on device |
+| 150 | Clear MAC Table | **DESTRUCTIVE**: Clear MAC address table on Switch |
+| 151 | Clear BPDU Errors | **DESTRUCTIVE**: Clear BPDU errors on switch ports |
+| 152 | Clear Learned MACs | **DESTRUCTIVE**: Clear learned MACs from switch port |
+| 153 | Clear Policy Hit Count | **DESTRUCTIVE**: Clear policy hit counters on device |
+| 154 | Release DHCP Lease | **DESTRUCTIVE**: Release DHCP lease from device port |
+| 155 | Release DHCP SSR | **DESTRUCTIVE**: Release DHCP lease on SSR device |
+| 156 | Poll Switch Stats | Force immediate stats poll on switch |
+| 157 | Create Device Snapshot | Create configuration snapshot on switch |
+| 158 | Offline Device Report | Scan org inventory for devices offline beyond configurable threshold (default 48h), display summary + PrettyTable, save CSV |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
 * 63–65 intentionally marked WIP; expect evolution.
-* 90–93, 99–100, 104, 106–111, 113–114 should never be scripted unattended without explicit review.
+* 90–93, 99–100, 104, 106–111, 113–114, 140, 142–143, 147–155 should never be scripted unattended without explicit review.
 
 ---
 ## 9. Systematic Test Mode (`--test`)
@@ -295,6 +468,40 @@ You can combine with `--output-format sqlite` and `--fast`:
 ```bash
 python MistHelper.py --test --output-format sqlite --fast
 ```
+
+### Unit Tests (Offline, No Credentials Required)
+
+Run the offline unit test suite — no API token or network access needed:
+
+```bash
+python -m pytest tests/unit/ -v
+```
+
+Tests cover data processing utilities, telemetry event schemas, primary key strategy validation, and configuration helpers. All tests complete in under 30 seconds.
+
+### NDJSON Test Event Output
+
+Both `--test` and `--testinteractive` emit structured NDJSON events to timestamped files:
+
+```text
+data/test_events_YYYYMMDD_HHMMSS.jsonl
+```
+
+Each line is a self-contained JSON object with fields: `event_type`, `timestamp`, `menu_option`, `status`, `duration_seconds`. AI agents and CI pipelines can parse results without regex.
+
+### Comparing Test Runs
+
+Use the comparison utility to detect regressions between two test runs:
+
+```bash
+python scripts/compare_test_runs.py data/test_events_20260311_143000.jsonl data/test_events_20260312_100000.jsonl
+```
+
+The report flags new failures, resolved failures, and timing regressions (>2x slower). Exit code 1 if regressions are found.
+
+### CI Pipeline
+
+Unit tests run automatically in GitHub Actions on every push. The pipeline has three sequential jobs: `validate` (syntax check) -> `test` (pytest) -> `build-and-push` (container image). Test failures block container deployment.
 
 ---
 ## 10. Enhanced SSH Command Runner (Option 97)
@@ -706,6 +913,26 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.03.28.19.09",
+      "date": "2026-03-28",
+      "changes": {
+        "features": [
+          "Offline Device Report (Menu 158): New OfflineDeviceReporter class scans entire org via listOrgDevicesStats (type=all, status=all), filters devices offline beyond user-configurable threshold (default 48h), resolves site names via lookup dict, displays summary stats (total devices, per-type breakdown, top 5 sites) + PrettyTable (max 50 rows), saves human-readable CSV with timestamped filename to data/. Classified as safe in OperationRegistry for automated --test mode."
+        ]
+      }
+    },
+    {
+      "version": "26.03.20.22.31",
+      "date": "2026-03-20",
+      "changes": {
+        "features": [
+          "Device Utility Commands: 35 new operations (menus 123-157) covering traceroute, OSPF diagnostics, session/service-path inspection, BGP/ARP/DHCP/802.1X/EVPN show commands, DNS resolution, live traffic monitoring, device locate, port bounce, cable test, reprovision/re-adopt, ZTP password retrieval, config command export, support file upload, 7 clear/reset operations, DHCP lease release, stats polling, and device snapshots",
+          "DeviceUtilityCommands class: Uses mistapi SDK methods (not raw requests) with WebSocket result streaming, device-type validation, port selection from live stats, and three-tier destructive confirmation (none/y-N/typed keyword)",
+          "14 new ENDPOINT_PRIMARY_KEY_STRATEGIES entries for dual-output (CSV/SQLite) support on all device utility results"
+        ]
+      }
+    },
     {
       "version": "26.03.05.02.49",
       "date": "2026-03-05",

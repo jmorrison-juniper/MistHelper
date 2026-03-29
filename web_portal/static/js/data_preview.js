@@ -77,7 +77,7 @@ var DataPreviewModal = (function() {
 
     function showLoading(show) {
         var el = document.getElementById('dataPreviewLoading');
-        if (el) el.style.display = show ? 'block' : 'none';
+        if (el) { if (show) { el.classList.remove('d-none'); } else { el.classList.add('d-none'); } }
     }
 
     // -----------------------------------------------------------------------
@@ -244,7 +244,7 @@ var DataPreviewModal = (function() {
 
     function renderJsonContent(data) {
         var raw = data.raw || data.content || JSON.stringify(data, null, 2);
-        var html = '<pre class="json-preview" style="max-height:60vh;overflow:auto;font-size:0.8rem;">';
+        var html = '<pre class="json-preview">';
         html += escapeHtml(typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2));
         html += '</pre>';
         setContent(html);
@@ -275,7 +275,7 @@ var DataPreviewModal = (function() {
         } else if (data.raw || data.content) {
             content = data.raw || data.content;
         }
-        var html = '<pre class="log-preview" style="max-height:60vh;overflow:auto;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;">';
+        var html = '<pre class="log-preview">';
         html += escapeHtml(content);
         html += '</pre>';
         setContent(html);
@@ -295,7 +295,7 @@ var DataPreviewModal = (function() {
 
     function setSearchVisible(visible) {
         var el = document.getElementById('dataPreviewSearchRow');
-        if (el) el.style.display = visible ? '' : 'none';
+        if (el) { if (visible) { el.classList.remove('d-none'); } else { el.classList.add('d-none'); } }
     }
 
     // -----------------------------------------------------------------------
@@ -325,7 +325,7 @@ var DataPreviewModal = (function() {
 
     function setPaginationVisible(visible) {
         var el = document.getElementById('dataPreviewPagination');
-        if (el) el.style.display = visible ? 'flex' : 'none';
+        if (el) { if (visible) { el.classList.remove('d-none'); } else { el.classList.add('d-none'); } }
     }
 
     function changePage(delta) {

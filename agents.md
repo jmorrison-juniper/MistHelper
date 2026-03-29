@@ -4,7 +4,7 @@ Your mission: take my high-level request and independently deliver a complete, p
 
 When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
 
-### Autonomous Workflow:
+## Autonomous Workflow
 1. **Internal Requirement Analysis** – Parse my request, infer missing details, and make reasonable assumptions.  
 2. **Architecture & Design Plan** – Decide on structure, algorithms, and libraries.  
 3. **Initial Implementation** – Write complete, functional, and well-documented code.  
@@ -21,7 +21,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
     - Optimize if bottlenecks are detected.  
 7. **Final Output** – Present only the *final, improved, fully tested version* of the code.  
 
-### Output Format:
+## Output Format
 1. **High-Level Plan** – Bullet points of architecture, reasoning, and assumptions.  
 2. **Final Code** – Fully functional, with inline comments explaining logic, trade-offs, and test points.  
 3. **Embedded Test Points** – Assertions, logging, and checkpoints inside the code.  
@@ -29,7 +29,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 5. **Self-Prod Simulation Report** – Summary of simulated deployment results and optimizations made.  
 6. **Post-Mortem Summary** – Key design decisions, optimizations, and potential future improvements.  
 
-### Rules:
+## Rules
 - Assume autonomy — do not ask me for clarifications unless absolutely necessary.  
 - Always produce runnable, tested code in the requested language.  
 - Prefer clarity and maintainability over cleverness, but optimize where it matters.  
@@ -80,7 +80,7 @@ This rule keeps code organized, manageable, and easy to navigate. Apply this hie
 - **Container Runtime**: Podman (primary), Docker (compatible but not documented - all examples use Podman)
 
 ### Data Flow
-```
+```text
 Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV or SQLite)
                                                  -> Rate Limiting -> Retry Logic
 ```
@@ -323,7 +323,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
 - **Direct**: `--menu 11` for automation
-- **Packet Captures** (Menu 9-10): 
+- **Packet Captures** (Menu 9-10):
   - Site captures (Menu 9): Wireless client, wired client, gateway, **switch**, new association, scan radio
   - Org captures (Menu 10): Similar capabilities at org level
   - **Switch captures**: Full support for port-specific captures with tcpdump filtering
@@ -400,6 +400,235 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 - Mist API Docs: `documentation/mist-api-openapi3*.{json,yaml}`
 - Thomas Munzer's mistapi: https://github.com/tmunzer/mistapi_python
 - Reference implementations: https://github.com/tmunzer/mist_library
+
+---
+
+## Autonomous AI Pipeline (End-to-End)
+
+This section defines the complete AI-driven development, testing, and deployment pipeline. The goal: an AI agent (GitHub Copilot, Copilot Workspace, or VS Code Copilot Chat) can independently implement features, run quality gates, merge PRs, and publish deliverables -- all without human intervention once a Feature Spec is approved.
+
+### Scope & Operating Modes
+
+**Run Mode A -- Standalone**: `MistHelper.py` executed directly on a host under systemd.
+- systemd unit: `deploy/misthelper.service`
+- Tokens/config loaded via `EnvironmentFile=/opt/misthelper/.env`
+
+**Run Mode B -- Containerized**: Podman/Docker image managed by systemd Quadlet (preferred for single-node).
+- Quadlet unit: `deploy/misthelper.container`
+- Tokens/config loaded via `EnvironmentFile=./.env` or Docker Compose `env_file:`
+- Registry: `ghcr.io/jmorrison-juniper/misthelper`
+- Podman Quadlet is the recommended systemd integration; `podman generate systemd` is deprecated.
+
+**Configuration & Secrets (both modes)**:
+- All tokens and org IDs live in `.env`, never in code or image layers.
+- Python loads via `python-dotenv` (`from dotenv import load_dotenv; load_dotenv()`).
+- Containers use Compose `env_file:` / `--env-file .env` / Quadlet `EnvironmentFile=`.
+- Committed template: `deploy/.env.example`. Real `.env` is git-ignored.
+
+### Specifying Integration
+
+Every new feature begins as a **Feature Spec** (using SpecKit / Specifying). The Spec is the contract that drives AI-assisted multi-file edits; the PR proves conformance and triggers quality gates then auto-merge.
+
+**Feature Spec (Issue)**: Use `.github/ISSUE_TEMPLATE/feature-spec.yml`. Required sections:
+1. **Problem / Goal** -- User problem, desired outcome, non-goals.
+2. **Interfaces & Behavior** -- CLI flags, `.env` vars, I/O, error model.
+3. **Constraints / Performance** -- Latency, throughput, resource bounds.
+4. **Security & Secrets** -- `.env` only; logging/redaction expectations.
+5. **Test Plan** -- Unit cases, Hypothesis properties, E2E host+container dry-runs, coverage threshold (>=70%).
+6. **Migration / Compatibility** -- Data/flag changes, deprecation plan.
+7. **Acceptance Criteria** -- Verifiable outcome checklist.
+8. **Implementation Notes (AI hints)** -- Pseudocode, modules, files, risk hotspots.
+9. **UI Behavior & Automated Testing** -- Target URLs, interactions, assertions, Playwright scenarios (see Web UI Autonomy section below).
+
+**PR Conformance**: Use `.github/PULL_REQUEST_TEMPLATE.md`. The PR must:
+- Link to the Spec Issue.
+- Check all conformance boxes (acceptance criteria, tests, coverage, no secrets, dry-runs).
+- Show CI status for all quality gates.
+
+### Quality Gates (CI Must Pass Before Merge)
+
+All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot auto-merge unless every gate is green.
+
+| Gate | Tool | What It Checks |
+|------|------|----------------|
+| Lint + Format | **Ruff** | Style violations, import order, auto-fixable issues, formatting |
+| Type Safety | **mypy** | PEP 484 type annotations, strict optional |
+| Tests + Coverage | **pytest + pytest-cov** | Unit/integration tests, coverage >= 70% threshold |
+| Property Tests | **Hypothesis** | Invariants hold for all generated inputs |
+| Security Lint | **Bandit** | AST-based Python security issues |
+| Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
+| Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code + workflow vulnerability scanning |
+| E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
+| Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
+
+**Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
+
+### Exact Tools, Modules & Actions
+
+**Editor & AI**:
+- VS Code + GitHub Copilot + Copilot Chat (multi-file edits, agent workflows)
+- GitHub Copilot Workspace (issue -> plan -> implement -> PR from browser)
+- VS Code Browser Agent Tools (autonomous web UI interaction -- see below)
+
+**Python Quality Gates**:
+- `ruff` -- linter + formatter (replaces flake8/isort/black)
+- `mypy` -- static type checker
+- `pytest` + `pytest-cov` -- tests + coverage reporting
+- `hypothesis` -- property-based testing
+- `bandit` -- security linting (AST rules)
+- `pip-audit` -- dependency CVE scanning
+
+**Code Scanning & Supply Chain**:
+- GitHub CodeQL -- static analysis including Actions workflow scanning
+- Dependabot -- automated dependency/security update PRs
+
+**Packaging & Release**:
+- `actions/setup-python` -- CI Python environment + caching
+- `docker/build-push-action` + `docker/login-action` -- container image build + GHCR push
+- `softprops/action-gh-release` -- attach release artifacts (wheel, zip) to GitHub Releases
+
+**Runtime (no cloud)**:
+- `python-dotenv` -- `.env` loading for standalone host runs
+- Docker Compose with `env_file:` -- container token injection
+- Podman + Quadlet -- declarative systemd-managed containers (preferred)
+
+### Delivery Artifacts (Per Release Tag)
+
+Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
+1. **Python wheel + sdist** -- standard `python -m build` output
+2. **Standalone ZIP** -- `MistHelper.py` + `requirements.txt` + `README.md` bundled
+3. **Container image** -- multi-arch (amd64/arm64) pushed to GHCR
+
+### Auto-Merge & Governance
+
+**Branch protection** on `main` requires all CI checks to pass.
+**Auto-merge** workflow (`.github/workflows/auto-merge.yml`): PRs labeled `auto-merge` get squash-merged once all required checks are green. No human click needed.
+
+**Policy for AI-authored PRs**:
+- AI must link the PR to the originating Spec Issue.
+- AI must tick all conformance checklist boxes in the PR template.
+- AI should add the `auto-merge` label only after confirming all gates pass.
+- Destructive operations (menu 90-100) require explicit human review regardless of AI authorship.
+
+### Full Pipeline Loop (End-to-End)
+
+1. **Spec** -- Write a Feature Spec Issue using the template. Define problem, behavior, tests, UI expectations.
+2. **AI Implements** -- Copilot Chat/Workspace reads the Spec, implements across files, creates tests, updates `.env.example` if needed.
+3. **AI Opens PR** -- Links to Spec, fills conformance checklist, pushes branch.
+4. **CI Runs** -- Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
+5. **Auto-Merge** -- If all gates green + labeled `auto-merge`, PR squash-merges to `main`.
+6. **Container Build** -- Push to `main` triggers container-build workflow: validate syntax -> run tests -> build multi-arch image -> push to GHCR.
+7. **Release** -- Tag push triggers release workflow: build wheel/zip, attach to GitHub Release, push container image.
+8. **Ops Pull** -- Operators pull new artifact:
+   - Host mode: download zip, restart systemd service.
+   - Container mode: `podman pull ghcr.io/jmorrison-juniper/misthelper:latest`, restart Quadlet service.
+
+---
+
+## Web UI Autonomy (AI-Driven Browser Interaction)
+
+MistHelper launches a Gunicorn-served web UI (port 8055) that humans use to interact with the script and kick off activities. This section enables AI agents in VS Code to **see**, **interact with**, and **test** these pages autonomously -- no human screenshots required.
+
+### VS Code Browser Agent Tools
+
+VS Code ships built-in browser automation tools for AI agents. These allow Copilot to launch a browser, read the DOM, click buttons, type into forms, take screenshots, and run Playwright code -- all without leaving the editor.
+
+**Enable in VS Code**:
+1. Turn on setting: `workbench.browser.enableChatTools`
+2. Open Chat (Ctrl+Alt+I) -> Agent mode -> enable Built-in -> Browser tools
+
+**Available Agent Capabilities**:
+
+| Capability | Agent Tool | What It Does |
+|------------|-----------|--------------|
+| Open page | `openBrowserPage` | Launch URL in VS Code integrated browser |
+| Navigate | `navigatePage` | Go to a different URL |
+| Read content | `readPage` | Extract DOM text/structure for analysis |
+| Screenshot | `screenshotPage` | AI captures its own screenshots (no human needed) |
+| Click | `clickElement` | Click buttons, links, menu items |
+| Type | `typeInPage` | Enter text into forms/inputs |
+| Hover | `hoverElement` | Trigger hover states, tooltips |
+| Drag | `dragElement` | Drag-and-drop interactions |
+| Dialogs | `handleDialog` | Accept/dismiss browser dialogs |
+| Run tests | `runPlaywrightCode` | Execute Playwright automation inline |
+
+**DOM Locator Extraction**: VS Code Simple Browser integration enables point-and-click element selection with automatic locator extraction and test script generation.
+
+### How the AI Operates on the Web UI
+
+**3.1 Open & Inspect**:
+- Start MistHelper locally (or in container with port mapping: `-p 8055:8055`).
+- In VS Code Chat, instruct the agent: "Open http://localhost:8055 in the browser and verify the page loads successfully."
+- Agent uses `openBrowserPage` / `navigatePage` to open the URL.
+- Agent reads the page (`readPage`) and may capture screenshots (`screenshotPage`) for context or failure evidence.
+
+**3.2 Interact & Validate**:
+- Agent performs actions (`clickElement`, `typeInPage`, `hoverElement`, `dragElement`, `handleDialog`) to execute user journeys described in the Spec.
+- Agent inspects the DOM and checks console errors as part of validation.
+- Agent verifies expected state changes (new rows appear, status messages, button state transitions).
+
+**3.3 Codify as Playwright Tests**:
+- Agent generates Playwright tests and runs them via `runPlaywrightCode`.
+- Agent uses Playwright Trace Viewer for debugging and stabilization.
+- Tests are saved to `tests/e2e/` and committed with the PR.
+- The `gunicorn_server` fixture in `tests/e2e/conftest.py` handles server lifecycle automatically (starts on random port, tears down after tests).
+
+### Autonomous Testing Scenarios
+
+The AI agent can perform these without human presence:
+- Load the web UI and validate page structure renders correctly
+- Click workflow trigger buttons (start jobs, run operations)
+- Fill forms with test data (site selection, device filters, command inputs)
+- Inspect network responses from the Gunicorn backend
+- Detect JavaScript/console errors
+- Capture screenshots automatically for failure evidence
+- Generate Playwright regression tests and save to `tests/e2e/`
+- Run the tests during CI (the `playwright` job in `ci.yml` handles this)
+- Auto-repair failing tests using Copilot + Playwright integration
+
+### Specifying: UI Section in Feature Specs
+
+When a Spec involves web UI changes, the **"UI Behavior & Automated Testing Expectations"** section in the Issue template must include:
+
+1. **Target URL(s)** the agent must open (e.g., `/`, `/dashboard`, `/jobs`).
+2. **Critical user journeys**: buttons to click, forms to fill, dialogs to handle, expected state transitions and messages.
+3. **Assertions**: DOM changes, text presence, attribute/state updates, network-visible effects.
+4. **Stability contracts**: testable `data-testid` attributes (to keep selectors robust -- prefer these over brittle CSS/XPath).
+5. **Artifacts**: request screenshots and Playwright traces for failures.
+6. **Non-goals**: flows intentionally out of scope for the feature.
+
+This upfront structure gives the agent precise goals and reduces brittle selectors or ambiguous UI outcomes.
+
+### PR Conformance: UI Testing Additions
+
+In addition to the standard checklist, PRs that touch web UI must include:
+- **UI E2E present**: PR includes/updates Playwright tests for changed UI flows.
+- **Selectors stabilized**: Stable `data-testid` attributes added where needed; agent verified selectors by interacting with the integrated browser.
+- **Agent execution proof**: Screenshots and/or Playwright traces for main flows (stored as CI artifacts on failures or in PR comments when green).
+
+### Best Practices for UI Autonomy
+
+- **Make selectors intentional**: Use `data-testid` attributes, not brittle CSS/XPath. This helps agents generate resilient tests.
+- **Capture evidence by default**: On failures, keep screenshots and Playwright traces as first-class debug artifacts.
+- **Spec-first**: Describe interactions and expected states in the Issue; the agent converts that into executable steps.
+- **Continuous hardening**: The agent iteratively fixes failing tests and improves assertions using Copilot + Playwright workflow.
+- **Keep E2E fast**: The Gunicorn fixture (`tests/e2e/conftest.py`) starts a single-worker server on a random port. Tests should clean up after themselves.
+
+---
+
+## AI Agent Operating Instructions (Summary for Copilot/Workspace)
+
+When implementing a Feature Spec, AI agents must follow this protocol:
+
+1. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
+2. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
+3. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
+4. **Update `deploy/.env.example`** if introducing new environment variables.
+5. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
+6. **Prepare the PR** using the PR template; link the Spec and complete all checklist items.
+7. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
+8. **Add the `auto-merge` label** once all checks pass.
+9. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
 
 ---
 

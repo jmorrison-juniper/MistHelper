@@ -1,47 +1,55 @@
 # MistHelper Dependencies
 # Requires Python 3.13 or newer
+# No version pins - always install latest available
 
 # Core API and networking
-mistapi>=0.59.0
-requests>=2.28.0
-websocket-client>=1.4.0
-urllib3>=1.26.0
+mistapi
+requests
+websocket-client
+urllib3
 
 # SSH and remote access
-paramiko>=2.9.0
+paramiko
 
 # Secure credential storage (required by mistapi)
-keyring>=25.0.0
+keyring
 
 # CLI and user interface
-prettytable>=3.5.0
-tqdm>=4.64.0
-sshkeyboard>=2.3.0
-rich>=13.0.0
-tabulate>=0.9.0
+prettytable
+tqdm
+sshkeyboard
+rich
+tabulate
 
 # Data processing and configuration
-numpy>=1.24.0
-python-dotenv>=1.0.0
-PyYAML>=6.0.0
+numpy
+python-dotenv
+PyYAML
 
 # Terminal emulation for SSH operations
-pyte>=0.8.0
+pyte
 
 # Address parsing and fuzzy matching
-usaddress-scourgify>=0.6.0
-rapidfuzz>=3.8.0
+usaddress-scourgify
+rapidfuzz
 
 # Web portal (Flask + Gunicorn)
-Flask>=3.0.0
-gunicorn>=22.0.0
-flask-wtf>=1.2.0
+Flask
+gunicorn
+flask-wtf
 
-# Interactive visualization (map viewer — Plotly.js bundled as static vendor)
-plotly>=5.14.0
-matplotlib>=3.5.0
-pillow>=9.0.0
-kaleido>=0.2.1
+# Interactive visualization (Maps Manager uses Dash for interactive view, Plotly for static)
+dash
+plotly
+matplotlib
+pillow
+kaleido
+
+# Pygments: CVE-2026-4539 has no fix available yet - ignored in CI pip-audit
+Pygments>=2.19.2
+
+# Testing (dev dependency - not needed at runtime)
+pytest
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,

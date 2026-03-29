@@ -13,7 +13,7 @@
 <div class="row mb-3">
     <div class="col-md-4">
         <input type="text" class="form-control portal-search" id="fileSearch"
-               placeholder="Filter files..." aria-label="Filter files">
+               placeholder="Filter files..." aria-label="Filter files" data-testid="file-search">
     </div>
     <div class="col-md-8 text-end">
     </div>
@@ -21,7 +21,7 @@
 
 <!-- File List -->
 <div id="fileListArea">
-    <table class="table portal-table" id="fileTable">
+    <table class="table portal-table" id="fileTable" data-testid="file-table">
         <thead>
             <tr>
                 <th data-sort>Name</th>
@@ -40,16 +40,16 @@
 <!-- Preview Panel (replaced by modal) -->
 
 <!-- SQLite Table List Panel -->
-<div id="sqlitePanel" class="preview-panel" style="display:none;">
+<div id="sqlitePanel" class="preview-panel d-none">
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 id="sqliteTitle" class="mb-0">Tables</h6>
-        <button class="btn btn-sm btn-outline-secondary" onclick="closeSqlite()">Close</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeSqlite()">Close</button>
     </div>
     <div id="sqliteContent"></div>
 </div>
 
 <!-- Empty State -->
-<div id="emptyState" class="empty-state" style="display:none;">
+<div id="emptyState" class="empty-state d-none">
     <div class="empty-icon">[ ]</div>
     <p>No data files found.</p>
     <p class="text-muted">Run an operation to generate data files.</p>
@@ -66,13 +66,13 @@
             </div>
             <div class="modal-body">
                 <!-- Search row -->
-                <div id="dataPreviewSearchRow" class="mb-2" style="display:none;">
-                    <input type="text" class="form-control form-control-sm" id="dataPreviewSearch"
-                           placeholder="Search rows..." style="max-width:300px;">
+                <div id="dataPreviewSearchRow" class="mb-2 d-none">
+                    <input type="text" class="form-control form-control-sm preview-search-input" id="dataPreviewSearch"
+                           placeholder="Search rows...">
                 </div>
 
                 <!-- Loading spinner -->
-                <div id="dataPreviewLoading" class="modal-loading" style="display:none;">
+                <div id="dataPreviewLoading" class="modal-loading d-none">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
@@ -83,8 +83,8 @@
                 <div id="dataPreviewBody"></div>
 
                 <!-- Pagination -->
-                <div class="portal-pagination" id="dataPreviewPagination" style="display:none;">
-                    <button class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                <div class="portal-pagination d-none" id="dataPreviewPagination">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
                             onclick="DataPreviewModal.changePage(-1)">Prev</button>
                     <span class="page-info" id="dataPreviewPageInfo"></span>
                     <button class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
@@ -125,10 +125,10 @@ function renderFileTable(files) {
     var empty = document.getElementById('emptyState');
     if (files.length === 0) {
         tbody.innerHTML = '';
-        empty.style.display = 'block';
+        empty.classList.remove('d-none');
         return;
     }
-    empty.style.display = 'none';
+    empty.classList.add('d-none');
     tbody.innerHTML = '';
     files.forEach(function(file) {
         var tr = document.createElement('tr');
@@ -165,7 +165,7 @@ function previewSqlite(path) {
     DataPreviewModal.openPreview(path);
 }
 
-function closeSqlite() { document.getElementById('sqlitePanel').style.display = 'none'; }
+function closeSqlite() { document.getElementById('sqlitePanel').classList.add('d-none'); }
 
 function filterFileTable() {
     var search = document.getElementById('fileSearch').value.toLowerCase();

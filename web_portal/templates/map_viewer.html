@@ -14,18 +14,18 @@
     <div class="col-md-3">
         <div class="portal-card mb-3 p-3">
             <label class="form-label" for="siteSelect">Site</label>
-            <select class="form-select" id="siteSelect" onchange="onSiteChange()">
+            <select class="form-select" id="siteSelect" onchange="onSiteChange()" data-testid="site-select">
                 <option value="">-- Select a site --</option>
             </select>
 
             <label class="form-label mt-3" for="mapSelect">Floor Plan</label>
-            <select class="form-select" id="mapSelect" onchange="onMapChange()" disabled>
+            <select class="form-select" id="mapSelect" onchange="onMapChange()" disabled data-testid="map-select">
                 <option value="">-- Select a map --</option>
             </select>
         </div>
 
         <!-- Device List -->
-        <div class="portal-card p-3" id="devicePanel" style="display:none;">
+        <div class="portal-card p-3 d-none" id="devicePanel" data-testid="device-panel">
             <h6>Devices (<span id="deviceCount">0</span>)</h6>
             <ul class="list-group list-group-flush" id="deviceList"></ul>
         </div>
@@ -33,8 +33,8 @@
 
     <!-- Right: Map Render Area -->
     <div class="col-md-9">
-        <div class="portal-card p-2" id="mapContainer">
-            <div id="plotArea" style="min-height:500px;">
+        <div class="portal-card p-2" id="mapContainer" data-testid="map-container">
+            <div id="plotArea" class="plot-area">
                 <div class="text-center text-muted py-5" id="mapPlaceholder">
                     Select a site and floor plan to view the map.
                 </div>
@@ -109,7 +109,7 @@ function onMapChange() {
 }
 
 function renderMap(data) {
-    document.getElementById('mapPlaceholder').style.display = 'none';
+    document.getElementById('mapPlaceholder').classList.add('d-none');
     currentDevices = data.devices || [];
 
     var xCoords = [];
@@ -187,11 +187,11 @@ function renderDeviceList(devices) {
     list.innerHTML = '';
 
     if (devices.length === 0) {
-        panel.style.display = 'none';
+        panel.classList.add('d-none');
         return;
     }
 
-    panel.style.display = '';
+    panel.classList.remove('d-none');
     devices.forEach(function(d) {
         var li = document.createElement('li');
         li.className = 'list-group-item py-1';
@@ -211,7 +211,7 @@ function clearMap() {
     ph.id = 'mapPlaceholder';
     ph.textContent = 'Select a site and floor plan to view the map.';
     area.appendChild(ph);
-    document.getElementById('devicePanel').style.display = 'none';
+    document.getElementById('devicePanel').classList.add('d-none');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
