@@ -3968,14 +3968,14 @@ class WebSocketManager:
         assert self.mist_host is not None, "mist_host must be set"  # nosec B101
         websocket_host = self.mist_host.replace("api.", "api-ws.")
         self.websocket_url = f"wss://{websocket_host}/api-ws/v1/stream"
-        self.websocket_connection = None
+        self.websocket_connection: websocket.WebSocketApp | None = None
         self.logger = logging.getLogger(__name__)
         self.connected = False
-        self.subscribed_channels = set()
-        self.confirmed_subscriptions = set()  # Track confirmed subscriptions
+        self.subscribed_channels: set[str] = set()
+        self.confirmed_subscriptions: set[str] = set()
 
         # Results storage for command outputs
-        self.command_results = {}
+        self.command_results: dict[str, Any] = {}
         self.results_lock = threading.Lock()
 
     def connect(self) -> bool:
@@ -4008,7 +4008,8 @@ class WebSocketManager:
             )
 
             # Start connection in background thread
-            self.websocket_thread = threading.Thread(target=self.websocket_connection.run_forever, daemon=True)
+            connection = self.websocket_connection
+            self.websocket_thread = threading.Thread(target=connection.run_forever, daemon=True)
             self.websocket_thread.start()
 
             # Wait for connection to establish
@@ -4047,7 +4048,8 @@ class WebSocketManager:
         try:
             subscription_message = {"subscribe": channel_path}
 
-            self.websocket_connection.send(json.dumps(subscription_message))  # type: ignore[union-attr]
+            if self.websocket_connection is not None:
+                self.websocket_connection.send(json.dumps(subscription_message))
             self.subscribed_channels.add(channel_path)
             self.logger.debug(f"Subscribed to channel: {channel_path}")
             return True

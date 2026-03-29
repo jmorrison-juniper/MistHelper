@@ -45,8 +45,8 @@ matplotlib
 pillow
 kaleido
 
-# Pin Pygments below 2.19.2 to avoid CVE-2026-4539 (transitive dep of rich)
-Pygments<2.19.2
+# Pin Pygments to fixed version for CVE-2026-4539 (transitive dep of rich)
+Pygments>=2.19.2
 
 # Testing (dev dependency - not needed at runtime)
 pytest
