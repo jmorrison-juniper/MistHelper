@@ -96,57 +96,24 @@ Requirements that MUST be met before any destructive operation (Menu 90-100) exe
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-requirementDiagram
+flowchart TB
+    subgraph requirements["Safety Requirements - Menu 90-100"]
+        SAF001["SAF-001: Explicit Confirmation<br/>Type exact word to proceed<br/>Risk: HIGH | Verify: test"]
+        SAF002["SAF-002: EOF Handling<br/>All input calls handle EOFError<br/>Risk: HIGH | Verify: inspection"]
+        SAF003["SAF-003: No Blind Automation<br/>--menu flag requires confirmation<br/>Risk: HIGH | Verify: test"]
+        SAF004["SAF-004: Logging Required<br/>Full context logged before execution<br/>Risk: MEDIUM | Verify: inspection"]
+        SAF005["SAF-005: Rollback Plan<br/>Firmware upgrades document rollback<br/>Risk: MEDIUM | Verify: inspection"]
+    end
 
-    requirement explicit_confirmation {
-        id: SAF-001
-        text: Destructive operations require typing exact confirmation word
-        risk: high
-        verifymethod: test
-    }
+    subgraph impl["Implementation"]
+        si["safe_input()<br/>MistHelper.py"]
+        fm["FirmwareManager<br/>MistHelper.py"]
+    end
 
-    requirement eof_handling {
-        id: SAF-002
-        text: All input calls handle EOFError for SSH session disconnects
-        risk: high
-        verifymethod: inspection
-    }
-
-    requirement no_automation {
-        id: SAF-003
-        text: Menu 90-100 cannot run via --menu flag without confirmation
-        risk: high
-        verifymethod: test
-    }
-
-    requirement logging_required {
-        id: SAF-004
-        text: All destructive actions logged with full context before execution
-        risk: medium
-        verifymethod: inspection
-    }
-
-    requirement rollback_plan {
-        id: SAF-005
-        text: Firmware upgrades document rollback procedures
-        risk: medium
-        verifymethod: inspection
-    }
-
-    element safe_input {
-        type: function
-        docRef: MistHelper.py
-    }
-
-    element FirmwareManager {
-        type: class
-        docRef: MistHelper.py
-    }
-
-    safe_input - satisfies -> explicit_confirmation
-    safe_input - satisfies -> eof_handling
-    FirmwareManager - satisfies -> logging_required
-    FirmwareManager - satisfies -> rollback_plan
+    si -->|satisfies| SAF001
+    si -->|satisfies| SAF002
+    fm -->|satisfies| SAF004
+    fm -->|satisfies| SAF005
 ```
 
 ---

@@ -18,19 +18,17 @@ Typical 802.11 frame structure captured by MistHelper's PacketCaptureManager.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-packet-beta
-    title IEEE 802.11 Frame Structure
-    0-1: "Frame Control (2B)"
-    2-3: "Duration/ID (2B)"
-    4-9: "Address 1 - Destination (6B)"
-    10-15: "Address 2 - Source (6B)"
-    16-21: "Address 3 - BSSID (6B)"
-    22-23: "Seq Control (2B)"
-    24-31: "Frame Body (variable)"
-    32-35: "FCS (4B)"
+flowchart LR
+    FC["Frame Control<br/>Bytes 0-1 (2B)"] --> DUR["Duration/ID<br/>Bytes 2-3 (2B)"]
+    DUR --> A1["Address 1<br/>Dest (6B)"]
+    A1 --> A2["Address 2<br/>Source (6B)"]
+    A2 --> A3["Address 3<br/>BSSID (6B)"]
+    A3 --> SEQ["Seq Control<br/>Bytes 22-23 (2B)"]
+    SEQ --> BODY["Frame Body<br/>(variable)"]
+    BODY --> FCS["FCS<br/>Bytes 32-35 (4B)"]
 ```
 
-> **PNG fallback**: If the packet-beta diagram does not render, see [network-protocols.png](network-protocols.png).
+> **PNG fallback**: If this diagram does not render, see [network-protocols.png](network-protocols.png).
 
 ## Ethernet Frame (Switch Captures)
 
@@ -46,16 +44,13 @@ For switch port-specific captures using tcpdump filtering.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-packet-beta
-    title Ethernet II Frame (Switch Port Capture)
-    0-5: "Dest MAC (6B)"
-    6-11: "Src MAC (6B)"
-    12-13: "EtherType (2B)"
-    14-17: "VLAN Tag 802.1Q (4B optional)"
-    18-21: "IP Header Start (4B)"
-    22-41: "IP Header (20B)"
-    42-61: "TCP/UDP Header (20B)"
-    62-63: "Payload Start"
+flowchart LR
+    DMAC["Dest MAC<br/>Bytes 0-5 (6B)"] --> SMAC["Src MAC<br/>Bytes 6-11 (6B)"]
+    SMAC --> ET["EtherType<br/>Bytes 12-13 (2B)"]
+    ET --> VLAN["VLAN Tag 802.1Q<br/>Bytes 14-17 (4B opt)"]
+    VLAN --> IPH["IP Header<br/>Bytes 18-41 (20B)"]
+    IPH --> TCPH["TCP/UDP Header<br/>Bytes 42-61 (20B)"]
+    TCPH --> PL["Payload Start<br/>Byte 62+"]
 ```
 
 ## Capture Types Supported

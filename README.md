@@ -38,7 +38,7 @@ See `deploy/.env.example` for environment variable documentation.
 
 MistHelper includes a comprehensive [visual documentation suite](documentation/diagrams/README.md) with 20 Mermaid diagram types covering architecture, class hierarchy, operations, and infrastructure -- all themed with T-Mobile dark-mode colors.
 
-<!-- INLINE DIAGRAM: Architecture Overview (architecture-beta) -->
+<!-- INLINE DIAGRAM: Architecture Overview (flowchart) -->
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -50,41 +50,41 @@ MistHelper includes a comprehensive [visual documentation suite](documentation/d
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-architecture-beta
-    group misthelper[MistHelper Application]
+flowchart LR
+    subgraph misthelper["MistHelper Application"]
+        menu["Menu System"]
+        registry["OperationRegistry"]
+        api["API Layer"]
+        exporters["Data Exporters"]
+        db[("SQLite Backend")]
 
-    service menu(server)[Menu System] in misthelper
-    service registry(server)[OperationRegistry] in misthelper
-    service api(cloud)[API Layer] in misthelper
-    service exporters(disk)[Data Exporters] in misthelper
-    service db(database)[SQLite Backend] in misthelper
+        subgraph realtime["Real-Time Services"]
+            websocket["WebSocket Manager"]
+            ssh_runner["SSH Runner"]
+            pcap["Packet Capture"]
+        end
 
-    group realtime[Real-Time Services] in misthelper
-    service websocket(internet)[WebSocket Manager] in realtime
-    service ssh_runner(server)[SSH Runner] in realtime
-    service pcap(server)[Packet Capture] in realtime
+        subgraph infra["Infrastructure"]
+            container["Container Runtime"]
+            web_portal["Web Portal 8055"]
+            ssh_server["SSH Server 2200"]
+        end
+    end
 
-    group infra[Infrastructure] in misthelper
-    service container(server)[Container Runtime] in infra
-    service web_portal(internet)[Web Portal 8055] in infra
-    service ssh_server(server)[SSH Server 2200] in infra
+    subgraph external["External Systems"]
+        mist_api["Mist Cloud API"]
+        devices["Network Devices"]
+    end
 
-    group external[External Systems]
-    service mist_api(cloud)[Mist Cloud API] in external
-    service devices(server)[Network Devices] in external
-
-    menu:R --> L:registry
-    registry:R --> L:api
-    api:R --> L:exporters
-    exporters:B --> T:db
-    api:B --> T:mist_api
-    websocket:B --> T:mist_api
-    ssh_runner:R --> L:devices
-    pcap:B --> T:mist_api
-    ssh_server:T --> B:menu
-    web_portal:T --> B:menu
-    container:R --> L:ssh_server
-    container:R --> L:web_portal
+    menu --> registry --> api --> exporters --> db
+    api --> mist_api
+    websocket --> mist_api
+    ssh_runner --> devices
+    pcap --> mist_api
+    ssh_server --> menu
+    web_portal --> menu
+    container --> ssh_server
+    container --> web_portal
 ```
 
 > See [detailed architecture diagrams](documentation/diagrams/core/architecture-overview.md) including C4 Context view.

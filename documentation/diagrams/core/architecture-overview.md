@@ -18,23 +18,23 @@ Who interacts with MistHelper and what external systems does it depend on?
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-C4Context
-    title MistHelper - System Context
+flowchart TB
+    noc_engineer(["NOC Engineer<br/>Network operations staff"])
+    ci_system(["CI/CD System<br/>GitHub Actions"])
 
-    Person(noc_engineer, "NOC Engineer", "Network operations staff using MistHelper via SSH or local terminal")
-    Person(ci_system, "CI/CD System", "GitHub Actions running quality gates and container builds")
+    subgraph misthelper["MistHelper"]
+        mh["Python CLI tool<br/>159 operations"]
+    end
 
-    System(misthelper, "MistHelper", "Python CLI tool for Mist Cloud network operations, data export, and device management")
+    mist_cloud["Juniper Mist Cloud<br/>REST API + WebSocket"]
+    ghcr["GitHub Container Registry<br/>ghcr.io"]
+    network_devices["Network Devices<br/>APs, switches, gateways"]
 
-    System_Ext(mist_cloud, "Juniper Mist Cloud", "REST API and WebSocket endpoints for network management")
-    System_Ext(ghcr, "GitHub Container Registry", "Container image storage (ghcr.io)")
-    System_Ext(network_devices, "Network Devices", "APs, switches, gateways managed by Mist")
-
-    Rel(noc_engineer, misthelper, "Uses", "SSH (2200) / Terminal / HTTP (8055)")
-    Rel(ci_system, misthelper, "Builds & Tests", "GitHub Actions")
-    Rel(misthelper, mist_cloud, "Calls API", "HTTPS REST + WebSocket")
-    Rel(misthelper, ghcr, "Publishes image", "OCI push")
-    Rel(mist_cloud, network_devices, "Manages", "Cloud control plane")
+    noc_engineer -->|"SSH 2200 / HTTP 8055"| mh
+    ci_system -->|"Builds & Tests"| mh
+    mh -->|"HTTPS REST + WebSocket"| mist_cloud
+    mh -->|"OCI push"| ghcr
+    mist_cloud -->|"Cloud control plane"| network_devices
 ```
 
 ## Internal Architecture
@@ -51,44 +51,44 @@ How MistHelper's subsystems connect and interact internally.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-architecture-beta
-    group misthelper[MistHelper Application]
+flowchart LR
+    subgraph misthelper["MistHelper Application"]
+        menu["Menu System"]
+        registry["OperationRegistry"]
+        api["API Layer"]
+        exporters["Data Exporters"]
+        db[("SQLite Backend")]
 
-    service menu(server)[Menu System] in misthelper
-    service registry(server)[OperationRegistry] in misthelper
-    service api(cloud)[API Layer] in misthelper
-    service exporters(disk)[Data Exporters] in misthelper
-    service db(database)[SQLite Backend] in misthelper
+        subgraph realtime["Real-Time Services"]
+            websocket["WebSocket Manager"]
+            ssh_runner["SSH Runner"]
+            pcap["Packet Capture"]
+        end
 
-    group realtime[Real-Time Services] in misthelper
-    service websocket(internet)[WebSocket Manager] in realtime
-    service ssh_runner(server)[SSH Runner] in realtime
-    service pcap(server)[Packet Capture] in realtime
+        subgraph infra["Infrastructure"]
+            container["Container Runtime"]
+            web_portal["Web Portal 8055"]
+            ssh_server["SSH Server 2200"]
+        end
+    end
 
-    group infra[Infrastructure] in misthelper
-    service container(server)[Container Runtime] in infra
-    service web_portal(internet)[Web Portal 8055] in infra
-    service ssh_server(server)[SSH Server 2200] in infra
+    subgraph external["External Systems"]
+        mist_api["Mist Cloud API"]
+        devices["Network Devices"]
+    end
 
-    group external[External Systems]
-    service mist_api(cloud)[Mist Cloud API] in external
-    service devices(server)[Network Devices] in external
-
-    menu:R --> L:registry
-    registry:R --> L:api
-    api:R --> L:exporters
-    exporters:B --> T:db
-    api:B --> T:mist_api
-    websocket:B --> T:mist_api
-    ssh_runner:R --> L:devices
-    pcap:B --> T:mist_api
-    ssh_server:T --> B:menu
-    web_portal:T --> B:menu
-    container:R --> L:ssh_server
-    container:R --> L:web_portal
+    menu --> registry --> api --> exporters --> db
+    api --> mist_api
+    websocket --> mist_api
+    ssh_runner --> devices
+    pcap --> mist_api
+    ssh_server --> menu
+    web_portal --> menu
+    container --> ssh_server
+    container --> web_portal
 ```
 
-> **PNG fallback**: If the architecture-beta diagram does not render, see [architecture-overview.png](architecture-overview.png).
+> **PNG fallback**: If this diagram does not render, see [architecture-overview.png](architecture-overview.png).
 
 ## Key Subsystems
 

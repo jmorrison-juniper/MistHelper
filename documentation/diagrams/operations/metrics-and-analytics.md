@@ -52,26 +52,30 @@ Where operations fall on the complexity-frequency spectrum.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-quadrantChart
-    title Operation Complexity vs Usage Frequency
-    x-axis Low Frequency --> High Frequency
-    y-axis Low Complexity --> High Complexity
-    quadrant-1 Complex & Frequent
-    quadrant-2 Complex & Rare
-    quadrant-3 Simple & Rare
-    quadrant-4 Simple & Frequent
-    Device Inventory: [0.9, 0.2]
-    Site Listing: [0.85, 0.15]
-    Alarm Events: [0.7, 0.3]
-    Device Stats: [0.75, 0.35]
-    Client Export: [0.6, 0.4]
-    Packet Capture: [0.3, 0.7]
-    WebSocket Diag: [0.4, 0.6]
-    AP Firmware: [0.15, 0.85]
-    VC Conversion: [0.05, 0.95]
-    SSH Runner: [0.25, 0.75]
-    Full Site Config: [0.1, 0.8]
-    License Summary: [0.5, 0.2]
+flowchart TB
+    subgraph q1["Complex and Frequent"]
+        pcap["Packet Capture"]
+        ws["WebSocket Diag"]
+        ssh["SSH Runner"]
+    end
+
+    subgraph q2["Complex and Rare"]
+        fw["AP Firmware"]
+        vc["VC Conversion"]
+        fsc["Full Site Config"]
+    end
+
+    subgraph q3["Simple and Frequent"]
+        inv["Device Inventory"]
+        sites["Site Listing"]
+        lic["License Summary"]
+    end
+
+    subgraph q4["Moderate Complexity"]
+        alarms["Alarm Events"]
+        stats["Device Stats"]
+        clients["Client Export"]
+    end
 ```
 
 ## Rate Limiting Adaptive Delay
@@ -80,24 +84,33 @@ How MistHelper's PID-like controller adjusts API request delay over time.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
-  'xyChart': {
-    'titleColor': '#E20074',
-    'xAxisLabelColor': '#E0E0E0',
-    'yAxisLabelColor': '#E0E0E0',
-    'xAxisLineColor': '#FF4DA6',
-    'yAxisLineColor': '#FF4DA6',
-    'plotColorPalette': '#E20074,#FF6F91,#99004D,#00C853,#FFD600'
-  }
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
 }}}%%
-xychart-beta
-    title "Adaptive Delay Response to 429 Rate Limits"
-    x-axis "Request Number" [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-    y-axis "Delay (ms)" 0 --> 5000
-    bar [100, 100, 100, 2000, 3500, 4500, 4000, 2500, 1500, 500, 200]
-    line [100, 100, 100, 2000, 3500, 4500, 4000, 2500, 1500, 500, 200]
+flowchart LR
+    subgraph input["Request Phase"]
+        R1["Requests 1-10<br/>Delay: 100ms"]
+        R2["Requests 11-15<br/>Delay: 100ms"]
+    end
+
+    subgraph spike["429 Rate Limit Hit"]
+        R3["Requests 15-20<br/>Delay: 2000-4500ms"]
+    end
+
+    subgraph recovery["Recovery Phase"]
+        R4["Requests 25-35<br/>Delay: 4000-1500ms"]
+        R5["Requests 40-50<br/>Delay: 500-200ms"]
+    end
+
+    R1 --> R2 --> R3 -->|"PID controller<br/>backs off"| R4 -->|"Delay decreases<br/>as 429s stop"| R5
 ```
 
-> **PNG fallback**: If the xychart-beta diagram does not render, see [metrics-xychart.png](metrics-xychart.png).
+> **PNG fallback**: If this diagram does not render, see [metrics-xychart.png](metrics-xychart.png).
 
 ## Data Flow Volumes
 
@@ -113,21 +126,20 @@ How API data flows through processing stages to output formats.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-sankey-beta
-
-API Calls,Pagination Handler,1000
-Pagination Handler,Rate Limiter,1000
-Rate Limiter,JSON Parser,950
-Rate Limiter,Rate Limited (429),50
-Rate Limited (429),Rate Limiter,50
-JSON Parser,Flattener,950
-Flattener,CSV Writer,570
-Flattener,SQLite Writer,380
-CSV Writer,data/ Directory,570
-SQLite Writer,mist_data.db,380
+flowchart LR
+    API["API Calls<br/>1000 requests"] --> PH["Pagination Handler"]
+    PH --> RL["Rate Limiter"]
+    RL -->|"950 OK"| JP["JSON Parser"]
+    RL -->|"50 retried"| R429["Rate Limited 429"]
+    R429 --> RL
+    JP --> FL["Flattener<br/>950 records"]
+    FL -->|"570 records"| CSV["CSV Writer"]
+    FL -->|"380 records"| SQL["SQLite Writer"]
+    CSV --> DIR["data/ Directory"]
+    SQL --> DB["mist_data.db"]
 ```
 
-> **PNG fallback**: If the sankey-beta diagram does not render, see [data-flow-sankey.png](data-flow-sankey.png).
+> **PNG fallback**: If this diagram does not render, see [data-flow-sankey.png](data-flow-sankey.png).
 
 ## Version History Milestones
 

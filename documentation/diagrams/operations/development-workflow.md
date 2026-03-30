@@ -16,36 +16,44 @@ SpecKit-driven feature lifecycle from specification through implementation to de
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-kanban
-    column backlog["Backlog"]
-        ticket["Feature Request"]
-        ticket["Bug Report"]
-        ticket["Dependency Update"]
+flowchart LR
+    subgraph backlog["Backlog"]
+        b1["Feature Request"]
+        b2["Bug Report"]
+        b3["Dependency Update"]
+    end
 
-    column specify["Specify"]
-        ticket["/speckit.specify"]
-        ticket["/speckit.clarify"]
+    subgraph specify["Specify"]
+        s1["/speckit.specify"]
+        s2["/speckit.clarify"]
+    end
 
-    column plan["Plan"]
-        ticket["/speckit.plan"]
-        ticket["/speckit.tasks"]
-        ticket["/speckit.checklist"]
+    subgraph plan["Plan"]
+        p1["/speckit.plan"]
+        p2["/speckit.tasks"]
+        p3["/speckit.checklist"]
+    end
 
-    column implement["Implement"]
-        ticket["/speckit.implement"]
-        ticket["TDD: Tests First"]
-        ticket["Code Changes"]
+    subgraph implement["Implement"]
+        i1["/speckit.implement"]
+        i2["TDD: Tests First"]
+        i3["Code Changes"]
+    end
 
-    column review["CI + Review"]
-        ticket["Ruff + mypy"]
-        ticket["pytest + Coverage"]
-        ticket["Bandit + pip-audit"]
-        ticket["Playwright E2E"]
+    subgraph review["CI + Review"]
+        r1["Ruff + mypy"]
+        r2["pytest + Coverage"]
+        r3["Bandit + pip-audit"]
+        r4["Playwright E2E"]
+    end
 
-    column deploy["Deploy"]
-        ticket["Auto-Merge"]
-        ticket["Container Build"]
-        ticket["GHCR Push"]
+    subgraph deploy["Deploy"]
+        d1["Auto-Merge"]
+        d2["Container Build"]
+        d3["GHCR Push"]
+    end
+
+    backlog --> specify --> plan --> implement --> review --> deploy
 ```
 
 ## Workflow Stages
