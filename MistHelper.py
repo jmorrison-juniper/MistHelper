@@ -19830,32 +19830,46 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def clear_session() -> None:
-        """Menu 149: Clear session on SSR/SRX (typed 'CLEAR' confirmation)."""
-        # TODO: Returns 400 "Either clear session by service_name or by session_ids".
-        #   API requires service_name or session_ids param, not just session_id.
-        #   Need to add service_name prompt and fix body key to session_ids (list).
         logging.info("Menu #149: Clear Session")
         selection = DeviceUtilityCommands._select_site_and_device("clear_session", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        session_id = InputUtils.safe_input("Session ID to clear (Enter for all): ", context="clear_session_id")
-        if session_id:
-            body["session_id"] = session_id
+        service_name = InputUtils.safe_input("Service name to clear (Enter to skip): ", context="clear_session_service_name")
+        session_ids_input = InputUtils.safe_input("Session IDs to clear (comma-separated, Enter to skip): ", context="clear_session_ids")
+        if service_name:
+            body["service_name"] = service_name
+        elif session_ids_input:
+            session_ids = [s.strip() for s in session_ids_input.split(",") if s.strip()]
+            if session_ids:
+                body["session_ids"] = session_ids
+        else:
+            confirm_all = InputUtils.safe_input("No service name or session IDs provided. This may attempt to clear ALL sessions. Type 'CLEAR ALL' to proceed or press Enter to cancel: ", context="clear_session_confirm_all")
+            if confirm_all != "CLEAR ALL":
+                print("Cancelled: No service name or session IDs provided.")
+                return
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"):
             return
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, body)
             DeviceUtilityCommands._print_api_result(response, "Session(s) cleared.", "Clear session failed")
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
-            print(f"! Clear session failed: {error}")
+            try:
+                code = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
+                if code == 400:
+                    print("! API returned 400. The API expects either 'service_name' or 'session_ids' in the request body.")
+                    print("  Provide a service name or a comma-separated list of session IDs, and retry.")
+                else:
+                    print(f"! Clear session failed: {error}")
+            except Exception:
+                print(f"! Clear session failed: {error}")
+
+
 
     @staticmethod
     def clear_mac_table() -> None:
