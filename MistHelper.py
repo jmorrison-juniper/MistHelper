@@ -19667,15 +19667,29 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def readopt_device() -> None:
-        """Menu 143: Re-adopt switch device."""
-        # TODO: Returns 400 "re-adopt only works for a VC" on non-VC switches.
-        #   Need to investigate: filter to VC-capable devices only, or add
-        #   pre-check for VC membership before calling API.
+        """Menu 143: Re-adopt switch device.
+
+        Preflight the device's Virtual Chassis (VC) membership before calling
+        the readopt API to avoid a `400` response for non-VC switches.
+        """
         logging.info("Menu #143: Re-adopt Device")
         selection = DeviceUtilityCommands._select_site_and_device("readopt", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
+
+        # Preflight: check if device is part of a virtual chassis
+        try:
+            vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
+            vc_data = getattr(vc_resp, "data", None) or {}
+            is_vc = vc_data.get("is_virtual_chassis", False)
+            if not is_vc:
+                print("! Device is not a Virtual Chassis member. 'readopt' applies only to VC devices. Skipping.")
+                return
+        except Exception as error:
+            # If the preflight check fails (e.g., permission or API change), log and attempt readopt
+            logging.warning(f"VC preflight check failed: {error}", exc_info=True)
+
         try:
             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(apisession, site_id, device_id)
             DeviceUtilityCommands._print_api_result(response, "Device re-adoption initiated.", "Re-adopt failed")
