@@ -11489,18 +11489,150 @@ class OrgAlarmEventExporter:
     def device_events_52w():  # type: ignore[no-untyped-def]
         """
         Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
+
+        This implementation streams results using the search_after token and writes
+        to CSV in a memory-efficient manner with simple checkpointing so it can be
+        resumed if interrupted.
         """
         logging.info("Exporting all org device events from the last 52 weeks...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=1000, duration="52w"
-        )
-        events = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
-        events = DataProcessingUtils.flatten_nested_fields(events)
-        events = DataProcessingUtils.escape_multiline(events)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]
-        logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+        if not org_id:
+            logging.error("No org_id available. Exiting.")
+            return
+
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
+        checkpoint_file = os.path.join(data_dir, f"OrgDeviceEvents_52w.{org_id}.checkpoint")
+        csv_file = os.path.join(data_dir, "OrgDeviceEvents_52w.csv")
+
+        limit = 1000
+        duration = "52w"
+        preload_pages = 3  # number of pages to fetch to build a robust header before streaming
+
+        # Try to read an existing checkpoint token to resume
+        search_after = None
+        if os.path.exists(checkpoint_file):
+            try:
+                with open(checkpoint_file, "r", encoding="utf-8") as fh:
+                    token = fh.read().strip()
+                    if token:
+                        search_after = token
+                        logging.info(f"Resuming OrgDeviceEvents_52w from checkpoint token: {search_after}")
+            except Exception as e:
+                logging.warning(f"Could not read checkpoint file {checkpoint_file}: {e}")
+
+        def _fetch_page(token):
+            # Always pass search_after as a keyword; mistapi may ignore None values but accept explicit token
+            if token:
+                return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                    apisession, org_id, device_type="all", limit=limit, duration=duration, search_after=token
+                )
+            return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                apisession, org_id, device_type="all", limit=limit, duration=duration
+            )
+
+        buffered_rows: list[dict[str, Any]] = []
+        page_count = 0
+        next_token = None
+
+        # Preload a small number of pages to compute a stable CSV header
+        while page_count < preload_pages:
+            response = _fetch_page(search_after)
+            page_data = getattr(response, "data", None)
+            if not page_data:
+                break
+
+            if isinstance(page_data, dict):
+                results = page_data.get("results", []) or page_data.get("data", [])
+                next_token = page_data.get("search_after") or page_data.get("next")
+            else:
+                results = page_data if isinstance(page_data, list) else []
+                next_token = None
+
+            if not results:
+                break
+
+            processed = DataProcessingUtils.flatten_nested_fields(results)
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            buffered_rows.extend(processed)
+
+            if not next_token:
+                break
+
+            search_after = next_token
+            page_count += 1
+
+        if not buffered_rows:
+            logging.info("No device events found for the 52-week period.")
+            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]
+            return
+
+        # Determine CSV header from preloaded rows and write them out
+        header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]
+        logging.info(f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv")
+        try:
+            with open(csv_file, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, fieldnames=header_fields)
+                writer.writeheader()
+                for row in buffered_rows:
+                    writer.writerow({k: row.get(k, "") for k in header_fields})
+        except Exception as write_err:
+            logging.error(f"Failed to write initial OrgDeviceEvents_52w CSV file: {write_err}")
+            raise
+
+        # Persist checkpoint if there are more pages to fetch
+        if next_token:
+            try:
+                with open(checkpoint_file, "w", encoding="utf-8") as fh:
+                    fh.write(str(next_token))
+            except Exception as e:
+                logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
+
+        # Continue streaming remaining pages (if any)
+        while next_token:
+            response = _fetch_page(next_token)
+            page_data = getattr(response, "data", None)
+            if not page_data:
+                break
+
+            if isinstance(page_data, dict):
+                results = page_data.get("results", []) or page_data.get("data", [])
+                next_token = page_data.get("search_after") or page_data.get("next")
+            else:
+                results = page_data if isinstance(page_data, list) else []
+                next_token = None
+
+            if not results:
+                break
+
+            processed = DataProcessingUtils.flatten_nested_fields(results)
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+
+            try:
+                with open(csv_file, "a", newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=header_fields)
+                    for row in processed:
+                        writer.writerow({k: row.get(k, "") for k in header_fields})
+            except Exception as append_err:
+                logging.error(f"Failed to append OrgDeviceEvents_52w CSV file: {append_err}")
+                raise
+
+            # Update checkpoint for resume
+            if next_token:
+                try:
+                    with open(checkpoint_file, "w", encoding="utf-8") as fh:
+                        fh.write(str(next_token))
+                except Exception as e:
+                    logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
+
+        # Completed; remove checkpoint file (best-effort)
+        try:
+            if os.path.exists(checkpoint_file):
+                os.remove(checkpoint_file)
+        except Exception:
+            logging.debug("Could not remove checkpoint file after completion")
+
+        logging.info(f"All org device events (52w) exported to {csv_file}.")
 
 
 # ============================================================================
