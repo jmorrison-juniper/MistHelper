@@ -114,6 +114,13 @@ warn_unused_ignores = false
 exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "starlink-api-reference", "scripts", "specs"]
 
 [[tool.mypy.overrides]]
+# Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
+# at runtime — mypy cannot resolve them statically, producing false attr-defined errors.
+# follow_imports = skip prevents mypy from analyzing dash internals at all.
+module = ["dash", "dash.*"]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
 # Skip type-checking for imported modules that are not part of the CI target (MistHelper.py).
 # maps_manager: large module with its own type issues — Phase 2 target
 # web_portal: Flask app with its own type issues — Phase 2 target

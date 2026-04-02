@@ -54478,7 +54478,7 @@ menu_actions = {
         "Export audit logs for the organization (last 24 hours)",
     ),
     "4": (
-        lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[no-untyped-call]
+        lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[misc, no-untyped-call]
         "Export gateway management overlay IPs grouped by template association",
     ),
     # > WebSocket Device Commands
@@ -54548,7 +54548,7 @@ menu_actions = {
         "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)",
     ),
     "28": (
-        lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[no-untyped-call]
+        lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[misc, no-untyped-call]
         "Find gateway ports overridden from template (outliers for compliance correction)",
     ),
     # Site-Specific Data Exports
@@ -54595,7 +54595,7 @@ menu_actions = {
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
     "104": (
-        lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run),
+        lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "105": (
@@ -54633,7 +54633,7 @@ menu_actions = {
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
     ),
     "61": (
-        lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(
+        lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(  # type: ignore[misc]
             fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify
         ).execute(),
         "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)",  # noqa: E501
@@ -54703,7 +54703,7 @@ menu_actions = {
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
     "95": (
-        lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[no-untyped-call]
+        lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[misc, no-untyped-call]
         "Export detailed device statistics for all gateways (with freshness check)",
     ),
     "96": (
@@ -54808,11 +54808,11 @@ menu_actions = {
         " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)",  # noqa: E501
     ),
     "113": (
-        lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),
+        lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "114": (
-        lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),
+        lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
     # ==============================
@@ -54861,7 +54861,7 @@ menu_actions = {
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
     "122": (
-        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[no-untyped-call]
+        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[misc, no-untyped-call]
         "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",  # noqa: E501
     ),
     # ==============================
@@ -55157,16 +55157,15 @@ class TelemetryEmitter:
 
     # -- context manager -----------------------------------------------------
 
-    def __enter__(self):  # type: ignore[no-untyped-def]
+    def __enter__(self) -> "TelemetryEmitter":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: ignore[no-untyped-def]
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
         self.close()
-        return False
 
     # -- test event helpers ---------------------------------------------------
 
-    def emit_test_start(self, menu_option, operation_name, test_mode):  # type: ignore[no-untyped-def]
+    def emit_test_start(self, menu_option: str | int, operation_name: str, test_mode: str) -> None:
         """Emit a test_start event."""
         self.emit(
             {
@@ -55178,7 +55177,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_pass(self, menu_option, operation_name, duration, test_mode):  # type: ignore[no-untyped-def]
+    def emit_test_pass(self, menu_option: str | int, operation_name: str, duration: float, test_mode: str) -> None:
         """Emit a test_pass event."""
         self.emit(
             {
@@ -55192,7 +55191,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_fail(self, menu_option, operation_name, duration, error, test_mode):  # type: ignore[no-untyped-def]
+    def emit_test_fail(self, menu_option: str | int, operation_name: str, duration: float, error: Exception, test_mode: str) -> None:
         """Emit a test_fail event."""
         self.emit(
             {
@@ -55208,7 +55207,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_skip(self, menu_option, operation_name, reason, category, test_mode):  # type: ignore[no-untyped-def]
+    def emit_test_skip(self, menu_option: str | int, operation_name: str, reason: str, category: str, test_mode: str) -> None:
         """Emit a test_skip event."""
         self.emit(
             {
@@ -55224,7 +55223,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_summary(self, total, passed, failed, skipped, elapsed, test_mode):  # type: ignore[no-untyped-def]  # noqa: PLR0913
+    def emit_test_summary(self, total: int, passed: int, failed: int, skipped: int, elapsed: float, test_mode: str) -> None:  # noqa: PLR0913
         """Emit a test_summary event."""
         overall = "pass" if failed == 0 else "fail"
         self.emit(
@@ -55244,7 +55243,7 @@ class TelemetryEmitter:
 
     # -- progress event helpers -----------------------------------------------
 
-    def emit_progress_start(self, menu_option, operation_name, total_items):  # type: ignore[no-untyped-def]
+    def emit_progress_start(self, menu_option: str | int, operation_name: str, total_items: int) -> None:
         """Emit a progress_start event."""
         self.emit(
             {
@@ -55256,7 +55255,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_tick(self, menu_option, operation_name, total, current, completed, remaining):  # type: ignore[no-untyped-def]  # noqa: PLR0913
+    def emit_progress_tick(self, menu_option: str | int, operation_name: str, total: int, current: object, completed: int, remaining: int) -> None:  # noqa: PLR0913
         """Emit a progress_tick event."""
         self.emit(
             {
@@ -55271,7 +55270,7 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_complete(self, menu_option, operation_name, total, processed, was_stopped, duration):  # type: ignore[no-untyped-def]  # noqa: PLR0913
+    def emit_progress_complete(self, menu_option: str | int, operation_name: str, total: int, processed: int, was_stopped: bool, duration: float) -> None:  # noqa: PLR0913
         """Emit a progress_complete event."""
         self.emit(
             {
@@ -55288,7 +55287,7 @@ class TelemetryEmitter:
 
     # -- retention ------------------------------------------------------------
 
-    def enforce_retention(self, directory: str = "data", prefix: str = "test_events_", limit: int = None):  # type: ignore[assignment, no-untyped-def]
+    def enforce_retention(self, directory: str = "data", prefix: str = "test_events_", limit: int | None = None) -> None:
         """Delete oldest timestamped JSONL files when count exceeds *limit*."""
         if limit is None:
             limit = self.RETENTION_LIMIT
@@ -55791,7 +55790,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
     for opt in unsafe_list:
         if opt in menu_actions:
             _, op_name = menu_actions[opt]
-            emitter.emit_test_skip(  # type: ignore[no-untyped-call]
+            emitter.emit_test_skip(
                 opt,
                 op_name,
                 OperationRegistry.skip_reason(opt),
@@ -55812,7 +55811,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
     for i, option in enumerate(safe_options, 1):
         func, description = menu_actions[option]
         print(f"   [{i:2}/{len(safe_options)}] Testing option {option:>3}: {description[:60]}...")
-        emitter.emit_test_start(option, description, "systematic")  # type: ignore[no-untyped-call]
+        emitter.emit_test_start(option, description, "systematic")
         op_start = time.time()
         # Determine if fast mode is globally enabled and if function supports it
         fast_enabled = False
@@ -55858,13 +55857,13 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
-            emitter.emit_test_pass(option, description, duration, "systematic")  # type: ignore[no-untyped-call]
+            emitter.emit_test_pass(option, description, duration, "systematic")
             logging.info(f"SYSTEMATIC_TEST: Successfully completed menu option {option}")
         except Exception as e:
             duration = time.time() - op_start
             print(f"   [FAILED]  Option {option} failed: {str(e)[:100]}...")
             error_count += 1
-            emitter.emit_test_fail(option, description, duration, e, "systematic")  # type: ignore[no-untyped-call]
+            emitter.emit_test_fail(option, description, duration, e, "systematic")
             logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
 
         # Small delay between tests to be respectful to the API
@@ -55873,7 +55872,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
     # Emit summary and clean up telemetry
     total_time = time.time() - start_time
     total_ops = len(all_options)
-    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "systematic")  # type: ignore[no-untyped-call]
+    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "systematic")
     emitter.close()
     emitter.enforce_retention()
     print()
@@ -55961,7 +55960,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
     for opt in skip_list:
         if opt in menu_actions:
             _, op_name = menu_actions[opt]
-            emitter.emit_test_skip(  # type: ignore[no-untyped-call]
+            emitter.emit_test_skip(
                 opt,
                 op_name,
                 OperationRegistry.skip_reason(opt),
@@ -56007,7 +56006,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
         func, description = menu_actions[option]
         print(f"   [{i:2}/{len(interactive_options)}] Testing option {option:>3}: {description[:60]}...")
 
-        emitter.emit_test_start(option, description, "interactive")  # type: ignore[no-untyped-call]
+        emitter.emit_test_start(option, description, "interactive")
         op_start = time.time()
         logging.info(f"INTERACTIVE_TEST: Starting test of menu option {option} description='{description}'")
 
@@ -56020,13 +56019,13 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
-            emitter.emit_test_pass(option, description, duration, "interactive")  # type: ignore[no-untyped-call]
+            emitter.emit_test_pass(option, description, duration, "interactive")
             logging.info(f"INTERACTIVE_TEST: Successfully completed menu option {option}")
         except Exception as error:
             duration = time.time() - op_start
             print(f"   [FAILED]  Option {option} failed: {str(error)[:100]}...")
             error_count += 1
-            emitter.emit_test_fail(option, description, duration, error, "interactive")  # type: ignore[no-untyped-call]
+            emitter.emit_test_fail(option, description, duration, error, "interactive")
             logging.error(f"INTERACTIVE_TEST: Failed menu option {option}: {error}")
 
         # Small delay between tests to be respectful to the API
@@ -56035,7 +56034,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
     # Emit summary and clean up telemetry
     total_time = time.time() - start_time
     total_ops = len(all_options)
-    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "interactive")  # type: ignore[no-untyped-call]
+    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "interactive")
     emitter.close()
     emitter.enforce_retention()
     print()
