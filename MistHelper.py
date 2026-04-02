@@ -47634,7 +47634,7 @@ class OrgLevelAPFirmwareUpgrader:
             print(f"  ! No firmware versions found for {model} - skipping")
             return {}
 
-        current_versions = set(self.ap_versions.get(d.get("id"), "Unknown") for d in devices)
+        current_versions = set(self.ap_versions.get(d.get("mac"), "Unknown") for d in devices)
         self._display_model_options(model, devices, model_versions, current_versions)
 
         user_input = self._get_version_selection_input(model_versions)
@@ -47652,7 +47652,7 @@ class OrgLevelAPFirmwareUpgrader:
 
         # Show current versions with context for Unknown
         if "Unknown" in current_versions:
-            unknown_devs = [d for d in devices if self.ap_versions.get(d.get("id"), "Unknown") == "Unknown"]
+            unknown_devs = [d for d in devices if self.ap_versions.get(d.get("mac"), "Unknown") == "Unknown"]
             known_versions = sorted([v for v in current_versions if v != "Unknown"], reverse=True)
             offline_names = ", ".join([d.get("name", d.get("mac", "unnamed")[:8]) for d in unknown_devs[:3]])
             if len(unknown_devs) > 3:
@@ -47702,7 +47702,7 @@ class OrgLevelAPFirmwareUpgrader:
         selected = model_versions[idx]
         target_version = selected.get("version")
 
-        devices_needing = [d for d in devices if self.ap_versions.get(d.get("id")) != target_version]
+        devices_needing = [d for d in devices if self.ap_versions.get(d.get("mac")) != target_version]
         if not devices_needing:
             print(f"    All {model} devices already at {target_version}")
             return {}
