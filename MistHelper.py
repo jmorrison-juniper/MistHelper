@@ -47339,12 +47339,11 @@ class OrgLevelAPFirmwareUpgrader:
                 return False
 
             logging.info(f"Discovered {len(self.all_aps)} APs in organization")
+            return self._organize_aps_by_model()
         except Exception as error:
             print(f"  X Error fetching devices: {error}")
             logging.error(f"Failed to fetch org devices: {error}")
             return False
-
-        return True
 
     def _get_org_inventory(self) -> list:  # type: ignore[type-arg]
         """Retrieve org inventory with pagination."""

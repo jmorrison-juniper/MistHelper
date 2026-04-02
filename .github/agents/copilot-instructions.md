@@ -38,6 +38,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - CSV to `data/OfflineDeviceReport_YYYYMMDD_HHMMSS.csv`; SQLite via `DataExporter.write_with_format_selection()` (dual output) (015-offline-device-report)
 - Mermaid (GitHub-rendered), Python 3.13 (CI lint script only) + GitHub Mermaid renderer (built-in), Mermaid syntax v11.x (016-mermaid-documentation-suite)
 - N/A (documentation-only feature; no runtime data) (016-mermaid-documentation-suite)
+- Python 3.13+ + mistapi >= 0.61.3 (Juniper Mist API SDK), websocket-client >= 1.8.0, sshkeyboard >= 2.3.1 (017-mistapi-upgrade-alignment)
+- SQLite (`data/mist_data.db`) + CSV dual output via `DataExporter` (017-mistapi-upgrade-alignment)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -57,9 +59,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 017-mistapi-upgrade-alignment: Added Python 3.13+ + mistapi >= 0.61.3 (Juniper Mist API SDK), websocket-client >= 1.8.0, sshkeyboard >= 2.3.1
 - 016-mermaid-documentation-suite: Added Mermaid (GitHub-rendered), Python 3.13 (CI lint script only) + GitHub Mermaid renderer (built-in), Mermaid syntax v11.x
 - 015-offline-device-report: Added Python 3.13+ + `mistapi` 0.59+ (API access), `PrettyTable` (screen display), `csv` (stdlib, CSV output)
-- 014-device-utility-commands: Added Python 3.13+ + mistapi 0.59+ (Mist API SDK), websocket-client (WebSocket connections), requests (HTTP fallback for non-SDK endpoints)
 
 
 <!-- MANUAL ADDITIONS START -->
