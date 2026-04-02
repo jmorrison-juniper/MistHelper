@@ -1,7 +1,7 @@
 """
-Unit test scaffolding for DeviceUtilityCommands.clear_session (Menu #149)
+Unit test for DeviceUtilityCommands.clear_session (Menu #149)
 
-Tests are marked xfail until the code is updated to accept session_ids or service_name.
+This test verifies that the code maps user input into either 'service_name' or 'session_ids' in the request body.
 """
 
 import pytest
@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import MistHelper
 
 
-@pytest.mark.xfail(reason="Feature not implemented: currently uses 'session_id' key; desired behavior: accept service_name or session_ids list")
 def test_clear_session_accepts_service_name_or_session_ids(monkeypatch):
     # Arrange
     monkeypatch.setattr(
@@ -18,15 +17,22 @@ def test_clear_session_accepts_service_name_or_session_ids(monkeypatch):
         lambda action, *args, **kwargs: ("site1", "dev1", "Device1"),
     )
 
-    # Simulate user entering comma-separated session IDs
+    # Simulate user entering comma-separated session IDs via context-based safe_input
     def fake_safe_input(prompt, context=None, allow_empty=True, **kwargs):
-        if "session ID" in prompt:
+        if context == "clear_session_ids":
             return "s1,s2"
-        if "Node" in prompt:
+        if context == "clear_session_node":
+            return ""
+        if context == "clear_session_service_name":
+            return ""
+        if context == "clear_session_confirm_all":
             return ""
         return ""
 
     monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
+
+    # Ensure destructive confirmation passes
+    monkeypatch.setattr(MistHelper.DeviceUtilityCommands, "_confirm_destructive", lambda *args, **kwargs: True)
 
     captured = {}
 
@@ -41,7 +47,7 @@ def test_clear_session_accepts_service_name_or_session_ids(monkeypatch):
     # Act
     MistHelper.DeviceUtilityCommands.clear_session()
 
-    # Assert: desired behavior is to set 'session_ids' or 'service_name'
-    assert (
-        "session_ids" in captured.get("body", {}) or "service_name" in captured.get("body", {})
+    # Assert
+    assert ("session_ids" in captured.get("body", {}) and captured["body"]["session_ids"] == ["s1", "s2"]) or (
+        "service_name" in captured.get("body", {})
     )
