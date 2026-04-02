@@ -47665,7 +47665,7 @@ class OrgLevelAPFirmwareUpgrader:
 
         print("    Available versions:")
 
-        for idx, version_info in enumerate(model_versions[:10]):
+        for idx, version_info in enumerate(model_versions):
             version_num = version_info.get("version", "Unknown")
             indicators = []
             if version_info.get("recommended"):
@@ -47680,7 +47680,7 @@ class OrgLevelAPFirmwareUpgrader:
         try:
             return (
                 InputUtils.safe_input(
-                    f"    Select version (0-{min(len(model_versions) - 1, 9)}, 's' to skip): ", context="version_select"
+                    f"    Select version (0-{len(model_versions) - 1}, 's' to skip): ", context="version_select"
                 )
                 .strip()
                 .lower()
