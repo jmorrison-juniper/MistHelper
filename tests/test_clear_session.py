@@ -9,7 +9,6 @@ These tests cover:
 - 400 API error handling
 """
 
-import pytest
 from unittest.mock import MagicMock
 
 import MistHelper
