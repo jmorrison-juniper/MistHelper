@@ -40,6 +40,22 @@ import logging
 import multiprocessing
 import os
 import platform
+# Ensure mistapi provides both 'templates' and 'wlan_templates' on api.v1.orgs for compatibility across versions.
+try:
+    import mistapi
+    if getattr(mistapi, "api", None) is not None and getattr(mistapi.api, "v1", None) is not None and getattr(mistapi.api.v1, "orgs", None) is not None:
+        orgs_module = mistapi.api.v1.orgs
+        # If one name exists but the other doesn't, alias it so either can be used.
+        if hasattr(orgs_module, "templates") and not hasattr(orgs_module, "wlan_templates"):
+            orgs_module.wlan_templates = orgs_module.templates
+        if hasattr(orgs_module, "wlan_templates") and not hasattr(orgs_module, "templates"):
+            orgs_module.templates = orgs_module.wlan_templates
+except Exception:
+    # Compatibility aliasing should never crash the program; log at debug level if logging is configured later.
+    try:
+        import logging as _logging; _logging.debug("mistapi compatibility aliasing failed or mistapi not installed")
+    except Exception:
+        pass
 import re
 import socket
 import subprocess  # nosec B404

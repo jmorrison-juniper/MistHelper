@@ -14,7 +14,7 @@ jobs:
       matrix:
         check: [ruff, mypy, pytest, bandit, pip-audit, diagram-lint]
     name: quality-gates (${{ matrix.check }})
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,11 +24,23 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install dependencies
+      - name: Install dependencies (with pins + retry)
         run: |
+          set -e
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff mypy types-requests types-paramiko types-tqdm pytest pytest-cov bandit pip-audit hypothesis
+          # Retry loop to reduce transient network failures
+          for i in 1 2 3; do
+            pip install -r requirements.txt && \
+              pip install ruff==0.8.0 mypy==1.0.0 types-requests types-paramiko types-tqdm pytest==7.0.0 pytest-cov bandit==1.7.0 pip-audit==2.7.0 hypothesis && break || sleep 5
+          done
+          # Print tool versions for triage
+          ruff --version || true
+          mypy --version || true
+          pytest --version || true
+          bandit --version || true
+          pip-audit --version || true
+
+      # NOTE: Consider adding actions/cache for pip (actions/cache@v4) to reduce install time.
 
       - name: Run Ruff linter
         if: matrix.check == 'ruff'

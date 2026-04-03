@@ -1,0 +1,48 @@
+*** Begin Patch
+*** Update File: .github/workflows/container-build.yml
+@@
+       - name: Log in to Container Registry
+-        uses: docker/login-action@v3
+-        with:
+-          registry: ${{ env.REGISTRY }}
+-          username: ${{ github.actor }}
+-          password: ${{ secrets.GITHUB_TOKEN }}
++        id: login
++        run: |
++          echo "Checking registry credentials..."
++          if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
++            echo "Using GHCR_TOKEN from repository secrets for login (preferred)."
++            echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
++          else
++            echo "GHCR_TOKEN not found; falling back to GITHUB_TOKEN. If push fails, add a GHCR_TOKEN secret with a PAT having appropriate scope."
++            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin || (
++              echo "ERROR: Registry login failed with fallback token. Ensure repository/org allows GITHUB_TOKEN to publish packages or add GHCR_TOKEN secret." && exit 1
++            )
++          fi
+@@
+-      - name: Build and push container image
+-        uses: docker/build-push-action@v5
+-        with:
+-          context: .
+-          file: ./Containerfile
+-          push: true
+-          platforms: linux/amd64,linux/arm64
+-          tags: ${{ steps.meta.outputs.tags }}
+-          labels: ${{ steps.meta.outputs.labels }}
+-          cache-from: type=gha
+-          cache-to: type=gha,mode=max
++      - name: Build and push container image (with retry)
++        run: |
++          set -e
++          # 3 attempts with exponential backoff
++          attempt=1
++          until [ $attempt -gt 3 ]; do
++            echo "Build attempt $attempt"
++            docker buildx build --progress=plain --platform linux/amd64,linux/arm64 -f ./Containerfile --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --push . && break
++            attempt=$((attempt+1))
++            sleep $((attempt * 10))
++          done
++          if [ $attempt -gt 3 ]; then
++            echo "ERROR: Build failed after 3 attempts" && exit 1
++          fi
+*** End Patch

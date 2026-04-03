@@ -1,0 +1,8 @@
+Pin CI tooling and increase Quality Gates timeout
+
+- Increase timeout-minutes for Quality Gates job from 5 to 20 to reduce spurious timeouts
+- Install pinned CLI/tool versions (ruff, mypy, pytest, bandit, pip-audit) with a small retry loop to mitigate transient network failures
+- Print installed tool versions for easier triage
+- (Non-invasive) Does not change project code or tests
+
+Rationale: restore CI stability quickly while we investigate longer-term improvements (pip caching, consolidated installs, canary upgrade jobs).

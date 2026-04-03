@@ -1,0 +1,785 @@
+
+{
+  "header": {
+    "reportVersion": 5,
+    "event": "Allocation failed - JavaScript heap out of memory",
+    "trigger": "OOMError",
+    "filename": "report.20260403.155539.60668.0.001.json",
+    "dumpEventTime": "2026-04-03T15:55:39Z",
+    "dumpEventTimeStamp": "1775249739374",
+    "processId": 60668,
+    "threadId": null,
+    "cwd": "C:\\Users\\jmorrison\\OneDrive - Juniper Networks, Inc\\Code\\MistHelper",
+    "commandLine": [
+      "C:\\Users\\jmorrison\\AppData\\Local\\Microsoft\\WinGet\\Packages\\GitHub.Copilot_Microsoft.Winget.Source_8wekyb3d8bbwe\\copilot.exe",
+      "--no-warnings",
+      "--report-on-fatalerror",
+      "C:\\Users\\jmorrison\\AppData\\Local\\Microsoft\\WinGet\\Packages\\GitHub.Copilot_Microsoft.Winget.Source_8wekyb3d8bbwe\\copilot.exe",
+      "--resume",
+      "8471b08f-a854-4020-bf80-14ec807551fb"
+    ],
+    "nodejsVersion": "v24.11.1",
+    "wordSize": 64,
+    "arch": "x64",
+    "platform": "win32",
+    "componentVersions": {
+      "acorn": "8.15.0",
+      "ada": "3.3.0",
+      "amaro": "1.1.4",
+      "ares": "1.34.5",
+      "brotli": "1.1.0",
+      "cjs_module_lexer": "2.1.0",
+      "cldr": "47.0",
+      "icu": "77.1",
+      "llhttp": "9.3.0",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.1",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.66.0",
+      "node": "24.11.1",
+      "openssl": "3.5.4",
+      "simdjson": "4.0.7",
+      "simdutf": "6.4.0",
+      "sqlite": "3.50.4",
+      "tz": "2025b",
+      "undici": "7.16.0",
+      "unicode": "16.0",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.10-node.28",
+      "zlib": "1.3.1-470d3a2",
+      "zstd": "1.5.7"
+    },
+    "release": {
+      "name": "node",
+      "lts": "Krypton",
+      "headersUrl": "https://nodejs.org/download/release/v24.11.1/node-v24.11.1-headers.tar.gz",
+      "sourceUrl": "https://nodejs.org/download/release/v24.11.1/node-v24.11.1.tar.gz",
+      "libUrl": "https://nodejs.org/download/release/v24.11.1/win-x64/node.lib"
+    },
+    "osName": "Windows_NT",
+    "osRelease": "10.0.26100",
+    "osVersion": "Windows 11 Enterprise",
+    "osMachine": "x86_64",
+    "cpus": [
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 3471046,
+        "nice": 0,
+        "sys": 67488250,
+        "idle": 209052140,
+        "irq": 17027906
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 866859,
+        "nice": 0,
+        "sys": 5468687,
+        "idle": 273674843,
+        "irq": 981703
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 7778375,
+        "nice": 0,
+        "sys": 38409125,
+        "idle": 233822890,
+        "irq": 5875000
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 1074609,
+        "nice": 0,
+        "sys": 5020562,
+        "idle": 273915218,
+        "irq": 788390
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 5108046,
+        "nice": 0,
+        "sys": 31700421,
+        "idle": 243201921,
+        "irq": 4868546
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 874937,
+        "nice": 0,
+        "sys": 3776453,
+        "idle": 275359000,
+        "irq": 466812
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 5362343,
+        "nice": 0,
+        "sys": 25449671,
+        "idle": 249198375,
+        "irq": 2628453
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 863218,
+        "nice": 0,
+        "sys": 3531640,
+        "idle": 275615531,
+        "irq": 375078
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 20968859,
+        "nice": 0,
+        "sys": 77219328,
+        "idle": 181822203,
+        "irq": 2319812
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 7921500,
+        "nice": 0,
+        "sys": 27496921,
+        "idle": 244591968,
+        "irq": 869890
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 17078343,
+        "nice": 0,
+        "sys": 66744453,
+        "idle": 196187593,
+        "irq": 2264453
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 6438515,
+        "nice": 0,
+        "sys": 23673296,
+        "idle": 249898578,
+        "irq": 1024140
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 5586703,
+        "nice": 0,
+        "sys": 23121906,
+        "idle": 251301781,
+        "irq": 1593265
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 847406,
+        "nice": 0,
+        "sys": 3201781,
+        "idle": 275961203,
+        "irq": 244187
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 5284640,
+        "nice": 0,
+        "sys": 22270953,
+        "idle": 252454796,
+        "irq": 1367281
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 788250,
+        "nice": 0,
+        "sys": 3146812,
+        "idle": 276075328,
+        "irq": 236437
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 28040984,
+        "nice": 0,
+        "sys": 185988828,
+        "idle": 65980578,
+        "irq": 4388375
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 21624156,
+        "nice": 0,
+        "sys": 122739234,
+        "idle": 135647000,
+        "irq": 2864093
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 16508625,
+        "nice": 0,
+        "sys": 83561750,
+        "idle": 179940015,
+        "irq": 2123484
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 15888906,
+        "nice": 0,
+        "sys": 76077140,
+        "idle": 188044343,
+        "irq": 1932812
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 36359750,
+        "nice": 0,
+        "sys": 179348890,
+        "idle": 64301750,
+        "irq": 3707578
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 24272968,
+        "nice": 0,
+        "sys": 122493156,
+        "idle": 133244265,
+        "irq": 2657625
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 18552234,
+        "nice": 0,
+        "sys": 84298718,
+        "idle": 177159437,
+        "irq": 1951578
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 17550375,
+        "nice": 0,
+        "sys": 77229546,
+        "idle": 185230468,
+        "irq": 1795265
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 35162953,
+        "nice": 0,
+        "sys": 179629750,
+        "idle": 65217687,
+        "irq": 3847156
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 24224453,
+        "nice": 0,
+        "sys": 122627062,
+        "idle": 133158875,
+        "irq": 2831734
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 18728671,
+        "nice": 0,
+        "sys": 84137437,
+        "idle": 177144281,
+        "irq": 2020906
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 18017500,
+        "nice": 0,
+        "sys": 76517250,
+        "idle": 185475640,
+        "irq": 1849687
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 41638625,
+        "nice": 0,
+        "sys": 176339156,
+        "idle": 62032609,
+        "irq": 3703609
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 27579609,
+        "nice": 0,
+        "sys": 122592437,
+        "idle": 129838343,
+        "irq": 2502187
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 21280468,
+        "nice": 0,
+        "sys": 84562328,
+        "idle": 174167593,
+        "irq": 1833578
+      },
+      {
+        "model": "13th Gen Intel(R) Core(TM) i9-13950HX",
+        "speed": 2419,
+        "user": 20585531,
+        "nice": 0,
+        "sys": 78644843,
+        "idle": 180780015,
+        "irq": 1945421
+      }
+    ],
+    "networkInterfaces": [
+      {
+        "name": "vEthernet (Default Switch)",
+        "internal": false,
+        "mac": "00:15:5d:ef:bd:31",
+        "address": "fe80::5f3:e315:90ee:3e42",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 51
+      },
+      {
+        "name": "vEthernet (Default Switch)",
+        "internal": false,
+        "mac": "00:15:5d:ef:bd:31",
+        "address": "172.18.80.1",
+        "netmask": "255.255.240.0",
+        "family": "IPv4"
+      },
+      {
+        "name": "VMware Network Adapter VMnet1",
+        "internal": false,
+        "mac": "00:50:56:c0:00:01",
+        "address": "fe80::de07:2c7f:da5c:6240",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 21
+      },
+      {
+        "name": "VMware Network Adapter VMnet1",
+        "internal": false,
+        "mac": "00:50:56:c0:00:01",
+        "address": "192.168.146.1",
+        "netmask": "255.255.255.0",
+        "family": "IPv4"
+      },
+      {
+        "name": "VMware Network Adapter VMnet8",
+        "internal": false,
+        "mac": "00:50:56:c0:00:08",
+        "address": "fe80::f1e3:5859:4a56:89b2",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 19
+      },
+      {
+        "name": "VMware Network Adapter VMnet8",
+        "internal": false,
+        "mac": "00:50:56:c0:00:08",
+        "address": "192.168.141.1",
+        "netmask": "255.255.255.0",
+        "family": "IPv4"
+      },
+      {
+        "name": "Wi-Fi",
+        "internal": false,
+        "mac": "ec:8e:77:a6:b1:4d",
+        "address": "fe80::f882:7aa9:e29f:cc93",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 4
+      },
+      {
+        "name": "Wi-Fi",
+        "internal": false,
+        "mac": "ec:8e:77:a6:b1:4d",
+        "address": "192.168.1.123",
+        "netmask": "255.255.255.0",
+        "family": "IPv4"
+      },
+      {
+        "name": "Loopback Pseudo-Interface 1",
+        "internal": true,
+        "mac": "00:00:00:00:00:00",
+        "address": "::1",
+        "netmask": "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+        "family": "IPv6",
+        "scopeid": 0
+      },
+      {
+        "name": "Loopback Pseudo-Interface 1",
+        "internal": true,
+        "mac": "00:00:00:00:00:00",
+        "address": "127.0.0.1",
+        "netmask": "255.0.0.0",
+        "family": "IPv4"
+      },
+      {
+        "name": "Teredo Tunneling Pseudo-Interface",
+        "internal": false,
+        "mac": "00:00:00:00:00:00",
+        "address": "2001:0:14c9:ce06:28dd:6b09:55aa:f4fa",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 0
+      },
+      {
+        "name": "Teredo Tunneling Pseudo-Interface",
+        "internal": false,
+        "mac": "00:00:00:00:00:00",
+        "address": "fe80::28dd:6b09:55aa:f4fa",
+        "netmask": "ffff:ffff:ffff:ffff::",
+        "family": "IPv6",
+        "scopeid": 18
+      }
+    ],
+    "host": "JNPR-WIN-Sq83Tt"
+  },
+  "javascriptStack": {
+    "message": "No stack.",
+    "stack": [
+      "Unavailable."
+    ],
+    "errorProperties": {
+    }
+  },
+  "javascriptHeap": {
+    "totalMemory": 4315156480,
+    "executableMemory": 19202048,
+    "totalCommittedMemory": 4315156480,
+    "availableMemory": 218671688,
+    "totalGlobalHandlesMemory": 6688840,
+    "usedGlobalHandlesMemory": 20992,
+    "usedMemory": 4243897912,
+    "memoryLimit": 4496293888,
+    "mallocedMemory": 2146352,
+    "externalMemory": 55322658,
+    "peakMallocedMemory": 2701037256,
+    "nativeContextCount": 3,
+    "detachedContextCount": 0,
+    "doesZapGarbage": 0,
+    "heapSpaces": {
+      "read_only_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 0,
+        "used": 0,
+        "available": 0
+      },
+      "new_space": {
+        "memorySize": 33554432,
+        "committedMemory": 33554432,
+        "capacity": 16776192,
+        "used": 0,
+        "available": 16776192
+      },
+      "old_space": {
+        "memorySize": 1446010880,
+        "committedMemory": 1446010880,
+        "capacity": 1416774864,
+        "used": 1412793992,
+        "available": 3980872
+      },
+      "code_space": {
+        "memorySize": 16777216,
+        "committedMemory": 16777216,
+        "capacity": 15430720,
+        "used": 15430720,
+        "available": 0
+      },
+      "shared_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 0,
+        "used": 0,
+        "available": 0
+      },
+      "trusted_space": {
+        "memorySize": 11300864,
+        "committedMemory": 11300864,
+        "capacity": 10308640,
+        "used": 10308640,
+        "available": 0
+      },
+      "shared_trusted_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 0,
+        "used": 0,
+        "available": 0
+      },
+      "new_large_object_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 16777216,
+        "used": 0,
+        "available": 16777216
+      },
+      "large_object_space": {
+        "memorySize": 2804895744,
+        "committedMemory": 2804895744,
+        "capacity": 2802761592,
+        "used": 2802761592,
+        "available": 0
+      },
+      "code_large_object_space": {
+        "memorySize": 2424832,
+        "committedMemory": 2424832,
+        "capacity": 2410880,
+        "used": 2410880,
+        "available": 0
+      },
+      "shared_large_object_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 0,
+        "used": 0,
+        "available": 0
+      },
+      "shared_trusted_large_object_space": {
+        "memorySize": 0,
+        "committedMemory": 0,
+        "capacity": 0,
+        "used": 0,
+        "available": 0
+      },
+      "trusted_large_object_space": {
+        "memorySize": 192512,
+        "committedMemory": 192512,
+        "capacity": 192088,
+        "used": 192088,
+        "available": 0
+      }
+    }
+  },
+  "nativeStack": [
+    {
+      "pc": "0x00007ff6952f1427",
+      "symbol": "node::GetAnonymousMainPath+286583"
+    },
+    {
+      "pc": "0x00007ff6952ee6ac",
+      "symbol": "node::GetAnonymousMainPath+274940"
+    },
+    {
+      "pc": "0x00007ff6952f33c8",
+      "symbol": "node::TriggerNodeReport+216"
+    },
+    {
+      "pc": "0x00007ff6953b9737",
+      "symbol": "node::OnFatalError+1143"
+    },
+    {
+      "pc": "0x00007ff695ffda77",
+      "symbol": "v8::Function::NewInstance+423"
+    },
+    {
+      "pc": "0x00007ff695dfe327",
+      "symbol": "v8::base::AddressSpaceReservation::AddressSpaceReservation+322071"
+    },
+    {
+      "pc": "0x00007ff695e02034",
+      "symbol": "v8::base::AddressSpaceReservation::AddressSpaceReservation+337700"
+    },
+    {
+      "pc": "0x00007ff695e10fcc",
+      "symbol": "v8::internal::StrongRootAllocatorBase::deallocate_impl+16604"
+    },
+    {
+      "pc": "0x00007ff695e1080b",
+      "symbol": "v8::internal::StrongRootAllocatorBase::deallocate_impl+14619"
+    },
+    {
+      "pc": "0x00007ff6972789ad",
+      "symbol": "v8::base::UnsignedDivisionByConstant<unsigned __int64>+2791325"
+    },
+    {
+      "pc": "0x00007ff695dfbdf0",
+      "symbol": "v8::base::AddressSpaceReservation::AddressSpaceReservation+312544"
+    },
+    {
+      "pc": "0x00007ff695e1667a",
+      "symbol": "X509_STORE_set_cleanup+5098"
+    },
+    {
+      "pc": "0x00007ff695e22a96",
+      "symbol": "uv_timer_set_repeat+20566"
+    },
+    {
+      "pc": "0x00007ff6959f5bb7",
+      "symbol": "v8::String::Utf8Value::~Utf8Value+143495"
+    },
+    {
+      "pc": "0x000001d9d75f733a",
+      "symbol": ""
+    }
+  ],
+  "resourceUsage": {
+    "free_memory": 34716004352,
+    "total_memory": 68358840320,
+    "rss": 4661022720,
+    "available_memory": 34716004352,
+    "userCpuSeconds": 3013.51,
+    "kernelCpuSeconds": 249.734,
+    "cpuConsumptionPercent": 72.3078,
+    "userCpuConsumptionPercent": 66.7741,
+    "kernelCpuConsumptionPercent": 5.53366,
+    "maxRss": 4788875264,
+    "pageFaults": {
+      "IORequired": 27688475,
+      "IONotRequired": 0
+    },
+    "fsActivity": {
+      "reads": 33955,
+      "writes": 12278
+    }
+  },
+  "uvthreadResourceUsage": {
+    "userCpuSeconds": 2610.25,
+    "kernelCpuSeconds": 197.453,
+    "cpuConsumptionPercent": 62.2137,
+    "userCpuConsumptionPercent": 57.8385,
+    "kernelCpuConsumptionPercent": 4.3752,
+    "fsActivity": {
+      "reads": 0,
+      "writes": 0
+    }
+  },
+  "libuv": [
+  ],
+  "workers": [
+  ],
+  "environmentVariables": {
+    "ALLUSERSPROFILE": "C:\\ProgramData",
+    "APPDATA": "C:\\Users\\jmorrison\\AppData\\Roaming",
+    "CommonProgramFiles": "C:\\Program Files\\Common Files",
+    "CommonProgramFiles(x86)": "C:\\Program Files (x86)\\Common Files",
+    "CommonProgramW6432": "C:\\Program Files\\Common Files",
+    "COMPUTERNAME": "JNPR-WIN-SQ83TT",
+    "ComSpec": "C:\\WINDOWS\\system32\\cmd.exe",
+    "COPILOT_CLI_BINARY_VERSION": "1.0.17",
+    "COPILOT_LOADER_PID": "57072",
+    "COPILOT_RUN_APP": "1",
+    "DriverData": "C:\\Windows\\System32\\Drivers\\DriverData",
+    "HOMEDRIVE": "C:",
+    "HOMEPATH": "\\Users\\jmorrison",
+    "LOCALAPPDATA": "C:\\Users\\jmorrison\\AppData\\Local",
+    "LOGONSERVER": "\\\\DCJNPRUSQNC2",
+    "NODE_ENV": "production",
+    "NUMBER_OF_PROCESSORS": "32",
+    "OneDrive": "C:\\Users\\jmorrison\\OneDrive - Juniper Networks, Inc",
+    "OneDriveCommercial": "C:\\Users\\jmorrison\\OneDrive - Juniper Networks, Inc",
+    "OS": "Windows_NT",
+    "Path": "C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\PuTTY\\;C:\\Program Files\\RedHat\\Podman\\;C:\\Program Files\\GitHub CLI\\;C:\\Program Files\\nodejs\\;C:\\Program Files\\Docker\\Docker\\resources\\bin;C:\\Program Files\\PowerShell\\7\\;C:\\Users\\jmorrison\\.local\\bin;C:\\Users\\jmorrison\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\;C:\\Users\\jmorrison\\AppData\\Local\\Programs\\Python\\Python313\\;C:\\Users\\jmorrison\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\jmorrison\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\jmorrison\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\jmorrison\\AppData\\Local\\Programs\\Git\\cmd;C:\\Program Files\\RedHat\\Podman;C:\\Users\\jmorrison\\AppData\\Local\\GitHubDesktop\\bin;C:\\Users\\jmorrison\\AppData\\Roaming\\npm;C:\\Users\\jmorrison\\AppData\\Local\\Microsoft\\WinGet\\Packages\\GitHub.Copilot_Microsoft.Winget.Source_8wekyb3d8bbwe;",
+    "PATHEXT": ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL",
+    "POWERSHELL_DISTRIBUTION_CHANNEL": "MSI:Windows 10 Enterprise",
+    "PROCESSOR_ARCHITECTURE": "AMD64",
+    "PROCESSOR_IDENTIFIER": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "PROCESSOR_LEVEL": "6",
+    "PROCESSOR_REVISION": "b701",
+    "ProgramData": "C:\\ProgramData",
+    "ProgramFiles": "C:\\Program Files",
+    "ProgramFiles(x86)": "C:\\Program Files (x86)",
+    "ProgramW6432": "C:\\Program Files",
+    "PSModulePath": "C:\\Users\\jmorrison\\Documents\\WindowsPowerShell\\Modules;C:\\Program Files\\WindowsPowerShell\\Modules;C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\Modules",
+    "PUBLIC": "C:\\Users\\Public",
+    "SESSIONNAME": "Console",
+    "SystemDrive": "C:",
+    "SystemRoot": "C:\\WINDOWS",
+    "TEMP": "C:\\Users\\JMORRI~1\\AppData\\Local\\Temp\\1",
+    "TMP": "C:\\Users\\JMORRI~1\\AppData\\Local\\Temp\\1",
+    "UATDATA": "C:\\Windows\\CCM\\UATData\\D9F8C395-CAB8-491d-B8AC-179A1FE1BE77",
+    "USERDNSDOMAIN": "JNPR.NET",
+    "USERDOMAIN": "JNPR",
+    "USERDOMAIN_ROAMINGPROFILE": "JNPR",
+    "USERNAME": "jmorrison",
+    "USERPROFILE": "C:\\Users\\jmorrison",
+    "windir": "C:\\WINDOWS",
+    "WSLENV": "WT_SESSION:WT_PROFILE_ID:",
+    "WT_PROFILE_ID": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+    "WT_SESSION": "e96e0513-7f9f-467a-b10c-557641d78d08",
+    "ZES_ENABLE_SYSMAN": "1"
+  },
+  "sharedObjects": [
+    "C:\\Users\\jmorrison\\AppData\\Local\\Microsoft\\WinGet\\Packages\\GitHub.Copilot_Microsoft.Winget.Source_8wekyb3d8bbwe\\copilot.exe",
+    "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+    "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+    "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+    "C:\\WINDOWS\\System32\\CRYPT32.dll",
+    "C:\\WINDOWS\\System32\\ucrtbase.dll",
+    "C:\\WINDOWS\\System32\\WS2_32.dll",
+    "C:\\WINDOWS\\System32\\RPCRT4.dll",
+    "C:\\WINDOWS\\System32\\USER32.dll",
+    "C:\\WINDOWS\\System32\\win32u.dll",
+    "C:\\WINDOWS\\System32\\GDI32.dll",
+    "C:\\WINDOWS\\System32\\gdi32full.dll",
+    "C:\\WINDOWS\\System32\\msvcp_win.dll",
+    "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+    "C:\\WINDOWS\\System32\\msvcrt.dll",
+    "C:\\WINDOWS\\System32\\sechost.dll",
+    "C:\\WINDOWS\\System32\\SHELL32.dll",
+    "C:\\WINDOWS\\System32\\wintypes.dll",
+    "C:\\WINDOWS\\System32\\combase.dll",
+    "C:\\WINDOWS\\System32\\ole32.dll",
+    "C:\\WINDOWS\\SYSTEM32\\dbghelp.dll",
+    "C:\\WINDOWS\\System32\\OLEAUT32.dll",
+    "C:\\WINDOWS\\SYSTEM32\\IPHLPAPI.DLL",
+    "C:\\WINDOWS\\SYSTEM32\\USERENV.dll",
+    "C:\\WINDOWS\\SYSTEM32\\WINMM.dll",
+    "C:\\WINDOWS\\SYSTEM32\\dbgcore.DLL",
+    "C:\\WINDOWS\\SYSTEM32\\CRYPTBASE.DLL",
+    "C:\\WINDOWS\\System32\\IMM32.DLL",
+    "C:\\Program Files\\Zscaler\\ZDP\\ZDPPrint64.dll",
+    "C:\\WINDOWS\\SYSTEM32\\ntmarta.dll",
+    "C:\\Program Files\\Avecto\\Privilege Guard Client\\PGHook.dll",
+    "C:\\WINDOWS\\SYSTEM32\\powrprof.dll",
+    "C:\\WINDOWS\\SYSTEM32\\UMPDC.dll",
+    "C:\\WINDOWS\\system32\\uxtheme.dll",
+    "C:\\WINDOWS\\system32\\mswsock.dll",
+    "C:\\WINDOWS\\SYSTEM32\\CRYPTSP.dll",
+    "C:\\WINDOWS\\system32\\rsaenh.dll",
+    "C:\\WINDOWS\\System32\\bcryptPrimitives.dll",
+    "C:\\WINDOWS\\SYSTEM32\\kernel.appcore.dll",
+    "C:\\WINDOWS\\System32\\NSI.dll",
+    "C:\\WINDOWS\\SYSTEM32\\dhcpcsvc6.DLL",
+    "C:\\WINDOWS\\SYSTEM32\\dhcpcsvc.DLL",
+    "C:\\WINDOWS\\SYSTEM32\\DNSAPI.dll",
+    "C:\\WINDOWS\\SYSTEM32\\MSASN1.dll",
+    "\\\\?\\C:\\Users\\jmorrison\\.copilot\\pkg\\universal\\1.0.17\\prebuilds\\win32-x64\\keytar.node",
+    "C:\\Windows\\System32\\rasadhlp.dll",
+    "C:\\WINDOWS\\System32\\fwpuclnt.dll",
+    "C:\\WINDOWS\\system32\\apphelp.dll",
+    "\\\\?\\C:\\Users\\jmorrison\\.copilot\\pkg\\universal\\1.0.17\\clipboard\\node_modules\\@teddyzhu\\clipboard-win32-x64-msvc\\clipboard.win32-x64-msvc.node",
+    "\\\\?\\C:\\Users\\jmorrison\\.copilot\\pkg\\universal\\1.0.17\\prebuilds\\win32-x64\\conpty.node",
+    "C:\\WINDOWS\\System32\\SHLWAPI.dll",
+    "C:\\WINDOWS\\System32\\Windows.Storage.dll",
+    "C:\\WINDOWS\\system32\\napinsp.dll",
+    "C:\\WINDOWS\\System32\\winrnr.dll",
+    "C:\\WINDOWS\\system32\\nlansp_c.dll",
+    "C:\\WINDOWS\\system32\\wshbth.dll"
+  ]
+}
