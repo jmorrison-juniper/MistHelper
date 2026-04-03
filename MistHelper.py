@@ -11513,7 +11513,7 @@ class OrgAlarmEventExporter:
         search_after = None
         if os.path.exists(checkpoint_file):
             try:
-                with open(checkpoint_file, "r", encoding="utf-8") as fh:
+                with open(checkpoint_file, encoding="utf-8") as fh:
                     token = fh.read().strip()
                     if token:
                         search_after = token
@@ -11570,15 +11570,45 @@ class OrgAlarmEventExporter:
         # Determine CSV header from preloaded rows and write them out
         header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]
         logging.info(f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv")
-        try:
-            with open(csv_file, "w", newline="", encoding="utf-8") as fh:
-                writer = csv.DictWriter(fh, fieldnames=header_fields)
-                writer.writeheader()
-                for row in buffered_rows:
-                    writer.writerow({k: row.get(k, "") for k in header_fields})
-        except Exception as write_err:
-            logging.error(f"Failed to write initial OrgDeviceEvents_52w CSV file: {write_err}")
-            raise
+
+        # Helper: fetch with retries to handle transient API errors/rate limits
+        def _fetch_page_with_retries(token, retries: int = 3, backoff: float = 1.0):
+            last_exc = None
+            for attempt in range(retries):
+                try:
+                    return _fetch_page(token)
+                except Exception as exc:  # pragma: no cover - defensive network handling
+                    last_exc = exc
+                    logging.warning(f"Attempt {attempt+1}/{retries} to fetch page failed: {exc}")
+                    if attempt < retries - 1:
+                        sleep_time = backoff * (2 ** attempt)
+                        logging.debug(f"Waiting {sleep_time}s before retrying")
+                        time.sleep(sleep_time)
+            # If we reach here, all retries failed
+            logging.error("Exceeded maximum retries fetching page")
+            raise last_exc
+
+        # Choose output path: CSV (default) or SQLite (streaming)
+        if OUTPUT_FORMAT == "sqlite":
+            table_name = "OrgDeviceEvents_52w"
+            try:
+                # Initial write of preloaded rows into SQLite table
+                DataExporter.write_with_format_selection(
+                    buffered_rows, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
+                )
+            except Exception as write_err:
+                logging.error(f"Failed to write initial OrgDeviceEvents_52w batch to SQLite: {write_err}")
+                raise
+        else:
+            try:
+                with open(csv_file, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=header_fields)
+                    writer.writeheader()
+                    for row in buffered_rows:
+                        writer.writerow({k: row.get(k, "") for k in header_fields})
+            except Exception as write_err:
+                logging.error(f"Failed to write initial OrgDeviceEvents_52w CSV file: {write_err}")
+                raise
 
         # Persist checkpoint if there are more pages to fetch
         if next_token:
@@ -11590,7 +11620,8 @@ class OrgAlarmEventExporter:
 
         # Continue streaming remaining pages (if any)
         while next_token:
-            response = _fetch_page(next_token)
+            # Use retry wrapper for robustness
+            response = _fetch_page_with_retries(next_token)
             page_data = getattr(response, "data", None)
             if not page_data:
                 break
@@ -11608,14 +11639,23 @@ class OrgAlarmEventExporter:
             processed = DataProcessingUtils.flatten_nested_fields(results)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
 
-            try:
-                with open(csv_file, "a", newline="", encoding="utf-8") as fh:
-                    writer = csv.DictWriter(fh, fieldnames=header_fields)
-                    for row in processed:
-                        writer.writerow({k: row.get(k, "") for k in header_fields})
-            except Exception as append_err:
-                logging.error(f"Failed to append OrgDeviceEvents_52w CSV file: {append_err}")
-                raise
+            if OUTPUT_FORMAT == "sqlite":
+                try:
+                    DataExporter.write_with_format_selection(
+                        processed, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
+                    )
+                except Exception as append_err:
+                    logging.error(f"Failed to append OrgDeviceEvents_52w to SQLite table {table_name}: {append_err}")
+                    raise
+            else:
+                try:
+                    with open(csv_file, "a", newline="", encoding="utf-8") as fh:
+                        writer = csv.DictWriter(fh, fieldnames=header_fields)
+                        for row in processed:
+                            writer.writerow({k: row.get(k, "") for k in header_fields})
+                except Exception as append_err:
+                    logging.error(f"Failed to append OrgDeviceEvents_52w CSV file: {append_err}")
+                    raise
 
             # Update checkpoint for resume
             if next_token:
@@ -11632,7 +11672,10 @@ class OrgAlarmEventExporter:
         except Exception:
             logging.debug("Could not remove checkpoint file after completion")
 
-        logging.info(f"All org device events (52w) exported to {csv_file}.")
+        if OUTPUT_FORMAT == "sqlite":
+            logging.info(f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})")
+        else:
+            logging.info(f"All org device events (52w) exported to {csv_file}.")
 
 
 # ============================================================================
