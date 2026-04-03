@@ -1,9 +1,8 @@
 
 import os
+
 import requests
 from dotenv import load_dotenv
-
-
 
 # Load environment variables from .env file in the workspace (if present)
 load_dotenv()

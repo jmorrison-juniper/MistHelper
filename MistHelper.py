@@ -40,6 +40,7 @@ import logging
 import multiprocessing
 import os
 import platform
+
 # Ensure mistapi provides both 'templates' and 'wlan_templates' on api.v1.orgs for compatibility across versions.
 try:
     import mistapi
@@ -53,7 +54,8 @@ try:
 except Exception:
     # Compatibility aliasing should never crash the program; log at debug level if logging is configured later.
     try:
-        import logging as _logging; _logging.debug("mistapi compatibility aliasing failed or mistapi not installed")
+        import logging as _logging
+        _logging.debug("mistapi compatibility aliasing failed or mistapi not installed")
     except Exception:
         pass
 import re
