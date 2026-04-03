@@ -61,9 +61,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- ci/triage-fixes-20260403-171203: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+- ci/triage-fixes-20260403-171203: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 - 001-export-beacons: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
-- 095-audit-menu-8-show-ssrsrx-routing-table: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
-- 017-mistapi-upgrade-alignment: Added Python 3.13+ + mistapi >= 0.61.3 (Juniper Mist API SDK), websocket-client >= 1.8.0, sshkeyboard >= 2.3.1
 
 
 <!-- MANUAL ADDITIONS START -->

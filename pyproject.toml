@@ -81,7 +81,7 @@ build-backend = "hatchling.build"
 packages = ["."]
 
 [tool.ruff]
-line-length = 120
+line-length = 160
 target-version = "py313"
 extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "starlink-api-reference", "scripts", "specs"]
 

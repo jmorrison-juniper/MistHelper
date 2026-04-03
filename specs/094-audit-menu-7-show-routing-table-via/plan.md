@@ -1,0 +1,441 @@
+# Implementation Plan: Audit Menu #7 — Show Routing Table via WebSocket
+
+**Branch**: `094-audit-menu-7-show-routing-table-via` | **Date**: 2025-07-24 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `/specs/094-audit-menu-7-show-routing-table-via/spec.md`
+
+## Summary
+
+Menu #7 ("Show routing table on switches via WebSocket") has **zero test coverage** and **10 audit findings** spanning input validation, safety, race conditions, and error handling. The implementation plan addresses these through three workstreams: (1) comprehensive test coverage using the R1 duplicate-pure-function pattern, (2) safety fixes replacing raw `input()` with `safe_input()` and adding prefix validation, (3) reliability fixes for subscription confirmation and error messaging. All changes are scoped to `RoutingUtils` methods and `WebSocketCommands.show_routing_table`. Shared infrastructure (`WebSocketManager`, `PromptUtils`) is tested only at the routing-table integration boundary.
+
+## Technical Context
+
+**Language/Version**: Python 3.13+
+**Primary Dependencies**: `websocket-client` (WebSocket connections), `requests` (HTTP POST to show_route API), `prettytable` (table display), `mistapi` 0.59+ (Mist API SDK — used indirectly via `apisession`)
+**Storage**: N/A (interactive terminal display, no data export)
+**Testing**: pytest with R1 pattern (duplicate pure functions to avoid MistHelper.py import side effects), `monkeypatch` for I/O, `tmp_path` for isolation
+**Target Platform**: Windows 11 (local dev) + Linux containers (Podman production)
+**Project Type**: CLI application (interactive menu-driven NOC tool)
+**Performance Goals**: N/A (interactive command, single-device queries)
+**Constraints**: Tests must run offline (<30s, no Mist API access); ASCII-only output; `safe_input()` required for all user prompts
+**Scale/Scope**: Single monolith file (`MistHelper.py`, ~18,700 lines); `RoutingUtils` class spans lines 17095–18723 (~1,600 lines, 40 methods); 11 methods directly in scope for Menu #7
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+### Principle I: Five-Item Rule — WARNING (existing violations, documented)
+
+| Method | Issue | Lines | Blocks |
+|--------|-------|-------|--------|
+| `_get_routing_table_params` | 6 input prompts + payload assembly | ~45 | 6+ |
+| `_display_routing_summary` | Stats aggregation + display + detail delegation | ~61 | 7+ |
+| `_parse_routing_table` | 4 fallback patterns + Juniper detection | ~62 | 5 |
+
+**Assessment**: These methods exceed the 25-line / 5-block limits. However, this audit focuses on test coverage and safety fixes — refactoring method structure is out of scope. Violations are logged in Complexity Tracking below. The test suite will cover current behavior so future refactoring is safe.
+
+### Principle II: Class-Based Architecture — PASS
+
+- All routing logic is in `RoutingUtils` (static methods on a named class)
+- Entry point delegates from `WebSocketCommands.show_routing_table()` to `RoutingUtils`
+- No standalone wrapper functions
+- Variable names use full words (`route_entries`, `websocket_manager`, `device_info`)
+
+### Principle III: Safety-First — VIOLATION (must fix)
+
+| Location | Issue |
+|----------|-------|
+| `_get_routing_table_params` (lines 18350–18363) | Uses raw `input()` **6 times** instead of `safe_input()`. No EOF/KeyboardInterrupt handling. |
+| `_display_routing_device_guidance` (line 18336) | Uses raw `input()` for continuation prompt. No EOF handling. |
+| `_get_routing_table_params` (line 18350) | No validation on prefix input — accepts arbitrary strings passed to API. |
+| `_get_routing_table_params` (lines 18369–18372) | Silent protocol default — user not notified when input is ignored. |
+
+**Gate result**: VIOLATION — must be fixed during implementation. All `input()` calls must be replaced with `safe_input()`. Prefix validation must be added. Protocol defaulting must notify the user.
+
+### Principle IV: Full Deployment Pipeline — PASS
+
+No code deployment occurs during the audit phase. Test files and bug fixes will follow the pipeline when merged.
+
+### Principle V: Observability & Logging — PASS
+
+- All methods use `logging.info`/`logging.debug`/`logging.error` correctly
+- Debug mode displays internal state with `[DEBUG]` prefix
+- No emoji or Unicode characters in log output
+- API token appears in `headers` dict (line 18402) but is not logged (debug prints URL only)
+
+### Gate Decision: PROCEED with mandatory Principle III fixes
+
+---
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/094-audit-menu-7-show-routing-table-via/
+├── spec.md              # Audit specification (10 findings)
+├── plan.md              # This file
+├── research.md          # Phase 0: Research findings
+├── data-model.md        # Phase 1: Route entry and parameter models
+├── quickstart.md        # Phase 1: Developer quickstart
+└── tasks.md             # Phase 2: Implementation tasks (generated by /speckit.tasks)
+```
+
+### Source Code (repository root)
+
+```text
+MistHelper.py                          # Monolith — all production code
+├── WebSocketCommands (line ~15801)     #   Entry point: .show_routing_table()
+├── WebSocketManager  (line ~3961)      #   WebSocket connection management
+└── RoutingUtils      (line ~17095)     #   11 methods in scope for Menu #7
+
+tests/
+├── conftest.py                         # Shared fixtures (tmp_data_dir, isolate_working_directory)
+└── unit/
+    └── test_routing_table.py           # NEW — all Menu #7 tests (R1 pattern)
+```
+
+**Structure Decision**: Single monolith with flat test directory. New test file `tests/unit/test_routing_table.py` follows the R1 pattern established by `test_offline_device_reporter.py` and `test_data_processing.py` — pure functions are duplicated from `MistHelper.py` to avoid import side effects. No new production files are created; all fixes are in-place edits to `MistHelper.py`.
+
+## Complexity Tracking
+
+> Principle I violations documented here. These are **existing** violations not introduced by this audit — they are deferred to a future refactoring effort once test coverage enables safe restructuring.
+
+| Violation | Why Accepted | Simpler Alternative Rejected Because |
+|-----------|-------------|--------------------------------------|
+| `_get_routing_table_params` exceeds 5 blocks (6 input prompts) | Collecting 6 related filter parameters in a single interactive flow; splitting would fragment the user experience | Extracting to sub-methods would add complexity without improving readability for this linear input sequence |
+| `_display_routing_summary` exceeds 25 lines (~61 lines) | Aggregates 6 statistics categories and displays summary + delegates to detail view | Splitting aggregation from display would require passing intermediate state between functions |
+| `_parse_routing_table` has 5 branches (~62 lines) | Each branch delegates to a dedicated parser method; the dispatch logic itself is the minimum needed | Reducing patterns would lose device format coverage |
+
+---
+
+## Phase 0: Research
+
+### Research Task 1: Test Pattern for Monolith Pure Functions (R1 Pattern)
+
+**Decision**: Use the R1 (duplicate-to-isolate) pattern for all parsing and display logic tests.
+
+**Rationale**: `MistHelper.py` has significant import side effects (global `apisession`, `mistapi` initialization, module-level state). Existing tests (`test_offline_device_reporter.py`, `test_data_processing.py`, `test_telemetry.py`) all duplicate pure functions rather than importing from `MistHelper.py`. This avoids the need for complex import mocking and keeps tests fast and isolated.
+
+**Alternatives considered**:
+- Direct import with mock: Rejected — `MistHelper.py` executes module-level code on import that requires `mistapi` and environment variables
+- `importlib` selective import: Rejected — too fragile, method signatures depend on class context
+- Refactor to separate modules first: Rejected — out of scope for this audit; the test suite must cover current code to enable future refactoring
+
+### Research Task 2: WebSocket Subscription Confirmation Pattern
+
+**Decision**: Replace `time.sleep(1)` with `WebSocketManager.wait_for_subscription_confirmation()` which already exists (line 4077) but is not called by `_connect_websocket`.
+
+**Rationale**: The `wait_for_subscription_confirmation()` method polls the `confirmed_subscriptions` set with 0.1-second intervals and a configurable timeout (default 10 seconds). This is the correct pattern — it waits for actual server acknowledgment rather than a fixed delay. The method already exists in the codebase and is well-tested by usage in other contexts.
+
+**Alternatives considered**:
+- Increase `time.sleep()` to 2–3 seconds: Rejected — still a race condition, just less likely to fail
+- Event-based wait with `threading.Event`: Rejected — `wait_for_subscription_confirmation()` already implements polling; adding events would require modifying `WebSocketManager` internals
+- Remove the wait entirely: Rejected — commands sent before subscription is confirmed may be lost
+
+### Research Task 3: Prefix Validation Approach
+
+**Decision**: Validate prefix input using Python's `ipaddress` module for CIDR notation, with a permissive fallback that warns but allows the user to proceed.
+
+**Rationale**: The Mist API accepts CIDR prefixes (e.g., `10.0.0.0/8`, `192.168.1.0/24`) and single IPs. Using `ipaddress.ip_network(prefix, strict=False)` handles both IPv4 and IPv6 with proper validation. A warn-and-confirm approach respects that operators may need to pass vendor-specific prefix formats.
+
+**Alternatives considered**:
+- Regex validation: Rejected — `ipaddress` module is stdlib and handles edge cases (leading zeros, IPv6) that regex cannot
+- Hard reject on invalid input: Rejected — some devices may accept non-standard prefix formats; warn-and-confirm is safer
+- No validation (status quo): Rejected — violates Constitution Principle III (validate early, return early)
+
+### Research Task 4: Connection Leak Edge Case Analysis
+
+**Decision**: The subscription failure leak (spec finding #10) is **partially mitigated** in current code — `_connect_websocket` calls `websocket_manager.disconnect()` before returning `None` (line 18037). However, a leak still exists if `subscribe_to_channel()` raises an exception instead of returning `False`, because the local `WebSocketManager` reference is lost without cleanup.
+
+**Rationale**: The orchestrator's `finally` block cannot clean up because `websocket_manager` assignment in `execute_show_routing_table` (line 18255) never completes if `_connect_websocket` throws. Fix: wrap the subscribe call in `_connect_websocket` with try/except that ensures `disconnect()` on any failure after `connect()` succeeds.
+
+**Alternatives considered**:
+- Context manager for WebSocketManager: Rejected — would require modifying shared infrastructure; out of audit scope
+- Catch in orchestrator only: Rejected — the local variable `websocket_manager` inside `_connect_websocket` is already lost by the time the orchestrator catches the exception
+
+### Research Task 5: safe_input() Migration Scope
+
+**Decision**: Replace all 7 raw `input()` calls in `_get_routing_table_params` (6 calls) and `_display_routing_device_guidance` (1 call) with `InputUtils.safe_input()`.
+
+**Rationale**: Constitution Principle III mandates `safe_input()` for all interactive input. The `safe_input()` function (line 2244) handles EOF (returns default value), KeyboardInterrupt (returns empty string), and strips whitespace. Each replacement must specify appropriate `context` and `default_value` parameters.
+
+**Migration map**:
+
+| Line | Current `input()` call | Replacement `safe_input()` parameters |
+|------|----------------------|--------------------------------------|
+| 18350 | Prefix prompt | `context="routing_prefix", default_value="", allow_empty=True` |
+| 18353 | Protocol prompt | `context="routing_protocol", default_value="", allow_empty=True` |
+| 18355 | VRF prompt | `context="routing_vrf", default_value="", allow_empty=True` |
+| 18356 | Neighbor prompt | `context="routing_neighbor", default_value="", allow_empty=True` |
+| 18361 | Direction prompt | `context="route_direction", default_value="", allow_empty=True` |
+| 18363 | Node prompt | `context="routing_node", default_value="", allow_empty=True` |
+| 18336 | Continue prompt | `context="routing_device_confirm", default_value="n", allow_empty=True` |
+
+---
+
+## Phase 1: Design
+
+### Data Model
+
+#### RouteEntry (parsed routing table record)
+
+```text
+RouteEntry:
+  destination    : str     # Route prefix (e.g., "10.0.0.0/8", "default")
+  next_hop       : str     # Next-hop IP address or gateway
+  interface      : str     # Egress interface (e.g., "ge-0/0/0", "eth0")
+  protocol       : str     # Source protocol (BGP, OSPF, STATIC, DIRECT, etc.)
+  metric         : str     # Route metric / cost
+  admin_distance : str     # Administrative distance
+  table          : str     # Routing table name (e.g., "inet.0") — Juniper only
+  active         : bool    # Whether route is active (marked with ">") — Juniper only
+```
+
+**Source**: Returned by `_parse_routing_table()`, `_parse_standard_route_line()`, `_parse_protocol_route_line()`, `_parse_tabular_route_line()`, `_normalize_json_route_entry()`, `_parse_juniper_routing()`.
+
+**Invariants**:
+- `destination` is always present (may be "default" for wildcard routes)
+- All other fields may be empty strings if not parsed from the device output
+- `active` defaults to `False`; set to `True` only by Juniper parser when ">" marker found
+
+#### QueryParameters (user-provided filter payload)
+
+```text
+QueryParameters:
+  prefix   : str | None   # CIDR prefix filter (e.g., "192.168.1.0/24")
+  protocol : str           # Protocol filter, always present (default: "any")
+  vrf      : str | None    # VRF instance name
+  neighbor : str | None    # BGP neighbor IP address
+  route    : str | None    # Route direction ("received" or "advertised") — only with neighbor
+  node     : str | None    # HA node selector ("node0" or "node1")
+```
+
+**Source**: Built by `_get_routing_table_params()` and passed to `_execute_routing_table_command()` as the HTTP POST body.
+
+**Validation rules** (to be added):
+- `prefix`: Must be valid CIDR or IP via `ipaddress.ip_network(prefix, strict=False)`, or empty
+- `protocol`: Must be one of `["bgp", "ospf", "static", "direct", "evpn", "any"]`; unrecognized values trigger user notification before defaulting to "any"
+- `node`: Must be one of `["node0", "node1"]` or empty
+- `route`: Must be one of `["received", "advertised"]` or empty
+
+#### WebSocketSession (connection lifecycle)
+
+```text
+WebSocketSession:
+  websocket_manager : WebSocketManager  # Connection instance
+  site_id           : str               # Selected site UUID
+  device_id         : str               # Selected device UUID
+  command_channel   : str               # "/sites/{site_id}/devices/{device_id}/cmd"
+  session_id        : str               # Correlation ID from API POST response
+  timeout_seconds   : int               # Result wait timeout (default: 60)
+```
+
+**Lifecycle**: Created in steps 1–4 of `execute_show_routing_table()`. The `session_id` is the correlation key for matching WebSocket result messages to the originating command. Cleanup occurs in the `finally` block via `_cleanup_websocket()`.
+
+### Contracts
+
+> Menu #7 is an interactive CLI command. It has no public API or library interface. The contracts below document the internal boundaries between the routing table pipeline components and the external Mist API.
+
+#### Contract 1: Mist show_route API
+
+```text
+Endpoint: POST https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_route
+Headers:
+  Authorization: Token {mist_apitoken}
+  Content-Type: application/json
+
+Request body (QueryParameters):
+  {
+    "prefix": "10.0.0.0/8",        // optional
+    "protocol": "bgp",              // required, default "any"
+    "vrf": "management",            // optional
+    "neighbor": "192.168.1.1",      // optional
+    "route": "received",            // optional, requires neighbor
+    "node": "node0"                 // optional
+  }
+
+Success response (200):
+  {
+    "session": "abc123-def456-..."   // correlation ID for WebSocket results
+  }
+
+Error responses:
+  400: Invalid parameters
+  401: Authentication failure
+  404: Device not found
+  500: Internal server error
+```
+
+#### Contract 2: WebSocket Command Result
+
+```text
+Channel: /sites/{site_id}/devices/{device_id}/cmd
+
+Subscription confirmation:
+  {"event": "channel_subscribed", "channel": "/sites/{site_id}/devices/{device_id}/cmd"}
+
+Command result message:
+  {
+    "event": "data",
+    "channel": "/sites/{site_id}/devices/{device_id}/cmd",
+    "data": {
+      "session": "abc123-def456-...",
+      "raw": "inet.0: 42 destinations, 48 routes...",   // Primary output field
+      "Output": "..."                                     // Alternative output field
+    }
+  }
+```
+
+#### Contract 3: Parser Input/Output
+
+```text
+Input:  raw_output (str) — raw text from WebSocket "raw" or "Output" field
+Output: list[RouteEntry] — structured route entries (see Data Model above)
+
+Parser dispatch:
+  1. Juniper format detected ("inet.0:", "inet6.0:", "Limit/Threshold:") -> _parse_juniper_routing()
+  2. Standard route lines (" via ", " dev ", " proto " keywords) -> _parse_standard_route_line()
+  3. Protocol keyword lines ("bgp", "ospf", "static", "direct", "connected") -> _parse_protocol_route_line()
+  4. JSON single-line objects -> _normalize_json_route_entry()
+  5. Tabular fallback (3+ space-separated fields) -> _parse_tabular_route_line()
+
+Invariant: Empty or None input always returns []
+Invariant: Malformed lines are silently skipped (no exceptions raised to caller)
+```
+
+---
+
+## Findings-to-Requirements Traceability
+
+| Spec Finding | Severity | Requirement | Fix Strategy |
+|-------------|----------|-------------|-------------|
+| #1 No test coverage | Critical | FR-001 through FR-003, FR-008 | New test file with R1 pattern: parsing, params, errors, display |
+| #2 No prefix validation | Medium | FR-004 (expanded) | Add `ipaddress.ip_network()` validation with warn-and-confirm |
+| #3 Silent protocol default | Low | FR-004 | Print notification before defaulting to "any" |
+| #4 Device type hardcoded | Low | Documented only | Out of scope — Menu #8 handles SSR/SRX; add clarifying comment |
+| #5 Hardcoded 1s subscription wait | Medium | FR-007 | Replace `time.sleep(1)` with `wait_for_subscription_confirmation()` |
+| #6 No subscription confirmation | Medium | FR-007 | Call existing `wait_for_subscription_confirmation()` method |
+| #7 Silent failure on missing session | Medium | FR-006 | Already prints message (line 18420); add `logging.error()` |
+| #8 Result fields inconsistency | Low | Documented only | Add troubleshooting guidance to empty-result message |
+| #9 Permissive tabular parser | Low | FR-002 | Cover with test cases; consider tightening heuristic |
+| #10 Connection leak on subscription failure | Medium | FR-005 | Add try/except in `_connect_websocket` after `connect()` succeeds |
+
+## Test Strategy
+
+### Test File: `tests/unit/test_routing_table.py`
+
+All tests follow the **R1 pattern**: pure functions are duplicated from `MistHelper.py` into the test file to avoid import side effects. No `import MistHelper` statements.
+
+### Test Classes and Coverage Map
+
+```text
+class TestParseRoutingTable:
+    test_empty_input_returns_empty_list              # Empty/None input
+    test_juniper_format_dispatches_to_juniper_parser # Juniper detection
+    test_standard_route_line_via_keyword             # Pattern 1: " via " lines
+    test_standard_route_line_dev_keyword             # Pattern 1: " dev " lines
+    test_protocol_keyword_bgp_line                   # Pattern 2: protocol keywords
+    test_json_single_line_object                     # Pattern 3: JSON format
+    test_tabular_fallback_three_columns              # Pattern 4: tabular
+    test_malformed_lines_skipped_silently            # Robustness: no exceptions
+    test_comment_and_show_lines_skipped              # Skip comments and "show" prefix
+
+class TestParseStandardRouteLine:
+    test_via_keyword_extracts_next_hop               # "10.0.0.0/8 via 192.168.1.1 dev eth0"
+    test_proto_keyword_extracts_protocol             # "default via 10.0.0.1 proto bgp"
+    test_default_route_star_becomes_default           # "* via 10.0.0.1" -> destination="default"
+    test_short_line_returns_none                      # Less than 2 parts
+
+class TestParseProtocolRouteLine:
+    test_bgp_keyword_detected                        # Line containing "bgp"
+    test_ospf_keyword_detected                       # Line containing "ospf"
+    test_no_protocol_keyword_returns_none             # Non-matching line
+
+class TestParseTabularRouteLine:
+    test_three_column_route_parsed                   # "10.0.0.0 192.168.1.1 eth0"
+    test_interface_prefix_detected                   # ge-0/0/0, xe-0/0/0, vlan patterns
+    test_metric_extracted                            # Numeric field parsed as metric
+    test_two_column_returns_none                     # Less than 3 fields
+
+class TestNormalizeJsonRouteEntry:
+    test_standard_json_fields                        # destination, next_hop, interface
+    test_alternate_field_names                       # nexthop, gateway, prefix
+    test_empty_dict_returns_entry_with_defaults      # {}
+
+class TestDisplayRoutingSummary:
+    test_empty_entries_prints_no_entries              # [] input
+    test_single_protocol_count                       # One BGP route
+    test_mixed_protocols_counted                     # BGP + OSPF + Static
+    test_active_routes_counted                       # active=True entries
+    test_unique_destinations_counted                 # Deduplication
+
+class TestGetRoutingTableParams:
+    test_all_defaults_returns_protocol_any            # All empty input
+    test_valid_protocol_accepted                     # "bgp" -> protocol: "bgp"
+    test_invalid_protocol_defaults_with_notification # "isis" -> protocol: "any" + warning
+    test_prefix_validated                            # "10.0.0.0/8" accepted
+    test_invalid_prefix_warns_user                   # "not-an-ip" triggers warning
+    test_neighbor_enables_direction_prompt           # Non-empty neighbor -> direction asked
+    test_node_validated                              # "node0" accepted, "node2" rejected
+
+class TestConnectWebsocket:
+    test_subscription_failure_disconnects             # subscribe returns False -> disconnect called
+    test_subscription_exception_disconnects          # subscribe raises -> disconnect called
+    test_confirmation_wait_replaces_sleep            # No time.sleep(1) in flow
+
+class TestExecuteRoutingTableCommand:
+    test_missing_session_id_logs_error               # API returns {} -> error logged
+    test_non_200_response_reports_status             # 400/500 -> status shown
+
+class TestCleanupWebsocket:
+    test_none_manager_skips_cleanup                  # websocket_manager=None -> no error
+    test_disconnect_called_on_valid_manager          # disconnect() invoked
+    test_cleanup_error_logged_not_raised             # Exception in disconnect -> warning logged
+```
+
+### Coverage Targets
+
+| Requirement | Test Classes | Min Tests |
+|-------------|-------------|-----------|
+| FR-001 (pipeline method tests) | TestConnectWebsocket, TestExecuteRoutingTableCommand, TestGetRoutingTableParams | 8 |
+| FR-002 (parsing format tests) | TestParseRoutingTable, TestParseStandardRouteLine, TestParseProtocolRouteLine, TestParseTabularRouteLine, TestNormalizeJsonRouteEntry | 15 |
+| FR-003 (summary display tests) | TestDisplayRoutingSummary | 5 |
+| FR-004 (input validation) | TestGetRoutingTableParams | 4 |
+| FR-005 (connection leak fix) | TestConnectWebsocket | 3 |
+| FR-006 (session ID error) | TestExecuteRoutingTableCommand | 2 |
+| FR-007 (subscription confirmation) | TestConnectWebsocket | 1 |
+| FR-008 (error path tests) | TestCleanupWebsocket, TestConnectWebsocket, TestExecuteRoutingTableCommand | 5 |
+| **Total** | **10 classes** | **43+ tests** |
+
+---
+
+## Post-Design Constitution Re-Check
+
+### Principle I: Five-Item Rule
+
+- New test file `test_routing_table.py` has 10 test classes — exceeds 5-item limit at the module level. **Accepted**: test classes are logically grouped by the production method they cover; flattening into fewer classes would reduce discoverability.
+- No new production methods exceed limits beyond what is already documented.
+
+### Principle II: Class-Based Architecture — PASS
+
+- Test organization uses classes (pytest pattern consistent with existing tests)
+- No wrapper functions introduced
+
+### Principle III: Safety-First — WILL BE RESOLVED
+
+- All 7 `input()` calls will be replaced with `safe_input()` during implementation
+- Prefix validation will use `ipaddress.ip_network()` with warn-and-confirm
+- Protocol defaulting will notify the user before falling back to "any"
+
+### Principle IV: Full Deployment Pipeline — PASS
+
+- `python -m py_compile MistHelper.py` will be run after all edits
+- Full pipeline executes on merge to main
+
+### Principle V: Observability & Logging — PASS
+
+- New `logging.error()` call added for missing session ID (finding #7)
+- All new messages use ASCII-only text
+- No new emoji or Unicode characters
+
+### Gate Decision: PASS — all violations have remediation plans
