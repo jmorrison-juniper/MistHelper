@@ -1,0 +1,13 @@
+# Proposed requirements-dev.txt (initial candidate)
+# NOTE: This is a candidate starting point. The matrix run in tasks.md must confirm exact versions.
+
+pytest>=8.2,<9.1
+hypothesis>=6.0,<7.0
+# Prefer stdlib importlib.metadata on Python >=3.8; avoid installing backport unless required by another package
+# If importlib-metadata backport is present and causes issues, pin a compatible version (example below)
+# importlib-metadata==4.13.0
+
+# Other dev deps (keep as in upstream if present)
+# flake8
+# black
+# mypy

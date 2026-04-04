@@ -1,0 +1,60 @@
+name: Dev-deps Hypothesis Triage
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  triage:
+    name: Triage Hypothesis/Importlib compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - python: '3.11'
+            hypothesis: '6.0.0'
+            importlib: 'none'
+          - python: '3.11'
+            hypothesis: '5.70.0'
+            importlib: 'none'
+          - python: '3.12'
+            hypothesis: '6.0.0'
+            importlib: 'none'
+          - python: '3.13'
+            hypothesis: '6.0.0'
+            importlib: 'none'
+          - python: '3.13'
+            hypothesis: '6.0.0'
+            importlib: '4.11.4'
+          - python: '3.13'
+            hypothesis: '6.3.0'
+            importlib: 'none'
+    strategy:
+      matrix:
+        include: []
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          if [ "${{ matrix.importlib }}" != "none" ]; then pip install "importlib-metadata==${{ matrix.importlib }}"; fi
+          pip install "hypothesis==${{ matrix.hypothesis }}"
+      - name: Show versions and inspect entry_points
+        run: |
+          python -c "import sys, importlib, importlib.metadata as ilm; import pytest, hypothesis; print('python', sys.version); print('pytest', pytest.__version__); print('hypothesis', hypothesis.__version__); print('entry_points_type', type(ilm.entry_points()));"
+          pytest --version
+      - name: Run smoke pytest (capture plugin errors)
+        run: |
+          pytest -q || true
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: devdeps-triage-${{ matrix.python }}-${{ matrix.hypothesis }}-${{ matrix.importlib }}
+          path: |
+            .
