@@ -11486,7 +11486,7 @@ class OrgAlarmEventExporter:
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
 
     @staticmethod
-    def device_events_52w():  # type: ignore[no-untyped-def]
+    def device_events_52w() -> None:
         """
         Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
 
@@ -13876,7 +13876,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def audit_logs(full_history=False, duration=None):  # type: ignore[no-untyped-def]
+    def audit_logs(full_history: bool = False, duration: str | None = None) -> None:
         """
         Export organization audit logs to OrgAuditLogs.csv.
         Fetches all pages using mistapi.get_all.
@@ -22165,7 +22165,7 @@ class GatewayExportUtils:
         print("  4. Ensuring gateway configurations with management IPs are current...")
         CacheUtils.check_and_generate_csv(
             "AllSiteGatewayConfigs.csv",
-            lambda: GatewayExportUtils.device_configs(fast=fast),  # type: ignore[no-untyped-call]
+            lambda: GatewayExportUtils.device_configs(fast=fast),
         )
 
         print("  5. Processing and correlating data...")
@@ -22288,7 +22288,7 @@ class GatewayExportUtils:
         )
 
     @staticmethod
-    def device_configs(debug=False, fast=False):  # type: ignore[no-untyped-def]
+    def device_configs(debug: bool = False, fast: bool = False) -> None:
         """
         Fetches and exports configuration details for all gateway devices across all sites in the organization
         to AllSiteGatewayConfigs.csv. Also generates a filtered CSV with selected fields and port info.
@@ -22389,7 +22389,7 @@ class GatewayExportUtils:
         # Ensure required CSVs are fresh
         CacheUtils.check_and_generate_csv(
             "AllSiteGatewayConfigs.csv",
-            lambda: GatewayExportUtils.device_configs(fast=fast),  # type: ignore[no-untyped-call]
+            lambda: GatewayExportUtils.device_configs(fast=fast),
         )
         CacheUtils.check_and_generate_csv("SiteList_ListAPI.csv", OrgSiteExporter.sites_list_api)
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
@@ -31557,7 +31557,7 @@ class DeviceRebootManager:
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
         CacheUtils.check_and_generate_csv(
             "AllSiteGatewayConfigs.csv",
-            lambda: GatewayExportUtils.device_configs(fast=True),  # type: ignore[no-untyped-call]
+            lambda: GatewayExportUtils.device_configs(fast=True),
         )
 
     @staticmethod
@@ -54693,7 +54693,7 @@ menu_actions = {
     "1": (OrgAlarmEventExporter.alarms, "Export all organization alarms from the past day"),
     "2": (OrgAlarmEventExporter.device_events, "Export all device events from the past 24 hours"),
     "3": (
-        lambda: OrgExportUtils.audit_logs(full_history=False),  # type: ignore[no-untyped-call]
+        lambda: OrgExportUtils.audit_logs(full_history=False),
         "Export audit logs for the organization (last 24 hours)",
     ),
     "4": (
@@ -54861,15 +54861,18 @@ menu_actions = {
         TroubleshootUtils.launch_interactive,
         "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis",
     ),
-    # Work In Progress Features (Read-Only)
-    "63": (OrgAlarmEventExporter.device_events_52w, "WIP Export all org device events from the last 52 weeks"),
+    # Long-Running Export Operations (Read-Only)
+    "63": (
+        OrgAlarmEventExporter.device_events_52w,
+        "Export all org device events from the last 52 weeks (streaming with checkpoint/resume)",
+    ),
     "64": (
-        lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"),  # type: ignore[no-untyped-call]
-        "WIP Export ALL audit logs for the organization (last 52 weeks)",
+        lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"),
+        "Export ALL audit logs for the organization (last 52 weeks)",
     ),
     "65": (
         GatewayExportUtils.device_configs,
-        "WIP Export configuration details for all gateway devices across all sites",
+        "Export configuration details for all gateway devices across all sites",
     ),
     # ==============================
     # UNSAFE/INTERACTIVE OPERATIONS
@@ -55690,10 +55693,10 @@ class OperationRegistry:
             "category": "resource_intensive",
             "skip_reason": "Support package generation - potentially resource intensive",
         },
-        # --- wip ------------------------------------------------------------
-        "63": {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
-        "64": {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
-        "65": {"category": "wip", "skip_reason": "WIP (Work in Progress) - may be unstable"},
+        # --- long-running exports (52-week time windows) --------------------
+        "63": {"category": "resource_intensive", "skip_reason": "52-week device events export - long-running"},
+        "64": {"category": "resource_intensive", "skip_reason": "52-week audit logs export - long-running"},
+        "65": {"category": "resource_intensive", "skip_reason": "All-site gateway configs export - long-running"},
         # --- destructive ----------------------------------------------------
         "90": {"category": "destructive", "skip_reason": "DESTRUCTIVE: AP firmware upgrade operation"},
         "91": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Device reboot operation"},
