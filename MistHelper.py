@@ -20103,22 +20103,18 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_bpdu_error() -> None:
         """Menu 151: Clear BPDU errors on switch (typed 'CLEAR' confirmation)."""
-        # TODO: Returns 400 on Morrison-Switch EX4100. Investigate whether
-        #   port_id is required (not optional), or if API expects different
-        #   body format. May only work when BPDU errors are actively present.
         logging.info("Menu #151: Clear BPDU Errors")
         selection = DeviceUtilityCommands._select_site_and_device("clear_bpdu_error", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
         port_id = DeviceUtilityCommands._select_port_optional(site_id, device_id)
-        if port_id:
-            body["port_id"] = port_id
+        port_target = port_id if port_id else "all"
         if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear BPDU errors: ", "CLEAR", "clear_bpdu_error"
+            f"Type 'CLEAR' to clear BPDU errors on port {port_target}: ", "CLEAR", "clear_bpdu_error"
         ):
             return
+        body: dict[str, Any] = {"port": port_target}
         try:
             response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
                 apisession, site_id, device_id, body
