@@ -7,6 +7,13 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-04-06
+
+- Q: Cache freshness window → A: 60 minutes (default). Applied as FR-009a and configurable via `SSID_CONSOLIDATION_CACHE_MINUTES`.
+
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Discover & Audit All Existing Templates (Priority: P1)
@@ -135,6 +142,7 @@ Before any phase executes, the system reads a default target SSID name from the 
 - **FR-007**: System MUST identify which of the 4 Mist Edge clusters each site's template references, capturing the cluster name and ID.
 - **FR-008**: System MUST generate a matrix report saved in both CSV and SQLite formats to the local data output directory.
 - **FR-009**: System MUST cache all collected data locally with a freshness timestamp and reuse cached data when it is within the configured freshness window. The engineer MUST be able to force a fresh collection even when cache is fresh.
+- **FR-009a**: Default cache freshness window is 60 minutes. This value is configurable via the environment variable `SSID_CONSOLIDATION_CACHE_MINUTES`.
 - **FR-010**: System MUST flag templates that do not contain exactly 2 SSIDs as anomalies in the report, with a reason code (e.g., "0 SSIDs", "1 SSID", "3+ SSIDs"). Anomalous templates MUST be included in the Phase 1 report but excluded from modification in Phases 2–5, with a clear log message explaining why each was skipped.
 - **FR-010a**: System MUST perform a deviation analysis across all non-PSK, non-anomaly templates, comparing settings parameter-by-parameter **for the selected target SSID only** within each target consolidation group (i.e., per Mist Edge cluster). The comparison scope is **every field in the matching WLAN JSON object** except the following metadata fields which are excluded: `id`, `org_id`, `site_id`, `template_id`, `created_time`, `modified_time`. For each parameter where values differ across sites, the system MUST report every unique value found and the count of sites using each value. This deviation report is included in the Phase 1 matrix output.
 - **FR-010b**: After per-cluster deviation analysis, the system MUST perform a **cross-cluster drift detection** pass. All 4 production consolidation groups are expected to share an identical base SSID configuration (excluding site-variable-resolved values). The system MUST compare the majority/canonical value for each parameter across all 4 clusters and flag any parameter where the canonical values differ between clusters. Cross-cluster drift is reported as a separate section in the Phase 1 deviation report, listing each drifting parameter with the per-cluster values.
