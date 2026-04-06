@@ -4,8 +4,10 @@ Unit test scaffolding for DeviceUtilityCommands.clear_learned_macs (Menu #152)
 Marked xfail until port-name normalization and API-format adjustments are implemented.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 
