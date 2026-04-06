@@ -4,8 +4,10 @@ Unit test scaffolding for DeviceUtilityCommands.clear_learned_macs (Menu #152)
 Marked xfail until port-name normalization and API-format adjustments are implemented.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 
@@ -27,9 +29,7 @@ def test_clear_learned_macs_accepts_junos_style_port_names(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearAllLearnedMacsFromPortOnSwitch", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearAllLearnedMacsFromPortOnSwitch", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_learned_macs()
 

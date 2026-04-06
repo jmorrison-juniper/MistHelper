@@ -32,9 +32,7 @@ def test_clear_bpdu_uses_normalized_port_identifier(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearBpduErrorsFromPortsOnSwitch", fake_clear_bpdu
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearBpduErrorsFromPortsOnSwitch", fake_clear_bpdu)
 
     # Act
     MistHelper.DeviceUtilityCommands.clear_bpdu_error()

@@ -4,8 +4,8 @@ Unit test for DeviceUtilityCommands.clear_session (Menu #149)
 This test verifies that the code maps user input into either 'service_name' or 'session_ids' in the request body.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
 import MistHelper
 
 
@@ -40,9 +40,7 @@ def test_clear_session_accepts_service_name_or_session_ids(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
 
     # Act
     MistHelper.DeviceUtilityCommands.clear_session()
