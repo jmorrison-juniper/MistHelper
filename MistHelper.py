@@ -55871,7 +55871,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
             logging.info(
                 f"SYSTEMATIC_TEST: Starting test of menu option {option} (fast_applied={invoke_kwargs.get('fast', False)})"  # noqa: E501
             )
-            func(**invoke_kwargs)  # type: ignore[operator]  # func is a callable from menu_actions
+            func(**invoke_kwargs)  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -56033,7 +56033,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
             invoke_kwargs = {}
             if "site_id" in sig.parameters:
                 invoke_kwargs["site_id"] = test_site_id
-            func(**invoke_kwargs)  # type: ignore[operator]  # func is a callable from menu_actions
+            func(**invoke_kwargs)  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -59131,7 +59131,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
             }
             sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
             accepted_args = {k: v for k, v in func_args.items() if k in sig.parameters and v is not None}
-            func(**accepted_args)  # type: ignore[operator]
+            func(**accepted_args)  # type: ignore[no-untyped-call]
         else:
             logging.error(f"! Invalid menu option: {args.menu}")
             print(f"! Invalid menu option: {args.menu}")
@@ -59206,7 +59206,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
                 # (session management operations that change context)
                 session_management_options = {"115"}  # Switch to interactive login
 
-                func()  # type: ignore[operator]  # func is a callable from menu_actions
+                func()  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
                 logging.info(f"Menu option '{iwant}' execution complete.")
 
                 # In container mode, return to menu. In direct mode, exit (unless session management)
