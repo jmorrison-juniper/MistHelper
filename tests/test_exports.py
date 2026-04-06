@@ -4,8 +4,8 @@ Unit tests for export scaffolding (Menus 63-65)
 This file contains tests that assert the 52-week exports call the underlying API and write outputs.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
 import MistHelper
 
 
@@ -16,7 +16,9 @@ def test_device_events_52w_writes_csv(monkeypatch):
 
     # Patch the search API and mistapi.get_all
     monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.orgs.devices, "searchOrgDeviceEvents", lambda session, org_id, device_type, limit, duration: MagicMock()
+        MistHelper.mistapi.api.v1.orgs.devices,
+        "searchOrgDeviceEvents",
+        lambda session, org_id, device_type, limit, duration: MagicMock(),
     )
     monkeypatch.setattr(MistHelper.mistapi, "get_all", lambda response, mist_session: sample_events)
 
