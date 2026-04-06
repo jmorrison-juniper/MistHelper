@@ -221,6 +221,31 @@ Every new operation MUST follow this sequence:
 - **Syntax validation**: `python -m py_compile MistHelper.py` MUST
   pass before every commit (enforced by Principle IV).
 
+### Security Findings: Fix Over Suppress (NON-NEGOTIABLE)
+
+Security tool findings (bandit, pip-audit, CodeQL) MUST be
+**resolved**, not suppressed:
+
+1. **Fix the root cause** -- Rewrite code to eliminate the vulnerability
+   (e.g., validate table names against sqlite_master before use).
+2. **Refactor to avoid the pattern** -- Restructure so the flagged
+   pattern is not needed (e.g., move a secret default from a dict
+   to `os.environ.get()` directly).
+3. **`#nosec` only for verified false positives** -- When the tool
+   misidentifies safe code (e.g., a logging f-string flagged as SQL
+   injection, or an intentional `0.0.0.0` bind gated by
+   `is_running_in_container()`). The annotation MUST include a
+   justification comment.
+
+Never use `#nosec`, `# type: ignore`, `# noqa`, or similar
+suppressions as a shortcut to silence legitimate findings. If a
+finding requires more than a trivial fix, create a GitHub issue
+and track it.
+
+**Rationale**: Suppressions hide risk. Fixes eliminate it. This
+codebase operates in production NOC environments where security
+findings left unresolved become real attack surfaces.
+
 ### Documentation
 
 - **README.md**: User-facing operations guide. MUST be updated for
@@ -368,4 +393,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.2.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06
+**Version**: 1.3.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06

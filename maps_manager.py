@@ -178,7 +178,7 @@ def is_running_in_container() -> bool:
                 return True
         except Exception:
             # Non-Unix or lookup failure; treat as non-container for this heuristic step
-            pass
+            logging.debug("Container detection: user lookup failed (non-Unix or unavailable)")
 
         # Heuristic: application installed in canonical container path /app and script present
         try:
@@ -189,7 +189,7 @@ def is_running_in_container() -> bool:
                     logging.debug("Container detection: /app path with MistHelper.py and sshd present")
                     return True
         except Exception:
-            pass
+            logging.debug("Container detection: path heuristic check failed")
     except Exception as container_detection_error:
         logging.debug(f"Container detection failed with exception: {container_detection_error}")
 
@@ -778,8 +778,8 @@ class MapsManager:
                         map_count = len(maps_response.data)
                         total_maps += map_count
                         sites_with_maps += 1
-                except Exception:
-                    pass  # Skip sites with errors
+                except Exception as site_error:
+                    logging.debug("Skipping site during map sampling: %s", site_error)
 
             print(f"       Found {total_maps} maps across {sites_with_maps} sites (sampled)")
             return True
@@ -814,8 +814,8 @@ class MapsManager:
                                     "map_name": map_data.get("name"),
                                 }
                             )
-                except Exception:
-                    pass
+                except Exception as site_error:
+                    logging.debug("Skipping site during export validation: %s", site_error)
 
             print(f"       Export data structure validated: {len(export_data)} map records")
             return True
@@ -845,8 +845,8 @@ class MapsManager:
                                 maps_with_images += 1
                             else:
                                 maps_without_images += 1
-                except Exception:
-                    pass
+                except Exception as site_error:
+                    logging.debug("Skipping site during image analysis: %s", site_error)
 
             print(f"       Image analysis: {maps_with_images} with images, {maps_without_images} without (sampled)")
             return True
@@ -1601,8 +1601,8 @@ class MapsManager:
                 zones_check = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
                 if zones_check.status_code == 200:
                     source_zones_count = len([z for z in zones_check.data if z.get("map_id") == source_map_id])
-            except Exception:
-                pass
+            except Exception as zone_error:
+                logging.debug("Could not fetch zone count for clone plan: %s", zone_error)
 
             # Display clone plan
             print(f"\n{'-' * 80}")
@@ -1884,8 +1884,8 @@ class MapsManager:
                 if devices_response.status_code == 200:
                     all_devices = devices_response.data if isinstance(devices_response.data, list) else []
                     devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
-            except Exception:
-                pass
+            except Exception as device_error:
+                logging.debug("Could not fetch devices for map detail: %s", device_error)
 
             # Count zones on this map
             zones_on_map = []
@@ -1893,10 +1893,8 @@ class MapsManager:
                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
                 if zones_response.status_code == 200:
                     zones_on_map = [z for z in zones_response.data if z.get("map_id") == map_id]
-            except Exception:
-                pass
-
-            # Count beacons
+            except Exception as zone_error:
+                logging.debug("Could not fetch zones for map detail: %s", zone_error)
             beacons_on_map = []
             vbeacons_on_map = []
             try:
@@ -1907,8 +1905,8 @@ class MapsManager:
                 vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=site_id)
                 if vbeacons_response.status_code == 200:
                     vbeacons_on_map = [v for v in vbeacons_response.data if v.get("map_id") == map_id]
-            except Exception:
-                pass
+            except Exception as beacon_error:
+                logging.debug("Could not fetch beacons for map detail: %s", beacon_error)
 
             print("\nAssets on this map:")
             print(f"  Devices: {len(devices_on_map)}")
@@ -3044,7 +3042,7 @@ class MapsManager:
                 logging.debug("Using Plotly/Dash mode for interactive viewer")
 
             # Select map to view and get list of all maps for dropdown
-            logging.debug(f"Prompting user to select map from site {site_name}")
+            logging.debug(f"Prompting user to select map from site {site_name}")  # nosec B608 — not SQL, just logging
             map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)
             if not map_id:
                 logging.info("Map viewer aborted: No map selected")
@@ -8404,7 +8402,7 @@ class MapsManager:
                 return no_update, updated_refresh_times
 
         # Determine host binding - use 0.0.0.0 in containers for external access
-        dash_host = "0.0.0.0" if is_running_in_container() else "127.0.0.1"
+        dash_host = "0.0.0.0" if is_running_in_container() else "127.0.0.1"  # nosec B104 — container must bind all interfaces
         # Use port 8050 by default (matches container EXPOSE and compose.yml)
         dash_port = int(os.getenv("DASH_PORT", "8050"))
 
@@ -9898,7 +9896,7 @@ class MapsManager:
         flask_port = 8050
 
         if is_running_in_container():
-            flask_host = "0.0.0.0"
+            flask_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
             logging.debug("Container detected: binding Flask to 0.0.0.0")
 
         print("\n" + "-" * 80)

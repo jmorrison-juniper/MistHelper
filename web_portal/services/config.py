@@ -28,7 +28,6 @@ class PortalConfigLoader:
         "PORTAL_THEME": "dark",
         "WEB_PORT": "8055",
         "PORTAL_ALLOWED_IPS": "",
-        "PORTAL_SECRET_KEY": "",
     }
 
     def load_config(self) -> dict:
@@ -54,7 +53,7 @@ class PortalConfigLoader:
             "web_port": self._validate_port(raw["WEB_PORT"]),
         }
         config["allowed_ips"] = self._parse_allowed_ips(raw["PORTAL_ALLOWED_IPS"])
-        config["secret_key"] = raw["PORTAL_SECRET_KEY"] or str(uuid.uuid4())
+        config["secret_key"] = os.environ.get("PORTAL_SECRET_KEY") or str(uuid.uuid4())
         return config
 
     def _validate_color(self, color: str) -> str:
@@ -147,7 +146,7 @@ class SecurityMiddleware:
         forwarded = request.headers.get("X-Forwarded-For", "")
         if forwarded:
             return forwarded.split(",")[0].strip()
-        return request.remote_addr or "0.0.0.0"
+        return request.remote_addr or "0.0.0.0"  # nosec B104 — fallback IP, not a bind address
 
     def _ip_is_allowed(self, client_ip: str, allowed_ips: list) -> bool:
         """Check if client IP matches any allowed CIDR network."""

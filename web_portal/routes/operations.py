@@ -5,6 +5,7 @@ and SSE event streaming for real-time progress updates.
 """
 
 import json
+import logging
 
 from flask import (
     Blueprint,
@@ -309,8 +310,8 @@ def _fetch_site_clients(apisession, site_id: str) -> list:
         wireless = _fetch_wireless_clients(mistapi, apisession, site_id)
         wired = _fetch_wired_clients(mistapi, apisession, site_id)
         clients = wireless + wired
-    except Exception:
-        pass
+    except Exception as client_error:
+        logging.debug("Could not fetch site clients: %s", client_error)
     return clients
 
 

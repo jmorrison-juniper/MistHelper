@@ -129,7 +129,8 @@ module = ["maps_manager", "maps_manager.*", "mist-ops-platform.*", "ops-portal.*
 follow_imports = "skip"
 
 [tool.bandit]
-targets = ["MistHelper.py"]
+targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "src"]
+exclude_dirs = ["tests", ".venv", "node_modules", "mist-ops-platform", "ops-portal", "starlink-api-reference", "scripts", "specs"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
