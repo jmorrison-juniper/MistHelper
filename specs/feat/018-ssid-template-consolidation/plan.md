@@ -1,70 +1,104 @@
-# Implementation Plan — SSID Template Consolidation (Feature 018)
+# Implementation Plan: [FEATURE]
 
-## Objectives
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-- Implement a 5-phase guided workflow in MistHelper to consolidate per-site SSID templates into a small set of consolidated templates.
-- Maintain idempotence and auditability for every operation.
-- Ensure PSK-based sites are excluded from automated modifications.
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
-## Phases (Mapping to the spec)
+## Summary
 
-1. Phase 1 — Inventory & Deviation Analysis (FR-005 ⇒ FR-010b)
-2. Phase 2 — Write Site Variables (FR-011 ⇒ FR-013)
-3. Phase 3 — Assign Site Groups (FR-014 ⇒ FR-015)
-4. Phase 4 — Create/Update Consolidated Templates (FR-016 ⇒ FR-018)
-5. Phase 5 — Disable Old Template SSIDs (FR-005 & FR-010)
+[Extract from feature spec: primary requirement + technical approach from research]
 
-## High-Level Design
+## Technical Context
 
-- Single top-level command: `menu 159` (or named) that loads `specs/feat/018-ssid-template-consolidation/spec.md` for the operational contract and drives the guided flow.
-- Cache layer under `data/ssi-template-consolidation/cache.db` (sqlite) for Phase 1 results.
-- Results/logging: per-phase CSV and SQLite outputs for audit. Logs stored in `data/logs/ssid-consolidation/`.
-- API client: reuse `mistapi` helpers already present in the project, obey existing rate-limiting helpers.
-- Confirmation style: destructive writes require typed `CONFIRM` per agents.md guidance.
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
-## Data Model
+**Language/Version**: Python 3.13 (project-wide requirement from constitution)
+**Primary Dependencies**: `mistapi` (>=0.59), `python-dotenv` (for `.env`), standard `sqlite3` (stdlib), and project `DataExporter` utilities
+**Storage**: Local SQLite files under `data/` (dual CSV/SQLite outputs via `DataExporter`)
+**Testing**: `pytest` for unit/integration tests (use pytest-mock for API client mocking)
+**Target Platform**: Production: Linux container (Podman); Development: Windows 11 local dev (venv)
+**Project Type**: CLI utility/script (single-file CLI entry `MistHelper.py` with new `SSIDTemplateConsolidationManager` class)
+**Performance Goals**: Phase 1 (inventory) must reliably handle ~170 sites without triggering Mist API rate-limits; aim to complete Phase 1 within 30 minutes under conservative batching/backoff settings. No hard SLA beyond avoiding API throttling.
+**Constraints**: Must use `mistapi` for Mist interactions; all writes are idempotent and require typed `CONFIRM` for destructive actions; obey rate-limiting/backoff heuristics; outputs written only to `data/`.
+**Scale/Scope**: Target organization size ~170 sites (primary); templates per site typically 1–3 SSIDs; operations will iterate across up to ~170 sites in bulk phases.
 
-- `Phase1Matrix` (SQLite table): site_id PK, site_name, template_id, template_name, target_ssid_name, target_ssid_id, psk_detected boolean, edge_cluster_id, edge_cluster_name, anomaly_code
-- `DeviationReport` (serialized JSON stored in SQLite blob column): per-cluster field -> values map with counts
-- `OperationsLog`: per-phase per-site operation results (success/failure, error message, timestamp)
+## Constitution Check
 
-## Acceptance Criteria
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- All Phase 1 CSV/DB outputs are generated and include the deviation analysis (FR-010a).
-- Phase 2 writes are idempotent (FR-011/FR-012).
-- Phase 3 site groups exist and membership is idempotent (FR-014/FR-015).
-- Phase 4 template creations are idempotent and append-only for multiple SSID runs (FR-016).
+[Gates determined based on constitution file]
 
-## Security & Safety
+## Project Structure
 
-- All writes are gated behind typed `CONFIRM`.
-- No destructive deletes; old SSIDs are disabled (FR-005/FR-010)
-- PSK sites are never modified automatically.
+### Documentation (this feature)
 
-## Rollback & Resume
+```text
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+```
 
-- If the workflow is interrupted, reconciling uses `OperationsLog` to detect finished sites and resumes where left off.
-- If templates need rollback, the system re-enables old template SSIDs from the archived state in `OperationsLog`.
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
-## Implementation Steps (developer-friendly)
+```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
 
-1. Add new menu option wiring in `MistHelper.py` to hook `menu 159` to new `SSIDTemplateConsolidationManager` class.
-2. Implement `SSIDTemplateConsolidationManager.phase1_collect()` to create Phase1Matrix and DeviationReport.
-3. Implement caching helpers around Phase1Matrix (refresh window configurable via env `SSID_CONSOLIDATION_CACHE_MINUTES`).
-4. Implement `phase2_apply_site_vars()` with typed confirmation and idempotent writes.
-5. Implement `phase3_assign_site_groups()` with create-if-missing site groups.
-6. Implement `phase4_create_templates()` with interactive deviation resolution UI.
-7. Implement `phase5_disable_old_ssids()` that sets `enabled=False` in templates per-site, preserving configs.
-8. Tests: unit tests for `deviation_analysis()` and `generate_template_name()`; integration test mocking the `mistapi` client to validate idempotence.
-9. Docs: Add `specs/feat/018-ssid-template-consolidation/quickstart.md` and a short README entry.
+tests/
+├── contract/
+├── integration/
+└── unit/
 
-## Timeline
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
 
-- Quick prototype (Phase 1): 1–2 days
-- Phases 2–4 with tests: 3–5 days
-- Phase 5 and cleanup: 1–2 days
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
 
-## Notes / Constraints
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
 
-- Must avoid overwhelming the Mist API — use existing rate-limit helpers and backoff.
-- This plan assumes `mistapi` is installed and available.
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
+```
+
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
+
+## Complexity Tracking
+
+> **Fill ONLY if Constitution Check has violations that must be justified**
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
