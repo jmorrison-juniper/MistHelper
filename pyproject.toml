@@ -56,7 +56,7 @@ dev = [
     "types-tqdm>=4.64.0",       # stubs for tqdm (Phase 1 fix)
     "bandit>=1.7.0",
     "pip-audit>=2.7.0",
-    "hypothesis>=6.0.0",
+    "hypothesis==6.151.10",
     "playwright>=1.40.0",
     "pre-commit>=3.0.0",
 ]

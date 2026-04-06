@@ -31,7 +31,7 @@ jobs:
           # Retry loop to reduce transient network failures
           for i in 1 2 3; do
             pip install -r requirements.txt && \
-              pip install ruff==0.8.0 mypy==1.0.0 types-requests types-paramiko types-tqdm pytest==7.0.0 pytest-cov bandit==1.7.0 pip-audit==2.7.0 hypothesis && break || sleep 5
+              pip install ruff==0.8.0 mypy==1.0.0 types-requests types-paramiko types-tqdm pytest==7.0.0 pytest-cov bandit==1.7.0 pip-audit==2.7.0 hypothesis==6.151.10 && break || sleep 5
           done
           # Print tool versions for triage
           ruff --version || true
@@ -58,6 +58,8 @@ jobs:
 
       - name: Run pytest
         if: matrix.check == 'pytest'
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: 1
         run: pytest tests/unit/ -v
 
       - name: Run Bandit security linter
