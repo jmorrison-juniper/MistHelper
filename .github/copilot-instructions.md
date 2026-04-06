@@ -549,6 +549,19 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 
+### Security Findings: Fix Over Suppress
+
+Security tool findings (bandit, pip-audit, CodeQL) must be **resolved**, not suppressed:
+
+1. **Fix the root cause** -- Rewrite code to eliminate the vulnerability.
+2. **Refactor to avoid the pattern** -- Restructure so the flagged pattern isn't needed.
+3. **`#nosec` only for verified false positives** -- When the tool misidentifies safe code
+   (e.g., logging f-string flagged as SQL, intentional `0.0.0.0` bind gated by container
+   detection). The annotation MUST include a justification comment.
+
+Never suppress legitimate findings. If a finding requires more than a trivial fix,
+create a GitHub issue and track it.
+
 ### Exact Tools, Modules & Actions
 
 **Editor & AI**:

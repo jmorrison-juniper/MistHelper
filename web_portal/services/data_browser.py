@@ -61,6 +61,8 @@ class DataBrowserService:
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
             return {"error": "File not found"}
+        if not self._is_valid_table_name(resolved, table_name):
+            return {"error": "Table not found"}
         return self._preview_sqlite(resolved, table_name, page, per_page, search)
 
     def resolve_safe_path(self, rel_path: str) -> str:
@@ -205,17 +207,36 @@ class DataBrowserService:
             return {"error": f"Failed to read SQLite: {exc}"}
 
     def _get_table_info(self, conn, table_name: str) -> dict:
-        """Get row count and column names for a SQLite table."""
+        """Get row count and column names for a SQLite table.
+
+        table_name MUST come from sqlite_master (internal) or be
+        validated by _is_valid_table_name before calling this method.
+        """
         cursor = conn.cursor()
-        cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+        cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')  # nosec B608 — table_name validated
         row_count = cursor.fetchone()[0]
-        cursor.execute(f'PRAGMA table_info("{table_name}")')
+        cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — table_name validated
         columns = [row[1] for row in cursor.fetchall()]
         return {
             "table_name": table_name,
             "row_count": row_count,
             "column_names": columns,
         }
+
+    def _is_valid_table_name(self, filepath: str, table_name: str) -> bool:
+        """Validate table_name exists in the database to prevent SQL injection."""
+        try:
+            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            )
+            exists = cursor.fetchone() is not None
+            conn.close()
+            return exists
+        except Exception:
+            return False
 
     def _preview_sqlite(
         self, filepath: str, table_name: str, page: int, per_page: int, search: str
@@ -224,7 +245,7 @@ class DataBrowserService:
         try:
             conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
             cursor = conn.cursor()
-            cursor.execute(f'PRAGMA table_info("{table_name}")')
+            cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
             col_info = cursor.fetchall()
             if not col_info:
                 conn.close()
@@ -251,22 +272,22 @@ class DataBrowserService:
             pattern = f"%{search}%"
             params = [pattern] * len(columns)
             cursor.execute(
-                f'SELECT COUNT(*) FROM "{table_name}" WHERE {where}', params
+                f'SELECT COUNT(*) FROM "{table_name}" WHERE {where}', params  # nosec B608 — validated
             )
             total = cursor.fetchone()[0]
             offset = (max(1, min(page, max(1, math.ceil(total / per_page)))) - 1) * per_page
             cursor.execute(
-                f'SELECT * FROM "{table_name}" WHERE {where} LIMIT ? OFFSET ?',
+                f'SELECT * FROM "{table_name}" WHERE {where} LIMIT ? OFFSET ?',  # nosec B608
                 params + [per_page, offset],
             )
         else:
-            cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+            cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')  # nosec B608 — validated
             total = cursor.fetchone()[0]
             total_pages = max(1, math.ceil(total / per_page))
             page = max(1, min(page, total_pages))
             offset = (page - 1) * per_page
             cursor.execute(
-                f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?',
+                f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?',  # nosec B608
                 [per_page, offset],
             )
         rows = [list(row) for row in cursor.fetchall()]
