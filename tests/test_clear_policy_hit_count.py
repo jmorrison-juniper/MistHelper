@@ -4,8 +4,10 @@ Unit test scaffolding for DeviceUtilityCommands.clear_policy_hit_count (Menu #15
 Tests target node handling and model capability detection. Marked xfail until capability checks are implemented.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 
@@ -18,7 +20,9 @@ def test_clear_policy_includes_node_when_required(monkeypatch):
     )
 
     # Simulate user input for Node
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", lambda prompt, context=None, **kwargs: "node0" if "Node" in prompt else "")
+    monkeypatch.setattr(
+        MistHelper.InputUtils, "safe_input", lambda prompt, context=None, **kwargs: "node0" if "Node" in prompt else ""
+    )
 
     captured = {}
 

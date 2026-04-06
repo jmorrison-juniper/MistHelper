@@ -11521,7 +11521,7 @@ class OrgAlarmEventExporter:
             except Exception as e:
                 logging.warning(f"Could not read checkpoint file {checkpoint_file}: {e}")
 
-        def _fetch_page(token):
+        def _fetch_page(token: str | None) -> object:
             # Always pass search_after as a keyword; mistapi may ignore None values but accept explicit token
             if token:
                 return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
@@ -11572,7 +11572,7 @@ class OrgAlarmEventExporter:
         logging.info(f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv")
 
         # Helper: fetch with retries to handle transient API errors/rate limits
-        def _fetch_page_with_retries(token, retries: int = 3, backoff: float = 1.0):
+        def _fetch_page_with_retries(token: str | None, retries: int = 3, backoff: float = 1.0) -> object:
             last_exc = None
             for attempt in range(retries):
                 try:
@@ -11586,7 +11586,9 @@ class OrgAlarmEventExporter:
                         time.sleep(sleep_time)
             # If we reach here, all retries failed
             logging.error("Exceeded maximum retries fetching page")
-            raise last_exc
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("All retries failed with no exception captured")
 
         # Choose output path: CSV (default) or SQLite (streaming)
         if OUTPUT_FORMAT == "sqlite":
@@ -20025,8 +20027,13 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        service_name = InputUtils.safe_input("Service name to clear (Enter to skip): ", context="clear_session_service_name")
-        session_ids_input = InputUtils.safe_input("Session IDs to clear (comma-separated, Enter to skip): ", context="clear_session_ids")
+        service_name = InputUtils.safe_input(
+            "Service name to clear (Enter to skip): ", context="clear_session_service_name"
+        )
+        session_ids_input = InputUtils.safe_input(
+            "Session IDs to clear (comma-separated, Enter to skip): ",
+            context="clear_session_ids",
+        )
         if service_name:
             body["service_name"] = service_name
         elif session_ids_input:
@@ -20034,14 +20041,20 @@ class DeviceUtilityCommands:
             if session_ids:
                 body["session_ids"] = session_ids
         else:
-            confirm_all = InputUtils.safe_input("No service name or session IDs provided. This may attempt to clear ALL sessions. Type 'CLEAR ALL' to proceed or press Enter to cancel: ", context="clear_session_confirm_all")
+            confirm_all = InputUtils.safe_input(
+                "No service name or session IDs provided. This may attempt to clear ALL sessions."
+                " Type 'CLEAR ALL' to proceed or press Enter to cancel: ",
+                context="clear_session_confirm_all",
+            )
             if confirm_all != "CLEAR ALL":
                 print("Cancelled: No service name or session IDs provided.")
                 return
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"):
+        if not DeviceUtilityCommands._confirm_destructive(
+            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"
+        ):
             return
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, body)
@@ -20049,9 +20062,15 @@ class DeviceUtilityCommands:
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
             try:
-                code = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
+                code = (
+                    getattr(error, "status_code", None)
+                    or getattr(getattr(error, "response", None), "status_code", None)
+                )
                 if code == 400:
-                    print("! API returned 400. The API expects either 'service_name' or 'session_ids' in the request body.")
+                    print(
+                        "! API returned 400. The API expects either 'service_name'"
+                        " or 'session_ids' in the request body."
+                    )
                     print("  Provide a service name or a comma-separated list of session IDs, and retry.")
                 else:
                     print(f"! Clear session failed: {error}")
