@@ -396,6 +396,92 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 ---
 
+## Multi-Agent Git Workflow
+
+Global workflow rules are defined in
+`%APPDATA%/Code/User/prompts/coding-standards.instructions.md`.
+This section adds MistHelper-specific enforcement.
+
+### Issue-First Development
+
+Every code change starts with an issue. No branch without an issue.
+
+When any error is detected during development (lint, test, type, runtime, security, CI),
+create a GitHub issue **before** attempting a fix:
+
+| Trigger | Label(s) | Issue Title Pattern |
+|---------|----------|---------------------|
+| `ruff check` violation | `lint`, rule code | `Lint: <rule> -- <description>` |
+| `pytest` failure | `bug`, `test` | `Test failure: <test_name>` |
+| `mypy` type error | `chore`, `types` | `Type error: <file>:<line>` |
+| Runtime exception | `bug` | `Runtime: <exception> in <function>` |
+| Security finding | `security` | `Security: <tool> -- <finding>` |
+| CI pipeline failure | `ci` | `CI: <workflow> -- <failure>` |
+
+Use `gh issue create --title "..." --label "..." --body "..."` to create issues
+programmatically. Include the full error output in the issue body for traceability.
+
+### Branch Strategy (No Stacking)
+
+```
+main (always deployable)
+  |-- fix/<issue-number>-<slug>      # bug fixes
+  |-- feat/<issue-number>-<slug>     # features
+  |-- chore/<issue-number>-<slug>    # maintenance / lint / docs
+```
+
+**Critical rules**:
+- Every branch targets `main` directly. Never branch from another feature branch.
+- Branch name must include the issue number: `fix/42-clear-session`.
+- One branch per issue. One PR per branch. One concern per PR.
+- Keep branches short-lived: merge or close within days, not weeks.
+
+**Lesson learned**: PRs 12-15 were stacked (branched from each other instead of main),
+causing cascading merge conflicts that required manual resolution. This rule prevents that.
+
+### Commit Messages
+
+Use Conventional Commits format:
+```
+<type>(<scope>): <description>
+
+Closes #<issue-number>
+```
+Types: `fix`, `feat`, `chore`, `refactor`, `test`, `docs`, `ci`.
+Include `Closes #N` in the body so the issue auto-closes on merge.
+
+### Merge Strategy
+
+- **Squash merge** to `main` (one clean commit per PR).
+- **Rebase before merging** if the branch is behind `main`.
+- **Delete branch** after merge (automatic via GitHub settings).
+- **Never force-push** to a shared branch or `main`.
+
+### Required Labels
+
+Every issue and PR MUST have at least:
+1. A **type** label: `bug`, `feature`, `chore`, `lint`, `security`, `refactor`
+2. A **scope** label: `MistHelper.py`, `tests`, `ci`, `container`, `docs`, `web-portal`
+3. A **status** label when in progress: `in-progress`
+
+### Fleet Coordination (Multi-Agent)
+
+When multiple AI agents work on MistHelper simultaneously:
+
+1. **Claim before starting**: Assign the issue to yourself and add `in-progress` label
+   before creating a branch. If already claimed, pick a different issue.
+2. **Check for file overlap**: Run
+   `gh pr list --json files --jq '.[].files[].path'`
+   to see what files other open PRs touch. Avoid overlapping files.
+3. **MistHelper.py is a hot file**: Since most changes touch this single file, only one
+   agent should have an open PR modifying it at a time. Others should wait or work on
+   non-overlapping files (tests, docs, CI, web portal).
+4. **Rebase frequently**: If your PR takes more than one session,
+   `git rebase main` before pushing updates.
+5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass.
+
+---
+
 ## External Resources
 - Mist API Docs: `documentation/mist-api-openapi3*.{json,yaml}`
 - Thomas Munzer's mistapi: https://github.com/tmunzer/mistapi_python
@@ -620,15 +706,18 @@ In addition to the standard checklist, PRs that touch web UI must include:
 
 When implementing a Feature Spec, AI agents must follow this protocol:
 
-1. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
-2. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
-3. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
-4. **Update `deploy/.env.example`** if introducing new environment variables.
-5. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
-6. **Prepare the PR** using the PR template; link the Spec and complete all checklist items.
-7. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
-8. **Add the `auto-merge` label** once all checks pass.
-9. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
+1. **Create or claim a GitHub issue** before writing any code. Add `in-progress` label.
+2. **Create a branch from `main`** using `fix/<issue>-<slug>`, `feat/<issue>-<slug>`, or `chore/<issue>-<slug>`.
+3. **Check for file overlap** with other open PRs (`gh pr list --json files`). Wait if MistHelper.py is contested.
+4. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
+5. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
+6. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
+7. **Update `deploy/.env.example`** if introducing new environment variables.
+8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
+9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, and complete all checklist items.
+10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
+11. **Add the `auto-merge` label** once all checks pass.
+12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
 
 ---
 

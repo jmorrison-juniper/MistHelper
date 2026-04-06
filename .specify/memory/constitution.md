@@ -25,6 +25,13 @@
   Follow-up TODOs: None
 -->
 
+<!-- Global coding standards (5-Item Rule, class-based architecture,
+     safety-first input, logging, quality gates) are defined in the
+     user-level VS Code instructions file:
+       %APPDATA%/Code/User/prompts/coding-standards.instructions.md
+     This constitution extends those global standards with
+     MistHelper-specific principles and constraints. -->
+
 # MistHelper Constitution
 
 ## Core Principles
@@ -229,6 +236,78 @@ All user-facing text MUST be written for junior NOC engineers. Use
 clear, professional language without jargon. The standard is:
 "Fred Rogers meets NASA/JPL safety standards."
 
+## Multi-Agent Git Workflow (NON-NEGOTIABLE)
+
+The global coding standards
+(`%APPDATA%/Code/User/prompts/coding-standards.instructions.md`)
+define the general multi-agent workflow. This section adds
+MistHelper-specific enforcement.
+
+### Issue-First Error Pipeline
+
+When any error is detected during development, an issue MUST be
+created before attempting a fix:
+
+```powershell
+# Ruff violation example
+gh issue create --title "Lint: E501 -- line too long in MistHelper.py" \
+  --label "lint,MistHelper.py" \
+  --body "ruff check output:\n$(ruff check MistHelper.py --select E501)"
+
+# Test failure example
+gh issue create --title "Test failure: test_clear_session" \
+  --label "bug,test" \
+  --body "pytest output:\n$(pytest tests/test_clear_session.py -v)"
+```
+
+### Branch Naming for MistHelper
+
+Branches MUST follow this pattern and target `main` directly:
+- `fix/<issue-number>-<slug>` -- bug fixes (e.g., `fix/42-clear-session`)
+- `feat/<issue-number>-<slug>` -- features (e.g., `feat/50-exports-streaming`)
+- `chore/<issue-number>-<slug>` -- maintenance (e.g., `chore/38-ruff-fixes`)
+
+**Never branch from another feature branch.** This caused the
+PRs 12-15 stacking mess that required manual conflict resolution.
+Every branch starts from `main`.
+
+### Required Labels
+
+Every issue and PR MUST have at least:
+1. A **type** label: `bug`, `feature`, `chore`, `lint`, `security`,
+   `refactor`
+2. A **scope** label: `MistHelper.py`, `tests`, `ci`, `container`,
+   `docs`, `web-portal`
+3. A **status** label when in progress: `in-progress`
+
+### Fleet Coordination Rules
+
+When multiple agents work on MistHelper simultaneously:
+
+1. **Claim first**: Add `in-progress` label to the issue before
+   creating a branch. If another agent already claimed it, pick a
+   different issue.
+2. **File overlap check**: Run
+   `gh pr list --json files --jq '.[].files[].path'`
+   to see what files other open PRs touch. Avoid overlapping files.
+3. **MistHelper.py is a hot file**: Since most changes touch this
+   single file, agents MUST coordinate when multiple PRs modify it.
+   Only one agent should have an open PR modifying MistHelper.py at
+   a time. Others should wait for merge or work on non-overlapping
+   files (tests, docs, CI).
+4. **Rebase before push**: Always `git rebase main` before pushing
+   to ensure the branch is current.
+5. **Squash merge only**: All PRs merge to `main` via squash merge.
+   This keeps history linear and readable.
+
+### PR Checklist Enforcement
+
+Every PR MUST include in its description:
+- `Closes #<issue-number>` (auto-closes the linked issue)
+- CI status confirmation (all quality gates green)
+- Files changed summary (to help detect overlap)
+- `auto-merge` label added only after all checks pass
+
 ## Governance
 
 This constitution is the authoritative source for MistHelper project
@@ -256,4 +335,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-03-05
+**Version**: 1.1.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06
