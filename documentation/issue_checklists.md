@@ -4,7 +4,7 @@ This document contains detailed checklists for each of the issues created from t
 
 ---
 
-## Issue #4  Investigate re-adopt switch failure on non-VC (Menu #143)
+## Issue #4 — Investigate re-adopt switch failure on non-VC (Menu #143)
 - [ ] Reproduce failure and capture full API request/response (headers, body, status, raw response).
 - [ ] Inspect mistapi.readoptSiteOctermDevice docstring and official API docs.
 - [ ] Implement `is_device_vc_capable(site_id, device_id)` helper.
@@ -19,7 +19,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #5  Fix clear_session API body/prompt (Menu #149)
+## Issue #5 — Fix clear_session API body/prompt (Menu #149)
 - [ ] Reproduce the 400 error and record API expectations from cloud doc.
 - [ ] Update UI prompts to allow either `service_name` or multiple `session_ids` (comma-separated).
 - [ ] Map inputs into API body: `body['service_name'] = ...` or `body['session_ids'] = [...]`.
@@ -33,7 +33,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #6  Investigate clear_bpdu_error 400 on EX4100 (Menu #151)
+## Issue #6 — Investigate clear_bpdu_error 400 on EX4100 (Menu #151)
 - [ ] Reproduce with EX4100 and capture failing request/response.
 - [ ] Confirm required body keys (port identifier format) via mistapi docstring.
 - [ ] Implement port normalization helper mapping human interface names (e.g., ge-0/0/0) to API-expected identifier.
@@ -46,7 +46,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #7  Investigate clear_learned_macs 400 on EX4100 (Menu #152)
+## Issue #7 — Investigate clear_learned_macs 400 on EX4100 (Menu #152)
 - [ ] Reproduce and record API expectation for `clearAllLearnedMacsFromPortOnSwitch` body.
 - [ ] Use same port normalization helper as Issue #6.
 - [ ] Add graceful error-handling and retries with normalized inputs.
@@ -57,7 +57,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #8  Investigate clear_policy_hit_count 400 on SSR120 (Menu #153)
+## Issue #8 — Investigate clear_policy_hit_count 400 on SSR120 (Menu #153)
 - [ ] Reproduce on SSR120; try calling with and without `node` param.
 - [ ] Check mistapi docs to confirm support for SSR120; add capability detection via `getSiteDevice`.
 - [ ] If unsupported by model, skip with a clear message.
@@ -69,7 +69,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #9  Stabilize WIP export features (Menus 63-65)
+## Issue #9 — Stabilize WIP export features (Menus 63-65)
 - [ ] Identify all APIs used (searchOrgDeviceEvents, listOrgAuditLogs, gateway device configs) and confirm pagination semantics.
 - [ ] Implement chunked streaming writes to CSV/SQLite using `mistapi.get_all` or manual pagination.
 - [ ] Add checkpointing (resume token or last-timestamp) to safely restart long exports.
@@ -82,7 +82,7 @@ Acceptance criteria:
 
 ---
 
-## Issue #10  Stabilize Virtual Chassis conversion (Option 92 - WIP)
+## Issue #10 — Stabilize Virtual Chassis conversion (Option 92 - WIP)
 - [ ] Review API doc for convertSiteVirtualChassisToVirtualMac and preconditions.
 - [ ] Add preflight checks: model compatibility, VC membership, device health, and backups availability.
 - [ ] Add mandatory multi-step confirmations and a `--dry-run` mode.

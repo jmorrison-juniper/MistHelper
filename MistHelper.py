@@ -11489,18 +11489,195 @@ class OrgAlarmEventExporter:
     def device_events_52w():  # type: ignore[no-untyped-def]
         """
         Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
+
+        This implementation streams results using the search_after token and writes
+        to CSV in a memory-efficient manner with simple checkpointing so it can be
+        resumed if interrupted.
         """
         logging.info("Exporting all org device events from the last 52 weeks...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=1000, duration="52w"
-        )
-        events = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
-        events = DataProcessingUtils.flatten_nested_fields(events)
-        events = DataProcessingUtils.escape_multiline(events)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]
-        logging.info(" All org device events (52w) exported to OrgDeviceEvents_52w.csv.")
+        if not org_id:
+            logging.error("No org_id available. Exiting.")
+            return
+
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
+        checkpoint_file = os.path.join(data_dir, f"OrgDeviceEvents_52w.{org_id}.checkpoint")
+        csv_file = os.path.join(data_dir, "OrgDeviceEvents_52w.csv")
+
+        limit = 1000
+        duration = "52w"
+        preload_pages = 3  # number of pages to fetch to build a robust header before streaming
+
+        # Try to read an existing checkpoint token to resume
+        search_after = None
+        if os.path.exists(checkpoint_file):
+            try:
+                with open(checkpoint_file, encoding="utf-8") as fh:
+                    token = fh.read().strip()
+                    if token:
+                        search_after = token
+                        logging.info(f"Resuming OrgDeviceEvents_52w from checkpoint token: {search_after}")
+            except Exception as e:
+                logging.warning(f"Could not read checkpoint file {checkpoint_file}: {e}")
+
+        def _fetch_page(token: str | None) -> object:
+            # Always pass search_after as a keyword; mistapi may ignore None values but accept explicit token
+            if token:
+                return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                    apisession, org_id, device_type="all", limit=limit, duration=duration, search_after=token
+                )
+            return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                apisession, org_id, device_type="all", limit=limit, duration=duration
+            )
+
+        buffered_rows: list[dict[str, Any]] = []
+        page_count = 0
+        next_token = None
+
+        # Preload a small number of pages to compute a stable CSV header
+        while page_count < preload_pages:
+            response = _fetch_page(search_after)
+            page_data = getattr(response, "data", None)
+            if not page_data:
+                break
+
+            if isinstance(page_data, dict):
+                results = page_data.get("results", []) or page_data.get("data", [])
+                next_token = page_data.get("search_after") or page_data.get("next")
+            else:
+                results = page_data if isinstance(page_data, list) else []
+                next_token = None
+
+            if not results:
+                break
+
+            processed = DataProcessingUtils.flatten_nested_fields(results)
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            buffered_rows.extend(processed)
+
+            if not next_token:
+                break
+
+            search_after = next_token
+            page_count += 1
+
+        if not buffered_rows:
+            logging.info("No device events found for the 52-week period.")
+            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]
+            return
+
+        # Determine CSV header from preloaded rows and write them out
+        header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]
+        logging.info(f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv")
+
+        # Helper: fetch with retries to handle transient API errors/rate limits
+        def _fetch_page_with_retries(token: str | None, retries: int = 3, backoff: float = 1.0) -> object:
+            last_exc = None
+            for attempt in range(retries):
+                try:
+                    return _fetch_page(token)
+                except Exception as exc:  # pragma: no cover - defensive network handling
+                    last_exc = exc
+                    logging.warning(f"Attempt {attempt + 1}/{retries} to fetch page failed: {exc}")
+                    if attempt < retries - 1:
+                        sleep_time = backoff * (2**attempt)
+                        logging.debug(f"Waiting {sleep_time}s before retrying")
+                        time.sleep(sleep_time)
+            # If we reach here, all retries failed
+            logging.error("Exceeded maximum retries fetching page")
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("All retries failed with no exception captured")
+
+        # Choose output path: CSV (default) or SQLite (streaming)
+        if OUTPUT_FORMAT == "sqlite":
+            table_name = "OrgDeviceEvents_52w"
+            try:
+                # Initial write of preloaded rows into SQLite table
+                DataExporter.write_with_format_selection(
+                    buffered_rows, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
+                )
+            except Exception as write_err:
+                logging.error(f"Failed to write initial OrgDeviceEvents_52w batch to SQLite: {write_err}")
+                raise
+        else:
+            try:
+                with open(csv_file, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=header_fields)
+                    writer.writeheader()
+                    for row in buffered_rows:
+                        writer.writerow({k: row.get(k, "") for k in header_fields})
+            except Exception as write_err:
+                logging.error(f"Failed to write initial OrgDeviceEvents_52w CSV file: {write_err}")
+                raise
+
+        # Persist checkpoint if there are more pages to fetch
+        if next_token:
+            try:
+                with open(checkpoint_file, "w", encoding="utf-8") as fh:
+                    fh.write(str(next_token))
+            except Exception as e:
+                logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
+
+        # Continue streaming remaining pages (if any)
+        while next_token:
+            # Use retry wrapper for robustness
+            response = _fetch_page_with_retries(next_token)
+            page_data = getattr(response, "data", None)
+            if not page_data:
+                break
+
+            if isinstance(page_data, dict):
+                results = page_data.get("results", []) or page_data.get("data", [])
+                next_token = page_data.get("search_after") or page_data.get("next")
+            else:
+                results = page_data if isinstance(page_data, list) else []
+                next_token = None
+
+            if not results:
+                break
+
+            processed = DataProcessingUtils.flatten_nested_fields(results)
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+
+            if OUTPUT_FORMAT == "sqlite":
+                try:
+                    DataExporter.write_with_format_selection(
+                        processed, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
+                    )
+                except Exception as append_err:
+                    logging.error(f"Failed to append OrgDeviceEvents_52w to SQLite table {table_name}: {append_err}")
+                    raise
+            else:
+                try:
+                    with open(csv_file, "a", newline="", encoding="utf-8") as fh:
+                        writer = csv.DictWriter(fh, fieldnames=header_fields)
+                        for row in processed:
+                            writer.writerow({k: row.get(k, "") for k in header_fields})
+                except Exception as append_err:
+                    logging.error(f"Failed to append OrgDeviceEvents_52w CSV file: {append_err}")
+                    raise
+
+            # Update checkpoint for resume
+            if next_token:
+                try:
+                    with open(checkpoint_file, "w", encoding="utf-8") as fh:
+                        fh.write(str(next_token))
+                except Exception as e:
+                    logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
+
+        # Completed; remove checkpoint file (best-effort)
+        try:
+            if os.path.exists(checkpoint_file):
+                os.remove(checkpoint_file)
+        except Exception:
+            logging.debug("Could not remove checkpoint file after completion")
+
+        if OUTPUT_FORMAT == "sqlite":
+            logging.info(f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})")
+        else:
+            logging.info(f"All org device events (52w) exported to {csv_file}.")
 
 
 # ============================================================================
@@ -19667,15 +19844,29 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def readopt_device() -> None:
-        """Menu 143: Re-adopt switch device."""
-        # TODO: Returns 400 "re-adopt only works for a VC" on non-VC switches.
-        #   Need to investigate: filter to VC-capable devices only, or add
-        #   pre-check for VC membership before calling API.
+        """Menu 143: Re-adopt switch device.
+
+        Preflight the device's Virtual Chassis (VC) membership before calling
+        the readopt API to avoid a `400` response for non-VC switches.
+        """
         logging.info("Menu #143: Re-adopt Device")
         selection = DeviceUtilityCommands._select_site_and_device("readopt", "switch")
         if not selection:
             return
         site_id, device_id, _ = selection
+
+        # Preflight: check if device is part of a virtual chassis
+        try:
+            vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
+            vc_data = getattr(vc_resp, "data", None) or {}
+            is_vc = vc_data.get("is_virtual_chassis", False)
+            if not is_vc:
+                print("! Device is not a Virtual Chassis member. 'readopt' applies only to VC devices. Skipping.")
+                return
+        except Exception as error:
+            # If the preflight check fails (e.g., permission or API change), log and attempt readopt
+            logging.warning(f"VC preflight check failed: {error}", exc_info=True)
+
         try:
             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(apisession, site_id, device_id)
             DeviceUtilityCommands._print_api_result(response, "Device re-adoption initiated.", "Re-adopt failed")
@@ -19830,19 +20021,34 @@ class DeviceUtilityCommands:
 
     @staticmethod
     def clear_session() -> None:
-        """Menu 149: Clear session on SSR/SRX (typed 'CLEAR' confirmation)."""
-        # TODO: Returns 400 "Either clear session by service_name or by session_ids".
-        #   API requires service_name or session_ids param, not just session_id.
-        #   Need to add service_name prompt and fix body key to session_ids (list).
         logging.info("Menu #149: Clear Session")
         selection = DeviceUtilityCommands._select_site_and_device("clear_session", "gateway")
         if not selection:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        session_id = InputUtils.safe_input("Session ID to clear (Enter for all): ", context="clear_session_id")
-        if session_id:
-            body["session_id"] = session_id
+        service_name = InputUtils.safe_input(
+            "Service name to clear (Enter to skip): ", context="clear_session_service_name"
+        )
+        session_ids_input = InputUtils.safe_input(
+            "Session IDs to clear (comma-separated, Enter to skip): ",
+            context="clear_session_ids",
+        )
+        if service_name:
+            body["service_name"] = service_name
+        elif session_ids_input:
+            session_ids = [s.strip() for s in session_ids_input.split(",") if s.strip()]
+            if session_ids:
+                body["session_ids"] = session_ids
+        else:
+            confirm_all = InputUtils.safe_input(
+                "No service name or session IDs provided. This may attempt to clear ALL sessions."
+                " Type 'CLEAR ALL' to proceed or press Enter to cancel: ",
+                context="clear_session_confirm_all",
+            )
+            if confirm_all != "CLEAR ALL":
+                print("Cancelled: No service name or session IDs provided.")
+                return
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
         if node:
             body["node"] = node
@@ -19855,7 +20061,20 @@ class DeviceUtilityCommands:
             DeviceUtilityCommands._print_api_result(response, "Session(s) cleared.", "Clear session failed")
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
-            print(f"! Clear session failed: {error}")
+            try:
+                code = getattr(error, "status_code", None) or getattr(
+                    getattr(error, "response", None), "status_code", None
+                )
+                if code == 400:
+                    print(
+                        "! API returned 400. The API expects either 'service_name'"
+                        " or 'session_ids' in the request body."
+                    )
+                    print("  Provide a service name or a comma-separated list of session IDs, and retry.")
+                else:
+                    print(f"! Clear session failed: {error}")
+            except Exception:
+                print(f"! Clear session failed: {error}")
 
     @staticmethod
     def clear_mac_table() -> None:
