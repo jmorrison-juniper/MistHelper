@@ -20127,9 +20127,6 @@ class DeviceUtilityCommands:
     @staticmethod
     def clear_learned_macs() -> None:
         """Menu 152: Clear learned MACs from switch port (typed 'CLEAR')."""
-        # TODO: Returns 400 on Morrison-Switch EX4100 with port ge-0/0/0.
-        #   Investigate API body format - may need different key than port_id,
-        #   or port name format may differ from what if_stat returns.
         logging.info("Menu #152: Clear Learned MACs")
         selection = DeviceUtilityCommands._select_site_and_device("clear_macs", "switch")
         if not selection:
@@ -20139,17 +20136,18 @@ class DeviceUtilityCommands:
         if not port_id:
             print("! Port selection is required for clearing learned MACs.")
             return
+        port_with_unit = port_id if "." in port_id else f"{port_id}.0"
         if not DeviceUtilityCommands._confirm_destructive(
-            f"Type 'CLEAR' to clear learned MACs on port {port_id}: ", "CLEAR", "clear_macs"
+            f"Type 'CLEAR' to clear learned MACs on port {port_with_unit}: ", "CLEAR", "clear_macs"
         ):
             return
-        body: dict[str, Any] = {"port_id": port_id}
+        body: dict[str, Any] = {"ports": [port_with_unit]}
         try:
             response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
                 apisession, site_id, device_id, body
             )
             DeviceUtilityCommands._print_api_result(
-                response, f"Learned MACs cleared from port {port_id}.", "Clear learned MACs failed"
+                response, f"Learned MACs cleared from port {port_with_unit}.", "Clear learned MACs failed"
             )
         except Exception as error:
             logging.error(f"Clear learned MACs failed: {error}", exc_info=True)
