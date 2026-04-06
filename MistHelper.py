@@ -11591,8 +11591,8 @@ class OrgAlarmEventExporter:
             raise RuntimeError("All retries failed with no exception captured")
 
         # Choose output path: CSV (default) or SQLite (streaming)
+        table_name = "OrgDeviceEvents_52w"
         if OUTPUT_FORMAT == "sqlite":
-            table_name = "OrgDeviceEvents_52w"
             try:
                 # Initial write of preloaded rows into SQLite table
                 DataExporter.write_with_format_selection(
@@ -12694,9 +12694,10 @@ class OfflineDeviceReporter:
             )
             site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
 
+            device_name = device.get("name") or "(unnamed)"
             offline_records.append(
                 {
-                    "Device Name": device.get("name") or "(unnamed)",
+                    "Device Name": device_name,
                     "Device Type": type_display,
                     "Site Name": site_name,
                     "MAC Address": device.get("mac", ""),
@@ -37431,7 +37432,7 @@ class MapsManager:
                 print(f"[DEBUG]   - maps_store: {len(new_maps_store)} maps")
                 print(f"[DEBUG]   - updated_config site: {updated_config.get('site_name')}")
                 # Access new_fig.data safely - Plotly Figure.data returns tuple of traces
-                trace_count = len(new_fig.data) if hasattr(new_fig, "data") else 0
+                trace_count = len(new_fig.data) if hasattr(new_fig, "data") else 0  # type: ignore[arg-type]  # Plotly Figure.data is a tuple
                 print(f"[DEBUG]   - new_fig has {trace_count} traces")
                 logging.info(f"[SITE-SWITCH] Successfully loaded map {map_name} with {len(devices)} devices")
                 return new_map_options, selected_map_id, new_maps_store, updated_config, new_fig
@@ -52824,7 +52825,7 @@ class MistHelperTUI:
             logging.info(f"TUI: Successfully executed {func_name}")
 
             if self.debug_mode:
-                result_len = len(result) if hasattr(result, "__len__") else "N/A"
+                result_len = len(result) if hasattr(result, "__len__") else "N/A"  # type: ignore[arg-type]  # guarded by hasattr
                 logging.debug(f"TUI_DEBUG: Execution successful - result type: {result_type}, length: {result_len}")
 
         except KeyboardInterrupt:
