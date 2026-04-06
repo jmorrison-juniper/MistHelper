@@ -370,32 +370,23 @@ PACKAGE_IMPORT_MAP = {
 }
 
 
-def _get_installed_version(package_name: str) -> str:
-    """Get installed version of a package using importlib.metadata."""
-    try:
-        from importlib.metadata import version as get_version
+from mh_helpers import _get_installed_version, _parse_version
 
-        return get_version(package_name)
-    except Exception:
-        return ""
+# Load optional SSID write helpers from a separate module to keep main file smaller.
+# If the helper module cannot be imported, provide a lightweight placeholder to avoid
+# breaking any importers. The real implementation lives in MistHelper_ssid_write.py.
+try:
+    from MistHelper_ssid_write import SSIDTemplateConsolidationManager
+except Exception:
+    class SSIDTemplateConsolidationManager:
+        @staticmethod
+        def prepare_templates(dry_run=True):
+            raise NotImplementedError("SSIDTemplateConsolidationManager.prepare_templates not implemented")
 
+        @staticmethod
+        def apply_prepared_templates():
+            raise NotImplementedError("SSIDTemplateConsolidationManager.apply_prepared_templates not implemented")
 
-def _parse_version(version_str: str) -> tuple:  # type: ignore[type-arg]
-    """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
-    try:
-        parts = []
-        for part in version_str.split("."):
-            # Handle versions like '1.0.0a1' by extracting numeric prefix
-            numeric = ""
-            for char in part:
-                if char.isdigit():
-                    numeric += char
-                else:
-                    break
-            parts.append(int(numeric) if numeric else 0)
-        return tuple(parts)
-    except Exception:
-        return (0,)
 
 
 def _version_satisfies(installed: str, spec: str) -> bool:  # noqa: C901

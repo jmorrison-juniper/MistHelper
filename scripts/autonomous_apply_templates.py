@@ -71,8 +71,17 @@ def main():
     # All checks passed; proceed to apply prepared templates
     logging.info("All requests contain wlan bodies; proceeding to apply")
 
-    # Monkeypatch InputUtils.safe_input to auto-confirm
-    InputUtils.safe_input = lambda *a, **k: "APPLY"
+    # Gate auto-confirm behind explicit flag and environment variable for safety.
+    auto_confirm = False
+    if "--auto-confirm" in sys.argv:
+        auto_confirm = True
+    if auto_confirm:
+        if os.environ.get("AUTONOMOUS_APPLY_ALLOWED", "") == "1":
+            logging.warning("Auto-confirm enabled (AUTONOMOUS_APPLY_ALLOWED=1). Proceeding without interactive prompt.")
+            InputUtils.safe_input = lambda *a, **k: "APPLY"
+        else:
+            logging.error("Auto-confirm requested but AUTONOMOUS_APPLY_ALLOWED env var not set to '1'. Aborting.")
+            sys.exit(8)
 
     try:
         SSIDTemplateConsolidationManager.apply_prepared_templates()
