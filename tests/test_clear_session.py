@@ -4,12 +4,19 @@ Unit test scaffolding for DeviceUtilityCommands.clear_session (Menu #149)
 Tests are marked xfail until the code is updated to accept session_ids or service_name.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 
-@pytest.mark.xfail(reason="Feature not implemented: currently uses 'session_id' key; desired behavior: accept service_name or session_ids list")
+@pytest.mark.xfail(
+    reason=(
+        "Feature not implemented: currently uses 'session_id' key;"
+        " desired behavior: accept service_name or session_ids list"
+    )
+)
 def test_clear_session_accepts_service_name_or_session_ids(monkeypatch):
     # Arrange
     monkeypatch.setattr(

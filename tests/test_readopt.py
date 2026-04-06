@@ -4,8 +4,10 @@ Unit test scaffolding for DeviceUtilityCommands.readopt_device (Menu #143)
 These tests are scaffolds and are marked xfail until the preflight VC-capability checks are implemented.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 

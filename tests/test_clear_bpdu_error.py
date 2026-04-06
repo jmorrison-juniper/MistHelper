@@ -1,11 +1,14 @@
 """
 Unit test scaffolding for DeviceUtilityCommands.clear_bpdu_error (Menu #151)
 
-These tests focus on verifying the port-normalization and body-format behavior. Marked xfail until normalization is implemented.
+These tests focus on verifying the port-normalization and body-format behavior.
+Marked xfail until normalization is implemented.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 import MistHelper
 
 
