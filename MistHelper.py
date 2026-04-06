@@ -44,6 +44,7 @@ import platform
 # Ensure mistapi provides both 'templates' and 'wlan_templates' on api.v1.orgs for compatibility across versions.
 try:
     import mistapi
+
     if getattr(mistapi, "api", None) is not None and getattr(mistapi.api, "v1", None) is not None and getattr(mistapi.api.v1, "orgs", None) is not None:
         orgs_module = mistapi.api.v1.orgs
         # If one name exists but the other doesn't, alias it so either can be used.
@@ -55,6 +56,7 @@ except Exception:
     # Compatibility aliasing should never crash the program; log at debug level if logging is configured later.
     try:
         import logging as _logging
+
         _logging.debug("mistapi compatibility aliasing failed or mistapi not installed")
     except Exception:
         pass
@@ -213,10 +215,7 @@ logging.basicConfig(
 if sys.version_info < MINIMUM_PYTHON_VERSION:
     version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"
-    logging.warning(
-        f"Python {version_str} detected. MistHelper requires Python {required_str}+. "
-        f"Some features may not work correctly."
-    )
+    logging.warning(f"Python {version_str} detected. MistHelper requires Python {required_str}+. Some features may not work correctly.")
 
 
 # Debug mode detection helper
@@ -378,6 +377,7 @@ from mh_helpers import _get_installed_version, _parse_version
 try:
     from MistHelper_ssid_write import SSIDTemplateConsolidationManager
 except Exception:
+
     class SSIDTemplateConsolidationManager:
         @staticmethod
         def prepare_templates(dry_run=True):
@@ -386,7 +386,6 @@ except Exception:
         @staticmethod
         def apply_prepared_templates():
             raise NotImplementedError("SSIDTemplateConsolidationManager.apply_prepared_templates not implemented")
-
 
 
 def _version_satisfies(installed: str, spec: str) -> bool:  # noqa: C901
@@ -528,9 +527,7 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
 
     # Check if we should upgrade to latest versions (not just meet minimum requirements)
     # Accepts both AUTO_UPGRADE_TO_LATEST and AUTO_UPGRADE_DEPENDENCIES for compatibility
-    auto_upgrade_to_latest = (
-        os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower() == "true"
-    )
+    auto_upgrade_to_latest = os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower() == "true"
     if auto_upgrade_to_latest:
         logging.debug("AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions")
 
@@ -783,9 +780,7 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
                         force_result = subprocess.run(force_cmd, capture_output=True, text=True, timeout=60)  # nosec B603
                         if force_result.returncode == 0:
                             new_version = _get_installed_version(package_name)
-                            logging.info(
-                                f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}"
-                            )
+                            logging.info(f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}")
                             upgrade_count += 1
                             upgraded = True
                         else:
@@ -992,12 +987,8 @@ class GlobalImportManager:
         # Configuration from .env file
         # For local development: UV enabled, auto-upgrades enabled
         # For containers: These are overridden by environment variables
-        self.auto_upgrade_uv = (
-            os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"
-        )  # Default to true for local UV usage
-        self.auto_upgrade_dependencies = (
-            os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"
-        )  # Default to true for local development
+        self.auto_upgrade_uv = os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"  # Default to true for local UV usage
+        self.auto_upgrade_dependencies = os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"  # Default to true for local development
         self.upgrade_check_timeout = int(os.getenv("UPGRADE_CHECK_TIMEOUT", "30"))  # Shorter timeout
         self.csv_freshness_minutes = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))
         # Only check for UV updates once per day by default
@@ -1230,10 +1221,7 @@ class GlobalImportManager:
                 return True
             else:
                 # If self-update fails, try pip upgrade (for pip-installed UV)
-                if (
-                    "Self-update is only available for uv binaries installed via the standalone installation scripts"
-                    in result.stderr
-                ):
+                if "Self-update is only available for uv binaries installed via the standalone installation scripts" in result.stderr:
                     logging.info("UV was installed via pip, attempting pip upgrade...")
                     pip_result = subprocess.run(  # nosec B603
                         [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],
@@ -1669,9 +1657,7 @@ class GlobalImportManager:
             with log_lock:
                 logging.info(f"  Checking {package_type} dependency: {module_name} ({package_spec or 'built-in'})")
 
-            result = self.import_module_safely(
-                module_name, package_spec, required=required, skip_deps=skip_deps, skip_upgrade=True
-            )
+            result = self.import_module_safely(module_name, package_spec, required=required, skip_deps=skip_deps, skip_upgrade=True)
 
             with log_lock:
                 if result:
@@ -1695,9 +1681,7 @@ class GlobalImportManager:
         # Process external packages concurrently
         if external_packages:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_package = {
-                    executor.submit(import_single_package, item): item for item in external_packages.items()
-                }
+                future_to_package = {executor.submit(import_single_package, item): item for item in external_packages.items()}
 
                 for future in concurrent.futures.as_completed(future_to_package):
                     package_info = future_to_package[future]
@@ -1745,9 +1729,7 @@ class GlobalImportManager:
             # Sequential for smaller loads or when skipping deps
             for module_name, package_spec in self.required_packages.items():
                 logging.info(f"  Checking required dependency: {module_name} ({package_spec or 'built-in'})")
-                result = self.import_module_safely(
-                    module_name, package_spec, required=True, skip_deps=skip_deps, skip_upgrade=True
-                )
+                result = self.import_module_safely(module_name, package_spec, required=True, skip_deps=skip_deps, skip_upgrade=True)
                 if result:
                     logging.info(f"  [OK] {module_name}: Available")
                 else:
@@ -1761,9 +1743,7 @@ class GlobalImportManager:
             # Sequential for smaller loads or when skipping deps
             for module_name, package_spec in self.optional_packages.items():
                 logging.info(f"  Checking optional dependency: {module_name} ({package_spec or 'built-in'})")
-                result = self.import_module_safely(
-                    module_name, package_spec, required=False, skip_deps=skip_deps, skip_upgrade=True
-                )
+                result = self.import_module_safely(module_name, package_spec, required=False, skip_deps=skip_deps, skip_upgrade=True)
                 if result:
                     logging.info(f"  [OK] {module_name}: Available")
                 else:
@@ -1977,9 +1957,7 @@ class GlobalImportManager:
 
                 @staticmethod
                 def SSHClient():  # type: ignore[no-untyped-def]
-                    raise ImportError(
-                        "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
-                    )
+                    raise ImportError("SSH functionality requires 'paramiko' package. Install with: pip install paramiko")
 
             global_vars["paramiko"] = SSHFallback()
 
@@ -2310,9 +2288,7 @@ FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))
 FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
 FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))
 FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8"))
-FAST_MODE_USE_CONNECTION_AWARE_THREADING = (
-    os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
-)
+FAST_MODE_USE_CONNECTION_AWARE_THREADING = os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 # WAN Port Configuration from .env (REQUIRED - no defaults)
@@ -2494,9 +2470,7 @@ def initialize_mist_session_interactive():  # type: ignore[no-untyped-def]  # no
     print("")
 
     try:
-        cloud_choice = InputUtils.safe_input(
-            "  Select cloud (1-11, or press Enter for Global 01): ", context="interactive_login"
-        ).strip()
+        cloud_choice = InputUtils.safe_input("  Select cloud (1-11, or press Enter for Global 01): ", context="interactive_login").strip()
     except SystemExit:
         return False
 
@@ -2564,9 +2538,7 @@ def initialize_mist_session_interactive():  # type: ignore[no-untyped-def]  # no
         # which causes login_with_return() to use token auth instead of email/password.
         # We must clear it to force the email/password login path.
         if apisession._apitoken:
-            logging.debug(
-                f"Clearing API token to force email/password login (had {len(apisession._apitoken)} token(s))"
-            )
+            logging.debug(f"Clearing API token to force email/password login (had {len(apisession._apitoken)} token(s))")
             apisession._apitoken = []
             apisession._apitoken_index = -1
 
@@ -2764,9 +2736,7 @@ def switch_to_interactive_login():  # type: ignore[no-untyped-def]
     _print_switch_login_header()  # type: ignore[no-untyped-call]
 
     try:
-        confirm = (
-            InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
-        )
+        confirm = InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
     except SystemExit:
         logging.debug("SystemExit during confirmation prompt")
         return True
@@ -3105,18 +3075,14 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
 
     # If rate-limited with multiple tokens, try each token individually until one works
     if not apisession and rate_limit_detected and tokens and len(tokens) > 1:
-        logging.warning(
-            f"Multi-token initialization failed due to rate limiting - testing {len(tokens)} tokens individually"
-        )
+        logging.warning(f"Multi-token initialization failed due to rate limiting - testing {len(tokens)} tokens individually")
 
         # Pre-filter tokens to find those not currently rate-limited
         available_tokens = []
         for token_index, individual_token in enumerate(tokens, start=1):
             if not is_token_rate_limited(individual_token, host):
                 available_tokens.append(individual_token)
-                logging.info(
-                    f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is available"
-                )
+                logging.info(f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is available")
             else:
                 logging.warning(
                     f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is rate-limited - skipping"  # noqa: E501
@@ -3136,9 +3102,7 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
             try:
                 if "MIST_APITOKEN" in os.environ:
                     del os.environ["MIST_APITOKEN"]
-                    logging.debug(
-                        "Temporarily cleared MIST_APITOKEN from environment for filtered token initialization"
-                    )
+                    logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
 
                 try:
                     filtered_kwargs = {}
@@ -3199,19 +3163,13 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
     token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(apisession, a)), None)
     has_readable_token = token_attr and getattr(apisession, token_attr)
     used_env_file = successful_method and "env_file" in successful_method
-    used_direct_token = successful_method and any(
-        param in successful_method for param in ["apitoken", "api_token", "token"]
-    )
+    used_direct_token = successful_method and any(param in successful_method for param in ["apitoken", "api_token", "token"])
     used_fallback_session = successful_method and "fallback" in successful_method
 
     # Only warn if no authentication method appears to be configured
     if not (has_readable_token or used_env_file or used_direct_token or used_fallback_session):
-        logging.warning(
-            "Session established but no authentication method detected; API calls may fail if authentication required"
-        )
-        logging.warning(
-            "To fix this: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your Mist API token"
-        )
+        logging.warning("Session established but no authentication method detected; API calls may fail if authentication required")
+        logging.warning("To fix this: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your Mist API token")
         logging.warning("Get your API token from: https://manage.mist.com/admin/apitoken")
     elif used_env_file:
         logging.debug("Session initialized using env_file - authentication configured via .env file")
@@ -3736,9 +3694,7 @@ class CacheUtils:
         logging.info(f"Support package written to {csv_file_path}")
 
     @staticmethod
-    def create_address_parse_failures_csv(
-        parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv"
-    ) -> None:
+    def create_address_parse_failures_csv(parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv") -> None:
         """
         Create a CSV file documenting address parsing failures.
 
@@ -3790,9 +3746,7 @@ class DisplayUtils:
     """
 
     @staticmethod
-    def dict_list_as_pretty_table(
-        data: list[dict[str, Any]], fields: list[str] | None = None, sortby: str | None = None
-    ) -> None:
+    def dict_list_as_pretty_table(data: list[dict[str, Any]], fields: list[str] | None = None, sortby: str | None = None) -> None:
         """
         Displays a PrettyTable from a list of dictionaries.
 
@@ -4274,22 +4228,13 @@ class WebSocketManager:
                         general_indicators = ["command completed", "operation complete", "finished"]
 
                         all_indicators = (
-                            ping_indicators
-                            + service_ping_indicators
-                            + arp_indicators
-                            + gateway_indicators
-                            + switch_indicators
-                            + general_indicators
+                            ping_indicators + service_ping_indicators + arp_indicators + gateway_indicators + switch_indicators + general_indicators
                         )
                         found_indicator = None
 
-                        if (
-                            debug_mode and check_count % 100 == 1
-                        ):  # Debug indicator checking every 100 checks (roughly 10 seconds)
+                        if debug_mode and check_count % 100 == 1:  # Debug indicator checking every 100 checks (roughly 10 seconds)
                             self.logger.debug(f"Checking {len(all_indicators)} completion indicators")
-                            self.logger.debug(
-                                f"Content sample for indicator check: {repr(all_raw_content.lower()[:150])}"
-                            )
+                            self.logger.debug(f"Content sample for indicator check: {repr(all_raw_content.lower()[:150])}")
                             print(f"[DEBUG] Checking {len(all_indicators)} completion indicators")
                             print(f"[DEBUG] Content sample for indicator check: {repr(all_raw_content.lower()[:150])}")
 
@@ -4313,9 +4258,7 @@ class WebSocketManager:
                             # Check if we have the complete statistics block
                             lines = all_raw_content.lower().split("\n")
                             for line in lines:
-                                if "packet loss" in line and (
-                                    "round-trip" in all_raw_content.lower() or "rtt" in all_raw_content.lower()
-                                ):
+                                if "packet loss" in line and ("round-trip" in all_raw_content.lower() or "rtt" in all_raw_content.lower()):
                                     found_indicator = "complete statistics block"
                                     if debug_mode:
                                         self.logger.debug("FOUND ping statistics completion pattern")
@@ -4325,14 +4268,10 @@ class WebSocketManager:
                                     break
 
                         # Service ping specific completion: look for individual ping responses with timing
-                        if (
-                            not found_indicator and len(collected_output) >= 3
-                        ):  # Service ping typically has multiple responses
+                        if not found_indicator and len(collected_output) >= 3:  # Service ping typically has multiple responses
                             # Look for service ping patterns - individual responses with seq/ttl/time
                             service_ping_pattern_count = 0
-                            if "seq=" in all_raw_content.lower() and (
-                                "ttl=" in all_raw_content.lower() or "time=" in all_raw_content.lower()
-                            ):
+                            if "seq=" in all_raw_content.lower() and ("ttl=" in all_raw_content.lower() or "time=" in all_raw_content.lower()):
                                 service_ping_pattern_count += 1
                             if "bytes from" in all_raw_content.lower():
                                 service_ping_pattern_count += 1
@@ -4354,9 +4293,7 @@ class WebSocketManager:
                             # If we see service ping patterns and have been collecting for reasonable time
                             if service_ping_pattern_count >= 2:
                                 # For service ping, if we have multiple ping responses and some idle time, consider complete  # noqa: E501
-                                if (
-                                    time.time() - last_activity > 3
-                                ):  # Wait 3 seconds after last response for service ping
+                                if time.time() - last_activity > 3:  # Wait 3 seconds after last response for service ping
                                     found_indicator = "service ping pattern detected"
                                     if debug_mode:
                                         self.logger.debug(
@@ -4372,17 +4309,11 @@ class WebSocketManager:
                         if not found_indicator and len(collected_output) >= 5:  # Reasonable number of responses
                             # Count individual ping responses in format: "64 bytes from X.X.X.X: seq=N ttl=N time=N ms"
                             ping_response_count = all_raw_content.lower().count("bytes from")
-                            if (
-                                ping_response_count >= 5 and time.time() - last_activity > 2
-                            ):  # Have responses and idle time
+                            if ping_response_count >= 5 and time.time() - last_activity > 2:  # Have responses and idle time
                                 found_indicator = f"count-based completion ({ping_response_count} responses)"
                                 if debug_mode:
-                                    self.logger.debug(
-                                        f"FOUND count-based service ping completion: {ping_response_count} responses"
-                                    )
-                                    self.logger.debug(
-                                        f"Idle time since last response: {time.time() - last_activity:.1f}s"
-                                    )
+                                    self.logger.debug(f"FOUND count-based service ping completion: {ping_response_count} responses")
+                                    self.logger.debug(f"Idle time since last response: {time.time() - last_activity:.1f}s")
                                     print(
                                         f"[DEBUG] FOUND count-based service ping completion: {ping_response_count} responses"  # noqa: E501
                                     )
@@ -4390,8 +4321,7 @@ class WebSocketManager:
 
                         # MAC table completion: detect when table is complete and device stops sending
                         if not found_indicator and (
-                            "ethernet switching table" in all_raw_content.lower()
-                            or "thernet switching table" in all_raw_content.lower()
+                            "ethernet switching table" in all_raw_content.lower() or "thernet switching table" in all_raw_content.lower()
                         ):
                             # Search for "Ethernet switching table : XXX entries" pattern in reassembled buffer
                             import re
@@ -4468,9 +4398,7 @@ class WebSocketManager:
                                 if time.time() - last_activity > 1:
                                     found_indicator = "arp table structure detected"
                                     if debug_mode:
-                                        print(
-                                            f"[DEBUG] FOUND ARP table completion: {arp_pattern_count} patterns detected"
-                                        )
+                                        print(f"[DEBUG] FOUND ARP table completion: {arp_pattern_count} patterns detected")
 
                         if found_indicator:
                             # This appears to be the final ping summary
@@ -4479,12 +4407,8 @@ class WebSocketManager:
                                 self.logger.debug(f"Completing after {check_count} checks")
                                 self.logger.debug(f"Total collected messages: {len(collected_output)}")
                                 self.logger.debug(f"Total content length: {len(all_raw_content)} characters")
-                                self.logger.debug(
-                                    f"Raw content sample (first 200 chars): {repr(all_raw_content[:200])}"
-                                )
-                                self.logger.debug(
-                                    f"Raw content sample (last 200 chars): {repr(all_raw_content[-200:])}"
-                                )
+                                self.logger.debug(f"Raw content sample (first 200 chars): {repr(all_raw_content[:200])}")
+                                self.logger.debug(f"Raw content sample (last 200 chars): {repr(all_raw_content[-200:])}")
                                 print(f"[DEBUG] Found completion indicator '{found_indicator}' in combined content")
                                 print(f"[DEBUG] Completing after {check_count} checks")
                                 print(f"[DEBUG] Total collected messages: {len(collected_output)}")
@@ -4520,9 +4444,7 @@ class WebSocketManager:
 
             if collected_count > 0 and (time.time() - last_activity > activity_timeout):
                 if debug_mode:
-                    self.logger.debug(
-                        f"Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages"
-                    )
+                    self.logger.debug(f"Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages")
                     print(
                         f"[DEBUG] Activity timeout reached ({activity_timeout}s), completing with {collected_count} messages"  # noqa: E501
                     )
@@ -4934,9 +4856,7 @@ class PacketCaptureManager:
 
         print("=" * 80)
 
-        choice = InputUtils.safe_input(
-            "\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter"
-        )
+        choice = InputUtils.safe_input("\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter")
 
         expressions = {
             # Basic filters
@@ -5124,9 +5044,7 @@ class PacketCaptureManager:
             ap_mac = self.normalize_mac_address(ap_mac)
 
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
@@ -5153,9 +5071,7 @@ class PacketCaptureManager:
             return
 
         # Max packet length
-        max_pkt_len_str = InputUtils.safe_input(
-            "Enter max packet length in bytes (default 1300, max 2048): ", default_value="1300", context="max_pkt_len"
-        )
+        max_pkt_len_str = InputUtils.safe_input("Enter max packet length in bytes (default 1300, max 2048): ", default_value="1300", context="max_pkt_len")
         try:
             max_pkt_len = int(max_pkt_len_str)
             if max_pkt_len < 64 or max_pkt_len > 2048:
@@ -5166,9 +5082,7 @@ class PacketCaptureManager:
             return
 
         # Multicast option
-        includes_mcast_input = InputUtils.safe_input(
-            "Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast"
-        )
+        includes_mcast_input = InputUtils.safe_input("Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == "y"
 
         # Tcpdump filter selection
@@ -5181,9 +5095,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build request payload
@@ -5225,9 +5137,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         # Start capture via API
         if enable_loop:
@@ -5269,9 +5179,7 @@ class PacketCaptureManager:
         client_mac = self.normalize_mac_address(client_mac)
 
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
@@ -5297,9 +5205,7 @@ class PacketCaptureManager:
             return
 
         # Multicast option
-        includes_mcast_input = InputUtils.safe_input(
-            "Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast"
-        )
+        includes_mcast_input = InputUtils.safe_input("Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast")
         includes_mcast = includes_mcast_input.lower() == "y"
 
         # Tcpdump filter selection
@@ -5312,9 +5218,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build payload
@@ -5348,9 +5252,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -5382,9 +5284,7 @@ class PacketCaptureManager:
 
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from gateway")
-        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(
-            site_id, gateway_mac, device_type="gateway", return_available=True
-        )
+        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(site_id, gateway_mac, device_type="gateway", return_available=True)
 
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -5404,9 +5304,7 @@ class PacketCaptureManager:
             logging.debug(f"User selected specific ports: {port_list}")
 
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
@@ -5417,9 +5315,7 @@ class PacketCaptureManager:
             print(f"\n! Invalid duration: {duration_str}")
             return
 
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
             if num_packets < 0 or num_packets > 10000:
@@ -5439,9 +5335,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build payload - CORRECT structure per API spec
@@ -5485,9 +5379,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -5519,9 +5411,7 @@ class PacketCaptureManager:
 
         # Port selection - now using interactive port selector with status information
         logging.debug("Prompting for port selection from switch")
-        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(
-            site_id, switch_mac, device_type="switch", return_available=True
-        )
+        port_selection_result = PromptNetworkDeviceUtils.select_ports_from_device(site_id, switch_mac, device_type="switch", return_available=True)
 
         if port_selection_result is None:
             logging.warning("Port selection failed or cancelled - aborting capture")
@@ -5541,9 +5431,7 @@ class PacketCaptureManager:
             logging.debug(f"User selected specific ports: {port_list}")
 
         # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
@@ -5554,9 +5442,7 @@ class PacketCaptureManager:
             print(f"\n! Invalid duration: {duration_str}")
             return
 
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
             if num_packets < 0 or num_packets > 10000:
@@ -5576,9 +5462,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build payload
@@ -5622,9 +5506,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -5646,14 +5528,10 @@ class PacketCaptureManager:
         print("Note: To capture ongoing traffic from already-connected clients, use Client Capture (Wireless) instead.")
 
         # Optional SSID filter
-        ssid = InputUtils.safe_input(
-            "\nEnter SSID to monitor (optional, press Enter for all): ", context="ssid", allow_empty=True
-        )
+        ssid = InputUtils.safe_input("\nEnter SSID to monitor (optional, press Enter for all): ", context="ssid", allow_empty=True)
 
         # Duration (Mist API enforces minimum 60 seconds for new_assoc captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
+        duration_str = InputUtils.safe_input("Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration")
         try:
             duration = int(duration_str)
             if duration < 60 or duration > 86400:
@@ -5671,9 +5549,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build payload
@@ -5696,9 +5572,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         if enable_loop:
             self._execute_site_capture_loop(site_id, payload)
@@ -5760,9 +5634,7 @@ class PacketCaptureManager:
         # Channel
         logging.debug("Prompting for channel")
         if band == "24":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-11, default 1): ", default_value="1", context="channel"
-            )
+            channel_str = InputUtils.safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
         elif band == "5":
             channel_str = InputUtils.safe_input(
                 "Enter channel (36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, default 36): ",  # noqa: E501
@@ -5770,9 +5642,7 @@ class PacketCaptureManager:
                 context="channel",
             )
         else:  # band == "6"
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-233, default 1): ", default_value="1", context="channel"
-            )
+            channel_str = InputUtils.safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
 
         try:
             channel = int(channel_str)
@@ -5823,9 +5693,7 @@ class PacketCaptureManager:
 
         # Number of packets
         logging.debug("Prompting for packet count")
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
             if num_packets < 0 or num_packets > 10000:
@@ -5845,9 +5713,7 @@ class PacketCaptureManager:
         print("\nLoop Mode:")
         print("  Automatically start a new capture when the current one completes")
         print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
+        loop_mode = InputUtils.safe_input("Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode")
         enable_loop = loop_mode.lower() == "y"
 
         # Build payload
@@ -5881,9 +5747,7 @@ class PacketCaptureManager:
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
         logging.debug("Waiting for user confirmation")
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         # Check for existing captures on this AP
         print(f"\n> Checking for existing captures on AP {ap_mac}...")
@@ -5893,8 +5757,7 @@ class PacketCaptureManager:
             if response.status_code == 200:
                 existing_captures = response.data or []
                 ap_has_capture = any(
-                    cap.get("ap_mac", "").replace(":", "").replace("-", "").lower()
-                    == ap_mac.replace(":", "").replace("-", "").lower()
+                    cap.get("ap_mac", "").replace(":", "").replace("-", "").lower() == ap_mac.replace(":", "").replace("-", "").lower()
                     for cap in existing_captures
                 )
 
@@ -5971,17 +5834,11 @@ class PacketCaptureManager:
 
         # Channel
         if band == "24":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-11, default 1): ", default_value="1", context="channel"
-            )
+            channel_str = InputUtils.safe_input("Enter channel (1-11, default 1): ", default_value="1", context="channel")
         elif band == "5":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (36-144, default 36): ", default_value="36", context="channel"
-            )
+            channel_str = InputUtils.safe_input("Enter channel (36-144, default 36): ", default_value="36", context="channel")
         else:  # band == "6"
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-233, default 1): ", default_value="1", context="channel"
-            )
+            channel_str = InputUtils.safe_input("Enter channel (1-233, default 1): ", default_value="1", context="channel")
 
         try:
             channel = int(channel_str)
@@ -6017,9 +5874,7 @@ class PacketCaptureManager:
             return
 
         # Number of packets
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
+        num_packets_str = InputUtils.safe_input("Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets")
         try:
             num_packets = int(num_packets_str)
             if num_packets < 0 or num_packets > 10000:
@@ -6252,9 +6107,7 @@ class PacketCaptureManager:
                             pcap_list = pcaps_data if isinstance(pcaps_data, list) else []
 
                         # Filter for completed PCAPs with download URLs
-                        completed_pcaps = [
-                            pcap for pcap in pcap_list if pcap.get("pcap_url") and pcap.get("format") == "pcap"
-                        ]
+                        completed_pcaps = [pcap for pcap in pcap_list if pcap.get("pcap_url") and pcap.get("format") == "pcap"]
 
                         print(f"  Found {len(completed_pcaps)} completed PCAP(s) with download URLs")
                         logging.info(f"Loop iteration {iteration}: Found {len(completed_pcaps)} completed PCAPs")
@@ -6292,15 +6145,11 @@ class PacketCaptureManager:
                                         downloads_this_round += 1
                                     else:
                                         print(f"      Failed to download: HTTP {download_response.status_code}")
-                                        logging.error(
-                                            f"Download failed for {capture_id}: {download_response.status_code}"
-                                        )
+                                        logging.error(f"Download failed for {capture_id}: {download_response.status_code}")
 
                                 except Exception as download_error:
                                     print(f"      Error downloading: {download_error}")
-                                    logging.error(
-                                        f"Download exception for {capture_id}: {download_error}", exc_info=True
-                                    )
+                                    logging.error(f"Download exception for {capture_id}: {download_error}", exc_info=True)
 
                             if downloads_this_round > 0:
                                 print(f"\n  Downloaded {downloads_this_round} new PCAP file(s) this round")
@@ -6340,9 +6189,7 @@ class PacketCaptureManager:
                     logging.info(f"Loop iteration {iteration}: Starting new capture with payload: {payload}")
 
                     try:
-                        response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
-                            self.mist_session, site_id, payload
-                        )
+                        response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
 
                         if response.status_code == 200:
                             result = response.data
@@ -6363,9 +6210,7 @@ class PacketCaptureManager:
                             error_details = response.data if hasattr(response, "data") else "No error details"
                             print(f"  Failed to start capture: HTTP {response.status_code}")
                             print(f"    Error: {error_details}")
-                            logging.error(
-                                f"Loop iteration {iteration} capture failed: {response.status_code} - {error_details}"
-                            )
+                            logging.error(f"Loop iteration {iteration} capture failed: {response.status_code} - {error_details}")
 
                             # Check for conflict
                             if response.status_code == 400 and isinstance(error_details, dict):
@@ -6594,9 +6439,7 @@ class PacketCaptureManager:
         print()
         print("  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures")
         try:
-            selection_input = InputUtils.safe_input(
-                f"Select MxEdge index [0-{len(mxedges) - 1}]: ", context="mxedge_selection"
-            ).strip()
+            selection_input = InputUtils.safe_input(f"Select MxEdge index [0-{len(mxedges) - 1}]: ", context="mxedge_selection").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n! Operation cancelled")
             logging.info("Menu #10: User cancelled MxEdge selection")
@@ -6654,9 +6497,7 @@ class PacketCaptureManager:
                             speed = port_info.get("speed", 0)
                             speed_str = f"{speed}Mbps" if speed else "N/A"
                             mac = port_info.get("mac", "N/A")
-                            print(
-                                f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}"
-                            )
+                            print(f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}")
                             port_list.append(port_name)
 
                         all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": port_list}
@@ -6724,9 +6565,7 @@ class PacketCaptureManager:
         tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
 
         # Duration
-        duration_str = InputUtils.safe_input(
-            "\nEnter capture duration in seconds (default 30, max 86400): ", default_value="30", context="duration"
-        )
+        duration_str = InputUtils.safe_input("\nEnter capture duration in seconds (default 30, max 86400): ", default_value="30", context="duration")
         try:
             duration = int(duration_str)
             if duration < 30 or duration > 86400:
@@ -6752,9 +6591,7 @@ class PacketCaptureManager:
             return
 
         # Max packet length
-        max_pkt_len_str = InputUtils.safe_input(
-            "Enter max packet length in bytes (default 128, max 2048): ", default_value="128", context="max_pkt_len"
-        )
+        max_pkt_len_str = InputUtils.safe_input("Enter max packet length in bytes (default 128, max 2048): ", default_value="128", context="max_pkt_len")
         try:
             max_pkt_len = int(max_pkt_len_str)
             if max_pkt_len < 64 or max_pkt_len > 2048:
@@ -6777,9 +6614,7 @@ class PacketCaptureManager:
                 print("\n! TZSP host required")
                 return
 
-            tzsp_port_str = InputUtils.safe_input(
-                "Enter TZSP port (default 37008): ", default_value="37008", context="tzsp_port"
-            )
+            tzsp_port_str = InputUtils.safe_input("Enter TZSP port (default 37008): ", default_value="37008", context="tzsp_port")
             try:
                 tzsp_port = int(tzsp_port_str)
                 if tzsp_port < 1 or tzsp_port > 65535:
@@ -6850,9 +6685,7 @@ class PacketCaptureManager:
         print("=" * 80)
 
         # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
+        InputUtils.safe_input("\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True)
 
         # Execute org capture
         self._execute_org_capture(payload)
@@ -7085,14 +6918,10 @@ class PacketCaptureManager:
                         # Handle case where API returns dict with 'results' key
                         if isinstance(raw_data, dict) and "results" in raw_data:
                             captures = raw_data["results"]
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items"
-                            )
+                            logging.debug(f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items")
                         elif isinstance(raw_data, list):
                             captures = raw_data
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items"
-                            )
+                            logging.debug(f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items")
                         else:
                             logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
                             logging.warning(f"  Raw data: {raw_data}")
@@ -7108,9 +6937,7 @@ class PacketCaptureManager:
                         for capture in captures:
                             # Handle case where capture might be a string or other type
                             if not isinstance(capture, dict):
-                                logging.warning(
-                                    f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}"
-                                )
+                                logging.warning(f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}")
                                 continue
 
                             cap_id = capture.get("id")
@@ -7259,14 +7086,10 @@ class PacketCaptureManager:
                         # Handle case where API returns dict with 'results' key
                         if isinstance(raw_data, dict) and "results" in raw_data:
                             captures = raw_data["results"]
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items"
-                            )
+                            logging.debug(f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items")
                         elif isinstance(raw_data, list):
                             captures = raw_data
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items"
-                            )
+                            logging.debug(f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items")
                         else:
                             logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
                             logging.warning(f"  Raw data: {raw_data}")
@@ -7282,9 +7105,7 @@ class PacketCaptureManager:
                         for capture in captures:
                             # Handle case where capture might be a string or other type
                             if not isinstance(capture, dict):
-                                logging.warning(
-                                    f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}"
-                                )
+                                logging.warning(f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}")
                                 continue
 
                             cap_id = capture.get("id")
@@ -7569,9 +7390,7 @@ class FilePathUtils:
         return os.path.join(data_dir, filename)
 
     @staticmethod
-    def create_csv_template(
-        filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
-    ) -> str:
+    def create_csv_template(filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None) -> str:
         """
         Creates a basic CSV file placeholder in the correct location.
 
@@ -8134,9 +7953,7 @@ class APITenantFetchUtils:
                                         service_tenant = service.get("tenant", "")
                                         if service_tenant and isinstance(service_tenant, str):
                                             tenant_names.add(service_tenant)
-                                            logging.debug(
-                                                f"Found tenant '{service_tenant}' in org service policy service"
-                                            )
+                                            logging.debug(f"Found tenant '{service_tenant}' in org service policy service")
 
             except Exception as org_error:
                 logging.warning(f"Could not fetch organization service policies: {org_error}")
@@ -8181,9 +7998,7 @@ class APITenantFetchUtils:
                                             service_tenant = service.get("tenant", "")
                                             if service_tenant and isinstance(service_tenant, str):
                                                 tenant_names.add(service_tenant)
-                                                logging.debug(
-                                                    f"Found tenant '{service_tenant}' in site service policy service"
-                                                )
+                                                logging.debug(f"Found tenant '{service_tenant}' in site service policy service")
 
                 except Exception as site_error:
                     logging.warning(f"Could not fetch site service policies: {site_error}")
@@ -8248,9 +8063,7 @@ class APITenantFetchUtils:
                                     for tenant_name in tenant_profiles.keys():
                                         if tenant_name and isinstance(tenant_name, str):
                                             tenant_names.add(tenant_name)
-                                            logging.debug(
-                                                f"Found tenant profile '{tenant_name}' in org gateway template"
-                                            )
+                                            logging.debug(f"Found tenant profile '{tenant_name}' in org gateway template")
 
                             # Check networks configuration which might have tenant mappings
                             networks_config = template.get("networks", [])
@@ -8262,9 +8075,7 @@ class APITenantFetchUtils:
                                             for tenant_name in tenants_dict.keys():
                                                 if tenant_name and isinstance(tenant_name, str):
                                                     tenant_names.add(tenant_name)
-                                                    logging.debug(
-                                                        f"Found tenant '{tenant_name}' in org gateway template network"
-                                                    )
+                                                    logging.debug(f"Found tenant '{tenant_name}' in org gateway template network")
 
             except Exception as org_error:
                 logging.warning(f"Could not fetch organization gateway templates: {org_error}")
@@ -8274,9 +8085,7 @@ class APITenantFetchUtils:
                 logging.info(f"Fetching site gateway templates for tenant information from site_id: {site_id}")
 
                 try:
-                    response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
-                        apisession, site_id
-                    )
+                    response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(apisession, site_id)
 
                     if hasattr(response, "data") and response.data:
                         templates_data = response.data
@@ -8306,9 +8115,7 @@ class APITenantFetchUtils:
                                         for tenant_name in tenant_profiles.keys():
                                             if tenant_name and isinstance(tenant_name, str):
                                                 tenant_names.add(tenant_name)
-                                                logging.debug(
-                                                    f"Found tenant profile '{tenant_name}' in site gateway template"
-                                                )
+                                                logging.debug(f"Found tenant profile '{tenant_name}' in site gateway template")
 
                                 # Check networks configuration
                                 networks_config = template.get("networks", [])
@@ -8481,9 +8288,7 @@ class APIFetchUtils:
             with connection_semaphore:  # Limit concurrent connections
                 try:
                     logging.debug(f"Fetching config for {work_device_id} ({work_site_name})")
-                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(
-                        apisession, work_site_id, work_device_id
-                    )
+                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, work_site_id, work_device_id)
                     config = getattr(config_response, "data", {})
                     if config:
                         # Add site metadata for enrichment
@@ -8517,9 +8322,7 @@ class APIFetchUtils:
                         )
                         time.sleep(delay)
                 else:
-                    logging.warning(
-                        f"! Failed to fetch config for device {failed_device_id} after {max_retries + 1} attempts"
-                    )
+                    logging.warning(f"! Failed to fetch config for device {failed_device_id} after {max_retries + 1} attempts")
 
             return retry_results
 
@@ -8835,10 +8638,7 @@ class DatabaseSchemaUtils:
             while frame:
                 function_name = frame.f_code.co_name
                 # Check if this looks like an API function name
-                if any(
-                    pattern in function_name
-                    for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
-                ):
+                if any(pattern in function_name for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]):
                     logging.debug(f"Detected API function name from stack: {function_name}")
                     return function_name
                 frame = frame.f_back
@@ -9231,9 +9031,7 @@ class SQLiteDatabaseWriter:
                 successful_inserts += 1
         return successful_inserts
 
-    def _insert_single_row(
-        self, idx: int, row: dict[str, Any], insert_mode: str, safe_fields: list[str], current_time: str
-    ) -> bool:
+    def _insert_single_row(self, idx: int, row: dict[str, Any], insert_mode: str, safe_fields: list[str], current_time: str) -> bool:
         """Insert a single row into the database."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         try:
@@ -9273,9 +9071,7 @@ class SQLiteDatabaseWriter:
         safe_table_name = self._get_safe_table_name()
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
         row_count = self.cursor.fetchone()[0]
-        logging.info(
-            f"Database verification: {row_count} rows confirmed in table {self.table_name} at {self.timestamp}"
-        )
+        logging.info(f"Database verification: {row_count} rows confirmed in table {self.table_name} at {self.timestamp}")
 
     def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
         """Handle SQLite-specific errors with rollback."""
@@ -9573,8 +9369,7 @@ class APIDataFetcher:
         """Log entry point with parameters."""
         api_name = self.api_call.__name__
         logging.debug(
-            f"ENTRY: APIDataFetcher(title={self.title}, api_call={api_name}, "
-            f"filename={self.filename}, sort_key={self.sort_key}, kwargs={self.kwargs})"
+            f"ENTRY: APIDataFetcher(title={self.title}, api_call={api_name}, filename={self.filename}, sort_key={self.sort_key}, kwargs={self.kwargs})"
         )
         logging.info(f"Starting data fetch: {self.title}")
         print(self.title)
@@ -9624,10 +9419,7 @@ class APIDataFetcher:
 
             if attempt < API_REQUEST_MAX_RETRIES:
                 delay = API_REQUEST_RETRY_DELAY * (2**attempt)
-                logging.warning(
-                    f"API call {api_name} failed (attempt {attempt + 1}/{API_REQUEST_MAX_RETRIES + 1}) "
-                    f"- retrying in {delay:.0f}s"
-                )
+                logging.warning(f"API call {api_name} failed (attempt {attempt + 1}/{API_REQUEST_MAX_RETRIES + 1}) - retrying in {delay:.0f}s")
                 print(
                     f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
                 )
@@ -10041,9 +9833,7 @@ class PromptNetworkDeviceUtils:
             print("\nSpecial options:")
             print("  'all' - Select all APs (launches simultaneous captures)")
 
-            user_input = InputUtils.safe_input(
-                "\nEnter the index number of the AP or 'all': ", context="ap_selection"
-            ).strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the AP or 'all': ", context="ap_selection").strip()
             logging.debug(f"User input for AP selection: {user_input}")
 
             # Check for 'all' option
@@ -10123,9 +9913,7 @@ class PromptNetworkDeviceUtils:
             print("=" * 80)
             print(table)
 
-            user_input = InputUtils.safe_input(
-                "\nEnter the index number of the gateway: ", context="gateway_selection"
-            ).strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the gateway: ", context="gateway_selection").strip()
             logging.debug(f"User input for gateway selection: {user_input}")
 
             # Validate index selection
@@ -10199,9 +9987,7 @@ class PromptNetworkDeviceUtils:
             print("=" * 80)
             print(table)
 
-            user_input = InputUtils.safe_input(
-                "\nEnter the index number of the switch: ", context="switch_selection"
-            ).strip()
+            user_input = InputUtils.safe_input("\nEnter the index number of the switch: ", context="switch_selection").strip()
             logging.debug(f"User input for switch selection: {user_input}")
 
             # Validate index selection
@@ -10263,9 +10049,7 @@ class PromptNetworkDeviceUtils:
                 dev_mac = dev.get("mac", "")
                 # Normalize device MAC for comparison
                 normalized_dev_mac = str(dev_mac).replace(":", "").replace("-", "").lower()
-                logging.debug(
-                    f"Comparing device {dev.get('name', 'Unknown')}: {dev_mac} (normalized: {normalized_dev_mac})"
-                )
+                logging.debug(f"Comparing device {dev.get('name', 'Unknown')}: {dev_mac} (normalized: {normalized_dev_mac})")
 
                 if normalized_dev_mac == normalized_input_mac:
                     device = dev
@@ -10289,9 +10073,7 @@ class PromptNetworkDeviceUtils:
                 # For switches/gateways, use dedicated port search API
                 logging.info(f"Fetching switch/gateway port stats using searchSiteSwOrGwPorts for device {device_id}")
                 try:
-                    ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
-                        apisession, site_id, mac=device_mac, limit=1000
-                    )
+                    ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(apisession, site_id, mac=device_mac, limit=1000)
                     ports_results = ports_search_response.data.get("results", [])
                     logging.info(f"Retrieved {len(ports_results)} port stat entries from searchSiteSwOrGwPorts")
 
@@ -10498,9 +10280,7 @@ class PromptNetworkDeviceUtils:
                 print("  - Press Enter with no input to capture on ALL ports (NOT AVAILABLE - exceeds 6 port limit)")
             print("  - Enter 'c' to cancel")
 
-            user_input = InputUtils.safe_input(
-                "\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True
-            ).strip()
+            user_input = InputUtils.safe_input("\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True).strip()
             logging.debug(f"User input for port selection: {user_input}")
 
             if user_input.lower() == "c":
@@ -10603,17 +10383,11 @@ class PromptClientUtils:
         try:
             # Fetch wireless clients using search endpoint (from clients module)
             wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
-            wireless_clients = (
-                wireless_response.data.get("results", [])
-                if hasattr(wireless_response.data, "get")
-                else wireless_response.data
-            )
+            wireless_clients = wireless_response.data.get("results", []) if hasattr(wireless_response.data, "get") else wireless_response.data
 
             # Fetch wired clients using search endpoint (from separate wired_clients module)
             wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
-            wired_clients = (
-                wired_response.data.get("results", []) if hasattr(wired_response.data, "get") else wired_response.data
-            )
+            wired_clients = wired_response.data.get("results", []) if hasattr(wired_response.data, "get") else wired_response.data
 
             all_clients = []
 
@@ -10692,9 +10466,7 @@ class PromptClientUtils:
                 idx = int(user_input)
                 if idx in index_to_client:
                     client_mac = index_to_client[idx].get("mac")
-                    client_hostname = index_to_client[idx].get(
-                        "hostname", index_to_client[idx].get("username", "Unknown")
-                    )
+                    client_hostname = index_to_client[idx].get("hostname", index_to_client[idx].get("username", "Unknown"))
                     conn_type = index_to_client[idx].get("connection_type", "Unknown")
                     print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
                     logging.info(
@@ -10791,9 +10563,7 @@ class PromptUtils:
     """
 
     @staticmethod
-    def select_device_id_from_inventory(
-        site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv"
-    ) -> str | None:
+    def select_device_id_from_inventory(site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv") -> str | None:
         """
         Prompts the user to select a device by index or name from the device inventory at a given site.
         Returns the corresponding device ID, or None if not found.
@@ -10847,9 +10617,7 @@ class PromptUtils:
 
         # Populate the table and lookup dictionaries
         for idx, item in enumerate(inventory):
-            table.add_row(
-                [idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")]
-            )
+            table.add_row([idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")])
             index_to_device[idx] = item
             name_to_device[item.get("name", "")] = item
 
@@ -11481,9 +11249,7 @@ class OrgAlarmEventExporter:
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("recent device events export", hours)
         duration_param = f"{hours}h"
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=1000, duration=duration_param
-        )
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(apisession, org_id, device_type="all", limit=1000, duration=duration_param)
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
         events = rawdata
         logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
@@ -11501,9 +11267,7 @@ class OrgAlarmEventExporter:
         """
         logging.info("Exporting all org device events from the last 52 weeks...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=1000, duration="52w"
-        )
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(apisession, org_id, device_type="all", limit=1000, duration="52w")
         events = mistapi.get_all(response=response, mist_session=apisession)
         logging.info(f"Fetched {len(events)} device events from the last 52 weeks.")
         events = DataProcessingUtils.flatten_nested_fields(events)
@@ -11617,9 +11381,7 @@ class OrgSiteExporter:
         end_time = int(time.time())
         start_time = end_time - 7 * 24 * 3600
         logging.debug(f"Fetching guest authorizations from {start_time} to {end_time} (epoch seconds).")
-        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
-            apisession, org_id, limit=1000, start=start_time, end=end_time
-        )
+        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000, start=start_time, end=end_time)
         guests = mistapi.get_all(response=response, mist_session=apisession)
         logging.info(f"Fetched {len(guests)} historical guest users from API.")
         guests = DataProcessingUtils.flatten_nested_fields(guests)
@@ -11836,17 +11598,13 @@ class OrgInventoryExporter:
                 site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
                 with open(site_list_path, encoding="utf-8") as file:
                     reader = csv.DictReader(file)
-                    site_lookup = {
-                        row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
-                    }
+                    site_lookup = {row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader}
                 logging.debug(f"Loaded {len(site_lookup)} sites from cached SiteList.csv")
             except Exception as exception:
                 logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {exception}")
                 # Fallback to API if cached data fails
                 sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-                site_lookup = {
-                    site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
-                }
+                site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
                 logging.debug(f"Loaded {len(site_lookup)} sites from API fallback")
 
             # Load inventory from cached CSV
@@ -11866,9 +11624,7 @@ class OrgInventoryExporter:
             # Original behavior: fetch directly from API
             # Fetch all sites and build a lookup dictionary for site info
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            site_lookup = {
-                site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
-            }
+            site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
             logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
 
             # Fetch org inventory (all devices)
@@ -12178,9 +11934,7 @@ class OrgDeviceStatsExporter:
                             stat["site_name"] = site_name
 
                         if attempt > 0:
-                            logging.info(
-                                f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)"
-                            )
+                            logging.info(f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)")
                         else:
                             logging.debug(f"! Collected {len(port_stats)} port stats from site {site_name}")
                         return port_stats
@@ -12202,19 +11956,14 @@ class OrgDeviceStatsExporter:
             def retry_failed_sites(failed_sites, connection_semaphore):  # type: ignore[no-untyped-def]
                 retry_results = []
                 still_failed = []
-                retry_threads = min(
-                    FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
-                )
+                retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
 
                 if retry_threads <= 0:
                     logging.warning(" FAST MODE: No available threads for retry; skipping retries")
                     return [], failed_sites
 
                 with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                    retry_futures = {
-                        executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info
-                        for site_info in failed_sites
-                    }
+                    retry_futures = {executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info for site_info in failed_sites}
                     import concurrent.futures
 
                     retry_futures_list = list(retry_futures.keys())
@@ -12264,9 +12013,7 @@ class OrgDeviceStatsExporter:
             # Flatten results (each successful result is a list of port stats)
             all_port_stats = []
             for idx, result_list in enumerate(successful_results):
-                logging.debug(
-                    f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}"
-                )
+                logging.debug(f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}")
                 if isinstance(result_list, list):
                     all_port_stats.extend(result_list)
                 else:
@@ -12450,10 +12197,7 @@ class OfflineDeviceReporter:
                 hours = int(raw)
                 if OfflineDeviceReporter.MIN_THRESHOLD_HOURS <= hours <= OfflineDeviceReporter.MAX_THRESHOLD_HOURS:
                     return hours
-                print(
-                    f"! Threshold must be between {OfflineDeviceReporter.MIN_THRESHOLD_HOURS}"
-                    f" and {OfflineDeviceReporter.MAX_THRESHOLD_HOURS} hours."
-                )
+                print(f"! Threshold must be between {OfflineDeviceReporter.MIN_THRESHOLD_HOURS} and {OfflineDeviceReporter.MAX_THRESHOLD_HOURS} hours.")
             except ValueError:
                 print(f"! Invalid input '{raw}'. Please enter a number.")
             remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1
@@ -12478,9 +12222,7 @@ class OfflineDeviceReporter:
 
         logging.info("Fetching device stats for offline device report...")
         print("  Fetching device statistics...")
-        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
-            apisession, current_org_id, type="all", status="all", fields="*", limit=1000
-        )
+        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(apisession, current_org_id, type="all", status="all", fields="*", limit=1000)
         all_devices: list[dict[str, Any]] = mistapi.get_all(response=stats_resp, mist_session=apisession)
         logging.info(f"Retrieved stats for {len(all_devices)} devices")
         print(f"  Retrieved {len(all_devices)} devices from API")
@@ -12521,9 +12263,7 @@ class OfflineDeviceReporter:
                 sort_key = offline_seconds
 
             device_type_raw = device.get("type", "unknown")
-            type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(
-                device_type_raw, device_type_raw.capitalize()
-            )
+            type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(device_type_raw, device_type_raw.capitalize())
             site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
 
             offline_records.append(
@@ -12743,9 +12483,7 @@ class OrgTemplateExporter:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         filename = "OrgApTemplates.csv"
         try:
-            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=1000
-            )
+            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=1000)
             ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
             if not ap_profiles:
                 print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")
@@ -12777,9 +12515,7 @@ class OrgTemplateExporter:
             switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
             if not switch_profiles:
                 print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
-                logging.info(
-                    "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
-                )
+                logging.info("No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv")
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
@@ -12911,18 +12647,14 @@ class OrgClientSecurityExporter:
                 if not site_id:
                     continue
                 try:
-                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        apisession, site_id, duration=rogue_duration, limit=1000
-                    )
+                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration=rogue_duration, limit=1000)
                     site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
                     for rogue_access_point in site_rogue_aps:
                         rogue_access_point["site_id"] = site_id
                         rogue_access_point["site_name"] = site_name
                         rogue_access_point["rogue_type"] = "AP"
                     all_rogue_aps.extend(site_rogue_aps)
-                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        apisession, site_id, duration=rogue_duration, limit=1000
-                    )
+                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration=rogue_duration, limit=1000)
                     site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession) or []
                     for client in site_rogue_clients:
                         client["site_id"] = site_id
@@ -12970,9 +12702,7 @@ class OrgClientSecurityExporter:
                 if os.path.exists(path):
                     age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
                     if age_minutes < CSV_FRESHNESS_MINUTES:
-                        logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
-                        )
+                        logging.info(f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch.")
                         print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
                         return
             except Exception as cache_error:
@@ -12996,9 +12726,7 @@ class OrgClientSecurityExporter:
                 if not site_id:
                     continue
                 try:
-                    response = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        apisession, site_id, duration=rogue_duration, limit=1000
-                    )
+                    response = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration=rogue_duration, limit=1000)
                     clients = mistapi.get_all(response=response, mist_session=apisession)
                     for client in clients:
                         client["site_id"] = site_id
@@ -13038,9 +12766,7 @@ class OrgClientSecurityExporter:
                 if os.path.exists(path):
                     age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
                     if age_minutes < CSV_FRESHNESS_MINUTES:
-                        logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
-                        )
+                        logging.info(f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch.")
                         print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
                         return
             except Exception as cache_error:
@@ -13064,9 +12790,7 @@ class OrgClientSecurityExporter:
                 if not site_id:
                     continue
                 try:
-                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        apisession, site_id, duration=rogue_duration, limit=1000
-                    )
+                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration=rogue_duration, limit=1000)
                     aps = mistapi.get_all(response=response, mist_session=apisession)
                     for access_point in aps:
                         access_point["site_id"] = site_id
@@ -13389,9 +13113,7 @@ class OrgExportUtils:
 
         for sle_type in sle_types:
             try:
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                    apisession, org_id, sle=sle_type, duration="7d", limit=1000
-                )
+                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_type, duration="7d", limit=1000)
                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
                 for site_data in sites_sle_data:
@@ -13406,9 +13128,7 @@ class OrgExportUtils:
             finally:
                 items_done += 1
                 if emitter:
-                    emitter.emit_progress_tick(
-                        "67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done
-                    )
+                    emitter.emit_progress_tick("67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done)
 
         if all_sites_sle_data:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
@@ -13421,9 +13141,7 @@ class OrgExportUtils:
             logging.warning("No sites SLE data available for organization")
             DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
         if emitter:
-            emitter.emit_progress_complete(
-                "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
-            )
+            emitter.emit_progress_complete("67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start)
 
     @staticmethod
     def insight_metrics():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -13476,9 +13194,7 @@ class OrgExportUtils:
 
                         for sle_category in sle_categories:
                             try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                    apisession, org_id, sle=sle_category, duration="7d", limit=1000
-                                )
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_category, duration="7d", limit=1000)
                                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
                                 if sites_data:
@@ -13499,9 +13215,7 @@ class OrgExportUtils:
                                         f"Successfully retrieved sites data for insight metric: {metric} with SLE: {sle_category} ({len(sites_data)} sites)"  # noqa: E501
                                     )
                                 else:
-                                    logging.debug(
-                                        f"No sites data available for insight metric: {metric} with SLE: {sle_category}"
-                                    )
+                                    logging.debug(f"No sites data available for insight metric: {metric} with SLE: {sle_category}")
                             except Exception as sites_error:
                                 logging.debug(
                                     f"Failed to get sites data for insight metric '{metric}' with SLE '{sle_category}': {sites_error}"  # noqa: E501
@@ -13796,9 +13510,7 @@ class OrgExportUtils:
                     if "worst-sites" in metric or "sites-sle" in metric:
                         for sle_category in sle_categories:
                             try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                    apisession, org_id, sle=sle_category, duration="7d", limit=1000
-                                )
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_category, duration="7d", limit=1000)
                                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
                                 if sites_sle_data:
@@ -13821,9 +13533,7 @@ class OrgExportUtils:
                                         f"Successfully retrieved sites SLE data for metric analysis: {metric} with SLE: {sle_category} ({len(sites_sle_data)} sites)"  # noqa: E501
                                     )
                                 else:
-                                    logging.debug(
-                                        f"No sites SLE data available for metric: {metric} with SLE: {sle_category}"
-                                    )
+                                    logging.debug(f"No sites SLE data available for metric: {metric} with SLE: {sle_category}")
                             except Exception as sites_error:
                                 logging.debug(
                                     f"Failed to get sites SLE data for metric '{metric}' with SLE '{sle_category}': {sites_error}"  # noqa: E501
@@ -13851,17 +13561,13 @@ class OrgExportUtils:
                 finally:
                     items_done += 1
                     if emitter:
-                        emitter.emit_progress_tick(
-                            "66", "sle_metrics", total_items, metric, items_done, total_items - items_done
-                        )
+                        emitter.emit_progress_tick("66", "sle_metrics", total_items, metric, items_done, total_items - items_done)
 
             # Second, get aggregated SLE data for each service category
             for sle_category in sle_categories:
                 try:
                     logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
-                    response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                        apisession, org_id, sle=sle_category, duration="7d", limit=1000
-                    )
+                    response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_category, duration="7d", limit=1000)
                     sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
                     if sites_sle_data:
@@ -13892,9 +13598,7 @@ class OrgExportUtils:
                 finally:
                     items_done += 1
                     if emitter:
-                        emitter.emit_progress_tick(
-                            "66", "sle_metrics", total_items, sle_category, items_done, total_items - items_done
-                        )
+                        emitter.emit_progress_tick("66", "sle_metrics", total_items, sle_category, items_done, total_items - items_done)
 
             # Report results
             print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
@@ -14241,9 +13945,7 @@ class SiteClientExporter:
         try:
             for metric in client_metrics:
                 try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                        apisession, site_id, client_mac, metric
-                    )
+                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(apisession, site_id, client_mac, metric)
                     client_insight_data = getattr(response, "data", response) or {}
 
                     if client_insight_data:
@@ -14266,9 +13968,7 @@ class SiteClientExporter:
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
-                logging.info(
-                    f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}"
-                )
+                logging.info(f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}")
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
                 logging.warning(f"No client insight data available for {client_mac} at {site_name}")
@@ -14329,9 +14029,7 @@ class SiteClientExporter:
 
             # Call the Mist API to search for wireless client sessions at the site
             logging.info("Fetching wireless client sessions data...")
-            session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(
-                apisession, site_id, limit=1000
-            )
+            session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(apisession, site_id, limit=1000)
             sessions = mistapi.get_all(response=session_response, mist_session=apisession)
 
             if not clients and not sessions:
@@ -14656,9 +14354,7 @@ class SiteAnomalyExporter:
             for metric in device_anomaly_metrics:
                 try:
                     # Call the site device anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
-                        apisession, site_id, metric, device_mac
-                    )
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(apisession, site_id, metric, device_mac)
                     device_anomaly_data = getattr(response, "data", response) or {}
 
                     if device_anomaly_data:
@@ -14735,9 +14431,7 @@ class SiteAnomalyExporter:
         client_hostname = "Unknown"
         try:
             # Search for the client to get hostname
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                apisession, site_id, limit=100, duration="1d"
-            )
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=100, duration="1d")
             clients = getattr(response, "data", response) or []
 
             for client in clients:
@@ -14779,9 +14473,7 @@ class SiteAnomalyExporter:
             for metric in client_anomaly_metrics:
                 try:
                     # Call the site client anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
-                        apisession, site_id, client_mac, metric
-                    )
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(apisession, site_id, client_mac, metric)
                     client_anomaly_data = getattr(response, "data", response) or {}
 
                     if client_anomaly_data:
@@ -15084,9 +14776,7 @@ class SiteExportUtils:
         try:
             for metric in device_metrics:
                 try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
-                        apisession, site_id, metric, device_mac
-                    )
+                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(apisession, site_id, metric, device_mac)
                     device_insight_data = getattr(response, "data", response) or {}
 
                     if device_insight_data:
@@ -15642,9 +15332,7 @@ class WebSocketNetworkDiagCommands:
                                 columns = gateway_data.get("columns", [])
                                 if columns:
                                     # Create header row
-                                    column_headers = [
-                                        col.get("display_name", col.get("id", "Unknown")) for col in columns
-                                    ]
+                                    column_headers = [col.get("display_name", col.get("id", "Unknown")) for col in columns]
 
                                     # Calculate column widths
                                     rows = gateway_data.get("rows", [])
@@ -15658,9 +15346,7 @@ class WebSocketNetworkDiagCommands:
                                         col_widths.append(min(max_width + 2, 20))  # Cap at 20 chars
 
                                     # Print header
-                                    header_line = " | ".join(
-                                        header.ljust(col_widths[idx]) for idx, header in enumerate(column_headers)
-                                    )
+                                    header_line = " | ".join(header.ljust(col_widths[idx]) for idx, header in enumerate(column_headers))
                                     print(header_line)
                                     print("-" * len(header_line))
 
@@ -16474,11 +16160,7 @@ class ServicePingManager:
                 index += 1
 
         # Template-only tenants
-        template_only = [
-            t
-            for t in self.template_tenants
-            if t not in self.org_tenants and t not in self.site_tenants and t not in self.policy_tenants
-        ]
+        template_only = [t for t in self.template_tenants if t not in self.org_tenants and t not in self.site_tenants and t not in self.policy_tenants]
         if template_only:
             print(f"  Gateway Template Tenants ({len(template_only)}):")
             for name in template_only:
@@ -16489,10 +16171,7 @@ class ServicePingManager:
         device_only = [
             t
             for t in self.device_tenants
-            if t not in self.org_tenants
-            and t not in self.site_tenants
-            and t not in self.policy_tenants
-            and t not in self.template_tenants
+            if t not in self.org_tenants and t not in self.site_tenants and t not in self.policy_tenants and t not in self.template_tenants
         ]
         if device_only:
             print(f"  Device Configuration Tenants ({len(device_only)}):")
@@ -16817,9 +16496,7 @@ class ServicePingManager:
         logging.info(f"Service ping payload: {payload}")
 
         try:
-            response = mistapi.api.v1.sites.devices.servicePingFromSsr(
-                apisession, self.site_id, self.device_id, payload
-            )
+            response = mistapi.api.v1.sites.devices.servicePingFromSsr(apisession, self.site_id, self.device_id, payload)
 
             logging.info(f"Service ping mistapi response status: {response.status_code}")
             logging.info(f"Service ping mistapi response data: {response.data}")
@@ -16943,9 +16620,7 @@ class ServicePingManager:
         if self.device_info:
             name = self.device_info.get("name", "Unknown Device")
             dtype = self.device_info.get("type", "unknown")
-            logging.info(
-                f"Service ping completed for {name} ({dtype}) - Service: {payload['service']}, Host: {payload['host']}"
-            )
+            logging.info(f"Service ping completed for {name} ({dtype}) - Service: {payload['service']}, Host: {payload['host']}")
         else:
             logging.info(
                 f"Service ping completed for device {self.device_id} - Service: {payload['service']}, Host: {payload['host']}"  # noqa: E501
@@ -17460,9 +17135,7 @@ class RoutingUtils:
             route_entry = {
                 "destination": route_data.get("destination", route_data.get("prefix", "")),
                 "next_hop": route_data.get("next_hop", route_data.get("nexthop", route_data.get("gateway", ""))),
-                "interface": route_data.get(
-                    "interface", route_data.get("dev", route_data.get("outgoing_interface", ""))
-                ),
+                "interface": route_data.get("interface", route_data.get("dev", route_data.get("outgoing_interface", ""))),
                 "protocol": route_data.get("protocol", route_data.get("proto", "")).upper(),
                 "metric": str(route_data.get("metric", route_data.get("cost", ""))),
                 "admin_distance": str(route_data.get("admin_distance", route_data.get("distance", ""))),
@@ -17553,12 +17226,7 @@ class RoutingUtils:
                         current_route["protocol"] = bracket_content
 
             # Continuation lines
-            elif current_route and (
-                line_stripped.startswith(">")
-                or line_stripped.startswith("*")
-                or line.startswith(" ")
-                or line.startswith("\t")
-            ):
+            elif current_route and (line_stripped.startswith(">") or line_stripped.startswith("*") or line.startswith(" ") or line.startswith("\t")):
                 if line_stripped.startswith(">"):
                     current_route["active"] = True
                     line_stripped = line_stripped[1:].strip()
@@ -17975,10 +17643,7 @@ class RoutingUtils:
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type).data
             device_info = next((device for device in rawdata if device.get("id") == device_id), None)
             if device_info and debug_mode:
-                print(
-                    f"[DEBUG] Device type: {device_info.get('type')}, "
-                    f"model: {device_info.get('model')}, name: {device_info.get('name')}"
-                )
+                print(f"[DEBUG] Device type: {device_info.get('type')}, model: {device_info.get('model')}, name: {device_info.get('name')}")
             return device_info
         except Exception as error:
             logging.warning(f"Could not verify device compatibility: {error}")
@@ -18659,9 +18324,7 @@ class RoutingUtils:
             if debug_mode:
                 print("[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")
 
-            response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(
-                apisession, site_id, device_id, request_body
-            )
+            response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(apisession, site_id, device_id, request_body)
 
             if debug_mode:
                 print(f"[DEBUG] API response type: {type(response)}")
@@ -19009,9 +18672,7 @@ class DeviceUtilityCommands:
                     if ip_addr:
                         extra = f" ({ip_addr})"
                 print(f"  {idx}. {iface}{extra}")
-            selection = InputUtils.safe_input(
-                "\nSelect interface by number or type name: ", context="interface_selection"
-            )
+            selection = InputUtils.safe_input("\nSelect interface by number or type name: ", context="interface_selection")
             if not selection:
                 print("! No interface selected.")
                 return None
@@ -19029,9 +18690,7 @@ class DeviceUtilityCommands:
     @staticmethod
     def _manual_interface_entry() -> str | None:
         """Prompt for manual interface name entry."""
-        iface = InputUtils.safe_input(
-            "Enter interface name (e.g., ge-0/0/0, wan0): ", context="manual_interface_entry", allow_empty=False
-        )
+        iface = InputUtils.safe_input("Enter interface name (e.g., ge-0/0/0, wan0): ", context="manual_interface_entry", allow_empty=False)
         return iface if iface else None
 
     @staticmethod
@@ -19064,9 +18723,7 @@ class DeviceUtilityCommands:
             if len(network_names) == 1:
                 print(f"\n-> Auto-selecting: {network_names[0]}")
                 return network_names[0]
-        selection = InputUtils.safe_input(
-            "Select network (number or name, required): ", context="dhcp_network", allow_empty=False
-        )
+        selection = InputUtils.safe_input("Select network (number or name, required): ", context="dhcp_network", allow_empty=False)
         if not selection:
             return ""
         if selection.isdigit() and network_names:
@@ -19076,9 +18733,7 @@ class DeviceUtilityCommands:
         return selection
 
     @staticmethod
-    def _run_websocket_command(
-        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
+    def _run_websocket_command(site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """Execute WebSocket command pattern: POST -> subscribe -> await result."""
         websocket_manager = WebSocketManager(apisession)
         if not websocket_manager.connect():
@@ -19117,9 +18772,7 @@ class DeviceUtilityCommands:
             websocket_manager.disconnect()
 
     @staticmethod
-    def _run_streaming_command(
-        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None, timeout_seconds: int = 120
-    ) -> None:
+    def _run_streaming_command(site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None, timeout_seconds: int = 120) -> None:
         """Execute streaming WebSocket command with incremental output display."""
         websocket_manager = WebSocketManager(apisession)
         if not websocket_manager.connect():
@@ -19146,9 +18799,7 @@ class DeviceUtilityCommands:
                 return
             print(f"-> Streaming started (session: {session_id[:8]}...)")
             print("-> Press Ctrl+C to stop.\n")
-            result = websocket_manager.wait_for_command_result(
-                session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=30
-            )
+            result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=30)
             if result:
                 raw = result.get("raw", "")
                 if raw:
@@ -19226,25 +18877,17 @@ class DeviceUtilityCommands:
         if not selection:
             return
         site_id, device_id, _ = selection
-        host = InputUtils.safe_input(
-            "Enter destination host or IP (required): ", context="traceroute_host", allow_empty=False
-        )
+        host = InputUtils.safe_input("Enter destination host or IP (required): ", context="traceroute_host", allow_empty=False)
         if not host:
             print("! Destination host is required.")
             return
-        protocol = InputUtils.safe_input(
-            "Protocol (udp/icmp, default: udp): ", default_value="udp", context="traceroute_protocol"
-        )
+        protocol = InputUtils.safe_input("Protocol (udp/icmp, default: udp): ", default_value="udp", context="traceroute_protocol")
         body: dict[str, Any] = {"host": host}
         if protocol and protocol.lower() in ("udp", "icmp"):
             body["protocol"] = protocol.lower()
         print(f"\n-> Running traceroute to {host}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.tracerouteFromDevice, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Traceroute", site_id, device_id, "tracerouteFromDevice", "DeviceTraceroute.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.tracerouteFromDevice, body)
+        DeviceUtilityCommands._display_and_export_result(result, "Traceroute", site_id, device_id, "tracerouteFromDevice", "DeviceTraceroute.csv")
 
     @staticmethod
     def show_ospf_neighbors() -> None:
@@ -19265,9 +18908,7 @@ class DeviceUtilityCommands:
         if neighbor:
             body["neighbor"] = neighbor
         print("\n-> Fetching OSPF neighbors...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body)
         DeviceUtilityCommands._display_and_export_result(
             result, "OSPF Neighbors", site_id, device_id, "showSiteGatewayOspfNeighbors", "DeviceOspfNeighbors.csv"
         )
@@ -19291,9 +18932,7 @@ class DeviceUtilityCommands:
         if port_id:
             body["port_id"] = port_id
         print("\n-> Fetching OSPF interfaces...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body)
         DeviceUtilityCommands._display_and_export_result(
             result, "OSPF Interfaces", site_id, device_id, "showSiteGatewayOspfInterfaces", "DeviceOspfInterfaces.csv"
         )
@@ -19317,12 +18956,8 @@ class DeviceUtilityCommands:
         if self_orig and self_orig.lower() == "y":
             body["self_originate"] = True
         print("\n-> Fetching OSPF database...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Database", site_id, device_id, "showSiteGatewayOspfDatabase", "DeviceOspfDatabase.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body)
+        DeviceUtilityCommands._display_and_export_result(result, "OSPF Database", site_id, device_id, "showSiteGatewayOspfDatabase", "DeviceOspfDatabase.csv")
 
     @staticmethod
     def show_ospf_summary() -> None:
@@ -19340,12 +18975,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching OSPF summary...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Summary", site_id, device_id, "showSiteGatewayOspfSummary", "DeviceOspfSummary.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body)
+        DeviceUtilityCommands._display_and_export_result(result, "OSPF Summary", site_id, device_id, "showSiteGatewayOspfSummary", "DeviceOspfSummary.csv")
 
     @staticmethod
     def resolve_dns() -> None:
@@ -19356,12 +18987,8 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         print("\n-> Testing DNS resolution on device...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "DNS Resolution", site_id, device_id, "testSiteSsrDnsResolution", "DeviceDnsResolution.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.testSiteSsrDnsResolution)
+        DeviceUtilityCommands._display_and_export_result(result, "DNS Resolution", site_id, device_id, "testSiteSsrDnsResolution", "DeviceDnsResolution.csv")
 
     @staticmethod
     def monitor_traffic() -> None:
@@ -19375,9 +19002,7 @@ class DeviceUtilityCommands:
         if not port_id:
             return
         body: dict[str, Any] = {"port_id": port_id}
-        duration_str = InputUtils.safe_input(
-            "Duration in seconds (default: 60): ", default_value="60", context="monitor_duration"
-        )
+        duration_str = InputUtils.safe_input("Duration in seconds (default: 60): ", default_value="60", context="monitor_duration")
         try:
             duration = int(duration_str) if duration_str else 60
         except ValueError:
@@ -19401,9 +19026,7 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         print("\n-> Running top command...")
-        DeviceUtilityCommands._run_streaming_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.runSiteSrxTopCommand, timeout_seconds=120
-        )
+        DeviceUtilityCommands._run_streaming_command(site_id, device_id, mistapi.api.v1.sites.devices.runSiteSrxTopCommand, timeout_seconds=120)
 
     # ===== SHOW COMMANDS =====
 
@@ -19426,12 +19049,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching device sessions...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Sessions", site_id, device_id, "showSiteSsrAndSrxSessions", "DeviceSessions.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body)
+        DeviceUtilityCommands._display_and_export_result(result, "Sessions", site_id, device_id, "showSiteSsrAndSrxSessions", "DeviceSessions.csv")
 
     @staticmethod
     def show_service_path() -> None:
@@ -19449,12 +19068,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching service path...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrServicePath, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Service Path", site_id, device_id, "showSiteSsrServicePath", "DeviceServicePath.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrServicePath, body)
+        DeviceUtilityCommands._display_and_export_result(result, "Service Path", site_id, device_id, "showSiteSsrServicePath", "DeviceServicePath.csv")
 
     @staticmethod
     def show_bgp_summary() -> None:
@@ -19469,12 +19084,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching BGP summary...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "BGP Summary", site_id, device_id, "showSiteDeviceBgpSummary", "DeviceBgpSummary.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body)
+        DeviceUtilityCommands._display_and_export_result(result, "BGP Summary", site_id, device_id, "showSiteDeviceBgpSummary", "DeviceBgpSummary.csv")
 
     @staticmethod
     def show_arp_table() -> None:
@@ -19489,12 +19100,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching ARP table...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "ARP Table", site_id, device_id, "showSiteDeviceArpTable", "DeviceArpTable.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body)
+        DeviceUtilityCommands._display_and_export_result(result, "ARP Table", site_id, device_id, "showSiteDeviceArpTable", "DeviceArpTable.csv")
 
     @staticmethod
     def show_dhcp_leases() -> None:
@@ -19512,12 +19119,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching DHCP leases...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "DHCP Leases", site_id, device_id, "showSiteDeviceDhcpLeases", "DeviceDhcpLeases.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body)
+        DeviceUtilityCommands._display_and_export_result(result, "DHCP Leases", site_id, device_id, "showSiteDeviceDhcpLeases", "DeviceDhcpLeases.csv")
 
     @staticmethod
     def show_dot1x() -> None:
@@ -19532,12 +19135,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching 802.1X table...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "802.1X Table", site_id, device_id, "showSiteDeviceDot1xTable", "DeviceDot1xTable.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body)
+        DeviceUtilityCommands._display_and_export_result(result, "802.1X Table", site_id, device_id, "showSiteDeviceDot1xTable", "DeviceDot1xTable.csv")
 
     @staticmethod
     def show_evpn_database() -> None:
@@ -19552,12 +19151,8 @@ class DeviceUtilityCommands:
         if node:
             body["node"] = node
         print("\n-> Fetching EVPN database...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "EVPN Database", site_id, device_id, "showSiteDeviceEvpnDatabase", "DeviceEvpnDatabase.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body)
+        DeviceUtilityCommands._display_and_export_result(result, "EVPN Database", site_id, device_id, "showSiteDeviceEvpnDatabase", "DeviceEvpnDatabase.csv")
 
     # ===== MANAGEMENT COMMANDS =====
 
@@ -19569,9 +19164,7 @@ class DeviceUtilityCommands:
         if not selection:
             return
         site_id, device_id, _ = selection
-        duration_str = InputUtils.safe_input(
-            "LED blink duration in minutes (1-120, default 5): ", default_value="5", context="locate_duration"
-        )
+        duration_str = InputUtils.safe_input("LED blink duration in minutes (1-120, default 5): ", default_value="5", context="locate_duration")
         try:
             duration = max(1, min(120, int(duration_str)))
         except ValueError:
@@ -19579,9 +19172,7 @@ class DeviceUtilityCommands:
         body: dict[str, Any] = {"duration": duration}
         try:
             response = mistapi.api.v1.sites.devices.startSiteLocateDevice(apisession, site_id, device_id, body)
-            if DeviceUtilityCommands._print_api_result(
-                response, f"Device LED blinking for {duration} minutes.", "Locate device failed"
-            ):
+            if DeviceUtilityCommands._print_api_result(response, f"Device LED blinking for {duration} minutes.", "Locate device failed"):
                 print("-> Use 'Unlocate Device' (menu 139) to stop.")
         except Exception as error:
             logging.error(f"Locate device failed: {error}", exc_info=True)
@@ -19617,17 +19208,13 @@ class DeviceUtilityCommands:
         if port_id.startswith(blocked_prefixes):
             print(f"! Port '{port_id}' cannot be bounced (management/aggregate/IRB port).")
             return
-        confirm = InputUtils.safe_input(
-            f"Bounce port {port_id}? This will briefly disrupt traffic. (y/N): ", context="bounce_port"
-        )
+        confirm = InputUtils.safe_input(f"Bounce port {port_id}? This will briefly disrupt traffic. (y/N): ", context="bounce_port")
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
         body: dict[str, Any] = {"ports": [port_id]}
         print(f"\n-> Bouncing port {port_id}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.bounceDevicePort, body
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.bounceDevicePort, body)
         if result:
             print("-> Port bounce complete.")
         else:
@@ -19646,12 +19233,8 @@ class DeviceUtilityCommands:
             return
         body: dict[str, Any] = {"port": port_id}
         print(f"\n-> Running cable test on port {port_id}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.cableTestFromSwitch, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Cable Test", site_id, device_id, "cableTestFromSwitch", "DeviceCableTest.csv"
-        )
+        result = DeviceUtilityCommands._run_websocket_command(site_id, device_id, mistapi.api.v1.sites.devices.cableTestFromSwitch, body)
+        DeviceUtilityCommands._display_and_export_result(result, "Cable Test", site_id, device_id, "cableTestFromSwitch", "DeviceCableTest.csv")
 
     @staticmethod
     def reprovision_device() -> None:
@@ -19661,9 +19244,7 @@ class DeviceUtilityCommands:
         if not selection:
             return
         site_id, device_id, _ = selection
-        confirm = InputUtils.safe_input(
-            "Reprovision this device? This will push fresh config. (y/N): ", context="reprovision"
-        )
+        confirm = InputUtils.safe_input("Reprovision this device? This will push fresh config. (y/N): ", context="reprovision")
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
@@ -19752,9 +19333,7 @@ class DeviceUtilityCommands:
         print("\nSupport file types:")
         for idx, ft in enumerate(file_types, 1):
             print(f"  {idx}. {ft}")
-        type_input = InputUtils.safe_input(
-            "Select type (1-7, default: 1 = full): ", default_value="1", context="support_type"
-        )
+        type_input = InputUtils.safe_input("Select type (1-7, default: 1 = full): ", default_value="1", context="support_type")
         try:
             type_idx = int(type_input) - 1
             info = file_types[type_idx] if 0 <= type_idx < len(file_types) else "full"
@@ -19766,9 +19345,7 @@ class DeviceUtilityCommands:
             body["node"] = node
         try:
             response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(apisession, site_id, device_id, body)
-            if DeviceUtilityCommands._print_api_result(
-                response, f"Support file upload ({info}) initiated.", "Support file upload failed"
-            ):
+            if DeviceUtilityCommands._print_api_result(response, f"Support file upload ({info}) initiated.", "Support file upload failed"):
                 print("-> Files will be available in the Mist dashboard.")
         except Exception as error:
             logging.error(f"Support file upload failed: {error}", exc_info=True)
@@ -19812,9 +19389,7 @@ class DeviceUtilityCommands:
             return
         site_id, device_id, _ = selection
         body: dict[str, Any] = {}
-        neighbor = InputUtils.safe_input(
-            "BGP neighbor IP (required): ", context="clear_bgp_neighbor", allow_empty=False
-        )
+        neighbor = InputUtils.safe_input("BGP neighbor IP (required): ", context="clear_bgp_neighbor", allow_empty=False)
         if not neighbor:
             print("! Neighbor IP is required.")
             return
@@ -19855,9 +19430,7 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"):
             return
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, body)
@@ -19878,9 +19451,7 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_mac_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear MAC table: ", "CLEAR", "clear_mac_table"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear MAC table: ", "CLEAR", "clear_mac_table"):
             return
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(apisession, site_id, device_id, body)
@@ -19904,14 +19475,10 @@ class DeviceUtilityCommands:
         port_id = DeviceUtilityCommands._select_port_optional(site_id, device_id)
         if port_id:
             body["port_id"] = port_id
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear BPDU errors: ", "CLEAR", "clear_bpdu_error"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear BPDU errors: ", "CLEAR", "clear_bpdu_error"):
             return
         try:
-            response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
-                apisession, site_id, device_id, body
-            )
+            response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(apisession, site_id, device_id, body)
             DeviceUtilityCommands._print_api_result(response, "BPDU errors cleared.", "Clear BPDU errors failed")
         except Exception as error:
             logging.error(f"Clear BPDU errors failed: {error}", exc_info=True)
@@ -19932,18 +19499,12 @@ class DeviceUtilityCommands:
         if not port_id:
             print("! Port selection is required for clearing learned MACs.")
             return
-        if not DeviceUtilityCommands._confirm_destructive(
-            f"Type 'CLEAR' to clear learned MACs on port {port_id}: ", "CLEAR", "clear_macs"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive(f"Type 'CLEAR' to clear learned MACs on port {port_id}: ", "CLEAR", "clear_macs"):
             return
         body: dict[str, Any] = {"port_id": port_id}
         try:
-            response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, f"Learned MACs cleared from port {port_id}.", "Clear learned MACs failed"
-            )
+            response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(apisession, site_id, device_id, body)
+            DeviceUtilityCommands._print_api_result(response, f"Learned MACs cleared from port {port_id}.", "Clear learned MACs failed")
         except Exception as error:
             logging.error(f"Clear learned MACs failed: {error}", exc_info=True)
             print(f"! Clear learned MACs failed: {error}")
@@ -19962,15 +19523,11 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_policy_node")
         if node:
             body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear policy hit count: ", "CLEAR", "clear_policy_hit_count"
-        ):
+        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear policy hit count: ", "CLEAR", "clear_policy_hit_count"):
             return
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, "Policy hit count cleared.", "Clear policy hit count failed"
-            )
+            DeviceUtilityCommands._print_api_result(response, "Policy hit count cleared.", "Clear policy hit count failed")
         except Exception as error:
             logging.error(f"Clear policy hit count failed: {error}", exc_info=True)
             print(f"! Clear policy hit count failed: {error}")
@@ -19997,9 +19554,7 @@ class DeviceUtilityCommands:
             return
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, f"DHCP lease released on port {port_id}.", "Release DHCP lease failed"
-            )
+            DeviceUtilityCommands._print_api_result(response, f"DHCP lease released on port {port_id}.", "Release DHCP lease failed")
         except Exception as error:
             logging.error(f"Release DHCP lease failed: {error}", exc_info=True)
             print(f"! Release DHCP lease failed: {error}")
@@ -20020,17 +19575,13 @@ class DeviceUtilityCommands:
         node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="release_dhcp_ssr_node")
         if node:
             body["node"] = node
-        confirm = InputUtils.safe_input(
-            f"Release DHCP lease on interface {port_id}? (y/N): ", context="release_dhcp_ssr"
-        )
+        confirm = InputUtils.safe_input(f"Release DHCP lease on interface {port_id}? (y/N): ", context="release_dhcp_ssr")
         if confirm.lower() != "y":
             print("! Operation cancelled.")
             return
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, f"SSR DHCP lease released on interface {port_id}.", "Release SSR DHCP lease failed"
-            )
+            DeviceUtilityCommands._print_api_result(response, f"SSR DHCP lease released on interface {port_id}.", "Release SSR DHCP lease failed")
         except Exception as error:
             logging.error(f"Release SSR DHCP lease failed: {error}", exc_info=True)
             print(f"! Release SSR DHCP lease failed: {error}")
@@ -20047,9 +19598,7 @@ class DeviceUtilityCommands:
         site_id, device_id, _ = selection
         try:
             response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(apisession, site_id, device_id)
-            if DeviceUtilityCommands._print_api_result(
-                response, "Fresh statistics polled from switch.", "Poll switch stats failed"
-            ):
+            if DeviceUtilityCommands._print_api_result(response, "Fresh statistics polled from switch.", "Poll switch stats failed"):
                 print("-> Updated stats will appear in next stats export.")
         except Exception as error:
             logging.error(f"Poll switch stats failed: {error}", exc_info=True)
@@ -20065,9 +19614,7 @@ class DeviceUtilityCommands:
         site_id, device_id, _ = selection
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(apisession, site_id, device_id)
-            DeviceUtilityCommands._print_api_result(
-                response, "Device snapshot created successfully.", "Create snapshot failed"
-            )
+            DeviceUtilityCommands._print_api_result(response, "Device snapshot created successfully.", "Create snapshot failed")
         except Exception as error:
             logging.error(f"Create snapshot failed: {error}", exc_info=True)
             print(f"! Create snapshot failed: {error}")
@@ -20230,9 +19777,7 @@ class ConstDefinitionsExporter:
         required_params = self._get_required_params(sig)
         optional_params = self._get_optional_params(sig)
 
-        special_handling = self._determine_special_handling(
-            endpoint_name, api_function, required_params, optional_params, filename
-        )
+        special_handling = self._determine_special_handling(endpoint_name, api_function, required_params, optional_params, filename)
 
         if special_handling == "skip":
             return
@@ -20261,21 +19806,13 @@ class ConstDefinitionsExporter:
         """Extract required parameters from function signature."""
         import inspect
 
-        return [
-            p
-            for p in sig.parameters.values()
-            if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
-        ]
+        return [p for p in sig.parameters.values() if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]]
 
     def _get_optional_params(self, sig) -> list[str]:  # type: ignore[no-untyped-def]
         """Extract optional parameter names from function signature."""
         import inspect
 
-        return [
-            p.name
-            for p in sig.parameters.values()
-            if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
-        ]
+        return [p.name for p in sig.parameters.values() if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]]
 
     def _determine_special_handling(
         self,
@@ -20561,9 +20098,7 @@ class ConstDefinitionsExporter:
                     record.update(state_data)
                     records.append(record)
                 else:
-                    records.append(
-                        {"country_code": country_code, "state_code": state_code, "state_name": str(state_data)}
-                    )
+                    records.append({"country_code": country_code, "state_code": state_code, "state_name": str(state_data)})
         elif isinstance(country_data, list):
             for item in country_data:
                 if isinstance(item, dict):
@@ -20614,9 +20149,7 @@ class ConstDefinitionsExporter:
                 original_count = len(country_codes)
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
                 if len(country_codes) < original_count:
-                    logging.debug(
-                        f"Filtered out {original_count - len(country_codes)} invalid country codes for ap_channels"
-                    )
+                    logging.debug(f"Filtered out {original_count - len(country_codes)} invalid country codes for ap_channels")
                 print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes
 
@@ -21348,13 +20881,9 @@ class GatewayTestExporter:
                     # Use semaphore to limit concurrent connections if provided
                     if connection_semaphore:
                         with connection_semaphore:
-                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
-                                apisession, site_id, device_id
-                            ).data
+                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
                     else:
-                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
-                            apisession, site_id, device_id
-                        ).data
+                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
 
                     stats["site_id"] = site_id
                     stats["site_name"] = site_name
@@ -21371,9 +20900,7 @@ class GatewayTestExporter:
                     if attempt < max_retries:
                         # Fast mode: reduced backoff delay for quicker retries
                         backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
-                        logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {exception}"
-                        )
+                        logging.warning(f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {exception}")
                         logging.info(f"! Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
                         time.sleep(backoff_delay)
                     else:
@@ -21395,9 +20922,7 @@ class GatewayTestExporter:
             def retry_failed_devices(failed_devices, connection_semaphore):  # type: ignore[no-untyped-def]
                 retry_results = []
                 still_failed = []
-                retry_threads = min(
-                    FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
-                )
+                retry_threads = min(FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2))
                 if retry_threads <= 0:
                     logging.warning(" FAST MODE: No available threads for retry; skipping retries")
                     return [], failed_devices
@@ -21462,9 +20987,7 @@ class GatewayTestExporter:
             DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
             logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
-            logging.info(
-                f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory"
-            )
+            logging.info(f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory")
         else:
             logging.warning(" No synthetic test results found. CSV not created.")
             print("! No synthetic test results found. CSV not created.")
@@ -21508,11 +21031,7 @@ class GatewayTestExporter:
                     reader = csv.DictReader(file)
                     # Filter out None/empty site_ids and only include gateways
                     site_ids = sorted(
-                        [
-                            str(row.get("site_id"))
-                            for row in reader
-                            if row.get("type") == "gateway" and row.get("site_id") and str(row.get("site_id")).strip()
-                        ]
+                        [str(row.get("site_id")) for row in reader if row.get("type") == "gateway" and row.get("site_id") and str(row.get("site_id")).strip()]
                     )
                     # Remove duplicates while preserving order
                     site_ids = list(dict.fromkeys(site_ids))
@@ -21558,9 +21077,7 @@ class GatewayTestExporter:
             def worker(site_id, connection_semaphore):  # type: ignore[no-untyped-def]
                 return fetch_site_tests(site_id, connection_semaphore)  # type: ignore[no-untyped-call]
 
-            successful_results, failed_sites = execute_with_connection_pool_management(
-                work_items=site_ids, worker_function=worker, batch_description="sites"
-            )
+            successful_results, failed_sites = execute_with_connection_pool_management(work_items=site_ids, worker_function=worker, batch_description="sites")
             # successful_results is a list of lists (each site's results); flatten
             flattened_results = []
             for site_list in successful_results:
@@ -21588,9 +21105,7 @@ class GatewayTestExporter:
             print(f"! {len(all_results)} gateway test results exported to {filename}")
             logging.info(f"! All test results saved to {filename} ({len(all_results)} records).")
             if fast:
-                logging.info(
-                    "! API Optimization: Saved site-level repeat lookups by using cached inventory for site derivation"
-                )
+                logging.info("! API Optimization: Saved site-level repeat lookups by using cached inventory for site derivation")
         else:
             logging.warning(" No test results found. CSV not created.")
             print("! No gateway test results found. CSV not created.")
@@ -21674,9 +21189,7 @@ class GatewayStatsExporter:
                     if attempt < max_retries:
                         # Fast mode: reduced backoff delay for quicker retries
                         backoff_delay = retry_delay * (2**attempt) if not fast else retry_delay
-                        logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}"
-                        )
+                        logging.warning(f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}")
                         logging.info(f"! Retrying in {backoff_delay} seconds...")
                         time.sleep(backoff_delay)
                     else:
@@ -21704,9 +21217,7 @@ class GatewayStatsExporter:
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
-                    executor.submit(
-                        fetch_device_stats_with_retry, device_info, connection_semaphore=connection_semaphore
-                    ): device_info
+                    executor.submit(fetch_device_stats_with_retry, device_info, connection_semaphore=connection_semaphore): device_info
                     for device_info in gateway_devices
                 }
 
@@ -21724,9 +21235,7 @@ class GatewayStatsExporter:
                             all_stats.append(result)
                     except Exception as exception:
                         site_id, device_id, device_name, site_name = device_info
-                        logging.error(
-                            f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}"
-                        )
+                        logging.error(f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}")
         else:
             # Sequential processing for smaller datasets or normal mode
             logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
@@ -21991,9 +21500,7 @@ class GatewayExportUtils:
         {dev.get("name"): dev for dev in gateway_devices}
 
         # Create management IP lookup by device name
-        mgmt_ip_lookup = {
-            config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") for config in gateway_configs
-        }
+        mgmt_ip_lookup = {config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") for config in gateway_configs}
 
         # Process gateway devices and correlate with template and management IP data
         results = []
@@ -22040,13 +21547,9 @@ class GatewayExportUtils:
 
             if mgmt_ip:
                 gateways_with_mgmt_ip += 1
-                logging.debug(
-                    f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})"
-                )
+                logging.debug(f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})")
             else:
-                logging.debug(
-                    f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})"
-                )
+                logging.debug(f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})")
 
         # Sort results by template name, then gateway name
         results.sort(key=lambda row: (row["gateway_template"], row["gateway_name"]))
@@ -22104,18 +21607,12 @@ class GatewayExportUtils:
 
         # Identify port config columns (excluding _vpn_paths_)
         base_columns = ["mac", "name"]
-        port_columns = [
-            col
-            for col in sanitized[0].keys()
-            if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col
-        ]
+        port_columns = [col for col in sanitized[0].keys() if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col]
         columns_to_keep = base_columns + port_columns
 
         # Filter rows where any port column has non-empty value
         filtered_rows = [
-            {col: row.get(col, "") for col in columns_to_keep}
-            for row in sanitized
-            if any(row.get(col) not in [None, "", "null"] for col in port_columns)
+            {col: row.get(col, "") for col in columns_to_keep} for row in sanitized if any(row.get(col) not in [None, "", "null"] for col in port_columns)
         ]
 
         # Write filtered dataset to CSV
@@ -22247,11 +21744,7 @@ class GatewayExportUtils:
                 # Check if port is overridden from template by looking for port_config fields in the CSV
                 # Need to check for both base port (port_config_{port}_*) and subinterfaces (port_config_{port}.*)
                 # to catch configurations like {{wan2_interface}}.70 or ge-0/0/1.100
-                port_config_fields = [
-                    col
-                    for col in row
-                    if col.startswith(f"port_config_{port_name}_") or col.startswith(f"port_config_{port_name}.")
-                ]
+                port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_") or col.startswith(f"port_config_{port_name}.")]
 
                 # Check for non-empty values (excluding vpn_paths which are template-inherited)
                 override_fields = []
@@ -22345,9 +21838,7 @@ class GatewayExportUtils:
 
                     # Fetch live device stats for current port status
                     try:
-                        stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                            apisession, site_id_inner, device_id_inner
-                        )
+                        stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id_inner, device_id_inner)
                         stats_data = getattr(stats_resp, "data", {})
                         interface_stats = stats_data.get("if_stat", {})
                     except Exception as exception:
@@ -22403,9 +21894,7 @@ class GatewayExportUtils:
                     device_data = getattr(resp, "data", {})
                     port_configs = device_data.get("port_config", {})
                 except Exception as exception:
-                    logging.warning(
-                        f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}"
-                    )
+                    logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}")
                     port_configs = {}
 
                 # Fetch live device stats for current port status
@@ -22420,9 +21909,7 @@ class GatewayExportUtils:
                             f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden"  # noqa: E501
                         )
                     else:
-                        logging.warning(
-                            f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {exception}"
-                        )
+                        logging.warning(f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {exception}")
                     interface_stats = {}
 
                 device_data_cache[device_id] = (port_configs, interface_stats)
@@ -22563,9 +22050,7 @@ class GatewayExportUtils:
             inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
             with open(inventory_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
-                gateways = [
-                    row for row in reader if row.get("type") == "gateway" and row.get("site_id") and row.get("id")
-                ]
+                gateways = [row for row in reader if row.get("type") == "gateway" and row.get("site_id") and row.get("id")]
 
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
             with open(site_list_path, encoding="utf-8") as csvfile:
@@ -22627,9 +22112,7 @@ class GatewayExportUtils:
         logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
 
         gateway_sites = {
-            device["site_id"]
-            for device in devices
-            if device.get("type") == "gateway" and device.get("site_id") and str(device.get("site_id")).strip()
+            device["site_id"] for device in devices if device.get("type") == "gateway" and device.get("site_id") and str(device.get("site_id")).strip()
         }
         logging.info(f"[INFO] Found {len(gateway_sites)} sites with at least one gateway.")
 
@@ -22674,9 +22157,7 @@ class TroubleshootUtils:
             if site_id:
                 print(f"   Site ID: {site_id}")
 
-            logging.info(
-                f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}"
-            )
+            logging.info(f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}")
 
             # Prepare parameters for troubleshoot call
             params = {"mac": client_mac}
@@ -22800,9 +22281,7 @@ class TroubleshootUtils:
             logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
 
             # Call Marvis troubleshoot endpoint for device using MAC address
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
-                apisession, org_id, mac=device_mac, site_id=site_id
-            )
+            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, mac=device_mac, site_id=site_id)
 
             logging.debug(
                 f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}"  # noqa: E501
@@ -22936,11 +22415,7 @@ class TroubleshootUtils:
                         print("\n  Network Connectivity Analysis:")
                         for idx, result in enumerate(results):
                             logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
-                            description = (
-                                result.get("description", "Analysis result")
-                                if isinstance(result, dict)
-                                else str(result)
-                            )
+                            description = result.get("description", "Analysis result") if isinstance(result, dict) else str(result)
                             print(f"  !? {description}")
                             if isinstance(result, dict) and result.get("action"):
                                 print(f"    Recommended Action: {result['action']}")
@@ -22950,9 +22425,7 @@ class TroubleshootUtils:
                         print("\n  Marvis Network Insights:")
                         for idx, insight in enumerate(insights):
                             logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
-                            description = (
-                                insight.get("description", insight) if isinstance(insight, dict) else str(insight)
-                            )
+                            description = insight.get("description", insight) if isinstance(insight, dict) else str(insight)
                             print(f"  !? {description}")
                     else:
                         logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
@@ -22965,9 +22438,7 @@ class TroubleshootUtils:
                                 print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
                 else:
                     logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
-                    print(
-                        f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}"
-                    )
+                    print(f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
 
             else:
                 logging.debug("MARVIS DEBUG: Response data is None or empty")
@@ -23062,9 +22533,7 @@ class TroubleshootUtils:
                 print(f"! Organization: {org_info.get('name', 'Unknown')}")
 
                 features = org_info.get("features", [])
-                marvis_features = [
-                    f for f in features if any(keyword in f.lower() for keyword in ["marvis", "vna", "insight"])
-                ]
+                marvis_features = [f for f in features if any(keyword in f.lower() for keyword in ["marvis", "vna", "insight"])]
 
                 if marvis_features:
                     print("\n  Marvis/VNA Features Available:")
@@ -23498,9 +22967,7 @@ class GatewayTemplateConfigManager:
             print(f"  [{idx}] {filename}")
 
         try:
-            selection = InputUtils.safe_input(
-                f"\n  Select extraction file [0-{len(extraction_files) - 1}]: ", context="menu_106_file_selection"
-            ).strip()
+            selection = InputUtils.safe_input(f"\n  Select extraction file [0-{len(extraction_files) - 1}]: ", context="menu_106_file_selection").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Operation cancelled.")
             return None
@@ -23650,9 +23117,7 @@ class GatewayTemplateConfigManager:
                             result["changes_made"].append(f"Added Picocell at position {policy_count + 1}")
 
                 # Push update
-                update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
-                    apisession, org_id, template_id, body=config
-                )
+                update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(apisession, org_id, template_id, body=config)
 
                 if update_resp.status_code == 200:
                     result["status"] = "SUCCESS"
@@ -23823,14 +23288,10 @@ class GatewayTemplateConfigManager:
         templates_to_create = []
 
         for state in sorted(states):
-            templates_to_create.append(
-                {"name": f"{source_name}_{state}", "location_type": "state", "location_value": state}
-            )
+            templates_to_create.append({"name": f"{source_name}_{state}", "location_type": "state", "location_value": state})
 
         for country in sorted(countries):
-            templates_to_create.append(
-                {"name": f"{source_name}_{country}", "location_type": "country", "location_value": country}
-            )
+            templates_to_create.append({"name": f"{source_name}_{country}", "location_type": "country", "location_value": country})
 
         print(f"\n  Step 4: Preview - {len(templates_to_create)} templates will be created:")
         for info in templates_to_create:
@@ -23916,9 +23377,7 @@ class GatewayTemplateConfigManager:
                 for field in ["id", "org_id", "created_time", "modified_time"]:
                     new_config.pop(field, None)
 
-                resp = mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate(
-                    apisession, org_id, body=new_config
-                )
+                resp = mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate(apisession, org_id, body=new_config)
 
                 if resp.status_code == 200:
                     new_id = resp.data.get("id") if hasattr(resp, "data") else ""
@@ -23956,9 +23415,7 @@ class GatewayTemplateConfigManager:
                 result["error"] = "Already assigned"
             else:
                 try:
-                    resp = mistapi.api.v1.sites.sites.updateSiteInfo(
-                        apisession, site_id, body={"gatewaytemplate_id": target_id}
-                    )
+                    resp = mistapi.api.v1.sites.sites.updateSiteInfo(apisession, site_id, body={"gatewaytemplate_id": target_id})
                     if resp.status_code == 200:
                         result["status"] = "ASSIGNED"
                     else:
@@ -24054,9 +23511,7 @@ class SSHRunnerManager:
             # Execute
             result = SSHRunnerManager._execute_ssh(hosts, username, password, commands)  # type: ignore[no-untyped-call]
             if emitter:
-                emitter.emit_progress_complete(
-                    "97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start
-                )
+                emitter.emit_progress_complete("97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start)
             return result
 
         except KeyboardInterrupt:
@@ -24234,11 +23689,7 @@ class SSHRunnerManager:
     def _select_gateway_template(gateways):  # type: ignore[no-untyped-def]
         """Display templates and get user selection."""
         templates = sorted(
-            set(
-                gw.get("Gateway Template", "Unknown")
-                for gw in gateways
-                if gw.get("Gateway Template") and gw.get("Gateway Template") != "Unknown"
-            )
+            set(gw.get("Gateway Template", "Unknown") for gw in gateways if gw.get("Gateway Template") and gw.get("Gateway Template") != "Unknown")
         )
 
         if not templates:
@@ -24248,9 +23699,7 @@ class SSHRunnerManager:
         print("\n  2. Available gateway templates:")
         for i, name in enumerate(templates, 1):
             total = sum(1 for gw in gateways if gw.get("Gateway Template") == name)
-            online = sum(
-                1 for gw in gateways if gw.get("Gateway Template") == name and gw.get("Online Status") == "Online"
-            )
+            online = sum(1 for gw in gateways if gw.get("Gateway Template") == name and gw.get("Online Status") == "Online")
             print(f"     {i:2}. {name} ({total} total, {online} online)")
 
         try:
@@ -24348,9 +23797,7 @@ class SSHRunnerManager:
             print(f"  - Successful: {successful}")
             print(f"  - Failed: {results.get('failed', 0)}")
 
-            logging.info(
-                f"SSH by template: {template_name}, {successful}/{results.get('total', len(management_ips))} successful"
-            )
+            logging.info(f"SSH by template: {template_name}, {successful}/{results.get('total', len(management_ips))} successful")
 
         except Exception as error:
             print(f"! Error: {error}")
@@ -24585,9 +24032,7 @@ class ARPCommandManager:
             logging.info(" WebSocket opened. Subscribing...")
             ws.send(json.dumps(subscribe_msg))
 
-        ws = websocket.WebSocketApp(
-            ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
-        )
+        ws = websocket.WebSocketApp(ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open)
 
         def run_ws():  # type: ignore[no-untyped-def]
             ws.run_forever()
@@ -24752,9 +24197,7 @@ class RateLimitingUtils:
                 if "error" in data and isinstance(data["error"], list):
                     cleaned_errors = []
                     for error_value in data["error"]:
-                        if isinstance(error_value, (int, float)) and not (
-                            math.isnan(error_value) or math.isinf(error_value)
-                        ):
+                        if isinstance(error_value, (int, float)) and not (math.isnan(error_value) or math.isinf(error_value)):
                             cleaned_errors.append(float(error_value))
                     data["error"] = cleaned_errors
                 else:
@@ -24768,9 +24211,7 @@ class RateLimitingUtils:
             except OSError as os_error:
                 logging.error(f"File I/O: OS error reading {tuning_data_file}: {os_error}. Using defaults.")
             except Exception as unexpected_error:
-                logging.error(
-                    f"File I/O: Unexpected error reading {tuning_data_file}: {unexpected_error}. Using defaults."
-                )
+                logging.error(f"File I/O: Unexpected error reading {tuning_data_file}: {unexpected_error}. Using defaults.")
         else:
             logging.debug(f"File I/O: {tuning_data_file} does not exist, using defaults")
 
@@ -24858,9 +24299,7 @@ class RateLimitingUtils:
         Each call writes a new line with a timestamped entry.
         Maintains only the last max_entries (default 100) to prevent unlimited file growth.
         """
-        logging.debug(
-            f"ENTRY: RateLimitingUtils._append_delay_metrics_log(filename={filename}, max_entries={max_entries})"
-        )
+        logging.debug(f"ENTRY: RateLimitingUtils._append_delay_metrics_log(filename={filename}, max_entries={max_entries})")
 
         # SECURITY: File path is forced into data/ directory unless caller provides an explicit path.
         # This prevents creating arbitrary files in the application root (permission errors in container) or unsafe paths.  # noqa: E501
@@ -24870,9 +24309,7 @@ class RateLimitingUtils:
                 os.makedirs(data_directory, exist_ok=True)
                 filename = os.path.join(data_directory, filename)
             except Exception as directory_creation_error:
-                logging.error(
-                    f"File I/O: Failed to ensure data directory for delay metrics file: {directory_creation_error}"
-                )
+                logging.error(f"File I/O: Failed to ensure data directory for delay metrics file: {directory_creation_error}")
                 # Fall back to original filename; subsequent write may fail but we continue safely.
 
         log_entry = {
@@ -24894,9 +24331,7 @@ class RateLimitingUtils:
                                 existing_entries.append(json.loads(line))
                     logging.debug(f"File I/O: Loaded {len(existing_entries)} existing entries from {filename}")
                 except (json.JSONDecodeError, OSError) as read_error:
-                    logging.warning(
-                        f"File I/O: Failed to read existing entries from {filename}: {read_error}. Starting fresh."
-                    )
+                    logging.warning(f"File I/O: Failed to read existing entries from {filename}: {read_error}. Starting fresh.")
                     existing_entries = []
 
             # Add new entry and keep only the last max_entries
@@ -24936,12 +24371,7 @@ class RateLimitingUtils:
         )
 
         # Reset gains if out of bounds
-        if (
-            tuning_data["k_p"] < 1e-6
-            or tuning_data["k_i"] < 1e-8
-            or tuning_data["k_p"] > 1.0
-            or tuning_data["k_i"] > 0.01
-        ):
+        if tuning_data["k_p"] < 1e-6 or tuning_data["k_i"] < 1e-8 or tuning_data["k_p"] > 1.0 or tuning_data["k_i"] > 0.01:
             logging.warning(f"PID gains out of bounds, resetting: k_p={tuning_data['k_p']}, k_i={tuning_data['k_i']}")
             tuning_data["k_p"] = 0.1
             tuning_data["k_i"] = 0.001
@@ -24959,10 +24389,7 @@ class RateLimitingUtils:
 
             # Hybrid refresh trigger: every 60s, every 100 requests, or top of the hour
             refresh_needed = (
-                not _api_usage_cache["initialized"]
-                or _api_usage_cache["perceived_requests"] >= 100
-                or elapsed > 60
-                or (now.minute == 0 and now.second < 5)
+                not _api_usage_cache["initialized"] or _api_usage_cache["perceived_requests"] >= 100 or elapsed > 60 or (now.minute == 0 and now.second < 5)
             )
 
             if refresh_needed:
@@ -24976,9 +24403,7 @@ class RateLimitingUtils:
                     _api_usage_cache["last_updated"] = current_time  # type: ignore[assignment]
                     _api_usage_cache["perceived_requests"] = 0
                     _api_usage_cache["initialized"] = True
-                    logging.debug(
-                        f"API usage refreshed: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests"
-                    )
+                    logging.debug(f"API usage refreshed: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
                 except Exception as api_error:
                     logging.warning(f"Failed to refresh API usage data: {api_error}. Using cached values.")
             else:
@@ -24986,9 +24411,7 @@ class RateLimitingUtils:
                 _api_usage_cache["used"] += estimated_growth
                 _api_usage_cache["last_updated"] = current_time  # type: ignore[assignment]
                 _api_usage_cache["perceived_requests"] += 1
-                logging.debug(
-                    f"Using estimated API usage: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests"
-                )
+                logging.debug(f"Using estimated API usage: {_api_usage_cache['used']}/{_api_usage_cache['limit']} requests")
 
             used = min(_api_usage_cache["used"], _api_usage_cache["limit"])
             limit = _api_usage_cache["limit"]
@@ -25622,9 +25045,7 @@ class AddressUtils:
             # Check for exact matches (case-insensitive)
             if comp_addr == skip_addr and comp_city == skip_city and comp_state == skip_state and comp_zip == skip_zip:
                 if debug:
-                    logging.debug(
-                        f"ADDRESS_SKIP: Found exact match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}"
-                    )
+                    logging.debug(f"ADDRESS_SKIP: Found exact match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
                 return True, skip_reason
 
             # Check for partial matches (any field matches and others are empty in skip list)
@@ -25653,9 +25074,7 @@ class AddressUtils:
                 # Wildcard pattern (mostly empty fields): require exactly 1 match
                 if empty_fields >= 3 and matching_fields == 1:
                     if debug:
-                        logging.debug(
-                            f"ADDRESS_SKIP: Found wildcard match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}"
-                        )
+                        logging.debug(f"ADDRESS_SKIP: Found wildcard match - {comp_addr}, {comp_city}, {comp_state}, {comp_zip}")
                     return True, skip_reason
                 # Specific address pattern: require at least 50% field match
                 elif populated_fields >= 2 and matching_fields >= max(2, populated_fields // 2):
@@ -25762,9 +25181,7 @@ class AddressUtils:
                 failed_fields.append(field_name)
 
             if debug:
-                logging.debug(
-                    f"ENHANCED_COMPARE: {field_name} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)"
-                )
+                logging.debug(f"ENHANCED_COMPARE: {field_name} similarity: {similarity:.1f}% (threshold: {field_threshold:.1f}%)")
 
         # Calculate weighted overall similarity
         overall_similarity = sum(field_similarities[field] * field_weights[field] for field in field_weights.keys())
@@ -25804,9 +25221,7 @@ class AddressUtils:
         comp_place = comparison_result.get("place_type", "").lower()
 
         if debug:
-            logging.debug(
-                f"Business context analysis: Mist place_type='{mist_place}', Comparison place_type='{comp_place}'"
-            )
+            logging.debug(f"Business context analysis: Mist place_type='{mist_place}', Comparison place_type='{comp_place}'")
 
         mist_is_business = any(biz_type in mist_place for biz_type in business_place_types)
         comp_is_business = any(biz_type in comp_place for biz_type in business_place_types)
@@ -26213,9 +25628,7 @@ class NominatimValidator:
         business_rec = AddressUtils.apply_business_context_rules(mist_result, comp_result, self.debug)  # type: ignore[no-untyped-call]
 
         if business_rec == "mist":
-            reason = (
-                f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
-            )
+            reason = f"Mist address appears more business-appropriate (type: {mist_result.get('place_type', 'unknown')})"
             return "mist", reason
         elif business_rec == "comparison":
             reason = f"Reference address appears more business-appropriate (type: {comp_result.get('place_type', 'unknown')})"  # noqa: E501
@@ -26332,9 +25745,7 @@ class NominatimValidator:
             logging.debug(f"Comparison validation result: {comp_result}")
 
         # Determine recommendation
-        recommendation, reason = self._determine_recommendation(
-            mist_result, comp_result, mist_address, comparison_address
-        )
+        recommendation, reason = self._determine_recommendation(mist_result, comp_result, mist_address, comparison_address)
 
         final_result = {
             "mist_validation": mist_result,
@@ -26517,9 +25928,7 @@ class InventoryCSVComparator:
     Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy matching.
     """
 
-    def __init__(
-        self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
-    ):
+    def __init__(self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True):
         """
         Initialize the inventory comparator with configuration options.
 
@@ -26953,9 +26362,7 @@ class InventoryCSVComparator:
 
         return {key: sites for key, sites in address_to_sites.items() if len(sites) > 1}
 
-    def _report_duplicates(
-        self, mist_addresses: dict[str, dict[str, Any]], ref_addresses: dict[str, dict[str, Any]]
-    ) -> None:
+    def _report_duplicates(self, mist_addresses: dict[str, dict[str, Any]], ref_addresses: dict[str, dict[str, Any]]) -> None:
         """Report duplicate address findings."""
         if self.mist_duplicates:
             self._print_duplicate_group("Mist", self.mist_duplicates, mist_addresses)
@@ -26968,9 +26375,7 @@ class InventoryCSVComparator:
         else:
             self._print_duplicate_summary()
 
-    def _print_duplicate_group(
-        self, source: str, duplicates: dict[str, list[str]], addresses: dict[str, dict[str, Any]]
-    ) -> None:
+    def _print_duplicate_group(self, source: str, duplicates: dict[str, list[str]], addresses: dict[str, dict[str, Any]]) -> None:
         """Print a group of duplicate addresses."""
         print(f"    {source} sites sharing the same address:")
         for _addr_key, sites in duplicates.items():
@@ -27136,9 +26541,7 @@ class InventoryCSVComparator:
         self.parse_failures.append(failure_record)
         self.counters.increment_parse_failure(parsed_result["parse_reason"])  # type: ignore[no-untyped-call]
 
-    def _record_device_parse_failure(
-        self, device: dict[str, Any], device_serial: str, device_identifier: str, error_msg: str
-    ) -> None:
+    def _record_device_parse_failure(self, device: dict[str, Any], device_serial: str, device_identifier: str, error_msg: str) -> None:
         """Record a device processing error as parse failure."""
         failure_record = {
             "site_id": device.get("site_id", ""),
@@ -27189,19 +26592,9 @@ class InventoryCSVComparator:
         mist_addr = conflict["mist_address"]
         comp_addr = conflict["comparison_address"]
 
-        mist_key = (
-            f"{mist_addr['address'].lower().strip()}|"
-            f"{mist_addr['city'].lower().strip()}|"
-            f"{mist_addr['state'].lower().strip()}|"
-            f"{mist_addr['zip'].strip()}"
-        )
+        mist_key = f"{mist_addr['address'].lower().strip()}|{mist_addr['city'].lower().strip()}|{mist_addr['state'].lower().strip()}|{mist_addr['zip'].strip()}"
 
-        comp_key = (
-            f"{comp_addr['address'].lower().strip()}|"
-            f"{comp_addr['city'].lower().strip()}|"
-            f"{comp_addr['state'].lower().strip()}|"
-            f"{comp_addr['zip'].strip()}"
-        )
+        comp_key = f"{comp_addr['address'].lower().strip()}|{comp_addr['city'].lower().strip()}|{comp_addr['state'].lower().strip()}|{comp_addr['zip'].strip()}"
 
         return f"{mist_key}||{comp_key}"
 
@@ -27296,9 +26689,7 @@ class InventoryCSVComparator:
                 logging.warning(f"Could not retrieve organization name: {error}")
             return None
 
-    def _validate_single_conflict(
-        self, conflict: dict[str, Any], current: int, total: int, org_name: str | None
-    ) -> dict[str, Any] | None:
+    def _validate_single_conflict(self, conflict: dict[str, Any], current: int, total: int, org_name: str | None) -> dict[str, Any] | None:
         """Validate a single conflict using Nominatim API."""
         device = conflict["device"]
         device_serial = conflict["device_serial"]
@@ -27354,11 +26745,7 @@ class InventoryCSVComparator:
 
     def _format_address_string(self, address: dict[str, str]) -> str:
         """Format address dictionary as display string."""
-        return (
-            (f"{address['address']}, {address['city']}, {address['state']} {address['zip']}")
-            .replace(", , ", ", ")
-            .strip(", ")
-        )
+        return (f"{address['address']}, {address['city']}, {address['state']} {address['zip']}").replace(", , ", ", ").strip(", ")
 
     def _print_validation_results(self, device_serial: str, result: dict[str, Any]) -> None:
         """Print validation results for a device."""
@@ -27426,9 +26813,7 @@ class InventoryCSVComparator:
             self.diff_report_items.append(diff_item)
 
         except Exception as error:
-            logging.warning(
-                f"! Error processing mismatch for device {conflict.get('device_serial', 'unknown')}: {error}"
-            )
+            logging.warning(f"! Error processing mismatch for device {conflict.get('device_serial', 'unknown')}: {error}")
             self.counters.comparison_failures += 1
 
     def _get_week_key(self, device: dict[str, Any]) -> str:
@@ -27831,9 +27216,7 @@ class WAN2MigrationManager:
             return sites_to_configure  # No prefix configured, include all sites
 
         original_count = len(sites_to_configure)
-        filtered_sites = [
-            site for site in sites_to_configure if not site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX)
-        ]
+        filtered_sites = [site for site in sites_to_configure if not site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX)]
         filtered_count = original_count - len(filtered_sites)
 
         if filtered_count > 0:
@@ -27971,11 +27354,7 @@ class WAN2MigrationManager:
 
     def _check_has_meaningful_override(self, config_row: dict[str, Any], fields: list[str]) -> bool:
         """Check if config row has meaningful WAN2 overrides (excluding VPN paths)."""
-        return any(
-            config_row.get(field, "").strip().lower() not in ["", "null", "none"]
-            for field in fields
-            if "_vpn_paths_" not in field
-        )
+        return any(config_row.get(field, "").strip().lower() not in ["", "null", "none"] for field in fields if "_vpn_paths_" not in field)
 
     def _extract_device_ip_config(self, config_row: dict[str, Any]) -> dict[str, str]:
         """Extract IP configuration from device config row."""
@@ -27989,10 +27368,7 @@ class WAN2MigrationManager:
         """Find and parse subinterface IP configurations."""
         configs = []
         for col in config_row:
-            if not (
-                (col.startswith("port_config_ge-0/0/1.") or col.startswith("port_config_{{wan2_interface}}."))
-                and col.endswith("_ip_config_type")
-            ):
+            if not ((col.startswith("port_config_ge-0/0/1.") or col.startswith("port_config_{{wan2_interface}}.")) and col.endswith("_ip_config_type")):
                 continue
 
             subif_ip_type = config_row.get(col, "").strip().lower()
@@ -28192,11 +27568,7 @@ class WAN2MigrationManager:
             requires_review = (
                 "CRITICAL"
                 if result.get("critical_override_count", 0) > 0
-                else (
-                    "WARNING"
-                    if result.get("warning_override_count", 0) > 0
-                    else ("INFO" if result.get("info_override_count", 0) > 0 else "No")
-                )
+                else ("WARNING" if result.get("warning_override_count", 0) > 0 else ("INFO" if result.get("info_override_count", 0) > 0 else "No"))
             )
 
             report_data.append(
@@ -28224,13 +27596,7 @@ class WAN2MigrationManager:
         override_count = sum(1 for r in results if r["has_overrides"])
         critical_sites = sum(1 for r in results if r.get("critical_override_count", 0) > 0)
         warning_sites = sum(1 for r in results if r.get("warning_override_count", 0) > 0)
-        info_sites = sum(
-            1
-            for r in results
-            if r.get("has_overrides")
-            and r.get("critical_override_count", 0) == 0
-            and r.get("warning_override_count", 0) == 0
-        )
+        info_sites = sum(1 for r in results if r.get("has_overrides") and r.get("critical_override_count", 0) == 0 and r.get("warning_override_count", 0) == 0)
 
         print("\n  Configuration Complete!")
         print("=" * 70)
@@ -28518,10 +27884,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all template fetch tasks
-        future_to_template = {
-            executor.submit(fetch_template_config, template_info): template_info
-            for template_info in templates_to_modify
-        }
+        future_to_template = {executor.submit(fetch_template_config, template_info): template_info for template_info in templates_to_modify}
 
         # Collect results with progress bar
         # CRITICAL FIX: Use fully qualified concurrent.futures.as_completed to avoid tqdm parameter conflicts
@@ -28618,14 +27981,10 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
                 # Push update to API (skip in dry-run mode)
                 if dry_run:
                     result["status"] = "DRY-RUN"
-                    logging.info(
-                        f"DRY-RUN: Would update template {template_name} with changes: {result['changes_made']}"
-                    )
+                    logging.info(f"DRY-RUN: Would update template {template_name} with changes: {result['changes_made']}")
                 else:
                     logging.debug(f"Updating template {template_name} via API")
-                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
-                        apisession, org_id, template_id, body=template_config
-                    )
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(apisession, org_id, template_id, body=template_config)
 
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
@@ -28714,10 +28073,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
                         continue
 
                     # Check if any port key matches search pattern
-                    has_override = any(
-                        port_key == search_pattern or port_key.startswith(f"{search_pattern}.")
-                        for port_key in port_config.keys()
-                    )
+                    has_override = any(port_key == search_pattern or port_key.startswith(f"{search_pattern}.") for port_key in port_config.keys())
 
                     if has_override:
                         devices_needing_migration.append(
@@ -28823,9 +28179,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
                             )
                         else:
                             logging.debug(f"Updating device {device_name} via API")
-                            update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                                apisession, site_id, device_id, body=device_config
-                            )
+                            update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(apisession, site_id, device_id, body=device_config)
 
                             if update_resp.status_code == 200:
                                 device_result["status"] = "SUCCESS"
@@ -28833,9 +28187,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
                             else:
                                 device_result["status"] = "FAILED"
                                 device_result["error"] = f"API returned status {update_resp.status_code}"
-                                logging.error(
-                                    f"Failed to update device {device_name}: status {update_resp.status_code}"
-                                )
+                                logging.error(f"Failed to update device {device_name}: status {update_resp.status_code}")
                     else:
                         device_result["status"] = "SKIPPED"
                         device_result["error"] = f"No {search_pattern} ports found in config"
@@ -28852,9 +28204,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
         use_fast_mode = fast and len(devices_needing_migration) > 5
 
         if use_fast_mode:
-            print(
-                f"\n  !? Fast mode enabled: Processing {len(devices_needing_migration)} devices with connection pooling"
-            )
+            print(f"\n  !? Fast mode enabled: Processing {len(devices_needing_migration)} devices with connection pooling")
             logging.info(f"Fast mode: Using connection pool for {len(devices_needing_migration)} device migrations")
 
             # Use connection pool management for parallel processing
@@ -28975,9 +28325,7 @@ def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = F
         print(f"\n  !? {failure_count} templates failed to update - check audit report")
 
     if devices_needing_migration:
-        device_failed = len(device_migration_results) - sum(
-            1 for r in device_migration_results if r["status"] == "SUCCESS"
-        )
+        device_failed = len(device_migration_results) - sum(1 for r in device_migration_results if r["status"] == "SUCCESS")
         if device_failed > 0:
             print(f"\n  !? WARNING: {device_failed} devices failed override migration")
             print("  !? These devices may lose static IP configurations")
@@ -29013,9 +28361,7 @@ class WANProbeConfigManager:
     # Default probe configuration - loaded from environment variables
     # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
     # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
-    DEFAULT_PROBE_IPS = [
-        ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
-    ]
+    DEFAULT_PROBE_IPS = [ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()]
     DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
 
     def __init__(self):  # type: ignore[no-untyped-def]
@@ -29179,9 +28525,7 @@ class WANProbeConfigManager:
 
             try:
                 logging.debug(f"Fetching template configuration for {template_name}")
-                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
-                    apisession, self.org_id, template_id
-                )
+                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(apisession, self.org_id, template_id)
                 config = response.data if hasattr(response, "data") else {}
 
                 if not isinstance(config, dict):
@@ -29199,13 +28543,9 @@ class WANProbeConfigManager:
                     if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":
                         current_probe = port_settings.get("wan_probe_override", {})
                         current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                        current_profile = (
-                            current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
-                        )
+                        current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
 
-                        wan_interfaces.append(
-                            {"port_name": port_name, "current_ips": current_ips, "current_profile": current_profile}
-                        )
+                        wan_interfaces.append({"port_name": port_name, "current_ips": current_ips, "current_profile": current_profile})
 
                 if wan_interfaces:
                     return {
@@ -29327,9 +28667,7 @@ class WANProbeConfigManager:
                     logging.info(f"DRY-RUN: Would update template {template_name} interfaces: {interfaces_modified}")
                 else:
                     logging.debug(f"Updating template {template_name} via API")
-                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
-                        apisession, self.org_id, template_id, body=config
-                    )
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(apisession, self.org_id, template_id, body=config)
 
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
@@ -29360,9 +28698,7 @@ class WANProbeConfigManager:
                     "template_name": result["template_name"],
                     "template_id": result["template_id"],
                     "site_count": result["site_count"],
-                    "interfaces_updated": ", ".join(result["interfaces_updated"])
-                    if result["interfaces_updated"]
-                    else "",
+                    "interfaces_updated": ", ".join(result["interfaces_updated"]) if result["interfaces_updated"] else "",
                     "interface_count": len(result["interfaces_updated"]),
                     "status": result["status"],
                     "error": result["error"],
@@ -29441,9 +28777,7 @@ class WANProbeDeviceOverrideManager:
     # Default probe configuration - loaded from environment variables (same as Menu 113)
     # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
     # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
-    DEFAULT_PROBE_IPS = [
-        ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
-    ]
+    DEFAULT_PROBE_IPS = [ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()]
     DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
 
     def __init__(self):  # type: ignore[no-untyped-def]
@@ -29608,9 +28942,7 @@ class WANProbeDeviceOverrideManager:
             if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue
             if site.get("gatewaytemplate_id", "").strip() == template_id:
-                self.template_sites.append(
-                    {"site_id": site.get("id", ""), "site_name": site.get("name", "Unknown Site")}
-                )
+                self.template_sites.append({"site_id": site.get("id", ""), "site_name": site.get("name", "Unknown Site")})
 
         if not self.template_sites:
             print(f"\n  No sites found using template '{template_name}'.")
@@ -29830,9 +29162,7 @@ class WANProbeDeviceOverrideManager:
                     logging.info(f"DRY-RUN: Would update device {device_name} ports: {ports_modified}")
                 else:
                     logging.debug(f"Updating device {device_name} via API")
-                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                        apisession, site_id, device_id, body=device_config
-                    )
+                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(apisession, site_id, device_id, body=device_config)
 
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
@@ -30052,9 +29382,7 @@ class VirtualChassisManager:
             return
 
         site_id_to_name = VirtualChassisManager._load_site_id_mapping()
-        converted, not_converted = VirtualChassisManager._analyze_conversion_status(
-            switches_with_vc_mac, site_id_to_name
-        )
+        converted, not_converted = VirtualChassisManager._analyze_conversion_status(switches_with_vc_mac, site_id_to_name)
 
         VirtualChassisManager._display_status_summary(converted, not_converted)
         VirtualChassisManager._export_status_results(converted + not_converted)
@@ -30087,11 +29415,7 @@ class VirtualChassisManager:
 
         with open(inventory_path, encoding="utf-8") as csvfile:
             reader = list(csv.DictReader(csvfile))
-            return [
-                row
-                for row in reader
-                if (row.get("type") == "switch" and row.get("id", "").strip() and row.get("site_id") == site_id)
-            ]
+            return [row for row in reader if (row.get("type") == "switch" and row.get("id", "").strip() and row.get("site_id") == site_id)]
 
     @staticmethod
     def _prompt_switch_selection(switches: list[dict], site_name: str) -> dict | None:  # type: ignore[type-arg]
@@ -30109,9 +29433,7 @@ class VirtualChassisManager:
             index_to_device[idx] = switch
             name_to_device[switch.get("name", "")] = switch
 
-        user_input = input(
-            f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches) - 1}]: "
-        ).strip()
+        user_input = input(f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches) - 1}]: ").strip()
 
         if user_input.isdigit():
             return index_to_device.get(int(user_input))
@@ -30127,9 +29449,7 @@ class VirtualChassisManager:
         print(f"MAC: {switch.get('mac', '')}")
         print("This operation cannot be undone!")
 
-        confirm = InputUtils.safe_input(
-            "\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation"
-        )
+        confirm = InputUtils.safe_input("\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation")
         return confirm == "CONVERT"
 
     @staticmethod
@@ -30137,9 +29457,7 @@ class VirtualChassisManager:
         """Execute the API call to convert a switch to virtual MAC."""
         print(f"! Converting switch '{switch_name}' (device_id: {device_id}) at site '{site_name}' to virtual MAC...")
         try:
-            response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
-                apisession, site_id, device_id
-            )
+            response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)
 
             if hasattr(response, "status_code") and response.status_code >= 400:
                 print(f"! Conversion failed (HTTP {response.status_code}): {getattr(response, 'data', '')}")
@@ -30230,14 +29548,8 @@ class VirtualChassisManager:
             with open(inventory_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    if (
-                        row.get("type") == "switch"
-                        and row.get("site_id") in target_site_ids
-                        and row.get("id", "").strip()
-                    ):
-                        site_name = next(
-                            (name for name, id_ in site_name_to_id.items() if id_ == row.get("site_id")), "Unknown Site"
-                        )
+                    if row.get("type") == "switch" and row.get("site_id") in target_site_ids and row.get("id", "").strip():
+                        site_name = next((name for name, id_ in site_name_to_id.items() if id_ == row.get("site_id")), "Unknown Site")
                         row["site_name"] = site_name
                         switches.append(row)
             return switches
@@ -30279,9 +29591,7 @@ class VirtualChassisManager:
             print(f"\n[{idx + 1}/{len(switches)}] Converting '{switch_name}' at site '{site_name}'...")
 
             try:
-                response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
-                    apisession, site_id, device_id
-                )
+                response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)
 
                 if hasattr(response, "status_code") and response.status_code >= 400:
                     print(f"! Conversion failed (HTTP {response.status_code}): {getattr(response, 'data', '')}")
@@ -30289,9 +29599,7 @@ class VirtualChassisManager:
                     failed_conversions += 1
                 elif isinstance(getattr(response, "data", None), dict) and "detail" in response.data:
                     print(f"! Conversion failed: {response.data['detail']}")
-                    logging.error(
-                        f"Conversion failed for {switch_name} at {site_name}. Detail: {response.data['detail']}"
-                    )
+                    logging.error(f"Conversion failed for {switch_name} at {site_name}. Detail: {response.data['detail']}")
                     failed_conversions += 1
                 else:
                     print("! Conversion triggered successfully.")
@@ -30475,9 +29783,7 @@ class SiteConfigManager:
     @staticmethod
     def _confirm_test_site_creation() -> bool:
         """Get user confirmation for test site creation."""
-        confirmation = InputUtils.safe_input(
-            "Type 'CREATE' (uppercase) to proceed with site creation: ", context="site creation confirmation"
-        )
+        confirmation = InputUtils.safe_input("Type 'CREATE' (uppercase) to proceed with site creation: ", context="site creation confirmation")
         if confirmation != "CREATE":
             print(" Site creation cancelled - confirmation phrase not matched")
             logging.info("Site creation cancelled by user")
@@ -30619,22 +29925,16 @@ class SiteConfigManager:
         templates_to_create, templates_to_update, update_mode = plan
 
         # Confirm and execute
-        if not SiteConfigManager._confirm_rf_template_operation(
-            templates_to_create, templates_to_update, sites_by_country, update_mode
-        ):
+        if not SiteConfigManager._confirm_rf_template_operation(templates_to_create, templates_to_update, sites_by_country, update_mode):
             return
 
         # Execute template creation/updates
-        template_mapping = SiteConfigManager._execute_rf_template_operations(
-            org_id, templates_to_create, templates_to_update, update_mode
-        )
+        template_mapping = SiteConfigManager._execute_rf_template_operations(org_id, templates_to_create, templates_to_update, update_mode)
 
         # Assign sites to templates
         success, failed = SiteConfigManager._assign_sites_to_rf_templates(sites_by_country, template_mapping)
 
-        SiteConfigManager._report_rf_template_results(
-            templates_to_create, templates_to_update, update_mode, success, failed, sites_without_country
-        )
+        SiteConfigManager._report_rf_template_results(templates_to_create, templates_to_update, update_mode, success, failed, sites_without_country)
         logging.warning(
             f"Menu #108 complete: {len(templates_to_create)} templates created, {len(success)} sites assigned, {len(failed)} failed"  # noqa: E501
         )
@@ -30695,9 +29995,7 @@ class SiteConfigManager:
         # Check existing RF templates
         print("\n  Step 2: Checking for existing RF templates...")
         try:
-            templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(
-                apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
-            )
+            templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
             existing = mistapi.get_all(response=templates_response, mist_session=apisession) or []
             existing_templates = {t.get("name"): t.get("id") for t in existing}
         except Exception as error:
@@ -30715,9 +30013,7 @@ class SiteConfigManager:
         for country in sorted(sites_by_country.keys()):
             template_name = f"RF-{country}"
             if template_name in existing_templates:
-                templates_to_update.append(
-                    {"country": country, "name": template_name, "id": existing_templates[template_name]}
-                )
+                templates_to_update.append({"country": country, "name": template_name, "id": existing_templates[template_name]})
             else:
                 templates_to_create.append({"country": country, "name": template_name})
 
@@ -30790,9 +30086,7 @@ class SiteConfigManager:
                 country = template_info["country"]
                 payload = SiteConfigManager._build_rf_template_payload(country, template_info["name"])
                 try:
-                    response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate(
-                        apisession, org_id, template_info["id"], body=payload
-                    )
+                    response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate(apisession, org_id, template_info["id"], body=payload)
                     if response.status_code == 200:
                         template_mapping[country] = {"id": template_info["id"], "name": template_info["name"]}
                         print(f"  Updated: {template_info['name']}")
@@ -30837,13 +30131,9 @@ class SiteConfigManager:
                 if ConfigUtils.check_stop_signal():
                     return success, failed
                 try:
-                    response = mistapi.api.v1.sites.sites.updateSiteInfo(
-                        apisession, site_info["id"], body={"rftemplate_id": template_id}
-                    )
+                    response = mistapi.api.v1.sites.sites.updateSiteInfo(apisession, site_info["id"], body={"rftemplate_id": template_id})
                     if response.status_code == 200:
-                        success.append(
-                            {"site_name": site_info["name"], "country": country, "template_name": template_name}
-                        )
+                        success.append({"site_name": site_info["name"], "country": country, "template_name": template_name})
                     else:
                         failed.append({"site_name": site_info["name"], "error": f"HTTP {response.status_code}"})
                     time.sleep(0.3)
@@ -30931,9 +30221,7 @@ class SiteConfigManager:
         print("\n  Step 1: Scanning organization for AP device models...")
 
         try:
-            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
+            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT)
             all_devices = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
         except Exception as error:
             logging.error(f"Failed to fetch inventory: {error}")
@@ -30966,9 +30254,7 @@ class SiteConfigManager:
         print("\n  Step 2: Checking for existing Device Profiles...")
 
         try:
-            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
+            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT)
             existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
             return {p.get("name"): p.get("id") for p in existing}
         except Exception as error:
@@ -31077,9 +30363,7 @@ class SiteConfigManager:
             return
 
         # Analyze matching
-        with_profile, without_profile, without_model = SiteConfigManager._analyze_ap_profile_matching(
-            all_aps, profile_map
-        )
+        with_profile, without_profile, without_model = SiteConfigManager._analyze_ap_profile_matching(all_aps, profile_map)
 
         if not with_profile:
             print("\n  No APs have matching Device Profiles to assign.")
@@ -31106,9 +30390,7 @@ class SiteConfigManager:
         print("\n  Step 1: Fetching AP inventory from organization...")
 
         try:
-            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
+            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT)
             all_aps = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
 
             if not all_aps:
@@ -31128,9 +30410,7 @@ class SiteConfigManager:
         print("\n  Step 2: Fetching existing Device Profiles...")
 
         try:
-            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
+            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT)
             existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
 
             profile_map = {p.get("name"): p.get("id") for p in existing if p.get("name") and p.get("id")}
@@ -31174,9 +30454,7 @@ class SiteConfigManager:
                     }
                 )
             else:
-                without_profile.append(
-                    {"mac": ap_mac, "name": ap_name, "model": ap_model, "expected_profile": expected_profile}
-                )
+                without_profile.append({"mac": ap_mac, "name": ap_name, "model": ap_model, "expected_profile": expected_profile})
 
         print("\n  Analysis:")
         print(f"   APs with matching profiles: {len(with_profile)}")
@@ -31208,9 +30486,7 @@ class SiteConfigManager:
 
         for ap_info in with_profile:
             try:
-                response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile(
-                    apisession, org_id, ap_info["profile_id"], body={"macs": [ap_info["mac"]]}
-                )
+                response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile(apisession, org_id, ap_info["profile_id"], body={"macs": [ap_info["mac"]]})
                 if response.status_code == 200:
                     success.append(
                         {
@@ -31221,9 +30497,7 @@ class SiteConfigManager:
                         }
                     )
                 else:
-                    failed.append(
-                        {"mac": ap_info["mac"], "name": ap_info["name"], "error": f"HTTP {response.status_code}"}
-                    )
+                    failed.append({"mac": ap_info["mac"], "name": ap_info["name"], "error": f"HTTP {response.status_code}"})
                 time.sleep(0.3)
             except Exception as error:
                 failed.append({"mac": ap_info["mac"], "name": ap_info["name"], "error": str(error)})
@@ -31803,9 +31077,7 @@ class MapReplacementWizard:
         print(f"Current Map: {self.map_name}")
         print(f"{'-' * 80}")
         print(f"  Type: {self.current_map.get('type', 'N/A')}")
-        print(
-            f"  Pixel Dimensions: {self.current_map.get('width', 'N/A')} x {self.current_map.get('height', 'N/A')} px"
-        )
+        print(f"  Pixel Dimensions: {self.current_map.get('width', 'N/A')} x {self.current_map.get('height', 'N/A')} px")
         print(
             f"  Physical Size: {self.current_map.get('width_m', 'N/A')} x {self.current_map.get('height_m', 'N/A')} meters"  # noqa: E501
         )
@@ -31961,12 +31233,8 @@ class MapReplacementWizard:
         width_ratio = self.new_width_px / self.original_width_px if self.original_width_px > 0 else 1
         height_ratio = self.new_height_px / self.original_height_px if self.original_height_px > 0 else 1
 
-        print(
-            f"\n  Width ratio:  {width_ratio:.4f}x ({'+' if width_ratio > 1 else ''}{((width_ratio - 1) * 100):.1f}%)"
-        )
-        print(
-            f"  Height ratio: {height_ratio:.4f}x ({'+' if height_ratio > 1 else ''}{((height_ratio - 1) * 100):.1f}%)"
-        )
+        print(f"\n  Width ratio:  {width_ratio:.4f}x ({'+' if width_ratio > 1 else ''}{((width_ratio - 1) * 100):.1f}%)")
+        print(f"  Height ratio: {height_ratio:.4f}x ({'+' if height_ratio > 1 else ''}{((height_ratio - 1) * 100):.1f}%)")
 
         aspect_diff = abs(width_ratio - height_ratio)
         if aspect_diff < 0.01:
@@ -32176,9 +31444,7 @@ class MapReplacementWizard:
         print("  Updating map properties...")
         try:
             map_update = self._build_map_update_payload()
-            response = mistapi.api.v1.sites.maps.updateSiteMap(
-                self.apisession, site_id=self.site_id, map_id=self.map_id, body=map_update
-            )
+            response = mistapi.api.v1.sites.maps.updateSiteMap(self.apisession, site_id=self.site_id, map_id=self.map_id, body=map_update)
 
             if response.status_code == 200:
                 print("    Map properties updated successfully")
@@ -32237,9 +31503,7 @@ class MapReplacementWizard:
         """Upload the new image file."""
         print("  Uploading new image...")
         try:
-            response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
-                self.apisession, site_id=self.site_id, map_id=self.map_id, file=self.file_path
-            )
+            response = mistapi.api.v1.sites.maps.addSiteMapImageFile(self.apisession, site_id=self.site_id, map_id=self.map_id, file=self.file_path)
 
             if response.status_code in [200, 201]:
                 print("    Image uploaded successfully")
@@ -32305,9 +31569,7 @@ class MapReplacementWizard:
                 vertices = zone.get("vertices", [])
 
                 if vertices:
-                    scaled_vertices = [
-                        {"x": v.get("x", 0) * self.scale_x, "y": v.get("y", 0) * self.scale_y} for v in vertices
-                    ]
+                    scaled_vertices = [{"x": v.get("x", 0) * self.scale_x, "y": v.get("y", 0) * self.scale_y} for v in vertices]
                     response = mistapi.api.v1.sites.zones.updateSiteZone(
                         self.apisession, site_id=self.site_id, zone_id=zone_id, body={"vertices": scaled_vertices}
                     )
@@ -32685,9 +31947,7 @@ class MapsManager:
             # Fetch device placements (APs, switches, gateways with x/y positions on this map)
             device_placements = []
             try:
-                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    api_session, site_id=site_id, type="all"
-                )
+                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(api_session, site_id=site_id, type="all")
                 if devices_response.status_code == 200:
                     all_devices = devices_response.data if isinstance(devices_response.data, list) else []
                     # Filter to devices placed on this map (have map_id and x/y coordinates)
@@ -33424,9 +32684,7 @@ class MapsManager:
 
                 # Create the map
                 print(f"\nCreating map '{map_name}'...")
-                create_response = mistapi.api.v1.sites.maps.createSiteMap(
-                    self.apisession, site_id=site_id, body=map_payload
-                )
+                create_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=map_payload)
 
                 if create_response.status_code in [200, 201]:
                     created_map = create_response.data
@@ -33484,9 +32742,7 @@ class MapsManager:
             # Fetch complete source map details
             print("\nFetching source map details...")
             logging.debug(f"Calling getSiteMap API - site_id: {site_id}, map_id: {source_map_id}")
-            source_response = mistapi.api.v1.sites.maps.getSiteMap(
-                self.apisession, site_id=site_id, map_id=source_map_id
-            )
+            source_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=source_map_id)
 
             logging.debug(f"getSiteMap response: HTTP {source_response.status_code}")
             if source_response.status_code != 200:
@@ -33578,11 +32834,7 @@ class MapsManager:
             print(f"  New name: {new_name}")
             print("  Will copy: dimensions, orientation, location data, wayfinding, walls")
             print(f"  Image: {'Yes - will download and re-upload' if 'url' in source_map else 'No image to copy'}")
-            print(
-                f"  Zones: {source_zones_count} zone(s) will be cloned"
-                if source_zones_count > 0
-                else "  Zones: None found on source map"
-            )
+            print(f"  Zones: {source_zones_count} zone(s) will be cloned" if source_zones_count > 0 else "  Zones: None found on source map")
             print(f"{'-' * 80}")
 
             confirm = input("\nProceed with full clone? (yes/no): ").strip().lower()
@@ -33629,9 +32881,7 @@ class MapsManager:
 
             # Create the cloned map
             print("\nCreating cloned map...")
-            clone_response = mistapi.api.v1.sites.maps.createSiteMap(
-                self.apisession, site_id=site_id, body=clone_payload
-            )
+            clone_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=clone_payload)
 
             if clone_response.status_code not in [200, 201]:
                 print(f"\n! Failed to clone map: HTTP {clone_response.status_code}")
@@ -33703,18 +32953,14 @@ class MapsManager:
                                     zone_payload["z"] = zone["z"]
 
                                 # Create zone on cloned map
-                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(
-                                    self.apisession, site_id=site_id, body=zone_payload
-                                )
+                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(self.apisession, site_id=site_id, body=zone_payload)
 
                                 if zone_response.status_code in [200, 201]:
                                     zones_cloned += 1
                                     logging.debug(f"Cloned zone '{zone.get('name')}' to new map")
                                 else:
                                     zones_failed += 1
-                                    logging.warning(
-                                        f"Failed to clone zone '{zone.get('name')}': HTTP {zone_response.status_code}"
-                                    )
+                                    logging.warning(f"Failed to clone zone '{zone.get('name')}': HTTP {zone_response.status_code}")
 
                             except Exception as zone_error:
                                 zones_failed += 1
@@ -33747,9 +32993,7 @@ class MapsManager:
             print(f"  -> Zones: {zones_cloned} cloned" + (f" ({zones_failed} failed)" if zones_failed > 0 else ""))
             print(f"{'-' * 80}")
 
-            logging.info(
-                f"Successfully cloned map {source_map_id} to {cloned_map_id} at site {site_id} (zones: {zones_cloned})"
-            )
+            logging.info(f"Successfully cloned map {source_map_id} to {cloned_map_id} at site {site_id} (zones: {zones_cloned})")
 
         except EOFError:
             logging.info("EOF detected during map clone")
@@ -33936,9 +33180,7 @@ class MapsManager:
 
             # Apply update
             print("\nApplying changes...")
-            update_response = mistapi.api.v1.sites.maps.updateSiteMap(
-                self.apisession, site_id=site_id, map_id=map_id, body=update_payload
-            )
+            update_response = mistapi.api.v1.sites.maps.updateSiteMap(self.apisession, site_id=site_id, map_id=map_id, body=update_payload)
 
             if update_response.status_code in [200, 201]:
                 print(f"\n{'-' * 80}")
@@ -34093,9 +33335,7 @@ class MapsManager:
 
             # Use mistapi's addSiteMapImageFile method
             with open(file_path, "rb"):
-                upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
-                    self.apisession, site_id=site_id, map_id=map_id, file=file_path
-                )
+                upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(self.apisession, site_id=site_id, map_id=map_id, file=file_path)
 
             if upload_response.status_code in [200, 201]:
                 print(f"\n{'-' * 80}")
@@ -34131,9 +33371,7 @@ class MapsManager:
 
             # Fetch devices for the site
             print(f"\nFetching devices for site: {site_name}")
-            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                self.apisession, site_id=site_id, type="all"
-            )
+            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id=site_id, type="all")
 
             if devices_response.status_code != 200:
                 print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
@@ -34285,9 +33523,7 @@ class MapsManager:
                                     f.write(response.content)
                                 total_downloaded += 1
                             else:
-                                logging.warning(
-                                    f"Failed to download {site_name}/{map_name}: HTTP {response.status_code}"
-                                )
+                                logging.warning(f"Failed to download {site_name}/{map_name}: HTTP {response.status_code}")
 
                         except Exception as e:
                             logging.error(f"Error downloading map image {map_item.get('id')}: {e}")
@@ -34375,9 +33611,7 @@ class MapsManager:
             for package_name, package_spec in optional_viz_packages.items():
                 try:
                     logging.debug(f"Checking optional package: {package_name} ({package_spec})")
-                    import_manager.import_module_safely(
-                        package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
-                    )
+                    import_manager.import_module_safely(package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True)
                     logging.debug(f"Optional package {package_name} installed/verified")
                 except Exception as e:
                     logging.debug(f"Optional package {package_name} unavailable: {e}")
@@ -34460,9 +33694,7 @@ class MapsManager:
 
             # Check if map has been scaled - PPM of 0 or very low indicates unscaled map
             if not map_ppm or map_ppm == 0:
-                logging.warning(
-                    f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal"
-                )
+                logging.warning(f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal")
                 print("\n" + "!" * 60)
                 print("! WARNING: This map image has NOT been scaled!")
                 print("! RF coverage heatmap and location features will not work correctly.")
@@ -34472,9 +33704,7 @@ class MapsManager:
             # Fetch devices on this map (use stats API for status information)
             print("Loading devices...")
             logging.info(f"Fetching device stats for site {site_id} (type=all)")
-            devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                self.apisession, site_id=site_id, limit=1000
-            )
+            devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_id=site_id, limit=1000)
 
             logging.debug(f"listSiteDevicesStats API response: HTTP {devices_response.status_code}")
             if devices_response.status_code != 200:
@@ -34521,9 +33751,7 @@ class MapsManager:
             try:
                 logging.info(f"Fetching connected wireless client stats for site {site_id}")
                 # Use stats API which includes location data (x, y, map_id)
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    self.apisession, site_id=site_id, limit=1000
-                )
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(self.apisession, site_id=site_id, limit=1000)
 
                 if clients_response.status_code == 200:
                     # Use get_all to handle pagination
@@ -34536,11 +33764,7 @@ class MapsManager:
                     logging.info(f"Looking for map_id: {map_id}")
 
                     # Filter clients that have map location data matching this map
-                    clients_on_map = [
-                        c
-                        for c in all_clients
-                        if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None
-                    ]
+                    clients_on_map = [c for c in all_clients if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None]
                     logging.info(f"Clients on this map (after filtering): {len(clients_on_map)}")
 
                     if clients_on_map:
@@ -34579,18 +33803,12 @@ class MapsManager:
                         exception_str = str(coverage_data.get("exception", ""))
 
                         if "psycopg2" in exception_str or "database" in exception_str.lower():
-                            logging.warning(
-                                "RF Coverage temporarily unavailable: Mist backend database connectivity issue"
-                            )
+                            logging.warning("RF Coverage temporarily unavailable: Mist backend database connectivity issue")
                             logging.debug(f"Coverage API backend error: {exception_str}")
                         else:
-                            logging.error(
-                                f"Coverage API returned error response (first 500 chars): {exception_str[:500]}"
-                            )
+                            logging.error(f"Coverage API returned error response (first 500 chars): {exception_str[:500]}")
                             logging.debug(f"Coverage API full error response: {exception_str}")
-                            logging.debug(
-                                f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}"
-                            )
+                            logging.debug(f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}")
 
                         coverage_data = None
                         print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
@@ -35185,9 +34403,7 @@ class MapsManager:
                 y = client.get("y")
                 client_mac = client.get("mac", "unknown")
                 client_map_id = client.get("map_id", "none")
-                logging.debug(
-                    f"Client {client_mac}: x={x}, y={y}, map_id={client_map_id} (looking for map_id={map_id})"
-                )
+                logging.debug(f"Client {client_mac}: x={x}, y={y}, map_id={client_map_id} (looking for map_id={map_id})")
                 if x is not None and y is not None:
                     client_x.append(x)
                     client_y.append(y)
@@ -35246,9 +34462,7 @@ class MapsManager:
                         yanchor="bottom",
                         name="Clients Label",  # For toggle control
                     )
-                logging.info(
-                    f"Added {len(client_x)} clients to map visualization (out of {len(clients)} total clients)"
-                )
+                logging.info(f"Added {len(client_x)} clients to map visualization (out of {len(clients)} total clients)")
             else:
                 logging.warning(f"Found {len(clients)} clients but none have x,y coordinates")
         else:
@@ -35704,9 +34918,7 @@ class MapsManager:
                 logging.info(
                     f"HEATMAP DEBUG - Coverage Y range: {min(unique_y):.1f} to {max(unique_y):.1f} pixels (from {min(unique_y) / ppm:.1f}m to {max(unique_y) / ppm:.1f}m)"  # noqa: E501
                 )
-                logging.info(
-                    f"HEATMAP DEBUG - Grid size: {len(unique_x)} x {len(unique_y)} = {len(grid_data)} data points"
-                )
+                logging.info(f"HEATMAP DEBUG - Grid size: {len(unique_x)} x {len(unique_y)} = {len(grid_data)} data points")
 
                 # Create Z matrix for heatmap - use None for missing data points
                 # This prevents artificial values from being interpolated
@@ -36312,9 +35524,7 @@ class MapsManager:
                                     labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
                                     style={"marginBottom": "10px"},
                                 ),
-                                html.H4(
-                                    "Clients", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
+                                html.H4("Clients", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}),
                                 dcc.Checklist(
                                     id="client-toggle",
                                     options=[
@@ -36327,9 +35537,7 @@ class MapsManager:
                                     labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
                                     style={"marginBottom": "10px"},
                                 ),
-                                html.H4(
-                                    "Devices", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
+                                html.H4("Devices", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}),
                                 dcc.Checklist(
                                     id="device-toggle",
                                     options=[
@@ -36342,9 +35550,7 @@ class MapsManager:
                                     labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
                                     style={"marginBottom": "10px"},
                                 ),
-                                html.H4(
-                                    "Filters", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
+                                html.H4("Filters", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}),
                                 dcc.Checklist(
                                     id="filter-toggle",
                                     options=[
@@ -36654,9 +35860,7 @@ class MapsManager:
                                 ),
                                 html.Hr(),
                                 html.H3("Set Origin"),
-                                html.P(
-                                    "Click map to set coordinate origin", style={"fontSize": "11px", "color": "#888"}
-                                ),
+                                html.P("Click map to set coordinate origin", style={"fontSize": "11px", "color": "#888"}),
                                 html.Div(
                                     [
                                         html.Button(
@@ -36819,9 +36023,7 @@ class MapsManager:
                                     id="click-data",
                                     children=[
                                         html.H3("Device Info"),
-                                        html.P(
-                                            "Click a device for details", style={"color": "#888", "fontStyle": "italic"}
-                                        ),
+                                        html.P("Click a device for details", style={"color": "#888", "fontStyle": "italic"}),
                                     ],
                                 ),
                             ],
@@ -36994,18 +36196,14 @@ class MapsManager:
                 return no_update, no_update, no_update, no_update, no_update
 
             # Get site name from available sites
-            site_name = next(
-                (s.get("name", "Unknown") for s in available_sites if s.get("id") == selected_site_id), "Unknown"
-            )
+            site_name = next((s.get("name", "Unknown") for s in available_sites if s.get("id") == selected_site_id), "Unknown")
             print(f"[DEBUG] Switching to site: {site_name} ({selected_site_id})")
             logging.info(f"[SITE-SWITCH] Switching to site {site_name} ({selected_site_id})")
 
             try:
                 # Fetch maps for the new site
                 print(f"[DEBUG] Fetching maps for site {selected_site_id}...")
-                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
-                    api_session_for_site_switch, site_id=selected_site_id
-                )
+                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session_for_site_switch, site_id=selected_site_id)
                 print(f"[DEBUG] Maps API response status: {maps_response.status_code}")
 
                 if maps_response.status_code != 200:
@@ -37086,9 +36284,7 @@ class MapsManager:
 
                 # Fetch devices for this map
                 try:
-                    devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                        api_session_for_site_switch, site_id=selected_site_id, limit=1000
-                    )
+                    devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(api_session_for_site_switch, site_id=selected_site_id, limit=1000)
                     if devices_response.status_code == 200:
                         all_devices = devices_response.data or []
                         devices = [d for d in all_devices if d.get("map_id") == selected_map_id]
@@ -37126,9 +36322,7 @@ class MapsManager:
                             x=[device_x],
                             y=[device_y],
                             mode="markers+text",
-                            marker=dict(
-                                size=12, color=marker_color, symbol=marker_symbol, line=dict(color="white", width=1)
-                            ),
+                            marker=dict(size=12, color=marker_color, symbol=marker_symbol, line=dict(color="white", width=1)),
                             text=[device_name],
                             textposition="top center",
                             textfont=dict(size=10, color="#e0e0e0"),
@@ -37320,14 +36514,10 @@ class MapsManager:
                 new_map_height = new_map_data.get("height", 1000)
                 new_ppm = new_map_data.get("ppm") or 10  # Use 10 if ppm is 0 or None
 
-                logging.info(
-                    f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height}, ppm={new_ppm})"
-                )
+                logging.info(f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height}, ppm={new_ppm})")
 
                 # Fetch devices for new map
-                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                    api_session_ref, site_id=site_id_local, limit=1000
-                )
+                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(api_session_ref, site_id=site_id_local, limit=1000)
                 new_devices = []
                 if devices_response.status_code == 200:
                     all_devices = mistapi.get_all(response=devices_response, mist_session=api_session_ref)
@@ -37341,9 +36531,7 @@ class MapsManager:
                     new_zones = [z for z in all_zones if z.get("map_id") == url_map_id]
 
                 # Fetch clients for new map
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    api_session_ref, site_id=site_id_local, limit=1000
-                )
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(api_session_ref, site_id=site_id_local, limit=1000)
                 new_clients = []
                 if clients_response.status_code == 200:
                     all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
@@ -37470,9 +36658,7 @@ class MapsManager:
                             text=f"<b>{zone_name}</b>",
                             showarrow=False,
                             font=dict(size=10, color="white", family="Arial Black"),
-                            bgcolor=border_color.replace(")", ",0.8)").replace("rgb", "rgba")
-                            if "rgb" in border_color
-                            else border_color,
+                            bgcolor=border_color.replace(")", ",0.8)").replace("rgb", "rgba") if "rgb" in border_color else border_color,
                             bordercolor="white",
                             borderwidth=1,
                             borderpad=3,
@@ -37596,9 +36782,7 @@ class MapsManager:
                         )
 
                         # Add device name labels
-                        for _i, (x, y, name, device_color) in enumerate(
-                            zip(x_coords, y_coords, names, colors, strict=False)
-                        ):
+                        for _i, (x, y, name, device_color) in enumerate(zip(x_coords, y_coords, names, colors, strict=False)):
                             new_fig.add_annotation(
                                 x=x,
                                 y=y - 15,
@@ -37617,9 +36801,7 @@ class MapsManager:
                         # Add device orientation crosshairs
                         import math
 
-                        for _i, (x, y, device, device_color) in enumerate(
-                            zip(x_coords, y_coords, type_devices, colors, strict=False)
-                        ):
+                        for _i, (x, y, device, device_color) in enumerate(zip(x_coords, y_coords, type_devices, colors, strict=False)):
                             orientation = device.get("orientation", 0)
                             crosshair_size = 40
 
@@ -37661,9 +36843,7 @@ class MapsManager:
                                     x=[dot_x],
                                     y=[dot_y],
                                     mode="markers",
-                                    marker=dict(
-                                        size=12, color=device_color, symbol="circle", line=dict(color="black", width=2)
-                                    ),
+                                    marker=dict(size=12, color=device_color, symbol="circle", line=dict(color="black", width=2)),
                                     name=f"{type_cfg['name']} Orientation",
                                     showlegend=False,
                                     hoverinfo="skip",
@@ -37873,9 +37053,7 @@ class MapsManager:
                                     # Build grid data - results is list of lists, not list of dicts
                                     grid_data = {}
                                     for item in results:
-                                        if not isinstance(item, (list, tuple)) or len(item) <= max(
-                                            x_idx, y_idx, max_rssi_idx
-                                        ):
+                                        if not isinstance(item, (list, tuple)) or len(item) <= max(x_idx, y_idx, max_rssi_idx):
                                             continue
                                         x_m = item[x_idx]
                                         y_m = item[y_idx]
@@ -37943,13 +37121,9 @@ class MapsManager:
                                             f"URL map switch: RF coverage - no valid grid data after processing {len(results)} points"  # noqa: E501
                                         )
                                 else:
-                                    logging.info(
-                                        "URL map switch: No RF coverage data available for this map (empty results)"
-                                    )
+                                    logging.info("URL map switch: No RF coverage data available for this map (empty results)")
                         else:
-                            logging.warning(
-                                f"URL map switch: RF coverage API returned HTTP {coverage_response.status_code}"
-                            )
+                            logging.warning(f"URL map switch: RF coverage API returned HTTP {coverage_response.status_code}")
                     else:
                         logging.warning("URL map switch: Cannot fetch RF coverage - site_id is None")
                 except Exception as rf_error:
@@ -38009,13 +37183,7 @@ class MapsManager:
         )
         def toggle_layers(infra_layers, beacon_layers, client_layers, device_layers, filter_layers, current_fig):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0913, PLR0915
             # Combine all layer selections
-            all_layers = (
-                (infra_layers or [])
-                + (beacon_layers or [])
-                + (client_layers or [])
-                + (device_layers or [])
-                + (filter_layers or [])
-            )
+            all_layers = (infra_layers or []) + (beacon_layers or []) + (client_layers or []) + (device_layers or []) + (filter_layers or [])
 
             # Toggle traces (markers, lines, shapes)
             for trace in current_fig["data"]:
@@ -38227,9 +37395,7 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx]["text"] = (
-                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
-                                )
+                                current_fig["layout"]["annotations"][ann_idx]["text"] = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -38277,9 +37443,7 @@ class MapsManager:
                 ], current_fig
 
             if not clickData:
-                return [
-                    html.P("Click map to set origin", style={"fontSize": "11px", "color": "#ff8800", "margin": "4px 0"})
-                ], current_fig
+                return [html.P("Click map to set origin", style={"fontSize": "11px", "color": "#ff8800", "margin": "4px 0"})], current_fig
 
             # Get clicked coordinates
             point = clickData["points"][0]
@@ -38317,18 +37481,14 @@ class MapsManager:
                     f"[OK] Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})",
                     style={"fontSize": "11px", "color": "#00ff00", "margin": "4px 0"},
                 ),
-                html.P(
-                    "Click button again to exit mode", style={"fontSize": "10px", "color": "#888", "margin": "4px 0"}
-                ),
+                html.P("Click button again to exit mode", style={"fontSize": "10px", "color": "#888", "margin": "4px 0"}),
             ]
 
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
 
         # Callback to show/hide zone name input based on drawing mode
-        @app.callback(
-            Output("zone-name-container", "style"), Input("drawing-mode-dropdown", "value"), prevent_initial_call=True
-        )
+        @app.callback(Output("zone-name-container", "style"), Input("drawing-mode-dropdown", "value"), prevent_initial_call=True)
         def toggle_zone_name_input(mode):  # type: ignore[no-untyped-def]
             """Show zone name input only when zone mode is selected"""
             if mode == "zone":
@@ -38396,9 +37556,7 @@ class MapsManager:
                 # Get shapes from figure
                 shapes = current_fig.get("layout", {}).get("shapes", [])
                 if not shapes:
-                    return html.Span(
-                        "No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}
-                    ), no_update
+                    return html.Span("No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}), no_update
 
                 # Get the last shape
                 last_shape = shapes[-1]
@@ -38422,9 +37580,7 @@ class MapsManager:
                             zone_data = {"name": zone_name, "map_id": config_map_id, "vertices": vertices}
 
                             # Call Mist API to create zone
-                            response = mistapi.api.v1.sites.zones.createSiteZone(
-                                api_session_ref, config_site_id, zone_data
-                            )
+                            response = mistapi.api.v1.sites.zones.createSiteZone(api_session_ref, config_site_id, zone_data)
 
                             if hasattr(response, "status_code") and response.status_code in [200, 201]:
                                 logging.info(f"Drawing tool: Zone '{zone_name}' created successfully")
@@ -38435,13 +37591,9 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to create zone - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return html.Span(f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
                         else:
-                            return html.Span(
-                                "Zones require rectangle shapes. Use Draw Rectangle tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return html.Span("Zones require rectangle shapes. Use Draw Rectangle tool.", style={"color": "#ff6666"}), no_update
 
                     elif drawing_mode == "wall":
                         # Save wall path via updateSiteMap
@@ -38458,9 +37610,7 @@ class MapsManager:
                             )
 
                             # Get existing map data first
-                            map_response = mistapi.api.v1.sites.maps.getSiteMap(
-                                api_session_ref, config_site_id, config_map_id
-                            )
+                            map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, config_site_id, config_map_id)
                             existing_wall_path = {}
                             if hasattr(map_response, "data"):
                                 existing_wall_path = map_response.data.get("wall_path", {})
@@ -38485,25 +37635,19 @@ class MapsManager:
 
                             update_data = {"wall_path": wall_path_data}
 
-                            response = mistapi.api.v1.sites.maps.updateSiteMap(
-                                api_session_ref, config_site_id, config_map_id, update_data
-                            )
+                            response = mistapi.api.v1.sites.maps.updateSiteMap(api_session_ref, config_site_id, config_map_id, update_data)
 
                             if hasattr(response, "status_code") and response.status_code == 200:
                                 logging.info("Drawing tool: Wall segment added successfully")
-                                return html.Span(
-                                    "Wall segment saved to Mist!", style={"color": "#28a745", "fontWeight": "bold"}
-                                ), {"trigger": current_trigger + 1}
+                                return html.Span("Wall segment saved to Mist!", style={"color": "#28a745", "fontWeight": "bold"}), {
+                                    "trigger": current_trigger + 1
+                                }
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save wall - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return html.Span(f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
                         else:
-                            return html.Span(
-                                "Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return html.Span("Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}), no_update
 
                     elif drawing_mode == "path":
                         # Save sitesurvey path via updateSiteMap
@@ -38521,9 +37665,7 @@ class MapsManager:
                             y1 = last_shape.get("y1", 0) / config_ppm
 
                             # Get existing map data
-                            map_response = mistapi.api.v1.sites.maps.getSiteMap(
-                                api_session_ref, config_site_id, config_map_id
-                            )
+                            map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, config_site_id, config_map_id)
                             existing_paths = []
                             if hasattr(map_response, "data"):
                                 existing_paths = map_response.data.get("sitesurvey_path", [])
@@ -38544,55 +37686,41 @@ class MapsManager:
 
                             update_data = {"sitesurvey_path": existing_paths}  # type: ignore[dict-item]
 
-                            response = mistapi.api.v1.sites.maps.updateSiteMap(
-                                api_session_ref, config_site_id, config_map_id, update_data
-                            )
+                            response = mistapi.api.v1.sites.maps.updateSiteMap(api_session_ref, config_site_id, config_map_id, update_data)
 
                             if hasattr(response, "status_code") and response.status_code == 200:
                                 logging.info("Drawing tool: Validation path added successfully")
-                                return html.Span(
-                                    "Validation path saved to Mist!", style={"color": "#28a745", "fontWeight": "bold"}
-                                ), {"trigger": current_trigger + 1}
+                                return html.Span("Validation path saved to Mist!", style={"color": "#28a745", "fontWeight": "bold"}), {
+                                    "trigger": current_trigger + 1
+                                }
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save path - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return html.Span(f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
                         else:
-                            return html.Span(
-                                "Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return html.Span("Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}), no_update
 
                     else:  # measure mode
-                        return html.Span(
-                            "Measurement mode - shapes not saved to Mist", style={"color": "#888"}
-                        ), no_update
+                        return html.Span("Measurement mode - shapes not saved to Mist", style={"color": "#888"}), no_update
 
                 except Exception as save_error:
                     logging.error(f"Drawing tool: Error saving shape - {save_error}", exc_info=True)
                     return html.Span(f"Error: {str(save_error)[:50]}", style={"color": "#ff4444"}), no_update
 
             elif button_id == "delete-paths-btn":
-                logging.info(
-                    f"Drawing tool: Delete paths button clicked - site_id={config_site_id}, map_id={config_map_id}"
-                )
+                logging.info(f"Drawing tool: Delete paths button clicked - site_id={config_site_id}, map_id={config_map_id}")
                 try:
                     # Clear all sitesurvey_path via updateSiteMap
                     update_data = {"sitesurvey_path": []}  # type: ignore[dict-item]
                     logging.info(f"Drawing tool: Calling updateSiteMap with {update_data}")
-                    response = mistapi.api.v1.sites.maps.updateSiteMap(
-                        api_session_ref, config_site_id, config_map_id, update_data
-                    )
-                    logging.info(
-                        f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}"
-                    )
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(api_session_ref, config_site_id, config_map_id, update_data)
+                    logging.info(f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}")
 
                     if hasattr(response, "status_code") and response.status_code == 200:
                         logging.info(f"Drawing tool: All validation paths deleted from map {config_map_id}")
-                        return html.Span(
-                            "All validation paths deleted - click Refresh to reload map", style={"color": "#28a745"}
-                        ), {"trigger": current_trigger + 1}
+                        return html.Span("All validation paths deleted - click Refresh to reload map", style={"color": "#28a745"}), {
+                            "trigger": current_trigger + 1
+                        }
                     else:
                         error_msg = getattr(response, "text", str(response))
                         logging.error(f"Drawing tool: Delete paths failed - {error_msg}")
@@ -38602,26 +37730,20 @@ class MapsManager:
                     return html.Span(f"Error: {str(del_error)[:50]}", style={"color": "#ff4444"}), no_update
 
             elif button_id == "delete-wayfinding-btn":
-                logging.info(
-                    f"Drawing tool: Delete wayfinding button clicked - site_id={config_site_id}, map_id={config_map_id}"
-                )
+                logging.info(f"Drawing tool: Delete wayfinding button clicked - site_id={config_site_id}, map_id={config_map_id}")
                 try:
                     # Clear all wayfinding_path via updateSiteMap
                     wayfinding_data: dict[str, Any] = {"coordinate": "actual", "nodes": []}
                     update_data = {"wayfinding_path": wayfinding_data}
                     logging.info(f"Drawing tool: Calling updateSiteMap with {update_data}")
-                    response = mistapi.api.v1.sites.maps.updateSiteMap(
-                        api_session_ref, config_site_id, config_map_id, update_data
-                    )
-                    logging.info(
-                        f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}"
-                    )
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(api_session_ref, config_site_id, config_map_id, update_data)
+                    logging.info(f"Drawing tool: updateSiteMap response status_code={getattr(response, 'status_code', 'N/A')}")
 
                     if hasattr(response, "status_code") and response.status_code == 200:
                         logging.info(f"Drawing tool: All wayfinding paths deleted from map {config_map_id}")
-                        return html.Span(
-                            "All wayfinding paths deleted - click Refresh to reload map", style={"color": "#28a745"}
-                        ), {"trigger": current_trigger + 1}
+                        return html.Span("All wayfinding paths deleted - click Refresh to reload map", style={"color": "#28a745"}), {
+                            "trigger": current_trigger + 1
+                        }
                     else:
                         error_msg = getattr(response, "text", str(response))
                         logging.error(f"Drawing tool: Delete wayfinding failed - {error_msg}")
@@ -38635,15 +37757,11 @@ class MapsManager:
                     # Clear wall_path via updateSiteMap
                     wall_data: dict[str, Any] = {"coordinate": "actual", "nodes": []}
                     update_data = {"wall_path": wall_data}
-                    response = mistapi.api.v1.sites.maps.updateSiteMap(
-                        api_session_ref, config_site_id, config_map_id, update_data
-                    )
+                    response = mistapi.api.v1.sites.maps.updateSiteMap(api_session_ref, config_site_id, config_map_id, update_data)
 
                     if hasattr(response, "status_code") and response.status_code == 200:
                         logging.info(f"Drawing tool: All walls deleted from map {config_map_id}")
-                        return html.Span(
-                            "All walls deleted - click Refresh to reload map", style={"color": "#28a745"}
-                        ), {"trigger": current_trigger + 1}
+                        return html.Span("All walls deleted - click Refresh to reload map", style={"color": "#28a745"}), {"trigger": current_trigger + 1}
                     else:
                         error_msg = getattr(response, "text", str(response))
                         return html.Span(f"Failed: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
@@ -38652,9 +37770,7 @@ class MapsManager:
                     return html.Span(f"Error: {str(del_error)[:50]}", style={"color": "#ff4444"}), no_update
 
             elif button_id == "delete-zones-btn":
-                logging.info(
-                    f"Drawing tool: Delete all zones button clicked - site_id={config_site_id}, map_id={config_map_id}"
-                )
+                logging.info(f"Drawing tool: Delete all zones button clicked - site_id={config_site_id}, map_id={config_map_id}")
                 try:
                     # First, get all zones for the site
                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, config_site_id)
@@ -38679,9 +37795,7 @@ class MapsManager:
                         zone_id = zone.get("id")
                         zone_name = zone.get("name", "Unknown")
                         try:
-                            del_response = mistapi.api.v1.sites.zones.deleteSiteZone(
-                                api_session_ref, config_site_id, zone_id
-                            )
+                            del_response = mistapi.api.v1.sites.zones.deleteSiteZone(api_session_ref, config_site_id, zone_id)
                             if hasattr(del_response, "status_code") and del_response.status_code in [200, 204]:
                                 deleted_count += 1
                                 logging.info(f"Drawing tool: Deleted zone '{zone_name}'")
@@ -38693,13 +37807,11 @@ class MapsManager:
                             logging.error(f"Drawing tool: Error deleting zone '{zone_name}': {zone_err}")
 
                     if failed_count == 0:
-                        return html.Span(
-                            f"Deleted {deleted_count} zones - click Refresh to reload map", style={"color": "#28a745"}
-                        ), {"trigger": current_trigger + 1}
+                        return html.Span(f"Deleted {deleted_count} zones - click Refresh to reload map", style={"color": "#28a745"}), {
+                            "trigger": current_trigger + 1
+                        }
                     else:
-                        return html.Span(
-                            f"Deleted {deleted_count}, failed {failed_count} zones", style={"color": "#ffc107"}
-                        ), {"trigger": current_trigger + 1}
+                        return html.Span(f"Deleted {deleted_count}, failed {failed_count} zones", style={"color": "#ffc107"}), {"trigger": current_trigger + 1}
 
                 except Exception as del_error:
                     logging.error(f"Drawing tool: Error deleting zones - {del_error}", exc_info=True)
@@ -38832,14 +37944,10 @@ class MapsManager:
                 else:
                     logging.warning("Pre-delete backup failed - proceeding with deletion anyway")
 
-                logging.warning(
-                    f"DESTRUCTIVE: Deleting map '{config_map_name}' (ID: {config_map_id}) from site {config_site_id}"
-                )
+                logging.warning(f"DESTRUCTIVE: Deleting map '{config_map_name}' (ID: {config_map_id}) from site {config_site_id}")
 
                 # Call the Mist API to delete the map - use config values!
-                delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(
-                    api_session_ref, site_id=config_site_id, map_id=config_map_id
-                )
+                delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(api_session_ref, site_id=config_site_id, map_id=config_map_id)
 
                 if delete_response.status_code in [200, 204]:
                     logging.info(f"Map '{config_map_name}' (ID: {config_map_id}) deleted successfully")
@@ -38851,9 +37959,7 @@ class MapsManager:
                     ), new_cache_bust
                 else:
                     logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")
-                    return html.Span(
-                        f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}), no_update
 
             except Exception as delete_error:
                 logging.error(f"Error deleting map: {delete_error}", exc_info=True)
@@ -38943,27 +38049,24 @@ class MapsManager:
             """Handle zone edit/remove and display selected zone info"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return html.P(
-                    "Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}
-                ), selected_zone_data or {"zone_id": None, "zone_name": None}
+                return html.P("Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}), selected_zone_data or {
+                    "zone_id": None,
+                    "zone_name": None,
+                }
 
             trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
             current_zone = selected_zone_data or {"zone_id": None, "zone_name": None}
 
             if trigger_id == "edit-zone-btn":
                 if current_zone.get("zone_id"):
-                    logging.info(
-                        f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}"
-                    )
+                    logging.info(f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}")
                     return html.Div(
                         [
                             html.P(
                                 f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
                                 style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
                             ),
-                            html.P(
-                                "Use Mist Dashboard to modify zone shape", style={"fontSize": "10px", "color": "#888"}
-                            ),
+                            html.P("Use Mist Dashboard to modify zone shape", style={"fontSize": "10px", "color": "#888"}),
                         ]
                     ), current_zone
                 else:
@@ -38973,9 +38076,7 @@ class MapsManager:
                                 "! Select a zone first",
                                 style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
                             ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
+                            html.P("Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}),
                         ]
                     ), current_zone
 
@@ -38987,9 +38088,7 @@ class MapsManager:
 
                     try:
                         # Call Mist API to delete the zone
-                        delete_response = mistapi.api.v1.sites.zones.deleteSiteZone(
-                            api_session_ref, site_id=site_id, zone_id=zone_id
-                        )
+                        delete_response = mistapi.api.v1.sites.zones.deleteSiteZone(api_session_ref, site_id=site_id, zone_id=zone_id)
 
                         if delete_response.status_code in [200, 204]:
                             logging.info(f"Zone {zone_name} deleted successfully")
@@ -38999,9 +38098,7 @@ class MapsManager:
                                         f"[OK] Zone deleted: {zone_name}",
                                         style={"fontSize": "11px", "color": "#00ff88", "fontWeight": "bold"},
                                     ),
-                                    html.P(
-                                        "Refresh the page to update view", style={"fontSize": "10px", "color": "#888"}
-                                    ),
+                                    html.P("Refresh the page to update view", style={"fontSize": "10px", "color": "#888"}),
                                 ]
                             ), {"zone_id": None, "zone_name": None}
                         else:
@@ -39012,9 +38109,7 @@ class MapsManager:
                                         f"X Delete failed: HTTP {delete_response.status_code}",
                                         style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
                                     ),
-                                    html.P(
-                                        "Check permissions and try again", style={"fontSize": "10px", "color": "#888"}
-                                    ),
+                                    html.P("Check permissions and try again", style={"fontSize": "10px", "color": "#888"}),
                                 ]
                             ), current_zone
 
@@ -39035,9 +38130,7 @@ class MapsManager:
                                 "! Select a zone first",
                                 style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
                             ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
+                            html.P("Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}),
                         ]
                     ), current_zone
 
@@ -39073,9 +38166,7 @@ class MapsManager:
                         ]
                     ), {"zone_id": zone_id, "zone_name": zone_name}
 
-            return html.P(
-                "Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}
-            ), current_zone
+            return html.P("Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}), current_zone
 
         # Callback to toggle auto-refresh intervals on/off
         @app.callback(
@@ -39186,15 +38277,11 @@ class MapsManager:
                     logging.info(f"Pre-clone backup saved: {backup_path}")
 
                 # Step 1: Fetch source map details
-                source_response = mistapi.api.v1.sites.maps.getSiteMap(
-                    api_session_ref, site_id=site_id_local, map_id=source_map_id
-                )
+                source_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, site_id=site_id_local, map_id=source_map_id)
 
                 if source_response.status_code != 200:
                     logging.error(f"Clone failed: Could not fetch source map - HTTP {source_response.status_code}")
-                    return html.Span(
-                        f"! Failed to fetch source map: HTTP {source_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return html.Span(f"! Failed to fetch source map: HTTP {source_response.status_code}", style={"color": "#ff4444"}), no_update
 
                 source_map = source_response.data
 
@@ -39254,17 +38341,13 @@ class MapsManager:
                         image_temp_path = None
 
                 # Step 4: Create the cloned map
-                clone_response = mistapi.api.v1.sites.maps.createSiteMap(
-                    api_session_ref, site_id=site_id_local, body=clone_payload
-                )
+                clone_response = mistapi.api.v1.sites.maps.createSiteMap(api_session_ref, site_id=site_id_local, body=clone_payload)
 
                 if clone_response.status_code not in [200, 201]:
                     logging.error(f"Clone failed: Could not create map - HTTP {clone_response.status_code}")
                     if image_temp_path and os.path.exists(image_temp_path):
                         os.remove(image_temp_path)
-                    return html.Span(
-                        f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return html.Span(f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={"color": "#ff4444"}), no_update
 
                 cloned_map = clone_response.data
                 cloned_map_id = cloned_map.get("id")
@@ -39309,9 +38392,7 @@ class MapsManager:
                                 if "z" in zone:
                                     zone_payload["z"] = zone["z"]
 
-                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(
-                                    api_session_ref, site_id=site_id_local, body=zone_payload
-                                )
+                                zone_response = mistapi.api.v1.sites.zones.createSiteZone(api_session_ref, site_id=site_id_local, body=zone_payload)
 
                                 if zone_response.status_code in [200, 201]:
                                     zones_cloned += 1
@@ -39329,14 +38410,10 @@ class MapsManager:
                 if zones_cloned > 0:
                     result_parts.append(f"Zones: {zones_cloned} cloned")
 
-                logging.info(
-                    f"Clone complete: {new_name} (ID: {cloned_map_id}), image={image_uploaded}, zones={zones_cloned}"
-                )
+                logging.info(f"Clone complete: {new_name} (ID: {cloned_map_id}), image={image_uploaded}, zones={zones_cloned}")
                 # Increment cache bust trigger to refresh map dropdown
                 new_cache_bust = {"trigger": current_trigger + 1}
-                return html.Span(
-                    " | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}
-                ), new_cache_bust
+                return html.Span(" | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}), new_cache_bust
 
             except Exception as e:
                 logging.error(f"Clone operation failed: {e}", exc_info=True)
@@ -39436,14 +38513,10 @@ class MapsManager:
                     logging.warning("Live data refresh: map_id is None, skipping refresh")
                     return no_update, updated_refresh_times
 
-                logging.info(
-                    f"Live data refresh: Fetching client positions for map {map_id_local} (site: {site_id_local})"
-                )
+                logging.info(f"Live data refresh: Fetching client positions for map {map_id_local} (site: {site_id_local})")
 
                 # Fetch fresh client data from API
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    api_session_ref, site_id=site_id_local, limit=1000
-                )
+                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(api_session_ref, site_id=site_id_local, limit=1000)
 
                 if clients_response.status_code != 200:
                     logging.warning(f"Live data refresh: Failed to fetch clients - HTTP {clients_response.status_code}")
@@ -39451,15 +38524,9 @@ class MapsManager:
 
                 # Get all clients and filter for this map
                 all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
-                fresh_clients = [
-                    c
-                    for c in all_clients
-                    if c.get("map_id") == map_id_local and c.get("x") is not None and c.get("y") is not None
-                ]
+                fresh_clients = [c for c in all_clients if c.get("map_id") == map_id_local and c.get("x") is not None and c.get("y") is not None]
 
-                logging.info(
-                    f"Live data refresh: Found {len(fresh_clients)} clients on map (total: {len(all_clients)})"
-                )
+                logging.info(f"Live data refresh: Found {len(fresh_clients)} clients on map (total: {len(all_clients)})")
 
                 # Update client traces in the figure
                 wifi_client_x = []
@@ -39523,9 +38590,7 @@ class MapsManager:
                         trace["y"] = wired_client_y
                         trace["hovertext"] = wired_client_hover
                         # Keep visible - don't change visibility based on toggle during refresh
-                        logging.info(
-                            f"Live data refresh: Updated Wired clients trace with {len(wired_client_x)} clients"
-                        )
+                        logging.info(f"Live data refresh: Updated Wired clients trace with {len(wired_client_x)} clients")
 
                 if not trace_updated:
                     logging.warning(
@@ -39537,14 +38602,10 @@ class MapsManager:
                 # We need to update their positions to match new client positions
                 if "layout" in current_fig and "annotations" in current_fig["layout"]:
                     # Remove old client label annotations
-                    new_annotations = [
-                        ann for ann in current_fig["layout"]["annotations"] if ann.get("name") != "Clients Label"
-                    ]
+                    new_annotations = [ann for ann in current_fig["layout"]["annotations"] if ann.get("name") != "Clients Label"]
 
                     # Add new client label annotations for WiFi clients
-                    for _i, (x, y, name) in enumerate(
-                        zip(wifi_client_x, wifi_client_y, wifi_client_names, strict=False)
-                    ):
+                    for _i, (x, y, name) in enumerate(zip(wifi_client_x, wifi_client_y, wifi_client_names, strict=False)):
                         new_annotations.append(
                             {
                                 "x": x,
@@ -39582,9 +38643,7 @@ class MapsManager:
 
                 # Refresh walls from map data
                 try:
-                    map_response = mistapi.api.v1.sites.maps.getSiteMap(
-                        api_session_ref, site_id=site_id_local, map_id=map_id_local
-                    )
+                    map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, site_id=site_id_local, map_id=map_id_local)
                     if map_response.status_code == 200:
                         map_data_fresh = map_response.data
                         wall_path = map_data_fresh.get("wall_path", {})
@@ -39664,9 +38723,7 @@ class MapsManager:
                     logging.warning("Live data refresh: RF coverage - map_id is None, skipping")
                     return no_update, updated_refresh_times
 
-                logging.info(
-                    f"Live data refresh: Fetching RF coverage data for map {map_id_local} (site: {site_id_local})"
-                )
+                logging.info(f"Live data refresh: Fetching RF coverage data for map {map_id_local} (site: {site_id_local})")
 
                 # Fetch fresh coverage data from API
                 coverage_url = f"/api/v1/sites/{site_id_local}/location/coverage"
@@ -39681,9 +38738,7 @@ class MapsManager:
                 coverage_response = api_session_ref.mist_get(coverage_url, query=coverage_params)
 
                 if coverage_response.status_code != 200:
-                    logging.warning(
-                        f"Live data refresh: Failed to fetch RF coverage - HTTP {coverage_response.status_code}"
-                    )
+                    logging.warning(f"Live data refresh: Failed to fetch RF coverage - HTTP {coverage_response.status_code}")
                     return no_update, updated_refresh_times
 
                 coverage_data = coverage_response.data
@@ -39707,13 +38762,7 @@ class MapsManager:
                     x_idx = result_def.index("x")
                     y_idx = result_def.index("y")
                     # Try max_rssi first, fall back to avg_rssi
-                    rssi_idx = (
-                        result_def.index("max_rssi")
-                        if "max_rssi" in result_def
-                        else result_def.index("avg_rssi")
-                        if "avg_rssi" in result_def
-                        else -1
-                    )
+                    rssi_idx = result_def.index("max_rssi") if "max_rssi" in result_def else result_def.index("avg_rssi") if "avg_rssi" in result_def else -1
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
                     return no_update, updated_refresh_times
@@ -40035,9 +39084,7 @@ class MapsManager:
 
             # Fetch devices for this map
             try:
-                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                    self.apisession, site_id=target_site_id, limit=1000
-                )
+                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_id=target_site_id, limit=1000)
                 if devices_response.status_code == 200:
                     all_devices = devices_response.data or []
                     devices = [d for d in all_devices if d.get("map_id") == map_id]
@@ -40059,9 +39106,7 @@ class MapsManager:
 
             # Fetch clients for this map
             try:
-                clients_response = mistapi.api.v1.sites.stats.getSiteClientsStats(
-                    self.apisession, site_id=target_site_id
-                )
+                clients_response = mistapi.api.v1.sites.stats.getSiteClientsStats(self.apisession, site_id=target_site_id)
                 if clients_response.status_code == 200:
                     all_clients = clients_response.data or []
                     clients = [c for c in all_clients if c.get("map_id") == map_id]
@@ -40481,16 +39526,12 @@ class FirmwareManager:
 
             if site_filter:
                 # Query specific site for current device stats
-                stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                    self.apisession, site_filter, type="all", limit=1000
-                )
+                stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_filter, type="all", limit=1000)
                 site_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
                 all_device_stats.extend(site_stats)
             else:
                 # Query entire org for current device stats
-                stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
-                    self.apisession, self.org_id, type="all", fields="*", limit=1000
-                )
+                stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(self.apisession, self.org_id, type="all", fields="*", limit=1000)
                 org_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
                 all_device_stats.extend(org_stats)
 
@@ -40542,10 +39583,7 @@ class FirmwareManager:
 
                 for upgrade in active_upgrades:
                     progress_bar = DisplayUtils.create_progress_bar(upgrade["progress"], bar_length=15)
-                    print(
-                        f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
-                        f"{upgrade['status']:<12} {progress_bar}"
-                    )
+                    print(f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} {upgrade['status']:<12} {progress_bar}")
 
                 print("  " + "=" * 86)
 
@@ -40679,9 +39717,7 @@ class FirmwareManager:
 
             # Log template-to-site mapping statistics
             for template_id, sites in template_sites_mapping.items():
-                template_name = next(
-                    (name for name, tid in template_name_to_id.items() if tid == template_id), "Unknown"
-                )
+                template_name = next((name for name, tid in template_name_to_id.items() if tid == template_id), "Unknown")
                 logging.debug(f"Template '{template_name}': {len(sites)} sites")
 
             return template_name_to_id, template_sites_mapping
@@ -41084,9 +40120,7 @@ class FirmwareManager:
             print("")
 
             try:
-                selection = (
-                    InputUtils.safe_input("    Select organization(s): ", context="org_multi_select").strip().lower()
-                )
+                selection = InputUtils.safe_input("    Select organization(s): ", context="org_multi_select").strip().lower()
             except SystemExit:
                 return None
 
@@ -41176,9 +40210,7 @@ class FirmwareManager:
                 print("")
 
                 try:
-                    selection = (
-                        InputUtils.safe_input("      Select site(s): ", context="site_multi_select").strip().lower()
-                    )
+                    selection = InputUtils.safe_input("      Select site(s): ", context="site_multi_select").strip().lower()
                 except SystemExit:
                     return None
 
@@ -41358,11 +40390,7 @@ class FirmwareManager:
                 )
 
                 try:
-                    cont = (
-                        InputUtils.safe_input("  Continue with remaining orgs? (y/N): ", context="msp_continue")
-                        .strip()
-                        .lower()
-                    )
+                    cont = InputUtils.safe_input("  Continue with remaining orgs? (y/N): ", context="msp_continue").strip().lower()
                 except SystemExit:
                     break
 
@@ -41906,9 +40934,7 @@ class FirmwareManager:
         print("\n-> Discovering available SSR firmware versions...")
         try:
             # Use the SSR-specific API to get available firmware versions
-            versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
-                self.apisession, self.org_id, channel=firmware_channel
-            )
+            versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(self.apisession, self.org_id, channel=firmware_channel)
 
             if versions_response.status_code != 200:
                 print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
@@ -42104,14 +41130,10 @@ class FirmwareManager:
                 try:
                     # Get SSRs at this site
                     print(f"  -> Discovering SSRs at {site_name}...")
-                    site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                        self.apisession, site_id, type="gateway"
-                    )
+                    site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id, type="gateway")
 
                     if site_devices_response.status_code != 200:
-                        error_msg = (
-                            f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
-                        )
+                        error_msg = f"Failed to retrieve devices for site {site_name}: {site_devices_response.status_code}"
                         print(f"  X  {error_msg}")
                         site_result["error"] = error_msg
                         upgrade_results["errors"].append(error_msg)
@@ -42130,18 +41152,12 @@ class FirmwareManager:
                         logger.debug(f"Device {device_id}: model='{device_model}', type='{device_type}'")
 
                         # Check if this is an SSR
-                        if device_type == "gateway" and (
-                            any(ssr_pattern in device_model for ssr_pattern in ssr_models) or "SSR" in device_model
-                        ):
+                        if device_type == "gateway" and (any(ssr_pattern in device_model for ssr_pattern in ssr_models) or "SSR" in device_model):
                             site_ssrs.append(device)
-                            logger.info(
-                                f"Identified SSR device: {device_id} (model: {device_model}, type: {device_type})"
-                            )
+                            logger.info(f"Identified SSR device: {device_id} (model: {device_model}, type: {device_type})")
                             print(f"    -> Identified SSR: {device_model} ({device_id})")
                         else:
-                            logger.debug(
-                                f"Skipping non-SSR device: {device_id} (model: {device_model}, type: {device_type})"
-                            )
+                            logger.debug(f"Skipping non-SSR device: {device_id} (model: {device_model}, type: {device_type})")
 
                     site_result["ssrs_found"] = len(site_ssrs)
 
@@ -42210,9 +41226,7 @@ class FirmwareManager:
                         print(
                             f"  -> Skipped {len(skipped_device_ids)} device(s) (already at target version or other issues)"  # noqa: E501
                         )
-                    logger.info(
-                        f"Initiating SSR firmware upgrade at {site_name} for validated devices: {validated_device_ids}"
-                    )
+                    logger.info(f"Initiating SSR firmware upgrade at {site_name} for validated devices: {validated_device_ids}")
 
                     # Use Mist API to upgrade SSR firmware
                     # SECURITY: SSR upgrades use org-level API with specific parameters
@@ -42240,9 +41254,7 @@ class FirmwareManager:
                     print(f"  -> Device IDs: {validated_device_ids}")
 
                     # Execute the SSR-specific upgrade API call
-                    upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(
-                        self.apisession, self.org_id, body=upgrade_body
-                    )
+                    upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(self.apisession, self.org_id, body=upgrade_body)
 
                     if upgrade_response.status_code in [200, 202]:
                         print(f"  !? Firmware upgrade initiated for {len(validated_device_ids)} SSR(s)")
@@ -42272,9 +41284,7 @@ class FirmwareManager:
                                 # Don't count this as an error
                             elif "downgrade fw version not allowed" in response_text.lower():
                                 # This is a validation error, not a system error
-                                logger.warning(
-                                    f"SSR downgrade rejected at {site_name}: API prevents firmware downgrades"
-                                )
+                                logger.warning(f"SSR downgrade rejected at {site_name}: API prevents firmware downgrades")
                                 print(f"  ! Firmware downgrade not allowed at {site_name} - API validation failed")
                                 site_result["upgrade_initiated"] = False
                                 site_result["skip_reason"] = "downgrade_not_allowed"
@@ -42287,9 +41297,7 @@ class FirmwareManager:
                                 print(f"  X  {error_msg}")
                                 site_result["error"] = error_msg
                                 upgrade_results["errors"].append(error_msg)
-                                logger.error(
-                                    f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}"
-                                )
+                                logger.error(f"SSR firmware upgrade failed at {site_name}: {upgrade_response.status_code}")
 
                         except Exception as e:
                             logger.error(f"Could not read response details: {e}")
@@ -42531,9 +41539,7 @@ class FirmwareUpgradeStatusChecker:
     def _fetch_site_stats(self) -> bool:
         """Fetch device stats for a single site."""
         print("   Fetching stats for selected site...")
-        stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-            apisession, self.site_filter, type="all", limit=1000
-        )
+        stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, self.site_filter, type="all", limit=1000)
         site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
         self.all_device_stats.extend(site_stats)
 
@@ -42544,9 +41550,7 @@ class FirmwareUpgradeStatusChecker:
     def _fetch_org_stats(self) -> bool:
         """Fetch device stats organization-wide."""
         print("   Fetching organization-wide device statistics...")
-        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
-            apisession, self.org_id, type="all", fields="*", limit=1000
-        )
+        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(apisession, self.org_id, type="all", fields="*", limit=1000)
         org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
         self.all_device_stats.extend(org_stats)
 
@@ -42641,9 +41645,7 @@ class FirmwareUpgradeStatusChecker:
 
         return fw_info
 
-    def _categorize_status(
-        self, fw_status: str, fw_progress: Any, fw_timestamp: Any, device_info: dict[str, Any]
-    ) -> None:
+    def _categorize_status(self, fw_status: str, fw_progress: Any, fw_timestamp: Any, device_info: dict[str, Any]) -> None:
         """Categorize device upgrade status and update summary."""
         if fw_status in ("inprogress", "upgrading", "downloading"):
             if self._is_stale_upgrade(fw_progress, fw_timestamp):
@@ -43034,9 +42036,7 @@ class FirmwareUpgradeStatusChecker:
             end_time = int(time.time())
             start_time = end_time - (24 * 60 * 60)
 
-            resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
-                apisession, self.org_id, start=start_time, end=end_time, limit=1000
-            )
+            resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, self.org_id, start=start_time, end=end_time, limit=1000)
             logs = mistapi.get_all(response=resp, mist_session=apisession)
 
             if not logs:
@@ -44274,9 +43274,7 @@ class BulkAPFirmwareUpgrader:
         if estimate["site_count"] > 1 or estimate["upgrade_calls"] > 1:
             print("\n   Breakdown by site:")
             for item in estimate["breakdown"][:10]:  # Show first 10
-                print(
-                    f"     - {item['site_name']}: {item['calls']} call(s) ({item['reason']}, {item['devices']} devices)"
-                )
+                print(f"     - {item['site_name']}: {item['calls']} call(s) ({item['reason']}, {item['devices']} devices)")
             if len(estimate["breakdown"]) > 10:
                 remaining = len(estimate["breakdown"]) - 10
                 remaining_calls = sum(b["calls"] for b in estimate["breakdown"][10:])
@@ -44528,9 +43526,7 @@ class BulkAPFirmwareUpgrader:
                     "P2P Enabled": self.upgrade_config["enable_p2p"],
                     "Max Failure %": self.upgrade_config["max_failure_percentage"],
                     "Force Upgrade": self.upgrade_config["force"],
-                    "Upgrade ID": self.upgrade_ids[-1]
-                    if self.upgrade_ids
-                    else ("N/A (DRY-RUN)" if self.dry_run else "N/A"),
+                    "Upgrade ID": self.upgrade_ids[-1] if self.upgrade_ids else ("N/A (DRY-RUN)" if self.dry_run else "N/A"),
                     "Status": effective_status,
                     "Timestamp": datetime.now(UTC).isoformat(),
                 }
@@ -44732,11 +43728,7 @@ class BulkAPFirmwareUpgrader:
                 print(f"      [{idx}] {version}")
 
             try:
-                choice = (
-                    input(f"\n   Select version for {ap_type} (1-{len(sorted_versions)}), 's' to skip: ")
-                    .strip()
-                    .lower()
-                )
+                choice = input(f"\n   Select version for {ap_type} (1-{len(sorted_versions)}), 's' to skip: ").strip().lower()
                 if choice == "s":
                     print(f"   Skipped {ap_type}")
                     continue
@@ -45066,9 +44058,7 @@ class MSPInventoryExporter:
         self._print_login_prompt()  # type: ignore[no-untyped-call]
 
         try:
-            proceed = (
-                InputUtils.safe_input("  Switch to interactive login? (Y/n): ", context="msp_inventory").strip().lower()
-            )
+            proceed = InputUtils.safe_input("  Switch to interactive login? (Y/n): ", context="msp_inventory").strip().lower()
         except SystemExit:
             return False
 
@@ -45515,11 +44505,7 @@ class SiteAutoUpgradeConfigurator:
         print("")
 
         try:
-            confirm = (
-                InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm")
-                .strip()
-                .lower()
-            )
+            confirm = InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm").strip().lower()
         except SystemExit:
             return
 
@@ -45543,9 +44529,7 @@ class SiteAutoUpgradeConfigurator:
         print("")
 
         try:
-            firmware_mode = (
-                InputUtils.safe_input("  Selection mode (1-2) [1]: ", context="msp_firmware_mode").strip() or "1"
-            )
+            firmware_mode = InputUtils.safe_input("  Selection mode (1-2) [1]: ", context="msp_firmware_mode").strip() or "1"
         except SystemExit:
             logging.debug("SystemExit during firmware mode selection")
             return
@@ -45587,9 +44571,7 @@ class SiteAutoUpgradeConfigurator:
             logging.warning("Schedule configuration cancelled by user")
             return
 
-        logging.info(
-            f"Schedule configured: day={shared_schedule.get('day_of_week')}, time={shared_schedule.get('time_of_day')}"
-        )
+        logging.info(f"Schedule configured: day={shared_schedule.get('day_of_week')}, time={shared_schedule.get('time_of_day')}")
 
         # Display what will be applied
         print("")
@@ -45606,11 +44588,7 @@ class SiteAutoUpgradeConfigurator:
         print("")
 
         try:
-            final_confirm = (
-                InputUtils.safe_input("  Apply this configuration? (Y/n): ", context="msp_final_confirm")
-                .strip()
-                .lower()
-            )
+            final_confirm = InputUtils.safe_input("  Apply this configuration? (Y/n): ", context="msp_final_confirm").strip().lower()
         except SystemExit:
             logging.debug("SystemExit during final confirmation")
             return
@@ -45647,9 +44625,7 @@ class SiteAutoUpgradeConfigurator:
             configurator.shared_versions = shared_versions  # None means auto-select, dict means use these
 
             success, site_count = configurator._run_msp_mode()
-            all_results.append(
-                {"org_id": org_id, "org_name": org_name, "success": success, "sites_configured": site_count}
-            )
+            all_results.append({"org_id": org_id, "org_name": org_name, "success": success, "sites_configured": site_count})
 
         # Summary
         SiteAutoUpgradeConfigurator._print_msp_summary(all_results, dry_run)
@@ -45807,9 +44783,7 @@ class SiteAutoUpgradeConfigurator:
             print("    [Enter] Skip this family")
 
             try:
-                choice = InputUtils.safe_input(
-                    f"  Select version (1-{len(sorted_versions)}): ", context="msp_firmware_select"
-                ).strip()
+                choice = InputUtils.safe_input(f"  Select version (1-{len(sorted_versions)}): ", context="msp_firmware_select").strip()
             except SystemExit:
                 logging.debug("SystemExit during firmware version selection")
                 return None
@@ -45911,9 +44885,7 @@ class SiteAutoUpgradeConfigurator:
 
         # Apply configuration (schedule was set before calling)
         success, count = self._apply_auto_upgrade_config()
-        logging.info(
-            f"MSP mode configuration complete for {self.org_name}: success={success}, sites_configured={count}"
-        )
+        logging.info(f"MSP mode configuration complete for {self.org_name}: success={success}, sites_configured={count}")
         return (success, count)
 
     def _auto_select_versions(self) -> bool:
@@ -46130,11 +45102,7 @@ class SiteAutoUpgradeConfigurator:
 
         print("")
         try:
-            selection = (
-                InputUtils.safe_input("  Enter site number (or 'q' to cancel): ", context="auto_upgrade_config")
-                .strip()
-                .lower()
-            )
+            selection = InputUtils.safe_input("  Enter site number (or 'q' to cancel): ", context="auto_upgrade_config").strip().lower()
         except SystemExit:
             return False
 
@@ -46402,9 +45370,7 @@ class SiteAutoUpgradeConfigurator:
             self._display_family_versions(family, models, sorted_versions, current_version)
 
             try:
-                choice = InputUtils.safe_input(
-                    f"  Select version (1-{len(sorted_versions)}): ", context="auto_upgrade_config"
-                ).strip()
+                choice = InputUtils.safe_input(f"  Select version (1-{len(sorted_versions)}): ", context="auto_upgrade_config").strip()
             except SystemExit:
                 logging.debug("SystemExit during version selection")
                 return False
@@ -46429,9 +45395,7 @@ class SiteAutoUpgradeConfigurator:
 
         day_map = {"1": "any", "2": "sun", "3": "mon", "4": "tue", "5": "wed", "6": "thu", "7": "fri", "8": "sat"}
         try:
-            choice = InputUtils.safe_input(
-                "  Day of week (1-8, default=1 for daily): ", context="auto_upgrade_config"
-            ).strip()
+            choice = InputUtils.safe_input("  Day of week (1-8, default=1 for daily): ", context="auto_upgrade_config").strip()
         except SystemExit:
             choice = "1"
         return day_map.get(choice, "any")
@@ -46462,12 +45426,8 @@ class SiteAutoUpgradeConfigurator:
         self.schedule["day_of_week"] = self._prompt_day_of_week()
         self.schedule["time_of_day"] = self._prompt_time_of_day()
 
-        day_display = (
-            "daily" if self.schedule.get("day_of_week") == "any" else self.schedule.get("day_of_week", "daily")
-        )
-        time_display = (
-            "any time" if self.schedule.get("time_of_day") == "any" else self.schedule.get("time_of_day", "any time")
-        )
+        day_display = "daily" if self.schedule.get("day_of_week") == "any" else self.schedule.get("day_of_week", "daily")
+        time_display = "any time" if self.schedule.get("time_of_day") == "any" else self.schedule.get("time_of_day", "any time")
         print(f"  + Schedule: {day_display} at {time_display}")
         logging.info(f"Schedule configured: {day_display} at {time_display}")
 
@@ -46583,11 +45543,7 @@ class SiteAutoUpgradeConfigurator:
             logging.debug("Dry-run mode - skipping confirmation prompt")
         else:
             try:
-                confirm = (
-                    InputUtils.safe_input("  Apply these settings? (y/N): ", context="auto_upgrade_config")
-                    .strip()
-                    .lower()
-                )
+                confirm = InputUtils.safe_input("  Apply these settings? (y/N): ", context="auto_upgrade_config").strip().lower()
             except SystemExit:
                 logging.debug("SystemExit during confirmation prompt")
                 return
@@ -46798,11 +45754,7 @@ class OrgLevelAPFirmwareUpgrader:
         print("")
 
         try:
-            confirm = (
-                InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm")
-                .strip()
-                .lower()
-            )
+            confirm = InputUtils.safe_input("  Proceed with these organizations? (Y/n): ", context="msp_confirm").strip().lower()
         except SystemExit:
             logging.debug("SystemExit during MSP confirmation")
             return
@@ -46886,9 +45838,7 @@ class OrgLevelAPFirmwareUpgrader:
         print("")
         for idx, msp in enumerate(msp_privileges, start=1):
             current_marker = " <-- currently selected" if default_idx == idx else ""
-            print(
-                f"    [{idx:>2}] {msp.get('msp_name', 'Unknown')} (role: {msp.get('role', 'unknown')}){current_marker}"
-            )
+            print(f"    [{idx:>2}] {msp.get('msp_name', 'Unknown')} (role: {msp.get('role', 'unknown')}){current_marker}")
 
         print("")
         print("  Selection Options:")
@@ -47687,13 +46637,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _get_version_selection_input(self, model_versions: list) -> str | None:  # type: ignore[type-arg]
         """Get user input for version selection. Returns None on session cancel."""
         try:
-            return (
-                InputUtils.safe_input(
-                    f"    Select version (0-{len(model_versions) - 1}, 's' to skip): ", context="version_select"
-                )
-                .strip()
-                .lower()
-            )
+            return InputUtils.safe_input(f"    Select version (0-{len(model_versions) - 1}, 's' to skip): ", context="version_select").strip().lower()
         except SystemExit:
             return None
 
@@ -48100,10 +47044,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _apply_default_settings(self) -> bool:  # noqa: PLR0912
         """Apply default upgrade settings with optional user prompts."""
         # Check if canary strategy is selected for either download or reboot
-        uses_canary = (
-            self.upgrade_config.get("download_strategy") == "canary"
-            or self.upgrade_config.get("reboot_strategy") == "canary"
-        )
+        uses_canary = self.upgrade_config.get("download_strategy") == "canary" or self.upgrade_config.get("reboot_strategy") == "canary"
 
         # Prompt for canary phases if canary strategy is selected
         if uses_canary:
@@ -48111,9 +47052,7 @@ class OrgLevelAPFirmwareUpgrader:
             print("    Canary phases define what percentage of devices to upgrade in each wave.")
             print("    Example: '1,2,4,8,16,32,64,100' means 1%, then 2%, then 4%, etc.")
             try:
-                phases_input = InputUtils.safe_input(
-                    "  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ", context="canary_phases"
-                ).strip()
+                phases_input = InputUtils.safe_input("  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ", context="canary_phases").strip()
             except SystemExit:
                 return False
 
@@ -48161,11 +47100,7 @@ class OrgLevelAPFirmwareUpgrader:
         print("\n  Peer-to-Peer Configuration:")
         print("    P2P allows APs to share firmware with nearby APs to reduce bandwidth.")
         try:
-            p2p_input = (
-                InputUtils.safe_input("  Enable P2P firmware sharing? (Y/n) [Y]: ", context="p2p_enable")
-                .strip()
-                .lower()
-            )
+            p2p_input = InputUtils.safe_input("  Enable P2P firmware sharing? (Y/n) [Y]: ", context="p2p_enable").strip().lower()
         except SystemExit:
             return False
 
@@ -48177,9 +47112,7 @@ class OrgLevelAPFirmwareUpgrader:
 
             # Ask for cluster size
             try:
-                cluster_input = InputUtils.safe_input(
-                    "  P2P cluster size (APs per cluster) [5]: ", context="p2p_cluster"
-                ).strip()
+                cluster_input = InputUtils.safe_input("  P2P cluster size (APs per cluster) [5]: ", context="p2p_cluster").strip()
             except SystemExit:
                 return False
 
@@ -48199,9 +47132,7 @@ class OrgLevelAPFirmwareUpgrader:
 
             # Ask for parallelism (number of simultaneous download batches)
             try:
-                parallel_input = InputUtils.safe_input(
-                    "  P2P parallelism (simultaneous site batches) [100]: ", context="p2p_parallelism"
-                ).strip()
+                parallel_input = InputUtils.safe_input("  P2P parallelism (simultaneous site batches) [100]: ", context="p2p_parallelism").strip()
             except SystemExit:
                 return False
 
@@ -48477,9 +47408,7 @@ class OrgLevelAPFirmwareUpgrader:
 
         filename = os.path.join("data", "org_level_ap_upgrade_results.csv")
         try:
-            DataExporter.write_with_format_selection(
-                self.results, filename, api_function_name="orgLevelAPFirmwareUpgrade"
-            )
+            DataExporter.write_with_format_selection(self.results, filename, api_function_name="orgLevelAPFirmwareUpgrade")
             print(f"\n  Results written to: {filename}")
             logging.info(f"Upgrade results written to: {filename}")
         except Exception as e:
@@ -48936,9 +47865,7 @@ class BulkSwitchFirmwareUpgrader:
         print("-> Querying available firmware versions from Mist API...")
         try:
             self.logger.debug("Calling listOrgAvailableDeviceVersions API for switch firmware")
-            versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(
-                apisession, self.org_id, type="switch"
-            )
+            versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, self.org_id, type="switch")
 
             if not (versions_response and hasattr(versions_response, "data") and versions_response.data):
                 self.logger.warning("API returned empty or invalid firmware data")
@@ -49009,9 +47936,7 @@ class BulkSwitchFirmwareUpgrader:
         unique_versions = list(set(raw_versions))
         self.available_versions = sorted(unique_versions, key=self._version_sort_key, reverse=True)
 
-        self.logger.info(
-            f"Filtered {len(self.available_versions)} compatible versions from {len(firmware_data)} entries"
-        )
+        self.logger.info(f"Filtered {len(self.available_versions)} compatible versions from {len(firmware_data)} entries")
 
     @staticmethod
     def _version_sort_key(version_string: str) -> list[int | str]:
@@ -49341,9 +48266,7 @@ class BulkSwitchFirmwareUpgrader:
         """Record an error that occurred while processing a site."""
         print(f"  X  Error processing site: {error}")
         self.upgrade_results["sites_failed"] += 1
-        self.upgrade_results["site_results"].append(
-            {"site_id": site_id, "site_name": site_name, "status": "error", "error": error}
-        )
+        self.upgrade_results["site_results"].append({"site_id": site_id, "site_name": site_name, "status": "error", "error": error})
         self.logger.error(f"Exception processing site {site_name}: {error}")
 
     def _finalize_results(self) -> None:
@@ -49448,9 +48371,7 @@ class AnomalyMetricsDiscovery:
     @classmethod
     def _handle_missing_csv(cls) -> list[dict[str, Any]]:
         """Handle case when ConstInsightMetrics.csv is not found."""
-        logging.warning(
-            "ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11)."
-        )
+        logging.warning("ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11).")
         return cls.FALLBACK_METRICS.copy()
 
     @classmethod
@@ -49646,9 +48567,7 @@ class WLANRadiusTimerManager:
             return
         logging.info("Fetching WLANs from site template...")
         try:
-            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
-                apisession, self.org_id, self.site_template_id
-            )
+            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, self.org_id, self.site_template_id)
             if response.status_code == 200:
                 template_data = response.data
                 self.template_name = template_data.get("name", "Unknown Template")
@@ -49725,9 +48644,7 @@ class WLANRadiusTimerManager:
         wlan["_inheritance_level"] = "org_wlan_with_template"
         wlan["_wlan_template_id"] = template_id
         template_info = next((t for t in self.wlan_templates if t.get("id") == template_id), None)
-        wlan["_wlan_template_name"] = (
-            template_info.get("name", "Unknown Template") if template_info else "Unknown Template"
-        )
+        wlan["_wlan_template_name"] = template_info.get("name", "Unknown Template") if template_info else "Unknown Template"
 
     def _uses_radius_auth(self, wlan: dict[str, Any]) -> bool:
         """Check if WLAN uses RADIUS or RadSec authentication."""
@@ -49826,11 +48743,7 @@ class WLANRadiusTimerManager:
         """Prompt user to select a WLAN to modify."""
         try:
             selection_input = (
-                InputUtils.safe_input(
-                    f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ", context="wlan_selection"
-                )
-                .strip()
-                .lower()
+                InputUtils.safe_input(f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ", context="wlan_selection").strip().lower()
             )
             if selection_input == "q":
                 print("\n[*] Exiting WLAN management.")
@@ -49876,9 +48789,7 @@ class WLANRadiusTimerManager:
         """Prompt for auth_servers_timeout value."""
         wlan = self._get_selected_wlan()
         current = wlan.get("auth_servers_timeout", 5)
-        timeout_input = InputUtils.safe_input(
-            f"auth_servers_timeout (1-30) [{current}]: ", default_value=str(current), context="timeout_input"
-        ).strip()
+        timeout_input = InputUtils.safe_input(f"auth_servers_timeout (1-30) [{current}]: ", default_value=str(current), context="timeout_input").strip()
         self.new_timeout = int(timeout_input) if timeout_input else current
         if self.new_timeout < 1 or self.new_timeout > 30:
             print("\n[!] Timeout must be between 1 and 30 seconds. Using current value.")
@@ -49888,9 +48799,7 @@ class WLANRadiusTimerManager:
         """Prompt for auth_servers_retries value."""
         wlan = self._get_selected_wlan()
         current = wlan.get("auth_servers_retries", 2)
-        retries_input = InputUtils.safe_input(
-            f"auth_servers_retries (0-10) [{current}]: ", default_value=str(current), context="retries_input"
-        ).strip()
+        retries_input = InputUtils.safe_input(f"auth_servers_retries (0-10) [{current}]: ", default_value=str(current), context="retries_input").strip()
         self.new_retries = int(retries_input) if retries_input else current
         if self.new_retries < 0 or self.new_retries > 10:
             print("\n[!] Retries must be between 0 and 10. Using current value.")
@@ -50045,9 +48954,7 @@ class WLANRadiusTimerManager:
             print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {wlan.get('_inheritance_source')}")
             assignment = wlan.get("_org_template_assignment", "assigned sites")
             template_name_wlan = wlan.get("_wlan_template_name", "Unknown")
-            print(
-                f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}"
-            )
+            print(f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}")
         print("")
 
     def _confirm_changes(self) -> bool:
@@ -50127,18 +49034,14 @@ class WLANRadiusTimerManager:
             print("[!] WLAN not found in site template")
             logging.error(f"WLAN {wlan_id} not found in site template {template_id}")
             return
-        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
-            apisession, self.org_id, template_id, template_data
-        )
+        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(apisession, self.org_id, template_id, template_data)
         if update_response.status_code == 200:
             print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")
             print("[+] All sites using this template will inherit these changes")
             logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
         else:
             print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
-            logging.error(
-                f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}"
-            )
+            logging.error(f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}")
 
     def _update_org_wlan(self) -> None:
         """Update an org-level WLAN."""
@@ -50283,9 +49186,7 @@ class BulkRadiusWLANConfigManager:
         current_retries = wlan.get("auth_servers_retries", 2)
         current_fast = wlan.get("fast_dot1x_timers", False)
         return (  # type: ignore[no-any-return]
-            current_timeout == self.target_timeout
-            and current_retries == self.target_retries
-            and current_fast == self.target_fast_dot1x
+            current_timeout == self.target_timeout and current_retries == self.target_retries and current_fast == self.target_fast_dot1x
         )
 
     def _filter_radius_wlans(self) -> None:
@@ -50796,10 +49697,7 @@ class MistHelperTUI:
             available_rows = max(10, console_height - ui_overhead)
 
             if self.debug_mode:
-                logging.debug(
-                    f"TUI_DEBUG: Terminal height={console_height}, UI overhead={ui_overhead}, "
-                    f"available for TABLE DATA={available_rows}"
-                )
+                logging.debug(f"TUI_DEBUG: Terminal height={console_height}, UI overhead={ui_overhead}, available for TABLE DATA={available_rows}")
 
             return available_rows
 
@@ -50844,9 +49742,7 @@ class MistHelperTUI:
                     logging.debug(f"TUI_DEBUG: Successfully imported module: {module_path}")
             except ImportError as import_error:
                 logging.error(f"TUI: Could not import {module_path}: {import_error}")
-                self.current_items = [
-                    {"type": "error", "name": "Import Error", "description": f"Module not found: {module_path}"}
-                ]
+                self.current_items = [{"type": "error", "name": "Import Error", "description": f"Module not found: {module_path}"}]
                 return
 
             # Discover sub-modules and functions
@@ -50862,9 +49758,7 @@ class MistHelperTUI:
                     if inspect.ismodule(item):
                         # Only show modules from mistapi package
                         if hasattr(item, "__package__") and "mistapi" in str(item.__package__):
-                            self.current_items.append(
-                                {"type": "module", "name": name, "object": item, "description": f"Module: {name}"}
-                            )
+                            self.current_items.append({"type": "module", "name": name, "object": item, "description": f"Module: {name}"})
 
                     # Check if it's a callable function
                     elif callable(item) and not inspect.isclass(item):
@@ -50900,9 +49794,7 @@ class MistHelperTUI:
             self.current_items.sort(key=lambda x: (0 if x["type"] == "module" else 1, x["name"]))
 
             if not self.current_items:
-                self.current_items = [
-                    {"type": "empty", "name": "(empty)", "description": "No items found at this level"}
-                ]
+                self.current_items = [{"type": "empty", "name": "(empty)", "description": "No items found at this level"}]
 
             logging.info(f"TUI: Discovered {len(self.current_items)} items at {module_path}")
 
@@ -51060,9 +49952,7 @@ class MistHelperTUI:
                                 return None
                         elif remaining_chars:
                             if self.debug_mode:
-                                logging.debug(
-                                    f"TUI_DEBUG: Unix - ESC followed by non-bracket sequence: {repr(remaining_chars)}"
-                                )
+                                logging.debug(f"TUI_DEBUG: Unix - ESC followed by non-bracket sequence: {repr(remaining_chars)}")
                             return None
                         else:
                             if self.debug_mode:
@@ -51102,9 +49992,7 @@ class MistHelperTUI:
             path_display = " -> ".join(self.current_path)
             breadcrumb_text += f" [dim bright_black]-> {path_display}[/dim bright_black]"
 
-        breadcrumb_panel = self.Panel(
-            breadcrumb_text, style="bright_white on grey11", border_style="bright_cyan", box=self.box.ROUNDED
-        )
+        breadcrumb_panel = self.Panel(breadcrumb_text, style="bright_white on grey11", border_style="bright_cyan", box=self.box.ROUNDED)
 
         # Miller Columns layout: each hierarchy level gets its own vertical column
         # btop-inspired color scheme: cyan borders, green accents, orange highlights
@@ -51151,9 +50039,7 @@ class MistHelperTUI:
             viewport_start = 0
             viewport_end = total_items
             if self.debug_mode:
-                logging.debug(
-                    f"TUI_DEBUG: All items fit - showing {total_items} items (viewport height: {viewport_height})"
-                )
+                logging.debug(f"TUI_DEBUG: All items fit - showing {total_items} items (viewport height: {viewport_height})")
         else:
             # Need scrolling - center selection in viewport
             viewport_start = max(0, self.current_selection - viewport_height // 2)
@@ -51197,8 +50083,7 @@ class MistHelperTUI:
 
                 if self.debug_mode:
                     logging.debug(
-                        f"TUI_DEBUG: Highlighting selection - index={idx}, name='{item_name}', "
-                        f"type={item_type}, viewport_position={idx - viewport_start}"
+                        f"TUI_DEBUG: Highlighting selection - index={idx}, name='{item_name}', type={item_type}, viewport_position={idx - viewport_start}"
                     )
             else:
                 prefix = " "
@@ -51214,10 +50099,7 @@ class MistHelperTUI:
 
         # Add scroll indicators if needed
         if self.debug_mode and total_items > viewport_height:
-            logging.debug(
-                f"TUI_DEBUG: Scroll indicators - can_scroll_up={viewport_start > 0}, "
-                f"can_scroll_down={viewport_end < total_items}"
-            )
+            logging.debug(f"TUI_DEBUG: Scroll indicators - can_scroll_up={viewport_start > 0}, can_scroll_down={viewport_end < total_items}")
 
         # Current level column with btop-style cyan border
         level_name = self.current_path[-1] if self.current_path else "root"
@@ -51317,9 +50199,7 @@ class MistHelperTUI:
             output_content.append("[bold bright_cyan]=== Function Execution - Parameter Input ===[/bold bright_cyan]")
             output_content.append("")
             if self.current_function:
-                output_content.append(
-                    f"[bright_green]Function:[/bright_green] {self.current_function.get('name', 'unknown')}"
-                )
+                output_content.append(f"[bright_green]Function:[/bright_green] {self.current_function.get('name', 'unknown')}")
 
             # Show current parameter being requested with prominent display
             if self.current_param_index < len(self.param_list):
@@ -51327,14 +50207,10 @@ class MistHelperTUI:
                 param_info = self.param_list[self.current_param_index]
                 param_name = param_info["name"]
                 required_tag = "[red][REQUIRED][/red]" if not param_info.get("has_default") else "[dim][optional][/dim]"
-                default_info = (
-                    f" [dim](default: {param_info.get('default')})[/dim]" if param_info.get("has_default") else ""
-                )
+                default_info = f" [dim](default: {param_info.get('default')})[/dim]" if param_info.get("has_default") else ""
 
                 # Create a clear input prompt box
-                output_content.append(
-                    f"[bold bright_yellow]+-- Input Needed: {param_name} {required_tag}[/bold bright_yellow]"
-                )
+                output_content.append(f"[bold bright_yellow]+-- Input Needed: {param_name} {required_tag}[/bold bright_yellow]")
                 if default_info:
                     output_content.append(f"[bright_yellow]|[/bright_yellow] {default_info}")
                 output_content.append(
@@ -51344,9 +50220,7 @@ class MistHelperTUI:
             # Show previously collected parameters at bottom
             if self.current_param_index > 0:
                 output_content.append("")
-                output_content.append(
-                    f"[dim]Already provided ({self.current_param_index}/{len(self.param_list)}):[/dim]"
-                )
+                output_content.append(f"[dim]Already provided ({self.current_param_index}/{len(self.param_list)}):[/dim]")
                 for idx in range(min(3, self.current_param_index)):  # Show last 3
                     param_info = self.param_list[self.current_param_index - 1 - idx]
                     param_name = param_info["name"]
@@ -51495,9 +50369,7 @@ class MistHelperTUI:
                     self.results_scroll_offset = min(max_offset, self.results_scroll_offset + 1)
                     self.result_row_scroll = 0  # Reset row scroll for new result
                     if self.debug_mode:
-                        logging.debug(
-                            f"TUI_DEBUG: Next result - offset now {self.results_scroll_offset} (max {max_offset})"
-                        )
+                        logging.debug(f"TUI_DEBUG: Next result - offset now {self.results_scroll_offset} (max {max_offset})")
             elif key == "up":
                 # Scroll up within current result (show earlier rows) - 10 rows at a time for faster navigation
                 old_scroll = self.result_row_scroll
@@ -51575,9 +50447,7 @@ class MistHelperTUI:
             self.current_selection = max(0, self.current_selection - 1)
 
             if self.debug_mode:
-                item_name = (
-                    self.current_items[self.current_selection].get("name", "unknown") if self.current_items else "none"
-                )
+                item_name = self.current_items[self.current_selection].get("name", "unknown") if self.current_items else "none"
                 logging.debug(
                     f"TUI_DEBUG: UP arrow - selection moved {old_selection} -> {self.current_selection} (now on: {item_name})"  # noqa: E501
                 )
@@ -51591,9 +50461,7 @@ class MistHelperTUI:
             self.current_selection = min(len(self.current_items) - 1, self.current_selection + 1)
 
             if self.debug_mode:
-                item_name = (
-                    self.current_items[self.current_selection].get("name", "unknown") if self.current_items else "none"
-                )
+                item_name = self.current_items[self.current_selection].get("name", "unknown") if self.current_items else "none"
                 logging.debug(
                     f"TUI_DEBUG: DOWN arrow - selection moved {old_selection} -> {self.current_selection} (now on: {item_name})"  # noqa: E501
                 )
@@ -51708,16 +50576,12 @@ class MistHelperTUI:
                 if param_name in self.dotenv_values:
                     self.function_params[param_name] = self.dotenv_values[param_name]
                     if self.debug_mode:
-                        logging.debug(
-                            f"TUI_DEBUG: Auto-filled {param_name} from .env file: {self.dotenv_values[param_name]}"
-                        )
+                        logging.debug(f"TUI_DEBUG: Auto-filled {param_name} from .env file: {self.dotenv_values[param_name]}")
                     continue
 
                 # Add to collection list
                 has_default = param.default != inspect.Parameter.empty
-                self.param_list.append(
-                    {"name": param_name, "has_default": has_default, "default": param.default if has_default else None}
-                )
+                self.param_list.append({"name": param_name, "has_default": has_default, "default": param.default if has_default else None})
 
             # Start prompting for parameters
             if self.param_list:
@@ -51725,9 +50589,7 @@ class MistHelperTUI:
                 self.current_param_index = 0
                 self.input_buffer = ""
                 if self.debug_mode:
-                    logging.debug(
-                        f"TUI_DEBUG: Starting parameter prompting - {len(self.param_list)} parameters to collect"
-                    )
+                    logging.debug(f"TUI_DEBUG: Starting parameter prompting - {len(self.param_list)} parameters to collect")
             else:
                 # No parameters needed, execute immediately
                 self._execute_function()  # type: ignore[no-untyped-call]
@@ -51782,11 +50644,7 @@ class MistHelperTUI:
             else:
                 self.function_params[param_name] = value
                 if self.debug_mode:
-                    display_value = (
-                        "***REDACTED***"
-                        if any(x in param_name.lower() for x in ["pass", "token", "key", "secret"])
-                        else value
-                    )
+                    display_value = "***REDACTED***" if any(x in param_name.lower() for x in ["pass", "token", "key", "secret"]) else value
                     logging.debug(f"TUI_DEBUG: Parameter stored - {param_name}: {display_value}")
 
         # Move to next parameter
@@ -51823,8 +50681,7 @@ class MistHelperTUI:
 
         if self.debug_mode:
             param_summary = {
-                k: "***REDACTED***" if any(x in k.lower() for x in ["pass", "token", "key", "secret"]) else v
-                for k, v in self.function_params.items()
+                k: "***REDACTED***" if any(x in k.lower() for x in ["pass", "token", "key", "secret"]) else v for k, v in self.function_params.items()
             }
             logging.debug(f"TUI_DEBUG: Executing {func_name} with parameters: {param_summary}")
 
@@ -51843,14 +50700,10 @@ class MistHelperTUI:
                 # Check if we should paginate (next URL exists means more results available)
                 while hasattr(result, "next") and result.next is not None:
                     page_count += 1
-                    self.output_lines = [
-                        f"[EXECUTING] Fetching page {page_count} (total results so far: {len(accumulated_results)})..."
-                    ]
+                    self.output_lines = [f"[EXECUTING] Fetching page {page_count} (total results so far: {len(accumulated_results)})..."]
 
                     if self.debug_mode:
-                        logging.debug(
-                            f"TUI_DEBUG: Following next URL for pagination - page {page_count}, next: {result.next}"
-                        )
+                        logging.debug(f"TUI_DEBUG: Following next URL for pagination - page {page_count}, next: {result.next}")
 
                     try:
                         # Get the next page using the mist_session and the next URL
@@ -51858,9 +50711,7 @@ class MistHelperTUI:
                         next_url = result.next
 
                         # Use the mist_session from parameters to make the next request
-                        mist_session = self.function_params.get("mist_session") or self.function_params.get(
-                            "apisession"
-                        )
+                        mist_session = self.function_params.get("mist_session") or self.function_params.get("apisession")
                         if mist_session and next_url:
                             # Make a GET request to the next URL
                             result = mist_session.mist_get(next_url)
@@ -51884,15 +50735,11 @@ class MistHelperTUI:
                                 else:
                                     # No more results
                                     if self.debug_mode:
-                                        logging.debug(
-                                            f"TUI_DEBUG: Page {page_count} returned no results, stopping pagination"
-                                        )
+                                        logging.debug(f"TUI_DEBUG: Page {page_count} returned no results, stopping pagination")
                                     break
                             else:
                                 if self.debug_mode:
-                                    logging.debug(
-                                        f"TUI_DEBUG: Page {page_count} response format unexpected, stopping pagination"
-                                    )
+                                    logging.debug(f"TUI_DEBUG: Page {page_count} response format unexpected, stopping pagination")
                                 break
                         else:
                             if self.debug_mode:
@@ -51978,9 +50825,7 @@ class MistHelperTUI:
         - Results contain dict items (tabular data)
         """
         if self.debug_mode:
-            logging.debug(
-                f"TUI_DEBUG: Checking if results should show in grid - data type: {type(parsed_data).__name__}"
-            )
+            logging.debug(f"TUI_DEBUG: Checking if results should show in grid - data type: {type(parsed_data).__name__}")
 
         if not isinstance(parsed_data, dict):
             if self.debug_mode:
@@ -52071,9 +50916,7 @@ class MistHelperTUI:
                     if isinstance(value, dict) and value:
                         indent = "  " * depth
                         if depth == 0:
-                            key_style = (
-                                f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
-                            )
+                            key_style = f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
                         elif depth == 1:
                             key_style = f"[bold bright_yellow]{indent}+- {key}[/bold bright_yellow]"
                         else:
@@ -52085,9 +50928,7 @@ class MistHelperTUI:
                     elif isinstance(value, list) and value and isinstance(value[0], dict):
                         indent = "  " * depth
                         if depth == 0:
-                            key_style = (
-                                f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
-                            )
+                            key_style = f"[bold bright_cyan on grey15]{indent}> {key.upper()}[/bold bright_cyan on grey15]"
                         elif depth == 1:
                             key_style = f"[bold bright_yellow]{indent}+- {key}[/bold bright_yellow]"
                         else:
@@ -52178,9 +51019,7 @@ class MistHelperTUI:
             row_info = f" | All {total_rows} rows visible"
 
         title = (
-            f"[bold bright_yellow]{nav_info}[/bold bright_yellow] "
-            f"| Total: {total} | Limit: {actual_limit} | Distinct: {distinct} "
-            f"{row_info} | {result_pct}%"
+            f"[bold bright_yellow]{nav_info}[/bold bright_yellow] | Total: {total} | Limit: {actual_limit} | Distinct: {distinct} {row_info} | {result_pct}%"
         )
 
         # Wrap in panel - it will auto-size based on table content
@@ -52458,11 +51297,7 @@ class MistHelperTUI:
 
                 if self.debug_mode:
                     # Redact sensitive values in logs
-                    display_value = (
-                        "***REDACTED***"
-                        if any(x in param_name.lower() for x in ["pass", "token", "key", "secret"])
-                        else value
-                    )
+                    display_value = "***REDACTED***" if any(x in param_name.lower() for x in ["pass", "token", "key", "secret"]) else value
                     logging.debug(f"TUI_DEBUG: User input for {param_name}: {display_value}")
 
                 # Use default if no value provided
@@ -52481,10 +51316,7 @@ class MistHelperTUI:
                 params[param_name] = value
 
             if self.debug_mode:
-                param_summary = {
-                    k: "***REDACTED***" if any(x in k.lower() for x in ["pass", "token", "key", "secret"]) else v
-                    for k, v in params.items()
-                }
+                param_summary = {k: "***REDACTED***" if any(x in k.lower() for x in ["pass", "token", "key", "secret"]) else v for k, v in params.items()}
                 logging.debug(f"TUI_DEBUG: Calling {func_name} with parameters: {param_summary}")
 
             # Execute the API call
@@ -52583,9 +51415,7 @@ class MistHelperTUI:
                 self.tty.setcbreak(sys.stdin.fileno())  # type: ignore[attr-defined]
 
             if self.debug_mode:
-                logging.debug(
-                    f"TUI_DEBUG: Returning to API explorer from {func_name} execution, terminal mode restored"
-                )
+                logging.debug(f"TUI_DEBUG: Returning to API explorer from {func_name} execution, terminal mode restored")
 
     def run(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Main TUI loop with hierarchical API navigation."""
@@ -52662,9 +51492,7 @@ class MistHelperTUI:
                     time.sleep(0.01)
 
                 if self.debug_mode:
-                    logging.debug(
-                        f"TUI_DEBUG: Main loop exited after {loop_iteration} iterations - exiting Live() context"
-                    )
+                    logging.debug(f"TUI_DEBUG: Main loop exited after {loop_iteration} iterations - exiting Live() context")
 
         except Exception as error:
             logging.error(f"TUI: Critical error in run() method: {error}", exc_info=True)
@@ -52687,9 +51515,7 @@ class MistHelperTUI:
                 except Exception as term_error:
                     logging.error(f"TUI: Error restoring terminal settings: {term_error}", exc_info=True)
                     if self.debug_mode:
-                        logging.debug(
-                            f"TUI_DEBUG: Terminal restoration failed: {type(term_error).__name__}: {term_error}"
-                        )
+                        logging.debug(f"TUI_DEBUG: Terminal restoration failed: {type(term_error).__name__}: {term_error}")
             else:
                 if self.debug_mode:
                     logging.debug("TUI_DEBUG: Windows platform - no terminal restoration needed")
@@ -52770,12 +51596,8 @@ class ZoneConfigurationAnalyzer:
 
         # Analyze the collected data
         zone_analysis = ZoneConfigurationAnalyzer._analyze_zone_patterns(site_zones) if site_zones else {}
-        engagement_analysis = (
-            ZoneConfigurationAnalyzer._analyze_engagement_patterns(site_settings) if site_settings else {}
-        )
-        occupancy_analysis = (
-            ZoneConfigurationAnalyzer._analyze_occupancy_patterns(site_settings) if site_settings else {}
-        )
+        engagement_analysis = ZoneConfigurationAnalyzer._analyze_engagement_patterns(site_settings) if site_settings else {}
+        occupancy_analysis = ZoneConfigurationAnalyzer._analyze_occupancy_patterns(site_settings) if site_settings else {}
 
         # Combine all analysis
         combined_analysis = {"zones": zone_analysis, "engagement": engagement_analysis, "occupancy": occupancy_analysis}
@@ -53308,9 +52130,7 @@ class ZoneConfigurationAnalyzer:
                 print(f"  - {data['site_name']}")
                 current = data.get("current_config", {})
                 print(f"    Current: passerby={current.get('passerby', 'N/A')}, bounce={current.get('bounce', 'N/A')}")
-                print(
-                    f"             engaged={current.get('engaged', 'N/A')}, stationed={current.get('stationed', 'N/A')}"
-                )
+                print(f"             engaged={current.get('engaged', 'N/A')}, stationed={current.get('stationed', 'N/A')}")
             if len(dwell_deviations) > 10:
                 print(f"  ... and {len(dwell_deviations) - 10} more sites")
         else:
@@ -53431,16 +52251,12 @@ class ZoneConfigurationAnalyzer:
 
         for site_id in all_site_ids:
             zone_data = site_zones.get(site_id, {"site_name": "Unknown", "zone_count": 0, "zone_names": set()})
-            settings_data = site_settings.get(
-                site_id, {"site_name": "Unknown", "engagement": {}, "occupancy": {}, "analytic": {}}
-            )
+            settings_data = site_settings.get(site_id, {"site_name": "Unknown", "engagement": {}, "occupancy": {}, "analytic": {}})
 
             site_name = zone_data.get("site_name") or settings_data.get("site_name", "Unknown")
 
             # Zone deviation info
-            missing_common = (
-                zone_analysis.get("sites_missing_common_zones", {}).get(site_id, {}).get("missing_zones", set())
-            )
+            missing_common = zone_analysis.get("sites_missing_common_zones", {}).get(site_id, {}).get("missing_zones", set())
             zone_deviation_info = zone_analysis.get("zone_count_deviations", {}).get(site_id, {})
 
             # Engagement settings
@@ -53690,9 +52506,7 @@ class SiteAnalyticsConfigurator:
         print("=" * 60)
 
         try:
-            confirmation = InputUtils.safe_input(
-                "Type 'CONFIGURE' to apply standard settings to all deviating sites: ", context="site_analytics_config"
-            )
+            confirmation = InputUtils.safe_input("Type 'CONFIGURE' to apply standard settings to all deviating sites: ", context="site_analytics_config")
         except SystemExit:
             logging.info("Site analytics configuration cancelled - session disconnected")
             return
@@ -53763,9 +52577,7 @@ class SiteAnalyticsConfigurator:
     def _check_rtsa_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
         """Check RTSA settings for deviations."""
         current_rtsa = settings.get("rtsa", {})
-        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rtsa, SiteAnalyticsConfigurator.STANDARD_RTSA, "rtsa"
-        )
+        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(current_rtsa, SiteAnalyticsConfigurator.STANDARD_RTSA, "rtsa")
         if rtsa_deviations:
             deviation_record["rtsa_deviation"] = True
             deviation_record["has_deviations"] = True
@@ -53776,9 +52588,7 @@ class SiteAnalyticsConfigurator:
     def _check_rogue_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
         """Check Rogue settings for deviations."""
         current_rogue = settings.get("rogue", {})
-        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rogue, SiteAnalyticsConfigurator.STANDARD_ROGUE, "rogue"
-        )
+        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(current_rogue, SiteAnalyticsConfigurator.STANDARD_ROGUE, "rogue")
         if rogue_deviations:
             deviation_record["rogue_deviation"] = True
             deviation_record["has_deviations"] = True
@@ -53800,9 +52610,7 @@ class SiteAnalyticsConfigurator:
     def _check_analytic_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
         """Check Analytic settings for deviations."""
         current_analytic = settings.get("analytic", {})
-        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_analytic, SiteAnalyticsConfigurator.STANDARD_ANALYTIC, "analytic"
-        )
+        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(current_analytic, SiteAnalyticsConfigurator.STANDARD_ANALYTIC, "analytic")
         if analytic_deviations:
             deviation_record["analytic_deviation"] = True
             deviation_record["has_deviations"] = True
@@ -53813,9 +52621,7 @@ class SiteAnalyticsConfigurator:
     def _check_occupancy_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
         """Check Occupancy settings for deviations."""
         current_occupancy = settings.get("occupancy", {})
-        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_occupancy, SiteAnalyticsConfigurator.STANDARD_OCCUPANCY, "occupancy"
-        )
+        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(current_occupancy, SiteAnalyticsConfigurator.STANDARD_OCCUPANCY, "occupancy")
         if occupancy_deviations:
             deviation_record["occupancy_deviation"] = True
             deviation_record["has_deviations"] = True
@@ -53826,9 +52632,7 @@ class SiteAnalyticsConfigurator:
     def _check_wifi_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
         """Check WiFi settings for deviations."""
         current_wifi = settings.get("wifi", {})
-        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_wifi, SiteAnalyticsConfigurator.STANDARD_WIFI, "wifi"
-        )
+        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(current_wifi, SiteAnalyticsConfigurator.STANDARD_WIFI, "wifi")
         if wifi_deviations:
             deviation_record["wifi_deviation"] = True
             deviation_record["has_deviations"] = True
@@ -53873,9 +52677,7 @@ class SiteAnalyticsConfigurator:
             if current_value is None:
                 deviations.append({"section": section, "key": key, "current": "NOT SET", "expected": expected_value})
             elif current_value != expected_value:
-                deviations.append(
-                    {"section": section, "key": key, "current": current_value, "expected": expected_value}
-                )
+                deviations.append({"section": section, "key": key, "current": current_value, "expected": expected_value})
 
         return deviations
 
@@ -54024,10 +52826,7 @@ class SiteAnalyticsConfigurator:
                     "wifi_deviation": "Yes" if site["wifi_deviation"] else "No",
                     "deviation_count": len(site["deviation_details"]),
                     "deviation_details": "; ".join(
-                        [
-                            f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}"
-                            for detail in site["deviation_details"][:5]
-                        ]
+                        [f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}" for detail in site["deviation_details"][:5]]
                     ),
                 }
             )
@@ -54049,12 +52848,8 @@ class SiteAnalyticsConfigurator:
         if site["engagement_deviation"]:
             if "engagement" not in current_settings:
                 current_settings["engagement"] = {}
-            current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tags"
-            ].copy()
-            current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tag_names"
-            ].copy()
+            current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tags"].copy()
+            current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["dwell_tag_names"].copy()
             current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
             result["sections_updated"].append("engagement")
         if site["analytic_deviation"]:
@@ -54090,9 +52885,7 @@ class SiteAnalyticsConfigurator:
             current_settings = response.data if isinstance(response.data, dict) else {}
             SiteAnalyticsConfigurator._apply_standard_sections(site, current_settings, result)
 
-            update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
-                apisession, site_id, body=current_settings
-            )
+            update_response = mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=current_settings)
             if update_response.status_code == 200:
                 result["status"] = "SUCCESS"
                 logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
@@ -54201,9 +52994,7 @@ class SiteInventoryHealthAnalyzer:
 
         # Generate reports
         missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(site_inventory, site_lookup)
-        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(
-            site_inventory, site_lookup
-        )
+        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(site_inventory, site_lookup)
 
         # Display and export results
         SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)
@@ -54350,8 +53141,7 @@ class SiteInventoryHealthAnalyzer:
                         "switch_count": switch_count,
                         "gateway_count": gateway_count,
                         "missing_types": ", ".join(missing_types),
-                        "ap_names": ", ".join([ap["name"] for ap in inventory["aps"][:5]])
-                        + ("..." if ap_count > 5 else ""),
+                        "ap_names": ", ".join([ap["name"] for ap in inventory["aps"][:5]]) + ("..." if ap_count > 5 else ""),
                     }
                 )
 
@@ -55058,11 +53848,7 @@ class TUILauncher:
     def _suppress_console_logging(self) -> None:
         """Remove console handlers to prevent interference with Rich TUI."""
         root_logger = logging.getLogger()
-        self.console_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ]
+        self.console_handlers = [h for h in root_logger.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
         for handler in self.console_handlers:
             root_logger.removeHandler(handler)
             logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")
@@ -55897,9 +54683,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
 
     if error_count == 0:
         print("   All tested operations completed successfully!")
-        logging.info(
-            f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
-        )
+        logging.info(f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s")
         return True
     else:
         print(f"    {error_count} operations failed - check logs for details")
@@ -56061,9 +54845,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
 
     if error_count == 0:
         print("   All tested interactive operations completed successfully!")
-        logging.info(
-            f"INTERACTIVE_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
-        )
+        logging.info(f"INTERACTIVE_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s")
         return True
     else:
         print(f"   {error_count} operations failed - check logs for details")
@@ -56120,9 +54902,7 @@ class EnhancedSSHRunner:
         hostname = hostname.rstrip(".")
 
         # Check overall format
-        hostname_pattern = re.compile(
-            r"^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$"
-        )
+        hostname_pattern = re.compile(r"^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$")
 
         return bool(hostname_pattern.match(hostname))
 
@@ -56204,11 +54984,7 @@ class EnhancedSSHRunner:
             sanitized = sanitized[:100]
 
         # Prevent reserved filenames on Windows
-        reserved_names = (
-            ["CON", "PRN", "AUX", "NUL"]
-            + [f"COM{port_num}" for port_num in range(1, 10)]
-            + [f"LPT{port_num}" for port_num in range(1, 10)]
-        )
+        reserved_names = ["CON", "PRN", "AUX", "NUL"] + [f"COM{port_num}" for port_num in range(1, 10)] + [f"LPT{port_num}" for port_num in range(1, 10)]
         if sanitized.upper() in reserved_names:
             sanitized = f"host_{sanitized}"
 
@@ -56620,9 +55396,7 @@ class EnhancedSSHRunner:
             print(f"[ERROR] Unexpected error: {e}")
             return False
 
-    def _execute_command(
-        self, command: str, use_shell: bool = False, hostname: str = "unknown"
-    ) -> tuple[bool, str, str]:
+    def _execute_command(self, command: str, use_shell: bool = False, hostname: str = "unknown") -> tuple[bool, str, str]:
         """
         Execute command on remote host
 
@@ -56680,15 +55454,11 @@ class EnhancedSSHRunner:
             self.logger.debug(f"Command completed in {command_time:.2f} seconds with exit status: {exit_status}")
             # Escape newlines and special characters for clean logging
             stdout_sample = stdout_output[:200].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-            self.logger.debug(
-                f"STDOUT ({len(stdout_output)} chars): {stdout_sample}{'...' if len(stdout_output) > 200 else ''}"
-            )
+            self.logger.debug(f"STDOUT ({len(stdout_output)} chars): {stdout_sample}{'...' if len(stdout_output) > 200 else ''}")
 
             if stderr_output:
                 stderr_sample = stderr_output[:200].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-                self.logger.warning(
-                    f"STDERR ({len(stderr_output)} chars): {stderr_sample}{'...' if len(stderr_output) > 200 else ''}"
-                )
+                self.logger.warning(f"STDERR ({len(stderr_output)} chars): {stderr_sample}{'...' if len(stderr_output) > 200 else ''}")
 
             print(f"- [{hostname}] Command completed with exit status: {exit_status}")
             return exit_status == 0, stdout_output, stderr_output
@@ -56703,9 +55473,7 @@ class EnhancedSSHRunner:
                 exit_status = stdout.channel.recv_exit_status()
                 command_time = time.time() - start_time
 
-                self.logger.debug(
-                    f"Command completed (no PTY) in {command_time:.2f} seconds with exit status: {exit_status}"
-                )
+                self.logger.debug(f"Command completed (no PTY) in {command_time:.2f} seconds with exit status: {exit_status}")
                 print(f"- [{hostname}] Command completed with exit status: {exit_status}")
                 return exit_status == 0, stdout_output, stderr_output
             except Exception as e2:
@@ -56774,9 +55542,7 @@ class EnhancedSSHRunner:
                         print(
                             f"[TIMEOUT] [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, forcing completion"  # noqa: E501
                         )
-                        self.logger.warning(
-                            f"Command hang detected after {current_duration:.0f}s, forcing completion: {command}"
-                        )
+                        self.logger.warning(f"Command hang detected after {current_duration:.0f}s, forcing completion: {command}")
                         output += f"\n\n[COMMAND TIMEOUT - Forced completion after {current_duration:.0f}s]\n"
                         break
 
@@ -56788,9 +55554,7 @@ class EnhancedSSHRunner:
                             )
 
                     if shell.recv_ready():
-                        chunk = shell.recv(131072).decode(
-                            "utf-8", errors="ignore"
-                        )  # Even larger buffer (128KB) for efficiency
+                        chunk = shell.recv(131072).decode("utf-8", errors="ignore")  # Even larger buffer (128KB) for efficiency
                         output += chunk
                         last_data_time = time.time()  # Reset timer when we get data
                         chunk_count += 1
@@ -56810,9 +55574,7 @@ class EnhancedSSHRunner:
                             self.logger.warning(
                                 f"Output size limit ({max_output_size // (1024 * 1024)}MB) reached, draining remaining data..."  # noqa: E501
                             )
-                            output += (
-                                f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024 * 1024)}MB reached]\n"
-                            )
+                            output += f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024 * 1024)}MB reached]\n"
                             print(
                                 f"!? [{hostname}] Output truncated at {max_output_size // (1024 * 1024)}MB, draining remaining data..."  # noqa: E501
                             )
@@ -56987,9 +55749,7 @@ class EnhancedSSHRunner:
                 clean_line = re.sub(r"\x1b\[\?[0-9]+[hl]", "", clean_line)  # ANSI mode changes
                 clean_line = re.sub(r"\x1b\[[0-9]+;[0-9]+H", "", clean_line)  # ANSI cursor positioning
                 clean_line = re.sub(r":\s*$", "", clean_line)  # Remove trailing colons from pager prompts
-                clean_line = (
-                    clean_line.replace("\r", "").replace("\x08", "").strip()
-                )  # Remove carriage returns and backspaces
+                clean_line = clean_line.replace("\r", "").replace("\x08", "").strip()  # Remove carriage returns and backspaces
 
                 # Skip VyOS-specific shell artifacts
                 vyos_artifacts = [
@@ -57063,9 +55823,7 @@ class EnhancedSSHRunner:
                         self.logger.warning(f"Command error detected: {pattern}")
                         break
 
-            self.logger.debug(
-                f"Command success determination: success={command_success}, output_length={len(cleaned_output)}"
-            )
+            self.logger.debug(f"Command success determination: success={command_success}, output_length={len(cleaned_output)}")
             print(f"[STATUS] [{hostname}] Command completed in {command_time:.2f} seconds")
             return command_success, cleaned_output, ""
 
@@ -57423,10 +56181,7 @@ Commands/responses to execute: {num_commands}
 
                 # SECURITY: Redact potential passwords in console output
                 display_item = current_item
-                if (
-                    any(pwd_hint in current_item.lower() for pwd_hint in ["password", "pass", "pwd"])
-                    and len(current_item) > 5
-                ):
+                if any(pwd_hint in current_item.lower() for pwd_hint in ["password", "pass", "pwd"]) and len(current_item) > 5:
                     display_item = "*" * len(current_item)  # Redact password
 
                 print(f"* [{hostname}] Executing step {step_num}: {display_item}")
@@ -57452,9 +56207,7 @@ Commands/responses to execute: {num_commands}
                             last_data_time = time.time()
 
                             # Check if we got a password prompt
-                            if any(
-                                prompt in response_output.lower() for prompt in ["password:", "password ", "passwd:"]
-                            ):
+                            if any(prompt in response_output.lower() for prompt in ["password:", "password ", "passwd:"]):
                                 logger.debug(f"[{hostname}] Password prompt detected")
                                 break
 
@@ -57542,9 +56295,7 @@ Commands/responses to execute: {num_commands}
             return overall_success
 
         except Exception as e:
-            logger.error(
-                f"[{hostname}] Unexpected error during interactive session: {type(e).__name__}: {e}", exc_info=True
-            )
+            logger.error(f"[{hostname}] Unexpected error during interactive session: {type(e).__name__}: {e}", exc_info=True)
             error_msg = f"[ERROR] Unexpected error: {e}"
             write_to_host_log(error_msg)
             return False
@@ -57763,9 +56514,7 @@ Commands to execute: {num_commands}
             return overall_success
 
         except Exception as e:
-            logger.error(
-                f"[{hostname}] Unexpected error during multi-command execution: {type(e).__name__}: {e}", exc_info=True
-            )
+            logger.error(f"[{hostname}] Unexpected error during multi-command execution: {type(e).__name__}: {e}", exc_info=True)
             error_msg = f"[ERROR] Unexpected error: {e}"
             write_to_host_log(error_msg)
             return False
@@ -57915,9 +56664,7 @@ Command: {command}
             logger.debug(f"SSH connected to {hostname}, executing single command")
 
             # Execute command
-            single_cmd_success, stdout, stderr = runner._execute_command(
-                command, use_shell=use_shell, hostname=hostname
-            )
+            single_cmd_success, stdout, stderr = runner._execute_command(command, use_shell=use_shell, hostname=hostname)
 
             # Display results
             separator = "\n" + "=" * 60
@@ -57953,9 +56700,7 @@ Command: {command}
             return single_cmd_success
 
         except Exception as e:
-            logger.error(
-                f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True
-            )
+            logger.error(f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True)
             error_msg = f"[ERROR] Unexpected error: {e}"
             write_to_host_log(error_msg)
             return False
@@ -58073,15 +56818,11 @@ Log file: {host_log_file}
 
                 if needs_interactive:
                     logger.info(f"[{hostname}] Using interactive mode for {len(commands)} commands")  # type: ignore[arg-type]
-                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands_interactive(
-                        hostname, username, password, commands, port, timeout, use_shell
-                    )
+                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands_interactive(hostname, username, password, commands, port, timeout, use_shell)
                     return (hostname, host_success, f"{len(commands)} interactive commands executed")  # type: ignore[arg-type]
                 else:
                     # Standard sequential command execution
-                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands(
-                        hostname, username, password, commands, port, timeout, use_shell
-                    )
+                    host_success = EnhancedSSHRunner._run_multiple_ssh_commands(hostname, username, password, commands, port, timeout, use_shell)
                     return (hostname, host_success, f"{len(commands)} commands executed")  # type: ignore[arg-type]
 
         except Exception as e:
@@ -58187,9 +56928,7 @@ Log file: {host_log_file}
                     done, pending = _cf.wait(pending, return_when=_cf.FIRST_COMPLETED)
                     for future in done:
                         if logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(
-                                f"[TRACE] wait loop iteration={iteration} future_done={future.done()} future={future}"
-                            )
+                            logger.debug(f"[TRACE] wait loop iteration={iteration} future_done={future.done()} future={future}")
                         try:
                             hostname, host_success, summary = future.result()
                         except Exception as fut_e:
@@ -58397,9 +57136,7 @@ Log file: {host_log_file}
                 else:
                     commands_to_run = [command]
             elif env_commands:
-                command = input(
-                    f"!? Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): "
-                ).strip()
+                command = input(f"!? Enter command to execute (or press Enter to use {len(env_commands)} commands from .env): ").strip()
                 if not command:
                     commands_to_run = env_commands
                     print(f"!? Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
@@ -58574,9 +57311,7 @@ SECURITY NOTES:
         parser.add_argument("--interactive", "-i", action="store_true", help="Run in interactive mode")
 
         # .env file mode controls
-        parser.add_argument(
-            "--no-env", action="store_true", help="Disable automatic .env file loading (use manual credentials)"
-        )
+        parser.add_argument("--no-env", action="store_true", help="Disable automatic .env file loading (use manual credentials)")
 
         # Connection parameters
         parser.add_argument("hostname", nargs="?", help="Hostname or IP address (overrides SSH_HOST)")
@@ -58604,12 +57339,8 @@ SECURITY NOTES:
             return ivalue
 
         parser.add_argument("--port", "-p", type=validate_port_arg, default=22, help="SSH port (default: 22)")
-        parser.add_argument(
-            "--timeout", "-t", type=validate_timeout_arg, default=30, help="Connection timeout in seconds (default: 30)"
-        )
-        parser.add_argument(
-            "--secure", "-s", action="store_true", help="Prompt for password securely instead of command line"
-        )
+        parser.add_argument("--timeout", "-t", type=validate_timeout_arg, default=30, help="Connection timeout in seconds (default: 30)")
+        parser.add_argument("--secure", "-s", action="store_true", help="Prompt for password securely instead of command line")
         parser.add_argument(
             "--shell",
             action="store_true",
@@ -58623,9 +57354,7 @@ SECURITY NOTES:
             default="INFO",
             help="Set logging level (default: INFO)",
         )
-        parser.add_argument(
-            "--debug", "-d", action="store_true", help="Enable debug logging (equivalent to --log-level DEBUG)"
-        )
+        parser.add_argument("--debug", "-d", action="store_true", help="Enable debug logging (equivalent to --log-level DEBUG)")
         parser.add_argument(
             "--max-threads",
             type=validate_threads_arg,
@@ -58792,18 +57521,10 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
     parser.add_argument("-S", "--site", help="Human-readable site name")
     parser.add_argument("-D", "--device", help="Human-readable device name")
     parser.add_argument("-P", "--port", help="Port ID")
-    parser.add_argument(
-        "--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)"
-    )
-    parser.add_argument(
-        "--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic."
-    )
-    parser.add_argument(
-        "--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)"
-    )
-    parser.add_argument(
-        "--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization"
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)")
+    parser.add_argument("--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic.")
+    parser.add_argument("--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)")
+    parser.add_argument("--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization")
     parser.add_argument(
         "--output-format",
         choices=["csv", "sqlite"],
@@ -59018,11 +57739,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
 
         # Remove console handler during TUI mode to prevent log messages from interfering with Rich display
         root_logger = logging.getLogger()
-        console_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ]
+        console_handlers = [h for h in root_logger.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
         for handler in console_handlers:
             root_logger.removeHandler(handler)
             logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")

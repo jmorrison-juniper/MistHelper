@@ -11,6 +11,7 @@ def test_safe_input_non_interactive_default():
 def test_safe_input_keyboard_interrupt(monkeypatch):
     def fake_input(prompt):
         raise KeyboardInterrupt
+
     monkeypatch.setattr("builtins.input", fake_input)
     with pytest.raises(UserCancelled):
         InputUtils.safe_input("p", interactive=True)

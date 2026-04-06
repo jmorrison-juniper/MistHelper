@@ -51,9 +51,7 @@ def process_devices(
             sort_key = offline_seconds
 
         device_type_raw = device.get("type", "unknown")
-        type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(
-            device_type_raw, device_type_raw.capitalize()
-        )
+        type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(device_type_raw, device_type_raw.capitalize())
         site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
 
         offline_records.append(

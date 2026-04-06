@@ -15,6 +15,7 @@ Usage in Feature Specs:
 """
 
 import pytest
+
 try:
     from hypothesis import given, settings
     from hypothesis import strategies as st
