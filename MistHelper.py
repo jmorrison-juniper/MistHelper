@@ -19871,9 +19871,8 @@ class DeviceUtilityCommands:
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
             try:
-                code = (
-                    getattr(error, "status_code", None)
-                    or getattr(getattr(error, "response", None), "status_code", None)
+                code = getattr(error, "status_code", None) or getattr(
+                    getattr(error, "response", None), "status_code", None
                 )
                 if code == 400:
                     print(
@@ -19885,8 +19884,6 @@ class DeviceUtilityCommands:
                     print(f"! Clear session failed: {error}")
             except Exception:
                 print(f"! Clear session failed: {error}")
-
-
 
     @staticmethod
     def clear_mac_table() -> None:
