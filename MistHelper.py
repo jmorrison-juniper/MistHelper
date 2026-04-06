@@ -862,7 +862,7 @@ def tqdm(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]
 
 
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests
 except ImportError as _req_err:
     raise ImportError("requests is required but not installed. Run: pip install requests") from _req_err
 
@@ -886,15 +886,15 @@ try:
     import paramiko  # type: ignore[import-untyped]
     from paramiko import AutoAddPolicy, SSHClient
 except ImportError:
-    paramiko = None  # type: ignore[assignment]
-    SSHClient = None  # type: ignore[assignment, misc]
-    AutoAddPolicy = None  # type: ignore[assignment, misc]
+    paramiko = None  # type: ignore[assignment]  # Optional - SSH operations
+    SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations
+    AutoAddPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
 
 # Optional imports with fallbacks
 try:
     from scourgify import normalize_address_record
 except ImportError:
-    normalize_address_record = None  # type: ignore[assignment, misc]
+    normalize_address_record = None
 
 try:
     from rapidfuzz import fuzz
@@ -3178,7 +3178,7 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
         if hasattr(apisession, "get") and callable(apisession.get):
 
             def _mist_get_wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]  # pragma: no cover (simple adapter)
-                return apisession.get(*args, **kwargs)  # type: ignore[union-attr]
+                return apisession.get(*args, **kwargs)
 
             apisession.mist_get = _mist_get_wrapper
             logging.info("Added mist_get wrapper around underlying get() method for compatibility")
@@ -3225,14 +3225,14 @@ def _configure_session_timeout(session_obj: Any) -> None:
         session_obj: The mistapi APISession object.
     """
     try:
-        from requests.adapters import HTTPAdapter  # type: ignore[import-untyped]
+        from requests.adapters import HTTPAdapter
 
         inner = getattr(session_obj, "_session", None)
         if inner is None:
             logging.warning("Cannot configure timeout - session has no _session attribute")
             return
 
-        class TimeoutAdapter(HTTPAdapter):  # type: ignore[misc]  # requests lacks type stubs
+        class TimeoutAdapter(HTTPAdapter):
             """HTTPAdapter that injects a default timeout."""
 
             def __init__(self, default_timeout: int, **kwargs):  # type: ignore[no-untyped-def]
@@ -3598,7 +3598,7 @@ class CacheUtils:
     def check_and_generate_csv(
         file_name: str,
         generate_function: Callable,  # type: ignore[type-arg]
-        freshness_minutes: int | None = None,  # type: ignore[type-arg]
+        freshness_minutes: int | None = None,
     ) -> bool:
         """
         Checks if a CSV file exists and is fresh (modified within the last `freshness_minutes`).
@@ -6911,7 +6911,7 @@ class PacketCaptureManager:
 
             # Initialize WebSocket manager if needed
             if not self.websocket_manager:
-                self.websocket_manager = WebSocketManager(self.mist_session)  # type: ignore[no-untyped-call]
+                self.websocket_manager = WebSocketManager(self.mist_session)
 
             # Connect and subscribe
             if not self.websocket_manager.connected:
@@ -6978,7 +6978,7 @@ class PacketCaptureManager:
 
             # Similar to site capture stream but uses org channel
             if not self.websocket_manager:
-                self.websocket_manager = WebSocketManager(self.mist_session)  # type: ignore[no-untyped-call]
+                self.websocket_manager = WebSocketManager(self.mist_session)
 
             if not self.websocket_manager.connected:
                 self.websocket_manager.connect()
@@ -11197,7 +11197,7 @@ class PromptUtils:
     def _handle_client_selection(
         all_clients: list[dict],  # type: ignore[type-arg]
         sites_cache: dict[str, str],
-        default_site_id: str | None,  # type: ignore[type-arg]
+        default_site_id: str | None,
     ) -> tuple[str | None, str | None, str | None]:
         """
         Handles user input for client selection.
@@ -11228,7 +11228,7 @@ class PromptUtils:
     def _extract_selected_client(
         client: dict,  # type: ignore[type-arg]
         sites_cache: dict[str, str],
-        default_site_id: str | None,  # type: ignore[type-arg]
+        default_site_id: str | None,
     ) -> tuple[str, str, str]:
         """Extracts and displays selected client information."""
         client_mac = client.get("mac", "")
@@ -14564,7 +14564,7 @@ class SiteClientExporter:
                         session["data_source"] = "session_only"
                         session["session_count"] = 1
                         # Prefix session-specific fields to avoid conflicts
-                        session_data: dict[str, Any] = {}  # type: ignore[no-redef]
+                        session_data: dict[str, Any] = {}
                         for key, value in session.items():
                             if key not in ["site_id", "site_name", "data_source", "session_count"]:
                                 session_data[f"session_{key}"] = value
@@ -15409,13 +15409,13 @@ class WebSocketNetworkDiagCommands:
             print("-> Establishing WebSocket connection...")
 
             # Initialize WebSocket manager
-            websocket_manager = WebSocketManager(apisession)  # type: ignore[no-untyped-call]
+            websocket_manager = WebSocketManager(apisession)
 
             if debug_mode:
                 print("[DEBUG] WebSocketManager initialized")
 
             # Connect to WebSocket
-            if not websocket_manager.connect():  # type: ignore[no-untyped-call]
+            if not websocket_manager.connect():
                 print("! Failed to establish WebSocket connection")
                 return
 
@@ -15424,9 +15424,9 @@ class WebSocketNetworkDiagCommands:
 
             # Subscribe to device command channel
             command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):  # type: ignore[no-untyped-call]
+            if not websocket_manager.subscribe_to_channel(command_channel):
                 print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             if debug_mode:
@@ -15452,7 +15452,7 @@ class WebSocketNetworkDiagCommands:
 
             if not mist_host or not mist_apitoken:
                 print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             if debug_mode:
@@ -15476,7 +15476,7 @@ class WebSocketNetworkDiagCommands:
             if ping_response.status_code != 200:
                 print(f"! Failed to issue ping command: {ping_response.status_code}")
                 print(f"! Response: {ping_response.text}")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             # Extract session ID from response
@@ -15484,7 +15484,7 @@ class WebSocketNetworkDiagCommands:
             session_id = response_data.get("session")
             if not session_id:
                 print("! No session ID returned from ping command")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             print(f"-> Ping command issued (session: {session_id[:8]}...)")
@@ -15495,7 +15495,7 @@ class WebSocketNetworkDiagCommands:
                 print("[DEBUG] Starting to wait for WebSocket results...")
 
             # Wait for ping results via WebSocket
-            ping_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=30)  # type: ignore[no-untyped-call]
+            ping_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=30)
 
             if debug_mode:
                 print(f"[DEBUG] wait_for_command_result returned: {ping_result is not None}")
@@ -15670,10 +15670,10 @@ class WebSocketNetworkDiagCommands:
                 print("[DEBUG] WebSocketManager initialized")
 
             # Initialize WebSocket manager
-            websocket_manager = WebSocketManager(apisession)  # type: ignore[no-untyped-call]
+            websocket_manager = WebSocketManager(apisession)
 
             # Connect to WebSocket
-            if not websocket_manager.connect():  # type: ignore[no-untyped-call]
+            if not websocket_manager.connect():
                 print("! Failed to establish WebSocket connection")
                 return
 
@@ -15682,9 +15682,9 @@ class WebSocketNetworkDiagCommands:
 
             # Subscribe to device command channel
             command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):  # type: ignore[no-untyped-call]
+            if not websocket_manager.subscribe_to_channel(command_channel):
                 print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             if debug_mode:
@@ -15707,7 +15707,7 @@ class WebSocketNetworkDiagCommands:
 
             if not mist_host or not mist_apitoken:
                 print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             # Make direct POST request to trigger ARP command
@@ -15728,7 +15728,7 @@ class WebSocketNetworkDiagCommands:
             if arp_response.status_code != 200:
                 print(f"! Failed to issue ARP command: {arp_response.status_code}")
                 print(f"! Response: {arp_response.text}")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             # Extract session ID from response
@@ -15736,7 +15736,7 @@ class WebSocketNetworkDiagCommands:
             session_id = response_data.get("session")
             if not session_id:
                 print("! No session ID returned from ARP command")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             print(f"-> ARP command issued (session: {session_id[:8]}...)")
@@ -15764,7 +15764,7 @@ class WebSocketNetworkDiagCommands:
                 timeout_seconds = 30
 
             # Wait for ARP results via WebSocket
-            arp_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds)  # type: ignore[no-untyped-call]
+            arp_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=timeout_seconds)
 
             if debug_mode:
                 print(f"[DEBUG] wait_for_command_result returned: {arp_result is not None}")
@@ -16028,13 +16028,13 @@ class WebSocketCommands:
             print("-> Establishing WebSocket connection...")
 
             # Initialize WebSocket manager
-            websocket_manager = WebSocketManager(apisession)  # type: ignore[no-untyped-call]
+            websocket_manager = WebSocketManager(apisession)
 
             if debug_mode:
                 print("[DEBUG] WebSocketManager initialized")
 
             # Connect to WebSocket
-            if not websocket_manager.connect():  # type: ignore[no-untyped-call]
+            if not websocket_manager.connect():
                 print("! Failed to establish WebSocket connection")
                 return
 
@@ -16043,9 +16043,9 @@ class WebSocketCommands:
 
             # Subscribe to device command channel
             command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):  # type: ignore[no-untyped-call]
+            if not websocket_manager.subscribe_to_channel(command_channel):
                 print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             if debug_mode:
@@ -16071,7 +16071,7 @@ class WebSocketCommands:
 
             if not mist_host or not mist_apitoken:
                 print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             if debug_mode:
@@ -16095,7 +16095,7 @@ class WebSocketCommands:
             if mac_table_response.status_code != 200:
                 print(f"! Failed to issue show MAC table command: {mac_table_response.status_code}")
                 print(f"! Response: {mac_table_response.text}")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             # Extract session ID from response
@@ -16103,7 +16103,7 @@ class WebSocketCommands:
             session_id = response_data.get("session")
             if not session_id:
                 print("! No session ID returned from show MAC table command")
-                websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                websocket_manager.disconnect()
                 return
 
             print(f"-> Show MAC table command issued (session: {session_id[:8]}...)")
@@ -16114,7 +16114,7 @@ class WebSocketCommands:
                 print("[DEBUG] Starting to wait for WebSocket results...")
 
             # Wait for MAC table results via WebSocket (longer timeout for potentially large tables)
-            mac_table_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)  # type: ignore[no-untyped-call]
+            mac_table_result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
 
             if debug_mode:
                 print(f"[DEBUG] wait_for_command_result returned: {mac_table_result is not None}")
@@ -16951,16 +16951,16 @@ class ServicePingManager:
 
     def _setup_websocket(self) -> bool:
         """Initialize and connect WebSocket."""
-        self.websocket_manager = WebSocketManager(apisession)  # type: ignore[no-untyped-call]
+        self.websocket_manager = WebSocketManager(apisession)
 
-        if not self.websocket_manager.connect():  # type: ignore[no-untyped-call]
+        if not self.websocket_manager.connect():
             print("! Failed to establish WebSocket connection")
             return False
 
         self._debug_print("WebSocket connection established")
 
         command_channel = f"/sites/{self.site_id}/devices/{self.device_id}/cmd"
-        if not self.websocket_manager.subscribe_to_channel(command_channel):  # type: ignore[no-untyped-call]
+        if not self.websocket_manager.subscribe_to_channel(command_channel):
             print("! Failed to subscribe to device command channel")
             return False
 
@@ -17035,7 +17035,7 @@ class ServicePingManager:
             timeout_seconds = 30
             activity_timeout = 3
 
-        result = self.websocket_manager.wait_for_command_result(  # type: ignore[no-untyped-call]
+        result = self.websocket_manager.wait_for_command_result(
             session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=activity_timeout
         )
 
@@ -17043,7 +17043,7 @@ class ServicePingManager:
         if result:
             self._debug_print(f"Result keys: {list(result.keys())}")
 
-        return result  # type: ignore[no-any-return]
+        return result
 
     def _display_results(self, result: dict | None, payload: dict) -> None:  # type: ignore[type-arg]
         """Display service ping results."""
@@ -17170,7 +17170,7 @@ class ServicePingManager:
         """Clean up WebSocket connection."""
         try:
             if self.websocket_manager is not None:
-                self.websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+                self.websocket_manager.disconnect()
                 print("-> WebSocket connection closed")
         except Exception as error:
             logging.warning(f"WebSocket cleanup error: {error}")
@@ -18181,11 +18181,11 @@ class RoutingUtils:
         print(f"\n-> Executing show forwarding table on device {device_id}...")
         print("-> Establishing WebSocket connection...")
 
-        websocket_manager = WebSocketManager(apisession)  # type: ignore[no-untyped-call]
+        websocket_manager = WebSocketManager(apisession)
         if debug_mode:
             print("[DEBUG] WebSocketManager initialized")
 
-        if not websocket_manager.connect():  # type: ignore[no-untyped-call]
+        if not websocket_manager.connect():
             print("! Failed to establish WebSocket connection")
             return None
 
@@ -18193,9 +18193,9 @@ class RoutingUtils:
             print("[DEBUG] WebSocket connection established")
 
         command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(command_channel):  # type: ignore[no-untyped-call]
+        if not websocket_manager.subscribe_to_channel(command_channel):
             print("! Failed to subscribe to device command channel")
-            websocket_manager.disconnect()  # type: ignore[no-untyped-call]
+            websocket_manager.disconnect()
             return None
 
         if debug_mode:
@@ -20493,7 +20493,7 @@ class ConstDefinitionsExporter:
         api_function: str,
         required_params: list,  # type: ignore[type-arg]
         optional_params: list[str],
-        filename: str,  # type: ignore[type-arg]
+        filename: str,
     ) -> str | None:
         """Determine special handling type for endpoint."""
         if endpoint_name == "ap_channels" and "country_code" in optional_params:
@@ -21972,7 +21972,7 @@ class GatewayStatsExporter:
             logging.warning(" No gateway device statistics found. CSV not created.")
 
     @staticmethod
-    def device_stats_with_freshness(fast=False):  # type: ignore[no-untyped-def]
+    def device_stats_with_freshness(fast: bool = False) -> None:
         """
         Exports gateway device statistics with freshness check.
         Checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
@@ -22132,7 +22132,7 @@ class GatewayExportUtils:
         OrgInventoryExporter.gateways_with_site_info()  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def management_ips(fast=False):  # type: ignore[no-untyped-def]  # noqa: PLR0915
+    def management_ips(fast: bool = False) -> None:  # noqa: PLR0915
         """
         Exports gateway management overlay IPs grouped by gateway template association.
         Creates a single CSV with gateway info, management IPs, status, and template names.
@@ -22359,7 +22359,7 @@ class GatewayExportUtils:
         logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
 
     @staticmethod
-    def with_wan_overrides(fast=False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def with_wan_overrides(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
         """
         Generates a CSV report of gateways with ports that are overridden from their template configuration.
         This helps identify outliers that need to be corrected back to template compliance.
@@ -22419,7 +22419,7 @@ class GatewayExportUtils:
         if not target_ports:
             print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")
             logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")
-            return []
+            return
 
         # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
         logging.info(" First pass: Identifying devices with port overrides...")
@@ -24297,7 +24297,7 @@ class SSHRunnerManager:
         print("  1. Ensuring gateway management IP data is current...")
         CacheUtils.check_and_generate_csv(
             "GatewayManagementIPs.csv",
-            lambda: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[no-untyped-call]
+            lambda: GatewayExportUtils.management_ips(fast=fast),
         )
 
         # Load gateway data
@@ -30557,7 +30557,7 @@ class VirtualChassisManager:
     @staticmethod
     def _analyze_conversion_status(
         switches: list[dict],  # type: ignore[type-arg]
-        site_id_to_name: dict[str, str],  # type: ignore[type-arg]
+        site_id_to_name: dict[str, str],
     ) -> tuple[list[dict], list[dict]]:  # type: ignore[type-arg]
         """Analyze switches to determine conversion status."""
         converted = []
@@ -30958,7 +30958,7 @@ class SiteConfigManager:
         to_create: list,  # type: ignore[type-arg]
         to_update: list,  # type: ignore[type-arg]
         sites_by_country: dict,  # type: ignore[type-arg]
-        update_mode: str,  # type: ignore[type-arg]
+        update_mode: str,
     ) -> bool:
         """Confirm RF template operation with user."""
         print("\n  " + "!" * 66)
@@ -37098,7 +37098,7 @@ class MapsManager:
         )
 
         # Clientside callback for map switching - triggers page reload with new map_id in URL
-        app.clientside_callback(  # type: ignore[no-untyped-call]
+        app.clientside_callback(
             """
             function(selected_map_id, config) {
                 var current_map_id = config ? config.map_id : null;
@@ -37132,7 +37132,7 @@ class MapsManager:
         )
 
         # Clientside callback to reload page after clone/delete to get fresh map data
-        app.clientside_callback(  # type: ignore[no-untyped-call]
+        app.clientside_callback(
             """
             function(cache_bust_data) {
                 if (!cache_bust_data || !cache_bust_data.trigger) {
@@ -37372,7 +37372,7 @@ class MapsManager:
                 print(f"[DEBUG]   - maps_store: {len(new_maps_store)} maps")
                 print(f"[DEBUG]   - updated_config site: {updated_config.get('site_name')}")
                 # Access new_fig.data safely - Plotly Figure.data returns tuple of traces
-                trace_count = len(new_fig.data) if hasattr(new_fig, "data") else 0  # type: ignore[arg-type]
+                trace_count = len(new_fig.data) if hasattr(new_fig, "data") else 0
                 print(f"[DEBUG]   - new_fig has {trace_count} traces")
                 logging.info(f"[SITE-SWITCH] Successfully loaded map {map_name} with {len(devices)} devices")
                 return new_map_options, selected_map_id, new_maps_store, updated_config, new_fig
@@ -46562,7 +46562,7 @@ class SiteAutoUpgradeConfigurator:
         family: str,
         models: list,  # type: ignore[type-arg]
         sorted_versions: list,  # type: ignore[type-arg]
-        current_version: str | None,  # type: ignore[type-arg]
+        current_version: str | None,
     ) -> None:
         """Display version options for a model family."""
         print(f"\n  {family} family ({', '.join(models)}):")
@@ -46580,7 +46580,7 @@ class SiteAutoUpgradeConfigurator:
         family: str,
         models: list,  # type: ignore[type-arg]
         sorted_versions: list,  # type: ignore[type-arg]
-        current_version: str | None,  # type: ignore[type-arg]
+        current_version: str | None,
     ) -> None:
         """Apply user's version selection for a model family."""
         if choice and choice.isdigit():
@@ -50405,7 +50405,7 @@ class BulkRadiusWLANConfigManager:
 
     CANCEL_KEYWORDS = {"q", "quit", "cancel", "back"}
 
-    def __init__(self):  # type: ignore[no-untyped-def]
+    def __init__(self) -> None:
         """Initialize manager and load configuration from .env."""
         self.org_id: str = ""
         self.all_wlans: list[dict[str, Any]] = []
@@ -52616,7 +52616,7 @@ class MistHelperTUI:
 
         # Restore terminal for input prompts
         if not self.IS_WINDOWS:
-            self.termios.tcsetattr(sys.stdin, self.termios.TCSADRAIN, self.old_terminal_settings)  # type: ignore[attr-defined]
+            self.termios.tcsetattr(sys.stdin, self.termios.TCSADRAIN, self.old_terminal_settings)
 
         try:
             # Get function signature
@@ -52765,7 +52765,7 @@ class MistHelperTUI:
             logging.info(f"TUI: Successfully executed {func_name}")
 
             if self.debug_mode:
-                result_len = len(result) if hasattr(result, "__len__") else "N/A"  # type: ignore[arg-type]
+                result_len = len(result) if hasattr(result, "__len__") else "N/A"
                 logging.debug(f"TUI_DEBUG: Execution successful - result type: {result_type}, length: {result_len}")
 
         except KeyboardInterrupt:
@@ -52790,7 +52790,7 @@ class MistHelperTUI:
 
             # Restore raw mode for TUI navigation on Unix systems
             if not self.IS_WINDOWS:
-                self.tty.setcbreak(sys.stdin.fileno())  # type: ignore[attr-defined]
+                self.tty.setcbreak(sys.stdin.fileno())
 
             if self.debug_mode:
                 logging.debug(
@@ -52808,8 +52808,8 @@ class MistHelperTUI:
         if not self.IS_WINDOWS:
             if self.debug_mode:
                 logging.debug("TUI_DEBUG: Unix platform detected - setting terminal to raw mode")
-            self.old_terminal_settings = self.termios.tcgetattr(sys.stdin)  # type: ignore[attr-defined]
-            self.tty.setcbreak(sys.stdin.fileno())  # type: ignore[attr-defined]
+            self.old_terminal_settings = self.termios.tcgetattr(sys.stdin)
+            self.tty.setcbreak(sys.stdin.fileno())
             if self.debug_mode:
                 logging.debug("TUI_DEBUG: Terminal set to raw mode successfully")
         else:
@@ -52891,7 +52891,7 @@ class MistHelperTUI:
                 try:
                     if self.debug_mode:
                         logging.debug("TUI_DEBUG: Restoring terminal settings on Unix platform")
-                    self.termios.tcsetattr(sys.stdin, self.termios.TCSADRAIN, self.old_terminal_settings)  # type: ignore[attr-defined]
+                    self.termios.tcsetattr(sys.stdin, self.termios.TCSADRAIN, self.old_terminal_settings)
                     if self.debug_mode:
                         logging.debug("TUI_DEBUG: Terminal settings restored successfully")
                 except Exception as term_error:
@@ -54697,7 +54697,7 @@ menu_actions = {
         "Export audit logs for the organization (last 24 hours)",
     ),
     "4": (
-        lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[misc, no-untyped-call]
+        lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[misc]
         "Export gateway management overlay IPs grouped by template association",
     ),
     # > WebSocket Device Commands
@@ -54767,7 +54767,7 @@ menu_actions = {
         "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)",
     ),
     "28": (
-        lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[misc, no-untyped-call]
+        lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[misc]
         "Find gateway ports overridden from template (outliers for compliance correction)",
     ),
     # Site-Specific Data Exports
@@ -54922,7 +54922,7 @@ menu_actions = {
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
     "95": (
-        lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[misc, no-untyped-call]
+        lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[misc]
         "Export detailed device statistics for all gateways (with freshness check)",
     ),
     "96": (
@@ -55080,7 +55080,7 @@ menu_actions = {
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
     "122": (
-        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[misc, no-untyped-call]
+        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[misc]
         "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",  # noqa: E501
     ),
     # ==============================
@@ -56090,7 +56090,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
             logging.info(
                 f"SYSTEMATIC_TEST: Starting test of menu option {option} (fast_applied={invoke_kwargs.get('fast', False)})"  # noqa: E501
             )
-            func(**invoke_kwargs)  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
+            func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -56252,7 +56252,7 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
             invoke_kwargs = {}
             if "site_id" in sig.parameters:
                 invoke_kwargs["site_id"] = test_site_id
-            func(**invoke_kwargs)  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
+            func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
             duration = time.time() - op_start
             print(f"   [SUCCESS] Option {option} completed successfully")
             success_count += 1
@@ -56788,7 +56788,7 @@ class EnhancedSSHRunner:
             print(f">> Connecting to {hostname}:{port} as {username}...")
 
             # Create SSH client  # nosec B101
-            self.client = SSHClient()  # type: ignore[assignment,misc]  # SSHClient confirmed non-None above
+            self.client = SSHClient()  # type: ignore[assignment]  # SSHClient typed as None in fallback
             assert self.client is not None  # nosec B101
             # Load existing host keys if available
             self.client.load_system_host_keys()
@@ -56798,9 +56798,9 @@ class EnhancedSSHRunner:
                 # known_hosts file doesn't exist yet - that's fine
                 pass
 
-            # For internal networks: Auto-accept new host keys  # nosec B507
+            # For internal networks: Auto-accept new host keys
             # NOTE: Only use this for trusted internal networks, not internet-facing connections
-            self.client.set_missing_host_key_policy(AutoAddPolicy())  # type: ignore[misc]  # AutoAddPolicy confirmed non-None above  # nosec B507
+            self.client.set_missing_host_key_policy(AutoAddPolicy())  # nosec B507 — internal NOC network only, not internet-facing
             self.logger.debug("SSH client created with AutoAddPolicy for internal network use")
 
             # Attempt connection
@@ -57346,7 +57346,7 @@ class EnhancedSSHRunner:
         if DOTENV_AVAILABLE:
             # Use python-dotenv for proper parsing
             try:
-                load_dotenv(env_file)  # type: ignore[call-arg]
+                load_dotenv(env_file)
                 ssh_host = os.getenv("SSH_HOST")
                 if ssh_host:
                     config["hosts"] = EnhancedSSHRunner._parse_host_list(ssh_host)
@@ -57592,7 +57592,7 @@ class EnhancedSSHRunner:
         overall_success = True
 
         # Initialize host log with header
-        num_commands = len(commands) if commands else 0  # type: ignore[arg-type]
+        num_commands = len(commands) if commands else 0
         header = f"""
 {"=" * 80}
 SSH Interactive Session Log for Host: {hostname}
@@ -57911,7 +57911,7 @@ Log file: {host_log_file}
         overall_success = True
 
         # Initialize host log with header
-        num_commands = len(commands) if commands else 0  # type: ignore[arg-type]
+        num_commands = len(commands) if commands else 0
         header = f"""
 {"=" * 80}
 SSH Session Log for Host: {hostname}
@@ -58277,7 +58277,7 @@ Log file: {host_log_file}
                     commands[0],  # type: ignore[index]
                     port,
                     timeout,
-                    use_shell,  # type: ignore[index]
+                    use_shell,
                 )
                 return (hostname, host_success, f"Single command: {commands[0]}")  # type: ignore[index]
             else:
@@ -59350,7 +59350,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
             }
             sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
             accepted_args = {k: v for k, v in func_args.items() if k in sig.parameters and v is not None}
-            func(**accepted_args)  # type: ignore[no-untyped-call]
+            func(**accepted_args)  # type: ignore[operator, no-untyped-call]
         else:
             logging.error(f"! Invalid menu option: {args.menu}")
             print(f"! Invalid menu option: {args.menu}")
@@ -59425,7 +59425,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
                 # (session management operations that change context)
                 session_management_options = {"115"}  # Switch to interactive login
 
-                func()  # type: ignore[no-untyped-call]  # func is a callable from menu_actions
+                func()  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
                 logging.info(f"Menu option '{iwant}' execution complete.")
 
                 # In container mode, return to menu. In direct mode, exit (unless session management)
@@ -59508,7 +59508,7 @@ if __name__ == "__main__":
         try:
             import sys as _sys_mod
 
-            _sys_mod.excepthook = _global_excepthook  # type: ignore[attr-defined]
+            _sys_mod.excepthook = _global_excepthook
         except Exception as hook_setup_err:
             logging.warning(f"Failed to install global excepthook: {hook_setup_err}")
         main()  # type: ignore[no-untyped-call]
