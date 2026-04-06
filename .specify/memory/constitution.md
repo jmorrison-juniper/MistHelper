@@ -236,6 +236,39 @@ All user-facing text MUST be written for junior NOC engineers. Use
 clear, professional language without jargon. The standard is:
 "Fred Rogers meets NASA/JPL safety standards."
 
+## Complexity-Driven SpecKit Escalation (NON-NEGOTIABLE)
+
+Not every task needs full ceremony. Use this decision tree:
+
+**Implement directly** (no spec needed):
+- Single-file edits with obvious intent (typo, log message, config)
+- Lint/format auto-fixes
+- Documentation-only changes
+- Adding a test for well-understood behavior
+
+**Escalate to SpecKit** (spec required before coding):
+- Changes touching 3+ files or 2+ classes
+- New menu operations or API integrations
+- Architectural changes (new classes, module splits, data flow)
+- Bug fixes where root cause is unclear or spans multiple components
+- Any change to destructive operations (menu 90-100)
+- Performance or concurrency work
+- Database schema or primary key strategy changes
+
+**Rationale**: Underpowered models (GPT-5 Mini and similar) lose
+track of multi-step implementations without structured artifacts.
+The spec anchors intent, the plan decomposes complexity, and tasks
+provide checkpoint-by-checkpoint execution any model can follow.
+Even capable models benefit from the spec as a contract preventing
+scope drift.
+
+Workflow: `speckit.specify` -> `speckit.clarify` (recommended) ->
+`speckit.plan` -> `speckit.tasks` -> `speckit.implement` ->
+`speckit.analyze`.
+
+If in doubt, escalate. A spec that turns out unnecessary costs
+minutes. A botched multi-file change without a spec costs hours.
+
 ## Multi-Agent Git Workflow (NON-NEGOTIABLE)
 
 The global coding standards
@@ -335,4 +368,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06
+**Version**: 1.2.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06

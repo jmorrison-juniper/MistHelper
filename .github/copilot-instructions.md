@@ -702,6 +702,45 @@ In addition to the standard checklist, PRs that touch web UI must include:
 
 ---
 
+## Complexity-Driven SpecKit Escalation
+
+Not every task needs full ceremony. Use this decision tree to determine whether
+to implement directly or escalate to the SpecKit workflow
+(specify -> plan -> tasks -> implement):
+
+**Implement directly** (no spec needed):
+- Single-file edits with obvious intent (typo, log message, config value)
+- Lint/format fixes with auto-fix available
+- Documentation-only changes
+- Adding a test for existing, well-understood behavior
+
+**Escalate to SpecKit** (spec required before coding):
+- Changes touching 3+ files or 2+ classes
+- New menu operations or API integrations
+- Architectural changes (new classes, module splits, data flow changes)
+- Bug fixes where root cause is unclear or spans multiple components
+- Any change to destructive operations (menu 90-100)
+- Performance or concurrency work
+- Database schema or primary key strategy changes
+
+**Why**: Smaller models (e.g., GPT-5 Mini) lose track of multi-step
+implementations without structured artifacts. The spec anchors intent, the plan
+decomposes complexity, and tasks provide checkpoint-by-checkpoint execution that
+any model can follow.
+
+**Workflow when escalating**:
+1. `speckit.specify` -- Create/update the spec from the issue
+2. `speckit.clarify` -- Surface underspecified areas (recommended)
+3. `speckit.plan` -- Generate the implementation plan
+4. `speckit.tasks` -- Break the plan into ordered tasks
+5. `speckit.implement` -- Execute the tasks
+6. `speckit.analyze` -- Cross-check spec/plan/tasks consistency
+
+If in doubt, escalate. A spec that turns out unnecessary costs minutes.
+A botched multi-file change without a spec costs hours.
+
+---
+
 ## AI Agent Operating Instructions (Summary for Copilot/Workspace)
 
 When implementing a Feature Spec, AI agents must follow this protocol:
