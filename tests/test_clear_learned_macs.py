@@ -29,9 +29,7 @@ def test_clear_learned_macs_accepts_junos_style_port_names(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearAllLearnedMacsFromPortOnSwitch", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearAllLearnedMacsFromPortOnSwitch", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_learned_macs()
 
