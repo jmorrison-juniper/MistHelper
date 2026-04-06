@@ -11579,9 +11579,9 @@ class OrgAlarmEventExporter:
                     return _fetch_page(token)
                 except Exception as exc:  # pragma: no cover - defensive network handling
                     last_exc = exc
-                    logging.warning(f"Attempt {attempt+1}/{retries} to fetch page failed: {exc}")
+                    logging.warning(f"Attempt {attempt + 1}/{retries} to fetch page failed: {exc}")
                     if attempt < retries - 1:
-                        sleep_time = backoff * (2 ** attempt)
+                        sleep_time = backoff * (2**attempt)
                         logging.debug(f"Waiting {sleep_time}s before retrying")
                         time.sleep(sleep_time)
             # If we reach here, all retries failed
@@ -20062,9 +20062,8 @@ class DeviceUtilityCommands:
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
             try:
-                code = (
-                    getattr(error, "status_code", None)
-                    or getattr(getattr(error, "response", None), "status_code", None)
+                code = getattr(error, "status_code", None) or getattr(
+                    getattr(error, "response", None), "status_code", None
                 )
                 if code == 400:
                     print(
@@ -20076,8 +20075,6 @@ class DeviceUtilityCommands:
                     print(f"! Clear session failed: {error}")
             except Exception:
                 print(f"! Clear session failed: {error}")
-
-
 
     @staticmethod
     def clear_mac_table() -> None:
