@@ -27,7 +27,6 @@ if _mh_path.exists() and (_existing is None or _is_init):
         pass  # MistHelper.py calls sys.exit(); ignore during import
 
 
-
 @pytest.fixture
 def tmp_data_dir(tmp_path):
     """Provide a temporary data directory for test file output."""
