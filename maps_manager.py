@@ -5746,8 +5746,7 @@ class MapsManager:
                             name=device_name,
                             showlegend=False,
                             hovertemplate=(
-                                f"<b>{device_name}</b><br>Type: {device_type}"
-                                f"<br>Status: {device_status}<extra></extra>"
+                                f"<b>{device_name}</b><br>Type: {device_type}<br>Status: {device_status}<extra></extra>"
                             ),
                         )
                     )
@@ -7350,9 +7349,7 @@ class MapsManager:
                     " - analyzes walls and creates location zones automatically"
                 )
                 logging.info(f"Utilities: Auto-Zone requested for map {map_id}")
-                return html.Span(
-                    msg, style={"color": "#667eea", "fontWeight": "bold"}
-                )
+                return html.Span(msg, style={"color": "#667eea", "fontWeight": "bold"})
 
             elif button_id == "change-image-btn":
                 msg = "! Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
