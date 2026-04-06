@@ -30143,15 +30143,18 @@ class VirtualChassisManager:
     """
 
     @staticmethod
-    def convert_single() -> None:
+    def convert_single(dry_run: bool = False) -> None:
         """
         Interactively convert a single virtual chassis switch to virtual MAC.
 
         Presents site selection, then shows available switches, and converts
         the selected device after confirmation.
         """
-        print("\n  DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
+        mode_label = "[DRY RUN] " if dry_run else ""
+        print(f"\n  {mode_label}DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
         print("=" * 60)
+        if dry_run:
+            print("  DRY RUN MODE: No changes will be made. Showing what would happen.")
 
         site_id = PromptUtils.select_site()
         if not site_id:
@@ -30176,6 +30179,17 @@ class VirtualChassisManager:
         if not device_id:
             print(" Missing device_id for selected switch.")
             logging.warning("Missing device_id for selected switch.")
+            return
+
+        if not VirtualChassisManager._preflight_check(selected):
+            return
+
+        if dry_run:
+            print(f"\n  [DRY RUN] Would convert switch '{selected.get('name', '')}' at site '{site_name}'")
+            print(f"  [DRY RUN] Device ID: {device_id}")
+            print(f"  [DRY RUN] MAC: {selected.get('mac', '')}")
+            print("  [DRY RUN] No API call made. Use without --dry-run to execute.")
+            logging.info(f"DRY RUN: Would convert {device_id} at site {site_id}")
             return
 
         if not VirtualChassisManager._confirm_conversion(selected, site_name, device_id):
@@ -30229,8 +30243,11 @@ class VirtualChassisManager:
 
         VirtualChassisManager._display_switches_for_conversion(switches_to_convert)
 
-        confirm = input("\n  Do you want to proceed with the conversion? (yes/no): ").strip().lower()
-        if confirm not in ["yes", "y"]:
+        confirm = InputUtils.safe_input(
+            "\nType 'CONVERT' to proceed with bulk conversion or anything else to cancel: ",
+            context="vc_bulk_conversion",
+        )
+        if confirm != "CONVERT":
             print(" Conversion cancelled by user.")
             logging.info("Virtual chassis conversion cancelled by user.")
             return
@@ -30319,13 +30336,44 @@ class VirtualChassisManager:
             index_to_device[idx] = switch
             name_to_device[switch.get("name", "")] = switch
 
-        user_input = input(
-            f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches) - 1}]: "
+        user_input = InputUtils.safe_input(
+            f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches) - 1}]: ",
+            context="vc_switch_selection",
         ).strip()
 
         if user_input.isdigit():
             return index_to_device.get(int(user_input))
         return name_to_device.get(user_input)
+
+    @staticmethod
+    def _preflight_check(switch: dict) -> bool:  # type: ignore[type-arg]
+        """Validate switch is eligible for VC-to-virtual-MAC conversion."""
+        device_type = switch.get("type", "")
+        if device_type != "switch":
+            print(f"! Preflight FAILED: Device type is '{device_type}', expected 'switch'.")
+            logging.error(f"Preflight: wrong device type '{device_type}' for VC conversion")
+            return False
+
+        device_id = switch.get("id", "").strip()
+        if not device_id:
+            print("! Preflight FAILED: Device has no assigned device ID.")
+            logging.error("Preflight: missing device_id for VC conversion")
+            return False
+
+        vc_mac = switch.get("vc_mac", "").strip()
+        if vc_mac and vc_mac.startswith("020003"):
+            print(f"! Preflight WARNING: Switch '{switch.get('name', '')}' appears already converted.")
+            print(f"   vc_mac '{vc_mac}' starts with '020003' (virtual MAC prefix).")
+            proceed = (
+                InputUtils.safe_input("   Continue anyway? (y/n): ", context="vc_preflight_already_converted")
+                .strip()
+                .lower()
+            )
+            if proceed not in ["y", "yes"]:
+                return False
+
+        logging.info(f"Preflight passed for switch '{switch.get('name', '')}' (id={device_id})")
+        return True
 
     @staticmethod
     def _confirm_conversion(switch: dict, site_name: str, device_id: str) -> bool:  # type: ignore[type-arg]
@@ -30364,6 +30412,10 @@ class VirtualChassisManager:
             else:
                 print(" Conversion to virtual MAC triggered successfully!")
                 print(" Check the device status in the Mist UI to monitor progress.")
+                print("\n  Rollback Guidance:")
+                print("   If the conversion causes issues, contact Juniper TAC.")
+                print("   The device may need a factory reset and re-adoption to revert.")
+                print("   Use Menu 94 to verify conversion status after the device reboots.")
                 logging.info(
                     f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(response, 'data', '')}"  # noqa: E501
                 )
@@ -30380,7 +30432,14 @@ class VirtualChassisManager:
             print(f"   Please create this file at: {csv_file_path}")
             print("   This file should contain site names (one per line, no header).")
 
-            user_input = input("   Would you like to create an empty file to get started? (y/n): ").strip().lower()
+            user_input = (
+                InputUtils.safe_input(
+                    "   Would you like to create an empty file to get started? (y/n): ",
+                    context="vc_csv_create",
+                )
+                .strip()
+                .lower()
+            )
             if user_input in ["y", "yes"]:
                 try:
                     template_path = FilePathUtils.create_csv_template("VCConvert.CSV")
@@ -54913,8 +54972,8 @@ menu_actions = {
         " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results",  # noqa: E501
     ),
     "92": (
-        VirtualChassisManager.convert_single,
-        " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)",
+        lambda dry_run=False: VirtualChassisManager.convert_single(dry_run=dry_run),  # type: ignore[misc]
+        " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive, supports --dry-run)",
     ),
     "93": (
         VirtualChassisManager.convert_by_site_list,
@@ -55700,7 +55759,7 @@ class OperationRegistry:
         # --- destructive ----------------------------------------------------
         "90": {"category": "destructive", "skip_reason": "DESTRUCTIVE: AP firmware upgrade operation"},
         "91": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Device reboot operation"},
-        "92": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - WIP"},
+        "92": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion"},
         "93": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - bulk operation"},
         "97": {
             "category": "destructive",
