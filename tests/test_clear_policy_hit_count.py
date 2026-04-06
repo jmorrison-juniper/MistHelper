@@ -30,9 +30,7 @@ def test_clear_policy_includes_node_when_required(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDevicePolicyHitCount", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDevicePolicyHitCount", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_policy_hit_count()
 

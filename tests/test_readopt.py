@@ -31,9 +31,7 @@ def test_readopt_calls_api_when_device_is_vc(monkeypatch):
     def fake_get_vc(session, site_id, device_id):
         return make_mock_response(data={"is_virtual_chassis": True})
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "getSiteDeviceVirtualChassis", fake_get_vc
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "getSiteDeviceVirtualChassis", fake_get_vc)
 
     called = {"readopt": False}
 
@@ -41,9 +39,7 @@ def test_readopt_calls_api_when_device_is_vc(monkeypatch):
         called["readopt"] = True
         return make_mock_response()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "readoptSiteOctermDevice", fake_readopt
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "readoptSiteOctermDevice", fake_readopt)
 
     # Act
     MistHelper.DeviceUtilityCommands.readopt_device()
@@ -63,9 +59,7 @@ def test_readopt_skips_non_vc_device(monkeypatch):
     def fake_get_vc(session, site_id, device_id):
         return make_mock_response(data={"is_virtual_chassis": False})
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "getSiteDeviceVirtualChassis", fake_get_vc
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "getSiteDeviceVirtualChassis", fake_get_vc)
 
     called = {"readopt": False}
 
@@ -73,9 +67,7 @@ def test_readopt_skips_non_vc_device(monkeypatch):
         called["readopt"] = True
         return make_mock_response()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "readoptSiteOctermDevice", fake_readopt
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "readoptSiteOctermDevice", fake_readopt)
 
     MistHelper.DeviceUtilityCommands.readopt_device()
 

@@ -45,9 +45,7 @@ def test_clear_session_with_service_name(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_session()
 
@@ -77,9 +75,7 @@ def test_clear_session_with_session_ids(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_session()
 
@@ -101,9 +97,7 @@ def test_clear_session_cancel_clear_all(monkeypatch, capsys):
         called["api"] = True
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_session()
 
@@ -129,9 +123,7 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
 
     MistHelper.DeviceUtilityCommands.clear_session()
 
@@ -166,9 +158,7 @@ def test_clear_session_handles_400(monkeypatch, capsys):
     def fake_clear_raise(apisession, site_id, device_id, body):
         raise FakeErr()
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear_raise
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear_raise)
 
     MistHelper.DeviceUtilityCommands.clear_session()
 
