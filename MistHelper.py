@@ -55191,7 +55191,9 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_fail(self, menu_option: str | int, operation_name: str, duration: float, error: Exception, test_mode: str) -> None:
+    def emit_test_fail(
+        self, menu_option: str | int, operation_name: str, duration: float, error: Exception, test_mode: str
+    ) -> None:
         """Emit a test_fail event."""
         self.emit(
             {
@@ -55207,7 +55209,9 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_skip(self, menu_option: str | int, operation_name: str, reason: str, category: str, test_mode: str) -> None:
+    def emit_test_skip(
+        self, menu_option: str | int, operation_name: str, reason: str, category: str, test_mode: str
+    ) -> None:
         """Emit a test_skip event."""
         self.emit(
             {
@@ -55223,7 +55227,9 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_summary(self, total: int, passed: int, failed: int, skipped: int, elapsed: float, test_mode: str) -> None:  # noqa: PLR0913
+    def emit_test_summary(
+        self, total: int, passed: int, failed: int, skipped: int, elapsed: float, test_mode: str
+    ) -> None:  # noqa: PLR0913
         """Emit a test_summary event."""
         overall = "pass" if failed == 0 else "fail"
         self.emit(
@@ -55255,7 +55261,9 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_tick(self, menu_option: str | int, operation_name: str, total: int, current: object, completed: int, remaining: int) -> None:  # noqa: PLR0913
+    def emit_progress_tick(
+        self, menu_option: str | int, operation_name: str, total: int, current: object, completed: int, remaining: int
+    ) -> None:  # noqa: PLR0913
         """Emit a progress_tick event."""
         self.emit(
             {
@@ -55270,7 +55278,15 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_complete(self, menu_option: str | int, operation_name: str, total: int, processed: int, was_stopped: bool, duration: float) -> None:  # noqa: PLR0913
+    def emit_progress_complete(
+        self,
+        menu_option: str | int,
+        operation_name: str,
+        total: int,
+        processed: int,
+        was_stopped: bool,
+        duration: float,
+    ) -> None:  # noqa: PLR0913
         """Emit a progress_complete event."""
         self.emit(
             {
@@ -55287,7 +55303,9 @@ class TelemetryEmitter:
 
     # -- retention ------------------------------------------------------------
 
-    def enforce_retention(self, directory: str = "data", prefix: str = "test_events_", limit: int | None = None) -> None:
+    def enforce_retention(
+        self, directory: str = "data", prefix: str = "test_events_", limit: int | None = None
+    ) -> None:
         """Delete oldest timestamped JSONL files when count exceeds *limit*."""
         if limit is None:
             limit = self.RETENTION_LIMIT
