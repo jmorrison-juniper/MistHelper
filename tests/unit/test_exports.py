@@ -5,9 +5,9 @@ This file contains tests that assert the 52-week exporter streams the underlying
 """
 
 import csv
-import pytest
 from unittest.mock import MagicMock
-import MistHelper
+
+import MistHelper  # conftest pre-loads MistHelper.py before test collection
 
 
 def test_device_events_52w_streams_and_writes_csv(monkeypatch, tmp_path):

@@ -5,8 +5,8 @@ This file contains tests that assert the 52-week exporter streams the underlying
 """
 
 import csv
-import pytest
 from unittest.mock import MagicMock
+
 import MistHelper
 
 
