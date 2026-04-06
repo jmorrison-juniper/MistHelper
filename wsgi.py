@@ -33,6 +33,7 @@ def _bootstrap_api_session():
     org_id = None
     try:
         import mistapi
+
         env_file = os.path.join(os.path.dirname(__file__), ".env")
         if os.path.isfile(env_file):
             apisession = mistapi.APISession(env_file=env_file)
@@ -55,6 +56,7 @@ def _resolve_org_id(apisession) -> str:
     """Resolve org_id from the authenticated API session."""
     try:
         import mistapi
+
         resp = mistapi.api.v1.self.self.getSelf(apisession)
         data = resp.data if hasattr(resp, "data") else {}
         privileges = data.get("privileges", [])
@@ -75,6 +77,7 @@ def _load_menu_actions(wsgi_session, wsgi_org_id):
     """
     try:
         import MistHelper
+
         if wsgi_session is not None:
             MistHelper.apisession = wsgi_session
             # Apply timeout adapter so API calls don't hang indefinitely
@@ -82,12 +85,12 @@ def _load_menu_actions(wsgi_session, wsgi_org_id):
         if wsgi_org_id:
             MistHelper.org_id = wsgi_org_id
             os.environ["ORG_ID"] = wsgi_org_id
-        logging.info("WSGI: MistHelper imported - %d menu actions loaded",
-                     len(MistHelper.menu_actions))
+        logging.info("WSGI: MistHelper imported - %d menu actions loaded", len(MistHelper.menu_actions))
         return MistHelper.menu_actions
     except Exception as exc:
         logging.warning("WSGI: MistHelper import failed (%s) - using static registry", exc)
         from web_portal.menu_registry import build_static_menu_actions
+
         return build_static_menu_actions()
 
 
