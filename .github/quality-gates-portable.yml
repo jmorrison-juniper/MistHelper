@@ -1,0 +1,310 @@
+# ================================================================
+# Quality Gates — Drop-in CI for any Python repo
+# ================================================================
+# USAGE: Copy this file to .github/workflows/quality-gates.yml
+# in any repo. Customize the env block below for your project.
+#
+# Required repo setup:
+#   1. Branch protection: require these status checks before merge
+#   2. Labels: "bug", "ci", "quality-gate" (auto-created on first failure)
+#   3. pyproject.toml: add [tool.*] sections for ruff, mypy, pylint, etc.
+#
+# Reusable: other workflows can `uses:` this via workflow_call.
+# ================================================================
+name: Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: '3.13'
+      src-path:
+        type: string
+        default: 'src/'
+      requirements-file:
+        type: string
+        default: 'requirements.txt'
+      coverage-threshold:
+        type: string
+        default: '90'
+      pylint-threshold:
+        type: string
+        default: '9.5'
+      interrogate-threshold:
+        type: string
+        default: '90'
+      vulture-confidence:
+        type: string
+        default: '90'
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  # ── Customize these for your project ──
+  PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
+  SRC_PATH: ${{ inputs.src-path || 'src/' }}
+  REQUIREMENTS_FILE: ${{ inputs.requirements-file || 'requirements.txt' }}
+  COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '90' }}
+  PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
+  INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
+  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
+  # Add any pip-audit ignores here (space-separated):
+  PIP_AUDIT_IGNORES: ""
+
+jobs:
+  # ── LINT & FORMAT ──────────────────────────────────────────────
+  ruff:
+    name: "Ruff (lint + format)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  black:
+    name: "Black (format check)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install black
+      - run: black --check .
+
+  # ── TYPE SAFETY ────────────────────────────────────────────────
+  mypy:
+    name: "mypy (strict)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: |
+          pip install -r ${{ env.REQUIREMENTS_FILE }}
+          pip install mypy
+      - run: mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
+
+  # ── TESTS + COVERAGE ──────────────────────────────────────────
+  pytest:
+    name: "pytest (coverage gate)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: |
+          pip install -r ${{ env.REQUIREMENTS_FILE }}
+          pip install pytest pytest-cov hypothesis
+      - run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+
+  # ── SECURITY ──────────────────────────────────────────────────
+  bandit:
+    name: "Bandit (security)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install bandit
+      - run: bandit -r ${{ env.SRC_PATH }} -ll
+
+  pip_audit:
+    name: "pip-audit (CVE scan)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install pip-audit
+      - run: pip-audit -r ${{ env.REQUIREMENTS_FILE }}
+
+  # ── CODE QUALITY ──────────────────────────────────────────────
+  pylint:
+    name: "Pylint (score gate)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: |
+          pip install -r ${{ env.REQUIREMENTS_FILE }}
+          pip install pylint
+      - run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
+
+  radon:
+    name: "Radon (complexity)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install radon
+      - name: Check cyclomatic complexity
+        run: |
+          radon cc ${{ env.SRC_PATH }} -a -nb
+          radon cc ${{ env.SRC_PATH }} -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          bad = []
+          for path, blocks in data.items():
+              for b in blocks:
+                  if b['complexity'] > 10:
+                      bad.append(f\"{path}:{b['lineno']} {b['name']} CC={b['complexity']}\")
+          if bad:
+              print('Cyclomatic complexity violations (>10):')
+              for item in bad:
+                  print(f'  {item}')
+              sys.exit(1)
+          print('All functions within complexity threshold.')
+          "
+
+  vulture:
+    name: "Vulture (dead code)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install vulture
+      - run: vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
+
+  # ── DOCUMENTATION ─────────────────────────────────────────────
+  pydocstyle:
+    name: "pydocstyle (docstring style)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install "pydocstyle[toml]"
+      - run: pydocstyle ${{ env.SRC_PATH }}
+
+  interrogate:
+    name: "Interrogate (docstring coverage)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install interrogate
+      - run: interrogate ${{ env.SRC_PATH }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
+
+  # ── FAILURE → GITHUB ISSUES ───────────────────────────────────
+  create_failure_issues:
+    name: "Create issues for failures"
+    needs:
+      - ruff
+      - black
+      - mypy
+      - pytest
+      - bandit
+      - pip_audit
+      - pylint
+      - radon
+      - vulture
+      - pydocstyle
+      - interrogate
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure issue labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "bug" --color "d73a4a" --description "Something isn't working" 2>/dev/null || true
+          gh label create "ci" --color "0e8a16" --description "CI/CD pipeline" 2>/dev/null || true
+          gh label create "quality-gate" --color "fbca04" --description "Quality gate failure" 2>/dev/null || true
+      - name: Create issues for each failed gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          declare -A RESULTS
+          RESULTS[ruff]="${{ needs.ruff.result }}"
+          RESULTS[black]="${{ needs.black.result }}"
+          RESULTS[mypy]="${{ needs.mypy.result }}"
+          RESULTS[pytest]="${{ needs.pytest.result }}"
+          RESULTS[bandit]="${{ needs.bandit.result }}"
+          RESULTS[pip_audit]="${{ needs.pip_audit.result }}"
+          RESULTS[pylint]="${{ needs.pylint.result }}"
+          RESULTS[radon]="${{ needs.radon.result }}"
+          RESULTS[vulture]="${{ needs.vulture.result }}"
+          RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
+          RESULTS[interrogate]="${{ needs.interrogate.result }}"
+
+          for gate in "${!RESULTS[@]}"; do
+            result="${RESULTS[$gate]}"
+            if [ "$result" = "failure" ]; then
+              TITLE="CI: quality-gate \`${gate}\` failed"
+
+              EXISTING=$(gh issue list --state open --search "CI: quality-gate ${gate} failed" --json number --jq 'length')
+              if [ "$EXISTING" != "0" ]; then
+                echo "Issue already exists for gate: ${gate} (skipping)"
+                continue
+              fi
+
+              BODY="## Quality Gate Failure
+
+          **Gate**: \`${gate}\`
+          **Branch**: \`${{ github.ref_name }}\`
+          **Commit**: \`${{ github.sha }}\`
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Action Required
+          Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details and fix the failing gate.
+
+          _Auto-generated by Quality Gates CI_"
+
+              gh issue create \
+                --title "$TITLE" \
+                --label "bug,ci,quality-gate" \
+                --body "$BODY"
+              echo "Created issue for failed gate: ${gate}"
+            fi
+          done

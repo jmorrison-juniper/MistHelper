@@ -1,0 +1,5 @@
+- Add helper mapping country->regulatory
+- Implement template generator
+- Validate with Mist API
+- Export snapshots and summary
+- Tests

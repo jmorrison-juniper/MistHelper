@@ -1,0 +1,6 @@
+Plan:
+1) Validate snapshot format and checksum
+2) Implement preview/dry-run diff generator
+3) Apply changes with batch/rate-limit
+4) Implement rollback and audit
+5) Tests and docs

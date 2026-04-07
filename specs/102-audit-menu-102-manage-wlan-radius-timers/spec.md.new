@@ -1,0 +1,53 @@
+Feature: Manage WLAN RADIUS timers
+
+Short description
+- Menu 102: Manage WLAN RADIUS timers
+- Function reference: WLANRadiusTimerManager.manage
+- Category: config_mgmt
+
+Purpose
+- Provide an interactive utility to discover WLANs that use RADIUS (or RadSec) in the current org and allow safe, auditable changes to RADIUS-related timers: auth_servers_timeout, auth_servers_retries, and fast_dot1x_timers.
+
+User stories
+- P1: As a NOC engineer I want to scan all org WLANs and list only those using RADIUS so I can review and change timer settings in bulk.
+- P1: As a cautious engineer I want to preview current vs proposed values per WLAN and confirm before applying changes.
+- P2: As an auditor I want a CSV change report containing before/after values for every modified WLAN.
+
+Acceptance criteria (high level)
+- The tool lists all WLANs from listOrgWlans filtered for RADIUS: presence of auth_servers, radsec.enabled=true, or auth.type in ['eap','eap192'].
+- The tool shows a numbered list with current auth timeout, retries, and fast_dot1x settings for each matched WLAN.
+- The user can select "all", individual indices, index ranges, or mixed selections (e.g. "1,3,5-8").
+- The tool displays current vs proposed values and requires explicit confirmation text "APPLY" before changing anything.
+- The tool skips WLANs already matching the target values (no unnecessary write calls).
+- When a WLAN is template-managed the tool warns and offers either: skip, modify template (with explicit confirmation), or show instructions for manual template update.
+- On completion a CSV audit file is produced to data/ with before/after rows and errors for failures.
+
+Functional requirements (condensed)
+- FR-001: Use Mist API listOrgWlans to fetch WLANs.
+- FR-002: Filter WLANs for RADIUS usage (auth_servers present || radsec.enabled === true || auth.type in ['eap', 'eap192']).
+- FR-003: Present results with indices and full values for auth_servers_timeout, auth_servers_retries, fast_dot1x_timers, template_id if present.
+- FR-004: Accept selection inputs: all | single index | comma list | ranges | combinations.
+- FR-005: Target values come from .env defaults (displayed at startup):
+  - RADIUS_AUTH_TIMEOUT=3
+  - RADIUS_AUTH_RETRIES=2
+  - RADIUS_FAST_DOT1X=true
+- FR-006: Require typed confirmation "APPLY" to proceed with changes.
+- FR-007: Export audit CSV (data/radius_wlan_timers_<org>_<ts>.csv) with columns: org_id, site_id, wlan_id, wlan_name, before_timeout, after_timeout, before_retries, after_retries, before_fast_dot1x, after_fast_dot1x, change_status, error_message, timestamp.
+- FR-008: Respect rate limiting and retry logic using existing MistHelper utilities.
+- FR-009: Gracefully handle EOF and non-interactive sessions (allow a --yes flag for automation, but still log actions and require explicit confirmation by default).
+
+Edge cases and notes
+- Template-managed WLANs: do not directly update site WLAN object if template_id is present unless user explicitly opts to modify the template. When modifying templates, use the template update API and record that template_id was changed (and document possible cascading effects).
+- Partial failures: record per-WLAN success/failure, continue processing other WLANs, include failures in CSV with error messages.
+- If no RADIUS WLANs found, show informational message and exit.
+
+Related/Analogous artifacts in repo
+- Reuse patterns from specs/001-radius-wlan-config (functional and acceptance language) and codepaths used by existing export and bulk-change menus.
+- Use existing CSV export utilities under src/export if present or follow their format.
+
+Security/Permissions
+- Requires Mist API token with write permission for WLAN or template objects, depending on chosen target.
+
+Metrics of success
+- Tool can discover and present RADIUS WLANs in large orgs (<2 minutes for typical org sizes up to hundreds of WLANs).
+- CSV audit is generated for every run that makes changes.

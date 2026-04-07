@@ -1,0 +1,47 @@
+- Task 1: Verify existence and signature of WAN2MigrationManager.set_site_variable
+  - Description: Search repository for WAN2MigrationManager and confirm method arguments/return type. If not present, design its API (params: apisession, org_id, site_id, variable_name, variable_value, dry_run=False).
+  - Owner: Backend developer
+  - Est: 0.5 day
+  - Acceptance: Confirmed function or documented design
+
+- Task 2: Add menu entry & CLI wiring
+  - Description: Add option 103 to the menu dispatcher and implement a handler function that gathers inputs and calls the manager.
+  - Owner: Feature dev
+  - Est: 1 day
+  - Acceptance: Selecting menu 103 runs handler and validates inputs (mocked)
+
+- Task 3: Implement input validation and interactive UI
+  - Description: Reuse existing site selection helpers; implement variable name/value validation, support --dry-run and --force.
+  - Owner: Feature dev
+  - Est: 0.75 day
+  - Acceptance: Handler rejects bad inputs and supports interactive flow
+
+- Task 4: Implement backend call & response handling
+  - Description: Call WAN2MigrationManager.set_site_variable with parameters, handle success and errors, log previous value for audit.
+  - Owner: Backend developer
+  - Est: 0.75 day
+  - Acceptance: Successful call shows confirmation and logs details
+
+- Task 5: Unit tests and mocks
+  - Description: Add unit tests for the menu handler using mocking for WAN2MigrationManager; test validation, dry-run, success, and failure paths.
+  - Owner: Test engineer
+  - Est: 0.5 day
+  - Acceptance: Tests pass locally
+
+- Task 6: Documentation and spec commit
+  - Description: Add spec files to specs\\103-audit-menu-103-set-wan2-site-variable; update README/menu help.
+  - Owner: Documentation
+  - Est: 0.25 day
+  - Acceptance: New spec added and referenced in release notes
+
+- Task 7: Integration testing / review
+  - Description: Manual integration or QA run with a test org/site; validate behavior end-to-end and audit logs.
+  - Owner: QA
+  - Est: 0.5 day
+  - Acceptance: QA signoff
+
+Optional Task: Add rollback helper
+  - Description: Implement an optional helper to restore previous variable value when requested.
+  - Owner: Backend developer
+  - Est: 0.5 day
+  - Acceptance: Rollback command restores previous value safely

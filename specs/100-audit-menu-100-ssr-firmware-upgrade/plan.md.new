@@ -1,0 +1,71 @@
+High-level milestones:
+
+1. Specify (this document) — define inputs/outputs and safety rules.
+2. Design — wire up interactive menu to orchestrator, add confirmations and logging, decide export/telemetry schema.
+3. Tests — unit tests for validate/build payload and mocked API write_entity; integration tests for orchestrator flow using test DB and a mocked MistEndpointService.
+4. Code changes — implement menu handler (if missing), improve orchestrator to return richer result, optionally persist audit record.
+5. Review & deploy — code review, run test suite, manual dry-run in a staging org.
+
+Concrete steps & files to edit:
+
+- Add/verify menu entry and interactive handler:
+  - File: MistHelper.py
+    - Add a menu handler that:
+      - prompts for org/site/device selection (use existing PromptUtils/Prompt selection helpers)
+      - prompts/selects golden image id
+      - calls FirmwareOrchestrator.validate_upgrade(image_id, target_device_ids)
+      - shows validation results and asks for explicit confirmation
+      - calls FirmwareOrchestrator.execute_upgrade(site_id, image_id, target_device_ids)
+      - displays ApiResult to user
+
+- If running under mist-ops-platform worker design (recommended): centralize orchestration invocation to the deploy scheduler (create a ScheduledJob) instead of direct immediate execution for large rollouts.
+  - Files: mist-ops-platform/src/worker/deploy/firmware.py (existing)
+  - Optionally: mist-ops-platform/src/api/routes/deploy.py to create scheduled rollout jobs for firmware changes
+
+- Add export/logging of upgrade attempts/results to CSV/SQLite (audit trail):
+  - Use DataExporter.write_with_format_selection in MistHelper.py (or mist-ops-platform equivalent) to persist a small audit row (fields: site_id, device_id(s), image_id, firmware_version, started_at, status_code, error_detail).
+  - Files to modify: mist-ops-platform worker code where execute_upgrade returns (add a call to DataExporter.save_data_to_output or provide a plugin hook that forwards results to a logging/exporter service)
+
+- Tests:
+  - Unit:
+    - tests/test_firmware_orchestrator.py: test validate_upgrade rejects unapproved image; test incompatibility errors; test build_upgrade_payload returns expected dict
+    - tests/test_mist_endpoint_service_mock.py: mock MistEndpointService.write_entity and test execute_upgrade behavior on success/failure
+  - Integration (requires a test DB):
+    - tests/integration/test_end_to_end_firmware_flow.py: create GoldenImage in test DB (approved), create Device rows with matching model, run orchestrator.execute_upgrade with a mocked MistEndpointService that returns success and ensure audit record written
+
+Test plan and example test cases:
+
+- Unit case 1: validate_upgrade rejects unapproved image
+  - Arrange: GoldenImage.lifecycle_state != APPROVED
+  - Assert: validate_upgrade returns valid==False and contains appropriate error message
+
+- Unit case 2: validate_upgrade catches incompatible device model
+  - Arrange: GoldenImage.device_model != Device.extra_fields['model'] for at least one device
+  - Assert: validate_upgrade returns valid==False with compatibility error listing device id
+
+- Unit case 3: execute_upgrade prevents run if validation fails
+  - Arrange: validation returns invalid
+  - Assert: execute_upgrade raises RuntimeError
+
+- Unit case 4: execute_upgrade calls MistEndpointService.write_entity with expected payload
+  - Arrange: Mock MistEndpointService.write_entity to capture args and return ApiResult(200, {...})
+  - Assert: payload includes keys: firmware_version, image_type, device_model, target_device_ids, content_hash; ApiResult.success true
+
+- Integration case: end-to-end happy path with DB & mock MistEndpointService
+  - Arrange: Insert GoldenImage (APPROVED) & Devices (matching model) in test DB
+  - Act: call validate_upgrade -> build_payload -> execute_upgrade (mock service returns success)
+  - Assert: ApiResult success and audit record created (CSV/SQLite) if implemented
+
+Rollout & review checklist:
+
+- All unit tests pass
+- Integration tests for create/execute flow pass with mocked Mist API
+- Interactive menu displays validation output and explicit confirmation prompt
+- Logging includes image_id, site_id, device_count, timestamp, and ApiResult.status_code
+- Security review: ensure no API tokens are printed to logs
+
+Time estimates (rough):
+
+- Small / quick proof-of-concept (interactive call to existing orchestrator): 1-2 days
+- Add DataExporter audit persistence + tests: 1-2 days
+- Full rollout integration with scheduled job patterns: 3-5 days

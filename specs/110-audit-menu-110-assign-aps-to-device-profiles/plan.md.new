@@ -1,0 +1,5 @@
+1) Implement selection helpers for APs by model or tag
+2) Implement assign helper with idempotency
+3) Add dry-run and confirmation flags
+4) Output CSV and audit rows
+5) Tests and docs

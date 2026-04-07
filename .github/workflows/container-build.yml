@@ -21,6 +21,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   # First job: Validate Python syntax before building
@@ -29,6 +30,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,6 +65,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -80,6 +101,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
 
       - name: Generate version tag
         id: version

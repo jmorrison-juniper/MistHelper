@@ -1,0 +1,6 @@
+1) Discover manager and patterns
+2) Define ExtractionResult and errors
+3) Implement extract: fetch template, redact secrets by default, serialize to YAML/JSON
+4) Persist artifact to data/exports/gateway_templates/ with checksum
+5) Tests and CLI wiring
+6) Docs and spec under specs/105-audit-menu-105-extract-gateway-template-config

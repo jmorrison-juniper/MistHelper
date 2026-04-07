@@ -1,0 +1,67 @@
+# Menu Spec: Launch TUI mode (Menu 101)
+
+**Menu ID:** 101
+
+**Title / Description:** Launch TUI mode
+
+**Function Reference:** TUILauncher.launch
+
+**Category:** interactive
+
+**SQL Export Relevant:** 0
+
+## Purpose
+Provide an interactive Text User Interface (TUI) entry point that launches the application's full-screen or split-pane interactive console allowing operators to navigate MistHelper functionality without typing menu numbers. The TUI is an alternative interactive experience to the command-line menu and must be safe, non-destructive by default, and provide the same safety and confirmation patterns used across MistHelper.
+
+## Scope
+- Launch a terminal-based UI suitable for standard terminals (xterm, Windows Terminal, Win32 console) and SSH sessions used for remote access.
+- Provide fallback to non-TUI menu if terminal doesn't support required features or if launched non-interactively.
+- Respect environment flags for headless operation (e.g., --no-tui) and idiomatic CLI flags.
+
+## User flow
+1. User selects menu item 101 from interactive menu, or runs `MistHelper.py --menu 101`, or uses a dedicated CLI flag (e.g., `--tui`).
+2. The program performs environment checks (isatty, TERM set, Windows compatibility) and optionally asks for confirmation when required resources are missing.
+3. TUILauncher.launch initializes the TUI, sets up logging and telemetry hooks, renders initial dashboard, and accepts keyboard navigation.
+4. On exit, TUILauncher ensures graceful teardown, saves any transient state if configured, and returns to the main menu or exits program per invocation mode.
+
+## Inputs
+- Invocation context (interactive menu, direct --menu call, SSH session)
+- Environment variables (TERM, COLORTERM, OS)
+- Optional settings/config: data directory, logging levels
+- User keyboard input while TUI is running
+
+## Outputs
+- Full-screen TUI rendered to stdout/stderr (terminal)
+- Logging messages to data/script.log and any configured telemetry backends
+- Optional artifacts (session logs) under data/tui_sessions/<timestamp>/
+
+## Behavior & Rules
+- Must detect non-interactive or piped stdout; if not a TTY, fail fast with a friendly message and return non-zero when launched directly.
+- Provide a fallback text-menu when terminal capabilities insufficient (e.g., TERM=unknown, no color support).
+- Never perform destructive operations without the existing confirmation pattern (safe_input wrapper and explicit typed confirmations).
+- Never write sensitive secrets to logs; redact tokens/passwords.
+- Ensure TUI can be cleanly run inside the project's container and via SSH forced-command setup.
+- Use platform-appropriate terminal abstractions (prefer high-level libs like 'textual' or 'urwid' if already a project dependency; otherwise, implement minimal curses-backed UI). Keep external dependencies minimal.
+
+## Error Handling
+- If initialization fails due to terminal capability, present fallback instructions and return to main menu.
+- On runtime exceptions, log full traceback (script.log), display brief user-friendly error message, and restore terminal state before exiting.
+
+## Observability
+- Emit start/stop events to main logger at INFO level.
+- Log session start/stop timestamp and user identity (if available) to data/tui_sessions/ for auditability.
+
+## Accessibility & UX
+- Keyboard-first navigation.
+- Provide clear exit key (e.g., 'q' or ESC + confirm if configured) and help screen (e.g., '?').
+- Keep interface simple: dashboard, menu tree, search, and back action.
+
+## Acceptance Criteria
+- TUILauncher.launch starts on menu 101 and produces an interactive TTY UI on a standard terminal.
+- When invoked in a non-TTY context, it fails with a clear message and returns control (no crash).
+- Existing safe_input/confirmation patterns remain enforced in any destructive sub-operations reachable from the TUI.
+- Unit tests cover environment detection, graceful fallback, and basic lifecycle (start, render minimal view, exit).
+
+## Security
+- Do not store credentials in session logs. Redact any tokens in plaintext before writing logs.
+
