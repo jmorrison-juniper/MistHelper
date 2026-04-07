@@ -50,6 +50,12 @@ env:
   VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+# Execution is staged by observed runtime so quick feedback lands first.
+# 2026-04-07 baseline on PR 56:
+#   Fast   (~8-11s): Ruff, Radon, Vulture, Interrogate, Diagram lint, Bandit, pydocstyle
+#   Medium (~24-32s): pip-audit, mypy
+#   Slow   (~36-61s): E2E smoke tests, Pylint, pytest, Black
+
 jobs:
   # ──────────────────────────────────────────────────────────────
   # LINT & FORMAT
@@ -82,6 +88,13 @@ jobs:
 
   black:
     name: "Black (format check)"
+    needs:
+      - pip_audit
+      - mypy
+      - playwright
+      - pylint
+      - pytest
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -109,6 +122,15 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   mypy:
     name: "mypy (strict)"
+    needs:
+      - ruff
+      - radon
+      - vulture
+      - interrogate
+      - diagram_lint
+      - bandit
+      - pydocstyle
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -139,6 +161,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   pytest:
     name: "pytest (coverage gate)"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -193,6 +219,15 @@ jobs:
 
   pip_audit:
     name: "pip-audit (CVE scan)"
+    needs:
+      - ruff
+      - radon
+      - vulture
+      - interrogate
+      - diagram_lint
+      - bandit
+      - pydocstyle
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -220,6 +255,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   pylint:
     name: "Pylint (score gate)"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -338,6 +377,10 @@ jobs:
 
   playwright:
     name: "E2E smoke tests"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
