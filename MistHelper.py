@@ -12959,6 +12959,8 @@ class E911BSSIDReportGenerator:
 
     BSSIDS_PER_RADIO = 16
     NIBBLE_MASK = 0xFFFFFFFFFFF0
+    BAND_MAP = {"24": "band_24", "5": "band_5", "6": "band_6"}
+    BAND_LABELS = [("band_24", "2.4 GHz"), ("band_5", "5 GHz"), ("band_6", "6 GHz")]
 
     @staticmethod
     def _format_bssid(radio_base_mac: str) -> list[str]:
@@ -12979,81 +12981,61 @@ class E911BSSIDReportGenerator:
         Returns dict with keys: sites, aps, maps, radio_macs,
         radio_bands, wlan_bands.
         """
-        logging.info("Fetching site data for E911 report...")
         print("  Fetching site information...")
         all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        site_lookup: dict[str, dict[str, str]] = {}
+        site_lookup: dict[str, dict[str, Any]] = {}
         for site in all_sites:
             site_id = site.get("id")
             if site_id:
-                site_lookup[site_id] = {"name": site.get("name", ""), "address": site.get("address", "")}
+                site_lookup[site_id] = {
+                    "name": site.get("name", ""),
+                    "address": site.get("address", ""),
+                    "sitegroup_ids": site.get("sitegroup_ids") or [],
+                    "sitetemplate_id": site.get("sitetemplate_id") or "",
+                }
         logging.debug("Sites fetched: %d", len(site_lookup))
 
-        logging.info("Fetching AP device stats for E911 report...")
         print("  Fetching AP device stats...")
         stats_response = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
         )
         all_ap_stats: list[dict[str, Any]] = mistapi.get_all(response=stats_response, mist_session=apisession)
         ap_lookup: dict[str, dict[str, str]] = {}
-        radio_band_lookup: dict[str, dict[str, Any]] = {}
         for device in all_ap_stats:
             device_mac = device.get("mac")
-            if not device_mac:
-                continue
-            ap_lookup[device_mac] = {
-                "name": device.get("name", ""),
-                "site_id": device.get("site_id") or "",
-                "map_id": device.get("map_id") or "",
-            }
-            for band_key, band_label in [("band_24", "2.4 GHz"), ("band_5", "5 GHz"), ("band_6", "6 GHz")]:
-                band_data = device.get("radio_stat", {}).get(band_key, {})
-                radio_mac = band_data.get("mac")
-                if radio_mac:
-                    radio_band_lookup[radio_mac] = {
-                        "band": band_label,
-                        "band_key": band_key,
-                        "channel": str(band_data.get("channel", "")),
-                        "power": str(band_data.get("power", "")),
-                    }
-        logging.debug("AP stats: %d, radio bands: %d", len(ap_lookup), len(radio_band_lookup))
+            if device_mac:
+                ap_lookup[device_mac] = {
+                    "name": device.get("name", ""),
+                    "site_id": device.get("site_id") or "",
+                    "map_id": device.get("map_id") or "",
+                }
+        logging.debug("AP device stats fetched: %d", len(ap_lookup))
 
-        logging.info("Fetching map and WLAN data for sites with APs...")
-        print("  Fetching floor plan maps and WLAN configurations...")
+        print("  Fetching org WLAN templates and org WLANs...")
+        wlan_templates = E911BSSIDReportGenerator._fetch_org_wlan_templates(org_id)
+        org_wlans = E911BSSIDReportGenerator._fetch_org_wlans(org_id)
+        logging.debug("Org templates: %d, org WLANs: %d", len(wlan_templates), len(org_wlans))
+
+        print("  Fetching maps, WLANs, and radio stats per site...")
         unique_site_ids = {info["site_id"] for info in ap_lookup.values() if info["site_id"]}
         map_lookup: dict[str, str] = {}
         wlan_band_lookup: dict[str, list[str]] = {}
-        band_map = {"24": "band_24", "5": "band_5", "6": "band_6"}
+        radio_band_lookup: dict[str, dict[str, Any]] = {}
         for site_id in unique_site_ids:
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT)
-            for site_map in mistapi.get_all(response=maps_response, mist_session=apisession):
-                if site_map.get("id"):
-                    map_lookup[site_map["id"]] = site_map.get("name", "")
-            wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT)
-            for wlan in mistapi.get_all(response=wlans_response, mist_session=apisession):
-                ssid_name = wlan.get("ssid", "")
-                if not ssid_name:
-                    continue
-                wlan_band = wlan.get("band", "")
-                if not wlan_band or wlan_band == "both":
-                    wlan_bands = ["band_24", "band_5"]
-                elif wlan_band in band_map:
-                    wlan_bands = [band_map[wlan_band]]
-                else:
-                    wlan_bands = [f"band_{b.strip()}" for b in wlan_band.split(",") if b.strip()]
-                for band_key in wlan_bands:
-                    lookup_key = f"{site_id}::{band_key}"
-                    wlan_band_lookup.setdefault(lookup_key, [])
-                    if ssid_name not in wlan_band_lookup[lookup_key]:
-                        wlan_band_lookup[lookup_key].append(ssid_name)
+            site_info = site_lookup.get(site_id, {})
+            E911BSSIDReportGenerator._fetch_site_maps(site_id, map_lookup)
+            E911BSSIDReportGenerator._resolve_site_ssids(
+                org_id, site_id, site_info, wlan_templates, org_wlans, wlan_band_lookup
+            )
+            E911BSSIDReportGenerator._fetch_site_radio_stats(site_id, radio_band_lookup)
         logging.debug(
-            "Maps: %d, WLAN band entries: %d across %d sites",
+            "Maps: %d, WLAN band entries: %d, radio bands: %d across %d sites",
             len(map_lookup),
             len(wlan_band_lookup),
+            len(radio_band_lookup),
             len(unique_site_ids),
         )
 
-        logging.info("Fetching AP radio MACs for E911 report...")
         print("  Fetching AP radio MACs...")
         radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(response=radio_response, mist_session=apisession)
@@ -13067,6 +13049,146 @@ class E911BSSIDReportGenerator:
             "radio_bands": radio_band_lookup,
             "wlan_bands": wlan_band_lookup,
         }
+
+    @staticmethod
+    def _fetch_org_wlan_templates(org_id: str) -> list[dict[str, Any]]:
+        """Fetch all org-level WLAN templates."""
+        response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, org_id)
+        if hasattr(response, "status_code") and response.status_code == 200:
+            return response.data if isinstance(response.data, list) else []
+        return []
+
+    @staticmethod
+    def _fetch_org_wlans(org_id: str) -> list[dict[str, Any]]:
+        """Fetch all org-level WLANs."""
+        response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
+        return mistapi.get_all(response=response, mist_session=apisession)
+
+    @staticmethod
+    def _fetch_site_maps(site_id: str, map_lookup: dict[str, str]) -> None:
+        """Fetch floor plan maps for a site into map_lookup."""
+        maps_response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT)
+        for site_map in mistapi.get_all(response=maps_response, mist_session=apisession):
+            if site_map.get("id"):
+                map_lookup[site_map["id"]] = site_map.get("name", "")
+
+    @staticmethod
+    def _fetch_site_radio_stats(site_id: str, radio_band_lookup: dict[str, dict[str, Any]]) -> None:
+        """Fetch site-level AP stats and extract radio band info."""
+        stats_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+            apisession, site_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
+        )
+        site_ap_stats: list[dict[str, Any]] = mistapi.get_all(response=stats_response, mist_session=apisession)
+        for device in site_ap_stats:
+            for band_key, band_label in E911BSSIDReportGenerator.BAND_LABELS:
+                band_data = (device.get("radio_stat") or {}).get(band_key, {})
+                radio_mac = band_data.get("mac")
+                if radio_mac:
+                    radio_band_lookup[radio_mac] = {
+                        "band": band_label,
+                        "band_key": band_key,
+                        "channel": str(band_data.get("channel", "")),
+                        "power": str(band_data.get("power", "")),
+                    }
+
+    @staticmethod
+    def _resolve_site_ssids(
+        org_id: str,
+        site_id: str,
+        site_info: dict[str, Any],
+        wlan_templates: list[dict[str, Any]],
+        org_wlans: list[dict[str, Any]],
+        wlan_band_lookup: dict[str, list[str]],
+    ) -> None:
+        """Resolve all SSIDs for a site from three sources.
+
+        Sources: site-level WLANs, site template WLANs, and
+        org WLANs via WLAN templates assigned to this site.
+        """
+        site_wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(
+            apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT
+        )
+        site_wlans = mistapi.get_all(response=site_wlans_response, mist_session=apisession)
+        E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, site_wlans, wlan_band_lookup)
+
+        sitetemplate_id = site_info.get("sitetemplate_id")
+        if sitetemplate_id:
+            E911BSSIDReportGenerator._resolve_site_template_wlans(org_id, sitetemplate_id, site_id, wlan_band_lookup)
+
+        assigned_template_ids = E911BSSIDReportGenerator._get_assigned_template_ids(site_id, site_info, wlan_templates)
+        if assigned_template_ids:
+            template_wlans = [w for w in org_wlans if w.get("template_id") in assigned_template_ids]
+            E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, template_wlans, wlan_band_lookup)
+            logging.debug(
+                "Site %s: %d org WLANs via %d templates",
+                site_id[:8],
+                len(template_wlans),
+                len(assigned_template_ids),
+            )
+
+    @staticmethod
+    def _resolve_site_template_wlans(
+        org_id: str,
+        sitetemplate_id: str,
+        site_id: str,
+        wlan_band_lookup: dict[str, list[str]],
+    ) -> None:
+        """Fetch WLANs defined inside a site template."""
+        try:
+            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, org_id, sitetemplate_id)
+            if hasattr(response, "status_code") and response.status_code == 200:
+                template_wlans = response.data.get("wlans", {})
+                if isinstance(template_wlans, dict):
+                    wlan_list = list(template_wlans.values())
+                    E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, wlan_list, wlan_band_lookup)
+        except Exception as error:
+            logging.debug("Failed to fetch site template %s: %s", sitetemplate_id[:8], error)
+
+    @staticmethod
+    def _get_assigned_template_ids(
+        site_id: str,
+        site_info: dict[str, Any],
+        wlan_templates: list[dict[str, Any]],
+    ) -> set[str]:
+        """Determine which WLAN templates are assigned to this site."""
+        assigned: set[str] = set()
+        site_groups = site_info.get("sitegroup_ids") or []
+        for template in wlan_templates:
+            applies = template.get("applies", {})
+            if not isinstance(applies, dict):
+                continue
+            if applies.get("org_id"):
+                assigned.add(template["id"])
+            elif site_id in applies.get("site_ids", []):
+                assigned.add(template["id"])
+            elif any(sg in applies.get("sitegroup_ids", []) for sg in site_groups):
+                assigned.add(template["id"])
+        return assigned
+
+    @staticmethod
+    def _add_wlans_to_band_lookup(
+        site_id: str,
+        wlans: list[dict[str, Any]],
+        wlan_band_lookup: dict[str, list[str]],
+    ) -> None:
+        """Add SSID names from a WLAN list into the band lookup dict."""
+        band_map = E911BSSIDReportGenerator.BAND_MAP
+        for wlan in wlans:
+            ssid_name = wlan.get("ssid", "")
+            if not ssid_name:
+                continue
+            wlan_band = wlan.get("band", "")
+            if not wlan_band or wlan_band == "both":
+                wlan_bands = ["band_24", "band_5"]
+            elif wlan_band in band_map:
+                wlan_bands = [band_map[wlan_band]]
+            else:
+                wlan_bands = [f"band_{b.strip()}" for b in wlan_band.split(",") if b.strip()]
+            for band_key in wlan_bands:
+                lookup_key = f"{site_id}::{band_key}"
+                wlan_band_lookup.setdefault(lookup_key, [])
+                if ssid_name not in wlan_band_lookup[lookup_key]:
+                    wlan_band_lookup[lookup_key].append(ssid_name)
 
     @staticmethod
     def _build_bssid_rows(
