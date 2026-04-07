@@ -1,0 +1,5 @@
+1) Discover AP model list and recommended settings
+2) Implement profile creation helper and naming convention
+3) Support per-site overrides and bulk assign
+4) Export YAML snapshots and write audit rows
+5) Tests and docs

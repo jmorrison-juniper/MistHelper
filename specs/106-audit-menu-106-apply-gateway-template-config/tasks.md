@@ -1,0 +1,1 @@
+Tasks for Apply Gateway Template Config (menu 106). See plan.md.

@@ -1,0 +1,5 @@
+- Implement clone helper and override merge logic
+- Validate naming and naming collisions
+- Add dry-run preview and snapshot
+- Apply clone with rate-limiting and retries
+- Tests and docs

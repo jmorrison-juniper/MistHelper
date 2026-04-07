@@ -1,0 +1,5 @@
+# Extract Gateway Template Config (Menu 105)
+
+Extract a gateway template configuration to YAML/JSON/text for audit/backup. Defaults to YAML, excludes secrets unless include_secrets=True and caller is authorized. Writes artifact to data/exports/gateway_templates/ with checksum metadata.
+
+Acceptance: artifact created on success; TemplateNotFoundError for missing template; no secret leakage in logs.
