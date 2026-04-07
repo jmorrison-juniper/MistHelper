@@ -13177,8 +13177,10 @@ class E911BSSIDReportGenerator:
             ssid_name = wlan.get("ssid", "")
             if not ssid_name:
                 continue
-            wlan_band = wlan.get("band", "")
-            if not wlan_band or wlan_band == "both":
+            wlan_band = wlan.get("band") or ""
+            if not wlan_band:
+                wlan_bands = ["band_24", "band_5", "band_6"]
+            elif wlan_band == "both":
                 wlan_bands = ["band_24", "band_5"]
             elif wlan_band in band_map:
                 wlan_bands = [band_map[wlan_band]]
