@@ -52,20 +52,23 @@ class TestMermaidBlockExtraction:
     """Test Mermaid code block extraction from markdown."""
 
     def test_extracts_single_block(self, validator):
-        content = dedent("""\
+        content = dedent(
+            """\
             # Title
 
             ```mermaid
             classDiagram
                 class DataExporter
             ```
-        """)
+        """
+        )
         blocks = validator.extract_mermaid_blocks(content)
         assert len(blocks) == 1
         assert "DataExporter" in blocks[0]
 
     def test_extracts_multiple_blocks(self, validator):
-        content = dedent("""\
+        content = dedent(
+            """\
             ```mermaid
             classDiagram
                 class Foo
@@ -77,12 +80,14 @@ class TestMermaidBlockExtraction:
             sequenceDiagram
                 participant Bar
             ```
-        """)
+        """
+        )
         blocks = validator.extract_mermaid_blocks(content)
         assert len(blocks) == 2
 
     def test_ignores_non_mermaid_blocks(self, validator):
-        content = dedent("""\
+        content = dedent(
+            """\
             ```python
             class NotADiagram:
                 pass
@@ -92,7 +97,8 @@ class TestMermaidBlockExtraction:
             classDiagram
                 class RealDiagram
             ```
-        """)
+        """
+        )
         blocks = validator.extract_mermaid_blocks(content)
         assert len(blocks) == 1
         assert "RealDiagram" in blocks[0]
@@ -148,14 +154,17 @@ class TestPythonSymbolExtraction:
 
     def test_extracts_class_names(self, validator, tmp_path):
         source = tmp_path / "test_source.py"
-        source.write_text(dedent("""\
+        source_text = dedent(
+            """\
             class MyExporter:
                 def export_data(self):
                     pass
 
             class MyManager:
                 pass
-        """))
+        """
+        )
+        source.write_text(source_text)
         symbols = validator.extract_python_symbols(source)
         assert "MyExporter" in symbols
         assert "MyManager" in symbols

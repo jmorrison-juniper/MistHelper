@@ -61,7 +61,7 @@ jobs:
   # LINT & FORMAT
   # ──────────────────────────────────────────────────────────────
   ruff:
-    name: "Ruff (lint + format)"
+    name: "Ruff (lint)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -83,8 +83,6 @@ jobs:
       - run: pip install ruff
       - name: Ruff lint
         run: ruff check .
-      - name: Ruff format check
-        run: ruff format --check .
 
   black:
     name: "Black (format check)"

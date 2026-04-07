@@ -6848,9 +6848,8 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx][
-                                    "text"
-                                ] = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                annotation_text = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                current_fig["layout"]["annotations"][ann_idx]["text"] = annotation_text
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -8385,11 +8384,12 @@ class MapsManager:
                     x_idx = result_def.index("x")
                     y_idx = result_def.index("y")
                     # Try max_rssi first, fall back to avg_rssi
-                    rssi_idx = (
-                        result_def.index("max_rssi")
-                        if "max_rssi" in result_def
-                        else result_def.index("avg_rssi") if "avg_rssi" in result_def else -1
-                    )
+                    if "max_rssi" in result_def:
+                        rssi_idx = result_def.index("max_rssi")
+                    elif "avg_rssi" in result_def:
+                        rssi_idx = result_def.index("avg_rssi")
+                    else:
+                        rssi_idx = -1
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
                     return no_update, updated_refresh_times
@@ -8453,9 +8453,9 @@ class MapsManager:
                 return no_update, updated_refresh_times
 
         # Determine host binding - use 0.0.0.0 in containers for external access
-        dash_host = (
-            "0.0.0.0" if is_running_in_container() else "127.0.0.1"
-        )  # nosec B104 — container must bind all interfaces
+        dash_host = "127.0.0.1"
+        if is_running_in_container():
+            dash_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
         # Use port 8050 by default (matches container EXPOSE and compose.yml)
         dash_port = int(os.getenv("DASH_PORT", "8050"))
 
@@ -9855,11 +9855,12 @@ class MapsManager:
                                 try:
                                     x_idx = result_def.index("x")
                                     y_idx = result_def.index("y")
-                                    rssi_idx = (
-                                        result_def.index("max_rssi")
-                                        if "max_rssi" in result_def
-                                        else result_def.index("avg_rssi") if "avg_rssi" in result_def else -1
-                                    )
+                                    if "max_rssi" in result_def:
+                                        rssi_idx = result_def.index("max_rssi")
+                                    elif "avg_rssi" in result_def:
+                                        rssi_idx = result_def.index("avg_rssi")
+                                    else:
+                                        rssi_idx = -1
                                 except ValueError:
                                     x_idx, y_idx, rssi_idx = 0, 1, 4
 
