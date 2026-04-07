@@ -26,6 +26,7 @@ def make_flaky_mistapi_sequence(responses):
     orgs_module = SimpleNamespace(sites=sites_module)
     v1 = SimpleNamespace(orgs=orgs_module)
     api = SimpleNamespace(v1=v1)
+
     def get_all(response, mist_session=None):
         return response.data
 

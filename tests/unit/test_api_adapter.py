@@ -12,6 +12,7 @@ class DummyResp:
 
 def make_mistapi_for_sites(data):
     """Create minimal mistapi-like namespace exposing listOrgSites and get_all."""
+
     def listOrgSites(apisession, org, limit):
         return DummyResp(data)
 
@@ -19,6 +20,7 @@ def make_mistapi_for_sites(data):
     orgs_module = SimpleNamespace(sites=sites_module)
     v1 = SimpleNamespace(orgs=orgs_module)
     api = SimpleNamespace(v1=v1)
+
     def get_all(response, mist_session=None):
         return response.data
 
@@ -27,6 +29,7 @@ def make_mistapi_for_sites(data):
 
 def make_mistapi_for_wlans(data):
     """Create minimal mistapi-like namespace exposing site wlans list function."""
+
     def listSiteWLANS(apisession, site_id, limit):
         return DummyResp(data)
 
@@ -34,6 +37,7 @@ def make_mistapi_for_wlans(data):
     sites = SimpleNamespace(wlans=wlans)
     v1 = SimpleNamespace(sites=sites)
     api = SimpleNamespace(v1=v1)
+
     def get_all(response, mist_session=None):
         return response.data
 
