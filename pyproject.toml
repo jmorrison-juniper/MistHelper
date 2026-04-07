@@ -111,7 +111,7 @@ warn_return_any = true
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = false
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "starlink-api-reference", "scripts", "specs"]
+exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "starlink-api-reference", "scripts", "specs", "tests"]
 
 [[tool.mypy.overrides]]
 # Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
@@ -127,6 +127,23 @@ follow_imports = "skip"
 # Others: third-party or legacy code not under active development
 module = ["maps_manager", "maps_manager.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "starlink-api-reference.*", "scripts.*", "specs.*"]
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# Tests: relax strict mode — test functions rarely benefit from full type annotations.
+# Phase 2 target: incrementally add annotations to test helpers.
+module = [
+    "tests",
+    "tests.*",
+    "tests.unit.*",
+    "tests.e2e.*",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+check_untyped_defs = false
+strict = false
 
 [tool.bandit]
 targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "src"]

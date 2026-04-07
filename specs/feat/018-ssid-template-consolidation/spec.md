@@ -7,6 +7,14 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-04-06
+
+- Q: Cache freshness window → A: 60 minutes (default). Applied as FR-009a and configurable via `SSID_CONSOLIDATION_CACHE_MINUTES`.
+- Q: Cache freshness env var name → A: SSID_CONSOLIDATION_CACHE_MINUTES (confirmed).
+
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Discover & Audit All Existing Templates (Priority: P1)
@@ -85,13 +93,6 @@ After the new templates are active and verified, the engineer runs Phase 5 to di
 
 **Independent Test**: Can be tested by running all 5 phases, then verifying that old template SSIDs are disabled in the Mist dashboard and that only the new consolidated template SSIDs are active.
 
-**Acceptance Scenarios**:
-
-1. **Given** the new 5 consolidated templates are in place, **When** the engineer runs Phase 5, **Then** the system displays a list of every old template and every SSID that will be disabled (with site name, template name, SSID name) and waits for CONFIRM.
-2. **Given** the engineer confirms, **When** old SSIDs are disabled, **Then** each SSID in each old template is set to `enabled: false` via the Mist API, and a results log shows success/failure per SSID per template.
-3. **Given** a site is flagged as PSK, **When** Phase 5 runs, **Then** that site's template SSIDs are not touched and the log confirms the site was skipped.
-4. **Given** an old template's SSID is already disabled, **When** Phase 5 processes it, **Then** it reports "already disabled" and does not make a redundant API call.
-
 ---
 
 ### User Story 6 — SSID Selector via .env with Runtime Override (Priority: P1)
@@ -142,6 +143,7 @@ Before any phase executes, the system reads a default target SSID name from the 
 - **FR-007**: System MUST identify which of the 4 Mist Edge clusters each site's template references, capturing the cluster name and ID.
 - **FR-008**: System MUST generate a matrix report saved in both CSV and SQLite formats to the local data output directory.
 - **FR-009**: System MUST cache all collected data locally with a freshness timestamp and reuse cached data when it is within the configured freshness window. The engineer MUST be able to force a fresh collection even when cache is fresh.
+- **FR-009a**: Default cache freshness window is 60 minutes. This value is configurable via the environment variable `SSID_CONSOLIDATION_CACHE_MINUTES`.
 - **FR-010**: System MUST flag templates that do not contain exactly 2 SSIDs as anomalies in the report, with a reason code (e.g., "0 SSIDs", "1 SSID", "3+ SSIDs"). Anomalous templates MUST be included in the Phase 1 report but excluded from modification in Phases 2–5, with a clear log message explaining why each was skipped.
 - **FR-010a**: System MUST perform a deviation analysis across all non-PSK, non-anomaly templates, comparing settings parameter-by-parameter **for the selected target SSID only** within each target consolidation group (i.e., per Mist Edge cluster). The comparison scope is **every field in the matching WLAN JSON object** except the following metadata fields which are excluded: `id`, `org_id`, `site_id`, `template_id`, `created_time`, `modified_time`. For each parameter where values differ across sites, the system MUST report every unique value found and the count of sites using each value. This deviation report is included in the Phase 1 matrix output.
 - **FR-010b**: After per-cluster deviation analysis, the system MUST perform a **cross-cluster drift detection** pass. All 4 production consolidation groups are expected to share an identical base SSID configuration (excluding site-variable-resolved values). The system MUST compare the majority/canonical value for each parameter across all 4 clusters and flag any parameter where the canonical values differ between clusters. Cross-cluster drift is reported as a separate section in the Phase 1 deviation report, listing each drifting parameter with the per-cluster values.
@@ -164,82 +166,12 @@ Before any phase executes, the system reads a default target SSID name from the 
 - **FR-016b**: The system MUST log each deviation resolution choice (parameter name, all candidate values, selected value, engineer confirmation timestamp) to the results log for audit purposes.
 - **FR-017**: System MUST associate each new template with its corresponding site group exclusively via `sitegroup_ids`. No direct `site_id` bindings are used; site membership in the site group is the sole mechanism controlling which sites receive a template.
 - **FR-018**: System MUST detect naming conflicts with existing templates and prompt the engineer before overwriting.
-**FR-016c**: System MUST generate consolidated template names by deriving a base name from environment configuration (prefer the `MIST_TEMPLATE_BASENAME` variable if present, otherwise use the selected `MIST_TARGET_SSID`), combined with the target group identifier (e.g., `prod_cluster1`) to produce predictable, idempotent names such as `misthelper_prod_cluster1_CorpSecure`.
+- **FR-016c**: System MUST generate consolidated template names by deriving a base name from environment configuration (prefer the `MIST_TEMPLATE_BASENAME` variable if present, otherwise use the selected `MIST_TARGET_SSID`), combined with the target group identifier (e.g., `prod_cluster1`) to produce predictable, idempotent names such as `misthelper_prod_cluster1_CorpSecure`.
 
-### Session 2026-04-06
+**FR-024a**: System MUST support resumable operations and replay for all long-running phases (Phases 1–5). The system MUST persist a durable `OperationsLog` entry for each unit-of-work (per-site, per-action) containing: `id`, `phase`, `site_id`, `action`, `cursor` (if applicable), `status`, `message`, and `timestamp`. On restart or retry, the system MUST be able to:
+- inspect `OperationsLog` to determine the last successfully completed work unit per phase,
+- resume processing from the next unprocessed work unit without duplicating side effects (idempotence),
+- offer an operator a resume or restart option when partial results are detected,
+- and expose an audit report of resumed/replayed operations.
 
-
-**Phase 5: Disable Old SSIDs**
-
-- **FR-019**: System MUST set the SSID matching the selected target SSID name in each old per-site template to disabled, preserving all other configuration for rollback purposes. Non-matching SSIDs in each old template are not touched.
-- **FR-020**: System MUST skip all PSK-flagged sites and all anomaly-flagged sites during the disable operation, logging each skip with the reason.
-- **FR-021**: System MUST not disable SSIDs that are already disabled.
-
-**Confirmation & Safety**
-
-- **FR-022**: System MUST display a detailed summary of all planned changes before any modification phase (2, 3, 4, 5) and require the user to type "CONFIRM" (exact string match) before proceeding.
-- **FR-023**: System MUST log the user's confirmation entry (including timestamp) to the script log.
-- **FR-024**: System MUST produce a per-site success/failure results log after each modification phase, saved to the local data output directory.
-- **FR-024a**: System MUST track processing progress during each modification phase. If a phase is interrupted and re-run, the system MUST detect previously completed sites (via the results log) and offer to resume from where processing stopped rather than restarting from the beginning.
-
-**Output & Caching**
-
-- **FR-025**: System MUST save all reports and data in both CSV and SQLite formats to the local data output directory.
-- **FR-026**: System MUST cache all API-retrieved data with a freshness mechanism, using the configured cache freshness window as the default.
-- **FR-027**: System MUST offer the engineer the option to force a fresh data collection even when cached data is within the freshness window.
-
-**Communication Style**
-
-- **FR-028**: All user-facing messages MUST use clear, professional, reassuring language suitable for junior NOC engineers — direct, calm, specific, and free of jargon. Think Fred Rogers explaining what's happening, combined with NASA/JPL mission-control precision about what will change and what safeguards are in place.
-
-### Key Entities
-
-- **WLAN Template**: A named configuration container that holds one or more SSID/WLAN configurations. Currently ~170 exist (one per site); target state is 5 consolidated templates. Key attributes: name, ID, associated site or site group, list of contained WLANs.
-- **SSID/WLAN**: An individual wireless network configuration within a template. Key attributes: name, ID, enabled/disabled state, authentication type (802.1X, open, PSK), VLAN assignment, Mist Edge tunnel reference, site variable references.
-- **Site**: A physical location managed by Mist. Key attributes: name, ID, assigned template, site group memberships, site settings (including site variables).
-- **Site Variable**: A key-value pair stored in a site's settings (`vars` dictionary) that templates can reference for site-specific values. Key attributes: variable name, value, owning site.
-- **Site Group**: A logical grouping of sites, identified by a name and ID. Templates can be assigned to a site group so all member sites inherit the template. Key attributes: name, ID, member site list.
-- **Mist Edge Cluster**: A tunneling infrastructure endpoint that sites connect through. There are currently 4 clusters across the ~170 sites. Key attributes: cluster name, cluster ID, associated sites.
-- **Consolidation Matrix**: The Phase 1 output artifact — a tabular dataset (CSV + SQLite) with one row per site containing all collected configuration details, anomaly flags, and PSK flags.
-
----
-
-## Success Criteria *(mandatory)*
-
-### Measurable Outcomes
-
-- **SC-001**: The number of active WLAN templates managing production SSIDs is reduced from ~170 to exactly 5, as verified by the Phase 1 audit report run after full completion.
-- **SC-002**: 100% of non-PSK sites have the correct site variables configured, as verified by a post-Phase-2 validation report comparing expected vs. actual site variable values.
-- **SC-003**: 100% of non-PSK sites are assigned to exactly one of the 5 target site groups, as verified by a post-Phase-3 validation report.
-- **SC-004**: All 5 new consolidated templates are created with active SSIDs, and site variable references resolve correctly for every assigned site — meaning each site receives the correct site-specific VLAN and edge cluster values through variable substitution.
-- **SC-005**: 100% of SSIDs in old per-site templates are set to disabled (not deleted) for non-PSK sites, as verified by a post-Phase-5 audit report.
-- **SC-006**: Zero PSK sites are modified by any phase of the operation, as verified by the per-phase skip logs.
-- **SC-007**: A junior NOC engineer with no prior exposure to this tool can complete the full 5-phase workflow in under 60 minutes using only the on-screen guidance, without requiring escalation or external documentation.
-- **SC-008**: Every modification phase produces a confirmation summary that the engineer reviews before typing CONFIRM, and every confirmation is logged with a timestamp. Zero unconfirmed changes are made.
-- **SC-009**: If any phase is interrupted mid-execution, the engineer can re-run that phase and it resumes or re-applies idempotently without creating duplicate resources or skipping sites.
-- **SC-010**: The Phase 1 matrix report is accurate for 100% of sites, as verified by spot-checking 10 randomly selected sites against the Mist dashboard.
-
----
-
-## Assumptions
-
-- The Mist organization has a single org ID, already configured via `MIST_ORG_ID` or `ORG_ID` in `.env`.
-- The existing `mistapi` library (≥0.59.0) provides all necessary API endpoints for templates, WLANs, sites, site groups, site settings, and Mist Edge operations. The `mistapi.api.v1.orgs.sitegroups` module is expected to exist for site group CRUD operations even though it is not currently called in MistHelper.py.
-- Each of the ~170 sites currently has exactly one template assigned, and each template contains exactly 2 SSIDs (one secured, one open/guest). Deviations from this pattern are treated as anomalies and flagged rather than causing failures.
-- The 4 Mist Edge clusters already exist and are correctly configured. This feature does not create or modify Mist Edge clusters.
-- The 5 target site groups and 5 new templates do not yet exist at the time of first execution. If they do, the system handles conflicts gracefully.
-- The `.env` file follows the existing project pattern of key=value pairs loaded by `python-dotenv`.
-- The `data/` directory is writable (validated by the existing `FilePermissionValidator` at startup).
-- API rate limits are manageable with the existing retry/backoff configuration (`API_REQUEST_MAX_RETRIES`, `API_REQUEST_RETRY_DELAY`).
-
----
-
-## Clarifications
-
-### Session 2026-04-02
-
-- Q: When creating consolidated templates, how should the system resolve parameter deviations (differing SSID settings across sites within the same consolidation group)? → A: No default, pick each — show all unique values per parameter with site counts; engineer must explicitly select one for each. No pre-selected default.
-- Q: How should consolidated templates be assigned to sites — via sitegroup_ids, direct site_ids, or both? → A: sitegroup_ids only. Each new template targets its site group; site membership controls assignment. No direct site_id binding.
-- Q: Which WLAN properties should the deviation analysis compare when fingerprinting SSIDs across sites within a consolidation group? → A: All properties. Compare every field in the WLAN JSON object except metadata fields: `id`, `org_id`, `site_id`, `template_id`, `created_time`, `modified_time`. Full-object comparison ensures no setting divergence is missed.
-- Q: When the SSID selector identifies a target SSID, does the system operate on all SSIDs in each template or only the selected one? → A: Selector picks exactly one SSID. Only that SSID is collected, variablized, and consolidated; the other SSID in the template is ignored. The engineer runs the workflow separately for each SSID (e.g., once for secured, once for open/guest).
-- Q: Should the 4 production templates share an identical SSID base configuration, or can each cluster's template have independent settings? → A: Identical base. All 4 production templates share the same SSID settings; differences are only in site-variable-resolved values. Cross-cluster deviations are flagged as drift.
+This requirement maps to `OperationsLog` persistence implemented in `src/ssid_consolidation/logging.py` (see tasks T008/T027) and to retry/resume UI prompts described in the tasks.

@@ -12822,6 +12822,88 @@ class OfflineDeviceReporter:
         print(f"\nReport completed in {elapsed:.1f} seconds")
 
 
+class SSIDTemplateConsolidationLauncher:
+    """Menu 159 launcher for SSID Template Consolidation (Phase 1).
+
+    Prompts for a target SSID (default from MIST_TARGET_SSID env var),
+    instantiates an API adapter + manager, runs Phase 1 collection and
+    prints export locations.
+    """
+
+    @staticmethod
+    def execute() -> None:
+        print("\n=== SSID Template Consolidation (Phase 1) ===")
+        logging.info("Starting SSID Template Consolidation (Phase 1)")
+
+        default_ssid = os.getenv("MIST_TARGET_SSID", "")
+        prompt = f"Enter target SSID name (default: {default_ssid}): " if default_ssid else "Enter target SSID name: "
+        target_ssid = InputUtils.safe_input(
+            prompt, default_value=default_ssid, allow_empty=False, context="ssid_template_consolidation"
+        )  # noqa: E501
+        if not target_ssid:
+            print("! No target SSID specified. Exiting.")
+            return
+
+        force_in = InputUtils.safe_input(
+            "Force refresh from API? (y/N): ",
+            default_value="N",
+            allow_empty=True,
+            context="ssid_template_consolidation",
+        )  # noqa: E501
+        force_refresh = force_in.strip().lower() in ("y", "yes")
+
+        try:
+            current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+            if not current_org_id:
+                print("! No organization selected. Exiting.")
+                return
+
+            # Create adapter/collector/manager using runtime mistapi session
+            try:
+                from src.ssid_consolidation.api import MistApiAdapter
+                from src.ssid_consolidation.collector import Collector
+                from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
+            except Exception:
+                logging.exception("Failed to import SSID consolidation modules")
+                print("! SSID consolidation modules unavailable. Ensure src package is installed or on PYTHONPATH.")
+                return
+
+            adapter = MistApiAdapter(apisession, mistapi, org_id=current_org_id)
+            collector = Collector(mist_client=adapter)
+            manager = SSIDTemplateConsolidationManager(collector=collector)
+
+            rows, meta = manager.phase1_collect(target_ssid, force_refresh=force_refresh)
+
+            if meta.get("cached"):
+                print("Using cached data (no API requests performed).")
+            else:
+                print("Collected fresh data from Mist API.")
+
+            out = meta.get("out") or {}
+            if out:
+                print(f"Exports: CSV -> {out.get('csv')} ; DB -> {out.get('db')}")
+
+            total = len(rows) if rows else 0
+            print(f"Total rows: {total}")
+
+            if rows:
+                try:
+                    from prettytable import PrettyTable
+
+                    keys = list(rows[0].keys())
+                    table = PrettyTable()
+                    table.field_names = keys
+                    for r in rows[:5]:
+                        table.add_row([r.get(k, "") for k in keys])
+                    print(table)
+                except Exception:
+                    logging.debug("PrettyTable not available or failed to render sample rows")
+
+        except Exception as e:
+            logging.exception("SSID consolidation launcher failed: %s", e)
+            print("! SSID Template Consolidation failed. See logs for details.")
+
+
 class OrgTemplateExporter:
     """
     Organization Template Exporter
@@ -55192,6 +55274,7 @@ menu_actions = {
     "157": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
     # > Offline / Reporting
     "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
+    "159": (SSIDTemplateConsolidationLauncher.execute, "SSID Template Consolidation (Phase 1: collect SSID matrix)"),
 }
 
 
@@ -55924,6 +56007,7 @@ class OperationRegistry:
             "skip_reason": "Create device snapshot - interactive switch",
         },
         "158": {"category": "safe"},
+        "159": {"category": "safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
