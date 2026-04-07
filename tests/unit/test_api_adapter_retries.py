@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from src.ssid_consolidation.api import MistApiAdapter
+from src.ssid_consolidation.api import MistApiAdapter, RetryPolicy
 
 
 class DummyResp:
@@ -46,8 +46,7 @@ class TestMistApiAdapterRetries(unittest.TestCase):
             apisession=object(),
             mistapi_module=mistapi,
             org_id="org1",
-            max_retries=2,
-            retry_delay=0.0,
+            retry_policy=RetryPolicy(max_retries=2, retry_delay=0.0),
         )
 
         sites = adapter.get_sites(org_id="org1")
@@ -65,8 +64,7 @@ class TestMistApiAdapterRetries(unittest.TestCase):
             apisession=object(),
             mistapi_module=mistapi,
             org_id="org1",
-            max_retries=1,
-            retry_delay=0.0,
+            retry_policy=RetryPolicy(max_retries=1, retry_delay=0.0),
         )
 
         sites = adapter.get_sites(org_id="org1")

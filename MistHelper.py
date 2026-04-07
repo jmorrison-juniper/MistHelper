@@ -33,8 +33,10 @@ import warnings
 warnings.filterwarnings("ignore", message="invalid escape sequence", category=SyntaxWarning)
 
 import argparse
+import base64
 import csv
 import getpass
+import hashlib
 import ipaddress
 import logging
 import multiprocessing
@@ -771,7 +773,12 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
                             "--no-deps",
                             package_spec,
                         ]
-                        force_result = subprocess.run(force_cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+                        force_result = subprocess.run(  # nosec B603
+                            force_cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
                         if force_result.returncode == 0:
                             new_version = _get_installed_version(package_name)
                             logging.info(
@@ -884,11 +891,11 @@ except ImportError:
 
 try:
     import paramiko  # type: ignore[import-untyped]
-    from paramiko import AutoAddPolicy, SSHClient
+    from paramiko import RejectPolicy, SSHClient
 except ImportError:
     paramiko = None  # type: ignore[assignment]  # Optional - SSH operations
     SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations
-    AutoAddPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
+    RejectPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
 
 # Optional imports with fallbacks
 try:
@@ -1267,7 +1274,12 @@ class GlobalImportManager:
                 # Use UV with default behavior
                 cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
+            result = subprocess.run(  # nosec B603
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.upgrade_check_timeout,
+            )
             if result.returncode == 0:
                 logging.info(f"Successfully installed {package_spec} with UV")
                 return True
@@ -1279,7 +1291,12 @@ class GlobalImportManager:
                 else:
                     cmd = [uv_cmd, "pip", "install", package_spec]
 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
+                result = subprocess.run(  # nosec B603
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.upgrade_check_timeout,
+                )
                 if result.returncode == 0:
                     logging.info(f"Successfully installed {package_spec} with UV (fallback)")
                     return True
@@ -1698,7 +1715,10 @@ class GlobalImportManager:
                         with log_lock:
                             logging.error(f"Package {package_info[0]} import generated an exception: {exc}")
 
-    def initialize_all_imports(self, skip_deps: bool = False) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
+    def initialize_all_imports(
+        self,
+        skip_deps: bool = False,
+    ) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
         """
         Initialize all imports and dependencies upfront.
 
@@ -3069,7 +3089,8 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
     for i, kwargs in enumerate(attempts, start=1):
         try:
             tried_variants.append(kwargs)
-            assert apisession_cls is not None, "apisession_cls should be set if attempts list is populated"  # nosec B101
+            if apisession_cls is None:
+                raise AssertionError("apisession_cls should be set if attempts list is populated")
             apisession = apisession_cls(**kwargs)
             successful_method = kwargs
             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
@@ -6398,7 +6419,12 @@ class PacketCaptureManager:
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
 
-    def _wait_for_capture_completion(self, site_id: str, capture_id: str, expected_duration: int) -> bool:  # noqa: C901, PLR0912
+    def _wait_for_capture_completion(
+        self,
+        site_id: str,
+        capture_id: str,
+        expected_duration: int,
+    ) -> bool:  # noqa: C901, PLR0912
         """
         Poll for capture completion status (separate from PCAP download availability).
         Returns as soon as capture completes, does not wait for PCAP file URL.
@@ -8878,7 +8904,11 @@ class DatabaseSchemaUtils:
         return strategy
 
     @staticmethod
-    def build_create_table_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:  # noqa: C901, PLR0912, PLR0915
+    def build_create_table_sql(
+        table_name: str,
+        fields: list[str],
+        strategy: dict[str, Any],
+    ) -> str:  # noqa: C901, PLR0912, PLR0915
         """
         Builds the CREATE TABLE SQL statement based on the endpoint strategy.
 
@@ -29647,9 +29677,9 @@ class WANProbeConfigManager:
                     "template_name": result["template_name"],
                     "template_id": result["template_id"],
                     "site_count": result["site_count"],
-                    "interfaces_updated": ", ".join(result["interfaces_updated"])
-                    if result["interfaces_updated"]
-                    else "",
+                    "interfaces_updated": (
+                        ", ".join(result["interfaces_updated"]) if result["interfaces_updated"] else ""
+                    ),
                     "interface_count": len(result["interfaces_updated"]),
                     "status": result["status"],
                     "error": result["error"],
@@ -37036,28 +37066,30 @@ class MapsManager:
                                 html.H3("Location Zones"),
                                 html.Div(
                                     [
-                                        dcc.Checklist(
-                                            id="zone-toggle",
-                                            options=[
-                                                {
-                                                    "label": f" {zone.get('name', f'Zone {i + 1}')}",
-                                                    "value": zone.get("id", f"zone_{i}"),
-                                                }
-                                                for i, zone in enumerate(zones)
-                                            ],
-                                            value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
-                                            labelStyle={
-                                                "display": "block",
-                                                "margin": "8px 0",
-                                                "fontSize": "13px",
-                                                "color": "#e0e0e0",
-                                            },
-                                            style={"marginBottom": "15px"},
-                                        )
-                                        if zones
-                                        else html.P(
-                                            "No zones on this map",
-                                            style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
+                                        (
+                                            dcc.Checklist(
+                                                id="zone-toggle",
+                                                options=[
+                                                    {
+                                                        "label": f" {zone.get('name', f'Zone {i + 1}')}",
+                                                        "value": zone.get("id", f"zone_{i}"),
+                                                    }
+                                                    for i, zone in enumerate(zones)
+                                                ],
+                                                value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
+                                                labelStyle={
+                                                    "display": "block",
+                                                    "margin": "8px 0",
+                                                    "fontSize": "13px",
+                                                    "color": "#e0e0e0",
+                                                },
+                                                style={"marginBottom": "15px"},
+                                            )
+                                            if zones
+                                            else html.P(
+                                                "No zones on this map",
+                                                style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
+                                            )
                                         ),
                                         html.Div(
                                             id="selected-zone-info",
@@ -37074,44 +37106,46 @@ class MapsManager:
                                                 "marginTop": "10px",
                                             },
                                         ),
-                                        html.Div(
-                                            [
-                                                html.Button(
-                                                    "[EDIT] Edit Zone",
-                                                    id="edit-zone-btn",
-                                                    n_clicks=0,
-                                                    style={
-                                                        "width": "48%",
-                                                        "marginRight": "4%",
-                                                        "padding": "6px",
-                                                        "backgroundColor": "#667eea",
-                                                        "color": "white",
-                                                        "border": "none",
-                                                        "borderRadius": "4px",
-                                                        "cursor": "pointer",
-                                                        "fontSize": "12px",
-                                                    },
-                                                ),
-                                                html.Button(
-                                                    "[DEL] Remove Zone",
-                                                    id="remove-zone-btn",
-                                                    n_clicks=0,
-                                                    style={
-                                                        "width": "48%",
-                                                        "padding": "6px",
-                                                        "backgroundColor": "#ff4444",
-                                                        "color": "white",
-                                                        "border": "none",
-                                                        "borderRadius": "4px",
-                                                        "cursor": "pointer",
-                                                        "fontSize": "12px",
-                                                    },
-                                                ),
-                                            ],
-                                            style={"marginTop": "10px", "display": "flex"},
-                                        )
-                                        if zones
-                                        else None,
+                                        (
+                                            html.Div(
+                                                [
+                                                    html.Button(
+                                                        "[EDIT] Edit Zone",
+                                                        id="edit-zone-btn",
+                                                        n_clicks=0,
+                                                        style={
+                                                            "width": "48%",
+                                                            "marginRight": "4%",
+                                                            "padding": "6px",
+                                                            "backgroundColor": "#667eea",
+                                                            "color": "white",
+                                                            "border": "none",
+                                                            "borderRadius": "4px",
+                                                            "cursor": "pointer",
+                                                            "fontSize": "12px",
+                                                        },
+                                                    ),
+                                                    html.Button(
+                                                        "[DEL] Remove Zone",
+                                                        id="remove-zone-btn",
+                                                        n_clicks=0,
+                                                        style={
+                                                            "width": "48%",
+                                                            "padding": "6px",
+                                                            "backgroundColor": "#ff4444",
+                                                            "color": "white",
+                                                            "border": "none",
+                                                            "borderRadius": "4px",
+                                                            "cursor": "pointer",
+                                                            "fontSize": "12px",
+                                                        },
+                                                    ),
+                                                ],
+                                                style={"marginTop": "10px", "display": "flex"},
+                                            )
+                                            if zones
+                                            else None
+                                        ),
                                     ]
                                 ),
                                 html.Hr(),
@@ -37816,9 +37850,11 @@ class MapsManager:
                             text=f"<b>{zone_name}</b>",
                             showarrow=False,
                             font=dict(size=10, color="white", family="Arial Black"),
-                            bgcolor=border_color.replace(")", ",0.8)").replace("rgb", "rgba")
-                            if "rgb" in border_color
-                            else border_color,
+                            bgcolor=(
+                                border_color.replace(")", ",0.8)").replace("rgb", "rgba")
+                                if "rgb" in border_color
+                                else border_color
+                            ),
                             bordercolor="white",
                             borderwidth=1,
                             borderpad=3,
@@ -38573,9 +38609,8 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx]["text"] = (
-                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
-                                )
+                                annotation_text = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                current_fig["layout"]["annotations"][ann_idx]["text"] = annotation_text
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -38742,9 +38777,10 @@ class MapsManager:
                 # Get shapes from figure
                 shapes = current_fig.get("layout", {}).get("shapes", [])
                 if not shapes:
-                    return html.Span(
-                        "No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}
-                    ), no_update
+                    return (
+                        html.Span("No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}),
+                        no_update,
+                    )
 
                 # Get the last shape
                 last_shape = shapes[-1]
@@ -38781,13 +38817,18 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to create zone - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Zones require rectangle shapes. Use Draw Rectangle tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span(
+                                    "Zones require rectangle shapes. Use Draw Rectangle tool.",
+                                    style={"color": "#ff6666"},
+                                ),
+                                no_update,
+                            )
 
                     elif drawing_mode == "wall":
                         # Save wall path via updateSiteMap
@@ -38843,23 +38884,28 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save wall - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span("Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}),
+                                no_update,
+                            )
 
                     elif drawing_mode == "path":
                         # Save sitesurvey path via updateSiteMap
                         if shape_type == "path":
                             # Path shapes have 'path' attribute with SVG path data
                             # This is complex - for now show guidance
-                            return html.Span(
-                                "Path saving requires SVG parsing. Use Mist Portal for complex paths.",
-                                style={"color": "#ff8800"},
-                            ), no_update
+                            return (
+                                html.Span(
+                                    "Path saving requires SVG parsing. Use Mist Portal for complex paths.",
+                                    style={"color": "#ff8800"},
+                                ),
+                                no_update,
+                            )
                         elif shape_type == "line":
                             x0 = last_shape.get("x0", 0) / config_ppm
                             y0 = last_shape.get("y0", 0) / config_ppm
@@ -38902,18 +38948,21 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save path - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span("Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}),
+                                no_update,
+                            )
 
                     else:  # measure mode
-                        return html.Span(
-                            "Measurement mode - shapes not saved to Mist", style={"color": "#888"}
-                        ), no_update
+                        return (
+                            html.Span("Measurement mode - shapes not saved to Mist", style={"color": "#888"}),
+                            no_update,
+                        )
 
                 except Exception as save_error:
                     logging.error(f"Drawing tool: Error saving shape - {save_error}", exc_info=True)
@@ -39191,15 +39240,19 @@ class MapsManager:
                     logging.info(f"Map '{config_map_name}' (ID: {config_map_id}) deleted successfully")
                     # Increment cache bust trigger to refresh map dropdown
                     new_cache_bust = {"trigger": current_trigger + 1}
-                    return html.Span(
-                        f"Map '{config_map_name}' deleted! Close this browser tab.",
-                        style={"color": "#00ff88", "fontWeight": "bold"},
-                    ), new_cache_bust
+                    return (
+                        html.Span(
+                            f"Map '{config_map_name}' deleted! Close this browser tab.",
+                            style={"color": "#00ff88", "fontWeight": "bold"},
+                        ),
+                        new_cache_bust,
+                    )
                 else:
                     logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")
-                    return html.Span(
-                        f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}),
+                        no_update,
+                    )
 
             except Exception as delete_error:
                 logging.error(f"Error deleting map: {delete_error}", exc_info=True)
@@ -39301,29 +39354,37 @@ class MapsManager:
                     logging.info(
                         f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}"
                     )
-                    return html.Div(
-                        [
-                            html.P(
-                                f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
-                                style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Use Mist Dashboard to modify zone shape", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                    return (
+                        html.Div(
+                            [
+                                html.P(
+                                    f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
+                                    style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Use Mist Dashboard to modify zone shape",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
+                            ]
+                        ),
+                        current_zone,
+                    )
                 else:
-                    return html.Div(
-                        [
-                            html.P(
-                                "! Select a zone first",
-                                style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                    return (
+                        html.Div(
+                            [
+                                html.P(
+                                    "! Select a zone first",
+                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Click on a zone in the map to select it",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
+                            ]
+                        ),
+                        current_zone,
+                    )
 
             elif trigger_id == "remove-zone-btn":
                 if current_zone.get("zone_id"):
@@ -39352,40 +39413,51 @@ class MapsManager:
                             ), {"zone_id": None, "zone_name": None}
                         else:
                             logging.error(f"Zone deletion failed: HTTP {delete_response.status_code}")
-                            return html.Div(
-                                [
-                                    html.P(
-                                        f"X Delete failed: HTTP {delete_response.status_code}",
-                                        style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                    ),
-                                    html.P(
-                                        "Check permissions and try again", style={"fontSize": "10px", "color": "#888"}
-                                    ),
-                                ]
-                            ), current_zone
+                            return (
+                                html.Div(
+                                    [
+                                        html.P(
+                                            f"X Delete failed: HTTP {delete_response.status_code}",
+                                            style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
+                                        ),
+                                        html.P(
+                                            "Check permissions and try again",
+                                            style={"fontSize": "10px", "color": "#888"},
+                                        ),
+                                    ]
+                                ),
+                                current_zone,
+                            )
 
                     except Exception as del_error:
                         logging.error(f"Error deleting zone: {del_error}", exc_info=True)
-                        return html.Div(
+                        return (
+                            html.Div(
+                                [
+                                    html.P(
+                                        f"X Error: {str(del_error)[:40]}",
+                                        style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
+                                    )
+                                ]
+                            ),
+                            current_zone,
+                        )
+                else:
+                    return (
+                        html.Div(
                             [
                                 html.P(
-                                    f"X Error: {str(del_error)[:40]}",
-                                    style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                )
+                                    "! Select a zone first",
+                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Click on a zone in the map to select it",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
                             ]
-                        ), current_zone
-                else:
-                    return html.Div(
-                        [
-                            html.P(
-                                "! Select a zone first",
-                                style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                        ),
+                        current_zone,
+                    )
 
             elif trigger_id == "map-display" and clickData:
                 # Check if clicked on a zone
@@ -39419,9 +39491,10 @@ class MapsManager:
                         ]
                     ), {"zone_id": zone_id, "zone_name": zone_name}
 
-            return html.P(
-                "Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}
-            ), current_zone
+            return (
+                html.P("Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}),
+                current_zone,
+            )
 
         # Callback to toggle auto-refresh intervals on/off
         @app.callback(
@@ -39538,9 +39611,13 @@ class MapsManager:
 
                 if source_response.status_code != 200:
                     logging.error(f"Clone failed: Could not fetch source map - HTTP {source_response.status_code}")
-                    return html.Span(
-                        f"! Failed to fetch source map: HTTP {source_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(
+                            f"! Failed to fetch source map: HTTP {source_response.status_code}",
+                            style={"color": "#ff4444"},
+                        ),
+                        no_update,
+                    )
 
                 source_map = source_response.data
 
@@ -39608,9 +39685,13 @@ class MapsManager:
                     logging.error(f"Clone failed: Could not create map - HTTP {clone_response.status_code}")
                     if image_temp_path and os.path.exists(image_temp_path):
                         os.remove(image_temp_path)
-                    return html.Span(
-                        f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(
+                            f"! Failed to create cloned map: HTTP {clone_response.status_code}",
+                            style={"color": "#ff4444"},
+                        ),
+                        no_update,
+                    )
 
                 cloned_map = clone_response.data
                 cloned_map_id = cloned_map.get("id")
@@ -39680,9 +39761,10 @@ class MapsManager:
                 )
                 # Increment cache bust trigger to refresh map dropdown
                 new_cache_bust = {"trigger": current_trigger + 1}
-                return html.Span(
-                    " | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}
-                ), new_cache_bust
+                return (
+                    html.Span(" | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}),
+                    new_cache_bust,
+                )
 
             except Exception as e:
                 logging.error(f"Clone operation failed: {e}", exc_info=True)
@@ -40053,13 +40135,12 @@ class MapsManager:
                     x_idx = result_def.index("x")
                     y_idx = result_def.index("y")
                     # Try max_rssi first, fall back to avg_rssi
-                    rssi_idx = (
-                        result_def.index("max_rssi")
-                        if "max_rssi" in result_def
-                        else result_def.index("avg_rssi")
-                        if "avg_rssi" in result_def
-                        else -1
-                    )
+                    if "max_rssi" in result_def:
+                        rssi_idx = result_def.index("max_rssi")
+                    elif "avg_rssi" in result_def:
+                        rssi_idx = result_def.index("avg_rssi")
+                    else:
+                        rssi_idx = -1
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
                     return no_update, updated_refresh_times
@@ -44874,9 +44955,9 @@ class BulkAPFirmwareUpgrader:
                     "P2P Enabled": self.upgrade_config["enable_p2p"],
                     "Max Failure %": self.upgrade_config["max_failure_percentage"],
                     "Force Upgrade": self.upgrade_config["force"],
-                    "Upgrade ID": self.upgrade_ids[-1]
-                    if self.upgrade_ids
-                    else ("N/A (DRY-RUN)" if self.dry_run else "N/A"),
+                    "Upgrade ID": (
+                        self.upgrade_ids[-1] if self.upgrade_ids else ("N/A (DRY-RUN)" if self.dry_run else "N/A")
+                    ),
                     "Status": effective_status,
                     "Timestamp": datetime.now(UTC).isoformat(),
                 }
@@ -56454,7 +56535,95 @@ class EnhancedSSHRunner:
         self.timeout = timeout
         self.client = None
         self.logger = logger or logging.getLogger("ssh_runner_v2")
+        self.managed_known_hosts_path: str | None = None
         self.logger.debug(f"EnhancedSSHRunner initialized with timeout={timeout}")
+
+    def _get_data_directory(self) -> str:
+        """Return the workspace data directory used for persistent SSH metadata."""
+        return os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))
+
+    def _get_managed_known_hosts_path(self) -> str:
+        """Return the path to MistHelper's managed known-hosts file."""
+        data_dir = self._get_data_directory()
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "ssh_known_hosts")
+
+    def _ensure_managed_known_hosts_file(self) -> str:
+        """Ensure the managed known-hosts file exists and is ready to be loaded."""
+        known_hosts_path = self._get_managed_known_hosts_path()
+        if not os.path.exists(known_hosts_path):
+            with open(known_hosts_path, "a", encoding="utf-8"):
+                pass
+        if hasattr(os, "chmod"):
+            try:
+                os.chmod(known_hosts_path, 0o600)
+            except OSError:
+                self.logger.debug("Unable to tighten permissions on %s", known_hosts_path)
+        self.managed_known_hosts_path = known_hosts_path
+        return known_hosts_path
+
+    @staticmethod
+    def _known_hosts_entry_name(hostname: str, port: int) -> str:
+        """Return the known-hosts entry name, including non-default ports."""
+        return hostname if port == 22 else f"[{hostname}]:{port}"
+
+    @staticmethod
+    def _format_host_key_fingerprint(host_key: Any) -> str:
+        """Return an OpenSSH-style SHA256 fingerprint string for a host key."""
+        digest = hashlib.sha256(host_key.asbytes()).digest()
+        return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
+
+    def _load_known_hosts(self) -> None:
+        """Load system, user, and managed host keys into the current SSH client."""
+        assert self.client is not None, "SSH client must exist before loading host keys"
+        self.client.load_system_host_keys()
+        user_known_hosts_path = os.path.expanduser("~/.ssh/known_hosts")
+        try:
+            self.client.load_host_keys(user_known_hosts_path)
+        except FileNotFoundError:
+            self.logger.debug("User known_hosts file does not exist: %s", user_known_hosts_path)
+        managed_known_hosts_path = self._ensure_managed_known_hosts_file()
+        self.client.load_host_keys(managed_known_hosts_path)
+
+    def _host_key_is_known(self, hostname: str, port: int) -> bool:
+        """Return whether the current SSH client already knows the host key entry."""
+        assert self.client is not None, "SSH client must exist before checking host keys"
+        entry_name = self._known_hosts_entry_name(hostname, port)
+        return self.client.get_host_keys().lookup(entry_name) is not None
+
+    def _fetch_remote_server_key(self, hostname: str, port: int) -> Any:
+        """Fetch the remote SSH server key without authenticating the session."""
+        socket_connection = socket.create_connection((hostname, port), timeout=self.timeout)
+        transport = paramiko.Transport(socket_connection)
+        try:
+            transport.start_client(timeout=self.timeout)
+            return transport.get_remote_server_key()
+        finally:
+            transport.close()
+            socket_connection.close()
+
+    def _save_host_keys(self) -> None:
+        """Persist the current SSH client's host keys to the managed store when available."""
+        assert self.client is not None, "SSH client must exist before saving host keys"
+        if not self.managed_known_hosts_path:
+            return
+        try:
+            self.client.save_host_keys(self.managed_known_hosts_path)
+        except OSError as error:
+            self.logger.warning("Failed to persist known_hosts to %s: %s", self.managed_known_hosts_path, error)
+
+    def _trust_host_on_first_use(self, hostname: str, port: int) -> None:
+        """Enroll an unseen host key into the managed known-hosts file before connect."""
+        assert self.client is not None, "SSH client must exist before trusting host keys"
+        if self._host_key_is_known(hostname, port):
+            return
+        remote_host_key = self._fetch_remote_server_key(hostname, port)
+        entry_name = self._known_hosts_entry_name(hostname, port)
+        self.client.get_host_keys().add(entry_name, remote_host_key.get_name(), remote_host_key)
+        self._save_host_keys()
+        fingerprint = self._format_host_key_fingerprint(remote_host_key)
+        self.logger.warning("TOFU enrolled new SSH host key for %s (%s)", entry_name, fingerprint)
+        print(f"[INFO] Trusted first-seen SSH host key for {entry_name} ({fingerprint})")
 
     @staticmethod
     def _validate_hostname(hostname: str) -> bool:
@@ -56931,18 +57100,11 @@ class EnhancedSSHRunner:
             # Create SSH client  # nosec B101
             self.client = SSHClient()  # type: ignore[assignment]  # SSHClient typed as None in fallback
             assert self.client is not None  # nosec B101
-            # Load existing host keys if available
-            self.client.load_system_host_keys()
-            try:
-                self.client.load_host_keys(os.path.expanduser("~/.ssh/known_hosts"))
-            except FileNotFoundError:
-                # known_hosts file doesn't exist yet - that's fine
-                pass
+            self._load_known_hosts()
+            self.client.set_missing_host_key_policy(RejectPolicy())
+            self.logger.debug("SSH client created with TOFU enrollment and strict host key verification")
 
-            # For internal networks: Auto-accept new host keys
-            # NOTE: Only use this for trusted internal networks, not internet-facing connections
-            self.client.set_missing_host_key_policy(AutoAddPolicy())  # nosec B507 — internal NOC network only, not internet-facing
-            self.logger.debug("SSH client created with AutoAddPolicy for internal network use")
+            self._trust_host_on_first_use(hostname, port)
 
             # Attempt connection
             connection_start = time.time()
@@ -56973,6 +57135,11 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg)
             print(f"[ERROR] Connection timeout after {self.timeout} seconds")
             return False
+        except paramiko.BadHostKeyException as e:
+            error_msg = f"Host key verification failed for {hostname}: {e}"
+            self.logger.error(error_msg)
+            print("[ERROR] Host key verification failed - update the known_hosts entry before retrying")
+            return False
         except paramiko.AuthenticationException as e:
             error_msg = f"Authentication failed for {username}@{hostname}: {e}"
             self.logger.error(error_msg)
@@ -56981,7 +57148,10 @@ class EnhancedSSHRunner:
         except paramiko.SSHException as e:
             error_msg = f"SSH Error connecting to {hostname}: {e}"
             self.logger.error(error_msg)
-            print(f"[ERROR] SSH Error: {e}")
+            if "known_hosts" in str(e):
+                print("[ERROR] Host key is not trusted - add the host key to known_hosts and retry")
+            else:
+                print(f"[ERROR] SSH Error: {e}")
             return False
         except Exception as e:
             error_msg = f"Unexpected error connecting to {hostname}: {type(e).__name__}: {e}"
@@ -57032,7 +57202,12 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg, exc_info=True)
             return False, "", error_msg
 
-    def _execute_direct(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # nosec B101
+    def _execute_direct(
+        self,
+        command: str,
+        start_time: float,
+        hostname: str = "unknown",
+    ) -> tuple[bool, str, str]:  # nosec B101
         """Execute command using exec_command with PTY support"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
@@ -57081,7 +57256,12 @@ class EnhancedSSHRunner:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
                 raise e2
 
-    def _execute_with_shell(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
+    def _execute_with_shell(
+        self,
+        command: str,
+        start_time: float,
+        hostname: str = "unknown",
+    ) -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
         """Execute command using interactive shell with device type detection"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:

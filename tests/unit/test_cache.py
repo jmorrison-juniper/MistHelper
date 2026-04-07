@@ -22,7 +22,24 @@ class TestCacheManager(unittest.TestCase):
         self.assertEqual(len(allrows), 1)
         self.assertEqual(allrows[0]["data"]["site_id"], "s1")
 
+    def test_get_all_skips_invalid_and_non_dict_payloads(self):
+        self.cache.clear()
+        self.cache._conn.execute(
+            "INSERT OR REPLACE INTO phase1_cache (site_id, row_json, collected_at) VALUES (?, ?, ?)",
+            ("bad-json", "{", "2026-04-07T00:00:00+00:00"),
+        )
+        self.cache._conn.execute(
+            "INSERT OR REPLACE INTO phase1_cache (site_id, row_json, collected_at) VALUES (?, ?, ?)",
+            ("bad-shape", "[]", "2026-04-07T00:00:00+00:00"),
+        )
+        self.cache._conn.commit()
+
+        allrows = self.cache.get_all()
+
+        self.assertEqual(allrows, [])
+
     def tearDown(self):
+        self.cache.close()
         try:
             os.remove(self.db)
         except Exception:

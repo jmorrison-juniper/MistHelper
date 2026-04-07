@@ -1,3 +1,10 @@
+# ================================================================
+# Quality Gates — Comprehensive CI required before auto-merge
+# ================================================================
+# Portable: copy to any repo, customize the env block below.
+# Reusable: other workflows can call via workflow_call.
+# Failures: auto-creates GitHub issues for each failing gate.
+# ================================================================
 name: Quality Gates
 
 on:
@@ -5,74 +12,468 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: '3.13'
+      src-path:
+        type: string
+        default: 'src/'
+      coverage-threshold:
+        type: string
+        default: '90'
+      pylint-threshold:
+        type: string
+        default: '9.5'
+      interrogate-threshold:
+        type: string
+        default: '90'
+      vulture-confidence:
+        type: string
+        default: '90'
+      create-issues:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  # --- Customize per repo (overridden by workflow_call inputs) ---
+  PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
+  SRC_PATH: ${{ inputs.src-path || 'src/' }}
+  COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '90' }}
+  PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
+  INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
+  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+# Execution is staged by observed runtime so quick feedback lands first.
+# 2026-04-07 baseline on PR 56:
+#   Fast   (~8-11s): Ruff, Radon, Vulture, Interrogate, Diagram lint, Bandit, pydocstyle
+#   Medium (~24-32s): pip-audit, mypy
+#   Slow   (~36-61s): E2E smoke tests, Pylint, pytest, Black
 
 jobs:
-  quality-gates:
+  # ──────────────────────────────────────────────────────────────
+  # LINT & FORMAT
+  # ──────────────────────────────────────────────────────────────
+  ruff:
+    name: "Ruff (lint)"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        check: [ruff, mypy, pytest, bandit, pip-audit, diagram-lint]
-    name: quality-gates (${{ matrix.check }})
     timeout-minutes: 5
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.13'
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install ruff
+      - name: Ruff lint
+        run: ruff check .
 
+  black:
+    name: "Black (format check)"
+    needs:
+      - pip_audit
+      - mypy
+      - playwright
+      - pylint
+      - pytest
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install black==25.1.0
+      - name: Black format check
+        run: black --check .
+
+  # ──────────────────────────────────────────────────────────────
+  # TYPE SAFETY
+  # ──────────────────────────────────────────────────────────────
+  mypy:
+    name: "mypy (strict)"
+    needs:
+      - ruff
+      - radon
+      - vulture
+      - interrogate
+      - diagram_lint
+      - bandit
+      - pydocstyle
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff mypy types-requests types-paramiko types-tqdm pytest pytest-cov bandit pip-audit hypothesis
+          pip install mypy types-requests types-paramiko types-tqdm
+      - name: Run mypy
+        run: mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
 
-      - name: Run Ruff linter
-        if: matrix.check == 'ruff'
+  # ──────────────────────────────────────────────────────────────
+  # TESTS + COVERAGE
+  # ──────────────────────────────────────────────────────────────
+  pytest:
+    name: "pytest (coverage gate)"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
         run: |
-          ruff check MistHelper.py tests/
-          ruff format --check MistHelper.py tests/
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov hypothesis
+      - name: Run tests with coverage
+        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
-      - name: Run mypy type checker
-        if: matrix.check == 'mypy'
-        run: mypy MistHelper.py
+  # ──────────────────────────────────────────────────────────────
+  # SECURITY
+  # ──────────────────────────────────────────────────────────────
+  bandit:
+    name: "Bandit (security)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install bandit
+      - name: Run Bandit
+        run: bandit -r ${{ env.SRC_PATH }} -ll
 
-      - name: Run pytest
-        if: matrix.check == 'pytest'
-        run: pytest tests/unit/ -v
+  pip_audit:
+    name: "pip-audit (CVE scan)"
+    needs:
+      - ruff
+      - radon
+      - vulture
+      - interrogate
+      - diagram_lint
+      - bandit
+      - pydocstyle
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" submodule update --init --recursive
+          else
+            echo "No .gitmodules found; skipping submodule init"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install pip-audit
+      - name: Run pip-audit
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2026-4539
 
-      - name: Run Bandit security linter
-        if: matrix.check == 'bandit'
-        run: bandit -r MistHelper.py -c pyproject.toml
+  # ──────────────────────────────────────────────────────────────
+  # CODE QUALITY
+  # ──────────────────────────────────────────────────────────────
+  pylint:
+    name: "Pylint (score gate)"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pylint
+      - name: Run Pylint
+        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
 
-      - name: Run pip-audit dependency scan
-        if: matrix.check == 'pip-audit'
-        run: pip-audit -r requirements.txt --ignore-vuln CVE-2026-4539  # No fix available yet for Pygments
+  radon:
+    name: "Radon (complexity)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install radon
+      - name: Check cyclomatic complexity
+        run: |
+          radon cc ${{ env.SRC_PATH }} -a -nb
+          radon cc ${{ env.SRC_PATH }} -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          bad = []
+          for path, blocks in data.items():
+              for b in blocks:
+                  if b['complexity'] > 10:
+                      bad.append(f\"{path}:{b['lineno']} {b['name']} CC={b['complexity']}\")
+          if bad:
+              print('Cyclomatic complexity violations (>10):')
+              for item in bad:
+                  print(f'  {item}')
+              sys.exit(1)
+          print('All functions within complexity threshold.')
+          "
 
-      - name: Run diagram reference lint
-        if: matrix.check == 'diagram-lint'
-        run: python scripts/lint_diagram_refs.py
+  vulture:
+    name: "Vulture (dead code)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install vulture
+      - name: Detect dead code
+        run: vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
+
+  # ──────────────────────────────────────────────────────────────
+  # DOCUMENTATION
+  # ──────────────────────────────────────────────────────────────
+  pydocstyle:
+    name: "pydocstyle (docstring style)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install "pydocstyle[toml]"
+      - name: Check docstring conventions
+        run: pydocstyle ${{ env.SRC_PATH }}
+
+  interrogate:
+    name: "Interrogate (docstring coverage)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install interrogate
+      - name: Check docstring coverage
+        run: interrogate ${{ env.SRC_PATH }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
+
+  # ──────────────────────────────────────────────────────────────
+  # PROJECT-SPECIFIC (remove or adapt when copying to other repos)
+  # ──────────────────────────────────────────────────────────────
+  diagram_lint:
+    name: "Diagram reference lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python scripts/lint_diagram_refs.py
 
   playwright:
+    name: "E2E smoke tests"
+    needs:
+      - pip_audit
+      - mypy
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.13'
-
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-timeout
-
-      - name: Run E2E smoke tests (Flask test client)
+      - name: Run E2E smoke tests
         run: pytest tests/e2e/ -v --timeout=60
+
+  # ──────────────────────────────────────────────────────────────
+  # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
+  # ──────────────────────────────────────────────────────────────
+  create_failure_issues:
+    name: "Create issues for failures"
+    needs:
+      - ruff
+      - black
+      - mypy
+      - pytest
+      - bandit
+      - pip_audit
+      - pylint
+      - radon
+      - vulture
+      - pydocstyle
+      - interrogate
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Ensure issue labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "bug" --color "d73a4a" --description "Something isn't working" 2>/dev/null || true
+          gh label create "ci" --color "0e8a16" --description "CI/CD pipeline" 2>/dev/null || true
+          gh label create "quality-gate" --color "fbca04" --description "Quality gate failure" 2>/dev/null || true
+      - name: Create issues for each failed gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          declare -A RESULTS
+          RESULTS[ruff]="${{ needs.ruff.result }}"
+          RESULTS[black]="${{ needs.black.result }}"
+          RESULTS[mypy]="${{ needs.mypy.result }}"
+          RESULTS[pytest]="${{ needs.pytest.result }}"
+          RESULTS[bandit]="${{ needs.bandit.result }}"
+          RESULTS[pip_audit]="${{ needs.pip_audit.result }}"
+          RESULTS[pylint]="${{ needs.pylint.result }}"
+          RESULTS[radon]="${{ needs.radon.result }}"
+          RESULTS[vulture]="${{ needs.vulture.result }}"
+          RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
+          RESULTS[interrogate]="${{ needs.interrogate.result }}"
+
+          for gate in "${!RESULTS[@]}"; do
+            result="${RESULTS[$gate]}"
+            if [ "$result" = "failure" ]; then
+              TITLE="CI: quality-gate \`${gate}\` failed"
+
+              # Skip if an open issue already exists for this gate
+              EXISTING=$(gh issue list --state open --search "CI: quality-gate ${gate} failed" --json number --jq 'length')
+              if [ "$EXISTING" != "0" ]; then
+                echo "Issue already exists for gate: ${gate} (skipping)"
+                continue
+              fi
+
+              BODY="## Quality Gate Failure
+
+          **Gate**: \`${gate}\`
+          **Branch**: \`${{ github.ref_name }}\`
+          **Commit**: \`${{ github.sha }}\`
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Action Required
+          Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details and fix the failing gate.
+
+          _Auto-generated by Quality Gates CI_"
+
+              gh issue create \
+                --title "$TITLE" \
+                --label "bug,ci,quality-gate" \
+                --body "$BODY"
+              echo "Created issue for failed gate: ${gate}"
+            fi
+          done

@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from src.ssid_consolidation.api import MistApiAdapter
+from src.ssid_consolidation.api import MistApiAdapter, RetryPolicy
 
 
 class DummyResp:
@@ -52,8 +52,7 @@ class TestMistApiAdapter(unittest.TestCase):
             apisession=object(),
             mistapi_module=mistapi,
             org_id="org1",
-            max_retries=0,
-            retry_delay=0.0,
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
         )
         sites = adapter.get_sites(org_id="org1")
         self.assertEqual(sites, data)
@@ -65,8 +64,7 @@ class TestMistApiAdapter(unittest.TestCase):
             apisession=object(),
             mistapi_module=mistapi,
             org_id="org1",
-            max_retries=0,
-            retry_delay=0.0,
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
         )
         wlans = adapter.get_site_wlans("site-1")
         self.assertEqual(wlans, data)
@@ -78,11 +76,58 @@ class TestMistApiAdapter(unittest.TestCase):
             apisession=object(),
             mistapi_module=mistapi,
             org_id=None,
-            max_retries=0,
-            retry_delay=0.0,
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
         )
         with self.assertRaises(ValueError):
             adapter.get_sites(org_id=None)
+
+    def test_get_site_wlans_returns_empty_for_blank_site_id(self):
+        mistapi = make_mistapi_for_wlans([{"id": "w1", "name": "MySSID"}])
+        adapter = MistApiAdapter(
+            apisession=object(),
+            mistapi_module=mistapi,
+            org_id="org1",
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
+        )
+
+        wlans = adapter.get_site_wlans("")
+
+        self.assertEqual(wlans, [])
+
+    def test_get_site_wlans_returns_empty_when_endpoint_missing(self):
+        mistapi = SimpleNamespace(
+            api=SimpleNamespace(v1=SimpleNamespace(sites=SimpleNamespace(wlans=SimpleNamespace()))),
+            get_all=lambda response, mist_session=None: response.data,
+        )
+        adapter = MistApiAdapter(
+            apisession=object(),
+            mistapi_module=mistapi,
+            org_id="org1",
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
+        )
+
+        wlans = adapter.get_site_wlans("site-1")
+
+        self.assertEqual(wlans, [])
+
+    def test_expand_paginated_response_handles_none_and_non_list(self):
+        mistapi_none = SimpleNamespace(api=SimpleNamespace(v1=SimpleNamespace()), get_all=lambda **_: None)
+        adapter_none = MistApiAdapter(
+            apisession=object(),
+            mistapi_module=mistapi_none,
+            org_id="org1",
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
+        )
+        self.assertEqual(adapter_none._expand_paginated_response(object(), "sites"), [])
+
+        mistapi_bad = SimpleNamespace(api=SimpleNamespace(v1=SimpleNamespace()), get_all=lambda **_: {"bad": "shape"})
+        adapter_bad = MistApiAdapter(
+            apisession=object(),
+            mistapi_module=mistapi_bad,
+            org_id="org1",
+            retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
+        )
+        self.assertEqual(adapter_bad._expand_paginated_response(object(), "sites"), [])
 
 
 if __name__ == "__main__":

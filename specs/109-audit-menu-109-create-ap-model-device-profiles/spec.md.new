@@ -1,0 +1,5 @@
+# Create AP Model Device Profiles (Menu 109)
+
+Create device profiles for AP models with recommended settings and optional per-site overrides. Profiles should be named with model and recommended suffix, support bulk assign, and export to YAML.
+
+Outputs: device profiles created or exported; CSV summary and SQLite audit table.

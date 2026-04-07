@@ -1,0 +1,15 @@
+- TODO: Add interactive menu handler that calls FirmwareOrchestrator.validate_upgrade and, on confirmation, calls FirmwareOrchestrator.execute_upgrade. (owner: auto, complexity: M, priority: high)
+
+- TODO: Prevent direct immediate upgrades in large-organizations — wire menu to create a scheduled deploy job with approval flow instead of immediate execute for >N devices. (owner: auto, complexity: L, priority: high)
+
+- TODO: Add audit export of upgrade attempts & results via DataExporter.write_with_format_selection (fields: site_id, device_id(s), image_id, firmware_version, started_at, status_code, error_detail). (owner: auto, complexity: M, priority: medium)
+
+- TODO: Create unit tests for FirmwareOrchestrator.validate_upgrade, build_upgrade_payload, and execute_upgrade with mocked MistEndpointService. (owner: auto, complexity: M, priority: high)
+
+- TODO: Create integration test that inserts a test GoldenImage (approved) and Devices into test DB and exercises execute_upgrade with a mocked MistEndpointService. (owner: auto, complexity: L, priority: medium)
+
+- TODO: Add explicit confirmation prompt text and guard rails to MistHelper interactive flow (e.g., require typing "UPGRADE" for destructive ops). (owner: auto, complexity: S, priority: high)
+
+- TODO: Document rollback/playbook steps in repository documentation (docs/) for SSR firmware mistakes (owner: auto, complexity: S, priority: medium)
+
+- TODO: If audit persistence is required in SQL with upsert-friendly semantics, add endpoint primary key strategy and use DataExporter._write_sqlite_format or SQLiteDatabaseWriter appropriately. (owner: auto, complexity: M, priority: medium)

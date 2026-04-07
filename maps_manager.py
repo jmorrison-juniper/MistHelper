@@ -5298,28 +5298,30 @@ class MapsManager:
                                 html.H3("Location Zones"),
                                 html.Div(
                                     [
-                                        dcc.Checklist(
-                                            id="zone-toggle",
-                                            options=[
-                                                {
-                                                    "label": f" {zone.get('name', f'Zone {i + 1}')}",
-                                                    "value": zone.get("id", f"zone_{i}"),
-                                                }
-                                                for i, zone in enumerate(zones)
-                                            ],
-                                            value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
-                                            labelStyle={
-                                                "display": "block",
-                                                "margin": "8px 0",
-                                                "fontSize": "13px",
-                                                "color": "#e0e0e0",
-                                            },
-                                            style={"marginBottom": "15px"},
-                                        )
-                                        if zones
-                                        else html.P(
-                                            "No zones on this map",
-                                            style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
+                                        (
+                                            dcc.Checklist(
+                                                id="zone-toggle",
+                                                options=[
+                                                    {
+                                                        "label": f" {zone.get('name', f'Zone {i + 1}')}",
+                                                        "value": zone.get("id", f"zone_{i}"),
+                                                    }
+                                                    for i, zone in enumerate(zones)
+                                                ],
+                                                value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
+                                                labelStyle={
+                                                    "display": "block",
+                                                    "margin": "8px 0",
+                                                    "fontSize": "13px",
+                                                    "color": "#e0e0e0",
+                                                },
+                                                style={"marginBottom": "15px"},
+                                            )
+                                            if zones
+                                            else html.P(
+                                                "No zones on this map",
+                                                style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
+                                            )
                                         ),
                                         html.Div(
                                             id="selected-zone-info",
@@ -5336,44 +5338,46 @@ class MapsManager:
                                                 "marginTop": "10px",
                                             },
                                         ),
-                                        html.Div(
-                                            [
-                                                html.Button(
-                                                    "[EDIT] Edit Zone",
-                                                    id="edit-zone-btn",
-                                                    n_clicks=0,
-                                                    style={
-                                                        "width": "48%",
-                                                        "marginRight": "4%",
-                                                        "padding": "6px",
-                                                        "backgroundColor": "#667eea",
-                                                        "color": "white",
-                                                        "border": "none",
-                                                        "borderRadius": "4px",
-                                                        "cursor": "pointer",
-                                                        "fontSize": "12px",
-                                                    },
-                                                ),
-                                                html.Button(
-                                                    "[DEL] Remove Zone",
-                                                    id="remove-zone-btn",
-                                                    n_clicks=0,
-                                                    style={
-                                                        "width": "48%",
-                                                        "padding": "6px",
-                                                        "backgroundColor": "#ff4444",
-                                                        "color": "white",
-                                                        "border": "none",
-                                                        "borderRadius": "4px",
-                                                        "cursor": "pointer",
-                                                        "fontSize": "12px",
-                                                    },
-                                                ),
-                                            ],
-                                            style={"marginTop": "10px", "display": "flex"},
-                                        )
-                                        if zones
-                                        else None,
+                                        (
+                                            html.Div(
+                                                [
+                                                    html.Button(
+                                                        "[EDIT] Edit Zone",
+                                                        id="edit-zone-btn",
+                                                        n_clicks=0,
+                                                        style={
+                                                            "width": "48%",
+                                                            "marginRight": "4%",
+                                                            "padding": "6px",
+                                                            "backgroundColor": "#667eea",
+                                                            "color": "white",
+                                                            "border": "none",
+                                                            "borderRadius": "4px",
+                                                            "cursor": "pointer",
+                                                            "fontSize": "12px",
+                                                        },
+                                                    ),
+                                                    html.Button(
+                                                        "[DEL] Remove Zone",
+                                                        id="remove-zone-btn",
+                                                        n_clicks=0,
+                                                        style={
+                                                            "width": "48%",
+                                                            "padding": "6px",
+                                                            "backgroundColor": "#ff4444",
+                                                            "color": "white",
+                                                            "border": "none",
+                                                            "borderRadius": "4px",
+                                                            "cursor": "pointer",
+                                                            "fontSize": "12px",
+                                                        },
+                                                    ),
+                                                ],
+                                                style={"marginTop": "10px", "display": "flex"},
+                                            )
+                                            if zones
+                                            else None
+                                        ),
                                     ]
                                 ),
                                 html.Hr(),
@@ -6080,9 +6084,11 @@ class MapsManager:
                             text=f"<b>{zone_name}</b>",
                             showarrow=False,
                             font=dict(size=10, color="white", family="Arial Black"),
-                            bgcolor=border_color.replace(")", ",0.8)").replace("rgb", "rgba")
-                            if "rgb" in border_color
-                            else border_color,
+                            bgcolor=(
+                                border_color.replace(")", ",0.8)").replace("rgb", "rgba")
+                                if "rgb" in border_color
+                                else border_color
+                            ),
                             bordercolor="white",
                             borderwidth=1,
                             borderpad=3,
@@ -6842,9 +6848,8 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx]["text"] = (
-                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
-                                )
+                                annotation_text = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                current_fig["layout"]["annotations"][ann_idx]["text"] = annotation_text
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -7012,9 +7017,10 @@ class MapsManager:
                 # Get shapes from figure
                 shapes = current_fig.get("layout", {}).get("shapes", [])
                 if not shapes:
-                    return html.Span(
-                        "No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}
-                    ), no_update
+                    return (
+                        html.Span("No shapes drawn. Use toolbar to draw first.", style={"color": "#ff6666"}),
+                        no_update,
+                    )
 
                 # Get the last shape
                 last_shape = shapes[-1]
@@ -7051,13 +7057,18 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to create zone - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save zone: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Zones require rectangle shapes. Use Draw Rectangle tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span(
+                                    "Zones require rectangle shapes. Use Draw Rectangle tool.",
+                                    style={"color": "#ff6666"},
+                                ),
+                                no_update,
+                            )
 
                     elif drawing_mode == "wall":
                         # Save wall path via updateSiteMap
@@ -7114,23 +7125,28 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save wall - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save wall: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span("Walls require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}),
+                                no_update,
+                            )
 
                     elif drawing_mode == "path":
                         # Save sitesurvey path via updateSiteMap
                         if shape_type == "path":
                             # Path shapes have 'path' attribute with SVG path data
                             # This is complex - for now show guidance
-                            return html.Span(
-                                "Path saving requires SVG parsing. Use Mist Portal for complex paths.",
-                                style={"color": "#ff8800"},
-                            ), no_update
+                            return (
+                                html.Span(
+                                    "Path saving requires SVG parsing. Use Mist Portal for complex paths.",
+                                    style={"color": "#ff8800"},
+                                ),
+                                no_update,
+                            )
                         elif shape_type == "line":
                             x0 = last_shape.get("x0", 0) / config_ppm
                             y0 = last_shape.get("y0", 0) / config_ppm
@@ -7173,18 +7189,21 @@ class MapsManager:
                             else:
                                 error_msg = getattr(response, "text", str(response))
                                 logging.error(f"Drawing tool: Failed to save path - {error_msg}")
-                                return html.Span(
-                                    f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}
-                                ), no_update
+                                return (
+                                    html.Span(f"Failed to save path: {error_msg[:50]}", style={"color": "#ff4444"}),
+                                    no_update,
+                                )
                         else:
-                            return html.Span(
-                                "Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}
-                            ), no_update
+                            return (
+                                html.Span("Paths require line shapes. Use Draw Line tool.", style={"color": "#ff6666"}),
+                                no_update,
+                            )
 
                     else:  # measure mode
-                        return html.Span(
-                            "Measurement mode - shapes not saved to Mist", style={"color": "#888"}
-                        ), no_update
+                        return (
+                            html.Span("Measurement mode - shapes not saved to Mist", style={"color": "#888"}),
+                            no_update,
+                        )
 
                 except Exception as save_error:
                     logging.error(f"Drawing tool: Error saving shape - {save_error}", exc_info=True)
@@ -7464,15 +7483,19 @@ class MapsManager:
                     logging.info(f"Map '{config_map_name}' (ID: {config_map_id}) deleted successfully")
                     # Increment cache bust trigger to refresh map dropdown
                     new_cache_bust = {"trigger": current_trigger + 1}
-                    return html.Span(
-                        f"Map '{config_map_name}' deleted! Close this browser tab.",
-                        style={"color": "#00ff88", "fontWeight": "bold"},
-                    ), new_cache_bust
+                    return (
+                        html.Span(
+                            f"Map '{config_map_name}' deleted! Close this browser tab.",
+                            style={"color": "#00ff88", "fontWeight": "bold"},
+                        ),
+                        new_cache_bust,
+                    )
                 else:
                     logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")
-                    return html.Span(
-                        f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}),
+                        no_update,
+                    )
 
             except Exception as delete_error:
                 logging.error(f"Error deleting map: {delete_error}", exc_info=True)
@@ -7574,29 +7597,37 @@ class MapsManager:
                     logging.info(
                         f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}"
                     )
-                    return html.Div(
-                        [
-                            html.P(
-                                f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
-                                style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Use Mist Dashboard to modify zone shape", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                    return (
+                        html.Div(
+                            [
+                                html.P(
+                                    f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
+                                    style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Use Mist Dashboard to modify zone shape",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
+                            ]
+                        ),
+                        current_zone,
+                    )
                 else:
-                    return html.Div(
-                        [
-                            html.P(
-                                "! Select a zone first",
-                                style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                    return (
+                        html.Div(
+                            [
+                                html.P(
+                                    "! Select a zone first",
+                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Click on a zone in the map to select it",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
+                            ]
+                        ),
+                        current_zone,
+                    )
 
             elif trigger_id == "remove-zone-btn":
                 if current_zone.get("zone_id"):
@@ -7625,40 +7656,51 @@ class MapsManager:
                             ), {"zone_id": None, "zone_name": None}
                         else:
                             logging.error(f"Zone deletion failed: HTTP {delete_response.status_code}")
-                            return html.Div(
-                                [
-                                    html.P(
-                                        f"X Delete failed: HTTP {delete_response.status_code}",
-                                        style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                    ),
-                                    html.P(
-                                        "Check permissions and try again", style={"fontSize": "10px", "color": "#888"}
-                                    ),
-                                ]
-                            ), current_zone
+                            return (
+                                html.Div(
+                                    [
+                                        html.P(
+                                            f"X Delete failed: HTTP {delete_response.status_code}",
+                                            style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
+                                        ),
+                                        html.P(
+                                            "Check permissions and try again",
+                                            style={"fontSize": "10px", "color": "#888"},
+                                        ),
+                                    ]
+                                ),
+                                current_zone,
+                            )
 
                     except Exception as del_error:
                         logging.error(f"Error deleting zone: {del_error}", exc_info=True)
-                        return html.Div(
+                        return (
+                            html.Div(
+                                [
+                                    html.P(
+                                        f"X Error: {str(del_error)[:40]}",
+                                        style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
+                                    )
+                                ]
+                            ),
+                            current_zone,
+                        )
+                else:
+                    return (
+                        html.Div(
                             [
                                 html.P(
-                                    f"X Error: {str(del_error)[:40]}",
-                                    style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                )
+                                    "! Select a zone first",
+                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
+                                ),
+                                html.P(
+                                    "Click on a zone in the map to select it",
+                                    style={"fontSize": "10px", "color": "#888"},
+                                ),
                             ]
-                        ), current_zone
-                else:
-                    return html.Div(
-                        [
-                            html.P(
-                                "! Select a zone first",
-                                style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                            ),
-                            html.P(
-                                "Click on a zone in the map to select it", style={"fontSize": "10px", "color": "#888"}
-                            ),
-                        ]
-                    ), current_zone
+                        ),
+                        current_zone,
+                    )
 
             elif trigger_id == "map-display" and clickData:
                 # Check if clicked on a zone
@@ -7692,9 +7734,10 @@ class MapsManager:
                         ]
                     ), {"zone_id": zone_id, "zone_name": zone_name}
 
-            return html.P(
-                "Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}
-            ), current_zone
+            return (
+                html.P("Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}),
+                current_zone,
+            )
 
         # Callback to toggle auto-refresh intervals on/off
         @app.callback(
@@ -7811,9 +7854,13 @@ class MapsManager:
 
                 if source_response.status_code != 200:
                     logging.error(f"Clone failed: Could not fetch source map - HTTP {source_response.status_code}")
-                    return html.Span(
-                        f"! Failed to fetch source map: HTTP {source_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(
+                            f"! Failed to fetch source map: HTTP {source_response.status_code}",
+                            style={"color": "#ff4444"},
+                        ),
+                        no_update,
+                    )
 
                 source_map = source_response.data
 
@@ -7881,9 +7928,13 @@ class MapsManager:
                     logging.error(f"Clone failed: Could not create map - HTTP {clone_response.status_code}")
                     if image_temp_path and os.path.exists(image_temp_path):
                         os.remove(image_temp_path)
-                    return html.Span(
-                        f"! Failed to create cloned map: HTTP {clone_response.status_code}", style={"color": "#ff4444"}
-                    ), no_update
+                    return (
+                        html.Span(
+                            f"! Failed to create cloned map: HTTP {clone_response.status_code}",
+                            style={"color": "#ff4444"},
+                        ),
+                        no_update,
+                    )
 
                 cloned_map = clone_response.data
                 cloned_map_id = cloned_map.get("id")
@@ -7953,9 +8004,10 @@ class MapsManager:
                 )
                 # Increment cache bust trigger to refresh map dropdown
                 new_cache_bust = {"trigger": current_trigger + 1}
-                return html.Span(
-                    " | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}
-                ), new_cache_bust
+                return (
+                    html.Span(" | ".join(result_parts), style={"color": "#00ff88", "fontWeight": "bold"}),
+                    new_cache_bust,
+                )
 
             except Exception as e:
                 logging.error(f"Clone operation failed: {e}", exc_info=True)
@@ -8332,13 +8384,12 @@ class MapsManager:
                     x_idx = result_def.index("x")
                     y_idx = result_def.index("y")
                     # Try max_rssi first, fall back to avg_rssi
-                    rssi_idx = (
-                        result_def.index("max_rssi")
-                        if "max_rssi" in result_def
-                        else result_def.index("avg_rssi")
-                        if "avg_rssi" in result_def
-                        else -1
-                    )
+                    if "max_rssi" in result_def:
+                        rssi_idx = result_def.index("max_rssi")
+                    elif "avg_rssi" in result_def:
+                        rssi_idx = result_def.index("avg_rssi")
+                    else:
+                        rssi_idx = -1
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
                     return no_update, updated_refresh_times
@@ -8402,7 +8453,9 @@ class MapsManager:
                 return no_update, updated_refresh_times
 
         # Determine host binding - use 0.0.0.0 in containers for external access
-        dash_host = "0.0.0.0" if is_running_in_container() else "127.0.0.1"  # nosec B104 — container must bind all interfaces
+        dash_host = "127.0.0.1"
+        if is_running_in_container():
+            dash_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
         # Use port 8050 by default (matches container EXPOSE and compose.yml)
         dash_port = int(os.getenv("DASH_PORT", "8050"))
 
@@ -9802,13 +9855,12 @@ class MapsManager:
                                 try:
                                     x_idx = result_def.index("x")
                                     y_idx = result_def.index("y")
-                                    rssi_idx = (
-                                        result_def.index("max_rssi")
-                                        if "max_rssi" in result_def
-                                        else result_def.index("avg_rssi")
-                                        if "avg_rssi" in result_def
-                                        else -1
-                                    )
+                                    if "max_rssi" in result_def:
+                                        rssi_idx = result_def.index("max_rssi")
+                                    elif "avg_rssi" in result_def:
+                                        rssi_idx = result_def.index("avg_rssi")
+                                    else:
+                                        rssi_idx = -1
                                 except ValueError:
                                     x_idx, y_idx, rssi_idx = 0, 1, 4
 

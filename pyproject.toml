@@ -50,12 +50,18 @@ dev = [
     "pytest-cov>=4.0.0",
     "coverage>=7.0.0",
     "ruff>=0.8.0",
+    "black==25.1.0",
     "mypy>=1.0.0",
     "types-requests>=2.28.0",   # stubs for requests (Phase 1 fix)
     "types-paramiko>=3.0.0",    # stubs for paramiko (Phase 1 fix)
     "types-tqdm>=4.64.0",       # stubs for tqdm (Phase 1 fix)
     "bandit>=1.7.0",
     "pip-audit>=2.7.0",
+    "pylint>=3.0.0",
+    "radon>=6.0.0",
+    "vulture>=2.10",
+    "pydocstyle[toml]>=6.3.0",
+    "interrogate>=1.7.0",
     "hypothesis>=6.0.0",
     "playwright>=1.40.0",
     "pre-commit>=3.0.0",
@@ -168,7 +174,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -181,3 +187,40 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+
+# --- Black (redundant with ruff format, included for explicit gate) ---
+[tool.black]
+line-length = 120
+target-version = ["py313"]
+extend-exclude = "mist-ops-platform|ops-portal|web_portal|scripts|specs"
+
+# --- Pylint ---
+[tool.pylint.main]
+fail-under = 9.5
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint."messages control"]
+# Docstring enforcement handled by pydocstyle/interrogate
+disable = ["C0114", "C0115", "C0116"]
+
+[tool.pylint.basic]
+good-names = ["i", "e", "f", "db", "ok"]
+
+# --- pydocstyle ---
+[tool.pydocstyle]
+convention = "google"
+match-dir = "(?!tests|\\.).*"
+
+# --- Interrogate (docstring coverage) ---
+[tool.interrogate]
+fail-under = 90
+exclude = ["tests", ".venv", "setup.py"]
+verbose = 1
+generate-badge = "."
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = false
+ignore-private = false

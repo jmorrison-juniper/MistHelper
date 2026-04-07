@@ -1,0 +1,9 @@
+# Update Templates WAN2 Variable (Menu 104)
+
+Create a safe, auditable operation to update a named WAN2-related variable across gateway templates. Default to dry-run; require explicit confirmation for persistent changes. Create snapshots before any update and provide rollback instructions in case of issues.
+
+Key inputs: selector (template ids/tags/name patterns), variable_name (default: WAN2), new_value, dry_run (default true), confirm (required for destructive run), batch_size for rate-limiting.
+
+Audit: store change snapshots and per-template results to data/ and write a summary CSV.
+
+Safety: default to dry-run, backup snapshots, and do not overwrite unless confirm and explicit 'force' flags used.

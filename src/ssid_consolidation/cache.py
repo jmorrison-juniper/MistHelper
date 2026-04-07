@@ -1,58 +1,80 @@
+"""SQLite-backed cache helpers for phase 1 SSID consolidation rows."""
+
+from __future__ import annotations
+
 import json
 import logging
-import sqlite3
-from datetime import datetime
-from pathlib import Path
+from datetime import UTC, datetime
+from json import JSONDecodeError
 from typing import Any
 
+from .store import SQLiteStore
 
-class CacheManager:
-    """Simple SQLite-backed cache for Phase 1 results."""
+LOGGER = logging.getLogger(__name__)
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS phase1_cache (
+    site_id TEXT PRIMARY KEY,
+    row_json TEXT,
+    collected_at TEXT
+)
+"""
+UPSERT_ROW_SQL = """
+INSERT OR REPLACE INTO phase1_cache (site_id, row_json, collected_at)
+VALUES (?, ?, ?)
+"""
+SELECT_ALL_SQL = "SELECT row_json, collected_at FROM phase1_cache"
+CLEAR_SQL = "DELETE FROM phase1_cache"
+
+
+class CacheManager(SQLiteStore):
+    """Store and retrieve normalized phase 1 rows in a local SQLite cache."""
 
     def __init__(self, db_path: str | None = None) -> None:
-        self.db_path = Path(db_path) if db_path else Path("data/ssid-consolidation/cache.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
-        self._ensure_table()
+        """Open the cache database and ensure the backing table exists."""
+        super().__init__(db_path=db_path, default_path="data/ssid-consolidation/cache.db")
 
-    def _ensure_table(self) -> None:
-        c = self._conn.cursor()
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS phase1_cache (
-                site_id TEXT PRIMARY KEY,
-                row_json TEXT,
-                collected_at TEXT
-            )
-            """
-        )
+    def ensure_schema(self) -> None:
+        """Create the cache table when it does not already exist."""
+        self._conn.execute(CREATE_TABLE_SQL)
         self._conn.commit()
+
+    def _default_timestamp(self) -> str:
+        """Return a UTC timestamp used when callers do not provide one."""
+        return datetime.now(UTC).isoformat()
 
     def save_rows(self, rows: list[dict[str, Any]], collected_at: str | None = None) -> None:
-        collected_at = collected_at or datetime.utcnow().isoformat()
-        c = self._conn.cursor()
+        """Persist the supplied rows into the cache using site ID as the natural key."""
+        timestamp = collected_at or self._default_timestamp()
         for row in rows:
             site_id = row.get("site_id") or row.get("site", "")
-            c.execute(
-                "INSERT OR REPLACE INTO phase1_cache (site_id, row_json, collected_at) VALUES (?, ?, ?)",
-                (site_id, json.dumps(row), collected_at),
+            self._conn.execute(
+                UPSERT_ROW_SQL,
+                (site_id, json.dumps(row), timestamp),
             )
         self._conn.commit()
 
+    def _decode_row(self, row_json: str) -> dict[str, Any] | None:
+        """Decode one cached JSON payload into a dictionary, or `None` on failure."""
+        try:
+            decoded = json.loads(row_json)
+        except (JSONDecodeError, TypeError):
+            LOGGER.exception("CacheManager: failed to decode cached row JSON")
+            return None
+        if not isinstance(decoded, dict):
+            LOGGER.warning("CacheManager: cached row was not a dictionary payload")
+            return None
+        return decoded
+
     def get_all(self) -> list[dict[str, Any]]:
-        c = self._conn.cursor()
-        c.execute("SELECT row_json, collected_at FROM phase1_cache")
-        out = []
-        for row_json, collected_at in c.fetchall():
-            try:
-                data = json.loads(row_json)
-            except Exception:
-                logging.exception("Failed to decode cached row_json")
-                continue
-            out.append({"data": data, "collected_at": collected_at})
+        """Return all cached rows with their collection timestamps."""
+        out: list[dict[str, Any]] = []
+        for row_json, collected_at in self._conn.execute(SELECT_ALL_SQL).fetchall():
+            data = self._decode_row(row_json)
+            if data is not None:
+                out.append({"data": data, "collected_at": collected_at})
         return out
 
     def clear(self) -> None:
-        c = self._conn.cursor()
-        c.execute("DELETE FROM phase1_cache")
+        """Delete all cached phase 1 rows."""
+        self._conn.execute(CLEAR_SQL)
         self._conn.commit()

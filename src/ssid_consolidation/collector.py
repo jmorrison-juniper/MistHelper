@@ -1,22 +1,30 @@
+"""Collection helpers for SSID template consolidation phase 1."""
+
+from __future__ import annotations
+
 import logging
-from datetime import datetime
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
+
+LOGGER = logging.getLogger(__name__)
+COLLECTION_ERROR_TYPES = (AttributeError, RuntimeError, TypeError, ValueError)
 
 
 class Collector:
-    """Collector that gathers template/site/SSID info from Mist API.
-
-    If a `mist_client` (adapter) is provided it will be used to query
-    the Mist API with retries and pagination. When no client is provided
-    the collector returns a deterministic sample payload so local tests
-    can run without credentials.
-    """
+    """Gather site and WLAN data needed for phase 1 SSID consolidation analysis."""
 
     def __init__(self, mist_client: Any | None = None) -> None:
+        """Store the optional Mist API adapter used for online collection."""
         self.mist_client = mist_client
 
-    def _sample_rows(self, target_ssid: str) -> list[dict[str, Any]]:
-        now = datetime.utcnow().isoformat()
+    def _current_timestamp(self) -> str:
+        """Return an ISO-8601 UTC timestamp for collected rows."""
+        return datetime.now(UTC).isoformat()
+
+    def sample_rows(self, target_ssid: str) -> list[dict[str, Any]]:
+        """Return deterministic sample rows for offline testing and fallback flows."""
+        timestamp = self._current_timestamp()
         return [
             {
                 "site_id": "site-1",
@@ -29,7 +37,7 @@ class Collector:
                 "edge_cluster_id": "ec-1",
                 "edge_cluster_name": "Edge Cluster 1",
                 "anomaly_code": None,
-                "collected_at": now,
+                "collected_at": timestamp,
             },
             {
                 "site_id": "site-2",
@@ -42,82 +50,131 @@ class Collector:
                 "edge_cluster_id": "ec-2",
                 "edge_cluster_name": "Edge Cluster 2",
                 "anomaly_code": "1_SSID",
-                "collected_at": now,
+                "collected_at": timestamp,
             },
         ]
 
+    def _get_sites(self) -> list[dict[str, Any]]:
+        """Return sites from the configured Mist adapter, or an empty list."""
+        client_get_sites = getattr(self.mist_client, "get_sites", None)
+        if self.mist_client is None or not callable(client_get_sites):
+            return []
+        org_id = getattr(self.mist_client, "org_id", None)
+        return self._call_site_fetcher(client_get_sites, org_id)
+
+    def _get_site_wlans(self, site_id: str) -> list[dict[str, Any]]:
+        """Return WLANs for one site and log recoverable API failures."""
+        client_get_site_wlans = getattr(self.mist_client, "get_site_wlans", None)
+        if self.mist_client is None or not callable(client_get_site_wlans):
+            return []
+        try:
+            wlans = self._call_wlan_fetcher(client_get_site_wlans, site_id)
+        except COLLECTION_ERROR_TYPES:
+            LOGGER.exception("Collector: failed to fetch WLANs for site %s", site_id)
+            return []
+        return wlans
+
+    def _call_site_fetcher(
+        self,
+        fetcher: Callable[..., Any],
+        org_id: str | None,
+    ) -> list[dict[str, Any]]:
+        """Call a site fetcher and normalize its payload to a list of dictionaries."""
+        return self._normalize_payload(fetcher(org_id=org_id))
+
+    def _call_wlan_fetcher(
+        self,
+        fetcher: Callable[..., Any],
+        site_id: str,
+    ) -> list[dict[str, Any]]:
+        """Call a WLAN fetcher and normalize its payload to a list of dictionaries."""
+        return self._normalize_payload(fetcher(site_id))
+
+    def _normalize_payload(self, payload: Any) -> list[dict[str, Any]]:
+        """Normalize a client payload to the list shape expected by the collector."""
+        return payload if isinstance(payload, list) else []
+
+    def _matches_target_ssid(self, wlan: dict[str, Any], target_ssid: str) -> bool:
+        """Return `True` when a WLAN matches the requested SSID name."""
+        wlan_name = wlan.get("name") or wlan.get("ssid_name") or ""
+        return wlan_name == target_ssid
+
+    def _detect_psk(self, wlan: dict[str, Any]) -> int:
+        """Return `1` when the WLAN indicates PSK-based authentication."""
+        encryption = str(wlan.get("encryption", "")).lower()
+        return 1 if wlan.get("psk") or "psk" in encryption else 0
+
+    def _template_id(self, site: dict[str, Any], wlan: dict[str, Any]) -> str:
+        """Return the best available template identifier for a site WLAN pair."""
+        return wlan.get("ap_template_id") or wlan.get("template_id") or site.get("template_id") or ""
+
+    def _template_name(self, wlan: dict[str, Any]) -> str:
+        """Return the best available template name for a site WLAN pair."""
+        return wlan.get("ap_template_name") or wlan.get("template_name") or ""
+
+    def _ssid_id(self, wlan: dict[str, Any]) -> str:
+        """Return the best available SSID identifier for the target WLAN."""
+        return wlan.get("id") or wlan.get("ssid_id") or ""
+
+    def _cluster_id(self, site: dict[str, Any]) -> str:
+        """Return the edge cluster identifier for a site, defaulting to empty."""
+        return site.get("edge_cluster_id") or ""
+
+    def _cluster_name(self, site: dict[str, Any]) -> str:
+        """Return the edge cluster name for a site, defaulting to empty."""
+        return site.get("edge_cluster_name") or ""
+
+    def _build_row(
+        self,
+        site: dict[str, Any],
+        wlan: dict[str, Any],
+        target_ssid: str,
+    ) -> dict[str, Any]:
+        """Build one normalized phase 1 row from site and WLAN source data."""
+        return {
+            "site_id": site.get("id") or "",
+            "site_name": site.get("name") or "",
+            "template_id": self._template_id(site, wlan),
+            "template_name": self._template_name(wlan),
+            "target_ssid_name": target_ssid,
+            "target_ssid_id": self._ssid_id(wlan),
+            "psk_detected": self._detect_psk(wlan),
+            "edge_cluster_id": self._cluster_id(site),
+            "edge_cluster_name": self._cluster_name(site),
+            "anomaly_code": None,
+            "collected_at": self._current_timestamp(),
+        }
+
+    def collect_from_api(self, target_ssid: str) -> list[dict[str, Any]]:
+        """Collect matching WLAN rows from the configured Mist API adapter."""
+        rows: list[dict[str, Any]] = []
+        for site in self._get_sites():
+            site_id = site.get("id") or ""
+            if not site_id:
+                continue
+            for wlan in self._get_site_wlans(site_id):
+                if self._matches_target_ssid(wlan, target_ssid):
+                    rows.append(self._build_row(site, wlan, target_ssid))
+        return rows
+
     def collect(self, target_ssid: str) -> list[dict[str, Any]]:
-        """Return a list of site-level rows for the target SSID.
-
-        If a `mist_client` adapter is available the collector will attempt
-        to fetch sites and site WLANs from the Mist API and return rows for
-        sites that host the requested SSID. On any failure it falls back to
-        the deterministic sample payload to preserve offline testing.
-        """
-        # Use adapter-based collection when available
-        if self.mist_client:
-            try:
-                org_id = getattr(self.mist_client, "org_id", None)
-                sites = self.mist_client.get_sites(org_id=org_id) if hasattr(self.mist_client, "get_sites") else []
-
-                rows: list[dict[str, Any]] = []
-                for site in sites:
-                    site_id = site.get("id")
-                    site_name = site.get("name", "")
-
-                    # Attempt to fetch site WLANs (may be empty)
-                    wlans = []
-                    try:
-                        if hasattr(self.mist_client, "get_site_wlans") and site_id:
-                            wlans = self.mist_client.get_site_wlans(site_id)
-                    except Exception:
-                        logging.exception("Failed to fetch WLANs for site %s", site_id)
-
-                    # Inspect WLANs for the target SSID name
-                    for wlan in wlans or []:
-                        # WLAN shape may vary; check common fields
-                        wlan_name = wlan.get("name") or wlan.get("ssid_name") or ""
-                        if wlan_name != target_ssid:
-                            continue
-
-                        row = {
-                            "site_id": site_id,
-                            "site_name": site_name,
-                            # Template id may be present on WLAN or site metadata
-                            "template_id": (
-                                wlan.get("ap_template_id")
-                                or wlan.get("template_id")
-                                or site.get("template_id")
-                                or ""
-                            ),
-                            "template_name": (
-                                wlan.get("ap_template_name")
-                                or wlan.get("template_name")
-                                or ""
-                            ),
-                            "target_ssid_name": target_ssid,
-                            "target_ssid_id": (
-                                wlan.get("id") or wlan.get("ssid_id") or ""
-                            ),
-                            "psk_detected": (
-                                1
-                                if wlan.get("psk") or wlan.get("encryption", "").lower().find("psk") != -1
-                                else 0
-                            ),
-                            "edge_cluster_id": site.get("edge_cluster_id") or "",
-                            "edge_cluster_name": site.get("edge_cluster_name") or "",
-                            "anomaly_code": None,
-                            "collected_at": datetime.utcnow().isoformat(),
-                        }
-                        rows.append(row)
-
-                if rows:
-                    logging.info("Collector: found %d sites hosting SSID '%s'", len(rows), target_ssid)
-                    return rows
-
-                logging.info("Collector: no matching SSID rows found via Mist API, falling back to sample data")
-            except Exception:
-                logging.exception("Collector: adapter-based collection failed - falling back to sample data")
-
-        logging.info("Collector: returning sample data for target_ssid=%s", target_ssid)
-        return self._sample_rows(target_ssid)
+        """Collect rows for the target SSID, falling back to sample rows offline."""
+        if self.mist_client is None:
+            LOGGER.info("Collector: returning sample data for target_ssid=%s", target_ssid)
+            return self.sample_rows(target_ssid)
+        try:
+            rows = self.collect_from_api(target_ssid)
+        except COLLECTION_ERROR_TYPES:
+            LOGGER.exception("Collector: adapter-based collection failed; using sample data")
+            rows = []
+        if rows:
+            LOGGER.info(
+                "Collector: found %d sites hosting SSID '%s'",
+                len(rows),
+                target_ssid,
+            )
+            return rows
+        LOGGER.info(
+            "Collector: no matching SSID rows found via Mist API; using sample data",
+        )
+        return self.sample_rows(target_ssid)

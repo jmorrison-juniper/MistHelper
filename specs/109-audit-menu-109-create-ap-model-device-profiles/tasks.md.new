@@ -1,0 +1,5 @@
+- Implement AP model discovery
+- Implement profile naming and creation helper
+- Support overrides and bulk assign
+- Export YAML snapshots and audit
+- Tests and docs
