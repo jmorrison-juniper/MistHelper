@@ -1,15 +1,22 @@
+import logging
 import os
 from datetime import datetime, timedelta
-from .collector import Collector
+
 from .cache import CacheManager
+from .collector import Collector
 from .exporter import Exporter
-import logging
 
 
 class SSIDTemplateConsolidationManager:
     """High-level manager orchestrating Phase 1 collection, cache, and export."""
 
-    def __init__(self, collector: Collector = None, cache: CacheManager = None, exporter: Exporter = None, cache_minutes: int = 60):
+    def __init__(
+        self,
+        collector: Collector | None = None,
+        cache: CacheManager | None = None,
+        exporter: Exporter | None = None,
+        cache_minutes: int = 60,
+    ):
         self.collector = collector or Collector()
         self.cache = cache or CacheManager()
         self.exporter = exporter or Exporter()

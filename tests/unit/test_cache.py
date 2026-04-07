@@ -1,6 +1,7 @@
-import unittest
-from src.ssid_consolidation.cache import CacheManager
 import os
+import unittest
+
+from src.ssid_consolidation.cache import CacheManager
 
 
 class TestCacheManager(unittest.TestCase):

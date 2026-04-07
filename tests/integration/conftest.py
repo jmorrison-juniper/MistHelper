@@ -1,5 +1,6 @@
-import pytest
 from types import SimpleNamespace
+
+import pytest
 
 from src.ssid_consolidation.api import MistApiAdapter
 

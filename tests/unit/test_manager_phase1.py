@@ -1,9 +1,10 @@
-import unittest
 import os
-from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
-from src.ssid_consolidation.collector import Collector
+import unittest
+
 from src.ssid_consolidation.cache import CacheManager
+from src.ssid_consolidation.collector import Collector
 from src.ssid_consolidation.exporter import Exporter
+from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
 
 
 class DummyCollector(Collector):
@@ -36,7 +37,12 @@ class TestManagerPhase1(unittest.TestCase):
         self.cache.clear()
         self.collector = DummyCollector()
         self.exporter = Exporter()
-        self.mgr = SSIDTemplateConsolidationManager(collector=self.collector, cache=self.cache, exporter=self.exporter, cache_minutes=60)
+        self.mgr = SSIDTemplateConsolidationManager(
+            collector=self.collector,
+            cache=self.cache,
+            exporter=self.exporter,
+            cache_minutes=60,
+        )
 
     def test_phase1_collect_and_cache(self):
         rows, meta = self.mgr.phase1_collect("TestSSID", force_refresh=True)

@@ -1,4 +1,5 @@
 import unittest
+
 from src.ssid_consolidation.analysis import AnalysisManager
 
 

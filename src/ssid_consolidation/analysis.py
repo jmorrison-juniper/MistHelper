@@ -1,15 +1,30 @@
-from collections import defaultdict
-from typing import List, Dict, Any
+from typing import Any
+
+# Type aliases for readability
+ClusterReport = dict[str, dict[str, dict[str, int]]]
 
 
 class AnalysisManager:
     """Per-cluster deviation analysis and cross-cluster drift detection."""
 
-    DEFAULT_EXCLUDE = {"id", "org_id", "site_id", "template_id", "created_time", "modified_time", "edge_cluster_id", "edge_cluster_name"}
+    DEFAULT_EXCLUDE = {
+        "id",
+        "org_id",
+        "site_id",
+        "template_id",
+        "created_time",
+        "modified_time",
+        "edge_cluster_id",
+        "edge_cluster_name",
+    }
 
-    def per_cluster_deviation(self, rows: List[Dict[str, Any]], exclude_fields=None) -> Dict[str, Dict[str, Dict[str, int]]]:
+    def per_cluster_deviation(
+        self,
+        rows: list[dict[str, Any]],
+        exclude_fields: list[str] | None = None,
+    ) -> ClusterReport:
         exclude = set(exclude_fields or []) | self.DEFAULT_EXCLUDE
-        per_cluster: Dict[str, Dict[str, Dict[str, int]]] = {}
+        per_cluster: ClusterReport = {}
         for row in rows:
             cluster = row.get("edge_cluster_id") or "unknown"
             per_cluster.setdefault(cluster, {})
@@ -21,16 +36,16 @@ class AnalysisManager:
                 param_map[key] = param_map.get(key, 0) + 1
         return per_cluster
 
-    def cross_cluster_drift(self, per_cluster_report: Dict[str, Dict[str, Dict[str, int]]]) -> Dict[str, Dict[str, str]]:
+    def cross_cluster_drift(self, per_cluster_report: ClusterReport) -> dict[str, dict[str, str]]:
         # For each parameter, compute the majority value per cluster and flag parameters where
         # the majority values differ across clusters.
         params = set()
         for cluster_map in per_cluster_report.values():
             params.update(cluster_map.keys())
 
-        drift: Dict[str, Dict[str, str]] = {}
+        drift: dict[str, dict[str, str]] = {}
         for param in params:
-            majority_by_cluster: Dict[str, str] = {}
+            majority_by_cluster: dict[str, str | None] = {}
             for cluster, cluster_map in per_cluster_report.items():
                 counts = cluster_map.get(param, {})
                 if counts:

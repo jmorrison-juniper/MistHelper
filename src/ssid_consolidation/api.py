@@ -8,9 +8,10 @@ pagination.
 from __future__ import annotations
 
 import logging
-import time
 import os
-from typing import Any, Callable, List
+import time
+from collections.abc import Callable
+from typing import Any
 
 
 class MistApiAdapter:
@@ -24,12 +25,28 @@ class MistApiAdapter:
 
     DEFAULT_PAGE_LIMIT = int(os.getenv("DEFAULT_API_PAGE_LIMIT", "1000"))
 
-    def __init__(self, apisession: Any, mistapi_module: Any, org_id: str | None = None, *, max_retries: int | None = None, retry_delay: float | None = None):
+    def __init__(
+        self,
+        apisession: Any,
+        mistapi_module: Any,
+        org_id: str | None = None,
+        *,
+        max_retries: int | None = None,
+        retry_delay: float | None = None,
+    ):
         self.apisession = apisession
         self.mistapi = mistapi_module
         self.org_id = org_id
-        self.max_retries = max_retries if max_retries is not None else int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))
-        self.retry_delay = retry_delay if retry_delay is not None else float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))
+        self.max_retries = (
+            max_retries
+            if max_retries is not None
+            else int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))
+        )
+        self.retry_delay = (
+            retry_delay
+            if retry_delay is not None
+            else float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))
+        )
 
     def _call_with_retries(self, fn: Callable[..., Any], *args, **kwargs) -> Any:
         last_resp = None
@@ -50,7 +67,7 @@ class MistApiAdapter:
         logging.error("MistApiAdapter: API call failed after %d attempts", self.max_retries + 1)
         return last_resp
 
-    def get_sites(self, org_id: str | None = None) -> List[dict]:
+    def get_sites(self, org_id: str | None = None) -> list[dict]:
         """Return list of sites for the org.
 
         Uses `mistapi.api.v1.orgs.sites.listOrgSites` and `mistapi.get_all`.
@@ -59,7 +76,7 @@ class MistApiAdapter:
         if not org:
             raise ValueError("org_id is required for get_sites()")
 
-        fn = getattr(self.mistapi.api.v1.orgs.sites, "listOrgSites")
+        fn = self.mistapi.api.v1.orgs.sites.listOrgSites
         resp = self._call_with_retries(fn, self.apisession, org, limit=self.DEFAULT_PAGE_LIMIT)
         try:
             result = self.mistapi.get_all(response=resp, mist_session=self.apisession)  # type: ignore[no-any-return]
@@ -69,7 +86,7 @@ class MistApiAdapter:
             logging.exception("MistApiAdapter: failed to expand paginated sites response")
             return []
 
-    def get_site_wlans(self, site_id: str) -> List[dict]:
+    def get_site_wlans(self, site_id: str) -> list[dict]:
         """Return list of WLANs for a site.
 
         Tries common variant names for the endpoint and returns an empty

@@ -12837,12 +12837,12 @@ class SSIDTemplateConsolidationLauncher:
 
         default_ssid = os.getenv("MIST_TARGET_SSID", "")
         prompt = f"Enter target SSID name (default: {default_ssid}): " if default_ssid else "Enter target SSID name: "
-        target_ssid = InputUtils.safe_input(prompt, default_value=default_ssid, allow_empty=False, context="ssid_template_consolidation")
+        target_ssid = InputUtils.safe_input(prompt, default_value=default_ssid, allow_empty=False, context="ssid_template_consolidation")  # noqa: E501
         if not target_ssid:
             print("! No target SSID specified. Exiting.")
             return
 
-        force_in = InputUtils.safe_input("Force refresh from API? (y/N): ", default_value="N", allow_empty=True, context="ssid_template_consolidation")
+        force_in = InputUtils.safe_input("Force refresh from API? (y/N): ", default_value="N", allow_empty=True, context="ssid_template_consolidation")  # noqa: E501
         force_refresh = force_in.strip().lower() in ("y", "yes")
 
         try:

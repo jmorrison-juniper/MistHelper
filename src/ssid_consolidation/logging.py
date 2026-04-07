@@ -1,7 +1,5 @@
 import sqlite3
 from pathlib import Path
-from dataclasses import asdict
-import logging
 
 
 class OperationsLog:
@@ -41,5 +39,9 @@ class OperationsLog:
 
     def query_by_phase(self, phase: int):
         cur = self._conn.cursor()
-        cur.execute("SELECT id, phase, site_id, action, status, message, timestamp FROM operations_log WHERE phase = ?", (phase,))
+        query = (
+            "SELECT id, phase, site_id, action, status, message, timestamp "
+            "FROM operations_log WHERE phase = ?"
+        )
+        cur.execute(query, (phase,))
         return cur.fetchall()

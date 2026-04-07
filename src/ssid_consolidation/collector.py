@@ -1,7 +1,5 @@
-import os
 import logging
 from datetime import datetime
-from typing import List, Dict
 
 
 class Collector:
@@ -16,7 +14,7 @@ class Collector:
     def __init__(self, mist_client=None):
         self.mist_client = mist_client
 
-    def _sample_rows(self, target_ssid: str) -> List[Dict]:
+    def _sample_rows(self, target_ssid: str) -> list[dict]:
         now = datetime.utcnow().isoformat()
         return [
             {
@@ -47,7 +45,7 @@ class Collector:
             },
         ]
 
-    def collect(self, target_ssid: str) -> List[Dict]:
+    def collect(self, target_ssid: str) -> list[dict]:
         """Return a list of site-level rows for the target SSID.
 
         If a `mist_client` adapter is available the collector will attempt
@@ -61,7 +59,7 @@ class Collector:
                 org_id = getattr(self.mist_client, "org_id", None)
                 sites = self.mist_client.get_sites(org_id=org_id) if hasattr(self.mist_client, "get_sites") else []
 
-                rows: List[Dict] = []
+                rows: list[dict] = []
                 for site in sites:
                     site_id = site.get("id")
                     site_name = site.get("name", "")
@@ -85,11 +83,26 @@ class Collector:
                             "site_id": site_id,
                             "site_name": site_name,
                             # Template id may be present on WLAN or site metadata
-                            "template_id": wlan.get("ap_template_id") or wlan.get("template_id") or site.get("template_id") or "",
-                            "template_name": wlan.get("ap_template_name") or wlan.get("template_name") or "",
+                            "template_id": (
+                                wlan.get("ap_template_id")
+                                or wlan.get("template_id")
+                                or site.get("template_id")
+                                or ""
+                            ),
+                            "template_name": (
+                                wlan.get("ap_template_name")
+                                or wlan.get("template_name")
+                                or ""
+                            ),
                             "target_ssid_name": target_ssid,
-                            "target_ssid_id": wlan.get("id") or wlan.get("ssid_id") or "",
-                            "psk_detected": 1 if wlan.get("psk") or wlan.get("encryption", "").lower().find("psk") != -1 else 0,
+                            "target_ssid_id": (
+                                wlan.get("id") or wlan.get("ssid_id") or ""
+                            ),
+                            "psk_detected": (
+                                1
+                                if wlan.get("psk") or wlan.get("encryption", "").lower().find("psk") != -1
+                                else 0
+                            ),
                             "edge_cluster_id": site.get("edge_cluster_id") or "",
                             "edge_cluster_name": site.get("edge_cluster_name") or "",
                             "anomaly_code": None,
