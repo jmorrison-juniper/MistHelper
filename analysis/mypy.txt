@@ -1,0 +1,2 @@
+copilot-worktree-2026-04-02T18-11-08 is not a valid Python package name
+mypy exit code: $LASTEXITCODE

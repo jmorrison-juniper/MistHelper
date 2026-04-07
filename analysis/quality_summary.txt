@@ -1,0 +1,7 @@
+--- Ruff ---
+--- Ruff summary saved ---
+--- Mypy ---
+--- Pytest (unit) ---
+--- Bandit ---
+--- pip-audit ---
+Quality gate runs saved to analysis/*.txt

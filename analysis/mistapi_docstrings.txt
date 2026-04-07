@@ -1,0 +1,4376 @@
+Found 177 unique mistapi references
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.const
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.const.countries
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.const.device_models
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.msps.msps
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.msps.orgs
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.admins.listOrgAdmins
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.alarms.searchOrgAlarms
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, site_id: str | None = None, group: str | None = None, severity: str | None = None, type: str | None = None, ack_admin_name: str | None = None, acked: bool | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+    API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms
+
+    PARAMS
+    -----------
+    mistapi.APISession : mist_session
+        mistapi session including authentication and Mist host information
+
+    PATH PARAMS
+    -----------
+    org_id : str
+
+    QUERY PARAMS
+    ------------
+    site_id : str
+    group : str{'infrastructure', 'marvis', 'security'}
+      Alarm group. enum: `infrastructure`, `marvis`, `security`.
+The `marvis` group is used to retrieve AI-driven network issue detections.
+Known Marvis alarm types include: `bad_cable`, `bad_wan_uplink`, `dns_failure`,
+`arp_failure`, `auth_failure`, `dhcp_failure`, `missing_vlan`,
+`negotiation_mismatch`, `port_flap`. Results include resolution status
+(`status`, `resolved_time`) and affected entity details."
+    severity : str{'critical', 'info', 'warn'}
+      Severity of the alarm. enum: `critical`, `info`, `warn`
+    type : str
+    ack_admin_name : str
+    acked : bool
+    start : str
+    end : str
+    duration : str, default: 1d
+    limit : int, default: 100
+    sort : str, default: timestamp
+    search_after : str
+
+    RETURN
+    -----------
+    mistapi.APIResponse
+        response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarm-templates/list-org-alarm-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.apitokens.listOrgApiTokens
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.aptemplates.listOrgAptemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/ap-templates/list-org-aptemplates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.clients.searchOrgWirelessClients
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, site_id: str | None = None, ap: str | None = None, band: str | None = None, device: str | None = None, hostname: str | None = None, ip: str | None = None, mac: str | None = None, model: str | None = None, os: str | None = None, psk_id: str | None = None, psk_name: str | None = None, ssid: str | None = None, text: str | None = None, username: str | None = None, vlan: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+site_id : str
+ap : str
+band : str
+device : str
+hostname : str
+ip : str
+mac : str
+model : str
+os : str
+psk_id : str
+psk_name : str
+ssid : str
+text : str
+username : str
+vlan : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, deviceprofile_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/assign-org-device-profile
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+deviceprofile_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/create-org-device-profile
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str{'ap', 'gateway', 'switch'}, default: ap
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.devices
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, model: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-device-versions
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str{'ap', 'gateway', 'switch'}, default: ap
+model : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.devices.listOrgDevices
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/list-org-devices
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.devices.searchOrgDeviceEvents
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, mac: str | None = None, model: str | None = None, device_type: str | None = None, text: str | None = None, timestamp: str | None = None, type: str | None = None, last_by: str | None = None, includes: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+mac : str
+model : str
+device_type : str, default: ap
+text : str
+timestamp : str
+type : str
+last_by : str
+includes : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.events.searchOrgEvents
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-events
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/create-org-gateway-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, gatewaytemplate_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/get-org-gateway-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+gatewaytemplate_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, gatewaytemplate_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/update-org-gateway-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+gatewaytemplate_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, wlan_id: str | None = None, auth_method: str | None = None, ssid: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/guests/search-org-guest-authorization
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+wlan_id : str
+auth_method : str
+ssid : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.insights.getOrgSitesSle
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, sle: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+sle : str{'wan', 'wifi', 'wired'}
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.insights.getOrgSle
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, metric: str, sle: str | None = None, duration: str | None = None, interval: str | None = None, start: str | None = None, end: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+metric : str
+
+QUERY PARAMS
+------------
+sle : str
+duration : str, default: 1d
+interval : str
+start : str
+end : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.inventory
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.inventory.getOrgInventory
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, serial: str | None = None, model: str | None = None, type: str | None = None, mac: str | None = None, site_id: str | None = None, vc_mac: str | None = None, vc: bool | None = None, unassigned: bool | None = None, modified_after: int | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+serial : str
+model : str
+type : str{'ap', 'gateway', 'switch'}
+mac : str
+site_id : str
+vc_mac : str
+vc : bool
+unassigned : bool, default: True
+modified_after : int
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.invites.listOrgInvites
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.licenses
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.licenses.getOrgLicensesBySite
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.logs.listOrgAuditLogs
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, site_id: str | None = None, admin_name: str | None = None, message: str | None = None, sort: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+site_id : str
+admin_name : str
+message : str
+sort : str{'-timestamp', 'admin_id', 'site_id', 'timestamp'}
+  Sort order
+start : str
+end : str
+duration : str, default: 1d
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.mxedges.listOrgMxEdges
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, for_site: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/list-org-mx-edges
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+for_site : str{'any', 'false', 'true'}, default: any
+  Filter for org/site level mist edges
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, nacrule_id: str | None = None, nacrule_matched: bool | None = None, dryrun_nacrule_id: str | None = None, dryrun_nacrule_matched: bool | None = None, auth_type: str | None = None, vlan: int | None = None, nas_vendor: str | None = None, bssid: str | None = None, idp_id: str | None = None, idp_role: str | None = None, idp_username: str | None = None, resp_attrs: list | None = None, ssid: str | None = None, username: str | None = None, site_id: str | None = None, ap: str | None = None, random_mac: bool | None = None, mac: str | None = None, timestamp: float | None = None, usermac_label: str | None = None, text: str | None = None, nas_ip: str | None = None, ingress_vlan: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/nac/search-org-nac-client-events
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str
+nacrule_id : str
+nacrule_matched : bool
+dryrun_nacrule_id : str
+dryrun_nacrule_matched : bool
+auth_type : str
+vlan : int
+nas_vendor : str
+bssid : str
+idp_id : str
+idp_role : str
+idp_username : str
+resp_attrs : list
+  Radius attributes returned by NAC to NAS derive
+ssid : str
+username : str
+site_id : str
+ap : str
+random_mac : bool
+mac : str
+timestamp : float
+usermac_label : str
+text : str
+nas_ip : str
+ingress_vlan : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: wxid
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.nac_clients.searchOrgNacClients
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, ap: str | None = None, auth_type: str | None = None, cert_expiry_duration: str | None = None, edr_managed: bool | None = None, edr_provider: str | None = None, edr_status: str | None = None, family: str | None = None, hostname: str | None = None, idp_id: str | None = None, mac: str | None = None, mdm_compliance: str | None = None, mdm_provider: str | None = None, mdm_managed: bool | None = None, mfg: str | None = None, model: str | None = None, nacrule_name: str | None = None, nacrule_id: str | None = None, nacrule_matched: bool | None = None, nas_vendor: str | None = None, nas_ip: str | None = None, ingress_vlan: str | None = None, os: str | None = None, ssid: str | None = None, status: str | None = None, text: str | None = None, timestamp: float | None = None, type: str | None = None, usermac_label: list | None = None, username: str | None = None, vlan: str | None = None, site_id: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/nac/search-org-nac-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+ap : str
+auth_type : str
+cert_expiry_duration : str
+edr_managed : bool
+edr_provider : str{'crowdstrike', 'sentinelone'}
+  EDR provider of client's organization
+edr_status : str{'sentinelone_healthy', 'sentinelone_infected', 'crowdstrike_low', 'crowdstrike_medium', 'crowdstrike_high', 'crowdstrike_critical', 'crowdstrike_informational'}
+  EDR Status of the NAC client
+family : str
+hostname : str
+idp_id : str
+mac : str
+mdm_compliance : str
+mdm_provider : str
+mdm_managed : bool
+mfg : str
+model : str
+nacrule_name : str
+nacrule_id : str
+nacrule_matched : bool
+nas_vendor : str
+nas_ip : str
+ingress_vlan : str
+os : str
+ssid : str
+status : str{'permitted', 'session_started', 'session_stopped', 'denied'}
+  Connection status of client i.e "permitted", "denied, "session_started", "session_stopped"
+text : str
+timestamp : float
+type : str
+usermac_label : list
+  Labels derived from usermac entry
+username : str
+vlan : str
+site_id : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: wxid
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.nacportals.listOrgNacPortals
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-portals/list-org-nac-portals
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.nacrules.listOrgNacRules
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-rules/list-org-nac-rules
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.nactags.listOrgNacTags
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, name: str | None = None, match: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-tags/list-org-nac-tags
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str{'egress_vlan_names', 'gbp_tag', 'match', 'radius_attrs', 'radius_group', 'radius_vendor_attrs', 'redirect_nacportal_id', 'session_timeout', 'username_attr', 'vlan'}
+  Type of NAC Tag. enum: `egress_vlan_names`, `gbp_tag`, `match`, `radius_attrs`, `radius_group`, `radius_vendor_attrs`, `session_timeout`, `username_attr`, `vlan`
+name : str
+match : str{'cert_cn', 'cert_eku', 'cert_issuer', 'cert_san', 'cert_serial', 'cert_sub', 'cert_template', 'client_mac', 'edr_status', 'gbp_tag', 'hostname', 'idp_role', 'ingress_vlan', 'mdm_status', 'nas_ip', 'radius_group', 'realm', 'ssid', 'user_name', 'usermac_label'}
+  if `type`==`match`, Type of NAC Tag. enum: `cert_cn`, `cert_eku`, `cert_issuer`, `cert_san`, `cert_serial`, `cert_sub`, `cert_template`, `client_mac`, `edr_status`, `gbp_tag`, `hostname`, `idp_role`, `ingress_vlan`, `mdm_status`, `nas_ip`, `radius_group`, `realm`, `ssid`, `user_name`, `usermac_label`
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.networks.listOrgNetworks
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/list-org-networks
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.orgs.getOrg
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/pcaps/list-org-packet-captures
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+start : str
+end : str
+duration : str, default: 1d
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.pcaps.startOrgPacketCapture
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/pcaps/start-org-packet-capture
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.psks.listOrgPsks
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, name: str | None = None, ssid: str | None = None, role: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/list-org-psks
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+name : str
+ssid : str
+role : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/create-org-rf-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/list-org-rf-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, rftemplate_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/update-org-rf-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+rftemplate_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/secintel-profiles/list-org-sec-intel-profiles
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/security-policies/list-org-sec-policies
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/list-org-service-policies
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.services.listOrgServices
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sites
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sites.createOrgSite
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/create-org-site
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sites.listOrgSites
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, sitetemplate_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/site-templates/get-org-site-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+sitetemplate_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/site-templates/list-org-site-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, sitetemplate_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/site-templates/update-org-site-template
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+sitetemplate_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.ssos.listOrgSsos
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, channel: str | None = None, mac: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-ssr-versions
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+channel : str{'alpha', 'beta', 'stable'}, default: stable
+  SSR version channel
+mac : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-ssr-upgrades
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.ssr.upgradeOrgSsrs
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-org-ssrs
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.getOrgMxEdgeStats
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, mxedge_id: str, for_site: bool | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/mxedges/get-org-mx-edge-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+mxedge_id : str
+
+QUERY PARAMS
+------------
+for_site : bool
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.listOrgDevicesStats
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, status: str | None = None, site_id: str | None = None, mac: str | None = None, evpntopo_id: str | None = None, evpn_unused: str | None = None, fields: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+type : str, default: ap
+status : str{'all', 'connected', 'disconnected'}, default: all
+site_id : str
+mac : str
+evpntopo_id : str
+evpn_unused : str
+fields : str
+start : str
+end : str
+duration : str, default: 1d
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.listOrgMxEdgesStats
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, for_site: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/mxedges/list-org-mx-edges-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+for_site : str{'any', 'true', 'false'}
+  Filter for site level mist edges
+start : str
+end : str
+duration : str, default: 1d
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.listOrgSitesStats
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.searchOrgAssets
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, site_id: str | None = None, mac: str | None = None, device_name: str | None = None, name: str | None = None, map_id: str | None = None, ibeacon_uuid: str | None = None, ibeacon_major: str | None = None, ibeacon_minor: str | None = None, eddystone_uid_namespace: str | None = None, eddystone_uid_instance: str | None = None, eddystone_url: str | None = None, ap_mac: str | None = None, beam: int | None = None, rssi: int | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/assets/search-org-assets
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+site_id : str
+mac : str
+device_name : str
+name : str
+map_id : str
+ibeacon_uuid : str
+ibeacon_major : str
+ibeacon_minor : str
+eddystone_uid_namespace : str
+eddystone_uid_instance : str
+eddystone_url : str
+ap_mac : str
+beam : int
+rssi : int
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.searchOrgBgpPeers
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.searchOrgPeerPathStats
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, mac: str | None = None, site_id: str | None = None, type: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/vpn-peers/search-org-peer-path-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+mac : str
+site_id : str
+type : str{'ipsec', 'svr'}
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, device_type: str | None = None, auth_state: str | None = None, full_duplex: bool | None = None, lte_imsi: str | None = None, lte_iccid: str | None = None, lte_imei: str | None = None, mac: str | None = None, neighbor_mac: str | None = None, neighbor_port_desc: str | None = None, neighbor_system_name: str | None = None, poe_disabled: bool | None = None, poe_mode: str | None = None, poe_on: bool | None = None, poe_priority: str | None = None, port_id: str | None = None, port_mac: str | None = None, speed: int | None = None, stp_state: str | None = None, stp_role: str | None = None, up: bool | None = None, xcvr_part_number: str | None = None, limit: int | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/ports/search-org-sw-or-gw-ports
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+device_type : str{'switch', 'gateway', 'all'}, default: all
+  Type of device. enum: `switch`, `gateway`, `all`
+auth_state : str{'', 'authenticated', 'authenticating', 'held', 'init'}
+  If `up`==`true` && has Authenticator role
+full_duplex : bool
+lte_imsi : str
+lte_iccid : str
+lte_imei : str
+mac : str
+neighbor_mac : str
+neighbor_port_desc : str
+neighbor_system_name : str
+poe_disabled : bool
+poe_mode : str
+poe_on : bool
+poe_priority : str{'low', 'high'}
+  PoE priority.
+port_id : str
+port_mac : str
+speed : int
+stp_state : str{'', 'blocking', 'disabled', 'forwarding', 'learning', 'listening'}
+  If `up`==`true`
+stp_role : str{'', 'alternate', 'backup', 'designated', 'disabled', 'root', 'root-prevented'}
+  If `up`==`true`
+up : bool
+xcvr_part_number : str
+limit : int, default: 100
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.stats.searchOrgTunnels
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.templates.listOrgTemplates
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlan-templates/list-org-templates
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.troubleshoot.troubleshootOrg
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, mac: str | None = None, site_id: str | None = None, start: str | None = None, end: str | None = None, type: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/marvis/troubleshoot-org
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+mac : str
+site_id : str
+start : str
+end : str
+type : str{'wan', 'wired', 'wireless'}
+  When troubleshooting site, type of network to troubleshoot
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.webhooks.listOrgWebhooks
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, auth_state: str | None = None, auth_method: str | None = None, source: str | None = None, site_id: str | None = None, device_mac: str | None = None, mac: str | None = None, port_id: str | None = None, vlan: int | None = None, ip: str | None = None, manufacture: str | None = None, text: str | None = None, nacrule_id: str | None = None, dhcp_hostname: str | None = None, dhcp_fqdn: str | None = None, dhcp_client_identifier: str | None = None, dhcp_vendor_class_identifier: str | None = None, dhcp_request_params: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wired/search-org-wired-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+auth_state : str
+auth_method : str
+source : str{'lldp', 'mac'}
+  source from where the client was learned (lldp, mac)
+site_id : str
+device_mac : str
+mac : str
+port_id : str
+vlan : int
+ip : str
+manufacture : str
+text : str
+nacrule_id : str
+dhcp_hostname : str
+dhcp_fqdn : str
+dhcp_client_identifier : str
+dhcp_vendor_class_identifier : str
+dhcp_request_params : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.wlans.listOrgWlans
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.orgs.wlans.updateOrgWlan
+Signature: (mist_session: mistapi.__api_session.APISession, org_id: str, wlan_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/update-org-wlan
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+org_id : str
+wlan_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.self.self
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.self.usage.getSelfApiUsage
+Signature: (mist_session: mistapi.__api_session.APISession) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self-api-usage
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, client_mac: str, metric: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/anomaly/get-site-anomaly-events-for-client
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+client_mac : str
+metric : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, metric: str, device_mac: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/anomaly/get-site-anomaly-events-for-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+metric : str
+device_mac : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, metric: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/anomaly/list-site-anomaly-events
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+metric : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.beacons.listSiteBeacons
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/beacons/list-site-beacons
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.beacons.updateSiteBeacon
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, beacon_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/beacons/update-site-beacon
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+beacon_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, ap: str | None = None, band: str | None = None, client_family: str | None = None, client_manufacture: str | None = None, client_model: str | None = None, client_username: str | None = None, client_os: str | None = None, ssid: str | None = None, wlan_id: str | None = None, psk_id: str | None = None, psk_name: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/clients/wireless/search-site-wireless-client-sessions
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+ap : str
+band : str{'24', '5', '6'}
+  802.11 Band
+client_family : str
+client_manufacture : str
+client_model : str
+client_username : str
+client_os : str
+ssid : str
+wlan_id : str
+psk_id : str
+psk_name : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.clients.searchSiteWirelessClients
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, ap: str | None = None, band: str | None = None, device: str | None = None, hostname: str | None = None, ip: str | None = None, mac: str | None = None, model: str | None = None, os: str | None = None, psk_id: str | None = None, psk_name: str | None = None, ssid: str | None = None, text: str | None = None, username: str | None = None, vlan: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/clients/wireless/search-site-wireless-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+ap : str
+band : str
+device : str
+hostname : str
+ip : str
+mac : str
+model : str
+os : str
+psk_id : str
+psk_name : str
+ssid : str
+text : str
+username : str
+vlan : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.bounceDevicePort
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/bounce-device-port
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.cableTestFromSwitch
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/cable-test-from-switch
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/clear-all-learned-macs-from-port-on-switch
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/clear-bpdu-errors-from-ports-on-switch
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearSiteDeviceMacTable
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/clear-site-device-mac-table
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/clear-site-device-policy-hit-count
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearSiteDeviceSession
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-device-session
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearSiteSsrArpCache
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-ssr-arp-cache
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-ssr-bgp-routes
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/wired/virtual-chassis/convert-site-virtual-chassis-to-virtual-mac
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.createSiteDeviceShellSession
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/create-site-device-shell-session
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.createSiteDeviceSnapshot
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/create-site-device-snapshot
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, sort: bool | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/get-site-device-config-cmd
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+QUERY PARAMS
+------------
+sort : bool
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/get-site-device-synthetic-test
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDeviceUpgrade
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, upgrade_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-site-device-upgrade
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+upgrade_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/wired/virtual-chassis/get-site-device-virtual-chassis
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/get-site-device-ztp-password
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.listSiteDeviceUpgrades
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, status: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-site-device-upgrades
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+status : str{'cancelled', 'completed', 'created', 'downloaded', 'downloading', 'failed', 'queued', 'upgrading'}
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.listSiteDevices
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, type: str | None = None, name: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+type : str, default: ap
+name : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.monitorSiteDeviceTraffic
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/monitor-site-device-traffic
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.pollSiteSwitchStats
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/poll-site-switch-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.readoptSiteOctermDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/readopt-site-octerm-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/release-site-device-dhcp-lease
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/release-site-ssr-dhcp-lease
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/reprovision-site-octerm-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.restartSiteDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/restart-site-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.runSiteSrxTopCommand
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/run-site-srx-top-command
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.servicePingFromSsr
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/service-ping-from-ssr
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteDeviceArpTable
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/show-site-device-arp-table
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-bgp-summary
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dhcp-leases
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dot1x-table
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-evpn-database
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-database
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-interfaces
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-neighbors
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-summary
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-routes
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-sessions
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.showSiteSsrServicePath
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-service-path
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.startSiteLocateDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/start-site-locate-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.stopSiteLocateDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/stop-site-locate-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/test-site-ssr-dns-resolution
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.tracerouteFromDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/traceroute-from-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.updateSiteDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/update-site-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.upgradeSiteDevices
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-site-devices
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/upload-site-device-support-file
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.events.searchSiteFastRoamEvents
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.events.searchSiteSystemEvents
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, type: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/events/search-site-system-events
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+type : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, resolve: bool | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/gateway-templates/list-site-gateway-templates-derived
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+resolve : bool
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.getSite
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.insights.getSiteInsightMetrics
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, metrics: str, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/insights/get-site-insight-metrics
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+metrics : str
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, client_mac: str, metrics: str, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/insights/get-site-insight-metrics-for-client
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+client_mac : str
+
+QUERY PARAMS
+------------
+metrics : str
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, metric: str, device_mac: str, port_id: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/insights/get-site-insight-metrics-for-device
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+metric : str
+device_mac : str
+
+QUERY PARAMS
+------------
+port_id : str
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.insights.listSiteRogueAPs
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, type: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+type : str{'honeypot', 'lan', 'others', 'spoof'}
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.insights.listSiteRogueClients
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+interval : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.listSites
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.addSiteMapImageFile
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, map_id: str, file: str | None = None, json: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/add-site-map-image
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+map_id : str
+
+BODY PARAMS
+-----------
+file : str
+    path to the file to upload. Binary file
+json : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.createSiteMap
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/create-site-map
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.deleteSiteMap
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, map_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/delete-site-map
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+map_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.getSiteMap
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, map_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/get-site-map
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+map_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.listSiteMaps
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/list-site-maps
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.maps.updateSiteMap
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, map_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/update-site-map
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+map_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.networks.listSiteNetworksDerived
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, resolve: bool | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/networks/list-site-networks-derived
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+resolve : bool
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.pcaps.listSitePacketCaptures
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, client_mac: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/pcaps/list-site-packet-captures
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+client_mac : str
+start : str
+end : str
+duration : str, default: 1d
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.pcaps.startSitePacketCapture
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/pcaps/start-site-packet-capture
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, resolve: bool | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/service-policies/list-site-service-policies-derived
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+resolve : bool
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.setting
+MODULE
+--------------------------------------------------------------------------------
+------------------------- Mist API Python CLI Session --------------------------
+
+    Written by: Thomas Munzer (tmunzer@juniper.net)
+    Github    : https://github.com/tmunzer/mistapi_python
+
+    This package is licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.setting.getSiteSetting
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.setting.getSiteSettings
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.setting.updateSiteSettings
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.sites.getSiteInfo
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.sites.updateSiteInfo
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/update-site-info
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.sle.listSiteSlesMetrics
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, scope: str, scope_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sles-metrics
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+scope : str{'ap', 'client', 'gateway', 'site', 'switch'}
+scope_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.stats.getSiteClientsStats
+NOT FOUND in installed mistapi
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.stats.getSiteDeviceStats
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, fields: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+device_id : str
+
+QUERY PARAMS
+------------
+fields : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.stats.listSiteDevicesStats
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, type: str | None = None, status: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+type : str, default: ap
+status : str{'all', 'connected', 'disconnected'}, default: all
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.stats.listSiteWirelessClientsStats
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, wired: bool | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/clients-wireless/list-site-wireless-clients-stats
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+wired : bool
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_type: str | None = None, auth_state: str | None = None, full_duplex: bool | None = None, lte_imsi: str | None = None, lte_iccid: str | None = None, lte_imei: str | None = None, mac: str | None = None, neighbor_mac: str | None = None, neighbor_port_desc: str | None = None, neighbor_system_name: str | None = None, poe_disabled: bool | None = None, poe_mode: str | None = None, poe_on: bool | None = None, poe_priority: str | None = None, port_id: str | None = None, port_mac: str | None = None, speed: int | None = None, stp_state: str | None = None, stp_role: str | None = None, up: bool | None = None, xcvr_part_number: str | None = None, limit: int | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+device_type : str{'switch', 'gateway', 'all'}, default: all
+  Type of device. enum: `switch`, `gateway`, `all`
+auth_state : str{'', 'authenticated', 'authenticating', 'held', 'init'}
+  If `up`==`true` && has Authenticator role
+full_duplex : bool
+lte_imsi : str
+lte_iccid : str
+lte_imei : str
+mac : str
+neighbor_mac : str
+neighbor_port_desc : str
+neighbor_system_name : str
+poe_disabled : bool
+poe_mode : str
+poe_on : bool
+poe_priority : str{'low', 'high'}
+  PoE priority.
+port_id : str
+port_mac : str
+speed : int
+stp_state : str{'', 'blocking', 'disabled', 'forwarding', 'learning', 'listening'}
+  If `up`==`true`
+stp_role : str{'', 'alternate', 'backup', 'designated', 'disabled', 'root', 'root-prevented'}
+  If `up`==`true`
+up : bool
+xcvr_part_number : str
+limit : int, default: 100
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, mac: str | None = None, port_id: str | None = None, vlan_id: str | None = None, by: str | None = None, reason: str | None = None, type: str | None = None, protocol: str | None = None, tenant: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/search-site-synthetic-test
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+mac : str
+port_id : str
+vlan_id : str
+by : str
+reason : str
+type : str{'arp', 'curl', 'dhcp', 'dhcp6', 'dns', 'lan_connectivity', 'radius', 'speedtest'}
+  Synthetic test type
+protocol : str{'ping', 'traceroute'}
+  Connectivity protocol
+tenant : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.vbeacons.listSiteVBeacons
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/vbeacons/list-site-v-beacons
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.vbeacons.updateSiteVBeacon
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, vbeacon_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/vbeacons/update-site-v-beacon
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+vbeacon_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.wired_clients.searchSiteWiredClients
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, device_mac: str | None = None, mac: str | None = None, ip: str | None = None, port_id: str | None = None, source: str | None = None, vlan: str | None = None, manufacture: str | None = None, text: str | None = None, nacrule_id: str | None = None, dhcp_hostname: str | None = None, dhcp_fqdn: str | None = None, dhcp_client_identifier: str | None = None, dhcp_vendor_class_identifier: str | None = None, dhcp_request_params: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/clients/wired/search-site-wired-clients
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+device_mac : str
+mac : str
+ip : str
+port_id : str
+source : str{'lldp', 'mac'}
+  source from where the client was learned (lldp, mac)
+vlan : str
+manufacture : str
+text : str
+nacrule_id : str
+dhcp_hostname : str
+dhcp_fqdn : str
+dhcp_client_identifier : str
+dhcp_vendor_class_identifier : str
+dhcp_request_params : str
+limit : int, default: 100
+start : str
+end : str
+duration : str, default: 1d
+sort : str, default: timestamp
+search_after : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.wlans.listSiteWlans
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/wlans/list-site-wlans
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.wlans.updateSiteWlan
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, wlan_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/wlans/update-site-wlan
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+wlan_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.zones.createSiteZone
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/create-site-zone
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.zones.deleteSiteZone
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, zone_id: str) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/delete-site-zone
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+zone_id : str
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.zones.listSiteZones
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/list-site-zones
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+
+QUERY PARAMS
+------------
+limit : int, default: 100
+page : int, default: 1
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call
+
+--------------------------------------------------------------------------------
+mistapi.api.v1.sites.zones.updateSiteZone
+Signature: (mist_session: mistapi.__api_session.APISession, site_id: str, zone_id: str, body: dict) -> mistapi.__api_response.APIResponse
+Docstring:
+API doc: https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/update-site-zone
+
+PARAMS
+-----------
+mistapi.APISession : mist_session
+    mistapi session including authentication and Mist host information
+
+PATH PARAMS
+-----------
+site_id : str
+zone_id : str
+
+BODY PARAMS
+-----------
+body : dict
+    JSON object to send to Mist Cloud (see API doc above for more details)
+
+RETURN
+-----------
+mistapi.APIResponse
+    response from the API call

@@ -1,0 +1,508 @@
+
+LineNumber Line
+---------- ----
+      2010                     if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):
+      2011                         logging.debug("mistapi.api.v1 module structure confirmed")
+      2013                         logging.warning("mistapi.api.v1 structure not found - this may cause API call failur…
+      2358         import mistapi.api.v1.self.self as self_api
+      2424         import mistapi.api.v1.msps.msps as msps_api
+      2539         apisession = mistapi.APISession(
+      2855         import mistapi.api.v1.msps.orgs as msp_orgs_api
+      2956         logging.debug("Invoking mistapi.cli.select_org()")
+      2957         org_id_list = mistapi.cli.select_org(apisession)
+      2977       3. Fallback to mistapi.Session() if available.
+      3007         logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallbac…
+      3037             logging.debug(f"mistapi.APISession accepted parameters: {sig_params}")
+      3075             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.ke…
+      3156     # Fallback to mistapi.Session if APISession failed
+      3159             apisession = mistapi.Session()
+      3160             successful_method = {"fallback": "mistapi.Session"}
+      3161             logging.info("Mist API session initialized with mistapi.Session fallback")
+      3163             logging.error(f"mistapi.Session fallback failed: {e}")
+      5882             response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
+      5936             response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
+      6072             response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
+      6138             response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
+      6229                     pcaps_response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
+      6334                         response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
+      6427                 response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
+      6510             response = mistapi.api.v1.orgs.mxedges.listOrgMxEdges(self.mist_session, self.org_id, limit=1000)
+      6511             mxedges = mistapi.get_all(response=response, mist_session=self.mist_session)
+      6527             stats_response = mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(self.mist_session, self.org_id, l…
+      6528             stats_data = mistapi.get_all(response=stats_response, mist_session=self.mist_session)
+      6630                 stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(self.mist_session, self.org_id,…
+      6863             response = mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(self.mist_session, self.org_id, paylo…
+      7068                     response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
+      7242                     response = mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures(self.mist_session, org_id)
+      7876         org_id_list = mistapi.cli.select_org(apisession)
+      7931         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
+      7932         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
+      7947         response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=DEFAULT_API_PAGE_…
+      7948         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
+      7974             response = mistapi.api.v1.orgs.networks.listOrgNetworks(apisession, org_id, limit=1000)
+      8031             response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(apisession, site_id)
+      8093                 response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(apisession, org_id, li…
+      8140                     response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(apisessio…
+      8212                 response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id, …
+      8268                     response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
+      8352             response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
+      8399         # Use mistapi.get_all to ensure pagination is handled for all sites
+      8410                 config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data
+      8438             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+      8439             inventory = mistapi.get_all(response=response, mist_session=apisession)
+      8475                     config_response = mistapi.api.v1.sites.devices.getSiteDevice(
+      9587             self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     10000             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+     10084             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway").data
+     10160             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="switch").data
+     10249             devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device…
+     10283                     ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+     10310                 stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_i…
+     10322                 device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, dev…
+     10596             wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
+     10604             wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
+     10805         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+     11021             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=100…
+     11022             clients = mistapi.get_all(response=response, mist_session=apisession) or []
+     11036             response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id, limit=…
+     11037             clients = mistapi.get_all(response=response, mist_session=apisession) or []
+     11051             response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(apisession, org_id, limit=1000)
+     11052             clients = mistapi.get_all(response=response, mist_session=apisession) or []
+     11065             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(apisession, org_id, limit=100…
+     11066             clients = mistapi.get_all(response=response, mist_session=apisession) or []
+     11278             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+     11430                 api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
+     11447             api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
+     11458             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
+     11475         response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+     11478         rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     11527                 return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+     11530             return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+     11706             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
+     11767         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
+     11768         guests = mistapi.get_all(response=response, mist_session=apisession)
+     11786         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
+     11789         guests = mistapi.get_all(response=response, mist_session=apisession)
+     11819             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
+     11841             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
+     12251             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
+     12314                 site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+     12315                 site_data = mistapi.get_all(response=site_response, mist_session=apisession)
+     12331                             response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(apisession, site_id,…
+     12332                             port_stats = mistapi.get_all(response=response, mist_session=apisession)
+     12474                 api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
+     12511             api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
+     12552                 vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, dev…
+     12647         stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+     12650         all_devices: list[dict[str, Any]] = mistapi.get_all(response=stats_resp, mist_session=apisession)
+     12839                 api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
+     12849                 api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+     12859                 api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+     12869                 api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
+     12879                 api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
+     12892             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+     12901             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key=…
+     12912             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+     12915             ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
+     12942             response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limi…
+     12943             switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
+     12977             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sor…
+     12984             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sor…
+     13027             resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, current_org_id, limit=1000)
+     13028             policies = mistapi.get_all(response=resp, mist_session=apisession) or []
+     13045             resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, current…
+     13046             secintel_profiles = mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
+     13080                     response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(
+     13083                     site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
+     13089                     response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(
+     13092                     site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession)…
+     13165                     response = mistapi.api.v1.sites.insights.listSiteRogueClients(
+     13168                     clients = mistapi.get_all(response=response, mist_session=apisession)
+     13233                     response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
+     13236                     aps = mistapi.get_all(response=response, mist_session=apisession)
+     13274             api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
+     13285             api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
+     13293         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key=…
+     13302             list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)
+     13312                 raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
+     13338             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
+     13357         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key…
+     13363             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
+     13369         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_…
+     13375             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
+     13456             import mistapi.api.v1.msps.orgs as msp_orgs_api
+     13558                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+     13561                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
+     13645                                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+     13648                                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or …
+     13678                         response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, durati…
+     13701                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", li…
+     13702                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
+     13789             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients, data_type="nac clients", sort_key=…
+     13796             api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags, data_type="nac tags", sort_key="name"
+     13803             api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals, data_type="nac portals", sort_key="na…
+     13810             api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules, data_type="nac rules", sort_key="name"
+     13819             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
+     13829             api_call=mistapi.api.v1.orgs.stats.searchOrgAssets, data_type="assets", sort_key="name"
+     13836             api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers, data_type="bgp peers", sort_key="peer_ip"
+     13843             api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels, data_type="tunnel stats", sort_key="name"
+     13850             api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats, data_type="site stats", sort_key="name"
+     13857             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats, data_type="mx edge stats", sort_key="nam…
+     13864             api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
+     13873             api_call=mistapi.api.v1.orgs.invites.listOrgInvites, data_type="invites", sort_key="email"
+     13880         Fetches all pages using mistapi.get_all.
+     13902             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
+     13903             rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     13965                                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+     13968                                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession)…
+     13999                         response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, durati…
+     14028                     response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+     14031                     sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
+     14119         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+     14177             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limi…
+     14178             rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     14199             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"
+     14217         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+     14218         devices = mistapi.get_all(response=response, mist_session=apisession)
+     14222             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_…
+     14262             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+     14302             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=10…
+     14303             rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     14334             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     14335             sites = mistapi.get_all(response=response, mist_session=apisession)
+     14345             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)
+     14346             clients = mistapi.get_all(response=response, mist_session=apisession) or []
+     14410                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
+     14493             client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, li…
+     14494             clients = mistapi.get_all(response=client_response, mist_session=apisession)
+     14498             session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(
+     14501             sessions = mistapi.get_all(response=session_response, mist_session=apisession)
+     14605             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
+     14621             api_call=mistapi.api.v1.sites.wlans.listSiteWlans, data_type="wlans", sort_key="ssid"
+     14627         SiteExportUtils._export_data(api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort…
+     14633             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
+     14684             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     14685             sites = mistapi.get_all(response=response, mist_session=apisession)
+     14716         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apirespons…
+     14727                     response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(apisession, site_id, metri…
+     14785             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     14786             sites = mistapi.get_all(response=response, mist_session=apisession)
+     14814         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apirespons…
+     14825                     response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
+     14888             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     14889             sites = mistapi.get_all(response=response, mist_session=apisession)
+     14904             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+     14937         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apirespons…
+     14948                     response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
+     15029             response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted…
+     15030             sites = mistapi.get_all(response=response, mist_session=apisession)
+     15064             rawdata = mistapi.get_all(response=response, mist_session=apisession)
+     15125             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     15126             sites = mistapi.get_all(response=response, mist_session=apisession)
+     15155                     response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metr…
+     15211             response = mistapi.api.v1.sites.listSites(apisession, site_id)
+     15212             sites = mistapi.get_all(response=response, mist_session=apisession)
+     15218             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+     15219             devices = mistapi.get_all(response=response, mist_session=apisession)
+     15253                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
+     15296             api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics, data_type="sle_metrics_insights", sort_ke…
+     15305             api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
+     15317             api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
+     15622                 rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+     16244         Uses the dedicated mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes function
+     16338             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, self.site_id, type="gateway")…
+     16465             config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, self.site_id, self.devi…
+     16536             stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, self.site_id, self.de…
+     16986             response = mistapi.api.v1.sites.devices.servicePingFromSsr(
+     18141             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type).da…
+     18657         Uses mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes for structured
+     18826                 print("[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")
+     18828             response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(
+     19025             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+     19036             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+     19109             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+     19146             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
+     19209             response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+     19409             site_id, device_id, mistapi.api.v1.sites.devices.tracerouteFromDevice, body
+     19435             site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body
+     19461             site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body
+     19487             site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body
+     19510             site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body
+     19526             site_id, device_id, mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
+     19556             mistapi.api.v1.sites.devices.monitorSiteDeviceTraffic,
+     19571             site_id, device_id, mistapi.api.v1.sites.devices.runSiteSrxTopCommand, timeout_seconds=120
+     19596             site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body
+     19619             site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrServicePath, body
+     19639             site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body
+     19659             site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body
+     19682             site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body
+     19702             site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body
+     19722             site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body
+     19747             response = mistapi.api.v1.sites.devices.startSiteLocateDevice(apisession, site_id, device_id, bo…
+     19765             response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(apisession, site_id, device_id)
+     19795             site_id, device_id, mistapi.api.v1.sites.devices.bounceDevicePort, body
+     19816             site_id, device_id, mistapi.api.v1.sites.devices.cableTestFromSwitch, body
+     19837             response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(apisession, site_id, device_…
+     19858             vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_i…
+     19869             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(apisession, site_id, device_id)
+     19884             response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(apisession, site_id, device_id)
+     19905             response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(apisession, site_id, device_id)
+     19948             response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(apisession, site_id, device_…
+     19980             response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(apisession, site_id, device_id, bod…
+     20014             response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(apisession, site_id, device_id, bo…
+     20047             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, b…
+     20080             response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(apisession, site_id, device_id, …
+     20106             response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
+     20135             response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
+     20164             response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(apisession, site_id, devic…
+     20193             response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(apisession, site_id, device_i…
+     20224             response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(apisession, site_id, device_id, …
+     20243             response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(apisession, site_id, device_id)
+     20261             response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(apisession, site_id, device_id)
+     20338         """Discover all const modules in mistapi.api.v1.const package."""
+     20341         import mistapi.api.v1.const as const_package
+     20626             device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
+     20712             countries_module = importlib.import_module("mistapi.api.v1.const.countries")
+     20800             countries_module = importlib.import_module("mistapi.api.v1.const.countries")
+     21440             fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
+     21455             fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
+     21469             fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
+     21545                             stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+     21549                         stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+     21733                         response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, s…
+     21735                     response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_…
+     21851                             stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, devic…
+     21853                         stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id…
+     22333         response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
+     22531                         resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id_inner, device_…
+     22542                         stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(
+     22596                     resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+     22607                     stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_i…
+     22792         site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+     22793         sites = mistapi.get_all(response=site_response, mist_session=apisession)
+     22888             response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
+     22964             device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+     22997             response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
+     23088                 f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={…
+     23092             response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, site_id=site_id)
+     23252             org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
+     23285                 ("Organization Sites SLE", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, o…
+     23534             response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id, limi…
+     23535             templates = mistapi.get_all(response=response, mist_session=apisession)
+     23590             response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(apisession, org_id, templa…
+     23807                 resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(apisession, org_id, templa…
+     23847                 update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+     24086             resp = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id, limit=10…
+     24087             templates = mistapi.get_all(response=resp, mist_session=apisession)
+     24113                 resp = mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate(
+     24153                     resp = mistapi.api.v1.sites.sites.updateSiteInfo(
+     24597             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device…
+     25167                     usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data
+     27476             org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
+     28349         settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
+     28363         update_resp = mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=current_sett…
+     28656             template_resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(apisession, org_id, t…
+     28820                     update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+     28893                 device_resp = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gatewa…
+     28894                 site_devices = mistapi.get_all(response=device_resp, mist_session=apisession)
+     28902                     device_config_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, dev…
+     28966                     device_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+     29020                             update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+     29376                 response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+     29524                     update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+     29831                 resp = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway", lim…
+     29986             resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
+     30027                     update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+     30269             response = mistapi.api.v1.sites.getSite(apisession, site_id)
+     30334             response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
+     30476                 response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
+     30747                 response = mistapi.api.v1.orgs.sites.createOrgSite(apisession, org_id, body=site_payload)
+     30849             sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PA…
+     30850             sites = mistapi.get_all(response=sites_response, mist_session=apisession)
+     30892             templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(
+     30895             existing = mistapi.get_all(response=templates_response, mist_session=apisession) or []
+     30987                     response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate(
+     31006                 response = mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate(apisession, org_id, payload)
+     31034                     response = mistapi.api.v1.sites.sites.updateSiteInfo(
+     31128             inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+     31131             all_devices = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
+     31163             profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+     31166             existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
+     31216                 response = mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile(apisession, org_id, bod…
+     31303             inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+     31306             all_aps = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
+     31325             profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+     31328             existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
+     31405                 response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile(
+     31763                 response = mistapi.api.v1.sites.devices.restartSiteDevice(
+     31973         response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=self.site_id, map_id=self.m…
+     32020             response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id=self.site_id, t…
+     32030             response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=self.site_id)
+     32039             response = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=self.site_id)
+     32043             vresponse = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=self.site_id)
+     32373             response = mistapi.api.v1.sites.maps.updateSiteMap(
+     32434             response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+     32471                 response = mistapi.api.v1.sites.devices.updateSiteDevice(
+     32505                     response = mistapi.api.v1.sites.zones.updateSiteZone(
+     32537                 response = mistapi.api.v1.sites.beacons.updateSiteBeacon(
+     32565                 response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
+     32627             resp = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id, limit=DEFAULT_API_PA…
+     32628             return mistapi.get_all(response=resp, mist_session=self.apisession)
+     32699             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     32778             map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
+     32882                 devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+     32915                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
+     32931                 beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons(api_session, site_id=site_id)
+     32946                 vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(api_session, site_id=site…
+     33137             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     33191                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id…
+     33249             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     33302                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id…
+     33353                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id…
+     33402             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     33482             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     33527             detail_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=…
+     33621                 create_response = mistapi.api.v1.sites.maps.createSiteMap(
+     33681             source_response = mistapi.api.v1.sites.maps.getSiteMap(
+     33763                 zones_check = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
+     33826             clone_response = mistapi.api.v1.sites.maps.createSiteMap(
+     33851                     upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+     33875                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
+     33900                                 zone_response = mistapi.api.v1.sites.zones.createSiteZone(
+     33980                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id…
+     34054             map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map…
+     34133             update_response = mistapi.api.v1.sites.maps.updateSiteMap(
+     34171             map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map…
+     34198             delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(self.apisession, site_id=site_id, map_…
+     34290                 upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+     34328             devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+     34436                     maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+     34628             map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map…
+     34669             devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     34696                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
+     34718                 clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+     34724                     all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
+     37200                 maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+     37283                     devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     37485                 fresh_maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session_ref, site_id=site_i…
+     37505                 map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, site_id_local, url_map_…
+     37522                 devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     37527                     all_devices = mistapi.get_all(response=devices_response, mist_session=api_session_ref)
+     37531                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, site_id=site_id_l…
+     37534                     all_zones = mistapi.get_all(response=zones_response, mist_session=api_session_ref)
+     37538                 clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+     37543                     all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
+     38619                             response = mistapi.api.v1.sites.zones.createSiteZone(
+     38655                             map_response = mistapi.api.v1.sites.maps.getSiteMap(
+     38682                             response = mistapi.api.v1.sites.maps.updateSiteMap(
+     38718                             map_response = mistapi.api.v1.sites.maps.getSiteMap(
+     38741                             response = mistapi.api.v1.sites.maps.updateSiteMap(
+     38778                     response = mistapi.api.v1.sites.maps.updateSiteMap(
+     38807                     response = mistapi.api.v1.sites.maps.updateSiteMap(
+     38832                     response = mistapi.api.v1.sites.maps.updateSiteMap(
+     38854                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, config_site_i…
+     38876                             del_response = mistapi.api.v1.sites.zones.deleteSiteZone(
+     39034                 delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(
+     39184                         delete_response = mistapi.api.v1.sites.zones.deleteSiteZone(
+     39383                 source_response = mistapi.api.v1.sites.maps.getSiteMap(
+     39451                 clone_response = mistapi.api.v1.sites.maps.createSiteMap(
+     39471                         upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+     39489                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, site_id=site_…
+     39506                                 zone_response = mistapi.api.v1.sites.zones.createSiteZone(
+     39565                 maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session_ref, site_id=site_id_loca…
+     39638                 clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+     39647                 all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
+     39764                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, site_id=site_…
+     39766                         all_zones = mistapi.get_all(response=zones_response, mist_session=api_session_ref)
+     39779                     map_response = mistapi.api.v1.sites.maps.getSiteMap(
+     40197             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=target_site_id)
+     40232                 devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     40245                 zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=target_si…
+     40256                 clients_response = mistapi.api.v1.sites.stats.getSiteClientsStats(
+     40545             import mistapi.api.v1.orgs.devices as org_devices_api
+     40678                 stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     40681                 site_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
+     40685                 stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+     40688                 org_stats = mistapi.get_all(response=stats_resp, mist_session=self.apisession)
+     41248             import mistapi.api.v1.msps.orgs as msp_orgs_api
+     41328             import mistapi.api.v1.orgs.sites as org_sites_api
+     41939             org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)
+     41962                 sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)
+     42103             versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
+     42136             ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(self.apisession, self.org_id, type…
+     42258             ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory(self.apisession, self.org_id, type…
+     42301                     site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+     42437                     upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(
+     42728         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+     42731         site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+     42741         stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+     42744         org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+     43094             ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)
+     43200             resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)
+     43231             resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
+     43234             logs = mistapi.get_all(response=resp, mist_session=apisession)
+     43275             resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+     43283             events = mistapi.get_all(response=resp, mist_session=apisession)
+     43331             resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
+     43332             upgrades = mistapi.get_all(response=resp, mist_session=apisession)
+     43901             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
+     43902             site_aps = mistapi.get_all(response=response, mist_session=apisession)
+     43976             stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="ap", lim…
+     43977             site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)
+     44028             response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, self.org_id)
+     44628         resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
+     44668             resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)
+     44757             device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
+     45068                 mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+     45345         import mistapi.api.v1.msps.orgs as msp_orgs_api
+     45393         import mistapi.api.v1.orgs.inventory as org_inventory_api
+     45933             import mistapi.api.v1.orgs.devices as org_devices_api
+     46192                     import mistapi.api.v1.sites.setting as sites_setting_api
+     46357             response = mistapi.api.v1.sites.setting.getSiteSettings(apisession, site_id)
+     46482             import mistapi.api.v1.orgs.devices as org_devices_api
+     46754                     mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)
+     47160             import mistapi.api.v1.msps.orgs as msp_orgs_api
+     47556         import mistapi.api.v1.orgs.inventory as org_inventory_api
+     47563         devices_data = mistapi.get_all(response=response, mist_session=apisession)
+     47602         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")
+     47662         import mistapi.api.v1.orgs.stats as org_stats_api
+     47669         stats_data = mistapi.get_all(response=response, mist_session=apisession)
+     47754         import mistapi.api.v1.orgs.devices as org_devices_api
+     48579         import mistapi.api.v1.orgs.devices as org_devices_api
+     48773             org_info = mistapi.api.v1.orgs.orgs.getOrg(apisession, self.org_id)
+     48815             sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, self.org_id)
+     49030             switches_response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, self.org_id, type=…
+     49133             versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(
+     49439         site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="swit…
+     49487         upgrade_response = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=upgrade…
+     49795             response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)
+     49828             response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)
+     49843             response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+     49870         response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)
+     49903         response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
+     50289         response = mistapi.api.v1.sites.wlans.updateSiteWlan(apisession, self.site_id, wlan.get("id"), paylo…
+     50304         template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, self.org_id, te…
+     50324         update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
+     50348         response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)
+     50449             response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
+     50660                 response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)
+     50826     Navigation starts at mistapi.api.v1 and allows drill-down into:
+     50876         self.current_path = []  # e.g., ['orgs', 'sites'] for mistapi.api.v1.orgs.sites
+     50879         self.breadcrumb = "mistapi.api.v1"  # Display path
+     51009         - Sub-modules (e.g., at mistapi.api.v1: orgs, sites, const, etc.)
+     51010         - Functions (e.g., at mistapi.api.v1.orgs: listOrgs, getOrg, etc.)
+     51022                 # Root level: mistapi.api.v1
+     51023                 module_path = "mistapi.api.v1"
+     51025                 # Deeper level: mistapi.api.v1.orgs, etc.
+     51026                 module_path = "mistapi.api.v1." + ".".join(self.current_path)
+     53018                 response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
+     53264                 response = mistapi.api.v1.sites.zones.listSiteZones(apisession, site_id=site_id)
+     53936                 response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
+     54278             response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
+     54287             update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
+     54429             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
+     54430             devices = mistapi.get_all(response=response, mist_session=apisession) or []
+     56187         sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
+     59291             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
+     59292             devices = mistapi.get_all(response=response, mist_session=apisession)
+
