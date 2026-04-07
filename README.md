@@ -102,7 +102,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-  root((MistHelper<br/>159 Operations))
+  root((MistHelper<br/>161 Operations))
     Safe (18)
       Org Sites
       Device Inventory
@@ -450,6 +450,8 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 156 | Poll Switch Stats | Force immediate stats poll on switch |
 | 157 | Create Device Snapshot | Create configuration snapshot on switch |
 | 158 | Offline Device Report | Scan org inventory for devices offline beyond configurable threshold (default 48h), display summary + PrettyTable, save CSV |
+| 159 | SSID Template Consolidation | Collect SSID configuration matrix across all templates and sites (Phase 1) |
+| 160 | E911 BSSID Compliance Report | Generate CSV of all BSSIDs per radio per AP across the org, organized by site/floor for E911 compliance |
 
 Important Notes:
 * Options 14 & 18 are resource‑intensive (multi‑hour) and skipped during `--test`.
@@ -913,6 +915,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.04.07.21.00",
+      "date": "2026-04-07",
+      "changes": {
+        "features": [
+          "E911 BSSID Compliance Report (Menu 160): New E911BSSIDReportGenerator class queries all AP radio MACs via listOrgApsMacs, resolves site name/address via listOrgSites, AP name/site/map via listOrgDevicesStats(type=ap), floor names via listSiteMaps per site, derives 16 BSSIDs per radio MAC (last nibble 0x0-0xF), outputs sorted CSV (Site Name, Site Address, Map Name, AP Name, BSSID) with compliance gap detection for APs missing map assignments. Classified as safe in OperationRegistry for automated --test mode."
+        ]
+      }
+    },
     {
       "version": "26.03.28.19.09",
       "date": "2026-03-28",
