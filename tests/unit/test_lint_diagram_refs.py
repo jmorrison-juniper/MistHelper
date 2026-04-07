@@ -148,14 +148,16 @@ class TestPythonSymbolExtraction:
 
     def test_extracts_class_names(self, validator, tmp_path):
         source = tmp_path / "test_source.py"
-        source.write_text(dedent("""\
+        source.write_text(
+            dedent("""\
             class MyExporter:
                 def export_data(self):
                     pass
 
             class MyManager:
                 pass
-        """))
+        """)
+        )
         symbols = validator.extract_python_symbols(source)
         assert "MyExporter" in symbols
         assert "MyManager" in symbols

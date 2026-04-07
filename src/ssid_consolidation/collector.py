@@ -104,6 +104,26 @@ class Collector:
         encryption = str(wlan.get("encryption", "")).lower()
         return 1 if wlan.get("psk") or "psk" in encryption else 0
 
+    def _template_id(self, site: dict[str, Any], wlan: dict[str, Any]) -> str:
+        """Return the best available template identifier for a site WLAN pair."""
+        return wlan.get("ap_template_id") or wlan.get("template_id") or site.get("template_id") or ""
+
+    def _template_name(self, wlan: dict[str, Any]) -> str:
+        """Return the best available template name for a site WLAN pair."""
+        return wlan.get("ap_template_name") or wlan.get("template_name") or ""
+
+    def _ssid_id(self, wlan: dict[str, Any]) -> str:
+        """Return the best available SSID identifier for the target WLAN."""
+        return wlan.get("id") or wlan.get("ssid_id") or ""
+
+    def _cluster_id(self, site: dict[str, Any]) -> str:
+        """Return the edge cluster identifier for a site, defaulting to empty."""
+        return site.get("edge_cluster_id") or ""
+
+    def _cluster_name(self, site: dict[str, Any]) -> str:
+        """Return the edge cluster name for a site, defaulting to empty."""
+        return site.get("edge_cluster_name") or ""
+
     def _build_row(
         self,
         site: dict[str, Any],
@@ -114,13 +134,13 @@ class Collector:
         return {
             "site_id": site.get("id") or "",
             "site_name": site.get("name") or "",
-            "template_id": (wlan.get("ap_template_id") or wlan.get("template_id") or site.get("template_id") or ""),
-            "template_name": (wlan.get("ap_template_name") or wlan.get("template_name") or ""),
+            "template_id": self._template_id(site, wlan),
+            "template_name": self._template_name(wlan),
             "target_ssid_name": target_ssid,
-            "target_ssid_id": wlan.get("id") or wlan.get("ssid_id") or "",
+            "target_ssid_id": self._ssid_id(wlan),
             "psk_detected": self._detect_psk(wlan),
-            "edge_cluster_id": site.get("edge_cluster_id") or "",
-            "edge_cluster_name": site.get("edge_cluster_name") or "",
+            "edge_cluster_id": self._cluster_id(site),
+            "edge_cluster_name": self._cluster_name(site),
             "anomaly_code": None,
             "collected_at": self._current_timestamp(),
         }

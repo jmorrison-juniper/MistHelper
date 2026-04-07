@@ -33,8 +33,10 @@ import warnings
 warnings.filterwarnings("ignore", message="invalid escape sequence", category=SyntaxWarning)
 
 import argparse
+import base64
 import csv
 import getpass
+import hashlib
 import ipaddress
 import logging
 import multiprocessing
@@ -771,9 +773,7 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
                             "--no-deps",
                             package_spec,
                         ]
-                        force_result = subprocess.run(
-                            force_cmd, capture_output=True, text=True, timeout=60
-                        )  # nosec B603
+                        force_result = subprocess.run(force_cmd, capture_output=True, text=True, timeout=60)  # nosec B603
                         if force_result.returncode == 0:
                             new_version = _get_installed_version(package_name)
                             logging.info(
@@ -886,11 +886,11 @@ except ImportError:
 
 try:
     import paramiko  # type: ignore[import-untyped]
-    from paramiko import AutoAddPolicy, SSHClient
+    from paramiko import RejectPolicy, SSHClient
 except ImportError:
     paramiko = None  # type: ignore[assignment]  # Optional - SSH operations
     SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations
-    AutoAddPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
+    RejectPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
 
 # Optional imports with fallbacks
 try:
@@ -1269,9 +1269,7 @@ class GlobalImportManager:
                 # Use UV with default behavior
                 cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]
 
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout
-            )  # nosec B603
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
             if result.returncode == 0:
                 logging.info(f"Successfully installed {package_spec} with UV")
                 return True
@@ -1283,9 +1281,7 @@ class GlobalImportManager:
                 else:
                     cmd = [uv_cmd, "pip", "install", package_spec]
 
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout
-                )  # nosec B603
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
                 if result.returncode == 0:
                     logging.info(f"Successfully installed {package_spec} with UV (fallback)")
                     return True
@@ -1704,9 +1700,7 @@ class GlobalImportManager:
                         with log_lock:
                             logging.error(f"Package {package_info[0]} import generated an exception: {exc}")
 
-    def initialize_all_imports(
-        self, skip_deps: bool = False
-    ) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
+    def initialize_all_imports(self, skip_deps: bool = False) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
         """
         Initialize all imports and dependencies upfront.
 
@@ -3077,9 +3071,7 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
     for i, kwargs in enumerate(attempts, start=1):
         try:
             tried_variants.append(kwargs)
-            assert (
-                apisession_cls is not None
-            ), "apisession_cls should be set if attempts list is populated"  # nosec B101
+            assert apisession_cls is not None, "apisession_cls should be set if attempts list is populated"  # nosec B101
             apisession = apisession_cls(**kwargs)
             successful_method = kwargs
             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
@@ -6408,9 +6400,7 @@ class PacketCaptureManager:
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
 
-    def _wait_for_capture_completion(
-        self, site_id: str, capture_id: str, expected_duration: int
-    ) -> bool:  # noqa: C901, PLR0912
+    def _wait_for_capture_completion(self, site_id: str, capture_id: str, expected_duration: int) -> bool:  # noqa: C901, PLR0912
         """
         Poll for capture completion status (separate from PCAP download availability).
         Returns as soon as capture completes, does not wait for PCAP file URL.
@@ -8890,9 +8880,7 @@ class DatabaseSchemaUtils:
         return strategy
 
     @staticmethod
-    def build_create_table_sql(
-        table_name: str, fields: list[str], strategy: dict[str, Any]
-    ) -> str:  # noqa: C901, PLR0912, PLR0915
+    def build_create_table_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:  # noqa: C901, PLR0912, PLR0915
         """
         Builds the CREATE TABLE SQL statement based on the endpoint strategy.
 
@@ -38593,9 +38581,9 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx][
-                                    "text"
-                                ] = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                current_fig["layout"]["annotations"][ann_idx]["text"] = (
+                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
+                                )
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -40123,7 +40111,9 @@ class MapsManager:
                     rssi_idx = (
                         result_def.index("max_rssi")
                         if "max_rssi" in result_def
-                        else result_def.index("avg_rssi") if "avg_rssi" in result_def else -1
+                        else result_def.index("avg_rssi")
+                        if "avg_rssi" in result_def
+                        else -1
                     )
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
@@ -56519,7 +56509,95 @@ class EnhancedSSHRunner:
         self.timeout = timeout
         self.client = None
         self.logger = logger or logging.getLogger("ssh_runner_v2")
+        self.managed_known_hosts_path: str | None = None
         self.logger.debug(f"EnhancedSSHRunner initialized with timeout={timeout}")
+
+    def _get_data_directory(self) -> str:
+        """Return the workspace data directory used for persistent SSH metadata."""
+        return os.path.dirname(FilePathUtils.get_csv_path("dummy.csv"))
+
+    def _get_managed_known_hosts_path(self) -> str:
+        """Return the path to MistHelper's managed known-hosts file."""
+        data_dir = self._get_data_directory()
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "ssh_known_hosts")
+
+    def _ensure_managed_known_hosts_file(self) -> str:
+        """Ensure the managed known-hosts file exists and is ready to be loaded."""
+        known_hosts_path = self._get_managed_known_hosts_path()
+        if not os.path.exists(known_hosts_path):
+            with open(known_hosts_path, "a", encoding="utf-8"):
+                pass
+        if hasattr(os, "chmod"):
+            try:
+                os.chmod(known_hosts_path, 0o600)
+            except OSError:
+                self.logger.debug("Unable to tighten permissions on %s", known_hosts_path)
+        self.managed_known_hosts_path = known_hosts_path
+        return known_hosts_path
+
+    @staticmethod
+    def _known_hosts_entry_name(hostname: str, port: int) -> str:
+        """Return the known-hosts entry name, including non-default ports."""
+        return hostname if port == 22 else f"[{hostname}]:{port}"
+
+    @staticmethod
+    def _format_host_key_fingerprint(host_key: Any) -> str:
+        """Return an OpenSSH-style SHA256 fingerprint string for a host key."""
+        digest = hashlib.sha256(host_key.asbytes()).digest()
+        return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
+
+    def _load_known_hosts(self) -> None:
+        """Load system, user, and managed host keys into the current SSH client."""
+        assert self.client is not None, "SSH client must exist before loading host keys"
+        self.client.load_system_host_keys()
+        user_known_hosts_path = os.path.expanduser("~/.ssh/known_hosts")
+        try:
+            self.client.load_host_keys(user_known_hosts_path)
+        except FileNotFoundError:
+            self.logger.debug("User known_hosts file does not exist: %s", user_known_hosts_path)
+        managed_known_hosts_path = self._ensure_managed_known_hosts_file()
+        self.client.load_host_keys(managed_known_hosts_path)
+
+    def _host_key_is_known(self, hostname: str, port: int) -> bool:
+        """Return whether the current SSH client already knows the host key entry."""
+        assert self.client is not None, "SSH client must exist before checking host keys"
+        entry_name = self._known_hosts_entry_name(hostname, port)
+        return self.client.get_host_keys().lookup(entry_name) is not None
+
+    def _fetch_remote_server_key(self, hostname: str, port: int) -> Any:
+        """Fetch the remote SSH server key without authenticating the session."""
+        socket_connection = socket.create_connection((hostname, port), timeout=self.timeout)
+        transport = paramiko.Transport(socket_connection)
+        try:
+            transport.start_client(timeout=self.timeout)
+            return transport.get_remote_server_key()
+        finally:
+            transport.close()
+            socket_connection.close()
+
+    def _save_host_keys(self) -> None:
+        """Persist the current SSH client's host keys to the managed store when available."""
+        assert self.client is not None, "SSH client must exist before saving host keys"
+        if not self.managed_known_hosts_path:
+            return
+        try:
+            self.client.save_host_keys(self.managed_known_hosts_path)
+        except OSError as error:
+            self.logger.warning("Failed to persist known_hosts to %s: %s", self.managed_known_hosts_path, error)
+
+    def _trust_host_on_first_use(self, hostname: str, port: int) -> None:
+        """Enroll an unseen host key into the managed known-hosts file before connect."""
+        assert self.client is not None, "SSH client must exist before trusting host keys"
+        if self._host_key_is_known(hostname, port):
+            return
+        remote_host_key = self._fetch_remote_server_key(hostname, port)
+        entry_name = self._known_hosts_entry_name(hostname, port)
+        self.client.get_host_keys().add(entry_name, remote_host_key.get_name(), remote_host_key)
+        self._save_host_keys()
+        fingerprint = self._format_host_key_fingerprint(remote_host_key)
+        self.logger.warning("TOFU enrolled new SSH host key for %s (%s)", entry_name, fingerprint)
+        print(f"[INFO] Trusted first-seen SSH host key for {entry_name} ({fingerprint})")
 
     @staticmethod
     def _validate_hostname(hostname: str) -> bool:
@@ -56996,20 +57074,11 @@ class EnhancedSSHRunner:
             # Create SSH client  # nosec B101
             self.client = SSHClient()  # type: ignore[assignment]  # SSHClient typed as None in fallback
             assert self.client is not None  # nosec B101
-            # Load existing host keys if available
-            self.client.load_system_host_keys()
-            try:
-                self.client.load_host_keys(os.path.expanduser("~/.ssh/known_hosts"))
-            except FileNotFoundError:
-                # known_hosts file doesn't exist yet - that's fine
-                pass
+            self._load_known_hosts()
+            self.client.set_missing_host_key_policy(RejectPolicy())
+            self.logger.debug("SSH client created with TOFU enrollment and strict host key verification")
 
-            # For internal networks: Auto-accept new host keys
-            # NOTE: Only use this for trusted internal networks, not internet-facing connections
-            self.client.set_missing_host_key_policy(
-                AutoAddPolicy()
-            )  # nosec B507 — internal NOC network only, not internet-facing
-            self.logger.debug("SSH client created with AutoAddPolicy for internal network use")
+            self._trust_host_on_first_use(hostname, port)
 
             # Attempt connection
             connection_start = time.time()
@@ -57040,6 +57109,11 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg)
             print(f"[ERROR] Connection timeout after {self.timeout} seconds")
             return False
+        except paramiko.BadHostKeyException as e:
+            error_msg = f"Host key verification failed for {hostname}: {e}"
+            self.logger.error(error_msg)
+            print("[ERROR] Host key verification failed - update the known_hosts entry before retrying")
+            return False
         except paramiko.AuthenticationException as e:
             error_msg = f"Authentication failed for {username}@{hostname}: {e}"
             self.logger.error(error_msg)
@@ -57048,7 +57122,10 @@ class EnhancedSSHRunner:
         except paramiko.SSHException as e:
             error_msg = f"SSH Error connecting to {hostname}: {e}"
             self.logger.error(error_msg)
-            print(f"[ERROR] SSH Error: {e}")
+            if "known_hosts" in str(e):
+                print("[ERROR] Host key is not trusted - add the host key to known_hosts and retry")
+            else:
+                print(f"[ERROR] SSH Error: {e}")
             return False
         except Exception as e:
             error_msg = f"Unexpected error connecting to {hostname}: {type(e).__name__}: {e}"
@@ -57099,9 +57176,7 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg, exc_info=True)
             return False, "", error_msg
 
-    def _execute_direct(
-        self, command: str, start_time: float, hostname: str = "unknown"
-    ) -> tuple[bool, str, str]:  # nosec B101
+    def _execute_direct(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # nosec B101
         """Execute command using exec_command with PTY support"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
@@ -57150,9 +57225,7 @@ class EnhancedSSHRunner:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
                 raise e2
 
-    def _execute_with_shell(
-        self, command: str, start_time: float, hostname: str = "unknown"
-    ) -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
+    def _execute_with_shell(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
         """Execute command using interactive shell with device type detection"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
