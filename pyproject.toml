@@ -83,7 +83,7 @@ packages = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "starlink-api-reference", "scripts", "specs"]
+extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
@@ -111,7 +111,7 @@ warn_return_any = true
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = false
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "starlink-api-reference", "scripts", "specs", "tests"]
+exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests"]
 
 [[tool.mypy.overrides]]
 # Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
@@ -125,7 +125,7 @@ follow_imports = "skip"
 # maps_manager: large module with its own type issues — Phase 2 target
 # web_portal: Flask app with its own type issues — Phase 2 target
 # Others: third-party or legacy code not under active development
-module = ["maps_manager", "maps_manager.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "starlink-api-reference.*", "scripts.*", "specs.*"]
+module = ["maps_manager", "maps_manager.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
@@ -147,7 +147,7 @@ strict = false
 
 [tool.bandit]
 targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "src"]
-exclude_dirs = ["tests", ".venv", "node_modules", "mist-ops-platform", "ops-portal", "starlink-api-reference", "scripts", "specs"]
+exclude_dirs = ["tests", ".venv", "node_modules", "mist-ops-platform", "ops-portal", "scripts", "specs"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

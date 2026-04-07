@@ -205,10 +205,6 @@ Thumbs.db
 # Node.js (ops-portal frontend)
 node_modules/
 
-# Nested repositories
-junos-mcp-server/
-starlink-api-reference/
-
 # Container
 .containerignore
 
