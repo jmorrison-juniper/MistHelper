@@ -1,17 +1,18 @@
 import sqlite3
 from pathlib import Path
+from typing import Any, List, Optional, Tuple
 
 
 class OperationsLog:
     """Simple persistent operations log for resumable work units."""
 
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: str | None = None) -> None:
         self.db_path = Path(db_path) if db_path else Path("data/ssid-consolidation/operations.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._ensure_table()
 
-    def _ensure_table(self):
+    def _ensure_table(self) -> None:
         cur = self._conn.cursor()
         cur.execute(
             """
@@ -28,7 +29,15 @@ class OperationsLog:
         )
         self._conn.commit()
 
-    def append(self, phase: int, site_id: str, action: str, status: str, message: str = None, timestamp: str = None):
+    def append(
+        self,
+        phase: int,
+        site_id: str,
+        action: str,
+        status: str,
+        message: str | None = None,
+        timestamp: str | None = None,
+    ) -> None:
         ts = timestamp or ""
         cur = self._conn.cursor()
         cur.execute(
@@ -37,7 +46,7 @@ class OperationsLog:
         )
         self._conn.commit()
 
-    def query_by_phase(self, phase: int):
+    def query_by_phase(self, phase: int) -> List[Tuple[Any, ...]]:
         cur = self._conn.cursor()
         query = (
             "SELECT id, phase, site_id, action, status, message, timestamp "

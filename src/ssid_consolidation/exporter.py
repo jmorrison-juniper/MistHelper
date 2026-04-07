@@ -2,12 +2,18 @@ import csv
 import logging
 import sqlite3
 from pathlib import Path
+from typing import Any, List, Dict
 
 
 class Exporter:
     """Export Phase 1 results to CSV and SQLite."""
 
-    def write(self, rows, outdir: str = "data/ssid-consolidation", basename: str = "matrix"):
+    def write(
+        self,
+        rows: List[Dict[str, Any]],
+        outdir: str = "data/ssid-consolidation",
+        basename: str = "matrix",
+    ) -> Dict[str, str]:
         path = Path(outdir)
         path.mkdir(parents=True, exist_ok=True)
         csv_path = path / f"{basename}.csv"

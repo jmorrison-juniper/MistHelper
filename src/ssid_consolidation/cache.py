@@ -3,18 +3,19 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any, List, Dict, Optional
 
 
 class CacheManager:
     """Simple SQLite-backed cache for Phase 1 results."""
 
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: str | None = None) -> None:
         self.db_path = Path(db_path) if db_path else Path("data/ssid-consolidation/cache.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._ensure_table()
 
-    def _ensure_table(self):
+    def _ensure_table(self) -> None:
         c = self._conn.cursor()
         c.execute(
             """
@@ -27,7 +28,7 @@ class CacheManager:
         )
         self._conn.commit()
 
-    def save_rows(self, rows, collected_at: str = None):
+    def save_rows(self, rows: List[Dict[str, Any]], collected_at: str | None = None) -> None:
         collected_at = collected_at or datetime.utcnow().isoformat()
         c = self._conn.cursor()
         for row in rows:
@@ -38,7 +39,7 @@ class CacheManager:
             )
         self._conn.commit()
 
-    def get_all(self):
+    def get_all(self) -> List[Dict[str, Any]]:
         c = self._conn.cursor()
         c.execute("SELECT row_json, collected_at FROM phase1_cache")
         out = []
@@ -51,7 +52,7 @@ class CacheManager:
             out.append({"data": data, "collected_at": collected_at})
         return out
 
-    def clear(self):
+    def clear(self) -> None:
         c = self._conn.cursor()
         c.execute("DELETE FROM phase1_cache")
         self._conn.commit()

@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Any, List, Dict, Optional
 
 
 class Collector:
@@ -11,10 +12,10 @@ class Collector:
     can run without credentials.
     """
 
-    def __init__(self, mist_client=None):
+    def __init__(self, mist_client: Any | None = None) -> None:
         self.mist_client = mist_client
 
-    def _sample_rows(self, target_ssid: str) -> list[dict]:
+    def _sample_rows(self, target_ssid: str) -> List[Dict[str, Any]]:
         now = datetime.utcnow().isoformat()
         return [
             {
@@ -45,7 +46,7 @@ class Collector:
             },
         ]
 
-    def collect(self, target_ssid: str) -> list[dict]:
+    def collect(self, target_ssid: str) -> List[Dict[str, Any]]:
         """Return a list of site-level rows for the target SSID.
 
         If a `mist_client` adapter is available the collector will attempt
@@ -59,7 +60,7 @@ class Collector:
                 org_id = getattr(self.mist_client, "org_id", None)
                 sites = self.mist_client.get_sites(org_id=org_id) if hasattr(self.mist_client, "get_sites") else []
 
-                rows: list[dict] = []
+                rows: List[Dict[str, Any]] = []
                 for site in sites:
                     site_id = site.get("id")
                     site_name = site.get("name", "")

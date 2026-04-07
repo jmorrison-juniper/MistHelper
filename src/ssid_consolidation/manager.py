@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import List, Dict, Any
 
 from .cache import CacheManager
 from .collector import Collector
@@ -25,7 +26,7 @@ class SSIDTemplateConsolidationManager:
         except Exception:
             self.cache_minutes = cache_minutes
 
-    def phase1_collect(self, target_ssid: str, force_refresh: bool = False):
+    def phase1_collect(self, target_ssid: str, force_refresh: bool = False) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Collect Phase 1 data; use cache if fresh unless `force_refresh` is True.
 
         Returns (rows, meta) where `meta` contains keys `cached` and `out`.
@@ -36,11 +37,15 @@ class SSIDTemplateConsolidationManager:
             # check freshness by examining first item's collected_at
             try:
                 collected_at = cached[0].get("collected_at")
-                collected_dt = datetime.fromisoformat(collected_at)
-                age = now - collected_dt
-                if age < timedelta(minutes=self.cache_minutes):
-                    logging.info("Using cached data collected %s ago", age)
-                    return [c["data"] for c in cached], {"cached": True, "collected_at": collected_at}
+                if isinstance(collected_at, str):
+                    collected_dt = datetime.fromisoformat(collected_at)
+                    age = now - collected_dt
+                    if age < timedelta(minutes=self.cache_minutes):
+                        logging.info("Using cached data collected %s ago", age)
+                        return [c["data"] for c in cached], {"cached": True, "collected_at": collected_at}
+                else:
+                    # collected_at missing or malformed; fall back to fresh collection
+                    raise ValueError("Invalid cached collected_at value")
             except Exception:
                 logging.exception("Failed to validate cache freshness; falling back to fresh collection")
 

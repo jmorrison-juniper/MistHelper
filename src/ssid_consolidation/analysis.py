@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 # Type aliases for readability
 ClusterReport = dict[str, dict[str, dict[str, int]]]
@@ -36,14 +36,14 @@ class AnalysisManager:
                 param_map[key] = param_map.get(key, 0) + 1
         return per_cluster
 
-    def cross_cluster_drift(self, per_cluster_report: ClusterReport) -> dict[str, dict[str, str]]:
+    def cross_cluster_drift(self, per_cluster_report: ClusterReport) -> dict[str, dict[str, Optional[str]]]:
         # For each parameter, compute the majority value per cluster and flag parameters where
         # the majority values differ across clusters.
-        params = set()
+        params: set[str] = set()
         for cluster_map in per_cluster_report.values():
             params.update(cluster_map.keys())
 
-        drift: dict[str, dict[str, str]] = {}
+        drift: dict[str, dict[str, Optional[str]]] = {}
         for param in params:
             majority_by_cluster: dict[str, str | None] = {}
             for cluster, cluster_map in per_cluster_report.items():
