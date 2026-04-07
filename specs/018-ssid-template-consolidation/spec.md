@@ -164,6 +164,10 @@ Before any phase executes, the system reads a default target SSID name from the 
 - **FR-016b**: The system MUST log each deviation resolution choice (parameter name, all candidate values, selected value, engineer confirmation timestamp) to the results log for audit purposes.
 - **FR-017**: System MUST associate each new template with its corresponding site group exclusively via `sitegroup_ids`. No direct `site_id` bindings are used; site membership in the site group is the sole mechanism controlling which sites receive a template.
 - **FR-018**: System MUST detect naming conflicts with existing templates and prompt the engineer before overwriting.
+**FR-016c**: System MUST generate consolidated template names by deriving a base name from environment configuration (prefer the `MIST_TEMPLATE_BASENAME` variable if present, otherwise use the selected `MIST_TARGET_SSID`), combined with the target group identifier (e.g., `prod_cluster1`) to produce predictable, idempotent names such as `misthelper_prod_cluster1_CorpSecure`.
+
+### Session 2026-04-06
+
 
 **Phase 5: Disable Old SSIDs**
 

@@ -31,7 +31,15 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Constitution compliance summary:
+
+- **Five-Item Rule**: The implementation will live in `src/ssid_consolidation` and split responsibilities across a small set of classes to keep module/file counts low. Proposed classes: `Collector`, `CacheManager`, `AnalysisManager`, `TemplateManager`, and `SSIDTemplateConsolidationManager`.
+- **Class-Based Architecture**: Core functionality will be implemented as class methods. CLI wiring will call class methods directly (no free-function wrappers) to comply with the "No Wrappers" rule.
+- **Safety-First**: All destructive writes require typed `CONFIRM` via `safe_input()` and early validation. `OperationsLog` will record per-site unit-of-work entries for resume/replay (see FR-024a).
+- **Full Deployment Pipeline**: Development will validate changes with `python -m py_compile MistHelper.py`, run `ruff` and `pytest` locally, and rely on CI for final gating before merge.
+- **Observability & Logging**: Structured `OperationsLog` entries and ASCII-only structured logging; secrets redaction enforced at the logging boundary.
+
+No planned constitution violations. Any necessary deviation will be recorded in the Complexity Tracking section with justification.
 
 ## Project Structure
 

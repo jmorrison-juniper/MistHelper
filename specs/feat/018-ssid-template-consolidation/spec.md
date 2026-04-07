@@ -12,6 +12,7 @@
 ### Session 2026-04-06
 
 - Q: Cache freshness window → A: 60 minutes (default). Applied as FR-009a and configurable via `SSID_CONSOLIDATION_CACHE_MINUTES`.
+- Q: Cache freshness env var name → A: SSID_CONSOLIDATION_CACHE_MINUTES (confirmed).
 
 
 ## User Scenarios & Testing *(mandatory)*
@@ -166,3 +167,11 @@ Before any phase executes, the system reads a default target SSID name from the 
 - **FR-017**: System MUST associate each new template with its corresponding site group exclusively via `sitegroup_ids`. No direct `site_id` bindings are used; site membership in the site group is the sole mechanism controlling which sites receive a template.
 - **FR-018**: System MUST detect naming conflicts with existing templates and prompt the engineer before overwriting.
 - **FR-016c**: System MUST generate consolidated template names by deriving a base name from environment configuration (prefer the `MIST_TEMPLATE_BASENAME` variable if present, otherwise use the selected `MIST_TARGET_SSID`), combined with the target group identifier (e.g., `prod_cluster1`) to produce predictable, idempotent names such as `misthelper_prod_cluster1_CorpSecure`.
+
+**FR-024a**: System MUST support resumable operations and replay for all long-running phases (Phases 1–5). The system MUST persist a durable `OperationsLog` entry for each unit-of-work (per-site, per-action) containing: `id`, `phase`, `site_id`, `action`, `cursor` (if applicable), `status`, `message`, and `timestamp`. On restart or retry, the system MUST be able to:
+- inspect `OperationsLog` to determine the last successfully completed work unit per phase,
+- resume processing from the next unprocessed work unit without duplicating side effects (idempotence),
+- offer an operator a resume or restart option when partial results are detected,
+- and expose an audit report of resumed/replayed operations.
+
+This requirement maps to `OperationsLog` persistence implemented in `src/ssid_consolidation/logging.py` (see tasks T008/T027) and to retry/resume UI prompts described in the tasks.
