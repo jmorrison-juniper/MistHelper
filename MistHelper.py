@@ -3472,6 +3472,14 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Sites with APs where switches or gateways are offline",
     },
+    # E911 BSSID compliance report (derived data, one row per BSSID)
+    "generateE911BSSIDReport": {
+        "type": "natural_pk",
+        "primary_key": ["bssid"],
+        "indexes": ["site_name", "ap_name", "map_name"],
+        "unique_constraints": [],
+        "description": "E911 BSSID compliance report - one row per BSSID with location context",
+    },
     # Default fallback strategy for unclassified endpoints
     # Uses auto-increment with unique constraint on API id field if present
     # Device Utility Commands - Diagnostic/Show command results (menus 123-157)
@@ -12902,6 +12910,204 @@ class SSIDTemplateConsolidationLauncher:
         except Exception as e:
             logging.exception("SSID consolidation launcher failed: %s", e)
             print("! SSID Template Consolidation failed. See logs for details.")
+
+
+class E911BSSIDReportGenerator:
+    """E911 BSSID Compliance Report (Menu 160).
+
+    Queries all AP radio MACs across the organization, resolves each AP's
+    site name, site address, map/floor name, and AP name, then derives
+    all BSSIDs (16 per radio MAC).  Output is a sorted CSV with one row
+    per BSSID for E911 compliance filing.
+
+    Usage:
+        E911BSSIDReportGenerator.execute()
+    """
+
+    BSSIDS_PER_RADIO = 16
+    NIBBLE_MASK = 0xFFFFFFFFFFF0
+
+    @staticmethod
+    def _format_bssid(radio_base_mac: str) -> list[str]:
+        """Derive 16 colon-separated BSSIDs from a radio base MAC."""
+        clean_mac = radio_base_mac.replace(":", "").replace("-", "")
+        base_int = int(clean_mac, 16)
+        cleared_base = base_int & E911BSSIDReportGenerator.NIBBLE_MASK
+        bssids: list[str] = []
+        for offset in range(E911BSSIDReportGenerator.BSSIDS_PER_RADIO):
+            bssid_hex = format(cleared_base | offset, "012x")
+            bssids.append(":".join(bssid_hex[i : i + 2] for i in range(0, 12, 2)))
+        return bssids
+
+    @staticmethod
+    def _fetch_lookups(
+        org_id: str,
+    ) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]], dict[str, str], list[dict[str, Any]]]:
+        """Pre-fetch site, AP, map, and radio MAC data from Mist API."""
+        logging.info("Fetching site data for E911 report...")
+        print("  Fetching site information...")
+        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
+        site_lookup: dict[str, dict[str, str]] = {}
+        for site in all_sites:
+            site_id = site.get("id")
+            if site_id:
+                site_lookup[site_id] = {"name": site.get("name", ""), "address": site.get("address", "")}
+        logging.debug("Sites fetched: %d", len(site_lookup))
+
+        logging.info("Fetching AP device stats for E911 report...")
+        print("  Fetching AP device stats...")
+        stats_response = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+            apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
+        )
+        all_ap_stats: list[dict[str, Any]] = mistapi.get_all(response=stats_response, mist_session=apisession)
+        ap_lookup: dict[str, dict[str, str]] = {}
+        for device in all_ap_stats:
+            device_mac = device.get("mac")
+            if device_mac:
+                ap_lookup[device_mac] = {
+                    "name": device.get("name", ""),
+                    "site_id": device.get("site_id") or "",
+                    "map_id": device.get("map_id") or "",
+                }
+        logging.debug("AP device stats fetched: %d", len(ap_lookup))
+
+        logging.info("Fetching map data for sites with APs...")
+        print("  Fetching floor plan maps...")
+        unique_site_ids = {info["site_id"] for info in ap_lookup.values() if info["site_id"]}
+        map_lookup: dict[str, str] = {}
+        for site_id in unique_site_ids:
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
+                apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT
+            )
+            for site_map in mistapi.get_all(response=maps_response, mist_session=apisession):
+                if site_map.get("id"):
+                    map_lookup[site_map["id"]] = site_map.get("name", "")
+        logging.debug("Maps fetched: %d across %d sites", len(map_lookup), len(unique_site_ids))
+
+        logging.info("Fetching AP radio MACs for E911 report...")
+        print("  Fetching AP radio MACs...")
+        radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(
+            apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
+        )
+        radio_macs_data: list[dict[str, Any]] = mistapi.get_all(response=radio_response, mist_session=apisession)
+        logging.debug("Radio MAC records fetched: %d", len(radio_macs_data))
+
+        return site_lookup, ap_lookup, map_lookup, radio_macs_data
+
+    @staticmethod
+    def _build_bssid_rows(
+        radio_macs_data: list[dict[str, Any]],
+        site_lookup: dict[str, dict[str, str]],
+        ap_lookup: dict[str, dict[str, str]],
+        map_lookup: dict[str, str],
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+        """Build sorted BSSID rows and compliance gaps from radio MAC data."""
+        rows: list[dict[str, str]] = []
+        compliance_gaps: list[dict[str, str]] = []
+
+        for ap_entry in radio_macs_data:
+            ap_mac = ap_entry.get("mac", "")
+            ap_info = ap_lookup.get(ap_mac, {})
+            ap_name = ap_info.get("name") or "Unknown"
+            site_id = ap_info.get("site_id") or ""
+            map_id = ap_info.get("map_id") or ""
+            gap_reason = ""
+
+            if not site_id:
+                site_name, site_address, map_name = "Unassigned", "", "Unassigned"
+                gap_reason = "No site assignment"
+            else:
+                site_info = site_lookup.get(site_id, {})
+                site_name = site_info.get("name") or "Unassigned"
+                site_address = site_info.get("address", "")
+                if not map_id:
+                    map_name = "Unassigned"
+                    gap_reason = "No map assignment"
+                elif map_id not in map_lookup:
+                    map_name = "Unknown Map"
+                    gap_reason = "Map ID not found"
+                else:
+                    map_name = map_lookup[map_id]
+
+            if not ap_info:
+                gap_reason = "Not in device stats"
+
+            if gap_reason:
+                compliance_gaps.append({"ap_name": ap_name, "ap_mac": ap_mac, "reason": gap_reason})
+
+            for radio_mac in ap_entry.get("radio_macs", []):
+                for bssid in E911BSSIDReportGenerator._format_bssid(radio_mac):
+                    rows.append({
+                        "Site Name": site_name,
+                        "Site Address": site_address,
+                        "Map Name": map_name,
+                        "AP Name": ap_name,
+                        "BSSID": bssid,
+                    })
+
+        rows.sort(key=lambda row: (row["Site Name"], row["Map Name"], row["AP Name"], row["BSSID"]))
+        return rows, compliance_gaps
+
+    @staticmethod
+    def _display_summary(
+        total_sites: int,
+        total_aps: int,
+        total_bssids: int,
+        compliance_gaps: list[dict[str, str]],
+    ) -> None:
+        """Display E911 report summary with compliance gap detection."""
+        print("\n--- E911 BSSID Report Summary ---")
+        print(f"  Sites processed: {total_sites:,}")
+        print(f"  APs processed: {total_aps:,}")
+        print(f"  BSSIDs generated: {total_bssids:,}")
+
+        if not compliance_gaps:
+            print("\n  No compliance gaps detected -- all APs are assigned to floor plans.")
+            return
+
+        print(f"\n  Compliance Gaps: {len(compliance_gaps)} AP(s) require attention")
+        for gap in compliance_gaps:
+            print(f"    - {gap['ap_name']} ({gap['ap_mac']}): {gap['reason']}")
+
+    @staticmethod
+    def execute() -> None:
+        """Generate E911 BSSID compliance report (Menu 160)."""
+        print("\n=== E911 BSSID Compliance Report ===")
+        logging.info("Starting E911 BSSID compliance report generation...")
+        start_time = time.time()
+
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+
+        site_lookup, ap_lookup, map_lookup, radio_macs_data = E911BSSIDReportGenerator._fetch_lookups(current_org_id)
+
+        if not radio_macs_data:
+            print("No APs found in this organization.")
+            logging.info("No APs found - skipping E911 report generation")
+            return
+
+        rows, compliance_gaps = E911BSSIDReportGenerator._build_bssid_rows(
+            radio_macs_data, site_lookup, ap_lookup, map_lookup
+        )
+
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"E911_BSSID_Report_{timestamp_str}.csv"
+        DataExporter.write_with_format_selection(
+            data=rows,
+            filename_or_table=filename,
+            api_function_name="generateE911BSSIDReport",
+        )
+        logging.info("E911 report saved: data/%s (%d BSSIDs)", filename, len(rows))
+        print(f"\nCSV saved: data/{filename} ({len(rows):,} BSSIDs)")
+
+        unique_sites = {row["Site Name"] for row in rows} - {"Unassigned"}
+        E911BSSIDReportGenerator._display_summary(len(unique_sites), len(radio_macs_data), len(rows), compliance_gaps)
+
+        elapsed = time.time() - start_time
+        logging.info("E911 BSSID report completed in %.1f seconds", elapsed)
+        print(f"\nReport completed in {elapsed:.1f} seconds")
 
 
 class OrgTemplateExporter:
@@ -55275,6 +55481,7 @@ menu_actions = {
     # > Offline / Reporting
     "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
     "159": (SSIDTemplateConsolidationLauncher.execute, "SSID Template Consolidation (Phase 1: collect SSID matrix)"),
+    "160": (E911BSSIDReportGenerator.execute, "E911 BSSID Compliance Report"),
 }
 
 
@@ -56008,6 +56215,7 @@ class OperationRegistry:
         },
         "158": {"category": "safe"},
         "159": {"category": "safe"},
+        "160": {"category": "safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
