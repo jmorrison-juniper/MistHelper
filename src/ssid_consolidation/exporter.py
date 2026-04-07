@@ -2,7 +2,7 @@ import csv
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any
 
 
 class Exporter:
@@ -10,10 +10,10 @@ class Exporter:
 
     def write(
         self,
-        rows: List[Dict[str, Any]],
+        rows: list[dict[str, Any]],
         outdir: str = "data/ssid-consolidation",
         basename: str = "matrix",
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         path = Path(outdir)
         path.mkdir(parents=True, exist_ok=True)
         csv_path = path / f"{basename}.csv"

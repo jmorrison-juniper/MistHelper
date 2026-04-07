@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 
 class OperationsLog:
@@ -46,7 +46,7 @@ class OperationsLog:
         )
         self._conn.commit()
 
-    def query_by_phase(self, phase: int) -> List[Tuple[Any, ...]]:
+    def query_by_phase(self, phase: int) -> list[tuple[Any, ...]]:
         cur = self._conn.cursor()
         query = (
             "SELECT id, phase, site_id, action, status, message, timestamp "

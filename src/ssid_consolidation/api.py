@@ -11,7 +11,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from typing import Any, List, Dict
+from typing import Any
 
 
 class MistApiAdapter:
@@ -67,7 +67,7 @@ class MistApiAdapter:
         logging.error("MistApiAdapter: API call failed after %d attempts", self.max_retries + 1)
         return last_resp
 
-    def get_sites(self, org_id: str | None = None) -> List[Dict[str, Any]]:
+    def get_sites(self, org_id: str | None = None) -> list[dict[str, Any]]:
         """Return list of sites for the org.
 
         Uses `mistapi.api.v1.orgs.sites.listOrgSites` and `mistapi.get_all`.
@@ -86,7 +86,7 @@ class MistApiAdapter:
             logging.exception("MistApiAdapter: failed to expand paginated sites response")
             return []
 
-    def get_site_wlans(self, site_id: str) -> List[Dict[str, Any]]:
+    def get_site_wlans(self, site_id: str) -> list[dict[str, Any]]:
         """Return list of WLANs for a site.
 
         Tries common variant names for the endpoint and returns an empty

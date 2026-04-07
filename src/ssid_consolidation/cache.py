@@ -3,7 +3,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Dict, Optional
+from typing import Any
 
 
 class CacheManager:
@@ -28,7 +28,7 @@ class CacheManager:
         )
         self._conn.commit()
 
-    def save_rows(self, rows: List[Dict[str, Any]], collected_at: str | None = None) -> None:
+    def save_rows(self, rows: list[dict[str, Any]], collected_at: str | None = None) -> None:
         collected_at = collected_at or datetime.utcnow().isoformat()
         c = self._conn.cursor()
         for row in rows:
@@ -39,7 +39,7 @@ class CacheManager:
             )
         self._conn.commit()
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self) -> list[dict[str, Any]]:
         c = self._conn.cursor()
         c.execute("SELECT row_json, collected_at FROM phase1_cache")
         out = []

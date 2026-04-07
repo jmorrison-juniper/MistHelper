@@ -1,7 +1,7 @@
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import Any
 
 from .cache import CacheManager
 from .collector import Collector
@@ -26,7 +26,13 @@ class SSIDTemplateConsolidationManager:
         except Exception:
             self.cache_minutes = cache_minutes
 
-    def phase1_collect(self, target_ssid: str, force_refresh: bool = False) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    def phase1_collect(
+        self,
+        target_ssid: str,
+        force_refresh: bool = False,
+    ) -> tuple[
+        list[dict[str, Any]], dict[str, Any]
+    ]:
         """Collect Phase 1 data; use cache if fresh unless `force_refresh` is True.
 
         Returns (rows, meta) where `meta` contains keys `cached` and `out`.
