@@ -1,8 +1,14 @@
+"""Typed data models used by the SSID consolidation workflow."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 
-@dataclass
-class Phase1Matrix:
+class Phase1Matrix(NamedTuple):
+    """Immutable phase 1 matrix row with the normalized export schema."""
+
     site_id: str
     site_name: str
     template_id: str | None = None
@@ -16,14 +22,18 @@ class Phase1Matrix:
     collected_at: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class DeviationReport:
+    """Deviation summary for one edge cluster."""
+
     cluster_id: str
     deviations: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class OperationLogEntry:
+    """One persisted operations-log record."""
+
     id: int | None = None
     phase: int = 0
     site_id: str | None = None

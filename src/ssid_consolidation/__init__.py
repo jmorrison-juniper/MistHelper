@@ -1,4 +1,6 @@
 """SSID Template Consolidation package - Phase 1 scaffolding."""
+
+from .api import RetryPolicy
 from .cache import CacheManager
 from .collector import Collector
 from .exporter import Exporter
@@ -10,6 +12,7 @@ __all__ = [
     "Collector",
     "CacheManager",
     "Exporter",
+    "RetryPolicy",
     "Phase1Matrix",
     "DeviationReport",
     "OperationLogEntry",

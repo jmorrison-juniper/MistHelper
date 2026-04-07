@@ -26,6 +26,16 @@ class DummyCollector(Collector):
         ]
 
 
+class FaultyExporter(Exporter):
+    def write(self, rows, outdir="data/ssid-consolidation", basename="matrix"):
+        raise OSError("export failed")
+
+
+class FaultyCache(CacheManager):
+    def save_rows(self, rows, collected_at=None):
+        raise OSError("cache failed")
+
+
 class TestManagerPhase1(unittest.TestCase):
     def setUp(self):
         self.cache_db = "data/ssid-consolidation/test_manager_cache.db"
@@ -52,7 +62,54 @@ class TestManagerPhase1(unittest.TestCase):
         rows2, meta2 = self.mgr.phase1_collect("TestSSID", force_refresh=False)
         self.assertTrue(meta2.get("cached"))
 
+    def test_phase1_collect_handles_invalid_cache_timestamp_and_export_failure(self):
+        self.cache.save_rows(self.collector.collect("TestSSID"), collected_at="not-a-timestamp")
+        mgr = SSIDTemplateConsolidationManager(
+            collector=self.collector,
+            cache=self.cache,
+            exporter=FaultyExporter(),
+            cache_minutes=60,
+        )
+
+        rows, meta = mgr.phase1_collect("TestSSID", force_refresh=False)
+
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(meta["cached"])
+        self.assertIsNone(meta["out"])
+
+    def test_phase1_collect_handles_invalid_cache_minutes_and_save_failure(self):
+        original_value = os.environ.get("SSID_CONSOLIDATION_CACHE_MINUTES")
+        os.environ["SSID_CONSOLIDATION_CACHE_MINUTES"] = "invalid"
+        faulty_cache_db = "data/ssid-consolidation/test_faulty_cache.db"
+        faulty_cache = None
+        try:
+            faulty_cache = FaultyCache(db_path=faulty_cache_db)
+            mgr = SSIDTemplateConsolidationManager(
+                collector=self.collector,
+                cache=faulty_cache,
+                exporter=self.exporter,
+                cache_minutes=15,
+            )
+            rows, meta = mgr.phase1_collect("TestSSID", force_refresh=True)
+            mgr.clear_cache()
+        finally:
+            if original_value is None:
+                os.environ.pop("SSID_CONSOLIDATION_CACHE_MINUTES", None)
+            else:
+                os.environ["SSID_CONSOLIDATION_CACHE_MINUTES"] = original_value
+            if faulty_cache is not None:
+                faulty_cache.close()
+            try:
+                os.remove(faulty_cache_db)
+            except Exception:
+                pass
+
+        self.assertEqual(mgr.cache_minutes, 15)
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(meta["cached"])
+
     def tearDown(self):
+        self.cache.close()
         try:
             os.remove(self.cache_db)
         except Exception:

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.ssid_consolidation.api import MistApiAdapter
+from src.ssid_consolidation.api import MistApiAdapter, RetryPolicy
 
 
 @pytest.fixture
@@ -30,4 +30,9 @@ def mock_mistapi():
 
 @pytest.fixture
 def adapter(mock_apisession, mock_mistapi):
-    return MistApiAdapter(mock_apisession, mock_mistapi, org_id="org1", max_retries=0, retry_delay=0.0)
+    return MistApiAdapter(
+        mock_apisession,
+        mock_mistapi,
+        org_id="org1",
+        retry_policy=RetryPolicy(max_retries=0, retry_delay=0.0),
+    )
