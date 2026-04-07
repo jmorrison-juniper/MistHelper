@@ -13174,6 +13174,8 @@ class E911BSSIDReportGenerator:
         """Add SSID names from a WLAN list into the band lookup dict."""
         band_map = E911BSSIDReportGenerator.BAND_MAP
         for wlan in wlans:
+            if not wlan.get("enabled", False):
+                continue
             ssid_name = wlan.get("ssid", "")
             if not ssid_name:
                 continue
