@@ -13006,9 +13006,7 @@ class E911BSSIDReportGenerator:
         unique_site_ids = {info["site_id"] for info in ap_lookup.values() if info["site_id"]}
         map_lookup: dict[str, str] = {}
         for site_id in unique_site_ids:
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
-                apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT
-            )
+            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT)
             for site_map in mistapi.get_all(response=maps_response, mist_session=apisession):
                 if site_map.get("id"):
                     map_lookup[site_map["id"]] = site_map.get("name", "")
@@ -13016,9 +13014,7 @@ class E911BSSIDReportGenerator:
 
         logging.info("Fetching AP radio MACs for E911 report...")
         print("  Fetching AP radio MACs...")
-        radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(
-            apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
-        )
+        radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(response=radio_response, mist_session=apisession)
         logging.debug("Radio MAC records fetched: %d", len(radio_macs_data))
 
@@ -13065,15 +13061,17 @@ class E911BSSIDReportGenerator:
             if gap_reason:
                 compliance_gaps.append({"ap_name": ap_name, "ap_mac": ap_mac, "reason": gap_reason})
 
-            for radio_mac in ap_entry.get("radio_macs", []):
+            for radio_mac in ap_entry.get("radio_mac", []):
                 for bssid in E911BSSIDReportGenerator._format_bssid(radio_mac):
-                    rows.append({
-                        "Site Name": site_name,
-                        "Site Address": site_address,
-                        "Map Name": map_name,
-                        "AP Name": ap_name,
-                        "BSSID": bssid,
-                    })
+                    rows.append(
+                        {
+                            "Site Name": site_name,
+                            "Site Address": site_address,
+                            "Map Name": map_name,
+                            "AP Name": ap_name,
+                            "BSSID": bssid,
+                        }
+                    )
 
         rows.sort(key=lambda row: (row["Site Name"], row["Map Name"], row["AP Name"], row["BSSID"]))
         return rows, compliance_gaps
