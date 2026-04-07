@@ -773,7 +773,9 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
                             "--no-deps",
                             package_spec,
                         ]
-                        force_result = subprocess.run(force_cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+                        force_result = subprocess.run(
+                            force_cmd, capture_output=True, text=True, timeout=60
+                        )  # nosec B603
                         if force_result.returncode == 0:
                             new_version = _get_installed_version(package_name)
                             logging.info(
@@ -1269,7 +1271,9 @@ class GlobalImportManager:
                 # Use UV with default behavior
                 cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout
+            )  # nosec B603
             if result.returncode == 0:
                 logging.info(f"Successfully installed {package_spec} with UV")
                 return True
@@ -1281,7 +1285,9 @@ class GlobalImportManager:
                 else:
                     cmd = [uv_cmd, "pip", "install", package_spec]
 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout)  # nosec B603
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout
+                )  # nosec B603
                 if result.returncode == 0:
                     logging.info(f"Successfully installed {package_spec} with UV (fallback)")
                     return True
@@ -1700,7 +1706,9 @@ class GlobalImportManager:
                         with log_lock:
                             logging.error(f"Package {package_info[0]} import generated an exception: {exc}")
 
-    def initialize_all_imports(self, skip_deps: bool = False) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
+    def initialize_all_imports(
+        self, skip_deps: bool = False
+    ) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
         """
         Initialize all imports and dependencies upfront.
 
@@ -3071,7 +3079,9 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
     for i, kwargs in enumerate(attempts, start=1):
         try:
             tried_variants.append(kwargs)
-            assert apisession_cls is not None, "apisession_cls should be set if attempts list is populated"  # nosec B101
+            assert (
+                apisession_cls is not None
+            ), "apisession_cls should be set if attempts list is populated"  # nosec B101
             apisession = apisession_cls(**kwargs)
             successful_method = kwargs
             logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
@@ -6400,7 +6410,9 @@ class PacketCaptureManager:
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
 
-    def _wait_for_capture_completion(self, site_id: str, capture_id: str, expected_duration: int) -> bool:  # noqa: C901, PLR0912
+    def _wait_for_capture_completion(
+        self, site_id: str, capture_id: str, expected_duration: int
+    ) -> bool:  # noqa: C901, PLR0912
         """
         Poll for capture completion status (separate from PCAP download availability).
         Returns as soon as capture completes, does not wait for PCAP file URL.
@@ -8880,7 +8892,9 @@ class DatabaseSchemaUtils:
         return strategy
 
     @staticmethod
-    def build_create_table_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:  # noqa: C901, PLR0912, PLR0915
+    def build_create_table_sql(
+        table_name: str, fields: list[str], strategy: dict[str, Any]
+    ) -> str:  # noqa: C901, PLR0912, PLR0915
         """
         Builds the CREATE TABLE SQL statement based on the endpoint strategy.
 
@@ -38581,9 +38595,9 @@ class MapsManager:
                                 shape_ft = shape_m * 3.28084
 
                                 # Update annotation text
-                                current_fig["layout"]["annotations"][ann_idx]["text"] = (
-                                    f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
-                                )
+                                current_fig["layout"]["annotations"][ann_idx][
+                                    "text"
+                                ] = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
                                 break
 
             status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
@@ -40111,9 +40125,7 @@ class MapsManager:
                     rssi_idx = (
                         result_def.index("max_rssi")
                         if "max_rssi" in result_def
-                        else result_def.index("avg_rssi")
-                        if "avg_rssi" in result_def
-                        else -1
+                        else result_def.index("avg_rssi") if "avg_rssi" in result_def else -1
                     )
                 except ValueError as index_error:
                     logging.warning(f"Live data refresh: Missing expected fields in result_def: {index_error}")
@@ -57176,7 +57188,9 @@ class EnhancedSSHRunner:
             self.logger.error(error_msg, exc_info=True)
             return False, "", error_msg
 
-    def _execute_direct(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # nosec B101
+    def _execute_direct(
+        self, command: str, start_time: float, hostname: str = "unknown"
+    ) -> tuple[bool, str, str]:  # nosec B101
         """Execute command using exec_command with PTY support"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
@@ -57225,7 +57239,9 @@ class EnhancedSSHRunner:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
                 raise e2
 
-    def _execute_with_shell(self, command: str, start_time: float, hostname: str = "unknown") -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
+    def _execute_with_shell(
+        self, command: str, start_time: float, hostname: str = "unknown"
+    ) -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
         """Execute command using interactive shell with device type detection"""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
