@@ -1,0 +1,372 @@
+# ================================================================
+# Nightly Continuous Verification
+# ================================================================
+# Re-validates the codebase against updated tools, rules, and
+# security feeds even when no code changes have occurred.
+#
+# Purpose: detect tooling drift, dependency CVEs, rule changes,
+# and silent regressions before they compound.
+#
+# This workflow runs independently of PR-based CI. Failures here
+# do NOT block main or merges — they surface as tracked issues.
+# ================================================================
+name: Nightly Continuous Verification
+
+on:
+  schedule:
+    # Every day at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      force-issue-creation:
+        description: "Create issues even if failures match existing open issues"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+  security-events: write
+
+env:
+  PYTHON_VERSION: '3.13'
+  SRC_PATH: 'src/'
+  COVERAGE_THRESHOLD: '90'
+  PYLINT_THRESHOLD: '9.5'
+  INTERROGATE_THRESHOLD: '90'
+  VULTURE_CONFIDENCE: '90'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  # ──────────────────────────────────────────────────────────────
+  # QUALITY GATES — all tools in a single venv
+  # ──────────────────────────────────────────────────────────────
+  quality-gates:
+    name: "Nightly quality gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      ruff-lint: ${{ steps.results.outputs.ruff-lint }}
+      ruff-format: ${{ steps.results.outputs.ruff-format }}
+      black: ${{ steps.results.outputs.black }}
+      mypy: ${{ steps.results.outputs.mypy }}
+      pytest: ${{ steps.results.outputs.pytest }}
+      bandit: ${{ steps.results.outputs.bandit }}
+      pip-audit: ${{ steps.results.outputs.pip-audit }}
+      pylint: ${{ steps.results.outputs.pylint }}
+      radon: ${{ steps.results.outputs.radon }}
+      vulture: ${{ steps.results.outputs.vulture }}
+      pydocstyle: ${{ steps.results.outputs.pydocstyle }}
+      interrogate: ${{ steps.results.outputs.interrogate }}
+      diagram-lint: ${{ steps.results.outputs.diagram-lint }}
+      e2e: ${{ steps.results.outputs.e2e }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Fetch submodules if present
+        run: |
+          if [ -f .gitmodules ]; then
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" \
+              submodule sync --recursive
+            git -c http.extraheader="AUTHORIZATION: bearer ${{ secrets.GITHUB_TOKEN }}" \
+              submodule update --init --recursive
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install all dependencies in single venv
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install \
+            ruff black \
+            mypy types-requests types-paramiko types-tqdm \
+            pytest pytest-cov pytest-timeout hypothesis \
+            bandit pip-audit \
+            pylint radon vulture \
+            "pydocstyle[toml]" interrogate
+
+      # ── Run each gate, capture exit codes ──────────────────
+      - name: Run all quality gates
+        id: results
+        run: |
+          declare -A GATES
+          RESULTS_DIR="$(mktemp -d)"
+
+          run_gate() {
+            local name="$1"
+            shift
+            local logfile="${RESULTS_DIR}/${name}.log"
+            echo "::group::${name}"
+            if "$@" > "${logfile}" 2>&1; then
+              echo "${name}=pass" >> "$GITHUB_OUTPUT"
+              echo "PASS: ${name}"
+            else
+              echo "${name}=fail" >> "$GITHUB_OUTPUT"
+              echo "FAIL: ${name}"
+            fi
+            cat "${logfile}"
+            echo "::endgroup::"
+          }
+
+          run_gate "ruff-lint"     ruff check .
+          run_gate "ruff-format"   ruff format --check .
+          run_gate "black"         black --check .
+          run_gate "mypy"          mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
+          run_gate "pytest"        pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+          run_gate "bandit"        bandit -r ${{ env.SRC_PATH }} -ll
+          run_gate "pip-audit"     pip-audit -r requirements.txt
+          run_gate "pylint"        pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
+
+          # Radon: check complexity threshold inline
+          run_gate "radon" bash -c '
+            radon cc ${{ env.SRC_PATH }} -a -nb
+            radon cc ${{ env.SRC_PATH }} -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          bad = []
+          for path, blocks in data.items():
+              for b in blocks:
+                  if b[\"complexity\"] > 10:
+                      bad.append(f\"{path}:{b[\"lineno\"]} {b[\"name\"]} CC={b[\"complexity\"]}\")
+          if bad:
+              print(\"Cyclomatic complexity violations (>10):\")
+              for item in bad:
+                  print(f\"  {item}\")
+              sys.exit(1)
+          print(\"All functions within complexity threshold.\")
+          "'
+
+          run_gate "vulture"       vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
+          run_gate "pydocstyle"    pydocstyle ${{ env.SRC_PATH }}
+          run_gate "interrogate"   interrogate ${{ env.SRC_PATH }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
+          run_gate "diagram-lint"  python scripts/lint_diagram_refs.py
+          run_gate "e2e"           pytest tests/e2e/ -v --timeout=60
+
+          # Save full logs as artifact
+          cp -r "${RESULTS_DIR}" gate-logs
+
+      - name: Upload gate logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-gate-logs
+          path: gate-logs/
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────
+  # CODEQL — consolidated from standalone weekly schedule
+  # ──────────────────────────────────────────────────────────────
+  codeql:
+    name: "CodeQL analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # ──────────────────────────────────────────────────────────────
+  # AUTOMATED ISSUE CREATION — new failures only
+  # ──────────────────────────────────────────────────────────────
+  report-findings:
+    name: "Report nightly findings"
+    needs: [quality-gates]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Download gate logs
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-gate-logs
+          path: gate-logs/
+        continue-on-error: true
+
+      - name: Ensure issue labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "nightly-verification" --color "5319e7" \
+            --description "Automated Verification Finding from nightly pipeline" 2>/dev/null || true
+          gh label create "ci" --color "0e8a16" \
+            --description "CI/CD pipeline" 2>/dev/null || true
+          gh label create "lint" --color "c5def5" \
+            --description "Lint or formatting issue" 2>/dev/null || true
+          gh label create "types" --color "bfdadc" \
+            --description "Type checking issue" 2>/dev/null || true
+          gh label create "security" --color "d73a4a" \
+            --description "Security finding" 2>/dev/null || true
+          gh label create "test" --color "0075ca" \
+            --description "Test failure" 2>/dev/null || true
+          gh label create "quality-gate" --color "fbca04" \
+            --description "Quality gate failure" 2>/dev/null || true
+
+      - name: Create issues for new failures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_CREATE: ${{ inputs.force-issue-creation || 'false' }}
+        run: |
+          # ── Gate results from outputs ──
+          declare -A GATE_RESULTS
+          GATE_RESULTS[ruff-lint]="${{ needs.quality-gates.outputs.ruff-lint }}"
+          GATE_RESULTS[ruff-format]="${{ needs.quality-gates.outputs.ruff-format }}"
+          GATE_RESULTS[black]="${{ needs.quality-gates.outputs.black }}"
+          GATE_RESULTS[mypy]="${{ needs.quality-gates.outputs.mypy }}"
+          GATE_RESULTS[pytest]="${{ needs.quality-gates.outputs.pytest }}"
+          GATE_RESULTS[bandit]="${{ needs.quality-gates.outputs.bandit }}"
+          GATE_RESULTS[pip-audit]="${{ needs.quality-gates.outputs.pip-audit }}"
+          GATE_RESULTS[pylint]="${{ needs.quality-gates.outputs.pylint }}"
+          GATE_RESULTS[radon]="${{ needs.quality-gates.outputs.radon }}"
+          GATE_RESULTS[vulture]="${{ needs.quality-gates.outputs.vulture }}"
+          GATE_RESULTS[pydocstyle]="${{ needs.quality-gates.outputs.pydocstyle }}"
+          GATE_RESULTS[interrogate]="${{ needs.quality-gates.outputs.interrogate }}"
+          GATE_RESULTS[diagram-lint]="${{ needs.quality-gates.outputs.diagram-lint }}"
+          GATE_RESULTS[e2e]="${{ needs.quality-gates.outputs.e2e }}"
+
+          # ── Tool-specific labels ──
+          declare -A GATE_LABELS
+          GATE_LABELS[ruff-lint]="lint"
+          GATE_LABELS[ruff-format]="lint"
+          GATE_LABELS[black]="lint"
+          GATE_LABELS[mypy]="types"
+          GATE_LABELS[pytest]="test"
+          GATE_LABELS[bandit]="security"
+          GATE_LABELS[pip-audit]="security"
+          GATE_LABELS[pylint]="quality-gate"
+          GATE_LABELS[radon]="quality-gate"
+          GATE_LABELS[vulture]="quality-gate"
+          GATE_LABELS[pydocstyle]="quality-gate"
+          GATE_LABELS[interrogate]="quality-gate"
+          GATE_LABELS[diagram-lint]="quality-gate"
+          GATE_LABELS[e2e]="test"
+
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          CREATED=0
+          SKIPPED=0
+          PASSED=0
+
+          for gate in "${!GATE_RESULTS[@]}"; do
+            result="${GATE_RESULTS[$gate]}"
+
+            if [ "$result" != "fail" ]; then
+              PASSED=$((PASSED + 1))
+              continue
+            fi
+
+            TITLE="Nightly Verification: ${gate} -- Automated Verification Finding"
+            TOOL_LABEL="${GATE_LABELS[$gate]}"
+
+            # ── Dedup: skip if open issue already exists (unless forced) ──
+            if [ "$FORCE_CREATE" != "true" ]; then
+              EXISTING=$(gh issue list \
+                --state open \
+                --label "nightly-verification" \
+                --search "Nightly Verification: ${gate}" \
+                --json number --jq 'length')
+              if [ "$EXISTING" != "0" ]; then
+                echo "Known existing failure: ${gate} (open issue exists, skipping)"
+                SKIPPED=$((SKIPPED + 1))
+                continue
+              fi
+            fi
+
+            # ── Collect failure output (trimmed to 3000 chars) ──
+            LOGFILE="gate-logs/${gate}.log"
+            if [ -f "$LOGFILE" ]; then
+              FAILURE_LOG=$(head -c 3000 "$LOGFILE")
+            else
+              FAILURE_LOG="(Log artifact not available for this gate)"
+            fi
+
+            # ── Detect tool version ──
+            case "$gate" in
+              ruff-lint|ruff-format) TOOL_VERSION=$(pip show ruff 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              black)                 TOOL_VERSION=$(pip show black 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              mypy)                  TOOL_VERSION=$(pip show mypy 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              pytest)                TOOL_VERSION=$(pip show pytest 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              bandit)                TOOL_VERSION=$(pip show bandit 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              pip-audit)             TOOL_VERSION=$(pip show pip-audit 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              pylint)                TOOL_VERSION=$(pip show pylint 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              radon)                 TOOL_VERSION=$(pip show radon 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              vulture)               TOOL_VERSION=$(pip show vulture 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              pydocstyle)            TOOL_VERSION=$(pip show pydocstyle 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              interrogate)           TOOL_VERSION=$(pip show interrogate 2>/dev/null | grep ^Version | cut -d' ' -f2) ;;
+              diagram-lint|e2e)      TOOL_VERSION="n/a" ;;
+            esac
+            TOOL_VERSION="${TOOL_VERSION:-unknown}"
+
+            read -r -d '' BODY <<ISSUE_EOF || true
+          ## Automated Verification Finding
+
+          **Tool**: \`${gate}\` v${TOOL_VERSION}
+          **Detected**: ${TIMESTAMP}
+          **Branch**: \`${{ github.ref_name }}\`
+          **Commit**: \`${{ github.sha }}\`
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Failure Output
+          \`\`\`
+          ${FAILURE_LOG}
+          \`\`\`
+
+          ### Context
+          This issue was auto-generated by the **Nightly Continuous Verification** pipeline.
+          No code changes triggered this run — the failure was detected by re-running quality
+          gates against the latest tool versions, rule sets, and security advisories.
+
+          Possible causes:
+          - Tooling drift (new lint rule, stricter type check, updated formatter)
+          - Dependency CVE published since last successful run
+          - Transient test flake or environment issue
+
+          ### Action Required
+          Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          for full details and resolve the finding.
+          ISSUE_EOF
+
+            gh issue create \
+              --title "$TITLE" \
+              --label "nightly-verification,ci,${TOOL_LABEL}" \
+              --body "$BODY"
+            CREATED=$((CREATED + 1))
+            echo "Created issue for: ${gate}"
+          done
+
+          echo ""
+          echo "=== Nightly Verification Summary ==="
+          echo "Passed:  ${PASSED}"
+          echo "Skipped: ${SKIPPED} (known existing failures)"
+          echo "New:     ${CREATED} (issues created)"

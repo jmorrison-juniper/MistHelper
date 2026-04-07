@@ -2,6 +2,7 @@
 Network Operations & Data Export Tool for Juniper Mist Cloud
 
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
+[![Nightly Verification](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/nightly-continuous-verification.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/nightly-continuous-verification.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
 **Operation Count:** The code currently defines 159 actionable menu entries (0-158) with some gaps for future expansion.
@@ -502,6 +503,12 @@ The report flags new failures, resolved failures, and timing regressions (>2x sl
 ### CI Pipeline
 
 Unit tests run automatically in GitHub Actions on every push. The pipeline has three sequential jobs: `validate` (syntax check) -> `test` (pytest) -> `build-and-push` (container image). Test failures block container deployment.
+
+### Nightly Continuous Verification
+
+A scheduled workflow runs every night at 00:00 UTC, re-running all quality gates (ruff, mypy, pytest, bandit, pip-audit, pylint, radon, vulture, pydocstyle, interrogate, CodeQL) against the latest tool versions and security advisories — even when no code has changed. This detects tooling drift, newly published CVEs, and rule changes before they compound.
+
+Nightly failures do not block `main` or merges. Instead, new failures automatically create GitHub issues labeled `nightly-verification` with full logs and workflow links. Known failures (with existing open issues) are not duplicated. This pipeline exists for early detection, not blame — failures are visible, actionable, and traceable.
 
 ---
 ## 10. Enhanced SSH Command Runner (Option 97)
