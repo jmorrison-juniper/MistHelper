@@ -5,7 +5,6 @@ devices with missing optional fields. Used by both unit and integration
 tests to ensure consistent test data.
 """
 
-
 DEVICE_AP: dict[str, object] = {
     "id": "d1000000-0000-0000-0000-000000000001",
     "mac": "aabbccddeef1",

@@ -31,10 +31,14 @@ class TestSQLiteUpsertIdempotency:
         devices = make_device_fixtures(10)
 
         first = MistHelper.DataExporter.write_with_format_selection(
-            devices, "OrgInventory.csv", api_function_name="getOrgInventory",
+            devices,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
         second = MistHelper.DataExporter.write_with_format_selection(
-            devices, "OrgInventory.csv", api_function_name="getOrgInventory",
+            devices,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         assert first is True
@@ -58,14 +62,18 @@ class TestSQLiteUpsertIdempotency:
         devices = make_device_fixtures(10)
 
         MistHelper.DataExporter.write_with_format_selection(
-            devices, "OrgInventory.csv", api_function_name="getOrgInventory",
+            devices,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         updated_devices = [dict(device) for device in devices]
         updated_devices[0]["model"] = "AP45"
 
         MistHelper.DataExporter.write_with_format_selection(
-            updated_devices, "OrgInventory.csv", api_function_name="getOrgInventory",
+            updated_devices,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         connection = sqlite3.connect(db_path)
@@ -88,14 +96,14 @@ class TestSQLiteUpsertIdempotency:
         monkeypatch.chdir(tmp_path)
 
         MistHelper.DataExporter.write_with_format_selection(
-            ALL_DEVICES, "OrgInventory.csv", api_function_name="getOrgInventory",
+            ALL_DEVICES,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='OrgInventory'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='OrgInventory'")
         index_names = [row[0] for row in cursor.fetchall()]
         connection.close()
 
@@ -114,7 +122,9 @@ class TestCSVSchemaStability:
         monkeypatch.chdir(tmp_path)
 
         MistHelper.DataExporter.write_with_format_selection(
-            ALL_DEVICES, "OrgInventory.csv", api_function_name="getOrgInventory",
+            ALL_DEVICES,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         csv_path = tmp_path / "data" / "OrgInventory.csv"
@@ -134,7 +144,9 @@ class TestCSVSchemaStability:
         monkeypatch.chdir(tmp_path)
 
         MistHelper.DataExporter.write_with_format_selection(
-            ALL_DEVICES, "OrgInventory.csv", api_function_name="getOrgInventory",
+            ALL_DEVICES,
+            "OrgInventory.csv",
+            api_function_name="getOrgInventory",
         )
 
         csv_path = tmp_path / "data" / "OrgInventory.csv"
