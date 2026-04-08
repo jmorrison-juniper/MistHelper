@@ -12991,9 +12991,7 @@ class SSIDTemplateConsolidationManager:
         }
         while True:
             self._display_phase_menu(phase_labels)
-            choice = InputUtils.safe_input(
-                "Select phase [1-6, q=quit]: ", context="ssid_consolidation_menu"
-            )
+            choice = InputUtils.safe_input("Select phase [1-6, q=quit]: ", context="ssid_consolidation_menu")
             if choice.lower() in ("q", "quit", ""):
                 print("Returning to main menu.")
                 return
@@ -13019,9 +13017,9 @@ class SSIDTemplateConsolidationManager:
         """Execute phases 1-5 sequentially, stopping on failure."""
         for phase_key in ("1", "2", "3", "4", "5"):
             phase_number = int(phase_key)
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"  Starting Phase {phase_number}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             if phase_number > 1 and not self._check_prerequisite(phase_number):
                 print(f"! Phase {phase_number} prerequisite not met. Stopping.")
                 return
@@ -13070,7 +13068,7 @@ class SSIDTemplateConsolidationManager:
         if not os.path.exists(self.CACHE_FILE):
             return None
         try:
-            with open(self.CACHE_FILE, "r", encoding="utf-8") as file_handle:
+            with open(self.CACHE_FILE, encoding="utf-8") as file_handle:
                 cached = json.load(file_handle)
             collected_at = cached.get("collected_at", "")
             if collected_at:
@@ -13128,7 +13126,7 @@ class SSIDTemplateConsolidationManager:
         if not result_file or not os.path.exists(result_file):
             return None
         try:
-            with open(result_file, "r", encoding="utf-8") as file_handle:
+            with open(result_file, encoding="utf-8") as file_handle:
                 return json.load(file_handle)
         except (json.JSONDecodeError, OSError) as error:
             logging.warning("Failed to load phase %d results: %s", phase, error)
@@ -13211,7 +13209,12 @@ class SSIDTemplateConsolidationManager:
         print(f"  PSK excluded:  {psk_count}")
         print(f"  Anomalies:     {anomaly_count}")
         print(f"  Deviations:    {len(deviations)}")
-        logging.info("Phase 1 complete: %d sites, %d eligible, %d deviations", len(matrix), len(eligible), len(deviations))
+        logging.info(
+            "Phase 1 complete: %d sites, %d eligible, %d deviations",
+            len(matrix),
+            len(eligible),
+            len(deviations),
+        )
 
     def _fetch_all_org_data(self) -> dict[str, Any]:
         """Fetch all org data using 5 bulk API calls."""
@@ -13298,9 +13301,7 @@ class SSIDTemplateConsolidationManager:
         wlans = self._get_template_wlans(template) if template else []
         matched_wlan = self._find_target_wlan(wlans)
 
-        psk_detected, anomaly, anomaly_reason = self._classify_site(
-            template, wlans, matched_wlan, mxtunnel_lookup
-        )
+        psk_detected, anomaly, anomaly_reason = self._classify_site(template, wlans, matched_wlan, mxtunnel_lookup)
 
         mxtunnel_ids = matched_wlan.get("mxtunnel_ids", []) if matched_wlan else []
         first_tunnel_id = mxtunnel_ids[0] if mxtunnel_ids else ""
@@ -13487,8 +13488,7 @@ class SSIDTemplateConsolidationManager:
     ) -> dict[str, Any]:
         """Build a deviation record for a parameter with multiple values."""
         unique_values = [
-            {"value": json.loads(value), "sites": sites, "count": len(sites)}
-            for value, sites in values_map.items()
+            {"value": json.loads(value), "sites": sites, "count": len(sites)} for value, sites in values_map.items()
         ]
         unique_values.sort(key=lambda entry: entry["count"], reverse=True)
         canonical_value = unique_values[0]["value"] if unique_values else None
@@ -13516,19 +13516,20 @@ class SSIDTemplateConsolidationManager:
             for cluster_name, canonicals in cluster_canonicals.items():
                 if param in canonicals:
                     values_by_cluster[cluster_name] = canonicals[param]
-            unique_canonical = set(json.dumps(value, default=str, sort_keys=True) for value in values_by_cluster.values())
+            unique_canonical = {json.dumps(value, default=str, sort_keys=True) for value in values_by_cluster.values()}
             if len(unique_canonical) > 1:
                 unique_values = [
-                    {"value": value, "sites": [cluster], "count": 1}
-                    for cluster, value in values_by_cluster.items()
+                    {"value": value, "sites": [cluster], "count": 1} for cluster, value in values_by_cluster.items()
                 ]
-                drift.append({
-                    "cluster_name": "cross_cluster",
-                    "cluster_id": "",
-                    "parameter": param,
-                    "unique_values": json.dumps(unique_values, default=str),
-                    "canonical_value": "",
-                })
+                drift.append(
+                    {
+                        "cluster_name": "cross_cluster",
+                        "cluster_id": "",
+                        "parameter": param,
+                        "unique_values": json.dumps(unique_values, default=str),
+                        "canonical_value": "",
+                    }
+                )
         return drift
 
     # ------------------------------------------------------------------
@@ -13553,7 +13554,8 @@ class SSIDTemplateConsolidationManager:
             return
 
         self._display_variable_summary(plan)
-        if not self._confirm_or_cancel(f"Write site variables for {len([p for p in plan if p['status'] == 'pending'])} sites?"):
+        pending_count = len([p for p in plan if p["status"] == "pending"])
+        if not self._confirm_or_cancel(f"Write site variables for {pending_count} sites?"):
             return
 
         results = self._write_site_variables(plan, prior_results if resuming else [])
@@ -13651,7 +13653,7 @@ class SSIDTemplateConsolidationManager:
         configured = [entry for entry in plan if entry["status"] == "already_configured"]
         conflicts = [entry for entry in plan if entry["status"] == "conflict"]
 
-        print(f"\n  Variable Assignment Plan:")
+        print("\n  Variable Assignment Plan:")
         print(f"    Pending:            {len(pending)}")
         print(f"    Already configured: {len(configured)}")
         print(f"    Conflicts:          {len(conflicts)}")
@@ -13660,7 +13662,11 @@ class SSIDTemplateConsolidationManager:
         if conflicts:
             print("\n  Conflicts (existing value differs from proposed):")
             for entry in conflicts[:10]:
-                print(f"    {entry['site_name']}: {entry['variable_name']} = {entry['current_value']} -> {entry['proposed_value']}")
+                site = entry["site_name"]
+                var_name = entry["variable_name"]
+                current = entry["current_value"]
+                proposed = entry["proposed_value"]
+                print(f"    {site}: {var_name} = {current} -> {proposed}")
             if len(conflicts) > 10:
                 print(f"    ... and {len(conflicts) - 10} more")
 
@@ -13672,8 +13678,7 @@ class SSIDTemplateConsolidationManager:
         results: list[dict[str, Any]] = list(resume_from) if resume_from else []
 
         pending_entries = [
-            entry for entry in plan
-            if entry["status"] == "pending" and entry["site_id"] not in completed_site_ids
+            entry for entry in plan if entry["status"] == "pending" and entry["site_id"] not in completed_site_ids
         ]
         site_groups = self._group_entries_by_site(pending_entries)
 
@@ -13763,21 +13768,25 @@ class SSIDTemplateConsolidationManager:
         for cluster_name in cluster_names:
             group_name = f"misthelper_prod_{cluster_name}"
             existing = existing_lookup.get(group_name)
-            groups.append({
-                "group_name": group_name,
-                "cluster_name": cluster_name,
-                "group_id": existing.get("id", "") if existing else "",
-                "exists": bool(existing),
-                "sites": [],
-            })
+            groups.append(
+                {
+                    "group_name": group_name,
+                    "cluster_name": cluster_name,
+                    "group_id": existing.get("id", "") if existing else "",
+                    "exists": bool(existing),
+                    "sites": [],
+                }
+            )
         pilot_existing = existing_lookup.get("misthelper_pilot")
-        groups.append({
-            "group_name": "misthelper_pilot",
-            "cluster_name": "pilot",
-            "group_id": pilot_existing.get("id", "") if pilot_existing else "",
-            "exists": bool(pilot_existing),
-            "sites": [],
-        })
+        groups.append(
+            {
+                "group_name": "misthelper_pilot",
+                "cluster_name": "pilot",
+                "group_id": pilot_existing.get("id", "") if pilot_existing else "",
+                "exists": bool(pilot_existing),
+                "sites": [],
+            }
+        )
 
         group_name_map = {group["group_name"]: group for group in groups}
         for row in matrix:
@@ -13787,10 +13796,12 @@ class SSIDTemplateConsolidationManager:
             mapped_name = "misthelper_pilot" if target == "pilot" else f"misthelper_prod_{target}"
             target_group = group_name_map.get(mapped_name)
             if target_group:
-                target_group["sites"].append({
-                    "site_id": row.get("site_id", ""),
-                    "site_name": row.get("site_name", ""),
-                })
+                target_group["sites"].append(
+                    {
+                        "site_id": row.get("site_id", ""),
+                        "site_name": row.get("site_name", ""),
+                    }
+                )
         return {"groups": groups}
 
     @staticmethod
@@ -13825,11 +13836,11 @@ class SSIDTemplateConsolidationManager:
                 print(f"  ! Failed to create group: {group['group_name']}: {error}")
         return plan
 
-    def _assign_sites_to_groups(
-        self, plan: dict[str, Any], resume_from: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def _assign_sites_to_groups(self, plan: dict[str, Any], resume_from: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Assign sites to their target groups via additive merge."""
-        completed_ids = {(row.get("site_id"), row.get("group_id")) for row in resume_from if row.get("status") == "assigned"}
+        completed_ids = {
+            (row.get("site_id"), row.get("group_id")) for row in resume_from if row.get("status") == "assigned"
+        }
         results: list[dict[str, Any]] = list(resume_from) if resume_from else []
 
         for group in plan.get("groups", []):
@@ -13839,16 +13850,11 @@ class SSIDTemplateConsolidationManager:
             results.extend(group_results)
         return results
 
-    def _assign_group_sites(
-        self, group: dict[str, Any], completed_ids: set[tuple[str, str]]
-    ) -> list[dict[str, Any]]:
+    def _assign_group_sites(self, group: dict[str, Any], completed_ids: set[tuple[str, str]]) -> list[dict[str, Any]]:
         """Assign all sites for a single group."""
         group_id = group["group_id"]
         group_name = group["group_name"]
-        sites_to_assign = [
-            site for site in group["sites"]
-            if (site["site_id"], group_id) not in completed_ids
-        ]
+        sites_to_assign = [site for site in group["sites"] if (site["site_id"], group_id) not in completed_ids]
         if not sites_to_assign:
             return []
 
@@ -13867,29 +13873,34 @@ class SSIDTemplateConsolidationManager:
             results: list[dict[str, Any]] = []
             for site in sites_to_assign:
                 status = "already_assigned" if site["site_id"] in existing_site_ids else "assigned"
-                results.append({
+                results.append(
+                    {
+                        "site_name": site["site_name"],
+                        "site_id": site["site_id"],
+                        "group_name": group_name,
+                        "group_id": group_id,
+                        "cluster_name": group.get("cluster_name", ""),
+                        "status": status,
+                        "reason": "",
+                        "timestamp": timestamp,
+                    }
+                )
+            return results
+        except Exception as error:
+            logging.error("Failed to assign sites to group '%s': %s", group_name, error)
+            return [
+                {
                     "site_name": site["site_name"],
                     "site_id": site["site_id"],
                     "group_name": group_name,
                     "group_id": group_id,
                     "cluster_name": group.get("cluster_name", ""),
-                    "status": status,
-                    "reason": "",
-                    "timestamp": timestamp,
-                })
-            return results
-        except Exception as error:
-            logging.error("Failed to assign sites to group '%s': %s", group_name, error)
-            return [{
-                "site_name": site["site_name"],
-                "site_id": site["site_id"],
-                "group_name": group_name,
-                "group_id": group_id,
-                "cluster_name": group.get("cluster_name", ""),
-                "status": "failed",
-                "reason": str(error),
-                "timestamp": datetime.now().isoformat(),
-            } for site in sites_to_assign]
+                    "status": "failed",
+                    "reason": str(error),
+                    "timestamp": datetime.now().isoformat(),
+                }
+                for site in sites_to_assign
+            ]
 
     def _get_existing_group_site_ids(self, group_id: str) -> list[str]:
         """Get current site_ids from cached sitegroup data."""
@@ -13964,7 +13975,11 @@ class SSIDTemplateConsolidationManager:
                     resolutions[(cluster, param)] = selected_value
                     logging.info(
                         "Deviation resolved: %s/%s = %s (selected from %d options at %s)",
-                        cluster, param, selected_value, len(unique_values), datetime.now().isoformat(),
+                        cluster,
+                        param,
+                        selected_value,
+                        len(unique_values),
+                        datetime.now().isoformat(),
                     )
                 else:
                     print(f"  ! Invalid selection. Skipping {param}.")
@@ -14000,7 +14015,8 @@ class SSIDTemplateConsolidationManager:
         """Build a single WLAN config with variable refs for deviations."""
         deviations = self.cache.get("deviations", [])
         deviation_params = {
-            dev.get("parameter") for dev in deviations
+            dev.get("parameter")
+            for dev in deviations
             if dev.get("cluster_name") == cluster_name and dev.get("cluster_name") != "cross_cluster"
         }
 
@@ -14050,17 +14066,14 @@ class SSIDTemplateConsolidationManager:
         """Create or update templates for each group."""
         basename = os.environ.get("MIST_TEMPLATE_BASENAME", self.target_ssid)
         existing_templates = {
-            tmpl.get("name", ""): tmpl
-            for tmpl in self.cache.get("data", {}).get("wlan_templates", [])
+            tmpl.get("name", ""): tmpl for tmpl in self.cache.get("data", {}).get("wlan_templates", [])
         }
         results: list[dict[str, Any]] = []
 
         for group_name, config in configs.items():
             group_info = group_plan.get(group_name, {})
             template_name = f"misthelper_{group_name}_{basename}"
-            result = self._create_or_update_single_template(
-                template_name, config, group_info, existing_templates
-            )
+            result = self._create_or_update_single_template(template_name, config, group_info, existing_templates)
             results.append(result)
         return results
 
@@ -14085,11 +14098,31 @@ class SSIDTemplateConsolidationManager:
                     context="ssid_consolidation_template_overwrite",
                 )
                 if confirm.strip().lower() not in ("y", "yes"):
-                    return self._template_result(template_name, "", group_info, "skipped", "User declined overwrite", timestamp)
-            return self._create_new_template(template_name, wlan_config, group_id, group_info, timestamp)
+                    return self._template_result(
+                        template_name,
+                        "",
+                        group_info,
+                        "skipped",
+                        "User declined overwrite",
+                        timestamp,
+                    )
+            return self._create_new_template(
+                template_name,
+                wlan_config,
+                group_id,
+                group_info,
+                timestamp,
+            )
         except Exception as error:
             logging.error("Template operation failed for '%s': %s", template_name, error)
-            return self._template_result(template_name, "", group_info, "failed", str(error), timestamp)
+            return self._template_result(
+                template_name,
+                "",
+                group_info,
+                "failed",
+                str(error),
+                timestamp,
+            )
 
     def _append_ssid_to_template(
         self,
@@ -14107,7 +14140,14 @@ class SSIDTemplateConsolidationManager:
 
         for wlan in current_wlans:
             if wlan.get("ssid", "").lower() == self.target_ssid.lower():
-                return self._template_result(template_name, template_id, group_info, "already_exists", "SSID already in template", timestamp)
+                return self._template_result(
+                    template_name,
+                    template_id,
+                    group_info,
+                    "already_exists",
+                    "SSID already in template",
+                    timestamp,
+                )
 
         current_wlans.append(wlan_config)
         template_data["wlans"] = current_wlans
@@ -14234,18 +14274,15 @@ class SSIDTemplateConsolidationManager:
         already = [entry for entry in plan if entry["status"] == "already_disabled"]
         skipped = [entry for entry in plan if entry["status"] == "skipped"]
 
-        print(f"\n  Disable Plan:")
+        print("\n  Disable Plan:")
         print(f"    To disable:       {len(to_disable)}")
         print(f"    Already disabled: {len(already)}")
         print(f"    Skipped:          {len(skipped)}")
 
-    def _disable_ssids(
-        self, plan: list[dict[str, Any]], resume_from: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def _disable_ssids(self, plan: list[dict[str, Any]], resume_from: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Disable SSIDs in old templates via GET-modify-PUT."""
         completed_ids = {
-            (row.get("site_id"), row.get("ssid_id"))
-            for row in resume_from if row.get("status") == "disabled"
+            (row.get("site_id"), row.get("ssid_id")) for row in resume_from if row.get("status") == "disabled"
         }
         results: list[dict[str, Any]] = list(resume_from) if resume_from else []
 
@@ -14763,9 +14800,7 @@ class E911BSSIDReportGenerator:
             print(f"  All {total_sites} sites already cached.")
             return True
 
-        print(
-            f"  Phase 2: Processing {len(remaining)} sites " f"({len(completed_sites)} cached, {total_sites} total)..."
-        )
+        print(f"  Phase 2: Processing {len(remaining)} sites ({len(completed_sites)} cached, {total_sites} total)...")
         interval = E911BSSIDReportGenerator.CHECKPOINT_INTERVAL
         for index, site_id in enumerate(remaining, 1):
             site_info = site_lookup.get(site_id, {})
