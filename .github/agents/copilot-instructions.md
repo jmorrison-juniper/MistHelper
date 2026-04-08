@@ -42,6 +42,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - SQLite (`data/mist_data.db`) + CSV dual output via `DataExporter` (017-mistapi-upgrade-alignment)
 - [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION] (feat/018-ssid-template-consolidation)
 - [if applicable, e.g., PostgreSQL, CoreData, files or N/A] (feat/018-ssid-template-consolidation)
+- Python 3.13+ + mistapi 0.59+, pytest, sqlite3 (stdlib), csv (stdlib) (feat/73-audit-menu-12-org-inventory)
+- SQLite (`data/mist_data.db`) + CSV (`data/OrgInventory.csv`) (feat/73-audit-menu-12-org-inventory)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -61,9 +63,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- feat/73-audit-menu-12-org-inventory: Added Python 3.13+ + mistapi 0.59+, pytest, sqlite3 (stdlib), csv (stdlib)
 - feat/018-ssid-template-consolidation: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 - 017-mistapi-upgrade-alignment: Added Python 3.13+ + mistapi >= 0.61.3 (Juniper Mist API SDK), websocket-client >= 1.8.0, sshkeyboard >= 2.3.1
-- 016-mermaid-documentation-suite: Added Mermaid (GitHub-rendered), Python 3.13 (CI lint script only) + GitHub Mermaid renderer (built-in), Mermaid syntax v11.x
 
 
 <!-- MANUAL ADDITIONS START -->
