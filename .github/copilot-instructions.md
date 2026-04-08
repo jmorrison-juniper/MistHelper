@@ -133,7 +133,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
 4. **Dual Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
-6. **Version Changelog**: Update README with `version YY.MM.DD.HH.MM` format (UTC timestamp)
+6. **Version Changelog**: Update `CHANGELOG.md` with `version YY.MM.DD.HH.MM` format (UTC timestamp)
 7. **Git Workflow**: Execute full deployment pipeline (see below)
 
 ### MANDATORY: Full Deployment Pipeline
@@ -370,7 +370,8 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 - **README.md**: User-facing operations guide (comprehensive)
 - **agents.md**: Internal agent guide (attached, ~350 lines)
 - **SSH_GUIDE.md**: SSH runner detailed usage
-- **documentation/**: Sample files, API specs, changelogs
+- **CHANGELOG.md**: Version history ([Keep a Changelog](https://keepachangelog.com/) format)
+- **documentation/**: Sample files, API specs
 
 ---
 
@@ -378,6 +379,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 | File | Purpose | Lines |
 |------|---------|-------|
 | `MistHelper.py` | Main implementation | ~28K |
+| `CHANGELOG.md` | Version history (Keep a Changelog format) | ~1K |
 | `agents.md` | Agent coding guide | ~350 |
 | `requirements.txt` | Python dependencies (pip compatibility) | ~30 |
 | `uv.lock` | UV package lock file (if using UV) | Generated |
@@ -391,7 +393,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 2. **Check existing patterns** - grep for similar operations
 3. **Validate early, return early** - NASA/JPL defensive programming
 4. **Test in venv** - Windows 11 local development standard environment
-5. **Update docs** - README changelog + operation tables
+5. **Update docs** - CHANGELOG.md + README operation tables
 6. **Execute full pipeline** - Don't skip deployment steps
 
 ---
