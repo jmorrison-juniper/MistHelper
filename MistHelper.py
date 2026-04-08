@@ -12951,7 +12951,12 @@ class E911BSSIDReportGenerator:
     is a sorted CSV with one row per BSSID for E911 compliance filing.
 
     Columns: Site Name, Site Address, Map Name, AP Name, AP MAC, Band,
-    Radio MAC, Channel, Power, BSSID, SSIDs on Band.
+    Radio MAC, BSSID, SSIDs on Band.
+
+    Rate-limit aware: saves progress to a checkpoint file after each
+    batch of sites.  On HTTP 429 or resume, reloads the checkpoint and
+    skips already-processed sites.  Org-level bulk queries are cached so
+    only per-site enrichment (maps + WLANs) costs API calls on resume.
 
     Usage:
         E911BSSIDReportGenerator.execute()
@@ -12961,6 +12966,13 @@ class E911BSSIDReportGenerator:
     NIBBLE_MASK = 0xFFFFFFFFFFF0
     BAND_MAP = {"24": "band_24", "5": "band_5", "6": "band_6"}
     BAND_LABELS = [("band_24", "2.4 GHz"), ("band_5", "5 GHz"), ("band_6", "6 GHz")]
+    CHECKPOINT_FILE = os.path.join("data", "e911_checkpoint.json")
+    CHECKPOINT_INTERVAL = 50
+    RADIO_BANDS_BY_COUNT = {
+        3: [("band_6", "6 GHz"), ("band_5", "5 GHz"), ("band_24", "2.4 GHz")],
+        2: [("band_5", "5 GHz"), ("band_24", "2.4 GHz")],
+        1: [("band_24", "2.4 GHz")],
+    }
 
     @staticmethod
     def _format_bssid(radio_base_mac: str) -> list[str]:
@@ -12975,13 +12987,14 @@ class E911BSSIDReportGenerator:
         return bssids
 
     @staticmethod
-    def _fetch_lookups(org_id: str) -> dict[str, Any]:
-        """Pre-fetch site, AP, map, radio band, WLAN, and radio MAC data.
+    def _fetch_org_bulk_data(org_id: str) -> dict[str, Any]:
+        """Fetch all org-level data in bulk (sites, AP stats, templates, WLANs, radio MACs).
 
-        Returns dict with keys: sites, aps, maps, radio_macs,
-        radio_bands, wlan_bands.
+        These are the expensive bulk queries that only need to run once.
+        Results are cached in the checkpoint file so they survive a 429.
         """
-        print("  Fetching site information...")
+        print("  Phase 1: Fetching org-level bulk data...")
+        print("    Fetching site information...")
         all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         site_lookup: dict[str, dict[str, Any]] = {}
         for site in all_sites:
@@ -12993,9 +13006,9 @@ class E911BSSIDReportGenerator:
                     "sitegroup_ids": site.get("sitegroup_ids") or [],
                     "sitetemplate_id": site.get("sitetemplate_id") or "",
                 }
-        logging.debug("Sites fetched: %d", len(site_lookup))
+        logging.info("Sites fetched: %d", len(site_lookup))
 
-        print("  Fetching AP device stats...")
+        print("    Fetching AP inventory stats...")
         stats_response = mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
         )
@@ -13009,46 +13022,133 @@ class E911BSSIDReportGenerator:
                     "site_id": device.get("site_id") or "",
                     "map_id": device.get("map_id") or "",
                 }
-        logging.debug("AP device stats fetched: %d", len(ap_lookup))
+        logging.info("AP device stats fetched: %d", len(ap_lookup))
 
-        print("  Fetching org WLAN templates and org WLANs...")
+        print("    Fetching org WLAN templates and org WLANs...")
         wlan_templates = E911BSSIDReportGenerator._fetch_org_wlan_templates(org_id)
         org_wlans = E911BSSIDReportGenerator._fetch_org_wlans(org_id)
-        logging.debug("Org templates: %d, org WLANs: %d", len(wlan_templates), len(org_wlans))
+        logging.info("Org templates: %d, org WLANs: %d", len(wlan_templates), len(org_wlans))
 
-        print("  Fetching maps, WLANs, and radio stats per site...")
-        unique_site_ids = {info["site_id"] for info in ap_lookup.values() if info["site_id"]}
-        map_lookup: dict[str, str] = {}
-        wlan_band_lookup: dict[str, list[str]] = {}
-        radio_band_lookup: dict[str, dict[str, Any]] = {}
-        for site_id in unique_site_ids:
-            site_info = site_lookup.get(site_id, {})
-            E911BSSIDReportGenerator._fetch_site_maps(site_id, map_lookup)
-            E911BSSIDReportGenerator._resolve_site_ssids(
-                org_id, site_id, site_info, wlan_templates, org_wlans, wlan_band_lookup
-            )
-            E911BSSIDReportGenerator._fetch_site_radio_stats(site_id, radio_band_lookup)
-        logging.debug(
-            "Maps: %d, WLAN band entries: %d, radio bands: %d across %d sites",
-            len(map_lookup),
-            len(wlan_band_lookup),
-            len(radio_band_lookup),
-            len(unique_site_ids),
-        )
+        print("    Pre-fetching unique site template WLANs...")
+        site_template_cache = E911BSSIDReportGenerator._prefetch_site_templates(org_id, site_lookup)
+        logging.info("Cached %d unique site templates", len(site_template_cache))
 
-        print("  Fetching AP radio MACs...")
+        print("    Fetching AP radio MACs...")
         radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(response=radio_response, mist_session=apisession)
-        logging.debug("Radio MAC records fetched: %d", len(radio_macs_data))
+        logging.info("Radio MAC records fetched: %d", len(radio_macs_data))
+
+        print("    Inferring radio bands from MAC positions...")
+        radio_band_lookup = E911BSSIDReportGenerator._infer_radio_bands(radio_macs_data)
+        logging.info("Radio bands inferred: %d broadcast radios", len(radio_band_lookup))
 
         return {
             "sites": site_lookup,
             "aps": ap_lookup,
-            "maps": map_lookup,
+            "wlan_templates": wlan_templates,
+            "org_wlans": org_wlans,
+            "site_template_cache": site_template_cache,
             "radio_macs": radio_macs_data,
             "radio_bands": radio_band_lookup,
-            "wlan_bands": wlan_band_lookup,
         }
+
+    @staticmethod
+    def _prefetch_site_templates(
+        org_id: str,
+        site_lookup: dict[str, dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Pre-fetch WLANs for each unique site template (avoids per-site API calls)."""
+        unique_ids = {info["sitetemplate_id"] for info in site_lookup.values() if info.get("sitetemplate_id")}
+        cache: dict[str, list[dict[str, Any]]] = {}
+        for sitetemplate_id in unique_ids:
+            try:
+                response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, org_id, sitetemplate_id)
+                if hasattr(response, "status_code") and response.status_code == 200:
+                    template_wlans = response.data.get("wlans", {})
+                    if isinstance(template_wlans, dict):
+                        cache[sitetemplate_id] = list(template_wlans.values())
+                    else:
+                        cache[sitetemplate_id] = []
+                else:
+                    cache[sitetemplate_id] = []
+            except Exception as error:
+                logging.debug("Failed to fetch site template %s: %s", sitetemplate_id[:8], error)
+                cache[sitetemplate_id] = []
+        return cache
+
+    @staticmethod
+    def _infer_radio_bands(
+        radio_macs_data: list[dict[str, Any]],
+    ) -> dict[str, dict[str, str]]:
+        """Infer radio band from MAC array position (last radio is always scanning)."""
+        band_orders = E911BSSIDReportGenerator.RADIO_BANDS_BY_COUNT
+        radio_band_lookup: dict[str, dict[str, str]] = {}
+        for ap_entry in radio_macs_data:
+            all_radios = ap_entry.get("radio_mac", [])
+            if len(all_radios) < 2:
+                continue
+            broadcast_radios = all_radios[:-1]
+            bands = band_orders.get(len(broadcast_radios), [])
+            for index, radio_mac in enumerate(broadcast_radios):
+                if index < len(bands):
+                    band_key, band_label = bands[index]
+                    radio_band_lookup[radio_mac] = {
+                        "band": band_label,
+                        "band_key": band_key,
+                    }
+        return radio_band_lookup
+
+    @staticmethod
+    def _save_checkpoint(
+        org_id: str,
+        org_data: dict[str, Any],
+        completed_sites: set[str],
+        map_lookup: dict[str, str],
+        wlan_band_lookup: dict[str, list[str]],
+        total_sites: int,
+    ) -> None:
+        """Save progress to checkpoint file for rate-limit recovery."""
+        checkpoint = {
+            "org_id": org_id,
+            "timestamp": datetime.now().isoformat(),
+            "total_sites": total_sites,
+            "completed_sites": list(completed_sites),
+            "org_data": org_data,
+            "map_lookup": map_lookup,
+            "wlan_band_lookup": wlan_band_lookup,
+        }
+        with open(E911BSSIDReportGenerator.CHECKPOINT_FILE, "w", encoding="utf-8") as handle:
+            json.dump(checkpoint, handle)
+        logging.info(
+            "Checkpoint saved: %d/%d sites completed",
+            len(completed_sites),
+            total_sites,
+        )
+
+    @staticmethod
+    def _load_checkpoint(org_id: str) -> dict[str, Any] | None:
+        """Load checkpoint if it exists and matches the current org."""
+        path = E911BSSIDReportGenerator.CHECKPOINT_FILE
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                checkpoint = json.load(handle)
+            if checkpoint.get("org_id") != org_id:
+                logging.info("Checkpoint org mismatch -- ignoring stale checkpoint")
+                return None
+            return checkpoint
+        except (json.JSONDecodeError, OSError) as error:
+            logging.warning("Failed to load checkpoint: %s", error)
+            return None
+
+    @staticmethod
+    def _clear_checkpoint() -> None:
+        """Remove checkpoint file after successful completion."""
+        path = E911BSSIDReportGenerator.CHECKPOINT_FILE
+        if os.path.exists(path):
+            os.remove(path)
+            logging.info("Checkpoint file removed")
 
     @staticmethod
     def _fetch_org_wlan_templates(org_id: str) -> list[dict[str, Any]]:
@@ -13066,54 +13166,44 @@ class E911BSSIDReportGenerator:
 
     @staticmethod
     def _fetch_site_maps(site_id: str, map_lookup: dict[str, str]) -> None:
-        """Fetch floor plan maps for a site into map_lookup."""
+        """Fetch floor plan maps for a site into map_lookup.
+
+        Raises RuntimeError on HTTP 429 (rate limit).
+        """
         maps_response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT)
+        if hasattr(maps_response, "status_code") and maps_response.status_code == 429:
+            raise RuntimeError("E911_RATE_LIMIT")
         for site_map in mistapi.get_all(response=maps_response, mist_session=apisession):
             if site_map.get("id"):
                 map_lookup[site_map["id"]] = site_map.get("name", "")
 
     @staticmethod
-    def _fetch_site_radio_stats(site_id: str, radio_band_lookup: dict[str, dict[str, Any]]) -> None:
-        """Fetch site-level AP stats and extract radio band info."""
-        stats_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-            apisession, site_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-        )
-        site_ap_stats: list[dict[str, Any]] = mistapi.get_all(response=stats_response, mist_session=apisession)
-        for device in site_ap_stats:
-            for band_key, band_label in E911BSSIDReportGenerator.BAND_LABELS:
-                band_data = (device.get("radio_stat") or {}).get(band_key, {})
-                radio_mac = band_data.get("mac")
-                if radio_mac:
-                    radio_band_lookup[radio_mac] = {
-                        "band": band_label,
-                        "band_key": band_key,
-                        "channel": str(band_data.get("channel", "")),
-                        "power": str(band_data.get("power", "")),
-                    }
-
-    @staticmethod
     def _resolve_site_ssids(
-        org_id: str,
         site_id: str,
         site_info: dict[str, Any],
         wlan_templates: list[dict[str, Any]],
         org_wlans: list[dict[str, Any]],
         wlan_band_lookup: dict[str, list[str]],
+        site_template_cache: dict[str, list[dict[str, Any]]],
     ) -> None:
         """Resolve all SSIDs for a site from three sources.
 
-        Sources: site-level WLANs, site template WLANs, and
+        Sources: site-level WLANs, cached site template WLANs, and
         org WLANs via WLAN templates assigned to this site.
+        Raises RuntimeError on HTTP 429 (rate limit).
         """
         site_wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(
             apisession, site_id, limit=DEFAULT_API_PAGE_LIMIT
         )
+        if hasattr(site_wlans_response, "status_code") and site_wlans_response.status_code == 429:
+            raise RuntimeError("E911_RATE_LIMIT")
         site_wlans = mistapi.get_all(response=site_wlans_response, mist_session=apisession)
         E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, site_wlans, wlan_band_lookup)
 
         sitetemplate_id = site_info.get("sitetemplate_id")
-        if sitetemplate_id:
-            E911BSSIDReportGenerator._resolve_site_template_wlans(org_id, sitetemplate_id, site_id, wlan_band_lookup)
+        if sitetemplate_id and sitetemplate_id in site_template_cache:
+            cached_wlans = site_template_cache[sitetemplate_id]
+            E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, cached_wlans, wlan_band_lookup)
 
         assigned_template_ids = E911BSSIDReportGenerator._get_assigned_template_ids(site_id, site_info, wlan_templates)
         if assigned_template_ids:
@@ -13125,24 +13215,6 @@ class E911BSSIDReportGenerator:
                 len(template_wlans),
                 len(assigned_template_ids),
             )
-
-    @staticmethod
-    def _resolve_site_template_wlans(
-        org_id: str,
-        sitetemplate_id: str,
-        site_id: str,
-        wlan_band_lookup: dict[str, list[str]],
-    ) -> None:
-        """Fetch WLANs defined inside a site template."""
-        try:
-            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, org_id, sitetemplate_id)
-            if hasattr(response, "status_code") and response.status_code == 200:
-                template_wlans = response.data.get("wlans", {})
-                if isinstance(template_wlans, dict):
-                    wlan_list = list(template_wlans.values())
-                    E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, wlan_list, wlan_band_lookup)
-        except Exception as error:
-            logging.debug("Failed to fetch site template %s: %s", sitetemplate_id[:8], error)
 
     @staticmethod
     def _get_assigned_template_ids(
@@ -13199,7 +13271,10 @@ class E911BSSIDReportGenerator:
         radio_macs_data: list[dict[str, Any]],
         lookups: dict[str, Any],
     ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-        """Build sorted BSSID rows and compliance gaps from radio MAC data."""
+        """Build sorted BSSID rows and compliance gaps from radio MAC data.
+
+        Scanning/BLE radios (no band mapping) are excluded from output.
+        """
         site_lookup = lookups["sites"]
         ap_lookup = lookups["aps"]
         map_lookup = lookups["maps"]
@@ -13239,11 +13314,11 @@ class E911BSSIDReportGenerator:
                 compliance_gaps.append({"ap_name": ap_name, "ap_mac": ap_mac, "reason": gap_reason})
 
             for radio_mac in ap_entry.get("radio_mac", []):
-                band_info = radio_band_lookup.get(radio_mac, {})
+                band_info = radio_band_lookup.get(radio_mac)
+                if not band_info:
+                    continue
                 band_label = band_info.get("band", "Unknown")
                 band_key = band_info.get("band_key", "")
-                channel = band_info.get("channel", "")
-                power = band_info.get("power", "")
                 ssid_key = f"{site_id}::{band_key}" if site_id and band_key else ""
                 ssids = ", ".join(wlan_band_lookup.get(ssid_key, [])) or "N/A"
                 for bssid in E911BSSIDReportGenerator._format_bssid(radio_mac):
@@ -13256,14 +13331,20 @@ class E911BSSIDReportGenerator:
                             "AP MAC": ap_mac,
                             "Band": band_label,
                             "Radio MAC": radio_mac,
-                            "Channel": channel,
-                            "Power": power,
                             "BSSID": bssid,
                             "SSIDs on Band": ssids,
                         }
                     )
 
-        rows.sort(key=lambda row: (row["Site Name"], row["Map Name"], row["AP Name"], row["Band"], row["BSSID"]))
+        rows.sort(
+            key=lambda row: (
+                row["Site Name"],
+                row["Map Name"],
+                row["AP Name"],
+                row["Band"],
+                row["BSSID"],
+            )
+        )
         return rows, compliance_gaps
 
     @staticmethod
@@ -13288,8 +13369,88 @@ class E911BSSIDReportGenerator:
             print(f"    - {gap['ap_name']} ({gap['ap_mac']}): {gap['reason']}")
 
     @staticmethod
+    def _process_sites(
+        org_id: str,
+        org_data: dict[str, Any],
+        completed_sites: set[str],
+        map_lookup: dict[str, str],
+        wlan_band_lookup: dict[str, list[str]],
+    ) -> bool:
+        """Process per-site enrichment (maps + WLANs) with checkpoint support.
+
+        Returns True if all sites processed, False if rate-limited.
+        """
+        site_lookup = org_data["sites"]
+        ap_lookup = org_data["aps"]
+        wlan_templates = org_data["wlan_templates"]
+        org_wlans = org_data["org_wlans"]
+        site_template_cache = org_data["site_template_cache"]
+        unique_site_ids = sorted({info["site_id"] for info in ap_lookup.values() if info["site_id"]})
+        remaining = [sid for sid in unique_site_ids if sid not in completed_sites]
+        total_sites = len(unique_site_ids)
+
+        if not remaining:
+            print(f"  All {total_sites} sites already cached.")
+            return True
+
+        print(
+            f"  Phase 2: Processing {len(remaining)} sites " f"({len(completed_sites)} cached, {total_sites} total)..."
+        )
+        interval = E911BSSIDReportGenerator.CHECKPOINT_INTERVAL
+        for index, site_id in enumerate(remaining, 1):
+            site_info = site_lookup.get(site_id, {})
+            try:
+                E911BSSIDReportGenerator._fetch_site_maps(site_id, map_lookup)
+                E911BSSIDReportGenerator._resolve_site_ssids(
+                    site_id,
+                    site_info,
+                    wlan_templates,
+                    org_wlans,
+                    wlan_band_lookup,
+                    site_template_cache,
+                )
+                completed_sites.add(site_id)
+            except RuntimeError as error:
+                if "E911_RATE_LIMIT" in str(error):
+                    print(f"\n  ! Rate limited (HTTP 429) after {index} sites this run.")
+                    E911BSSIDReportGenerator._save_checkpoint(
+                        org_id,
+                        org_data,
+                        completed_sites,
+                        map_lookup,
+                        wlan_band_lookup,
+                        total_sites,
+                    )
+                    next_hour = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                    print(f"    Checkpoint saved: {len(completed_sites)}/{total_sites} sites.")
+                    print(f"    Run Menu 160 again after {next_hour.strftime('%H:%M')} to resume.")
+                    return False
+                raise
+            except Exception as error:
+                logging.warning("Error processing site %s: %s", site_id[:8], error)
+                completed_sites.add(site_id)
+
+            if index % interval == 0:
+                E911BSSIDReportGenerator._save_checkpoint(
+                    org_id,
+                    org_data,
+                    completed_sites,
+                    map_lookup,
+                    wlan_band_lookup,
+                    total_sites,
+                )
+                print(f"    Progress: {len(completed_sites)}/{total_sites} sites")
+
+        print(f"    Done: {len(completed_sites)}/{total_sites} sites enriched.")
+        return True
+
+    @staticmethod
     def execute() -> None:
-        """Generate E911 BSSID compliance report (Menu 160)."""
+        """Generate E911 BSSID compliance report (Menu 160).
+
+        Supports checkpoint/resume for large orgs that exceed the
+        5000 API calls per clock-hour rate limit.
+        """
         print("\n=== E911 BSSID Compliance Report ===")
         logging.info("Starting E911 BSSID compliance report generation...")
         start_time = time.time()
@@ -13299,14 +13460,53 @@ class E911BSSIDReportGenerator:
             print("! No organization selected. Exiting.")
             return
 
-        lookups = E911BSSIDReportGenerator._fetch_lookups(current_org_id)
-        radio_macs_data = lookups["radio_macs"]
+        checkpoint = E911BSSIDReportGenerator._load_checkpoint(current_org_id)
+        org_data: dict[str, Any] | None = None
+        map_lookup: dict[str, str] = {}
+        wlan_band_lookup: dict[str, list[str]] = {}
+        completed_sites: set[str] = set()
 
+        if checkpoint:
+            done = len(checkpoint.get("completed_sites", []))
+            total = checkpoint.get("total_sites", "?")
+            print(f"  Found checkpoint: {done}/{total} sites completed.")
+            resume = InputUtils.safe_input("  Resume from checkpoint? (y/n): ", context="e911_resume")
+            if resume.lower() == "y":
+                org_data = checkpoint["org_data"]
+                map_lookup = checkpoint.get("map_lookup", {})
+                wlan_band_lookup = checkpoint.get("wlan_band_lookup", {})
+                completed_sites = set(checkpoint.get("completed_sites", []))
+                print("  Restored org data from checkpoint.")
+            else:
+                E911BSSIDReportGenerator._clear_checkpoint()
+
+        if org_data is None:
+            org_data = E911BSSIDReportGenerator._fetch_org_bulk_data(current_org_id)
+
+        radio_macs_data = org_data["radio_macs"]
         if not radio_macs_data:
             print("No APs found in this organization.")
             logging.info("No APs found - skipping E911 report generation")
             return
 
+        all_done = E911BSSIDReportGenerator._process_sites(
+            current_org_id,
+            org_data,
+            completed_sites,
+            map_lookup,
+            wlan_band_lookup,
+        )
+        if not all_done:
+            return
+
+        lookups = {
+            "sites": org_data["sites"],
+            "aps": org_data["aps"],
+            "maps": map_lookup,
+            "radio_macs": radio_macs_data,
+            "radio_bands": org_data["radio_bands"],
+            "wlan_bands": wlan_band_lookup,
+        }
         rows, compliance_gaps = E911BSSIDReportGenerator._build_bssid_rows(radio_macs_data, lookups)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -13322,6 +13522,7 @@ class E911BSSIDReportGenerator:
         unique_sites = {row["Site Name"] for row in rows} - {"Unassigned"}
         E911BSSIDReportGenerator._display_summary(len(unique_sites), len(radio_macs_data), len(rows), compliance_gaps)
 
+        E911BSSIDReportGenerator._clear_checkpoint()
         elapsed = time.time() - start_time
         logging.info("E911 BSSID report completed in %.1f seconds", elapsed)
         print(f"\nReport completed in {elapsed:.1f} seconds")
