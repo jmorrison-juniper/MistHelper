@@ -20,3 +20,13 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
+
+  - package-ecosystem: "npm"
+    directory: "/ops-portal"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps(ops-portal)"
