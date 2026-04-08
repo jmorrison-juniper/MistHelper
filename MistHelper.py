@@ -13132,7 +13132,7 @@ class E911BSSIDReportGenerator:
         if not os.path.exists(path):
             return None
         try:
-            with open(path, "r", encoding="utf-8") as handle:
+            with open(path, encoding="utf-8") as handle:
                 checkpoint = json.load(handle)
             if checkpoint.get("org_id") != org_id:
                 logging.info("Checkpoint org mismatch -- ignoring stale checkpoint")
