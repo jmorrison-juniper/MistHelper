@@ -2,10 +2,18 @@
 
 **Feature Branch**: `feat/72-ssid-template-consolidation-rewrite`
 **Created**: 2026-04-08
-**Status**: Draft
+**Status**: Clarified
 **Issue**: #72
 **Replaces**: `specs/018-ssid-template-consolidation/` (preserved as reference)
 **Input**: User description: "Rewrite the SSID Template Consolidation feature (Menu 159) for MistHelper. Consolidates ~170 per-site WLAN templates into 5 shared templates (4 production mapped 1:1 to Mist Edge clusters + 1 pilot/test) using Mist site variables for per-site configuration and site groups for template assignment. Implemented as a 5-phase guided workflow inside MistHelper.py."
+
+## Clarification Decisions (Resolved 2026-04-08)
+
+1. **Pilot group assignment**: Sites are assigned to the pilot/test group by **name pattern matching** — sites whose name contains "pilot", "test", or "lab" (case-insensitive). All other non-PSK, non-anomaly sites go to their Edge cluster production group.
+2. **Site variable fields**: The system **auto-detects** which fields need site variables by running deviation analysis in Phase 1. Any parameter that differs across sites within a cluster group becomes a site variable candidate. No hardcoded list of variable fields.
+3. **Phase 5 old template handling**: Phase 5 **disables the matching SSID only** (`enabled: false`). Old templates are NOT unassigned or deleted. This preserves safe rollback — re-enable the SSID and the old config is back.
+4. **Template naming convention**: **5 templates total, named by cluster only** (not per-SSID). Pattern: `misthelper_<group>_<basename>`. When a second SSID is consolidated, it is appended to the existing template. The `basename` comes from `MIST_TEMPLATE_BASENAME` env var or defaults to the first SSID name.
+5. **Sites without Edge cluster**: Sites that cannot be mapped to any of the 4 Edge clusters are **flagged as anomalies and excluded** from Phases 2–5. They appear in the Phase 1 matrix report with anomaly reason "no Edge cluster mapping".
 
 ---
 
@@ -197,14 +205,14 @@ If the engineer's session is interrupted during any write phase (2–5), the per
 
 **Phase 2: Site Variable Configuration**
 
-- **FR-018**: System MUST compute required site variables from Phase 1 data: at minimum VLAN values and Mist Edge cluster reference.
+- **FR-018**: System MUST auto-detect which fields require site variables by using the deviation analysis from Phase 1. Any parameter that differs across sites within a cluster group becomes a site variable candidate. No hardcoded list of variable fields — the system discovers them dynamically. At minimum, VLAN values and Mist Edge cluster references are expected candidates.
 - **FR-019**: System MUST display a summary table (site name, variable name, proposed value, current value) and require "CONFIRM" before writing.
 - **FR-020**: System MUST be idempotent: if a variable already exists with the same value, skip with "already configured". If the value differs, show the conflict in the confirmation summary.
 - **FR-021**: System MUST skip PSK-flagged and anomaly-flagged sites, logging each skip with reason.
 
 **Phase 3: Site Group Assignment**
 
-- **FR-022**: System MUST assign each non-PSK, non-anomaly site to one of 5 groups: 4 production groups mapped 1:1 to Edge clusters + 1 pilot/test group.
+- **FR-022**: System MUST assign each non-PSK, non-anomaly site to one of 5 groups: 4 production groups mapped 1:1 to Edge clusters + 1 pilot/test group. Pilot/test group membership is determined by site name pattern matching: sites whose name contains "pilot", "test", or "lab" (case-insensitive) are assigned to the pilot/test group. All other qualifying sites are assigned to their Edge cluster production group.
 - **FR-023**: System MUST create missing site groups before assigning sites.
 - **FR-024**: System MUST be idempotent: if a site is already in the correct group, report "already assigned" without duplicating.
 - **FR-025**: System MUST display group assignments and require "CONFIRM" before writing.
@@ -221,7 +229,7 @@ If the engineer's session is interrupted during any write phase (2–5), the per
 
 **Phase 5: Disable Old SSIDs**
 
-- **FR-033**: System MUST set the matching SSID in each old per-site template to `enabled: false`, preserving all other configuration for rollback.
+- **FR-033**: System MUST set the matching SSID in each old per-site template to `enabled: false`, preserving all other configuration for rollback. Old templates are NOT unassigned or deleted — only the target SSID is disabled, enabling safe rollback by re-enabling the SSID.
 - **FR-034**: Non-matching SSIDs in each old template MUST NOT be touched.
 - **FR-035**: System MUST skip PSK and anomaly sites, logging each skip.
 - **FR-036**: System MUST not disable already-disabled SSIDs (idempotent).
@@ -284,5 +292,6 @@ If the engineer's session is interrupted during any write phase (2–5), the per
 - The `data/` directory is writable (validated by existing `FilePermissionValidator`).
 - API rate limits are manageable with existing retry/backoff configuration.
 - The `.env` file follows existing `python-dotenv` patterns.
-- The pilot/test site group membership is determined by a consistent mechanism (e.g., site name pattern, a tag, or manual designation during Phase 3).
+- The pilot/test site group membership is determined by site name pattern matching: sites whose name contains "pilot", "test", or "lab" (case-insensitive) are placed in the pilot/test group.
+- Sites that cannot be mapped to any of the 4 Edge clusters are flagged as anomalies with reason "no Edge cluster mapping" and excluded from Phases 2–5.
 - All code changes are confined to `MistHelper.py` (classes) and the menu registration section.
