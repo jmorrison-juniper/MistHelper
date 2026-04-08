@@ -94,7 +94,7 @@ flowchart LR
 
 | Subsystem | Primary Classes | Purpose |
 |-----------|----------------|---------|
-| Menu System | `OperationRegistry`, `MistHelperTUI` | 159-operation interactive/CLI menu |
+| Menu System | `OperationRegistry`, `MistHelperTUI` | 161-operation interactive/CLI menu |
 | API Layer | `APIFetchUtils`, `RateLimitingUtils` | Paginated API calls with adaptive rate limiting |
 | Data Exporters | `DataExporter`, `SQLiteDatabaseWriter` | Dual CSV/SQLite output with business keys |
 | WebSocket | `WebSocketManager`, `WebSocketCommands` | Real-time device commands |
