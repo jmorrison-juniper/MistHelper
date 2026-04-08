@@ -246,3 +246,4 @@ configs/
 *.msi
 *.deb
 *.rpm
+interrogate_badge.svg

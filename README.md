@@ -450,7 +450,7 @@ Below is the authoritative (condensed) list derived directly from `menu_actions`
 | 156 | Poll Switch Stats | Force immediate stats poll on switch |
 | 157 | Create Device Snapshot | Create configuration snapshot on switch |
 | 158 | Offline Device Report | Scan org inventory for devices offline beyond configurable threshold (default 48h), display summary + PrettyTable, save CSV |
-| 159 | SSID Template Consolidation | Collect SSID configuration matrix across all templates and sites (Phase 1) |
+| 159 | SSID Template Consolidation | 5-phase guided workflow: audit matrix, site variables, site groups, template creation, and old SSID disable |
 | 160 | E911 BSSID Compliance Report | Generate CSV of all BSSIDs per radio per AP across the org, organized by site/floor for E911 compliance |
 
 Important Notes:
@@ -915,6 +915,15 @@ Built for operational reliability and clarity in large enterprise / NOC contexts
 ```json
 {
   "changelog": [
+    {
+      "version": "26.04.08.18.41",
+      "date": "2026-04-08",
+      "changes": {
+        "features": [
+          "SSID Template Consolidation (Menu 159): Complete rewrite as SSIDTemplateConsolidationManager with 5-phase guided workflow. Phase 1: read-only audit builds site-template-SSID matrix with cross-cluster deviation analysis. Phase 2: auto-detect site-specific deviations and write MISTHELPER_* site variables. Phase 3: create site groups by Mist Edge cluster affinity. Phase 4: build consolidated WLAN templates with Jinja variable references for deviations. Phase 5: disable old per-site SSIDs. Includes JSON cache/resume, CONFIRM gates on all write phases, and DataExporter dual CSV/SQLite output."
+        ]
+      }
+    },
     {
       "version": "26.04.07.22.27",
       "date": "2026-04-07",
