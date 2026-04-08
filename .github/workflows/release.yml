@@ -107,13 +107,13 @@ jobs:
       contents: write
     steps:
       - name: Download Python artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-dist
           path: dist/
 
       - name: Download standalone bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: standalone-bundle
 
