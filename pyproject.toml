@@ -73,7 +73,7 @@ container = [
 [project.urls]
 Homepage = "https://github.com/jmorrison-juniper/MistHelper"
 Repository = "https://github.com/jmorrison-juniper/MistHelper.git"
-Documentation = "https://github.com/jmorrison-juniper/MistHelper#readme"
+Documentation = "https://github.com/jmorrison-juniper/MistHelper/wiki"
 Issues = "https://github.com/jmorrison-juniper/MistHelper/issues"
 
 [project.scripts]
