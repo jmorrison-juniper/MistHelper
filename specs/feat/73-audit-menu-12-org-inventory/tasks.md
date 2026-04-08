@@ -5,7 +5,7 @@
 **Issue**: [#73](https://github.com/jmorrison-juniper/MistHelper/issues/73)
 **Branch**: `feat/73-audit-menu-12-org-inventory`
 
-**Tests**: Explicitly requested in spec. TDD approach — write tests first, verify they fail, then implementation confirms they pass.
+**Tests**: Explicitly requested in spec. Verification approach — write tests to confirm existing implementation is correct. Tests are expected to PASS immediately since Menu 12 is already fully implemented.
 
 **Organization**: Tasks grouped by user story (4 stories from spec.md, prioritized P1→P3).
 
@@ -50,7 +50,8 @@
 
 - [ ] T006 [P] [US1] Write test_inventory_creates_api_data_fetcher_with_correct_params in `tests/unit/test_menu_12_inventory.py`
 - [ ] T007 [P] [US1] Write test_inventory_calls_execute_exactly_once in `tests/unit/test_menu_12_inventory.py`
-- [ ] T008 [US1] Run tests and verify they PASS (no production changes needed — implementation already exists)
+- [ ] T008 [P] [US1] Write test_inventory_handles_empty_api_response (empty result set, no crash, logs warning) in `tests/unit/test_menu_12_inventory.py`
+- [ ] T008b [US1] Run tests and verify they PASS (no production changes needed — implementation already exists)
 
 **Checkpoint**: Unit tests confirm Menu 12 wiring is correct — APIDataFetcher receives api_call, filename="OrgInventory.csv", sort_key="model", limit=1000
 
@@ -212,6 +213,18 @@ Task T018: "Run and verify"
 
 - [P] tasks = different files or independent test functions, no dependencies
 - [Story] label maps task to specific user story for traceability
+
+### Deferred Edge Cases (Out of Scope for This Audit)
+
+The following edge cases from spec.md are deferred because they test shared infrastructure (APIDataFetcher/DataExporter) rather than Menu 12-specific logic:
+
+- HTTP 429 retry behavior — APIDataFetcher scope
+- HTTP 500+ retry behavior — APIDataFetcher scope
+- Malformed API response recovery — APIDataFetcher scope
+- Unwritable `data/` directory — DataExporter scope
+
+The missing `id` field edge case is partially addressed by DEVICE_MISSING_OPTIONAL fixture (missing optional fields) in integration tests.
+
 - Each user story is independently testable after Phase 2
 - No production code changes — this is a test-only audit PR
 - Existing implementation already works; tests CONFIRM correctness

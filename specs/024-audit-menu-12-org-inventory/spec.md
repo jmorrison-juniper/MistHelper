@@ -155,7 +155,7 @@ When MistHelper runs with the web UI active, Menu 12 emits progress events via `
 
 ## Test Plan Outline
 
-### Unit Tests (`tests/unit/test_menu_12_org_inventory.py`)
+### Unit Tests (`tests/unit/test_menu_12_inventory.py`)
 
 1. **test_inventory_creates_api_data_fetcher_with_correct_params**: Mock `APIDataFetcher` class, call `OrgInventoryExporter.inventory()`, assert constructor receives correct `title`, `api_call`, `filename`, `sort_key`, `limit`.
 2. **test_inventory_calls_execute**: Mock `APIDataFetcher`, call `inventory()`, assert `.execute()` was called exactly once.
