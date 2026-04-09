@@ -16032,13 +16032,14 @@ class OrgExportUtils:
             raise
 
     @staticmethod
-    def sle_metrics():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def sle_metrics(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
-        # Use the actual SLE service categories supported by the Mist platform
+        # Use the actual SLE service categories supported by the Mist platform.
+        # In systematic test fast mode, run a smoke path to reduce runtime.
         sle_categories = [
             "wifi",  # WiFi/wireless SLE metrics
             "wan",  # WAN connectivity SLE metrics
@@ -16051,6 +16052,17 @@ class OrgExportUtils:
             "sites-sle",  # Sites SLE aggregation
             "worst-sites-by-sle",  # Worst performing sites SLE analysis
         ]
+        duration_value = "7d"
+        if fast:
+            sle_categories = ["wifi"]
+            org_sle_specialized_metrics = ["summary"]
+            duration_value = f"{TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=1)}h"
+            logging.info(
+                "Fast mode enabled for option 66: using smoke path (categories=%s, specialized=%s, duration=%s)",
+                sle_categories,
+                org_sle_specialized_metrics,
+                duration_value,
+            )
 
         total_items = len(org_sle_specialized_metrics) + len(sle_categories)
         emitter = PROGRESS_EMITTER
@@ -16077,7 +16089,7 @@ class OrgExportUtils:
                         for sle_category in sle_categories:
                             try:
                                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                    apisession, org_id, sle=sle_category, duration="7d", limit=1000
+                                    apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
                                 )
                                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
@@ -16110,7 +16122,9 @@ class OrgExportUtils:
                                 )
                                 continue
                     else:
-                        response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")
+                        response = mistapi.api.v1.orgs.insights.getOrgSle(
+                            apisession, org_id, metric, duration=duration_value
+                        )
                         sle_data = getattr(response, "data", response) or {}
 
                         if sle_data:
@@ -16140,7 +16154,7 @@ class OrgExportUtils:
                 try:
                     logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
                     response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                        apisession, org_id, sle=sle_category, duration="7d", limit=1000
+                        apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
                     )
                     sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
