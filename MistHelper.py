@@ -16507,7 +16507,13 @@ class SiteClientExporter:
             print("! Could not determine client MAC address.")
             return
 
-        filename = f"SiteClientInsights_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
+        normalized_client_mac = SiteClientExporter._normalize_client_mac_or_none(client_mac)
+        if not normalized_client_mac:
+            print(f"! Invalid client MAC address format: {client_mac}")
+            logging.error(f"Invalid client MAC address format provided for client insights: {client_mac}")
+            return
+
+        filename = f"SiteClientInsights_{sanitized_site_name}_{normalized_client_mac.replace(':', '')}.csv"
 
         # Get all metrics that support "client" scope
         client_metrics = InsightMetricsUtils.get_by_scope("client")
@@ -16521,13 +16527,13 @@ class SiteClientExporter:
         all_client_data = []
         metrics_retrieved = 0
 
-        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {client_mac}...")
+        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {normalized_client_mac}...")
 
         try:
             for metric in client_metrics:
                 try:
                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                        apisession, site_id, client_mac, metric
+                        apisession, site_id, normalized_client_mac, metric
                     )
                     client_insight_data = getattr(response, "data", response) or {}
 
@@ -16536,7 +16542,7 @@ class SiteClientExporter:
                         client_insight_data["metric_type"] = metric
                         client_insight_data["site_id"] = site_id
                         client_insight_data["site_name"] = site_name
-                        client_insight_data["client_mac"] = client_mac
+                        client_insight_data["client_mac"] = normalized_client_mac
                         all_client_data.append(client_insight_data)
                         metrics_retrieved += 1
                         logging.debug(f"Retrieved client insight data for metric: {metric}")
@@ -16552,16 +16558,25 @@ class SiteClientExporter:
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
                 logging.info(
-                    f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}"
+                    f"Exported {metrics_retrieved} client insight metrics for {normalized_client_mac} at {site_name} to {filename}"
                 )
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
-                logging.warning(f"No client insight data available for {client_mac} at {site_name}")
+                logging.warning(f"No client insight data available for {normalized_client_mac} at {site_name}")
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting client insights: {exception}")
-            logging.error(f"Failed to export client insights for {client_mac} at {site_name}: {exception}")
+            logging.error(f"Failed to export client insights for {normalized_client_mac} at {site_name}: {exception}")
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _normalize_client_mac_or_none(client_mac: str) -> str | None:
+        """Validate and normalize client MAC for site insights endpoints."""
+        if not client_mac:
+            return None
+        if not PacketCaptureManager.validate_mac_address(client_mac):
+            return None
+        return PacketCaptureManager.normalize_mac_address(client_mac)
 
     @staticmethod
     def wifi_clients(site_id=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -16734,11 +16749,51 @@ class SiteConfigExporter:
     """
 
     @staticmethod
-    def wlans():  # type: ignore[no-untyped-def]
-        """Export WLANs for a site to SiteWlans.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.wlans.listSiteWlans, data_type="wlans", sort_key="ssid"
-        )
+    def wlans(site_id=None):  # type: ignore[no-untyped-def]
+        """Export effective WLANs for a site to SiteWlans.csv."""
+        logging.info("Starting export of site WLANs...")
+
+        if not site_id:
+            site_id = PromptUtils.select_site()
+            if not site_id:
+                logging.error("No site selected. Exiting.")
+                return
+
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception as exception:
+            logging.error(f"Error getting site name for WLAN export: {exception}")
+            site_name = site_id
+
+        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"
+
+        try:
+            # Prefer derived WLANs so inherited/template WLANs are included.
+            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
+                apisession,
+                site_id,
+                resolve=True,
+            )
+            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
+        except Exception as exception:
+            logging.warning(f"Failed to fetch derived WLANs for site {site_id}, falling back to site-local WLANs: {exception}")
+            local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
+            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
+
+        if not rawdata:
+            logging.warning(f"No data provided for output to {filename}")
+            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+            print(f"! 0 records exported to data\\{filename}")
+            return
+
+        processed = DataProcessingUtils.flatten_nested_fields(rawdata)
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+        processed = sorted(processed, key=lambda row: row.get("ssid", ""))
+        DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+        print(f"! {len(processed)} records exported to data\\{filename}")
+        logging.info(f"Exported {len(processed)} WLAN records for site {site_name} to {filename}")
 
     @staticmethod
     def maps():  # type: ignore[no-untyped-def]
@@ -58531,15 +58586,46 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
     if not org_id:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
-    # Get first available site_id for testing
+    # Get test site for interactive operations (optionally pinned via env var)
     test_site_id = None
     try:
         print("   Fetching test site for interactive operations...")
-        sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
-        if sites_response.data and len(sites_response.data) > 0:
-            test_site_id = sites_response.data[0]["id"]
-            test_site_name = sites_response.data[0].get("name", "Unknown")
-            print(f"   Using test site: {test_site_name} ({test_site_id})")
+        site_selector = os.getenv("MIST_INTERACTIVE_TEST_SITE", "").strip()
+        test_site_name = "Unknown"
+
+        if site_selector:
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+            sites_data = mistapi.get_all(response=sites_response, mist_session=apisession)
+            matching_site = next(
+                (
+                    site
+                    for site in sites_data
+                    if site.get("id") == site_selector or site.get("name", "").lower() == site_selector.lower()
+                ),
+                None,
+            )
+            if matching_site:
+                test_site_id = matching_site["id"]
+                test_site_name = matching_site.get("name", "Unknown")
+                print(f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {test_site_name} ({test_site_id})")
+            else:
+                print(
+                    f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
+                    "falling back to first available site."
+                )
+                logging.warning(
+                    "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
+                    site_selector,
+                )
+
+        if not test_site_id:
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
+            if sites_response.data and len(sites_response.data) > 0:
+                test_site_id = sites_response.data[0]["id"]
+                test_site_name = sites_response.data[0].get("name", "Unknown")
+                print(f"   Using first available test site: {test_site_name} ({test_site_id})")
+
+        if test_site_id:
             logging.info(f"INTERACTIVE_TEST: Using test site_id={test_site_id} name={test_site_name}")
         else:
             print("[ERROR] No sites found in organization - cannot run interactive tests")

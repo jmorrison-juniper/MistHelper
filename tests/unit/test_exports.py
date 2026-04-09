@@ -109,3 +109,11 @@ def test_metric_compatibility_filters_switch_metrics_for_ap():
     assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "ap") is False
     assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "switch") is True
     assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "unknown") is True
+
+
+def test_normalize_client_mac_or_none_accepts_and_normalizes():
+    assert MistHelper.SiteClientExporter._normalize_client_mac_or_none("845733cac819") == "84:57:33:ca:c8:19"
+
+
+def test_normalize_client_mac_or_none_rejects_invalid():
+    assert MistHelper.SiteClientExporter._normalize_client_mac_or_none("bad-mac") is None
