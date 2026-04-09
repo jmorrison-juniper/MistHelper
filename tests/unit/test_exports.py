@@ -157,3 +157,54 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
 
     selected = MistHelper.PromptUtils.select_device_id_from_inventory("site-1", "all", "DeviceInventory.csv")
     assert selected == "dev-gw"
+
+
+def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_legacy", lambda: None)
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
+    monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
+
+    site_response = [{"id": "site-1", "name": "Site One"}]
+    client_response = [{"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}]
+    get_all_calls = {"count": 0}
+
+    def get_all_stub(*_args, **_kwargs):
+        get_all_calls["count"] += 1
+        return site_response if get_all_calls["count"] == 1 else client_response
+
+    monkeypatch.setattr(MistHelper.mistapi, "get_all", get_all_stub)
+    monkeypatch.setattr(
+        MistHelper.mistapi.api.v1.sites,
+        "listSites",
+        lambda *_args, **_kwargs: object(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        MistHelper.mistapi.api.v1.sites.stats,
+        "listSiteWirelessClientsStats",
+        lambda *_args, **_kwargs: object(),
+    )
+
+    captured = {}
+
+    def get_client_insight_stub(apisession, site_id, client_mac, *, metrics):
+        captured["site_id"] = site_id
+        captured["client_mac"] = client_mac
+        captured["metrics"] = metrics
+        return type("Response", (), {"data": {"value": 42}})()
+
+    monkeypatch.setattr(
+        MistHelper.mistapi.api.v1.sites.insights,
+        "getSiteInsightMetricsForClient",
+        get_client_insight_stub,
+    )
+    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
+
+    MistHelper.SiteClientExporter.client_insights()
+
+    assert captured["site_id"] == "site-1"
+    assert captured["client_mac"] == "00:11:22:33:44:55"
+    assert captured["metrics"] == "metric-one"

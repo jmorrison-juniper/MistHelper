@@ -1,4 +1,4 @@
-﻿# MistHelper Development Guidelines
+# MistHelper Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-03
 
@@ -44,6 +44,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - [if applicable, e.g., PostgreSQL, CoreData, files or N/A] (feat/018-ssid-template-consolidation)
 - Python 3.13+ + mistapi 0.59+, pytest, sqlite3 (stdlib), csv (stdlib) (feat/73-audit-menu-12-org-inventory)
 - SQLite (`data/mist_data.db`) + CSV (`data/OrgInventory.csv`) (feat/73-audit-menu-12-org-inventory)
+- Python 3.13 + `mistapi` (target floor `>=0.61.4`), `websocket-client` (target floor `>=1.8.0`), `requests`, `python-dotenv` (001-mistapi-sdk-audit)
+- N/A for the audit itself; existing MistHelper CSV/SQLite outputs remain unchanged (001-mistapi-sdk-audit)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -63,9 +65,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 001-mistapi-sdk-audit: Added Python 3.13 + `mistapi` (target floor `>=0.61.4`), `websocket-client` (target floor `>=1.8.0`), `requests`, `python-dotenv`
 - feat/73-audit-menu-12-org-inventory: Added Python 3.13+ + mistapi 0.59+, pytest, sqlite3 (stdlib), csv (stdlib)
 - feat/018-ssid-template-consolidation: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
-- 017-mistapi-upgrade-alignment: Added Python 3.13+ + mistapi >= 0.61.3 (Juniper Mist API SDK), websocket-client >= 1.8.0, sshkeyboard >= 2.3.1
 
 
 <!-- MANUAL ADDITIONS START -->
