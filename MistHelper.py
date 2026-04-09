@@ -2151,6 +2151,8 @@ else:
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
 IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
+# Last selected interactive site ID (used to keep testinteractive site context consistent)
+LAST_SELECTED_SITE_ID: str | None = None
 
 
 class TimeUtils:
@@ -10931,9 +10933,12 @@ class PromptUtils:
         user_input = input("Enter the index or name of the device to view device: ").strip()
         logging.debug(f"User input for device selection: {user_input}")
 
+        # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
+        normalized_input = user_input[1:] if user_input.startswith(".") else user_input
+
         # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
+        if normalized_input.isdigit():
+            idx = int(normalized_input)
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
                 logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
@@ -10943,9 +10948,9 @@ class PromptUtils:
                 return None
 
         # Try name selection
-        if user_input in name_to_device:
-            device_id = name_to_device[user_input].get("id")
-            logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
+        if normalized_input in name_to_device:
+            device_id = name_to_device[normalized_input].get("id")
+            logging.info(f"User selected device by name: {normalized_input} (device_id: {device_id})")
             return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
@@ -10983,6 +10988,8 @@ class PromptUtils:
         user_input = input("\nEnter site index or name: ").strip()
         logging.debug(f"User input for site selection: {user_input}")
 
+        global LAST_SELECTED_SITE_ID
+
         # Try index selection
         if user_input.isdigit():
             idx = int(user_input)
@@ -10990,6 +10997,7 @@ class PromptUtils:
                 site_id = index_to_site[idx].get("id")
                 print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
                 logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                LAST_SELECTED_SITE_ID = site_id
                 return site_id
             else:
                 print(" Invalid index.")
@@ -11001,6 +11009,7 @@ class PromptUtils:
             site_id = name_to_site[user_input].get("id")
             print(f"! Selected site: {user_input} (ID: {site_id})")
             logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            LAST_SELECTED_SITE_ID = site_id
             return site_id
 
         print(" Site not found by name or index.")
@@ -16527,7 +16536,7 @@ class SiteClientExporter:
         all_client_data = []
         metrics_retrieved = 0
 
-        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {normalized_client_mac}...")
+        print(f"! Retrieving {len(client_metrics)} different client insight metrics for selected client...")
 
         try:
             for metric in client_metrics:
@@ -16557,16 +16566,14 @@ class SiteClientExporter:
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
-                logging.info(
-                    f"Exported {metrics_retrieved} client insight metrics for {normalized_client_mac} at {site_name} to {filename}"
-                )
+                logging.info(f"Exported {metrics_retrieved} client insight metrics at {site_name} to {filename}")
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
-                logging.warning(f"No client insight data available for {normalized_client_mac} at {site_name}")
+                logging.warning(f"No client insight data available at {site_name}")
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting client insights: {exception}")
-            logging.error(f"Failed to export client insights for {normalized_client_mac} at {site_name}: {exception}")
+            logging.error(f"Failed to export client insights at {site_name}: {exception}")
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -16778,7 +16785,9 @@ class SiteConfigExporter:
             )
             rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
         except Exception as exception:
-            logging.warning(f"Failed to fetch derived WLANs for site {site_id}, falling back to site-local WLANs: {exception}")
+            logging.warning(
+                f"Failed to fetch derived WLANs for site {site_id}, " f"falling back to site-local WLANs: {exception}"
+            )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
 
@@ -23277,7 +23286,8 @@ class InsightMetricsUtils:
             List of metric names that support the target scope
         """
         csv_path = os.path.join("data", "ConstInsightMetrics.csv")
-        metrics_for_scope = []
+        metrics_for_scope: list[str] = []
+        normalized_target_scope = (target_scope or "").strip().lower()
 
         try:
             if not os.path.exists(csv_path):
@@ -23293,7 +23303,15 @@ class InsightMetricsUtils:
                     if not metric_name:
                         continue
 
-                    if scopes and target_scope in scopes:
+                    if not scopes:
+                        continue
+
+                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)
+                    # Skip placeholder/template metrics that require token substitution.
+                    if "{" in metric_name or "}" in metric_name:
+                        continue
+
+                    if normalized_target_scope in parsed_scopes:
                         metrics_for_scope.append(metric_name)
 
             logging.debug(f"Found {len(metrics_for_scope)} metrics for scope '{target_scope}': {metrics_for_scope}")
@@ -23302,6 +23320,17 @@ class InsightMetricsUtils:
         except Exception as exception:
             logging.error(f"Error reading ConstInsightMetrics.csv: {exception}")
             return []
+
+    @staticmethod
+    def _parse_scopes(scopes_text: str) -> set[str]:
+        """Parse scope strings from CSV into normalized tokens."""
+        if not scopes_text:
+            return set()
+        normalized = scopes_text.strip().lower()
+        normalized = normalized.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
+        normalized = normalized.replace(";", ",")
+        tokens = [token.strip() for token in normalized.split(",") if token.strip()]
+        return set(tokens)
 
     @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]

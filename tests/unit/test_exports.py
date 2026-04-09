@@ -125,3 +125,35 @@ def test_normalize_client_mac_or_none_accepts_and_normalizes():
 
 def test_normalize_client_mac_or_none_rejects_invalid():
     assert MistHelper.SiteClientExporter._normalize_client_mac_or_none("bad-mac") is None
+
+
+def test_parse_scopes_handles_csv_style_values():
+    parsed = MistHelper.InsightMetricsUtils._parse_scopes("site, client, device")
+    assert parsed == {"site", "client", "device"}
+
+
+def test_parse_scopes_handles_brackets_and_quotes():
+    parsed = MistHelper.InsightMetricsUtils._parse_scopes("['site','client']")
+    assert parsed == {"site", "client"}
+
+
+def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
+    device_rows = [
+        {"id": "dev-ap", "name": "Basement", "mac": "a83a7961bd05", "model": "AP45", "serial": "A1"},
+        {"id": "dev-sw", "name": "Morrison-Switch", "mac": "209339051780", "model": "EX4100-F-12P", "serial": "S1"},
+        {"id": "dev-gw", "name": "Morrison-SRX", "mac": "e824a63fbb81", "model": "SRX320-POE", "serial": "G1"},
+    ]
+
+    class _Resp:
+        data = device_rows
+
+    monkeypatch.setattr(
+        MistHelper.mistapi.api.v1.sites.devices,
+        "listSiteDevices",
+        lambda *_args, **_kwargs: _Resp(),
+    )
+    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: ".2")
+
+    selected = MistHelper.PromptUtils.select_device_id_from_inventory("site-1", "all", "DeviceInventory.csv")
+    assert selected == "dev-gw"
