@@ -5,6 +5,12 @@ All notable changes to MistHelper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
+## [26.04.09.21.30] - 2026-04-09
+
+### Compatibility Audit
+
+- MistAPI compatibility audit alignment: raised the documented dependency floor to `mistapi>=0.61.4` and `websocket-client>=1.8.0`, updated the site client insights workflow to call `getSiteInsightMetricsForClient(..., metrics=metric)`, and added regression coverage for alarms, device-event pagination, site client stats, site SLE summaries, client insight metrics, and the E911 BSSID report.
+
 ## [26.04.08.18.41] - 2026-04-08
 
 ### Added

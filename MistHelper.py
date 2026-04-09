@@ -16542,7 +16542,7 @@ class SiteClientExporter:
             for metric in client_metrics:
                 try:
                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                        apisession, site_id, normalized_client_mac, metric
+                        apisession, site_id, normalized_client_mac, metrics=metric
                     )
                     client_insight_data = getattr(response, "data", response) or {}
 

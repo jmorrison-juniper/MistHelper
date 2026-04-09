@@ -1,11 +1,10 @@
 # MistHelper Dependencies
 # Requires Python 3.13 or newer
-# No version pins - always install latest available
 
 # Core API and networking
-mistapi
+mistapi>=0.61.4
 requests
-websocket-client
+websocket-client>=1.8.0
 urllib3
 
 # SSH and remote access
