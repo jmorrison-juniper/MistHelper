@@ -50,6 +50,7 @@ Pygments>=2.19.2
 
 # Testing (dev dependency - not needed at runtime)
 pytest
+hypothesis>=6.151.12
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
