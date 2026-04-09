@@ -58329,8 +58329,10 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
             emitter.emit_test_fail(option, description, duration, e, "systematic")
             logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
 
-        # Small delay between tests to be respectful to the API
-        time.sleep(1)
+        # Small delay between tests to be respectful to the API.
+        # In --test --fast mode, skip the harness pause to reduce total runtime.
+        if not fast_enabled:
+            time.sleep(1)
 
     # Emit summary and clean up telemetry
     total_time = time.time() - start_time
