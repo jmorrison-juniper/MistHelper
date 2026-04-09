@@ -317,37 +317,14 @@ Interactive fallback occurs if no `-M/--menu` is supplied.
 
 ---
 
-## Menu Operations
+## Menu Reference
 
-Below is a condensed category summary. For the full per-item reference with descriptions, see the **[Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference)** wiki page.
+This README is intentionally lean. The full, up-to-date menu reference (each option, description, safety level, and usage examples) is maintained in the repository documentation and the GitHub Wiki:
 
-| Range | Category | Safety |
-|-------|----------|--------|
-| 0 | Exit | Safe |
-| 1-4 | Org alarms, events, audit logs, gateway IPs | Safe |
-| 5-8 | WebSocket commands (MAC/FIB/routing tables) | Interactive |
-| 9-10 | Packet captures (site & org level) | Interactive |
-| 11-28 | Inventory, stats, templates, enrichment | Safe |
-| 29-34 | Site-scoped ports, clients, devices | Safe |
-| 35-39 | Template bundles (network, RF, AP, switch) | Safe |
-| 40-53 | Clients, security, licenses, PSKs, WLANs, maps | Safe/Interactive |
-| 54-62 | Admin, MSP info, monitoring, firmware status | Safe/Interactive |
-| 63-65 | Bulk history exports (WIP - unstable) | Resource Intensive |
-| 66-89 | SLE insights, interactive views, continuous loops, WebSocket ops | Interactive |
-| 90-100 | **Firmware, reboots, VC conversion, SSH runner** | **Destructive** |
-| 101-112 | TUI, RADIUS config, template management, maps manager | Mixed |
-| 113-122 | WAN probes, MSP inventory, site config analysis | Mixed |
-| 123-146 | Device commands (traceroute, OSPF, BGP, ARP, cable test, etc.) | Interactive |
-| 147-157 | Clear/reset commands (ARP, BGP, sessions, MAC, DHCP) | **Destructive** |
-| 158-160 | Offline device report, SSID consolidation, E911 BSSID report | Safe/Interactive |
+- Repository copy (authoritative, auto-generated): documentation/menu_reference.md
+- GitHub Wiki mirror: https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference
 
-**Important Notes:**
-* Options 14 & 18 are resource-intensive (multi-hour) and skipped during `--test`
-* 63-65 are explicitly marked WIP; expect evolution
-* Destructive operations (90-100, 104, 106-111, 113-114, 140, 142-143, 147-155) should never be scripted unattended without explicit review
-
----
-
+For quick category guidance, see the Wiki Menu Reference page linked above.
 ## Security & Safety
 
 | Area | Practice |
