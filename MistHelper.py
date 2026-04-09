@@ -16522,6 +16522,7 @@ class SiteClientExporter:
             logging.error(f"Invalid client MAC address format provided for client insights: {client_mac}")
             return
 
+        redacted_client_mac = SiteClientExporter._redact_mac_for_logging(normalized_client_mac)
         filename = f"SiteClientInsights_{sanitized_site_name}_{normalized_client_mac.replace(':', '')}.csv"
 
         # Get all metrics that support "client" scope
@@ -16536,7 +16537,7 @@ class SiteClientExporter:
         all_client_data = []
         metrics_retrieved = 0
 
-        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {normalized_client_mac}...")
+        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {redacted_client_mac}...")
 
         try:
             for metric in client_metrics:
@@ -16568,15 +16569,15 @@ class SiteClientExporter:
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
                 logging.info(
                     f"Exported {metrics_retrieved} client insight metrics "
-                    f"for {normalized_client_mac} at {site_name} to {filename}"
+                    f"for {redacted_client_mac} at {site_name} to {filename}"
                 )
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
-                logging.warning(f"No client insight data available for {normalized_client_mac} at {site_name}")
+                logging.warning(f"No client insight data available for {redacted_client_mac} at {site_name}")
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting client insights: {exception}")
-            logging.error(f"Failed to export client insights for {normalized_client_mac} at {site_name}: {exception}")
+            logging.error(f"Failed to export client insights for {redacted_client_mac} at {site_name}: {exception}")
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -16587,6 +16588,15 @@ class SiteClientExporter:
         if not PacketCaptureManager.validate_mac_address(client_mac):
             return None
         return PacketCaptureManager.normalize_mac_address(client_mac)
+
+    @staticmethod
+    def _redact_mac_for_logging(mac_address: str) -> str:
+        """Redact MAC address for console/log messages."""
+        normalized = PacketCaptureManager.normalize_mac_address(mac_address)
+        parts = normalized.split(":")
+        if len(parts) != 6:
+            return "xx:xx:xx:xx:xx:xx"
+        return "xx:xx:xx:" + ":".join(parts[-3:])
 
     @staticmethod
     def wifi_clients(site_id=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -16789,8 +16799,7 @@ class SiteConfigExporter:
             rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
         except Exception as exception:
             logging.warning(
-                f"Failed to fetch derived WLANs for site {site_id}, "
-                f"falling back to site-local WLANs: {exception}"
+                f"Failed to fetch derived WLANs for site {site_id}, " f"falling back to site-local WLANs: {exception}"
             )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
