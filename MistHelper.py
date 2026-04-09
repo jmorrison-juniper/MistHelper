@@ -2151,6 +2151,8 @@ else:
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
 IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
+# Last selected interactive site ID (used to keep testinteractive site context consistent)
+LAST_SELECTED_SITE_ID: str | None = None
 
 
 class TimeUtils:
@@ -10931,9 +10933,12 @@ class PromptUtils:
         user_input = input("Enter the index or name of the device to view device: ").strip()
         logging.debug(f"User input for device selection: {user_input}")
 
+        # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
+        normalized_input = user_input[1:] if user_input.startswith(".") else user_input
+
         # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
+        if normalized_input.isdigit():
+            idx = int(normalized_input)
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
                 logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
@@ -10943,9 +10948,9 @@ class PromptUtils:
                 return None
 
         # Try name selection
-        if user_input in name_to_device:
-            device_id = name_to_device[user_input].get("id")
-            logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
+        if normalized_input in name_to_device:
+            device_id = name_to_device[normalized_input].get("id")
+            logging.info(f"User selected device by name: {normalized_input} (device_id: {device_id})")
             return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
@@ -10983,6 +10988,8 @@ class PromptUtils:
         user_input = input("\nEnter site index or name: ").strip()
         logging.debug(f"User input for site selection: {user_input}")
 
+        global LAST_SELECTED_SITE_ID
+
         # Try index selection
         if user_input.isdigit():
             idx = int(user_input)
@@ -10990,6 +10997,7 @@ class PromptUtils:
                 site_id = index_to_site[idx].get("id")
                 print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
                 logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                LAST_SELECTED_SITE_ID = site_id
                 return site_id
             else:
                 print(" Invalid index.")
@@ -11001,6 +11009,7 @@ class PromptUtils:
             site_id = name_to_site[user_input].get("id")
             print(f"! Selected site: {user_input} (ID: {site_id})")
             logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            LAST_SELECTED_SITE_ID = site_id
             return site_id
 
         print(" Site not found by name or index.")
