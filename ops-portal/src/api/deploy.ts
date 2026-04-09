@@ -21,6 +21,7 @@ export interface CheckConfig {
 
 export interface DeployJob {
   id: string;
+  org_id: string;
   name: string;
   status: JobStatus;
   scheduledAt: string | null;
@@ -34,6 +35,13 @@ export interface DeployJob {
   approvedBy: string | null;
   createdBy: string;
   createdAt: string;
+  /* Snake-case aliases used in API request payloads */
+  target_entities?: Array<{ entity_type: string; entity_id: string }>;
+  change_payload?: Record<string, unknown>;
+  scheduled_at?: string;
+  pre_check_defs?: unknown;
+  post_check_defs?: unknown;
+  auto_rollback_on_failure?: boolean;
 }
 
 export interface DryRunResult {
