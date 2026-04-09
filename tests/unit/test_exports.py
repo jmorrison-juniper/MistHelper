@@ -155,5 +155,5 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
     monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: ".2")
 
-    selected = MistHelper.PromptUtils.select_device_id_from_csv("site-1", "all", "DeviceInventory.csv")
+    selected = MistHelper.PromptUtils.select_device_id_from_inventory("site-1", "all", "DeviceInventory.csv")
     assert selected == "dev-gw"
