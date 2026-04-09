@@ -15105,7 +15105,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.2s.
         """
         output_files = ["OrgSecurityPolicies.csv", "OrgSecIntelProfiles.csv", "OrgRogueData.csv"]
         if fast:
@@ -15173,7 +15172,6 @@ class OrgClientSecurityExporter:
             DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
         logging.info("Fetching rogue APs and clients from all sites via insights...")
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
@@ -15215,7 +15213,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue data: {e}")
         all_rogue_data = all_rogue_aps + all_rogue_clients
@@ -15241,7 +15238,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
         """
         output_file = "OrgRogueClients.csv"
         if fast:
@@ -15260,7 +15256,6 @@ class OrgClientSecurityExporter:
         logging.info("Starting export of rogue clients from all sites...")
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_clients: list[dict[str, Any]] = []
@@ -15288,7 +15283,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue clients: {e}")
             return
@@ -15309,7 +15303,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
         """
         output_file = "OrgRogueAPs.csv"
         if fast:
@@ -15328,7 +15321,6 @@ class OrgClientSecurityExporter:
         logging.info("Starting export of rogue APs from all sites...")
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_aps: list[dict[str, Any]] = []
@@ -15356,7 +15348,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue APs: {e}")
             return
