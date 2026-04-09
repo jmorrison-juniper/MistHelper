@@ -2151,6 +2151,8 @@ else:
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
 IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
+# Last selected interactive site ID (used to keep testinteractive site context consistent)
+LAST_SELECTED_SITE_ID: str | None = None
 
 
 class TimeUtils:
@@ -10931,9 +10933,12 @@ class PromptUtils:
         user_input = input("Enter the index or name of the device to view device: ").strip()
         logging.debug(f"User input for device selection: {user_input}")
 
+        # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
+        normalized_input = user_input[1:] if user_input.startswith(".") else user_input
+
         # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
+        if normalized_input.isdigit():
+            idx = int(normalized_input)
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
                 logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
@@ -10943,9 +10948,9 @@ class PromptUtils:
                 return None
 
         # Try name selection
-        if user_input in name_to_device:
-            device_id = name_to_device[user_input].get("id")
-            logging.info(f"User selected device by name: {user_input} (device_id: {device_id})")
+        if normalized_input in name_to_device:
+            device_id = name_to_device[normalized_input].get("id")
+            logging.info(f"User selected device by name: {normalized_input} (device_id: {device_id})")
             return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
@@ -10983,6 +10988,8 @@ class PromptUtils:
         user_input = input("\nEnter site index or name: ").strip()
         logging.debug(f"User input for site selection: {user_input}")
 
+        global LAST_SELECTED_SITE_ID
+
         # Try index selection
         if user_input.isdigit():
             idx = int(user_input)
@@ -10990,6 +10997,7 @@ class PromptUtils:
                 site_id = index_to_site[idx].get("id")
                 print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
                 logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                LAST_SELECTED_SITE_ID = site_id
                 return site_id
             else:
                 print(" Invalid index.")
@@ -11001,6 +11009,7 @@ class PromptUtils:
             site_id = name_to_site[user_input].get("id")
             print(f"! Selected site: {user_input} (ID: {site_id})")
             logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            LAST_SELECTED_SITE_ID = site_id
             return site_id
 
         print(" Site not found by name or index.")
@@ -15105,7 +15114,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.2s.
         """
         output_files = ["OrgSecurityPolicies.csv", "OrgSecIntelProfiles.csv", "OrgRogueData.csv"]
         if fast:
@@ -15173,7 +15181,6 @@ class OrgClientSecurityExporter:
             DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
         logging.info("Fetching rogue APs and clients from all sites via insights...")
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
@@ -15215,7 +15222,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue data: {e}")
         all_rogue_data = all_rogue_aps + all_rogue_clients
@@ -15241,7 +15247,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
         """
         output_file = "OrgRogueClients.csv"
         if fast:
@@ -15260,7 +15265,6 @@ class OrgClientSecurityExporter:
         logging.info("Starting export of rogue clients from all sites...")
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_clients: list[dict[str, Any]] = []
@@ -15288,7 +15292,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue clients: {e}")
             return
@@ -15309,7 +15312,6 @@ class OrgClientSecurityExporter:
         Fast Mode Behavior:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-            - Reduced sleep: 0.05s inter-site delay instead of 0.5s.
         """
         output_file = "OrgRogueAPs.csv"
         if fast:
@@ -15328,7 +15330,6 @@ class OrgClientSecurityExporter:
         logging.info("Starting export of rogue APs from all sites...")
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
         rogue_duration = f"{lookback_hours}h"
-        inter_site_delay = 0.05 if fast else 0.5
         TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
         all_rogue_aps: list[dict[str, Any]] = []
@@ -15356,7 +15357,6 @@ class OrgClientSecurityExporter:
                 except Exception as e:
                     logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
                     continue
-                time.sleep(inter_site_delay)
         except Exception as e:
             logging.error(f"Failed to process sites for rogue APs: {e}")
             return
@@ -16032,13 +16032,14 @@ class OrgExportUtils:
             raise
 
     @staticmethod
-    def sle_metrics():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def sle_metrics(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
-        # Use the actual SLE service categories supported by the Mist platform
+        # Use the actual SLE service categories supported by the Mist platform.
+        # In systematic test fast mode, run a smoke path to reduce runtime.
         sle_categories = [
             "wifi",  # WiFi/wireless SLE metrics
             "wan",  # WAN connectivity SLE metrics
@@ -16051,6 +16052,17 @@ class OrgExportUtils:
             "sites-sle",  # Sites SLE aggregation
             "worst-sites-by-sle",  # Worst performing sites SLE analysis
         ]
+        duration_value = "7d"
+        if fast:
+            sle_categories = ["wifi"]
+            org_sle_specialized_metrics = ["summary"]
+            duration_value = f"{TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=1)}h"
+            logging.info(
+                "Fast mode enabled for option 66: using smoke path (categories=%s, specialized=%s, duration=%s)",
+                sle_categories,
+                org_sle_specialized_metrics,
+                duration_value,
+            )
 
         total_items = len(org_sle_specialized_metrics) + len(sle_categories)
         emitter = PROGRESS_EMITTER
@@ -16077,7 +16089,7 @@ class OrgExportUtils:
                         for sle_category in sle_categories:
                             try:
                                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                    apisession, org_id, sle=sle_category, duration="7d", limit=1000
+                                    apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
                                 )
                                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
@@ -16110,7 +16122,9 @@ class OrgExportUtils:
                                 )
                                 continue
                     else:
-                        response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")
+                        response = mistapi.api.v1.orgs.insights.getOrgSle(
+                            apisession, org_id, metric, duration=duration_value
+                        )
                         sle_data = getattr(response, "data", response) or {}
 
                         if sle_data:
@@ -16140,7 +16154,7 @@ class OrgExportUtils:
                 try:
                     logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
                     response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                        apisession, org_id, sle=sle_category, duration="7d", limit=1000
+                        apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
                     )
                     sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
@@ -16502,7 +16516,14 @@ class SiteClientExporter:
             print("! Could not determine client MAC address.")
             return
 
-        filename = f"SiteClientInsights_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
+        normalized_client_mac = SiteClientExporter._normalize_client_mac_or_none(client_mac)
+        if not normalized_client_mac:
+            print(f"! Invalid client MAC address format: {client_mac}")
+            logging.error(f"Invalid client MAC address format provided for client insights: {client_mac}")
+            return
+
+        redacted_client_mac = SiteClientExporter._redact_mac_for_logging(normalized_client_mac)
+        filename = f"SiteClientInsights_{sanitized_site_name}_{normalized_client_mac.replace(':', '')}.csv"
 
         # Get all metrics that support "client" scope
         client_metrics = InsightMetricsUtils.get_by_scope("client")
@@ -16516,13 +16537,13 @@ class SiteClientExporter:
         all_client_data = []
         metrics_retrieved = 0
 
-        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {client_mac}...")
+        print(f"! Retrieving {len(client_metrics)} different client insight metrics for {redacted_client_mac}...")
 
         try:
             for metric in client_metrics:
                 try:
                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                        apisession, site_id, client_mac, metric
+                        apisession, site_id, normalized_client_mac, metric
                     )
                     client_insight_data = getattr(response, "data", response) or {}
 
@@ -16531,7 +16552,7 @@ class SiteClientExporter:
                         client_insight_data["metric_type"] = metric
                         client_insight_data["site_id"] = site_id
                         client_insight_data["site_name"] = site_name
-                        client_insight_data["client_mac"] = client_mac
+                        client_insight_data["client_mac"] = normalized_client_mac
                         all_client_data.append(client_insight_data)
                         metrics_retrieved += 1
                         logging.debug(f"Retrieved client insight data for metric: {metric}")
@@ -16547,16 +16568,35 @@ class SiteClientExporter:
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
                 logging.info(
-                    f"Exported {metrics_retrieved} client insight metrics for {client_mac} at {site_name} to {filename}"
+                    f"Exported {metrics_retrieved} client insight metrics "
+                    f"for {redacted_client_mac} at {site_name} to {filename}"
                 )
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
-                logging.warning(f"No client insight data available for {client_mac} at {site_name}")
+                logging.warning(f"No client insight data available for {redacted_client_mac} at {site_name}")
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting client insights: {exception}")
-            logging.error(f"Failed to export client insights for {client_mac} at {site_name}: {exception}")
+            logging.error(f"Failed to export client insights for {redacted_client_mac} at {site_name}: {exception}")
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _normalize_client_mac_or_none(client_mac: str) -> str | None:
+        """Validate and normalize client MAC for site insights endpoints."""
+        if not client_mac:
+            return None
+        if not PacketCaptureManager.validate_mac_address(client_mac):
+            return None
+        return PacketCaptureManager.normalize_mac_address(client_mac)
+
+    @staticmethod
+    def _redact_mac_for_logging(mac_address: str) -> str:
+        """Redact MAC address for console/log messages."""
+        normalized = PacketCaptureManager.normalize_mac_address(mac_address)
+        parts = normalized.split(":")
+        if len(parts) != 6:
+            return "xx:xx:xx:xx:xx:xx"
+        return "xx:xx:xx:" + ":".join(parts[-3:])
 
     @staticmethod
     def wifi_clients(site_id=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -16729,11 +16769,53 @@ class SiteConfigExporter:
     """
 
     @staticmethod
-    def wlans():  # type: ignore[no-untyped-def]
-        """Export WLANs for a site to SiteWlans.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.wlans.listSiteWlans, data_type="wlans", sort_key="ssid"
-        )
+    def wlans(site_id=None):  # type: ignore[no-untyped-def]
+        """Export effective WLANs for a site to SiteWlans.csv."""
+        logging.info("Starting export of site WLANs...")
+
+        if not site_id:
+            site_id = PromptUtils.select_site()
+            if not site_id:
+                logging.error("No site selected. Exiting.")
+                return
+
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception as exception:
+            logging.error(f"Error getting site name for WLAN export: {exception}")
+            site_name = site_id
+
+        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"
+
+        try:
+            # Prefer derived WLANs so inherited/template WLANs are included.
+            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
+                apisession,
+                site_id,
+                resolve=True,
+            )
+            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
+        except Exception as exception:
+            logging.warning(
+                f"Failed to fetch derived WLANs for site {site_id}, " f"falling back to site-local WLANs: {exception}"
+            )
+            local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
+            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
+
+        if not rawdata:
+            logging.warning(f"No data provided for output to {filename}")
+            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+            print(f"! 0 records exported to data\\{filename}")
+            return
+
+        processed = DataProcessingUtils.flatten_nested_fields(rawdata)
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+        processed = sorted(processed, key=lambda row: row.get("ssid", ""))
+        DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+        print(f"! {len(processed)} records exported to data\\{filename}")
+        logging.info(f"Exported {len(processed)} WLAN records for site {site_name} to {filename}")
 
     @staticmethod
     def maps():  # type: ignore[no-untyped-def]
@@ -17334,13 +17416,20 @@ class SiteExportUtils:
             device = next((dev for dev in devices if dev["id"] == device_id), None)
             device_name = device["name"] if device else device_id
             device_mac = device["mac"] if device else None
+            device_model = device.get("model", "") if device else ""
         except Exception:
             device_name = device_id
             device_mac = None
+            device_model = ""
 
         if not device_mac:
             print(f"! Error: Could not find MAC address for device {device_name}")
             logging.error(f"Could not find MAC address for device {device_id}")
+            return
+        normalized_device_mac = SiteExportUtils._normalize_device_mac_or_none(device_mac)
+        if not normalized_device_mac:
+            print(f"! Invalid device MAC address format for {device_name}: {device_mac}")
+            logging.error(f"Invalid device MAC address format for device {device_id}: {device_mac}")
             return
 
         sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
@@ -17349,6 +17438,12 @@ class SiteExportUtils:
 
         # Get all metrics that support "device" scope
         device_metrics = InsightMetricsUtils.get_by_scope("device")
+        device_platform = SiteExportUtils._classify_device_platform(device_model)
+        device_metrics = [
+            metric
+            for metric in device_metrics
+            if SiteExportUtils._metric_compatible_with_platform(metric, device_platform)
+        ]
 
         if not device_metrics:
             print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
@@ -17365,7 +17460,7 @@ class SiteExportUtils:
             for metric in device_metrics:
                 try:
                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
-                        apisession, site_id, metric, device_mac
+                        apisession, site_id, metric, normalized_device_mac
                     )
                     device_insight_data = getattr(response, "data", response) or {}
 
@@ -17376,7 +17471,7 @@ class SiteExportUtils:
                         device_insight_data["site_name"] = site_name
                         device_insight_data["device_id"] = device_id
                         device_insight_data["device_name"] = device_name
-                        device_insight_data["device_mac"] = device_mac
+                        device_insight_data["device_mac"] = normalized_device_mac
                         all_device_data.append(device_insight_data)
                         metrics_retrieved += 1
                         logging.debug(f"Retrieved device insight data for metric: {metric}")
@@ -17404,11 +17499,96 @@ class SiteExportUtils:
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
+    def _classify_device_platform(device_model: str) -> str:
+        """Classify Mist inventory model into ap/switch/gateway for metric filtering."""
+        model = (device_model or "").upper()
+        if model.startswith("AP"):
+            return "ap"
+        if model.startswith(("EX", "QFX")):
+            return "switch"
+        if model.startswith(("SRX", "SSR")):
+            return "gateway"
+        return "unknown"
+
+    @staticmethod
+    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
+        """Skip clearly incompatible device metrics to prevent avoidable API 400 responses."""
+        metric = (metric_name or "").lower()
+        if "switch" in metric:
+            return device_platform in {"switch", "unknown"}
+        if any(token in metric for token in ("gateway", "wan", "srx", "ssr")):
+            return device_platform in {"gateway", "unknown"}
+        if "ap" in metric or "wifi" in metric:
+            return device_platform in {"ap", "unknown"}
+        return True
+
+    @staticmethod
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+        """Validate and normalize device MAC for device insights endpoints."""
+        if not device_mac:
+            return None
+        if not PacketCaptureManager.validate_mac_address(device_mac):
+            return None
+        return PacketCaptureManager.normalize_mac_address(device_mac)
+
+    @staticmethod
     def insights():  # type: ignore[no-untyped-def]
-        """Export insights for a site to SiteInsights.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics, data_type="sle_metrics_insights", sort_key="name"
-        )
+        """Export SLE metric availability for a selected site."""
+        logging.info("Starting export of site SLE metric insights...")
+
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception as exception:
+            logging.error(f"Error getting site name: {exception}")
+            site_name = site_id
+
+        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
+        filename = f"SiteSleMetricsInsights_{safe_site_name}.csv"
+
+        try:
+            # listSiteSlesMetrics requires explicit scope and scope_id.
+            response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
+                apisession,
+                site_id,
+                scope="site",
+                scope_id=site_id,
+            )
+            metrics_payload = getattr(response, "data", response) or {}
+
+            rows = []
+            enabled_metrics = metrics_payload.get("enabled", [])
+            supported_metrics = metrics_payload.get("supported", [])
+
+            for metric_name in sorted(set(enabled_metrics + supported_metrics)):
+                rows.append(
+                    {
+                        "site_id": site_id,
+                        "site_name": site_name,
+                        "metric_name": metric_name,
+                        "enabled": metric_name in enabled_metrics,
+                        "supported": metric_name in supported_metrics,
+                    }
+                )
+
+            if rows:
+                DataExporter.save_data_to_output(rows, filename)  # type: ignore[no-untyped-call]
+                print(f"! {len(rows)} records exported to data\\{filename}")
+                logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
+            else:
+                print(f"! 0 records exported to data\\{filename} (no metrics available)")
+                logging.warning(f"No site SLE metric insight data available for site {site_name}")
+                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+        except Exception as exception:
+            print(f"! Error exporting site SLE metric insights: {exception}")
+            logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
+            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _system_events():  # type: ignore[no-untyped-def]
@@ -23119,7 +23299,8 @@ class InsightMetricsUtils:
             List of metric names that support the target scope
         """
         csv_path = os.path.join("data", "ConstInsightMetrics.csv")
-        metrics_for_scope = []
+        metrics_for_scope: list[str] = []
+        normalized_target_scope = (target_scope or "").strip().lower()
 
         try:
             if not os.path.exists(csv_path):
@@ -23135,7 +23316,15 @@ class InsightMetricsUtils:
                     if not metric_name:
                         continue
 
-                    if scopes and target_scope in scopes:
+                    if not scopes:
+                        continue
+
+                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)
+                    # Skip placeholder/template metrics that require token substitution.
+                    if "{" in metric_name or "}" in metric_name:
+                        continue
+
+                    if normalized_target_scope in parsed_scopes:
                         metrics_for_scope.append(metric_name)
 
             logging.debug(f"Found {len(metrics_for_scope)} metrics for scope '{target_scope}': {metrics_for_scope}")
@@ -23144,6 +23333,17 @@ class InsightMetricsUtils:
         except Exception as exception:
             logging.error(f"Error reading ConstInsightMetrics.csv: {exception}")
             return []
+
+    @staticmethod
+    def _parse_scopes(scopes_text: str) -> set[str]:
+        """Parse scope strings from CSV into normalized tokens."""
+        if not scopes_text:
+            return set()
+        normalized = scopes_text.strip().lower()
+        normalized = normalized.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
+        normalized = normalized.replace(";", ",")
+        tokens = [token.strip() for token in normalized.split(",") if token.strip()]
+        return set(tokens)
 
     @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
@@ -58088,8 +58288,11 @@ class OperationRegistry:
             "skip_reason": "Create device snapshot - interactive switch",
         },
         "158": {"category": "safe"},
-        "159": {"category": "safe"},
-        "160": {"category": "safe"},
+        "159": {
+            "category": "interactive",
+            "skip_reason": "Interactive multi-phase workflow with write-capable phases",
+        },
+        "160": {"category": "interactive_safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
@@ -58326,8 +58529,10 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
             emitter.emit_test_fail(option, description, duration, e, "systematic")
             logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
 
-        # Small delay between tests to be respectful to the API
-        time.sleep(1)
+        # Small delay between tests to be respectful to the API.
+        # In --test --fast mode, skip the harness pause to reduce total runtime.
+        if not fast_enabled:
+            time.sleep(1)
 
     # Emit summary and clean up telemetry
     total_time = time.time() - start_time
@@ -58437,15 +58642,46 @@ def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR09
     if not org_id:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
-    # Get first available site_id for testing
+    # Get test site for interactive operations (optionally pinned via env var)
     test_site_id = None
     try:
         print("   Fetching test site for interactive operations...")
-        sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
-        if sites_response.data and len(sites_response.data) > 0:
-            test_site_id = sites_response.data[0]["id"]
-            test_site_name = sites_response.data[0].get("name", "Unknown")
-            print(f"   Using test site: {test_site_name} ({test_site_id})")
+        site_selector = os.getenv("MIST_INTERACTIVE_TEST_SITE", "").strip()
+        test_site_name = "Unknown"
+
+        if site_selector:
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
+            sites_data = mistapi.get_all(response=sites_response, mist_session=apisession)
+            matching_site = next(
+                (
+                    site
+                    for site in sites_data
+                    if site.get("id") == site_selector or site.get("name", "").lower() == site_selector.lower()
+                ),
+                None,
+            )
+            if matching_site:
+                test_site_id = matching_site["id"]
+                test_site_name = matching_site.get("name", "Unknown")
+                print(f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {test_site_name} ({test_site_id})")
+            else:
+                print(
+                    f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
+                    "falling back to first available site."
+                )
+                logging.warning(
+                    "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
+                    site_selector,
+                )
+
+        if not test_site_id:
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
+            if sites_response.data and len(sites_response.data) > 0:
+                test_site_id = sites_response.data[0]["id"]
+                test_site_name = sites_response.data[0].get("name", "Unknown")
+                print(f"   Using first available test site: {test_site_name} ({test_site_id})")
+
+        if test_site_id:
             logging.info(f"INTERACTIVE_TEST: Using test site_id={test_site_id} name={test_site_name}")
         else:
             print("[ERROR] No sites found in organization - cannot run interactive tests")

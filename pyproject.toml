@@ -62,7 +62,7 @@ dev = [
     "vulture>=2.10",
     "pydocstyle[toml]>=6.3.0",
     "interrogate>=1.7.0",
-    "hypothesis>=6.0.0",
+    "hypothesis>=6.151.12",
     "playwright>=1.40.0",
     "pre-commit>=3.0.0",
 ]
