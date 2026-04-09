@@ -58088,8 +58088,11 @@ class OperationRegistry:
             "skip_reason": "Create device snapshot - interactive switch",
         },
         "158": {"category": "safe"},
-        "159": {"category": "safe"},
-        "160": {"category": "safe"},
+        "159": {
+            "category": "interactive",
+            "skip_reason": "Interactive multi-phase workflow with write-capable phases",
+        },
+        "160": {"category": "interactive_safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
