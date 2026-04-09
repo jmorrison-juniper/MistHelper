@@ -16567,7 +16567,8 @@ class SiteClientExporter:
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
                 logging.info(
-                    f"Exported {metrics_retrieved} client insight metrics for {normalized_client_mac} at {site_name} to {filename}"
+                    f"Exported {metrics_retrieved} client insight metrics "
+                    f"for {normalized_client_mac} at {site_name} to {filename}"
                 )
             else:
                 print(f"! 0 client insights exported to {filename} (no data available)")
@@ -16787,7 +16788,10 @@ class SiteConfigExporter:
             )
             rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
         except Exception as exception:
-            logging.warning(f"Failed to fetch derived WLANs for site {site_id}, falling back to site-local WLANs: {exception}")
+            logging.warning(
+                f"Failed to fetch derived WLANs for site {site_id}, "
+                f"falling back to site-local WLANs: {exception}"
+            )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
 
