@@ -17404,6 +17404,11 @@ class SiteExportUtils:
             print(f"! Error: Could not find MAC address for device {device_name}")
             logging.error(f"Could not find MAC address for device {device_id}")
             return
+        normalized_device_mac = SiteExportUtils._normalize_device_mac_or_none(device_mac)
+        if not normalized_device_mac:
+            print(f"! Invalid device MAC address format for {device_name}: {device_mac}")
+            logging.error(f"Invalid device MAC address format for device {device_id}: {device_mac}")
+            return
 
         sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
         sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name or device_id)
@@ -17433,7 +17438,7 @@ class SiteExportUtils:
             for metric in device_metrics:
                 try:
                     response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
-                        apisession, site_id, metric, device_mac
+                        apisession, site_id, metric, normalized_device_mac
                     )
                     device_insight_data = getattr(response, "data", response) or {}
 
@@ -17444,7 +17449,7 @@ class SiteExportUtils:
                         device_insight_data["site_name"] = site_name
                         device_insight_data["device_id"] = device_id
                         device_insight_data["device_name"] = device_name
-                        device_insight_data["device_mac"] = device_mac
+                        device_insight_data["device_mac"] = normalized_device_mac
                         all_device_data.append(device_insight_data)
                         metrics_retrieved += 1
                         logging.debug(f"Retrieved device insight data for metric: {metric}")
@@ -17494,6 +17499,15 @@ class SiteExportUtils:
         if "ap" in metric or "wifi" in metric:
             return device_platform in {"ap", "unknown"}
         return True
+
+    @staticmethod
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+        """Validate and normalize device MAC for device insights endpoints."""
+        if not device_mac:
+            return None
+        if not PacketCaptureManager.validate_mac_address(device_mac):
+            return None
+        return PacketCaptureManager.normalize_mac_address(device_mac)
 
     @staticmethod
     def insights():  # type: ignore[no-untyped-def]
