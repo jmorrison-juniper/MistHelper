@@ -96,3 +96,16 @@ def test_device_events_52w_streams_and_writes_sqlite(monkeypatch, tmp_path):
     conn.close()
 
     assert count == 3
+
+
+def test_classify_device_platform_by_model_prefix():
+    assert MistHelper.SiteExportUtils._classify_device_platform("AP45") == "ap"
+    assert MistHelper.SiteExportUtils._classify_device_platform("EX4100-F-12P") == "switch"
+    assert MistHelper.SiteExportUtils._classify_device_platform("SRX320-POE") == "gateway"
+    assert MistHelper.SiteExportUtils._classify_device_platform("UNKNOWN") == "unknown"
+
+
+def test_metric_compatibility_filters_switch_metrics_for_ap():
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "ap") is False
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "switch") is True
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "unknown") is True

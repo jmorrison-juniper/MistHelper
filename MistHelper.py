@@ -17339,9 +17339,11 @@ class SiteExportUtils:
             device = next((dev for dev in devices if dev["id"] == device_id), None)
             device_name = device["name"] if device else device_id
             device_mac = device["mac"] if device else None
+            device_model = device.get("model", "") if device else ""
         except Exception:
             device_name = device_id
             device_mac = None
+            device_model = ""
 
         if not device_mac:
             print(f"! Error: Could not find MAC address for device {device_name}")
@@ -17354,6 +17356,12 @@ class SiteExportUtils:
 
         # Get all metrics that support "device" scope
         device_metrics = InsightMetricsUtils.get_by_scope("device")
+        device_platform = SiteExportUtils._classify_device_platform(device_model)
+        device_metrics = [
+            metric
+            for metric in device_metrics
+            if SiteExportUtils._metric_compatible_with_platform(metric, device_platform)
+        ]
 
         if not device_metrics:
             print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
@@ -17409,11 +17417,87 @@ class SiteExportUtils:
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
+    def _classify_device_platform(device_model: str) -> str:
+        """Classify Mist inventory model into ap/switch/gateway for metric filtering."""
+        model = (device_model or "").upper()
+        if model.startswith("AP"):
+            return "ap"
+        if model.startswith(("EX", "QFX")):
+            return "switch"
+        if model.startswith(("SRX", "SSR")):
+            return "gateway"
+        return "unknown"
+
+    @staticmethod
+    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
+        """Skip clearly incompatible device metrics to prevent avoidable API 400 responses."""
+        metric = (metric_name or "").lower()
+        if "switch" in metric:
+            return device_platform in {"switch", "unknown"}
+        if any(token in metric for token in ("gateway", "wan", "srx", "ssr")):
+            return device_platform in {"gateway", "unknown"}
+        if "ap" in metric or "wifi" in metric:
+            return device_platform in {"ap", "unknown"}
+        return True
+
+    @staticmethod
     def insights():  # type: ignore[no-untyped-def]
-        """Export insights for a site to SiteInsights.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.sle.listSiteSlesMetrics, data_type="sle_metrics_insights", sort_key="name"
-        )
+        """Export SLE metric availability for a selected site."""
+        logging.info("Starting export of site SLE metric insights...")
+
+        site_id = PromptUtils.select_site()
+        if not site_id:
+            logging.error("No site selected. Exiting.")
+            return
+
+        try:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
+            sites = mistapi.get_all(response=response, mist_session=apisession)
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+        except Exception as exception:
+            logging.error(f"Error getting site name: {exception}")
+            site_name = site_id
+
+        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
+        filename = f"SiteSleMetricsInsights_{safe_site_name}.csv"
+
+        try:
+            # listSiteSlesMetrics requires explicit scope and scope_id.
+            response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
+                apisession,
+                site_id,
+                scope="site",
+                scope_id=site_id,
+            )
+            metrics_payload = getattr(response, "data", response) or {}
+
+            rows = []
+            enabled_metrics = metrics_payload.get("enabled", [])
+            supported_metrics = metrics_payload.get("supported", [])
+
+            for metric_name in sorted(set(enabled_metrics + supported_metrics)):
+                rows.append(
+                    {
+                        "site_id": site_id,
+                        "site_name": site_name,
+                        "metric_name": metric_name,
+                        "enabled": metric_name in enabled_metrics,
+                        "supported": metric_name in supported_metrics,
+                    }
+                )
+
+            if rows:
+                DataExporter.save_data_to_output(rows, filename)  # type: ignore[no-untyped-call]
+                print(f"! {len(rows)} records exported to data\\{filename}")
+                logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
+            else:
+                print(f"! 0 records exported to data\\{filename} (no metrics available)")
+                logging.warning(f"No site SLE metric insight data available for site {site_name}")
+                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+        except Exception as exception:
+            print(f"! Error exporting site SLE metric insights: {exception}")
+            logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
+            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _system_events():  # type: ignore[no-untyped-def]
