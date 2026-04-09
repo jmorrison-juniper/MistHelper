@@ -23277,7 +23277,8 @@ class InsightMetricsUtils:
             List of metric names that support the target scope
         """
         csv_path = os.path.join("data", "ConstInsightMetrics.csv")
-        metrics_for_scope = []
+        metrics_for_scope: list[str] = []
+        normalized_target_scope = (target_scope or "").strip().lower()
 
         try:
             if not os.path.exists(csv_path):
@@ -23293,7 +23294,15 @@ class InsightMetricsUtils:
                     if not metric_name:
                         continue
 
-                    if scopes and target_scope in scopes:
+                    if not scopes:
+                        continue
+
+                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)
+                    # Skip placeholder/template metrics that require token substitution.
+                    if "{" in metric_name or "}" in metric_name:
+                        continue
+
+                    if normalized_target_scope in parsed_scopes:
                         metrics_for_scope.append(metric_name)
 
             logging.debug(f"Found {len(metrics_for_scope)} metrics for scope '{target_scope}': {metrics_for_scope}")
@@ -23302,6 +23311,17 @@ class InsightMetricsUtils:
         except Exception as exception:
             logging.error(f"Error reading ConstInsightMetrics.csv: {exception}")
             return []
+
+    @staticmethod
+    def _parse_scopes(scopes_text: str) -> set[str]:
+        """Parse scope strings from CSV into normalized tokens."""
+        if not scopes_text:
+            return set()
+        normalized = scopes_text.strip().lower()
+        normalized = normalized.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
+        normalized = normalized.replace(";", ",")
+        tokens = [token.strip() for token in normalized.split(",") if token.strip()]
+        return set(tokens)
 
     @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]

@@ -125,3 +125,13 @@ def test_normalize_client_mac_or_none_accepts_and_normalizes():
 
 def test_normalize_client_mac_or_none_rejects_invalid():
     assert MistHelper.SiteClientExporter._normalize_client_mac_or_none("bad-mac") is None
+
+
+def test_parse_scopes_handles_csv_style_values():
+    parsed = MistHelper.InsightMetricsUtils._parse_scopes("site, client, device")
+    assert parsed == {"site", "client", "device"}
+
+
+def test_parse_scopes_handles_brackets_and_quotes():
+    parsed = MistHelper.InsightMetricsUtils._parse_scopes("['site','client']")
+    assert parsed == {"site", "client"}
