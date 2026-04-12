@@ -64,7 +64,7 @@ dev = [
     "interrogate>=1.7.0",
     "hypothesis>=6.151.12",
     "playwright>=1.40.0",
-    "pre-commit>=3.0.0",
+    "pre-commit>=4.5.1",
 ]
 container = [
     "uvicorn>=0.20.0",
