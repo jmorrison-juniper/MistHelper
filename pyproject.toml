@@ -29,7 +29,7 @@ dependencies = [
     
     # CLI and user interface
     "prettytable>=3.5.0",
-    "tqdm>=4.64.0",
+    "tqdm>=4.67.3",
     "sshkeyboard>=2.3.0",
     
     # Data processing
