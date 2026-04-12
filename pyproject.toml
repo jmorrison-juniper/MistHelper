@@ -53,7 +53,7 @@ dev = [
     "black==26.3.1",
     "mypy>=1.0.0",
     "types-requests>=2.28.0",   # stubs for requests (Phase 1 fix)
-    "types-paramiko>=3.0.0",    # stubs for paramiko (Phase 1 fix)
+    "types-paramiko>=4.0.0.20260408",    # stubs for paramiko (Phase 1 fix)
     "types-tqdm>=4.64.0",       # stubs for tqdm (Phase 1 fix)
     "bandit>=1.7.0",
     "pip-audit>=2.7.0",
