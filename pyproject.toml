@@ -34,7 +34,7 @@ dependencies = [
     
     # Data processing
     "numpy>=1.24.0",
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.2.2",
     
     # Terminal emulation for SSH operations
     "pyte>=0.8.0",
