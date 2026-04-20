@@ -3479,6 +3479,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Global wired client report with operator-based filtering",
     },
+    "wiredClientManufacturerReport": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["mac", "timestamp", "site_id", "device_id", "manufacture"],
+        "unique_constraints": [],
+        "description": "Wired client report filtered by manufacturer selection",
+    },
     # Type 5: License and summary APIs (often aggregated data)
     "getOrgLicensesSummary": {
         "type": "auto_increment_with_unique",
@@ -15713,6 +15720,127 @@ class GlobalWiredClientReportGenerator:
         except OSError as error:
             logging.error(f"Failed to write local report artifact: {error}")
             print(f"  Warning: Could not write report summary to {report_path}")
+
+
+class WiredClientManufacturerReportGenerator:
+    """Generates wired client reports filtered by interactive manufacturer selection."""
+
+    @staticmethod
+    def execute() -> None:
+        """Main entry point: always export ALL, then optionally filter by manufacturer."""
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)
+        if not records:
+            logging.warning("No wired clients retrieved from API")
+            print("\n  No wired clients found in the organization.")
+            return
+        WiredClientManufacturerReportGenerator._write_outputs(records, "")
+        summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
+        selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)
+        if not selected:
+            return
+        filtered = WiredClientManufacturerReportGenerator._filter_by_manufacturer(records, selected)
+        WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)
+
+    @staticmethod
+    def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:
+        """Fetch all wired clients across the organization without filters."""
+        try:
+            logging.info("Fetching all organization wired clients for manufacturer report...")
+            print("\n  Retrieving all wired clients from organization...")
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+                apisession,
+                org_id,
+                limit=1000,
+            )
+            records = mistapi.get_all(response=response, mist_session=apisession) or []
+            logging.info(f"Retrieved {len(records)} wired client records")
+            print(f"  Retrieved {len(records)} wired client records")
+            return records
+        except Exception as exception:
+            logging.error(f"Failed to fetch wired clients: {exception}", exc_info=True)
+            print(f"\n  Error retrieving wired clients: {exception}")
+            return []
+
+    @staticmethod
+    def _build_manufacturer_summary(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
+        """Extract unique manufacturers with client counts, sorted by count descending."""
+        manufacturer_counts: dict[str, int] = {}
+        for record in records:
+            manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()
+            manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1
+        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[1], reverse=True)
+        return sorted_manufacturers
+
+    @staticmethod
+    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:
+        """Display manufacturer list with counts and prompt user to select one."""
+        total_clients = sum(count for _, count in summary)
+        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")
+        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")
+        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")
+        for index, (manufacturer, count) in enumerate(summary, 1):
+            display_name = manufacturer[:44]
+            print(f"  {index:<5} {display_name:<45} {count:>8}")
+        choice = InputUtils.safe_input(
+            "\n  Enter manufacturer number for filtered report (Enter to skip): ",
+            default_value="",
+            allow_empty=True,
+            context="manufacturer_report_selection",
+        )
+        if not choice:
+            return None
+        try:
+            selection_index = int(choice)
+        except ValueError:
+            print("  Invalid selection.")
+            return None
+        if 1 <= selection_index <= len(summary):
+            selected_manufacturer = summary[selection_index - 1][0]
+            logging.info(f"User selected manufacturer: {selected_manufacturer}")
+            return selected_manufacturer
+        print("  Selection out of range.")
+        return None
+
+    @staticmethod
+    def _filter_by_manufacturer(records: list[dict[str, Any]], manufacturer: str) -> list[dict[str, Any]]:
+        """Filter records by selected manufacturer. Empty string means no filter (all records)."""
+        if not manufacturer:
+            return records
+        normalized_selection = manufacturer.strip().lower()
+        return [
+            record
+            for record in records
+            if str(record.get("manufacture", "") or "").strip().lower() == normalized_selection
+        ]
+
+    @staticmethod
+    def _build_filename(manufacturer: str) -> str:
+        """Build a unique filename incorporating the selected manufacturer."""
+        if not manufacturer:
+            slug = "ALL"
+        else:
+            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]
+        return f"WiredClientManufacturerReport_{slug}"
+
+    @staticmethod
+    def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:
+        """Write filtered records through the standard CSV/SQLite export path."""
+        label = manufacturer if manufacturer else "ALL manufacturers"
+        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)
+        print(f"\n  Exporting {len(filtered)} records for: {label}")
+        if filtered:
+            flattened = DataProcessingUtils.flatten_nested_fields(filtered)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+        else:
+            sanitized = []
+        DataExporter.write_with_format_selection(
+            sanitized,
+            filename,
+            api_function_name="wiredClientManufacturerReport",
+        )
+        print(f"  Exported to: data/{filename}.csv")
+        logging.info(f"Manufacturer report exported: {len(sanitized)} records for {label} -> {filename}")
 
 
 class OrgAdminExporter:
@@ -57888,6 +58016,10 @@ menu_actions = {
     "159": (SSIDTemplateConsolidationManager.execute, "SSID Template Consolidation (5-Phase Guided Workflow)"),
     "160": (E911BSSIDReportGenerator.execute, "E911 BSSID Compliance Report"),
     "161": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
+    "162": (
+        WiredClientManufacturerReportGenerator.execute,
+        "Wired Client Manufacturer Report (browse & select)",
+    ),
 }
 
 
@@ -58626,6 +58758,7 @@ class OperationRegistry:
         },
         "160": {"category": "interactive_safe"},
         "161": {"category": "interactive_safe"},
+        "162": {"category": "interactive_safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
