@@ -25,6 +25,9 @@ numpy
 python-dotenv
 PyYAML
 
+# AI analysis (Mist Ideas Analyzer)
+openai>=1.0
+
 # Terminal emulation for SSH operations
 pyte
 

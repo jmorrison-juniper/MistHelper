@@ -3472,6 +3472,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Wired client data with composite key for time-series",
     },
+    "globalWiredClientReport": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["mac", "timestamp", "site_id", "device_id", "manufacture"],
+        "unique_constraints": [],
+        "description": "Global wired client report with operator-based filtering",
+    },
     # Type 5: License and summary APIs (often aggregated data)
     "getOrgLicensesSummary": {
         "type": "auto_increment_with_unique",
@@ -15369,6 +15376,346 @@ class OrgClientSecurityExporter:
         else:
             logging.info("No rogue APs found across all sites")
             print(" No rogue APs detected across all sites")
+
+
+class FilterOperatorEngine:
+    """Shared operator catalog, normalization, and evaluation for client search filtering."""
+
+    OPERATOR_CATALOG: list[str] = [
+        "is",
+        "is not",
+        "contains",
+        "doesn't contain",
+        "starts with",
+        "doesn't start with",
+        "ends with",
+        "doesn't end with",
+        "is blank",
+        "is not blank",
+        "is null",
+        "is not null",
+    ]
+
+    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(
+        {
+            "is",
+            "is not",
+            "contains",
+            "doesn't contain",
+            "starts with",
+            "doesn't start with",
+            "ends with",
+            "doesn't end with",
+        }
+    )
+
+    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(
+        {
+            "is",
+            "contains",
+            "starts with",
+            "ends with",
+        }
+    )
+
+    @staticmethod
+    def normalize_mac(mac_value: str) -> str:
+        """Remove delimiters and lowercase for delimiter-insensitive comparison."""
+        if not mac_value:
+            return ""
+        return re.sub(r"[:\-.]", "", mac_value).lower()
+
+    @staticmethod
+    def normalize_text(text_value: str) -> str:
+        """Lowercase and strip for case-insensitive comparison."""
+        if not text_value:
+            return ""
+        return text_value.strip().lower()
+
+    @staticmethod
+    def evaluate_operator(field_value: str | None, operator: str, search_value: str, is_mac: bool = False) -> bool:
+        """Evaluate a single operator against a field value. Returns True if record matches."""
+        if operator in ("is null", "is not null", "is blank", "is not blank"):
+            return FilterOperatorEngine._evaluate_null_blank(field_value, operator)
+        if field_value is None or str(field_value).strip() == "":
+            return False
+        normalized = FilterOperatorEngine._normalize_pair(str(field_value), search_value, is_mac)
+        return FilterOperatorEngine._evaluate_value_operator(normalized[0], operator, normalized[1])
+
+    @staticmethod
+    def validate_operator_value(operator: str, value: str, field_name: str) -> bool:
+        """Validate that value-required operators have non-empty normalized values."""
+        if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
+            if not value or not value.strip():
+                logging.warning(f"Operator '{operator}' for {field_name} requires a non-empty value")
+                print(f"\n  Operator '{operator}' requires a value for {field_name}. Please try again.")
+                return False
+        return True
+
+    @staticmethod
+    def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:
+        """Evaluate null/blank operators against a field value."""
+        if operator == "is null":
+            return field_value is None
+        if operator == "is not null":
+            return field_value is not None
+        if operator == "is blank":
+            return field_value is not None and str(field_value).strip() == ""
+        return field_value is not None and str(field_value).strip() != ""
+
+    @staticmethod
+    def _normalize_pair(field_value: str, search_value: str, is_mac: bool) -> tuple[str, str]:
+        """Normalize field and search values for comparison."""
+        if is_mac:
+            return FilterOperatorEngine.normalize_mac(field_value), FilterOperatorEngine.normalize_mac(search_value)
+        return FilterOperatorEngine.normalize_text(field_value), FilterOperatorEngine.normalize_text(search_value)
+
+    @staticmethod
+    def _evaluate_value_operator(field: str, operator: str, search: str) -> bool:
+        """Evaluate value-based positional/equality operators."""
+        operator_map: dict[str, Any] = {
+            "is": lambda f, s: f == s,
+            "is not": lambda f, s: f != s,
+            "contains": lambda f, s: s in f,
+            "doesn't contain": lambda f, s: s not in f,
+            "starts with": lambda f, s: f.startswith(s),
+            "doesn't start with": lambda f, s: not f.startswith(s),
+            "ends with": lambda f, s: f.endswith(s),
+            "doesn't end with": lambda f, s: not f.endswith(s),
+        }
+        evaluator = operator_map.get(operator)
+        return evaluator(field, search) if evaluator else False
+
+
+class GlobalWiredClientReportGenerator:
+    """Generates organization-wide wired client reports with operator-based MAC/manufacturer filtering."""
+
+    @staticmethod
+    def execute() -> None:
+        """Main entry point from menu system."""
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()
+        if criteria is False:
+            return
+        records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
+        if not records:
+            logging.warning("No wired clients retrieved from API")
+            print("\n  No wired clients found in the organization.")
+            return
+        matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
+        GlobalWiredClientReportGenerator._write_outputs(matched, metadata)
+
+    @staticmethod
+    def _prompt_filter_criteria() -> dict[str, str] | None | bool:
+        """Collect optional MAC and manufacturer filter criteria from user."""
+        print("\n--- Global Wired Client Report ---")
+        print("Optional filters (press Enter to skip):\n")
+        criteria: dict[str, str] = {}
+        mac_result = GlobalWiredClientReportGenerator._collect_single_filter("MAC address", "mac", criteria)
+        if mac_result is False:
+            return False
+        mfg_result = GlobalWiredClientReportGenerator._collect_single_filter("Manufacturer", "mfg", criteria)
+        if mfg_result is False:
+            return False
+        return criteria if criteria else None
+
+    @staticmethod
+    def _collect_single_filter(field_label: str, key_prefix: str, criteria: dict[str, str]) -> bool | None:
+        """Collect a single field operator and value. Returns False on validation failure."""
+        operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)
+        if not operator:
+            return None
+        criteria[f"{key_prefix}_operator"] = operator
+        if operator not in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
+            return True
+        value = InputUtils.safe_input(f"  Enter {field_label} value: ", context=f"wired_report_{key_prefix}_filter")
+        if not FilterOperatorEngine.validate_operator_value(operator, value, field_label):
+            return False
+        criteria[f"{key_prefix}_value"] = value
+        return True
+
+    @staticmethod
+    def _prompt_operator(field_name: str) -> str | None:
+        """Display operator selection menu and return chosen operator or None."""
+        print(f"  {field_name} filter operator:")
+        print("    0. No filter (skip)")
+        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):
+            print(f"    {index}. {operator}")
+        choice = InputUtils.safe_input(
+            f"  Select {field_name} operator (0-12, default 0): ",
+            default_value="0",
+            context=f"wired_report_{field_name.lower().replace(' ', '_')}_operator",
+        )
+        if choice == "0" or not choice:
+            return None
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):
+                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]
+                logging.info(f"Selected {field_name} operator: {selected}")
+                return selected
+        except ValueError:
+            pass
+        print(f"  Invalid selection. No {field_name} filter will be applied.")
+        return None
+
+    @staticmethod
+    def _fetch_clients(org_id: str, criteria: dict[str, str] | None) -> tuple[list[dict[str, Any]], bool]:
+        """Fetch org-wide wired clients with optional remote prefiltering."""
+        remote_params: dict[str, Any] = {"limit": 1000}
+        remote_used = False
+        if criteria:
+            remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
+        try:
+            logging.info("Fetching organization wired clients...")
+            print("\n  Retrieving wired clients from organization...")
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+                apisession,
+                org_id,
+                **remote_params,
+            )
+            records = mistapi.get_all(response=response, mist_session=apisession) or []
+            logging.info(f"Retrieved {len(records)} wired client records")
+            print(f"  Retrieved {len(records)} wired client records")
+            return records, remote_used
+        except Exception as exception:
+            logging.error(f"Failed to fetch wired clients: {exception}", exc_info=True)
+            print(f"\n  Error retrieving wired clients: {exception}")
+            return [], False
+
+    @staticmethod
+    def _build_remote_params(criteria: dict[str, str], params: dict[str, Any]) -> bool:
+        """Add best-effort remote prefilter params. Returns True if any were added."""
+        remote_used = False
+        mac_operator = criteria.get("mac_operator", "")
+        if mac_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:
+            mac_value = criteria.get("mac_value", "")
+            if mac_value:
+                params["mac"] = mac_value
+                remote_used = True
+                logging.info(f"Remote prefilter: mac={mac_value}")
+        mfg_operator = criteria.get("mfg_operator", "")
+        if mfg_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:
+            mfg_value = criteria.get("mfg_value", "")
+            if mfg_value:
+                params["manufacture"] = mfg_value
+                remote_used = True
+                logging.info(f"Remote prefilter: manufacture={mfg_value}")
+        return remote_used
+
+    @staticmethod
+    def _apply_filters(
+        records: list[dict[str, Any]],
+        criteria: dict[str, str] | None,
+        remote_used: bool,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Apply local authoritative filtering with AND logic. Returns matched records and metadata."""
+        total_retrieved = len(records)
+        has_filters = criteria is not None and bool(criteria)
+        if not has_filters:
+            metadata = GlobalWiredClientReportGenerator._build_metadata(
+                total_retrieved,
+                total_retrieved,
+                remote_used,
+                False,
+                criteria,
+            )
+            return records, metadata
+        matched = [record for record in records if GlobalWiredClientReportGenerator._record_matches(record, criteria)]
+        metadata = GlobalWiredClientReportGenerator._build_metadata(
+            total_retrieved,
+            len(matched),
+            remote_used,
+            True,
+            criteria,
+        )
+        return matched, metadata
+
+    @staticmethod
+    def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:
+        """Evaluate a single record against all active filter criteria with AND logic."""
+        mac_operator = criteria.get("mac_operator")
+        if mac_operator:
+            mac_value = criteria.get("mac_value", "")
+            field_value = record.get("mac")
+            if not FilterOperatorEngine.evaluate_operator(field_value, mac_operator, mac_value, is_mac=True):
+                return False
+        mfg_operator = criteria.get("mfg_operator")
+        if mfg_operator:
+            mfg_value = criteria.get("mfg_value", "")
+            field_value = record.get("manufacture")
+            if not FilterOperatorEngine.evaluate_operator(field_value, mfg_operator, mfg_value, is_mac=False):
+                return False
+        return True
+
+    @staticmethod
+    def _build_metadata(
+        retrieved: int,
+        matched: int,
+        remote_used: bool,
+        local_used: bool,
+        criteria: dict[str, str] | None,
+    ) -> dict[str, Any]:
+        """Build filtering decision metadata for output summary."""
+        metadata: dict[str, Any] = {
+            "records_retrieved": retrieved,
+            "records_matched": matched,
+            "remote_filter_used": remote_used,
+            "local_filter_used": local_used,
+            "generated_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+        }
+        if criteria:
+            if criteria.get("mac_operator"):
+                metadata["mac_operator"] = criteria["mac_operator"]
+                metadata["mac_value"] = criteria.get("mac_value", "")
+            if criteria.get("mfg_operator"):
+                metadata["mfg_operator"] = criteria["mfg_operator"]
+                metadata["mfg_value"] = criteria.get("mfg_value", "")
+        return metadata
+
+    @staticmethod
+    def _write_outputs(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+        """Write matched records to both local report artifact and standard export."""
+        matched_count = metadata["records_matched"]
+        retrieved_count = metadata["records_retrieved"]
+        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")
+        if matched_count == 0:
+            logging.info("Zero records matched filters -- producing empty outputs")
+            print("  No records matched the specified filters.")
+        GlobalWiredClientReportGenerator._write_standard_export(matched)
+        GlobalWiredClientReportGenerator._write_local_report(matched, metadata)
+
+    @staticmethod
+    def _write_standard_export(matched: list[dict[str, Any]]) -> None:
+        """Write matched records through the standard CSV/SQLite export path."""
+        if matched:
+            flattened = DataProcessingUtils.flatten_nested_fields(matched)
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+        else:
+            sanitized = []
+        DataExporter.write_with_format_selection(
+            sanitized,
+            "GlobalWiredClientReport",
+            api_function_name="globalWiredClientReport",
+        )
+        logging.info(f"Standard export: {len(sanitized)} records to GlobalWiredClientReport")
+
+    @staticmethod
+    def _write_local_report(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+        """Write local report artifact with summary metadata to data/ directory."""
+        report_path = os.path.join("data", "GlobalWiredClientReport_summary.json")
+        report_payload: dict[str, Any] = {
+            "summary": metadata,
+            "record_count": len(matched),
+        }
+        try:
+            with open(report_path, "w", encoding="utf-8") as report_file:
+                json.dump(report_payload, report_file, indent=2, default=str)
+            logging.info(f"Local report artifact written to {report_path}")
+            print(f"  Report summary written to {report_path}")
+        except OSError as error:
+            logging.error(f"Failed to write local report artifact: {error}")
+            print(f"  Warning: Could not write report summary to {report_path}")
 
 
 class OrgAdminExporter:
@@ -57543,6 +57890,7 @@ menu_actions = {
     "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
     "159": (SSIDTemplateConsolidationManager.execute, "SSID Template Consolidation (5-Phase Guided Workflow)"),
     "160": (E911BSSIDReportGenerator.execute, "E911 BSSID Compliance Report"),
+    "161": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
 }
 
 
@@ -58280,6 +58628,7 @@ class OperationRegistry:
             "skip_reason": "Interactive multi-phase workflow with write-capable phases",
         },
         "160": {"category": "interactive_safe"},
+        "161": {"category": "interactive_safe"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
