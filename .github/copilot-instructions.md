@@ -480,7 +480,122 @@ When multiple AI agents work on MistHelper simultaneously:
    non-overlapping files (tests, docs, CI, web portal).
 4. **Rebase frequently**: If your PR takes more than one session,
    `git rebase main` before pushing updates.
-5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass.
+5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass,
+   **including CodeQL** (takes 2-3 minutes). Use `gh pr checks <pr> --watch` to confirm.
+
+### Windows Branch Switching (File Locking)
+
+VS Code and OneDrive hold file locks that block `git checkout` on Windows.
+**Preferred approach**: Use git worktrees instead of switching branches:
+
+```powershell
+# Create a worktree for the feature branch (separate directory, no locks)
+git worktree add ../MistHelper-feat-42 feat/42-my-feature
+
+# Work in the worktree directory
+cd ../MistHelper-feat-42
+
+# When done, remove the worktree
+cd ../MistHelper
+git worktree remove ../MistHelper-feat-42
+git branch -D feat/42-my-feature
+```
+
+**Fallback** (if worktrees are not practical):
+```powershell
+# Kill orphaned git processes holding the index lock
+Get-Process git -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item .git/index.lock -ErrorAction SilentlyContinue
+git checkout main
+```
+
+### Post-Merge Fix Timing
+
+**Never push to a branch after its PR has been squash-merged.**
+The branch's history diverges from `main` after squash merge, so cherry-picks
+and pushes to the dead branch will fail or create orphaned commits.
+
+If a fix is needed after merge:
+1. Pull `main` to get the squash-merged commit.
+2. Create a **new issue** for the fix.
+3. Create a **new branch** from `main`.
+4. Fix, push, and open a **new PR**.
+
+### Feature Development Workflow (Step-by-Step)
+
+This is the canonical workflow for every code change. No shortcuts.
+
+**Step 1 -- Create an Issue**:
+```powershell
+gh issue create --title "<type>: <description>" --label "<type>,<scope>"
+# Note the issue number from the output URL
+```
+
+**Step 2 -- Create a Worktree or Branch**:
+```powershell
+# Worktree (preferred on Windows -- avoids file lock conflicts)
+git worktree add ../MistHelper-<slug> <type>/<issue>-<slug>
+cd ../MistHelper-<slug>
+
+# OR branch (if worktrees not practical)
+git checkout -b <type>/<issue>-<slug> main
+```
+
+**Step 3 -- Develop and Test**:
+```powershell
+# Make changes, then validate
+python -m py_compile MistHelper.py          # Syntax check
+python MistHelper.py --test                 # Run test suite (skip 14,18,63-65,90-100)
+```
+
+**Step 4 -- Commit with Conventional Commits**:
+```powershell
+git add <files>
+git commit -m "<type>(<scope>): <description>
+
+Closes #<issue>"
+```
+
+**Step 5 -- Push and Create PR**:
+```powershell
+git push origin <type>/<issue>-<slug>
+gh pr create --title "<type>(<scope>): <description>" --body "Closes #<issue>" --base main
+```
+
+**Step 6 -- Wait for ALL CI Checks (Including CodeQL)**:
+```powershell
+gh pr checks <pr-number> --watch
+# Do NOT proceed until every check shows a green checkmark
+# CodeQL takes 2-3 minutes -- do not skip it
+```
+
+**Step 7 -- Add Auto-Merge Label**:
+```powershell
+# Only after ALL checks (including CodeQL) are green
+gh pr edit <pr-number> --add-label "auto-merge"
+```
+
+**Step 8 -- Clean Up After Merge**:
+```powershell
+# Worktree cleanup
+cd ../MistHelper
+git worktree remove ../MistHelper-<slug>
+git checkout main && git pull origin main
+git branch -D <type>/<issue>-<slug>
+
+# OR branch cleanup
+git checkout main && git pull origin main
+git branch -D <type>/<issue>-<slug>
+```
+
+### NEVER Do These
+
+- Push fixes to a branch after its PR is squash-merged (commits become orphaned)
+- Add `auto-merge` label before CodeQL finishes on code PRs
+- Branch from feature branches (no stacking -- PRs 12-15 lesson)
+- Force-push to `main` or shared branches
+- Run `git checkout` while VS Code has files open (use worktrees instead)
+- Skip `python -m py_compile` before committing
 
 ---
 
@@ -602,13 +717,14 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
 
 ### Auto-Merge & Governance
 
-**Branch protection** on `main` requires all CI checks to pass.
+**Branch protection** on `main` requires all CI checks to pass, **including CodeQL**.
 **Auto-merge** workflow (`.github/workflows/auto-merge.yml`): PRs labeled `auto-merge` get squash-merged once all required checks are green. No human click needed.
 
 **Policy for AI-authored PRs**:
 - AI must link the PR to the originating Spec Issue.
 - AI must tick all conformance checklist boxes in the PR template.
-- AI should add the `auto-merge` label only after confirming all gates pass.
+- AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
+  Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
 - Destructive operations (menu 90-100) require explicit human review regardless of AI authorship.
 
 ### Full Pipeline Loop (End-to-End)
