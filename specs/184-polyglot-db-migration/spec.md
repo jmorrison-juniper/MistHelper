@@ -5,6 +5,24 @@
 **Status**: Draft  
 **Input**: User description: "Replace SQL everywhere we can in this project when running as a container, with Redis and ArangoDB containers bundled together. Minimize or eliminate the use of SQLite and other SQL variants. Snapshot frequency: on-change, and periodic when load is lite. Retention policy: as much as storage can hold, then rollover the oldest."
 
+## Clarifications
+
+### Session 2026-04-20
+
+- Q: Should ArangoDB and Redis require authentication credentials when deployed as containers? → A: Yes, require auth via credentials in `.env` (root password for ArangoDB, `requirepass` for Redis).
+- Q: How should entity deletion be handled when an entity is removed from the Mist API? → A: Soft-delete (mark inactive with timestamp, retain history for snapshots and graph integrity).
+- Q: What is the scalability scope — single-node only or multi-node clustering? → A: Single-node only; matches the existing single-container deployment model.
+- Q: What is explicitly out of scope for this feature? → A: No query UI, no multi-org federation, no real-time streaming dashboard, no ArangoDB/Redis clustering.
+- Q: How should Redis TimeSeries downsampling be triggered? → A: Automatically on ingestion via Redis compaction rules (not batch jobs).
+
+### Out of Scope
+
+- Query UI or data exploration dashboard (future feature)
+- Multi-org federation or cross-org data sharing
+- Real-time streaming dashboard (WebSocket-based live views)
+- ArangoDB or Redis clustering / high-availability configurations
+- Custom AQL query interface for end users
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Container Deployment with Multi-DB Backend (Priority: P1)
@@ -125,6 +143,7 @@ As a user running MistHelper directly on a host (not in a container), I want the
 - What happens when Redis TimeSeries runs out of memory? The retention policy should prevent OOM by proactively trimming, and Redis should be configured with a max-memory eviction policy as a safety net.
 - What happens when network connectivity between containers is interrupted mid-write? Writes should be atomic per entity with retry logic, and partial writes should not corrupt data.
 - What happens when migrating from an existing SQLite deployment to polyglot? A one-time migration tool should export existing SQLite data into ArangoDB/Redis.
+- What happens when an entity is deleted from the Mist API? Documents are soft-deleted (marked inactive with a timestamp) rather than hard-deleted, preserving history for snapshots and graph edge integrity.
 
 ## Requirements *(mandatory)*
 
@@ -144,6 +163,9 @@ As a user running MistHelper directly on a host (not in a container), I want the
 - **FR-012**: System MUST support configuring database connection parameters via environment variables in `.env`.
 - **FR-013**: System MUST upsert documents in ArangoDB (insert or update based on document key) to prevent duplicates, matching current SQLite `INSERT OR REPLACE` behavior.
 - **FR-014**: System MUST operate in degraded mode when only one of the two backends (ArangoDB or Redis) is available, routing data to the available backend plus CSV.
+- **FR-015**: System MUST require authentication for both ArangoDB (root password) and Redis (`requirepass`), with credentials configured via `.env` environment variables.
+- **FR-016**: System MUST soft-delete entities removed from the Mist API by marking them inactive with a timestamp, preserving history for snapshots and graph integrity.
+- **FR-017**: System MUST apply Redis TimeSeries compaction rules automatically on ingestion (not via batch jobs) for downsampling.
 
 ### Key Entities
 
@@ -174,3 +196,6 @@ As a user running MistHelper directly on a host (not in a container), I want the
 - Mist webhook integration for on-change snapshots uses the existing webhook infrastructure already present in MistHelper.
 - Network connectivity between containers on the same compose network is reliable and low-latency.
 - The `data/` volume mount pattern continues to be used for ArangoDB and Redis persistent storage.
+- Deployment is single-node only; no ArangoDB or Redis clustering is required.
+- Both ArangoDB and Redis containers require authentication; credentials are managed via `.env`.
+- Entity deletion from Mist API uses soft-delete (mark inactive) rather than hard-delete.
