@@ -54,11 +54,48 @@ services:
   #     dockerfile: Dockerfile  # Docker-compatible version with HEALTHCHECK
   #   # ... same config as above
 
+  ollama:
+    image: docker.io/ollama/ollama
+    container_name: ollama-misthelper
+    ports:
+      - "11434:11434"
+    volumes:
+      # Named volume keeps models across container restarts/upgrades.
+      # Without this, every `podman rm` wipes the downloaded models.
+      - ollama-models:/root/.ollama
+    environment:
+      # MoE CPU offload: expert FFN layers run from system RAM,
+      # attention/embedding layers stay on GPU.  Drops mixtral:8x7b
+      # VRAM requirement from ~26 GB to ~10 GB.
+      - OLLAMA_SCHED_SPREAD=1
+      # KV cache quantization: q8_0 halves VRAM vs fp16 default
+      # with negligible quality loss. q4_0 saves more but causes
+      # measurable perplexity drift on longer contexts.
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+    dns:
+      # Explicit DNS avoids Podman virtual network DNS failures
+      # when pulling large models from Cloudflare R2 (ollama.com).
+      - 8.8.8.8
+      - 1.1.1.1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+
 networks:
   misthelper-network:
     driver: bridge
 
-# Optional: Named volumes instead of bind mounts
 volumes:
   misthelper-data:
+    driver: local
+  # Persistent model storage for the local Ollama instance.
+  # Models survive container restarts, upgrades, and `podman rm`.
+  ollama-models:
     driver: local
