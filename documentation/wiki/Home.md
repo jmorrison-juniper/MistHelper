@@ -1,10 +1,10 @@
 # MistHelper Wiki
 
-Welcome to the MistHelper documentation wiki. MistHelper is a production-focused Python application for Juniper Mist Cloud network operations, providing 161 menu-driven operations for data extraction, device management, and firmware upgrades.
+Welcome to the MistHelper documentation wiki. MistHelper is a production-focused Python application for Juniper Mist Cloud network operations, providing 163 menu-driven operations for data extraction, device management, and firmware upgrades.
 
 ## Quick Links
 
-- [Menu Reference](Menu-Reference) - Complete list of all 161 menu operations
+- [Menu Reference](Menu-Reference) - Complete list of all 163 menu operations
 - [Data Model](Data-Model) - CSV and SQLite output details
 - [Testing](Testing) - Systematic test mode and CI pipeline
 - [Troubleshooting](Troubleshooting) - Common issues and solutions
