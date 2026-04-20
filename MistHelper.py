@@ -15817,9 +15817,19 @@ class WiredClientManufacturerReportGenerator:
         ]
 
     @staticmethod
+    def _build_filename(manufacturer: str) -> str:
+        """Build a unique filename incorporating the selected manufacturer."""
+        if not manufacturer:
+            slug = "ALL"
+        else:
+            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]
+        return f"WiredClientManufacturerReport_{slug}"
+
+    @staticmethod
     def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:
         """Write filtered records through the standard CSV/SQLite export path."""
         label = manufacturer if manufacturer else "ALL manufacturers"
+        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)
         print(f"\n  Exporting {len(filtered)} records for: {label}")
         if filtered:
             flattened = DataProcessingUtils.flatten_nested_fields(filtered)
@@ -15828,10 +15838,11 @@ class WiredClientManufacturerReportGenerator:
             sanitized = []
         DataExporter.write_with_format_selection(
             sanitized,
-            "WiredClientManufacturerReport",
+            filename,
             api_function_name="wiredClientManufacturerReport",
         )
-        logging.info(f"Manufacturer report exported: {len(sanitized)} records for {label}")
+        print(f"  Exported to: data/{filename}.csv")
+        logging.info(f"Manufacturer report exported: {len(sanitized)} records for {label} -> {filename}")
 
 
 class OrgAdminExporter:
