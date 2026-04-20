@@ -15412,9 +15412,6 @@ class FilterOperatorEngine:
     REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(
         {
             "is",
-            "contains",
-            "starts with",
-            "ends with",
         }
     )
 
