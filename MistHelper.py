@@ -15727,16 +15727,17 @@ class WiredClientManufacturerReportGenerator:
 
     @staticmethod
     def execute() -> None:
-        """Main entry point from menu system."""
+        """Main entry point: always export ALL, then optionally filter by manufacturer."""
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)
         if not records:
             logging.warning("No wired clients retrieved from API")
             print("\n  No wired clients found in the organization.")
             return
+        WiredClientManufacturerReportGenerator._write_outputs(records, "")
         summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
         selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)
-        if selected is None:
+        if not selected:
             return
         filtered = WiredClientManufacturerReportGenerator._filter_by_manufacturer(records, selected)
         WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)
@@ -15778,31 +15779,27 @@ class WiredClientManufacturerReportGenerator:
         print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")
         print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")
         print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")
-        print(f"  {'0':<5} {'[Export ALL - no filter]':<45} {total_clients:>8}")
         for index, (manufacturer, count) in enumerate(summary, 1):
             display_name = manufacturer[:44]
             print(f"  {index:<5} {display_name:<45} {count:>8}")
         choice = InputUtils.safe_input(
-            "\n  Enter manufacturer number (0 for all, or Enter to cancel): ",
+            "\n  Enter manufacturer number for filtered report (Enter to skip): ",
             default_value="",
             allow_empty=True,
             context="manufacturer_report_selection",
         )
         if not choice:
-            print("  Cancelled.")
             return None
         try:
             selection_index = int(choice)
         except ValueError:
-            print("  Invalid selection. Cancelled.")
+            print("  Invalid selection.")
             return None
-        if selection_index == 0:
-            return ""
         if 1 <= selection_index <= len(summary):
             selected_manufacturer = summary[selection_index - 1][0]
             logging.info(f"User selected manufacturer: {selected_manufacturer}")
             return selected_manufacturer
-        print("  Selection out of range. Cancelled.")
+        print("  Selection out of range.")
         return None
 
     @staticmethod
