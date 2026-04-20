@@ -15764,12 +15764,12 @@ class WiredClientManufacturerReportGenerator:
 
     @staticmethod
     def _build_manufacturer_summary(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
-        """Extract unique manufacturers with client counts, sorted by count descending."""
+        """Extract unique manufacturers with client counts, sorted alphabetically."""
         manufacturer_counts: dict[str, int] = {}
         for record in records:
             manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()
             manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1
-        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[1], reverse=True)
+        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[0].lower())
         return sorted_manufacturers
 
     @staticmethod
