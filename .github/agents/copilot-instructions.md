@@ -50,6 +50,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - JSON files in `data/mist_ideas_cache/` (per-idea cache + `api_index.json`); output to `data/mist_ideas_analysis.{md,json,csv}` (183-mist-ideas-analyzer)
 - Python 3.13+ + `mistapi>=0.61.4`, existing MistHelper utilities (`ConfigUtils`, `InputUtils`, `DataExporter`, `DataProcessingUtils`) (001-wired-client-global-report)
 - `data/` CSV exports and `data/mist_data.db` SQLite output via existing exporter flow (001-wired-client-global-report)
+- Python 3.13+ + `mistapi>=0.61.4`, `python-arango>=8.3.2`, `redis>=7.4.0` (with hiredis) (184-polyglot-db-migration)
+- ArangoDB 3.12 (documents + graph), Redis Stack (TimeSeries module), CSV files (always) (184-polyglot-db-migration)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -69,11 +71,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 184-polyglot-db-migration: Added Python 3.13+ + `mistapi>=0.61.4`, `python-arango>=8.3.2`, `redis>=7.4.0` (with hiredis)
 - 001-wired-client-global-report: Added Python 3.13+ + `mistapi>=0.61.4`, existing MistHelper utilities (`ConfigUtils`, `InputUtils`, `DataExporter`, `DataProcessingUtils`)
 - 183-mist-ideas-analyzer: Added Python 3.13+ + `openai>=1.0` (AI API client, OpenAI-compatible surface for all 3 backends), `python-dotenv` (credential loading), `argparse` (stdlib, CLI flags)
-- 001-mistapi-sdk-audit: Added Python 3.13 + `mistapi` (target floor `>=0.61.4`), `websocket-client` (target floor `>=1.8.0`), `requests`, `python-dotenv`
-- feat/73-audit-menu-12-org-inventory: Added Python 3.13+ + mistapi 0.59+, pytest, sqlite3 (stdlib), csv (stdlib)
-- feat/018-ssid-template-consolidation: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
 
 <!-- MANUAL ADDITIONS START -->
