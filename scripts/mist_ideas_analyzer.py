@@ -385,10 +385,11 @@ class AiBackendDetector:
             "https://api.openai.com/v1",
         )
         model = os.environ.get("AI_MODEL", "gpt-4o-mini")
+        redacted = redact_key(api_key)
         logger.info(
             "Backend: Generic OpenAI (model=%s, key=%s)",
             model,
-            redact_key(api_key),
+            redacted,
         )
         return {
             "backend": "generic",

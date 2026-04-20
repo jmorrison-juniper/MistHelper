@@ -15382,21 +15382,41 @@ class FilterOperatorEngine:
     """Shared operator catalog, normalization, and evaluation for client search filtering."""
 
     OPERATOR_CATALOG: list[str] = [
-        "is", "is not", "contains", "doesn't contain",
-        "starts with", "doesn't start with",
-        "ends with", "doesn't end with",
-        "is blank", "is not blank", "is null", "is not null",
+        "is",
+        "is not",
+        "contains",
+        "doesn't contain",
+        "starts with",
+        "doesn't start with",
+        "ends with",
+        "doesn't end with",
+        "is blank",
+        "is not blank",
+        "is null",
+        "is not null",
     ]
 
-    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset({
-        "is", "is not", "contains", "doesn't contain",
-        "starts with", "doesn't start with",
-        "ends with", "doesn't end with",
-    })
+    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(
+        {
+            "is",
+            "is not",
+            "contains",
+            "doesn't contain",
+            "starts with",
+            "doesn't start with",
+            "ends with",
+            "doesn't end with",
+        }
+    )
 
-    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset({
-        "is", "contains", "starts with", "ends with",
-    })
+    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(
+        {
+            "is",
+            "contains",
+            "starts with",
+            "ends with",
+        }
+    )
 
     @staticmethod
     def normalize_mac(mac_value: str) -> str:
@@ -15550,7 +15570,9 @@ class GlobalWiredClientReportGenerator:
             logging.info("Fetching organization wired clients...")
             print("\n  Retrieving wired clients from organization...")
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
-                apisession, org_id, **remote_params,
+                apisession,
+                org_id,
+                **remote_params,
             )
             records = mistapi.get_all(response=response, mist_session=apisession) or []
             logging.info(f"Retrieved {len(records)} wired client records")
@@ -15583,19 +15605,29 @@ class GlobalWiredClientReportGenerator:
 
     @staticmethod
     def _apply_filters(
-        records: list[dict[str, Any]], criteria: dict[str, str] | None, remote_used: bool,
+        records: list[dict[str, Any]],
+        criteria: dict[str, str] | None,
+        remote_used: bool,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Apply local authoritative filtering with AND logic. Returns matched records and metadata."""
         total_retrieved = len(records)
         has_filters = criteria is not None and bool(criteria)
         if not has_filters:
             metadata = GlobalWiredClientReportGenerator._build_metadata(
-                total_retrieved, total_retrieved, remote_used, False, criteria,
+                total_retrieved,
+                total_retrieved,
+                remote_used,
+                False,
+                criteria,
             )
             return records, metadata
         matched = [record for record in records if GlobalWiredClientReportGenerator._record_matches(record, criteria)]
         metadata = GlobalWiredClientReportGenerator._build_metadata(
-            total_retrieved, len(matched), remote_used, True, criteria,
+            total_retrieved,
+            len(matched),
+            remote_used,
+            True,
+            criteria,
         )
         return matched, metadata
 
@@ -15618,7 +15650,11 @@ class GlobalWiredClientReportGenerator:
 
     @staticmethod
     def _build_metadata(
-        retrieved: int, matched: int, remote_used: bool, local_used: bool, criteria: dict[str, str] | None,
+        retrieved: int,
+        matched: int,
+        remote_used: bool,
+        local_used: bool,
+        criteria: dict[str, str] | None,
     ) -> dict[str, Any]:
         """Build filtering decision metadata for output summary."""
         metadata: dict[str, Any] = {
