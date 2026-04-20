@@ -398,6 +398,93 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 ---
 
+## Multi-Agent Git Workflow
+
+Global workflow rules are defined in
+`%APPDATA%/Code/User/prompts/coding-standards.instructions.md`.
+This section adds MistHelper-specific enforcement.
+
+### Issue-First Development
+
+Every code change starts with an issue. No branch without an issue.
+
+When any error is detected during development (lint, test, type, runtime, security, CI),
+create a GitHub issue **before** attempting a fix:
+
+| Trigger | Label(s) | Issue Title Pattern |
+|---------|----------|---------------------|
+| `ruff check` violation | `lint`, rule code | `Lint: <rule> -- <description>` |
+| `pytest` failure | `bug`, `test` | `Test failure: <test_name>` |
+| `mypy` type error | `chore`, `types` | `Type error: <file>:<line>` |
+| Runtime exception | `bug` | `Runtime: <exception> in <function>` |
+| Security finding | `security` | `Security: <tool> -- <finding>` |
+| CI pipeline failure | `ci` | `CI: <workflow> -- <failure>` |
+
+Use `gh issue create --title "..." --label "..." --body "..."` to create issues
+programmatically. Include the full error output in the issue body for traceability.
+
+### Branch Strategy (No Stacking)
+
+```
+main (always deployable)
+  |-- fix/<issue-number>-<slug>      # bug fixes
+  |-- feat/<issue-number>-<slug>     # features
+  |-- chore/<issue-number>-<slug>    # maintenance / lint / docs
+```
+
+**Critical rules**:
+- Every branch targets `main` directly. Never branch from another feature branch.
+- Branch name must include the issue number: `fix/42-clear-session`.
+- One branch per issue. One PR per branch. One concern per PR.
+- Keep branches short-lived: merge or close within days, not weeks.
+
+**Lesson learned**: PRs 12-15 were stacked (branched from each other instead of main),
+causing cascading merge conflicts that required manual resolution. This rule prevents that.
+
+### Commit Messages
+
+Use Conventional Commits format:
+```
+<type>(<scope>): <description>
+
+Closes #<issue-number>
+```
+Types: `fix`, `feat`, `chore`, `refactor`, `test`, `docs`, `ci`.
+Include `Closes #N` in the body so the issue auto-closes on merge.
+
+### Merge Strategy
+
+- **Squash merge** to `main` (one clean commit per PR).
+- **Rebase before merging** if the branch is behind `main`.
+- **Delete branch** after merge (automatic via GitHub settings).
+- **Never force-push** to a shared branch or `main`.
+
+### Required Labels
+
+Every issue and PR MUST have at least:
+1. A **type** label: `bug`, `feature`, `chore`, `lint`, `security`, `refactor`
+2. A **scope** label: `MistHelper.py`, `tests`, `ci`, `container`, `docs`, `web-portal`
+3. A **status** label when in progress: `in-progress`
+
+### Fleet Coordination (Multi-Agent)
+
+When multiple AI agents work on MistHelper simultaneously:
+
+1. **Claim before starting**: Assign the issue to yourself and add `in-progress` label
+   before creating a branch. If already claimed, pick a different issue.
+2. **Check for file overlap**: Run
+   `gh pr list --json files --jq '.[].files[].path'`
+   to see what files other open PRs touch. Avoid overlapping files.
+3. **MistHelper.py is a hot file**: Since most changes touch this single file, only one
+   agent should have an open PR modifying it at a time. Others should wait or work on
+   non-overlapping files (tests, docs, CI, web portal).
+4. **Rebase frequently**: If your PR takes more than one session,
+   `git rebase main` before pushing updates.
+5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass,
+   **including CodeQL** (takes 2-3 minutes). Use `gh pr checks <pr> --watch` to confirm.
+
+---
+
 ## External Resources
 - Mist API Docs: `documentation/mist-api-openapi3*.{json,yaml}`
 - Thomas Munzer's mistapi: https://github.com/tmunzer/mistapi_python
@@ -465,6 +552,19 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 
+### Security Findings: Fix Over Suppress
+
+Security tool findings (bandit, pip-audit, CodeQL) must be **resolved**, not suppressed:
+
+1. **Fix the root cause** -- Rewrite code to eliminate the vulnerability.
+2. **Refactor to avoid the pattern** -- Restructure so the flagged pattern isn't needed.
+3. **`#nosec` only for verified false positives** -- When the tool misidentifies safe code
+   (e.g., logging f-string flagged as SQL, intentional `0.0.0.0` bind gated by container
+   detection). The annotation MUST include a justification comment.
+
+Never suppress legitimate findings. If a finding requires more than a trivial fix,
+create a GitHub issue and track it.
+
 ### Exact Tools, Modules & Actions
 
 **Editor & AI**:
@@ -503,13 +603,14 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
 
 ### Auto-Merge & Governance
 
-**Branch protection** on `main` requires all CI checks to pass.
+**Branch protection** on `main` requires all CI checks to pass, **including CodeQL**.
 **Auto-merge** workflow (`.github/workflows/auto-merge.yml`): PRs labeled `auto-merge` get squash-merged once all required checks are green. No human click needed.
 
 **Policy for AI-authored PRs**:
 - AI must link the PR to the originating Spec Issue.
 - AI must tick all conformance checklist boxes in the PR template.
-- AI should add the `auto-merge` label only after confirming all gates pass.
+- AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
+  Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
 - Destructive operations (menu 90-100) require explicit human review regardless of AI authorship.
 
 ### Full Pipeline Loop (End-to-End)
@@ -618,19 +719,166 @@ In addition to the standard checklist, PRs that touch web UI must include:
 
 ---
 
+## Complexity-Driven SpecKit Escalation
+
+Not every task needs full ceremony. Use this decision tree to determine whether
+to implement directly or escalate to the SpecKit workflow
+(specify -> plan -> tasks -> implement):
+
+**Implement directly** (no spec needed):
+- Single-file edits with obvious intent (typo, log message, config value)
+- Lint/format fixes with auto-fix available
+- Documentation-only changes
+- Adding a test for existing, well-understood behavior
+
+**Escalate to SpecKit** (spec required before coding):
+- Changes touching 3+ files or 2+ classes
+- New menu operations or API integrations
+- Architectural changes (new classes, module splits, data flow changes)
+- Bug fixes where root cause is unclear or spans multiple components
+- Any change to destructive operations (menu 90-100)
+- Performance or concurrency work
+- Database schema or primary key strategy changes
+
+**Why**: Smaller models (e.g., GPT-5 Mini) lose track of multi-step
+implementations without structured artifacts. The spec anchors intent, the plan
+decomposes complexity, and tasks provide checkpoint-by-checkpoint execution that
+any model can follow.
+
+**Workflow when escalating**:
+1. `speckit.specify` -- Create/update the spec from the issue
+2. `speckit.clarify` -- Surface underspecified areas (recommended)
+3. `speckit.plan` -- Generate the implementation plan
+4. `speckit.tasks` -- Break the plan into ordered tasks
+5. `speckit.implement` -- Execute the tasks
+6. `speckit.analyze` -- Cross-check spec/plan/tasks consistency
+
+If in doubt, escalate. A spec that turns out unnecessary costs minutes.
+A botched multi-file change without a spec costs hours.
+
+---
+
+## Git Workflow
+
+### Feature Development Workflow (Step-by-Step)
+
+This is the canonical workflow for every code change. No shortcuts.
+
+**Step 1 -- Create an Issue**:
+```powershell
+gh issue create --title "<type>: <description>" --label "<type>,<scope>"
+# Note the issue number from the output URL
+```
+
+**Step 2 -- Create a Worktree or Branch**:
+```powershell
+# Worktree (preferred on Windows -- avoids file lock conflicts)
+git worktree add ../MistHelper-<slug> <type>/<issue>-<slug>
+cd ../MistHelper-<slug>
+
+# OR branch (if worktrees not practical)
+git checkout -b <type>/<issue>-<slug> main
+```
+
+**Step 3 -- Develop and Test**:
+```powershell
+# Make changes, then validate
+python -m py_compile MistHelper.py          # Syntax check
+python MistHelper.py --test                 # Run test suite (skip 14,18,63-65,90-100)
+```
+
+**Step 4 -- Commit with Conventional Commits**:
+```powershell
+git add <files>
+git commit -m "<type>(<scope>): <description>
+
+Closes #<issue>"
+```
+
+**Step 5 -- Push and Create PR**:
+```powershell
+git push origin <type>/<issue>-<slug>
+gh pr create --title "<type>(<scope>): <description>" --body "Closes #<issue>" --base main
+```
+
+**Step 6 -- Wait for ALL CI Checks (Including CodeQL)**:
+```powershell
+gh pr checks <pr-number> --watch
+# Do NOT proceed until every check shows a green checkmark
+# CodeQL takes 2-3 minutes -- do not skip it
+```
+
+**Step 7 -- Add Auto-Merge Label**:
+```powershell
+# Only after ALL checks (including CodeQL) are green
+gh pr edit <pr-number> --add-label "auto-merge"
+```
+
+**Step 8 -- Clean Up After Merge**:
+```powershell
+# Worktree cleanup
+cd ../MistHelper
+git worktree remove ../MistHelper-<slug>
+git checkout main && git pull origin main
+git branch -D <type>/<issue>-<slug>
+
+# OR branch cleanup
+git checkout main && git pull origin main
+git branch -D <type>/<issue>-<slug>
+```
+
+### Windows Branch Switching (File Locking)
+
+VS Code and OneDrive hold file locks that block `git checkout` on Windows.
+**Preferred approach**: Use git worktrees instead of switching branches (see Step 2 above).
+
+**Fallback** (if worktrees are not practical):
+```powershell
+# Kill orphaned git processes holding the index lock
+Get-Process git -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item .git/index.lock -ErrorAction SilentlyContinue
+git checkout main
+```
+
+### Post-Merge Fix Timing
+
+**Never push to a branch after its PR has been squash-merged.**
+The branch's history diverges from `main` after squash merge, so cherry-picks
+and pushes to the dead branch will fail or create orphaned commits.
+
+If a fix is needed after merge:
+1. Pull `main` to get the squash-merged commit.
+2. Create a **new issue** for the fix.
+3. Create a **new branch** from `main`.
+4. Fix, push, and open a **new PR**.
+
+### NEVER Do These
+
+- Push fixes to a branch after its PR is squash-merged (commits become orphaned)
+- Add `auto-merge` label before CodeQL finishes on code PRs
+- Branch from feature branches (no stacking -- PRs 12-15 lesson)
+- Force-push to `main` or shared branches
+- Run `git checkout` while VS Code has files open (use worktrees instead)
+- Skip `python -m py_compile` before committing
+
+---
+
 ## AI Agent Operating Instructions (Summary for Copilot/Workspace)
 
 When implementing a Feature Spec, AI agents must follow this protocol:
 
-1. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
-2. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
-3. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
-4. **Update `deploy/.env.example`** if introducing new environment variables.
-5. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
-6. **Prepare the PR** using the PR template; link the Spec and complete all checklist items.
-7. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
-8. **Add the `auto-merge` label** once all checks pass.
-9. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
+1. **Create or claim a GitHub issue** before writing any code. Add `in-progress` label.
+2. **Create a branch from `main`** using `fix/<issue>-<slug>`, `feat/<issue>-<slug>`, or `chore/<issue>-<slug>`.
+3. **Check for file overlap** with other open PRs (`gh pr list --json files`). Wait if MistHelper.py is contested.
+4. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
+5. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
+6. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
+7. **Update `deploy/.env.example`** if introducing new environment variables.
+8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
+9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, and complete all checklist items.
+10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
+11. **Add the `auto-merge` label** once all checks pass.
+12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
 
 ---
 
