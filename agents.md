@@ -140,9 +140,11 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 **AI agents MUST execute this complete workflow after any code changes:**
 
 ```powershell
-# Step 1: Validate Syntax BEFORE Commit
-python -m py_compile MistHelper.py
-# If no output, syntax is valid. If errors, fix before committing.
+# Step 1: Validate BEFORE Commit (syntax + lint + format)
+python -m py_compile MistHelper.py    # Syntax check (no output = valid)
+python -m ruff check MistHelper.py    # Lint check (must pass clean)
+python -m black --check MistHelper.py # Format check (run without --check to auto-fix)
+# All three must pass before committing.
 
 # Step 2: Commit and Push
 git add MistHelper.py README.md  # Include all modified files
@@ -457,6 +459,7 @@ Include `Closes #N` in the body so the issue auto-closes on merge.
 - **Squash merge** to `main` (one clean commit per PR).
 - **Rebase before merging** if the branch is behind `main`.
 - **Delete branch** after merge (automatic via GitHub settings).
+- **`Closes #N` in PR body** -- squash merge only reads the PR body for auto-close keywords, not individual commit messages.
 - **Never force-push** to a shared branch or `main`.
 
 ### Required Labels
@@ -784,6 +787,8 @@ git checkout -b <type>/<issue>-<slug> main
 ```powershell
 # Make changes, then validate
 python -m py_compile MistHelper.py          # Syntax check
+python -m ruff check MistHelper.py          # Lint check
+python -m black MistHelper.py              # Auto-format (fixes style in place)
 python MistHelper.py --test                 # Run test suite (skip 14,18,63-65,90-100)
 ```
 
@@ -859,7 +864,7 @@ If a fix is needed after merge:
 - Branch from feature branches (no stacking -- PRs 12-15 lesson)
 - Force-push to `main` or shared branches
 - Run `git checkout` while VS Code has files open (use worktrees instead)
-- Skip `python -m py_compile` before committing
+- Skip `python -m py_compile`, `ruff check`, or `black --check` before committing
 
 ---
 
