@@ -1,0 +1,24 @@
+# Copilot Coding Agent -- Environment Setup
+# This file configures the development environment that the Copilot Coding Agent
+# uses when implementing issues assigned to it. It runs as a GitHub Actions workflow
+# step before the agent starts coding.
+#
+# Docs: https://docs.github.com/en/copilot/customizing-copilot/customizing-the-development-environment-for-copilot-coding-agent
+
+steps:
+  - name: Set up Python 3.13
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.13"
+
+  - name: Install UV package manager
+    run: pip install uv
+
+  - name: Install project dependencies
+    run: uv pip install --system -r requirements.txt
+
+  - name: Verify environment
+    run: |
+      python --version
+      python -m py_compile MistHelper.py
+      echo "Environment ready for Copilot Coding Agent"
