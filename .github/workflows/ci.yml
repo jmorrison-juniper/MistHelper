@@ -413,7 +413,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
-    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    if: ${{ always() && github.ref == 'refs/heads/main' && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -475,5 +475,62 @@ jobs:
                 --label "bug,ci,quality-gate" \
                 --body "$BODY"
               echo "Created issue for failed gate: ${gate}"
+            fi
+          done
+
+  # ──────────────────────────────────────────────────────────────
+  # SUCCESS → AUTO-CLOSE resolved quality-gate issues
+  # ──────────────────────────────────────────────────────────────
+  close_resolved_issues:
+    name: "Close resolved quality-gate issues"
+    needs:
+      - ruff
+      - black
+      - mypy
+      - pytest
+      - bandit
+      - pip_audit
+      - pylint
+      - radon
+      - vulture
+      - pydocstyle
+      - interrogate
+    if: ${{ always() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - name: Close issues for passing gates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          declare -A RESULTS
+          RESULTS[ruff]="${{ needs.ruff.result }}"
+          RESULTS[black]="${{ needs.black.result }}"
+          RESULTS[mypy]="${{ needs.mypy.result }}"
+          RESULTS[pytest]="${{ needs.pytest.result }}"
+          RESULTS[bandit]="${{ needs.bandit.result }}"
+          RESULTS[pip_audit]="${{ needs.pip_audit.result }}"
+          RESULTS[pylint]="${{ needs.pylint.result }}"
+          RESULTS[radon]="${{ needs.radon.result }}"
+          RESULTS[vulture]="${{ needs.vulture.result }}"
+          RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
+          RESULTS[interrogate]="${{ needs.interrogate.result }}"
+
+          for gate in "${!RESULTS[@]}"; do
+            result="${RESULTS[$gate]}"
+            if [ "$result" = "success" ]; then
+              SEARCH="CI: quality-gate ${gate} failed"
+              ISSUES=$(gh issue list --state open --label "quality-gate" --search "$SEARCH" --json number --jq '.[].number')
+              for issue_number in $ISSUES; do
+                gh issue close "$issue_number" \
+                  --reason completed \
+                  --comment "Auto-closed: \`${gate}\` gate now passing on \`${{ github.ref_name }}\` (commit \`${{ github.sha }}\`)."
+                echo "Closed issue #${issue_number} (gate: ${gate})"
+              done
             fi
           done
