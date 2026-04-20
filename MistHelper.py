@@ -15809,7 +15809,8 @@ class WiredClientManufacturerReportGenerator:
             return records
         normalized_selection = manufacturer.strip().lower()
         return [
-            record for record in records
+            record
+            for record in records
             if str(record.get("manufacture", "") or "").strip().lower() == normalized_selection
         ]
 
