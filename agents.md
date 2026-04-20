@@ -555,6 +555,11 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 
+**Automated issue lifecycle** (main branch only):
+- Gate fails on `main` → GitHub issue auto-created with `quality-gate` label
+- Gate passes on `main` → matching open issue auto-closed
+- PR branch failures are visible in PR checks only (no issues created)
+
 ### Security Findings: Fix Over Suppress
 
 Security tool findings (bandit, pip-audit, CodeQL) must be **resolved**, not suppressed:
