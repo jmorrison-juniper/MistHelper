@@ -66,6 +66,19 @@ if TYPE_CHECKING:
     from prettytable import PrettyTable
 
 # ============================================================================
+# POLYGLOT DATABASE LAYER (OPTIONAL)
+# ============================================================================
+# Conditional import for ArangoDB + Redis TimeSeries backends.
+# Falls back gracefully in standalone mode (no python-arango/redis installed).
+try:
+    from src.db import DatabaseConfig, configure_db_logging
+    from src.db.router import DatabaseRouter
+
+    DB_LAYER_AVAILABLE = True
+except ImportError:
+    DB_LAYER_AVAILABLE = False
+
+# ============================================================================
 # EARLY LOGGING SETUP
 # ============================================================================
 # Configure logging IMMEDIATELY after imports to prevent Python from creating
@@ -3398,49 +3411,61 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "System events with composite key for uniqueness",
     },
-    # Type 3: Composite key for statistics and metrics APIs
-    # These APIs return aggregated data that benefits from composite keys
+    # Type 3: TimeSeries metrics -- pure-numeric endpoints routed to Redis TimeSeries
+    # These APIs return time-series data with explicit numeric and label fields
     "listOrgDevicesStats": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["device_id", "timestamp"],
         "indexes": ["device_id", "timestamp", "org_id", "site_id", "type"],
         "unique_constraints": [],
-        "description": "Organization device statistics with composite key for metrics",
+        "description": "Organization device statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["cpu_util", "mem_util", "uptime", "num_clients"],
+        "ts_label_fields": ["hostname", "model", "type", "site_id"],
     },
     "listSiteDevicesStats": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["device_id", "timestamp"],
         "indexes": ["device_id", "timestamp", "site_id", "type"],
         "unique_constraints": [],
-        "description": "Site device statistics with composite key for metrics",
+        "description": "Site device statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["cpu_util", "mem_util", "uptime", "num_clients"],
+        "ts_label_fields": ["hostname", "model", "type"],
     },
     "listSiteWirelessClientsStats": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["client_mac", "timestamp"],
         "indexes": ["client_mac", "timestamp", "site_id", "device_id"],
         "unique_constraints": [],
-        "description": "Site wireless client statistics with composite key for metrics",
+        "description": "Wireless client statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["rssi", "snr", "rx_rate", "tx_rate"],
+        "ts_label_fields": ["ssid", "hostname", "device_id"],
     },
     "searchOrgSwOrGwPorts": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["device_id", "port_id", "timestamp"],
         "indexes": ["device_id", "port_id", "timestamp", "org_id"],
         "unique_constraints": [],
-        "description": "Switch/gateway port statistics with composite key",
+        "description": "Switch/gateway port statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["rx_bytes", "tx_bytes", "rx_errors", "tx_errors"],
+        "ts_label_fields": ["port_id", "device_id", "org_id"],
     },
     "searchSiteSwOrGwPorts": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["device_id", "port_id", "timestamp"],
         "indexes": ["device_id", "port_id", "timestamp", "site_id"],
         "unique_constraints": [],
-        "description": "Site switch/gateway port statistics with composite key",
+        "description": "Site port statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["rx_bytes", "tx_bytes", "rx_errors", "tx_errors"],
+        "ts_label_fields": ["port_id", "device_id", "site_id"],
     },
     "searchOrgPeerPathStats": {
-        "type": "composite_pk",
+        "type": "timeseries_pk",
         "primary_key": ["from_device", "to_device", "timestamp"],
         "indexes": ["from_device", "to_device", "timestamp", "org_id"],
         "unique_constraints": [],
-        "description": "Peer path statistics with composite key",
+        "description": "Peer path statistics routed to Redis TimeSeries",
+        "ts_value_fields": ["latency", "jitter", "loss"],
+        "ts_label_fields": ["from_device", "to_device", "org_id"],
     },
     # Map-related endpoints
     "listSiteMaps": {
@@ -3493,6 +3518,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "sku", "type"],
         "unique_constraints": [],
         "description": "License summary data (aggregated, no stable primary key)",
+    },
+    "listOrgLicenses": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "sku", "type"],
+        "unique_constraints": [],
+        "description": "License records from canonical list endpoint",
     },
     # Site Inventory Health Analysis reports
     "sitesMissingInfrastructure": {
@@ -9405,12 +9437,38 @@ class DataExporter:
     Uses static methods to avoid unnecessary object instantiation.
     """
 
+    _router: "DatabaseRouter | None" = None  # type: ignore[name-defined]
+    _router_initialized: bool = False
+    _last_snapshot_times: dict[str, float] = {}
+
+    @classmethod
+    def _init_router(cls) -> None:
+        """Initialize polyglot DatabaseRouter once (lazy, idempotent)."""
+        if cls._router_initialized:
+            return
+        cls._router_initialized = True
+        if not DB_LAYER_AVAILABLE:
+            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")
+            return
+        try:
+            configure_db_logging()
+            config = DatabaseConfig.from_env()
+            cls._router = DatabaseRouter(
+                config,
+                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,
+            )
+            logging.info("Polyglot DatabaseRouter initialized")
+        except Exception as error:
+            logging.warning(f"DatabaseRouter init failed, CSV/SQLite only: {error}")
+            cls._router = None
+
     @staticmethod
     def write_with_format_selection(
         data: list[dict[str, Any]],
         filename_or_table: str,
         format_override: str | None = None,
         api_function_name: str | None = None,
+        raw_data: list[dict[str, Any]] | None = None,
     ) -> bool:
         """
         Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
@@ -9420,6 +9478,7 @@ class DataExporter:
             filename_or_table: CSV filename or database table name
             format_override: Optional override for output format ("csv" or "sqlite")
             api_function_name: Name of the API function for SQLite strategy selection
+            raw_data: Unflattened API response for polyglot backends (if None, uses data)
 
         Returns:
             bool: True if successful, False otherwise
@@ -9434,12 +9493,56 @@ class DataExporter:
 
         try:
             if output_format == "csv":
-                return DataExporter._write_csv_format(data, filename_or_table)
+                csv_ok = DataExporter._write_csv_format(data, filename_or_table)
             else:
-                return DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
+                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
         except Exception as error:
             logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {error}")
             return False
+
+        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
+        return csv_ok
+
+    @staticmethod
+    def _route_to_polyglot(
+        data: list[dict[str, Any]],
+        api_function_name: str | None,
+        raw_data: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Send data to polyglot backends (ArangoDB/Redis) if available."""
+        if not api_function_name or not DB_LAYER_AVAILABLE:
+            return
+        DataExporter._init_router()
+        if DataExporter._router is None:
+            return
+        try:
+            polyglot_data = raw_data or data
+            result = DataExporter._router.write(polyglot_data, api_function_name)
+            logging.info(
+                f"Polyglot write: backend={result.backend}, "
+                f"written={result.records_written}, "
+                f"failed={result.records_failed}"
+            )
+        except Exception as error:
+            logging.warning(f"Polyglot write failed (CSV preserved): {error}")
+
+    @classmethod
+    def _check_periodic_snapshot(
+        cls,
+        api_function_name: str,
+        threshold_seconds: float = 3600.0,
+    ) -> bool:
+        """Check if enough time elapsed since last snapshot for this API.
+
+        Returns True if a snapshot should be taken (threshold exceeded).
+        Updates the timestamp when returning True.
+        """
+        now = time.time()
+        last_time = cls._last_snapshot_times.get(api_function_name, 0.0)
+        if (now - last_time) < threshold_seconds:
+            return False
+        cls._last_snapshot_times[api_function_name] = now
+        return True
 
     @staticmethod
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
@@ -9566,19 +9669,24 @@ class DataExporter:
             return 0
 
         # Filter to dict entries only (defensive)
-        processed_data = [entry for entry in data if isinstance(entry, dict)]
+        raw_data = [entry for entry in data if isinstance(entry, dict)]
 
         # Sort if requested
         if sort_key:
-            processed_data = sorted(processed_data, key=lambda x: x.get(sort_key, ""))
+            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))
             logging.debug(f"Data sorted by key: {sort_key}")
 
-        # Apply standard processing
-        processed_data = DataProcessingUtils.flatten_nested_fields(processed_data)
+        # Apply standard processing for CSV/SQLite (flatten + escape)
+        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)
         processed_data = DataProcessingUtils.escape_multiline(processed_data)  # type: ignore[no-untyped-call]
 
-        # Save the processed data
-        success = DataExporter.save_data_to_output(processed_data, filename, api_function_name)  # type: ignore[no-untyped-call]
+        # Save flattened data to CSV/SQLite, pass raw to polyglot
+        success = DataExporter.write_with_format_selection(
+            processed_data,
+            filename,
+            api_function_name=api_function_name,
+            raw_data=raw_data,
+        )
 
         if success:
             logging.info(f"Exported {len(processed_data)} records to {filename}")
@@ -15901,11 +16009,11 @@ class OrgAdminExporter:
                 raw_items = [raw_items]
             if not raw_items:
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.save_data_to_output([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(raw_items)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+            DataExporter.save_data_to_output(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
             logging.info(f"Exported {len(processed)} license records to {filename}.")
         except Exception as e:
             logging.error(f"Failed to export licenses: {e}")
@@ -62107,7 +62215,16 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         action="store_true",
         help="Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu",
     )
+    parser.add_argument(
+        "--standalone",
+        action="store_true",
+        help="Force standalone/CSV-only mode, disabling ArangoDB and Redis connections",
+    )
     args = parser.parse_args()
+
+    # Apply --standalone CLI flag to environment
+    if args.standalone:
+        os.environ["MISTHELPER_STANDALONE"] = "true"
 
     # Store args globally for menu functions to access CLI flags
     globals()["args"] = args
