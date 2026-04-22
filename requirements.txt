@@ -47,6 +47,13 @@ matplotlib
 pillow
 kaleido
 
+# Polyglot database backends (ArangoDB + Redis TimeSeries)
+python-arango>=8.3.2
+redis[hiredis]>=7.4.0
+
+# Structured logging for database modules
+structlog
+
 # Pygments: CVE-2026-4539 has no fix available yet - ignored in CI pip-audit
 Pygments>=2.19.2
 

@@ -18,7 +18,7 @@ from typing import Any
 
 import redis
 
-from src.db import DatabaseConfig, WriteResult, get_logger
+from . import DatabaseConfig, WriteResult, get_logger
 
 RAW_RETENTION_MS = int(os.environ.get("REDIS_RAW_RETENTION_DAYS", "7")) * 86_400_000
 HOURLY_RETENTION_MS = 90 * 86_400_000  # 90 days
@@ -48,6 +48,7 @@ class RedisTimeSeriesWriter:
     """
 
     def __init__(self, config: DatabaseConfig) -> None:
+        """Initialize Redis TimeSeries connection and verify module."""
         self._log = get_logger("redis_writer")
         self._client = redis.Redis(
             host=config.redis_host,
@@ -61,7 +62,7 @@ class RedisTimeSeriesWriter:
         self._log.info("redis_connected", host=config.redis_host)
 
     def _verify_timeseries_module(self) -> None:
-        modules = self._client.module_list()
+        modules: list[dict[str, Any]] = self._client.module_list()  # type: ignore[assignment]
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules
@@ -491,6 +492,7 @@ class RedisJSONWriter:
     """
 
     def __init__(self, config: DatabaseConfig) -> None:
+        """Initialize Redis JSON connection and verify module."""
         self._log = get_logger("redis_json_writer")
         self._client = redis.Redis(
             host=config.redis_host,
@@ -503,7 +505,7 @@ class RedisJSONWriter:
 
     def _verify_json_module(self) -> None:
         """Check that the ReJSON module is loaded."""
-        modules = self._client.module_list()
+        modules: list[dict[str, Any]] = self._client.module_list()  # type: ignore[assignment]
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules

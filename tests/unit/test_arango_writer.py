@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.db import DatabaseConfig, WriteResult
+from src.db import DatabaseConfig
 
 
 @pytest.fixture
@@ -30,9 +30,7 @@ def mock_arango_client():
         mock_client.db.return_value = mock_sys_db
         mock_sys_db.has_database.return_value = True
         mock_db = MagicMock()
-        mock_client.db.side_effect = lambda name, **kw: (
-            mock_sys_db if name == "_system" else mock_db
-        )
+        mock_client.db.side_effect = lambda name, **kw: (mock_sys_db if name == "_system" else mock_db)
         yield {
             "client_cls": mock_cls,
             "client": mock_client,
@@ -55,10 +53,8 @@ class TestArangoDBWriterInit:
         from src.db.arango_writer import ArangoDBWriter
 
         mock_arango_client["sys_db"].has_database.return_value = False
-        writer = ArangoDBWriter(config)
-        mock_arango_client["sys_db"].create_database.assert_called_once_with(
-            "misthelper"
-        )
+        ArangoDBWriter(config)
+        mock_arango_client["sys_db"].create_database.assert_called_once_with("misthelper")
 
 
 class TestArangoDBWriterWrite:
@@ -72,7 +68,7 @@ class TestArangoDBWriterWrite:
         mock_collection = MagicMock()
         mock_db.has_collection.return_value = True
         mock_db.collection.return_value = mock_collection
-        mock_collection.insert.return_value = {"_key": "uuid-1"}
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}
 
         strategy = {
             "type": "natural_pk",
@@ -84,11 +80,10 @@ class TestArangoDBWriterWrite:
         assert result.success is True
         assert result.backend == "arangodb"
         assert result.records_written == 1
-        mock_collection.insert.assert_called_once()
-        call_args = mock_collection.insert.call_args
-        doc = call_args[0][0]
-        assert doc["_key"] == "uuid-1"
-        assert "_misthelper_updated_at" in doc
+        mock_collection.import_bulk.assert_called_once()
+        docs = mock_collection.import_bulk.call_args[0][0]
+        assert docs[0]["_key"] == "uuid-1"
+        assert "_misthelper_updated_at" in docs[0]
 
     def test_auto_creates_collection(self, config, mock_arango_client):
         from src.db.arango_writer import ArangoDBWriter
@@ -98,7 +93,8 @@ class TestArangoDBWriterWrite:
         mock_db.has_collection.return_value = False
         mock_collection = MagicMock()
         mock_db.create_collection.return_value = mock_collection
-        mock_collection.insert.return_value = {"_key": "uuid-1"}
+        mock_db.collection.return_value = mock_collection
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}
         data = [{"id": "uuid-1", "name": "Test"}]
@@ -115,7 +111,7 @@ class TestArangoDBWriterWrite:
         mock_collection = MagicMock()
         mock_db.has_collection.return_value = True
         mock_db.collection.return_value = mock_collection
-        mock_collection.insert.return_value = {"_key": "auto-1"}
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}
 
         strategy = {
             "type": "auto_increment_with_unique",
@@ -125,8 +121,8 @@ class TestArangoDBWriterWrite:
         result = writer.write(data, "summaries", strategy)
 
         assert result.success is True
-        call_doc = mock_collection.insert.call_args[0][0]
-        assert "_key" in call_doc
+        docs = mock_collection.import_bulk.call_args[0][0]
+        assert "_key" in docs[0]
 
     def test_handles_insert_error_gracefully(self, config, mock_arango_client):
         from src.db.arango_writer import ArangoDBWriter
@@ -136,7 +132,7 @@ class TestArangoDBWriterWrite:
         mock_collection = MagicMock()
         mock_db.has_collection.return_value = True
         mock_db.collection.return_value = mock_collection
-        mock_collection.insert.side_effect = Exception("Insert failed")
+        mock_collection.import_bulk.side_effect = Exception("Import failed")
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}
         data = [{"id": "uuid-1"}]
@@ -152,14 +148,14 @@ class TestArangoDBWriterWrite:
         mock_collection = MagicMock()
         mock_db.has_collection.return_value = True
         mock_db.collection.return_value = mock_collection
-        mock_collection.insert.return_value = {"_key": "uuid-1"}
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}
         data = [{"id": "uuid-1"}]
         writer.write(data, "sites", strategy)
 
-        call_doc = mock_collection.insert.call_args[0][0]
-        assert isinstance(call_doc["_misthelper_updated_at"], int)
+        docs = mock_collection.import_bulk.call_args[0][0]
+        assert isinstance(docs[0]["_misthelper_updated_at"], int)
 
 
 class TestArangoDBWriterGraph:
@@ -170,7 +166,7 @@ class TestArangoDBWriterGraph:
 
         mock_db = mock_arango_client["db"]
         mock_db.has_graph.return_value = False
-        writer = ArangoDBWriter(config)
+        ArangoDBWriter(config)
         mock_db.create_graph.assert_called_once()
 
 
@@ -192,9 +188,7 @@ class TestArangoDBWriterSoftDelete:
         }
         mock_collection.all.return_value = [existing_doc]
 
-        writer.mark_absent_as_deleted(
-            "sites", current_keys=set()
-        )
+        writer.mark_absent_as_deleted("sites", current_keys=set())
 
         mock_collection.update.assert_called_once()
         update_doc = mock_collection.update.call_args[0][0]
@@ -208,14 +202,14 @@ class TestArangoDBWriterSoftDelete:
         mock_collection = MagicMock()
         mock_db.has_collection.return_value = True
         mock_db.collection.return_value = mock_collection
-        mock_collection.insert.return_value = {"_key": "uuid-1"}
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}
         data = [{"id": "uuid-1", "_misthelper_deleted_at": 1234567890}]
         writer.write(data, "sites", strategy)
 
-        call_doc = mock_collection.insert.call_args[0][0]
-        assert call_doc.get("_misthelper_deleted_at") is None
+        docs = mock_collection.import_bulk.call_args[0][0]
+        assert docs[0].get("_misthelper_deleted_at") is None
 
 
 class TestArangoDBWriterSnapshot:
@@ -232,9 +226,7 @@ class TestArangoDBWriterSnapshot:
 
         existing_snapshot = {"config_hash": "abc123"}
         mock_cursor = MagicMock()
-        mock_cursor.__iter__ = MagicMock(
-            return_value=iter([existing_snapshot])
-        )
+        mock_cursor.__iter__ = MagicMock(return_value=iter([existing_snapshot]))
         mock_db.aql.execute.return_value = mock_cursor
 
         result = writer.snapshot(

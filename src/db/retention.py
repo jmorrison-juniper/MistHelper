@@ -11,7 +11,7 @@ import os
 import threading
 from typing import Any
 
-from src.db import get_logger
+from . import get_logger
 
 logger = get_logger(__name__)
 
@@ -28,6 +28,7 @@ class RetentionManager:
         arango_writer: Any,
         redis_writer: Any,
     ) -> None:
+        """Initialize retention manager with backend writers."""
         self._arango = arango_writer
         self._redis = redis_writer
         self._max_storage_gb = int(

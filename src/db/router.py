@@ -10,9 +10,9 @@ import hashlib
 import json
 from typing import Any
 
-from src.db import DatabaseConfig, DualWriteResult, WriteResult, get_logger
-from src.db.arango_writer import ArangoDBWriter
-from src.db.redis_writer import RedisJSONWriter, RedisTimeSeriesWriter
+from . import DatabaseConfig, DualWriteResult, WriteResult, get_logger
+from .arango_writer import ArangoDBWriter
+from .redis_writer import RedisJSONWriter, RedisTimeSeriesWriter
 
 logger = get_logger(__name__)
 
@@ -46,6 +46,7 @@ class DatabaseRouter:
         config: DatabaseConfig,
         strategies: dict[str, Any] | None = None,
     ) -> None:
+        """Initialize database router and connect to available backends."""
         self.config = config
         self._strategies = strategies or {}
         self._arango_available = False

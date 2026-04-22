@@ -13,9 +13,9 @@ import time
 import uuid
 from typing import Any
 
-from arango import ArangoClient
+from arango import ArangoClient  # type: ignore[attr-defined]
 
-from src.db import DatabaseConfig, WriteResult, get_logger
+from . import DatabaseConfig, WriteResult, get_logger
 
 logger = get_logger(__name__)
 
@@ -55,6 +55,7 @@ class ArangoDBWriter:
     """Write documents to ArangoDB with upsert, graph, and snapshot support."""
 
     def __init__(self, config: DatabaseConfig) -> None:
+        """Initialize ArangoDB connection and ensure database exists."""
         self._client = ArangoClient(hosts=config.arango_host)
         self._config = config
         self._ensure_database()
@@ -169,7 +170,7 @@ class ArangoDBWriter:
         collection = self._db.collection(collection_name)
         now = int(time.time())
 
-        for doc in collection.all():
+        for doc in collection.all():  # type: ignore[union-attr]
             key = doc.get("_key")
             already_deleted = doc.get("_misthelper_deleted_at")
             if key not in current_keys and not already_deleted:
@@ -197,7 +198,7 @@ class ArangoDBWriter:
             "RETURN doc",
             bind_vars={"eid": entity_id},
         )
-        for existing in cursor:
+        for existing in cursor:  # type: ignore[union-attr]
             if existing.get("config_hash") == config_hash:
                 return False
 

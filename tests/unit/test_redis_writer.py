@@ -5,11 +5,11 @@ All redis interactions are mocked — no live Redis required.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.db import DatabaseConfig, WriteResult
+from src.db import DatabaseConfig
 
 
 @pytest.fixture
@@ -29,9 +29,7 @@ def mock_redis():
         mock_cls.return_value = mock_client
         mock_ts = MagicMock()
         mock_client.ts.return_value = mock_ts
-        mock_client.module_list.return_value = [
-            {"name": b"timeseries", "ver": 11006}
-        ]
+        mock_client.module_list.return_value = [{"name": b"timeseries", "ver": 11006}]
         mock_pipeline = MagicMock()
         mock_client.pipeline.return_value = mock_pipeline
         mock_pipeline.__enter__ = MagicMock(return_value=mock_pipeline)
@@ -70,6 +68,13 @@ class TestRedisTimeSeriesWriterWrite:
         from src.db.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
+        # Pipeline called 3 times: key creation, compaction, TS.ADD
+        # 2 numeric fields (cpu_usage, mem_usage) → 2 keys, 8 compaction cmds, 2 adds
+        mock_redis["pipeline"].execute.side_effect = [
+            [True, True],
+            [True] * 8,
+            [True, True],
+        ]
         strategy = {
             "type": "composite_pk",
             "primary_key": ["id", "device_id", "timestamp"],
@@ -88,7 +93,7 @@ class TestRedisTimeSeriesWriterWrite:
 
         assert result.success is True
         assert result.backend == "redis"
-        assert result.records_written > 0
+        assert result.records_written == 2
 
     def test_skips_non_numeric_fields(self, config, mock_redis):
         from src.db.redis_writer import RedisTimeSeriesWriter
@@ -98,9 +103,7 @@ class TestRedisTimeSeriesWriterWrite:
             "type": "composite_pk",
             "primary_key": ["id", "timestamp"],
         }
-        data = [
-            {"id": "evt-1", "timestamp": 1700000000, "status": "active"}
-        ]
+        data = [{"id": "evt-1", "timestamp": 1700000000, "status": "active"}]
         result = writer.write(data, "getEvents", strategy)
 
         assert result.records_written == 0
@@ -113,9 +116,7 @@ class TestRedisTimeSeriesWriterWrite:
             "type": "composite_pk",
             "primary_key": ["id", "device_id", "timestamp"],
         }
-        data = [
-            {"id": "evt-1", "device_id": "dev-1", "timestamp": 1700000000, "cpu": 50.0}
-        ]
+        data = [{"id": "evt-1", "device_id": "dev-1", "timestamp": 1700000000, "cpu": 50.0}]
         writer.write(data, "getDeviceStats", strategy)
 
         # Verify TS.CREATE was called with the correct key pattern
@@ -139,7 +140,12 @@ class TestRedisTimeSeriesWriterWrite:
         from src.db.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
-        mock_redis["ts"].add.side_effect = Exception("Connection lost")
+        # 1 numeric field → 1 key creation, 4 compaction cmds, 1 TS.ADD (fails)
+        mock_redis["pipeline"].execute.side_effect = [
+            [True],
+            [True] * 4,
+            [Exception("Connection lost")],
+        ]
         strategy = {
             "type": "composite_pk",
             "primary_key": ["id", "timestamp"],
@@ -157,7 +163,7 @@ class TestRedisTimeSeriesCompaction:
         from src.db.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
-        writer._ensure_compaction("test:dev-1:cpu")
+        writer._ensure_single_compaction("test:dev-1:cpu")
 
         create_rule_calls = mock_redis["ts"].createrule.call_args_list
         assert len(create_rule_calls) >= 2
@@ -169,8 +175,8 @@ class TestRedisTimeSeriesCompaction:
         from src.db.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
-        writer._ensure_compaction("test:dev-1:cpu")
+        writer._ensure_single_compaction("test:dev-1:cpu")
         initial_calls = len(mock_redis["ts"].createrule.call_args_list)
 
-        writer._ensure_compaction("test:dev-1:cpu")
+        writer._ensure_single_compaction("test:dev-1:cpu")
         assert len(mock_redis["ts"].createrule.call_args_list) == initial_calls
