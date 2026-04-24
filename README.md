@@ -4,9 +4,9 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 163 actionable menu entries (0-162) with some gaps for future expansion.
+**Operation Count:** The code currently defines 165 actionable menu entries (0-164) with some gaps for future expansion.
 
-MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to either CSV files or a relational SQLite database that uses natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
+MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
 > **[Full Documentation Wiki](https://github.com/jmorrison-juniper/MistHelper/wiki)** | [Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference) | [Troubleshooting](https://github.com/jmorrison-juniper/MistHelper/wiki/Troubleshooting) | [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup)
 
@@ -57,6 +57,8 @@ flowchart LR
         api["API Layer"]
         exporters["Data Exporters"]
         db[("SQLite Backend")]
+        arango[("ArangoDB")]
+        redis[("Redis Stack")]
 
         subgraph realtime["Real-Time Services"]
             websocket["WebSocket Manager"]
@@ -102,7 +104,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-  root((MistHelper<br/>163 Operations))
+  root((MistHelper<br/>165 Operations))
     Safe (51)
       Org Sites
       Device Inventory
@@ -114,7 +116,7 @@ mindmap
       WLAN Settings
       RF Templates
       Webhooks
-    Interactive (25)
+    Interactive (27)
       Packet Captures
       SLE Metrics
       Client Events
@@ -147,7 +149,7 @@ mindmap
 ## Core Capabilities
 
 * Multi-mode execution: interactive menu or direct CLI (`--menu <id>`)
-* Dual output backends: CSV (simple exchange) or SQLite (`data/mist_data.db`) with adaptive schema strategies
+* Multi-backend output: CSV (simple exchange), SQLite (`data/mist_data.db`), or polyglot (ArangoDB + Redis) with adaptive routing strategies
 * Hybrid primary key strategy: natural keys when stable IDs exist, composite keys for time-series, and guarded fallback
 * Adaptive dependency and import system (`GlobalImportManager`) with UV-to-pip fallback and optional auto-upgrade (disable in containers)
 * Intelligent rate limiting & pacing (delay metrics + tuning persistence via `delay_metrics.json`, `tuning_data.json`)
@@ -165,7 +167,7 @@ mindmap
 | Path | Purpose |
 |------|---------|
 | `MistHelper.py` | Primary monolithic implementation (menu, exports, SSH, persistence) |
-| `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts |
+| `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
 | `CombinedInventory_ByWeek/` | Time-series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
 | `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |

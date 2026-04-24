@@ -35,7 +35,7 @@ stateDiagram-v2
     Retrying --> Failed : Max retries exceeded
 
     Completed --> Exporting : Data ready
-    Exporting --> [*] : CSV/SQLite written
+    Exporting --> [*] : CSV/SQLite/polyglot written
 
     Failed --> [*] : Error logged
 

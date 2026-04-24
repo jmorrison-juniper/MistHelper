@@ -174,8 +174,8 @@ The following technology choices are binding for all MistHelper code:
   compatible but all documentation and examples MUST use Podman.
 - **File Paths**: MUST use `os.path.join()` or `pathlib.Path()`. Never
   hardcode `/` or `\\` separators. Windows compatibility is required.
-- **Output Backends**: All data operations MUST support dual output
-  (CSV and SQLite). The `DataExporter.write_with_format_selection()`
+- **Output Backends**: All data operations MUST support multi-backend output
+  (CSV, SQLite, and polyglot ArangoDB/Redis). The `DataExporter.write_with_format_selection()`
   method is the standard entry point.
 - **Database Keys**: Natural business keys from the Mist API (not
   artificial IDs). Primary key strategy MUST be defined in
@@ -202,7 +202,7 @@ Every new operation MUST follow this sequence:
    (natural_pk, composite_pk, or auto_increment_with_unique).
 3. **Flatten JSON** — Use existing `flatten_dict()` helpers for nested
    API response structures.
-4. **Dual Output** — Call
+4. **Multi-Backend Output** — Call
    `DataExporter.write_with_format_selection(data, filename,
    api_function_name=...)`.
 5. **Update README** — Modify the operation count and add the new

@@ -26,7 +26,7 @@ Recommended incremental refactor targets (mirrors Agents Guide Section 18):
 | `FirmwareManager` | AP, switch, and SSR firmware upgrades |
 | `EnhancedSSHRunner` | SSH command execution framework |
 | `SFPTransceiverDataProcessor` | SFP transceiver data merge operations |
-| `DataExporter` | Dual CSV/SQLite output backend |
+| `DataExporter` | Multi-backend output (CSV/SQLite/ArangoDB/Redis) |
 
 ## Internal Documentation
 

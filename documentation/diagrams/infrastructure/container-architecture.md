@@ -47,6 +47,11 @@ flowchart TB
         sessions["sessions/<br/>Per-Connection"]
     end
 
+    subgraph polyglot["Polyglot Backends (Optional)"]
+        arango["ArangoDB<br/>:8529"]
+        redis["Redis Stack<br/>:6379"]
+    end
+
     subgraph ports["External Ports"]
         p2200["Port 2200 - SSH Access"]
         p8055["Port 8055 - Web Portal"]
@@ -94,6 +99,11 @@ flowchart LR
             datadir["data/ volume"]
             envfile[".env file"]
         end
+
+        subgraph polyglot["Polyglot Backends (Optional)"]
+            arango["ArangoDB<br/>:8529"]
+            redis["Redis Stack<br/>:6379"]
+        end
     end
 
     engineer --> sshd
@@ -101,6 +111,8 @@ flowchart LR
     sshd --> misthelper
     gunicorn --> misthelper
     misthelper --> sqlite
+    misthelper --> arango
+    misthelper --> redis
     sqlite --> datadir
     misthelper --> envfile
 ```
@@ -113,6 +125,8 @@ Each SSH connection gets its own isolated session directory.
 |-----------|------|---------|
 | Session Directory | `/app/sessions/session_{id}/` | Per-connection isolation |
 | Data Volume | `/app/data/` | Shared CSV/SQLite output |
+| ArangoDB | `arangodb:8529` | Document storage (optional polyglot backend) |
+| Redis Stack | `redis-stack:6379` | Time-series + JSON cache (optional polyglot backend) |
 | SSH Config | `/etc/ssh/sshd_config` | ForceCommand, port 2200 |
 | Web Server | `0.0.0.0:8055` | Gunicorn with workers |
 | Credentials | `/app/.env` | Read-only mounted secrets |

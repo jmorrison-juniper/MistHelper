@@ -23,7 +23,7 @@ flowchart TB
     ci_system(["CI/CD System<br/>GitHub Actions"])
 
     subgraph misthelper["MistHelper"]
-        mh["Python CLI tool<br/>163 operations"]
+        mh["Python CLI tool<br/>164 operations"]
     end
 
     mist_cloud["Juniper Mist Cloud<br/>REST API + WebSocket"]
@@ -58,6 +58,8 @@ flowchart LR
         api["API Layer"]
         exporters["Data Exporters"]
         db[("SQLite Backend")]
+        arango[("ArangoDB")]
+        redis[("Redis Stack")]
 
         subgraph realtime["Real-Time Services"]
             websocket["WebSocket Manager"]
@@ -78,6 +80,8 @@ flowchart LR
     end
 
     menu --> registry --> api --> exporters --> db
+    exporters --> arango
+    exporters --> redis
     api --> mist_api
     websocket --> mist_api
     ssh_runner --> devices
@@ -94,9 +98,9 @@ flowchart LR
 
 | Subsystem | Primary Classes | Purpose |
 |-----------|----------------|---------|
-| Menu System | `OperationRegistry`, `MistHelperTUI` | 163-operation interactive/CLI menu |
+| Menu System | `OperationRegistry`, `MistHelperTUI` | 164-operation interactive/CLI menu |
 | API Layer | `APIFetchUtils`, `RateLimitingUtils` | Paginated API calls with adaptive rate limiting |
-| Data Exporters | `DataExporter`, `SQLiteDatabaseWriter` | Dual CSV/SQLite output with business keys |
+| Data Exporters | `DataExporter`, `SQLiteDatabaseWriter`, `DatabaseRouter` | Multi-backend output (CSV/SQLite/ArangoDB/Redis) with business keys |
 | WebSocket | `WebSocketManager`, `WebSocketCommands` | Real-time device commands |
 | SSH Runner | `EnhancedSSHRunner`, `SSHRunnerManager` | Paramiko-based device command execution |
 | Packet Capture | `PacketCaptureManager` | Site and org-level packet captures |

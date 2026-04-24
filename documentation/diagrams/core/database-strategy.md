@@ -2,7 +2,7 @@
 
 # Database Strategy
 
-Hybrid primary key system and PK strategy decision flowchart for MistHelper's SQLite backend.
+Hybrid primary key system and PK strategy decision flowchart for MistHelper's SQLite and polyglot backends.
 
 ## Entity Relationship Diagram
 
@@ -138,6 +138,7 @@ flowchart TD
 
 ## Related Diagrams
 
-- [Data Pipeline](data-pipeline.md) - SQLite output path with PK strategy selection
-- [Architecture Overview](architecture-overview.md) - SQLite backend in system context
+- [Data Pipeline](data-pipeline.md) - Output paths with PK strategy selection
+- [Data Persistence Routing](data-persistence-routing.md) - Polyglot routing decision tree (ArangoDB/Redis)
+- [Architecture Overview](architecture-overview.md) - Database backends in system context
 - [Class Hierarchy: Utilities](../class-hierarchy/utilities.md) - DatabaseSchemaUtils and SQLiteDatabaseWriter

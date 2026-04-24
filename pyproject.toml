@@ -178,6 +178,9 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "integration: tests that call the real Mist API (require .env credentials)",
+]
 
 [tool.coverage.run]
 source = ["."]
