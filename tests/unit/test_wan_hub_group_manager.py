@@ -412,3 +412,208 @@ class TestLogInconsistentPods:
         manager._log_inconsistent_pods("ALPHA", matches)
         output = capsys.readouterr().out
         assert "mixed" not in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Coverage: run() workflow
+# ---------------------------------------------------------------------------
+
+
+class TestRunWorkflow:
+    """Test the main run() orchestration method."""
+
+    @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
+    def test_no_profiles_exits(self, mock_fetch, manager, capsys):
+        mock_fetch.return_value = []
+        manager.run()
+        output = capsys.readouterr().out
+        assert "No WAN Hub Profiles" in output
+
+    @patch.object(WanHubGroupNumberManager, "_prompt_action")
+    @patch.object(WanHubGroupNumberManager, "_prompt_profile_selection")
+    @patch.object(WanHubGroupNumberManager, "_display_profile_list")
+    @patch.object(WanHubGroupNumberManager, "_fetch_hub_spoke_vpns")
+    @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
+    def test_no_hub_spoke_vpns_exits(
+        self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager, capsys
+    ):
+        mock_profiles.return_value = [{"name": "P1"}]
+        mock_vpns.return_value = ([], [{"type": "mesh"}])
+        manager.run()
+        mock_display.assert_not_called()
+
+    @patch.object(WanHubGroupNumberManager, "_prompt_action")
+    @patch.object(WanHubGroupNumberManager, "_prompt_profile_selection")
+    @patch.object(WanHubGroupNumberManager, "_display_profile_list")
+    @patch.object(WanHubGroupNumberManager, "_fetch_hub_spoke_vpns")
+    @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
+    def test_user_cancels_selection(
+        self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager
+    ):
+        mock_profiles.return_value = [{"name": "P1"}]
+        mock_vpns.return_value = ([{"type": "hub_spoke", "paths": {}}], [])
+        mock_select.return_value = None
+        manager.run()
+        mock_action.assert_not_called()
+
+    @patch.object(WanHubGroupNumberManager, "_prompt_action")
+    @patch.object(WanHubGroupNumberManager, "_prompt_profile_selection")
+    @patch.object(WanHubGroupNumberManager, "_display_profile_list")
+    @patch.object(WanHubGroupNumberManager, "_fetch_hub_spoke_vpns")
+    @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
+    def test_full_workflow_calls_action(
+        self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager
+    ):
+        profile = {"name": "HUB1"}
+        mock_profiles.return_value = [profile]
+        vpn = {"type": "hub_spoke", "paths": {"HUB1-WAN1": {"pod": 1}}}
+        mock_vpns.return_value = ([vpn], [vpn])
+        mock_select.return_value = profile
+        manager.run()
+        mock_action.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _fetch_hub_spoke_vpns exception
+# ---------------------------------------------------------------------------
+
+
+class TestFetchHubSpokeVpnsError:
+    """Test _fetch_hub_spoke_vpns error handling."""
+
+    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_api_error_returns_empty(self, mock_list, manager, capsys):
+        mock_list.side_effect = Exception("Connection failed")
+        hub_spoke, all_vpns = manager._fetch_hub_spoke_vpns()
+        assert hub_spoke == []
+        assert all_vpns == []
+        output = capsys.readouterr().out
+        assert "Error retrieving VPN" in output
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _display_profile_list
+# ---------------------------------------------------------------------------
+
+
+class TestDisplayProfileList:
+    """Test profile list display rendering."""
+
+    def test_renders_profile_names(self, manager, sample_vpns, capsys):
+        profiles = [
+            {"name": "ALPHA"},
+            {"name": "BRAVO"},
+        ]
+        vpn_data = manager._build_vpn_data(profiles, sample_vpns)
+        manager._display_profile_list(profiles, vpn_data)
+        output = capsys.readouterr().out
+        assert "1." in output
+        assert "ALPHA" in output
+        assert "2." in output
+        assert "BRAVO" in output
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _prompt_action
+# ---------------------------------------------------------------------------
+
+
+class TestPromptAction:
+    """Test the set/clear/cancel action menu."""
+
+    def test_no_matches_exits(self, manager, capsys):
+        profile = {"name": "EMPTY"}
+        vpn_data = {"EMPTY": []}
+        manager._prompt_action(profile, vpn_data)
+        output = capsys.readouterr().out
+        assert "No VPN paths found" in output
+
+    @patch.object(WanHubGroupNumberManager, "_prompt_set_pod")
+    def test_action_1_calls_set_pod(self, mock_set, manager, sample_vpns):
+        profile = {"name": "ALPHA"}
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)
+        manager._safe_input = MagicMock(return_value="1")
+        manager._prompt_action(profile, vpn_data)
+        mock_set.assert_called_once()
+
+    @patch.object(WanHubGroupNumberManager, "clear_pod")
+    def test_action_2_calls_clear(self, mock_clear, manager, sample_vpns):
+        profile = {"name": "ALPHA"}
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)
+        manager._safe_input = MagicMock(return_value="2")
+        manager._prompt_action(profile, vpn_data)
+        mock_clear.assert_called_once()
+
+    def test_action_3_cancels(self, manager, sample_vpns, capsys):
+        profile = {"name": "ALPHA"}
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)
+        manager._safe_input = MagicMock(return_value="3")
+        manager._prompt_action(profile, vpn_data)
+        output = capsys.readouterr().out
+        assert "Cancelled" in output
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _prompt_set_pod happy path + confirmation cancel
+# ---------------------------------------------------------------------------
+
+
+class TestPromptSetPodConfirmation:
+    """Test _prompt_set_pod confirmation and cancellation paths."""
+
+    @patch.object(WanHubGroupNumberManager, "set_pod")
+    def test_confirmed_calls_set_pod(self, mock_set, manager, sample_vpns):
+        profile = {"name": "ALPHA"}
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)
+        manager._safe_input = MagicMock(side_effect=["42", "y"])
+        manager._prompt_set_pod(profile, vpn_data)
+        mock_set.assert_called_once_with(profile, vpn_data, 42)
+
+    def test_declined_cancels(self, manager, sample_vpns, capsys):
+        profile = {"name": "ALPHA"}
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)
+        manager._safe_input = MagicMock(side_effect=["42", "n"])
+        manager._prompt_set_pod(profile, vpn_data)
+        output = capsys.readouterr().out
+        assert "Cancelled" in output
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _apply_vpn_updates exception handler
+# ---------------------------------------------------------------------------
+
+
+class TestApplyVpnUpdatesError:
+    """Test _apply_vpn_updates error handling."""
+
+    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
+    def test_api_error_prints_message(self, mock_get, manager, capsys):
+        mock_get.side_effect = Exception("Network error")
+        vpn_updates = {"vpn-1": {"name": "OrgOverlay", "paths": ["ALPHA-WAN1"]}}
+        manager._apply_vpn_updates(vpn_updates, "ALPHA", 99)
+        output = capsys.readouterr().out
+        assert "Error updating VPN" in output
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _fallback_input
+# ---------------------------------------------------------------------------
+
+
+class TestFallbackInput:
+    """Test the fallback input handler."""
+
+    @patch("builtins.input", return_value="  hello  ")
+    def test_strips_whitespace(self, mock_input):
+        result = WanHubGroupNumberManager._fallback_input("prompt: ")
+        assert result == "hello"
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_eof_returns_empty(self, mock_input):
+        result = WanHubGroupNumberManager._fallback_input("prompt: ")
+        assert result == ""
+
+    @patch("builtins.input", side_effect=KeyboardInterrupt)
+    def test_keyboard_interrupt_returns_empty(self, mock_input):
+        result = WanHubGroupNumberManager._fallback_input("prompt: ")
+        assert result == ""
