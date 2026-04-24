@@ -447,9 +447,7 @@ class TestRunWorkflow:
     @patch.object(WanHubGroupNumberManager, "_display_profile_list")
     @patch.object(WanHubGroupNumberManager, "_fetch_hub_spoke_vpns")
     @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
-    def test_user_cancels_selection(
-        self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager
-    ):
+    def test_user_cancels_selection(self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager):
         mock_profiles.return_value = [{"name": "P1"}]
         mock_vpns.return_value = ([{"type": "hub_spoke", "paths": {}}], [])
         mock_select.return_value = None
