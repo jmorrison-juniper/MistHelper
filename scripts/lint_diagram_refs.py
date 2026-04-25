@@ -16,20 +16,74 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
-BUILT_IN_ALLOWLIST = frozenset([
-    "API", "SSH", "CSV", "SQLite", "GHCR", "CI", "CD", "UUID", "PK", "ER",
-    "EOF", "MistHelper", "GitHub", "Podman", "Docker", "Flask", "Gunicorn",
-    "Mermaid", "Ruff", "Bandit", "CodeQL", "Playwright", "WebSocket",
-    "ForceCommand", "NOC", "TCP", "UDP", "VLAN", "BSSID", "MAC", "JSON",
-    # Mermaid diagram participant/label terms (not Python symbols)
-    "User", "Menu", "Fetch", "Rate", "Process", "Export", "Select",
-    "Write", "Upsert", "Accumulate", "GET", "POST", "PUT", "DELETE",
-    # Overview-level group labels (plural forms, not class names)
-    "InfrastructureCore", "ConfigObjects", "Utilities", "APIFetching",
-    "DataProcessing", "OrgExporters", "SiteExporters", "GatewayExporters",
-    "WebSocketNet", "Managers", "UITUI", "SystemRegistry", "OrgExporter",
-    "SiteExporter", "GatewayExporter", "MigrationManager",
-])
+BUILT_IN_ALLOWLIST = frozenset(
+    [
+        "API",
+        "SSH",
+        "CSV",
+        "SQLite",
+        "GHCR",
+        "CI",
+        "CD",
+        "UUID",
+        "PK",
+        "ER",
+        "EOF",
+        "MistHelper",
+        "GitHub",
+        "Podman",
+        "Docker",
+        "Flask",
+        "Gunicorn",
+        "Mermaid",
+        "Ruff",
+        "Bandit",
+        "CodeQL",
+        "Playwright",
+        "WebSocket",
+        "ForceCommand",
+        "NOC",
+        "TCP",
+        "UDP",
+        "VLAN",
+        "BSSID",
+        "MAC",
+        "JSON",
+        # Mermaid diagram participant/label terms (not Python symbols)
+        "User",
+        "Menu",
+        "Fetch",
+        "Rate",
+        "Process",
+        "Export",
+        "Select",
+        "Write",
+        "Upsert",
+        "Accumulate",
+        "Route",
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        # Overview-level group labels (plural forms, not class names)
+        "InfrastructureCore",
+        "ConfigObjects",
+        "Utilities",
+        "APIFetching",
+        "DataProcessing",
+        "OrgExporters",
+        "SiteExporters",
+        "GatewayExporters",
+        "WebSocketNet",
+        "Managers",
+        "UITUI",
+        "SystemRegistry",
+        "OrgExporter",
+        "SiteExporter",
+        "GatewayExporter",
+        "MigrationManager",
+    ]
+)
 
 CLASS_SUFFIX_PATTERN = re.compile(
     r"[A-Z][a-zA-Z]+(?:Utils|Manager|Exporter|Config|Runner|Writer"
@@ -70,9 +124,7 @@ class DiagramReferenceValidator:
         for match in re.finditer(r"(\w+)\s*:\s*(\w+)\(\)", block):
             results.append(match.group(1))
             results.append(match.group(2))
-        for match in re.finditer(
-            r"(\w+)\s*<\|--\s*(\w+)", block
-        ):
+        for match in re.finditer(r"(\w+)\s*<\|--\s*(\w+)", block):
             results.append(match.group(1))
             results.append(match.group(2))
         return results
@@ -80,9 +132,7 @@ class DiagramReferenceValidator:
     def _extract_sequence_ids(self, block: str) -> list[str]:
         """Extract identifiers from sequenceDiagram syntax."""
         results: list[str] = []
-        for match in re.finditer(
-            r"participant\s+(\w+)(?:\s+as\s+(.+))?", block
-        ):
+        for match in re.finditer(r"participant\s+(\w+)(?:\s+as\s+(.+))?", block):
             name = match.group(1)
             if name[0].isupper():
                 results.append(name)
@@ -141,11 +191,13 @@ class DiagramReferenceValidator:
             curr_row = [i + 1]
             for j, char_b in enumerate(second):
                 cost = 0 if char_a == char_b else 1
-                curr_row.append(min(
-                    curr_row[j] + 1,
-                    prev_row[j + 1] + 1,
-                    prev_row[j] + cost,
-                ))
+                curr_row.append(
+                    min(
+                        curr_row[j] + 1,
+                        prev_row[j + 1] + 1,
+                        prev_row[j] + cost,
+                    )
+                )
             prev_row = curr_row
         return prev_row[-1]
 
@@ -177,12 +229,14 @@ class DiagramReferenceValidator:
                     continue
                 line_num = self._find_line_number(lines, name)
                 closest = self.find_closest_match(name)
-                self.stale_references.append({
-                    "file": str(filepath),
-                    "line": line_num,
-                    "name": name,
-                    "closest": closest,
-                })
+                self.stale_references.append(
+                    {
+                        "file": str(filepath),
+                        "line": line_num,
+                        "name": name,
+                        "closest": closest,
+                    }
+                )
                 file_stale += 1
         return file_stale
 
@@ -200,9 +254,7 @@ class DiagramReferenceValidator:
             if not path.exists():
                 logger.error("Source file not found: %s", path)
                 return 2
-            self.python_symbols.update(
-                self.extract_python_symbols(path)
-            )
+            self.python_symbols.update(self.extract_python_symbols(path))
 
         if not self.python_symbols:
             logger.error("No Python symbols extracted")
@@ -218,9 +270,7 @@ class DiagramReferenceValidator:
 
         return self._report_results()
 
-    def _collect_markdown_files(
-        self, config: argparse.Namespace
-    ) -> list[Path]:
+    def _collect_markdown_files(self, config: argparse.Namespace) -> list[Path]:
         """Collect all markdown files to scan."""
         files: list[Path] = []
         docs_dir = Path(config.docs_dir)
@@ -237,10 +287,7 @@ class DiagramReferenceValidator:
         """Print results and return exit code."""
         if self.stale_references:
             for ref in self.stale_references:
-                msg = (
-                    f'STALE: {ref["file"]}:{ref["line"]}'
-                    f' "{ref["name"]}" not found in codebase'
-                )
+                msg = f'STALE: {ref["file"]}:{ref["line"]}' f' "{ref["name"]}" not found in codebase'
                 logger.warning(msg)
                 if ref["closest"]:
                     logger.warning("  Closest match: %s", ref["closest"])
@@ -261,9 +308,7 @@ class DiagramReferenceValidator:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Validate Mermaid diagram references against codebase"
-    )
+    parser = argparse.ArgumentParser(description="Validate Mermaid diagram references against codebase")
     parser.add_argument(
         "--docs-dir",
         default="documentation/diagrams/",
@@ -307,9 +352,7 @@ def main() -> int:
                 for line in allowlist_path.read_text().splitlines()
                 if line.strip() and not line.startswith("#")
             )
-            validator = DiagramReferenceValidator(
-                BUILT_IN_ALLOWLIST | extra
-            )
+            validator = DiagramReferenceValidator(BUILT_IN_ALLOWLIST | extra)
         else:
             logger.error("Allowlist file not found: %s", allowlist_path)
             return 2

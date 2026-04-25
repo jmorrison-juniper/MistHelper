@@ -10,8 +10,12 @@ under ``src/``, establishing the pattern for future extractions from
 the MistHelper monolith.
 """
 
+from __future__ import annotations
+
 import copy
 import logging
+from collections.abc import Callable
+from typing import Any
 
 import mistapi
 import mistapi.api.v1.orgs.deviceprofiles
@@ -25,7 +29,13 @@ class WanHubGroupNumberManager:
     POD_MAX = 128
     POD_DEFAULT = 1
 
-    def __init__(self, apisession, org_id: str, safe_input_func=None):
+    def __init__(
+        self,
+        apisession: Any,
+        org_id: str,
+        safe_input_func: Callable[..., str] | None = None,
+    ) -> None:
+        """Initialize with API session, org ID, and optional input function."""
         self.apisession = apisession
         self.org_id = org_id
         self._safe_input = safe_input_func or self._fallback_input
@@ -35,7 +45,11 @@ class WanHubGroupNumberManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def execute(apisession, get_org_id_func, safe_input_func):
+    def execute(
+        apisession: Any,
+        get_org_id_func: Callable[[], str | None],
+        safe_input_func: Callable[..., str] | None,
+    ) -> None:
         """Static entry point called by menu_actions lambda."""
         org_id = get_org_id_func()
         if not org_id:
@@ -48,7 +62,7 @@ class WanHubGroupNumberManager:
     # Main workflow
     # ------------------------------------------------------------------
 
-    def run(self):
+    def run(self) -> None:
         """Main workflow: fetch, display, select, act."""
         print("\n=== WAN Hub Group Number Manager ===")
         logging.info("Starting WAN Hub Group Number Manager")
@@ -76,13 +90,15 @@ class WanHubGroupNumberManager:
     # API helpers
     # ------------------------------------------------------------------
 
-    def _fetch_profiles(self):
+    def _fetch_profiles(self) -> list[dict[str, Any]]:
         """Fetch gateway device profiles, sorted alphabetically."""
         try:
             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
                 self.apisession, self.org_id, type="gateway"
             )
-            profiles = mistapi.get_all(response=response, mist_session=self.apisession)
+            profiles: list[dict[str, Any]] = mistapi.get_all(
+                response=response, mist_session=self.apisession
+            )
             profiles.sort(key=lambda profile: profile.get("name", "").lower())
             logging.debug("Fetched %d gateway profiles", len(profiles))
             return profiles
@@ -91,7 +107,9 @@ class WanHubGroupNumberManager:
             print("! Error retrieving WAN Hub Profiles. Check API connectivity.")
             return []
 
-    def _fetch_hub_spoke_vpns(self):
+    def _fetch_hub_spoke_vpns(
+        self,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Fetch org VPNs filtered to hub_spoke type.
 
         Returns (hub_spoke_vpns, all_vpns) so callers can report what was found.
@@ -108,12 +126,12 @@ class WanHubGroupNumberManager:
             return [], []
 
     @staticmethod
-    def _report_no_hub_spoke(all_vpns):
+    def _report_no_hub_spoke(all_vpns: list[dict[str, Any]]) -> None:
         """Tell the user what VPN types were found instead of hub_spoke."""
         if not all_vpns:
             print("! No VPN definitions found in this organization.")
             return
-        type_counts = {}
+        type_counts: dict[str, int] = {}
         for vpn in all_vpns:
             vpn_type = vpn.get("type", "unknown") or "unknown"
             type_counts[vpn_type] = type_counts.get(vpn_type, 0) + 1
@@ -124,7 +142,11 @@ class WanHubGroupNumberManager:
     # Path matching
     # ------------------------------------------------------------------
 
-    def _find_matching_paths(self, profile_name, vpns):
+    def _find_matching_paths(
+        self,
+        profile_name: str,
+        vpns: list[dict[str, Any]],
+    ) -> list[tuple[str, str, str, int]]:
         """Find VPN paths whose key starts with '{profile_name}-'.
 
         Returns list of (vpn_id, vpn_name, path_key, current_pod) tuples.
@@ -141,7 +163,11 @@ class WanHubGroupNumberManager:
                     matches.append((vpn_id, vpn_name, path_key, pod))
         return matches
 
-    def _build_vpn_data(self, profiles, vpns):
+    def _build_vpn_data(
+        self,
+        profiles: list[dict[str, Any]],
+        vpns: list[dict[str, Any]],
+    ) -> dict[str, list[tuple[str, str, str, int]]]:
         """Pre-compute matching paths for every profile."""
         data = {}
         for profile in profiles:
@@ -153,7 +179,11 @@ class WanHubGroupNumberManager:
     # Display helpers
     # ------------------------------------------------------------------
 
-    def _display_profile_list(self, profiles, vpn_data):
+    def _display_profile_list(
+        self,
+        profiles: list[dict[str, Any]],
+        vpn_data: dict[str, list[tuple[str, str, str, int]]],
+    ) -> None:
         """Print numbered, alphabetized profile list with pod values."""
         print("\n  WAN Hub Profiles:")
         for index, profile in enumerate(profiles, start=1):
@@ -164,7 +194,9 @@ class WanHubGroupNumberManager:
         print()
 
     @staticmethod
-    def _format_pod_display(matches):
+    def _format_pod_display(
+        matches: list[tuple[str, str, str, int]],
+    ) -> str:
         """Format pod value for display, detecting inconsistencies."""
         if not matches:
             return "Pod: -- (no VPN paths)"
@@ -180,7 +212,10 @@ class WanHubGroupNumberManager:
     # User interaction
     # ------------------------------------------------------------------
 
-    def _prompt_profile_selection(self, profiles):
+    def _prompt_profile_selection(
+        self,
+        profiles: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
         """Prompt user to select a profile by index number."""
         count = len(profiles)
         while True:
@@ -202,7 +237,11 @@ class WanHubGroupNumberManager:
                 return selected
             print(f"  Please enter a number between 1 and {count}.")
 
-    def _prompt_action(self, profile, vpn_data):
+    def _prompt_action(
+        self,
+        profile: dict[str, Any],
+        vpn_data: dict[str, list[tuple[str, str, str, int]]],
+    ) -> None:
         """Show set/clear/cancel menu for the selected profile."""
         name = profile.get("name", "")
         matches = vpn_data.get(name, [])
@@ -229,7 +268,11 @@ class WanHubGroupNumberManager:
         else:
             print("  Cancelled.")
 
-    def _prompt_set_pod(self, profile, vpn_data):
+    def _prompt_set_pod(
+        self,
+        profile: dict[str, Any],
+        vpn_data: dict[str, list[tuple[str, str, str, int]]],
+    ) -> None:
         """Prompt for new pod value and execute set."""
         raw = self._safe_input(
             f"  Enter new pod value ({self.POD_MIN}-{self.POD_MAX}): ",
@@ -256,7 +299,12 @@ class WanHubGroupNumberManager:
     # Core operations
     # ------------------------------------------------------------------
 
-    def set_pod(self, profile, vpn_data, new_pod):
+    def set_pod(
+        self,
+        profile: dict[str, Any],
+        vpn_data: dict[str, list[tuple[str, str, str, int]]],
+        new_pod: int,
+    ) -> None:
         """Batch-update all matching VPN paths to new_pod value."""
         name = profile.get("name", "")
         matches = vpn_data.get(name, [])
@@ -267,7 +315,11 @@ class WanHubGroupNumberManager:
         vpn_updates = self._group_by_vpn(matches, new_pod)
         self._apply_vpn_updates(vpn_updates, name, new_pod)
 
-    def clear_pod(self, profile, vpn_data):
+    def clear_pod(
+        self,
+        profile: dict[str, Any],
+        vpn_data: dict[str, list[tuple[str, str, str, int]]],
+    ) -> None:
         """Reset pod to default (1) on all matching paths."""
         name = profile.get("name", "")
         matches = vpn_data.get(name, [])
@@ -288,16 +340,25 @@ class WanHubGroupNumberManager:
     # Update helpers
     # ------------------------------------------------------------------
 
-    def _group_by_vpn(self, matches, new_pod):
+    def _group_by_vpn(
+        self,
+        matches: list[tuple[str, str, str, int]],
+        new_pod: int,
+    ) -> dict[str, dict[str, Any]]:
         """Group path updates by VPN id for batch API calls."""
-        vpn_map = {}
+        vpn_map: dict[str, dict[str, Any]] = {}
         for vpn_id, vpn_name, path_key, _current in matches:
             if vpn_id not in vpn_map:
                 vpn_map[vpn_id] = {"name": vpn_name, "paths": []}
             vpn_map[vpn_id]["paths"].append(path_key)
         return vpn_map
 
-    def _apply_vpn_updates(self, vpn_updates, profile_name, new_pod):
+    def _apply_vpn_updates(
+        self,
+        vpn_updates: dict[str, dict[str, Any]],
+        profile_name: str,
+        new_pod: int,
+    ) -> None:
         """Apply pod updates to each VPN object via API."""
         total_updated = 0
         for vpn_id, info in vpn_updates.items():
@@ -318,7 +379,12 @@ class WanHubGroupNumberManager:
                 return
         print(f"  Updated {total_updated} paths for '{profile_name}' to pod {new_pod}.")
 
-    def _update_single_vpn(self, vpn_id, path_keys, new_pod):
+    def _update_single_vpn(
+        self,
+        vpn_id: str,
+        path_keys: list[str],
+        new_pod: int,
+    ) -> int:
         """Fetch, modify, and push a single VPN object."""
         response = mistapi.api.v1.orgs.vpns.getOrgVpn(self.apisession, self.org_id, vpn_id)
         vpn_obj = response.data if hasattr(response, "data") else response
@@ -336,7 +402,11 @@ class WanHubGroupNumberManager:
     # Utility helpers
     # ------------------------------------------------------------------
 
-    def _log_inconsistent_pods(self, name, matches):
+    def _log_inconsistent_pods(
+        self,
+        name: str,
+        matches: list[tuple[str, str, str, int]],
+    ) -> None:
         """Warn if a profile's VPN paths have different pod values."""
         pod_values = {pod for (_, _, _, pod) in matches}
         if len(pod_values) > 1:
@@ -349,7 +419,7 @@ class WanHubGroupNumberManager:
             )
 
     @staticmethod
-    def _fallback_input(prompt, **kwargs):
+    def _fallback_input(prompt: str, **_kwargs: Any) -> str:
         """Fallback input when safe_input is not provided."""
         try:
             return input(prompt).strip()

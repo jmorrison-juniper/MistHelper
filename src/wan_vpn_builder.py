@@ -10,8 +10,12 @@ Follows the external-module pattern established by Menu 163
 (``src/wan_hub_group_manager.py``).
 """
 
+from __future__ import annotations
+
 import logging
 import re
+from collections.abc import Callable
+from typing import Any
 
 import mistapi
 import mistapi.api.v1.orgs.deviceprofiles
@@ -26,7 +30,13 @@ class WanVpnBuilder:
     POD_DEFAULT = 1
     PATH_WARN_THRESHOLD = 500
 
-    def __init__(self, apisession, org_id: str, safe_input_func=None):
+    def __init__(
+        self,
+        apisession: Any,
+        org_id: str,
+        safe_input_func: Callable[..., str] | None = None,
+    ) -> None:
+        """Initialize with API session, org ID, and optional input function."""
         self.apisession = apisession
         self.org_id = org_id
         self._safe_input = safe_input_func or self._fallback_input
@@ -36,7 +46,11 @@ class WanVpnBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def execute(apisession, get_org_id_func, safe_input_func):
+    def execute(
+        apisession: Any,
+        get_org_id_func: Callable[[], str | None],
+        safe_input_func: Callable[..., str] | None,
+    ) -> None:
         """Static entry point called by menu_actions lambda."""
         org_id = get_org_id_func()
         if not org_id:
@@ -49,7 +63,7 @@ class WanVpnBuilder:
     # Main workflow (US1 + US2 + US3 orchestration)
     # ------------------------------------------------------------------
 
-    def run(self):
+    def run(self) -> None:
         """Main workflow: fetch, display, build, preview, create."""
         print("\n=== WAN Hub-Spoke VPN Builder ===")
         logging.info("Starting WAN Hub-Spoke VPN Builder")
@@ -111,7 +125,9 @@ class WanVpnBuilder:
         return parts[-1] if len(parts) > 1 else interface_name
 
     @staticmethod
-    def _classify_interfaces(port_config: dict) -> tuple:
+    def _classify_interfaces(
+        port_config: dict[str, Any],
+    ) -> tuple[list[str], list[str]]:
         """Classify interfaces into WAN and LAN lists.
 
         Returns (wan_list, lan_list) where each item is the
@@ -150,7 +166,9 @@ class WanVpnBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _collect_wan_suffixes(assignments: list) -> set:
+    def _collect_wan_suffixes(
+        assignments: list[dict[str, Any]],
+    ) -> set[str]:
         """Collect global WAN suffix set from all non-skip assignments."""
         suffixes = set()
         for assignment in assignments:
@@ -165,11 +183,11 @@ class WanVpnBuilder:
     @staticmethod
     def _generate_hub_paths(
         profile_name: str,
-        wan_interfaces: list,
-        lan_interfaces: list,
-        suffixes: set,
+        wan_interfaces: list[str],
+        lan_interfaces: list[str],
+        suffixes: set[str],
         pod: int,
-    ) -> dict:
+    ) -> dict[str, dict[str, int]]:
         """Generate hub paths: direct + cross-connects for WAN, direct for LAN."""
         paths = {}
         sorted_suffixes = sorted(suffixes)
@@ -187,10 +205,10 @@ class WanVpnBuilder:
     @staticmethod
     def _generate_spoke_paths(
         profile_name: str,
-        wan_interfaces: list,
-        lan_interfaces: list,
+        wan_interfaces: list[str],
+        lan_interfaces: list[str],
         pod: int,
-    ) -> dict:
+    ) -> dict[str, dict[str, int]]:
         """Generate spoke paths: direct paths only for WAN and LAN."""
         paths = {}
         for interface_name in wan_interfaces:
@@ -201,7 +219,11 @@ class WanVpnBuilder:
             paths[direct_key] = {"pod": pod}
         return paths
 
-    def _build_vpn_body(self, vpn_name: str, assignments: list) -> dict:
+    def _build_vpn_body(
+        self,
+        vpn_name: str,
+        assignments: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Assemble the full VPN API request body."""
         suffixes = self._collect_wan_suffixes(assignments)
         all_paths = {}
@@ -229,13 +251,13 @@ class WanVpnBuilder:
     # API helpers
     # ------------------------------------------------------------------
 
-    def _fetch_profiles(self) -> list:
+    def _fetch_profiles(self) -> list[Any]:
         """Fetch gateway device profiles, sorted alphabetically."""
         try:
             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
                 self.apisession, self.org_id, type="gateway"
             )
-            profiles = mistapi.get_all(response=response, mist_session=self.apisession)
+            profiles: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)
             profiles.sort(key=lambda profile: profile.get("name", "").lower())
             logging.debug("Fetched %d gateway profiles", len(profiles))
             return profiles
@@ -244,11 +266,11 @@ class WanVpnBuilder:
             print("! Error retrieving gateway device profiles. Check API connectivity.")
             return []
 
-    def _fetch_existing_vpns(self) -> list:
+    def _fetch_existing_vpns(self) -> list[Any]:
         """Fetch all org VPN definitions."""
         try:
             response = mistapi.api.v1.orgs.vpns.listOrgVpns(self.apisession, self.org_id)
-            vpns = mistapi.get_all(response=response, mist_session=self.apisession)
+            vpns: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)
             logging.debug("Fetched %d org VPNs", len(vpns))
             return vpns
         except Exception:
@@ -256,11 +278,13 @@ class WanVpnBuilder:
             print("! Error retrieving VPN definitions. Check API connectivity.")
             return []
 
-    def _create_vpn(self, vpn_body: dict) -> dict | None:
+    def _create_vpn(self, vpn_body: dict[str, Any]) -> dict[str, Any] | None:
         """Create VPN via API. Returns created VPN dict or None on failure."""
         try:
             response = mistapi.api.v1.orgs.vpns.createOrgVpn(self.apisession, self.org_id, body=vpn_body)
-            created = response.data if hasattr(response, "data") else response
+            created: dict[str, Any] = (
+                response.data if hasattr(response, "data") else response
+            )
             logging.info("VPN created via API: %s", created.get("id", ""))
             return created
         except Exception:
@@ -272,7 +296,7 @@ class WanVpnBuilder:
     # User interaction — display helpers (US1 + US3)
     # ------------------------------------------------------------------
 
-    def _display_existing_vpns(self, vpns: list):
+    def _display_existing_vpns(self, vpns: list[Any]) -> None:
         """Display summary table of existing VPNs."""
         if not vpns:
             print("\n  No existing VPN definitions in this organization.")
@@ -287,7 +311,7 @@ class WanVpnBuilder:
             print(f"  {index:<4} {name:<30} {vpn_type:<12} {path_count:>6}")
         print()
 
-    def _display_profile_list(self, profiles: list):
+    def _display_profile_list(self, profiles: list[Any]) -> None:
         """Show numbered profile list with WAN/LAN interface counts."""
         print(f"\n  Gateway Device Profiles ({len(profiles)}):")
         print(f"  {'#':<4} {'Profile Name':<30} {'WAN':>4} {'LAN':>4}")
@@ -302,7 +326,7 @@ class WanVpnBuilder:
             print(f"  {index:<4} {name:<30} {wan_count:>4} {lan_count:>4}{warning}")
         print()
 
-    def _display_preview(self, vpn_name: str, vpn_body: dict) -> bool:
+    def _display_preview(self, vpn_name: str, vpn_body: dict[str, Any]) -> bool:
         """Display VPN preview and prompt for CREATE confirmation."""
         paths = vpn_body.get("paths", {})
         path_count = len(paths)
@@ -333,7 +357,7 @@ class WanVpnBuilder:
     # User interaction — prompts (US1)
     # ------------------------------------------------------------------
 
-    def _prompt_vpn_name(self, existing_names: list) -> str | None:
+    def _prompt_vpn_name(self, existing_names: list[str]) -> str | None:
         """Prompt for VPN name, validate uniqueness."""
         lower_names = [name.lower() for name in existing_names]
         while True:
@@ -352,7 +376,10 @@ class WanVpnBuilder:
                 continue
             return name
 
-    def _prompt_role_assignments(self, profiles: list) -> list | None:
+    def _prompt_role_assignments(
+        self,
+        profiles: list[Any],
+    ) -> list[dict[str, Any]] | None:
         """Prompt user to assign Hub/Spoke/Skip to each profile."""
         assignments = []
         print("  Assign roles to each profile (H=Hub, S=Spoke, K=Skip):")
@@ -388,7 +415,10 @@ class WanVpnBuilder:
             return None
         return assignments
 
-    def _prompt_pod_values(self, assignments: list) -> list | None:
+    def _prompt_pod_values(
+        self,
+        assignments: list[dict[str, Any]],
+    ) -> list[dict[str, Any]] | None:
         """Prompt for pod values with auto-suggestion."""
         fallback_counter = 1
         for assignment in assignments:
@@ -427,8 +457,8 @@ class WanVpnBuilder:
         interface_name: str,
         vpn_name: str,
         role: str,
-        suffixes: set,
-    ) -> dict:
+        suffixes: set[str],
+    ) -> dict[str, dict[str, Any]]:
         """Build vpn_paths entries for a single port.
 
         Returns dict of {PathName.VPNName: {key: N, role: role}} entries.
@@ -452,8 +482,8 @@ class WanVpnBuilder:
         profile_id: str,
         profile_name: str,
         vpn_name: str,
-        assignment: dict,
-        suffixes: set,
+        assignment: dict[str, Any],
+        suffixes: set[str],
     ) -> bool:
         """Fetch fresh profile, merge vpn_paths, push update."""
         try:
@@ -495,8 +525,8 @@ class WanVpnBuilder:
         self,
         vpn_id: str,
         vpn_name: str,
-        assignments: list,
-    ):
+        assignments: list[dict[str, Any]],
+    ) -> None:
         """Offer to update each profile's port_config with vpn_paths."""
         non_skip = [a for a in assignments if a["role"] != "skip"]
         if not non_skip:
@@ -534,7 +564,7 @@ class WanVpnBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _fallback_input(prompt, **kwargs):
+    def _fallback_input(prompt: str, **_kwargs: Any) -> str:
         """Fallback input when safe_input is not provided."""
         try:
             return input(prompt).strip()
