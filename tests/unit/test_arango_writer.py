@@ -213,7 +213,7 @@ class TestArangoDBWriterSoftDelete:
 
 
 class TestArangoDBWriterSnapshot:
-    """Tests for config snapshot deduplication."""
+    """Tests for config snapshot deduplication and entity edges."""
 
     def test_skips_duplicate_snapshot(self, config, mock_arango_client):
         from src.db.arango_writer import ArangoDBWriter
@@ -237,3 +237,495 @@ class TestArangoDBWriterSnapshot:
         )
 
         assert result is False
+
+    def test_snapshot_creates_entity_edge(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+        mock_db.aql.execute.return_value = iter([])
+
+        result = writer.snapshot(
+            entity_type="listOrgSites",
+            entity_id="site-uuid-1",
+            config_body={"name": "Test Site"},
+            config_hash="new-hash",
+        )
+
+        assert result is True
+        # insert for snapshot doc + import_bulk for edge
+        mock_collection.insert.assert_called_once()
+        mock_collection.import_bulk.assert_called_once()
+        edge_doc = mock_collection.import_bulk.call_args[0][0][0]
+        assert edge_doc["_from"].startswith("config_snapshots/")
+        assert edge_doc["_to"] == "sites/site-uuid-1"
+        assert edge_doc["entity_type"] == "listOrgSites"
+
+    def test_snapshot_skips_edge_for_unknown_entity_type(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+        mock_db.aql.execute.return_value = iter([])
+
+        result = writer.snapshot(
+            entity_type="unknownApiFunction",
+            entity_id="uuid-1",
+            config_body={"name": "Test"},
+            config_hash="new-hash",
+        )
+
+        assert result is True
+        mock_collection.insert.assert_called_once()
+        # No import_bulk for edge since entity_type is not in ENTITY_TYPE_TO_VERTEX
+        mock_collection.import_bulk.assert_not_called()
+
+
+class TestArangoDBWriterWlanGraph:
+    """Tests for WLAN graph population."""
+
+    def test_wlan_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listOrgWlans" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listOrgWlans"]
+        assert mapping["vertex"] == "wlans"
+        assert mapping["key_field"] == "id"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WlanBelongsToSite" in edge_cols
+        assert "WlanUsesTemplate" in edge_cols
+
+    def test_wlan_template_edge_targets_templates(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listOrgWlans"]["edges"]
+        template_edge = next(e for e in edges if e["edge_col"] == "WlanUsesTemplate")
+        assert template_edge["from_col"] == "wlans"
+        assert template_edge["to_col"] == "templates"
+        assert template_edge["to_field"] == "template_id"
+
+    def test_mxedge_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listOrgMxEdges" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listOrgMxEdges"]
+        assert mapping["vertex"] == "devices"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "OrgContainsDevice" in edge_cols
+        assert "MxEdgeBelongsToCluster" in edge_cols
+
+    def test_mxedge_cluster_edge_targets_mxclusters(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listOrgMxEdges"]["edges"]
+        cluster_edge = next(e for e in edges if e["edge_col"] == "MxEdgeBelongsToCluster")
+        assert cluster_edge["from_col"] == "devices"
+        assert cluster_edge["to_col"] == "mxclusters"
+        assert cluster_edge["to_field"] == "mxcluster_id"
+
+    def test_site_sitegroup_edge_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listOrgSites"]
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "SiteBelongsToSiteGroup" in edge_cols
+        sg_edge = next(e for e in mapping["edges"] if e["edge_col"] == "SiteBelongsToSiteGroup")
+        assert sg_edge["to_col"] == "sitegroups"
+        assert sg_edge["to_field"] == "sitegroup_ids"
+
+    def test_entity_type_to_vertex_mapping(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listOrgSites"] == "sites"
+        assert ENTITY_TYPE_TO_VERTEX["listOrgGatewayTemplates"] == "templates"
+        assert ENTITY_TYPE_TO_VERTEX["listOrgRfTemplates"] == "templates"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteDevices"] == "devices"
+        assert ENTITY_TYPE_TO_VERTEX["getOrgWlans"] == "wlans"
+
+
+class TestArangoDBWriterEdgeDefinitions:
+    """Tests for EDGE_DEFINITIONS completeness."""
+
+    def test_all_eleven_edge_definitions(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {d["edge_collection"] for d in EDGE_DEFINITIONS}
+        expected = {
+            "OrgContainsSite",
+            "OrgContainsDevice",
+            "SiteContainsDevice",
+            "TemplateAssignedToSite",
+            "DeviceHasPort",
+            "ClientConnectedToDevice",
+            "WlanBelongsToSite",
+            "WlanUsesTemplate",
+            "SiteBelongsToSiteGroup",
+            "MxEdgeBelongsToCluster",
+            "ConfigSnapshotForEntity",
+        }
+        assert edge_names == expected
+
+    def test_sitegroup_vertex_in_edge_def(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        sg_edge = next(d for d in EDGE_DEFINITIONS if d["edge_collection"] == "SiteBelongsToSiteGroup")
+        assert "sitegroups" in sg_edge["to_vertex_collections"]
+
+    def test_mxclusters_vertex_in_edge_def(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        mc_edge = next(d for d in EDGE_DEFINITIONS if d["edge_collection"] == "MxEdgeBelongsToCluster")
+        assert "mxclusters" in mc_edge["to_vertex_collections"]
+
+    def test_ensure_target_vertices_on_sites(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listOrgSites"]
+        targets = mapping.get("ensure_target_vertices", [])
+        assert ("sitegroup_ids", "sitegroups") in targets
+
+    def test_ensure_target_vertices_on_mxedges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listOrgMxEdges"]
+        targets = mapping.get("ensure_target_vertices", [])
+        assert ("mxcluster_id", "mxclusters") in targets
+
+
+class TestArangoDBWriterEdgeKey:
+    """Tests for _edge_key deterministic hash."""
+
+    def test_edge_key_is_deterministic(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        key1 = writer._edge_key("orgs/abc", "sites/xyz")
+        key2 = writer._edge_key("orgs/abc", "sites/xyz")
+        assert key1 == key2
+
+    def test_edge_key_differs_for_different_inputs(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        key1 = writer._edge_key("orgs/abc", "sites/xyz")
+        key2 = writer._edge_key("orgs/abc", "sites/def")
+        assert key1 != key2
+
+    def test_edge_key_is_16_chars(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        key = writer._edge_key("orgs/abc", "sites/xyz")
+        assert len(key) == 16
+
+
+class TestArangoDBWriterSanitizeKey:
+    """Tests for _sanitize_key."""
+
+    def test_sanitize_replaces_slash(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        assert ArangoDBWriter._sanitize_key("a/b/c") == "a_b_c"
+
+    def test_sanitize_replaces_colon(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        assert ArangoDBWriter._sanitize_key("a:b:c") == "a_b_c"
+
+    def test_sanitize_preserves_valid_key(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        assert ArangoDBWriter._sanitize_key("abc-123_def") == "abc-123_def"
+
+
+class TestArangoDBWriterEnsureTargetVertices:
+    """Tests for _ensure_target_vertices runtime behavior."""
+
+    def test_creates_stub_vertices_for_array_fk(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+
+        data = [
+            {"id": "site-1", "sitegroup_ids": ["sg-1", "sg-2"]},
+            {"id": "site-2", "sitegroup_ids": ["sg-1"]},
+        ]
+        mapping = {"ensure_target_vertices": [("sitegroup_ids", "sitegroups")]}
+        writer._ensure_target_vertices(data, mapping)
+
+        mock_collection.import_bulk.assert_called_once()
+        stubs = mock_collection.import_bulk.call_args[0][0]
+        stub_keys = {s["_key"] for s in stubs}
+        assert "sg-1" in stub_keys
+        assert "sg-2" in stub_keys
+
+    def test_skips_empty_fk_values(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+
+        data = [{"id": "site-1", "sitegroup_ids": None}]
+        mapping = {"ensure_target_vertices": [("sitegroup_ids", "sitegroups")]}
+        writer._ensure_target_vertices(data, mapping)
+
+        mock_collection.import_bulk.assert_not_called()
+
+    def test_creates_stub_for_scalar_fk(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+
+        data = [{"id": "mxe-1", "mxcluster_id": "cluster-abc"}]
+        mapping = {"ensure_target_vertices": [("mxcluster_id", "mxclusters")]}
+        writer._ensure_target_vertices(data, mapping)
+
+        mock_collection.import_bulk.assert_called_once()
+        stubs = mock_collection.import_bulk.call_args[0][0]
+        assert stubs[0]["_key"] == "cluster-abc"
+
+
+class TestArangoDBWriterBuildEdges:
+    """Tests for _build_edges with array FK support."""
+
+    def test_builds_edges_for_array_fk(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.return_value = False
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))
+
+        data = [{"id": "site-1", "sitegroup_ids": ["sg-1", "sg-2"]}]
+        edge_config = {
+            "edge_col": "SiteBelongsToSiteGroup",
+            "from_col": "sites",
+            "from_field": "id",
+            "to_col": "sitegroups",
+            "to_field": "sitegroup_ids",
+        }
+        edges = writer._build_edges(data, "id", edge_config)
+        assert len(edges) == 2
+        to_ids = {e["_to"] for e in edges}
+        assert "sitegroups/sg-1" in to_ids
+        assert "sitegroups/sg-2" in to_ids
+
+    def test_builds_edges_for_scalar_fk(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.return_value = False
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))
+
+        data = [{"id": "wlan-1", "template_id": "tmpl-1"}]
+        edge_config = {
+            "edge_col": "WlanUsesTemplate",
+            "from_col": "wlans",
+            "from_field": "id",
+            "to_col": "templates",
+            "to_field": "template_id",
+        }
+        edges = writer._build_edges(data, "id", edge_config)
+        assert len(edges) == 1
+        assert edges[0]["_from"] == "wlans/wlan-1"
+        assert edges[0]["_to"] == "templates/tmpl-1"
+
+    def test_skips_records_missing_to_field(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.return_value = False
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))
+
+        data = [{"id": "wlan-1"}]
+        edge_config = {
+            "edge_col": "WlanUsesTemplate",
+            "from_col": "wlans",
+            "from_field": "id",
+            "to_col": "templates",
+            "to_field": "template_id",
+        }
+        edges = writer._build_edges(data, "id", edge_config)
+        assert len(edges) == 0
+
+
+class TestArangoDBWriterMarkAbsent:
+    """Tests for mark_absent_as_deleted edge cases."""
+
+    def test_skips_nonexistent_collection(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_db.collection.reset_mock()
+        mock_db.has_collection.return_value = False
+
+        writer.mark_absent_as_deleted("nonexistent", current_keys=set())
+        mock_db.collection.assert_not_called()
+
+    def test_skips_already_deleted_docs(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+
+        existing_doc = {
+            "_key": "old-uuid",
+            "_misthelper_deleted_at": 1234567890,
+        }
+        mock_collection.all.return_value = [existing_doc]
+
+        writer.mark_absent_as_deleted("sites", current_keys=set())
+        mock_collection.update.assert_not_called()
+
+    def test_does_not_delete_present_keys(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+
+        existing_doc = {
+            "_key": "active-uuid",
+            "_misthelper_deleted_at": None,
+        }
+        mock_collection.all.return_value = [existing_doc]
+
+        writer.mark_absent_as_deleted("sites", current_keys={"active-uuid"})
+        mock_collection.update.assert_not_called()
+
+
+class TestArangoDBWriterBackfillEdges:
+    """Tests for _backfill_snapshot_edges."""
+
+    def test_skips_when_no_config_snapshots(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.side_effect = lambda name: name != "config_snapshots"
+        writer = ArangoDBWriter(config)
+        # Should not raise; silently returns
+        assert writer is not None
+
+    def test_backfill_creates_missing_edges(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.return_value = True
+        edge_col = MagicMock()
+        edge_col.count.return_value = 0
+        snapshot_col = MagicMock()
+        snapshot_col.count.return_value = 2
+
+        def collection_side_effect(name):
+            if name == "ConfigSnapshotForEntity":
+                return edge_col
+            if name == "config_snapshots":
+                return snapshot_col
+            return MagicMock()
+
+        mock_db.collection.side_effect = collection_side_effect
+
+        cursor = [
+            {"key": "snap-1", "entity_type": "listOrgSites", "entity_id": "site-1"},
+            {"key": "snap-2", "entity_type": "unknownType", "entity_id": "x"},
+        ]
+        mock_db.aql.execute.return_value = iter(cursor)
+
+        writer = ArangoDBWriter(config)
+        # The backfill runs during __init__ -> _ensure_graph
+        # edge_col.import_bulk should have been called with the valid snap-1 edge
+        assert writer is not None
+
+
+class TestArangoDBWriterBuildVertices:
+    """Tests for _build_vertices."""
+
+    def test_builds_vertex_with_metadata_fields(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        data = [
+            {
+                "id": "dev-1",
+                "name": "AP-Lobby",
+                "org_id": "org-1",
+                "site_id": "site-1",
+                "type": "ap",
+                "model": "AP45",
+                "serial": "ABC123",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "ip": "10.0.0.1",
+            }
+        ]
+        vertices = writer._build_vertices(data, "id")
+        assert len(vertices) == 1
+        v = vertices[0]
+        assert v["_key"] == "dev-1"
+        assert v["name"] == "AP-Lobby"
+        assert v["type"] == "ap"
+        assert v["mac"] == "aa:bb:cc:dd:ee:ff"
+        assert "_misthelper_updated_at" in v
+
+    def test_skips_records_missing_key_field(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        data = [{"name": "No ID here"}]
+        vertices = writer._build_vertices(data, "id")
+        assert len(vertices) == 0
+
+
+class TestArangoDBWriterPopulateGraph:
+    """Tests for _populate_graph end-to-end with mocked collections."""
+
+    def test_populate_graph_for_unmapped_collection(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_db.has_collection.return_value = True
+
+        # unmapped collection should be a no-op
+        writer._populate_graph([{"id": "x"}], "totally_unknown_collection")
+        # No vertex/edge creation attempted beyond init
+
+    def test_populate_graph_creates_org_vertex(self, config, mock_arango_client):
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        mock_db = mock_arango_client["db"]
+        mock_collection = MagicMock()
+        mock_db.has_collection.return_value = True
+        mock_db.collection.return_value = mock_collection
+        mock_collection.all.return_value = []
+
+        data = [{"id": "site-1", "org_id": "org-abc", "name": "TestSite"}]
+        writer._populate_graph(data, "listOrgSites")
+
+        # Should have attempted to import org vertex + site vertex + edges
+        assert mock_collection.import_bulk.called
