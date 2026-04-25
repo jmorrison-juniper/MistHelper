@@ -96,9 +96,7 @@ class WanHubGroupNumberManager:
             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
                 self.apisession, self.org_id, type="gateway"
             )
-            profiles: list[dict[str, Any]] = mistapi.get_all(
-                response=response, mist_session=self.apisession
-            )
+            profiles: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=self.apisession)
             profiles.sort(key=lambda profile: profile.get("name", "").lower())
             logging.debug("Fetched %d gateway profiles", len(profiles))
             return profiles

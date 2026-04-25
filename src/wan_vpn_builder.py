@@ -282,9 +282,7 @@ class WanVpnBuilder:
         """Create VPN via API. Returns created VPN dict or None on failure."""
         try:
             response = mistapi.api.v1.orgs.vpns.createOrgVpn(self.apisession, self.org_id, body=vpn_body)
-            created: dict[str, Any] = (
-                response.data if hasattr(response, "data") else response
-            )
+            created: dict[str, Any] = response.data if hasattr(response, "data") else response
             logging.info("VPN created via API: %s", created.get("id", ""))
             return created
         except Exception:
