@@ -11,7 +11,7 @@ flowchart TD
     B --> C["Flatten / Normalize<br/>JSON Response"]
     C --> D["save_data_to_output()"]
 
-    D --> E["CSV / SQLite<br/>write_with_format_selection()"]
+    D --> E["CSV / SQLite / ArangoDB+Redis<br/>write_with_format_selection()"]
     D --> F{"api_function_name<br/>provided?"}
 
     F -->|No| G["Skip polyglot<br/>(CSV only)"]

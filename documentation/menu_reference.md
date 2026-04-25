@@ -179,6 +179,8 @@ menu_actions = {
     "159": (SSIDTemplateConsolidationManager.execute, "SSID Template Consolidation (5-Phase Guided Workflow)"),
     "160": (E911BSSIDReportGenerator.execute, "E911 BSSID Compliance Report"),
     "161": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
+    "162": (WiredClientManufacturerReportGenerator.execute, "Wired Client Manufacturer Report (browse & select)"),
+    "163": (WanHubGroupNumberManager.execute, "WAN Hub Group Number Manager"),
 }
 ```
 

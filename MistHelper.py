@@ -78,6 +78,9 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.wan_hub_group_manager import WanHubGroupNumberManager
+from src.wan_vpn_builder import WanVpnBuilder
+
 # ============================================================================
 # EARLY LOGGING SETUP
 # ============================================================================
@@ -58128,6 +58131,16 @@ menu_actions = {
         WiredClientManufacturerReportGenerator.execute,
         "Wired Client Manufacturer Report (browse & select)",
     ),
+    "163": (
+        lambda: WanHubGroupNumberManager.execute(
+            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+        ),
+        "WAN Hub Group Number Manager",
+    ),
+    "164": (
+        lambda: WanVpnBuilder.execute(apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input),
+        "WAN Hub-Spoke VPN Builder",
+    ),
 }
 
 
@@ -58867,6 +58880,14 @@ class OperationRegistry:
         "160": {"category": "interactive_safe"},
         "161": {"category": "interactive_safe"},
         "162": {"category": "interactive_safe"},
+        "163": {
+            "category": "interactive",
+            "skip_reason": "Interactive VPN pod management with API writes",
+        },
+        "164": {
+            "category": "interactive",
+            "skip_reason": "Interactive VPN builder with API writes",
+        },
     }
 
     # Categories that are safe for --test (fully automated, no user input)

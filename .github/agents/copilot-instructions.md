@@ -52,6 +52,10 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - `data/` CSV exports and `data/mist_data.db` SQLite output via existing exporter flow (001-wired-client-global-report)
 - Python 3.13+ + `mistapi>=0.61.4`, `python-arango>=8.3.2`, `redis>=7.4.0` (with hiredis) (184-polyglot-db-migration)
 - ArangoDB 3.12 (documents + graph), Redis Stack (TimeSeries module), CSV files (always) (184-polyglot-db-migration)
+- Python 3.13+ + mistapi 0.59+ (`orgs.deviceprofiles`, `orgs.vpns`) (186-wan-hub-group-number)
+- N/A (no CSV/SQLite output — interactive display + API write only) (186-wan-hub-group-number)
+- Python 3.13+ + `mistapi` 0.59+ (Mist API SDK) (187-wan-vpn-builder)
+- N/A (API-only, no local persistence) (187-wan-vpn-builder)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -71,9 +75,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 187-wan-vpn-builder: Added Python 3.13+ + `mistapi` 0.59+ (Mist API SDK)
+- 186-wan-hub-group-number: Added Python 3.13+ + mistapi 0.59+ (`orgs.deviceprofiles`, `orgs.vpns`)
 - 184-polyglot-db-migration: Added Python 3.13+ + `mistapi>=0.61.4`, `python-arango>=8.3.2`, `redis>=7.4.0` (with hiredis)
-- 001-wired-client-global-report: Added Python 3.13+ + `mistapi>=0.61.4`, existing MistHelper utilities (`ConfigUtils`, `InputUtils`, `DataExporter`, `DataProcessingUtils`)
-- 183-mist-ideas-analyzer: Added Python 3.13+ + `openai>=1.0` (AI API client, OpenAI-compatible surface for all 3 backends), `python-dotenv` (credential loading), `argparse` (stdlib, CLI flags)
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -1,6 +1,6 @@
 # Menu Reference
 
-Operation Count: MistHelper currently defines 163 actionable menu entries (0-162) with some gaps for future expansion.
+Operation Count: MistHelper currently defines 164 actionable menu entries (0-163) with some gaps for future expansion.
 
 Below is the authoritative list derived directly from `menu_actions` in code. WIP = unstable schema, DESTRUCTIVE = requires explicit user confirmation.
 
@@ -205,5 +205,8 @@ Below is the authoritative list derived directly from `menu_actions` in code. WI
 | 158 | Offline Device Report | Safe | `OfflineDeviceReporter.execute` |
 | 159 | SSID Template Consolidation (5-Phase Guided Workflow) | Safe | `SSIDTemplateConsolidationManager.execute` |
 | 160 | E911 BSSID Compliance Report | Safe | `E911BSSIDReportGenerator.execute` |
+| 161 | Global Wired Client Report (operator-based MAC/MFG filtering) | Interactive Safe | `GlobalWiredClientReportGenerator.execute` |
+| 162 | Wired Client Manufacturer Report (browse & select) | Interactive Safe | `WiredClientManufacturerReportGenerator.execute` |
+| 163 | WAN Hub Group Number Manager | Interactive | `WanHubGroupNumberManager.execute` |
 
 This page should be regenerated whenever `menu_actions` changes so the wiki stays aligned with `MistHelper.py`.

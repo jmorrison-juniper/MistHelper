@@ -39,7 +39,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 ---
 
 ## Project Overview
-MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 100+ menu-driven operations for data extraction, device management, and firmware upgrades with dual output (CSV/SQLite) and containerized SSH access.
+MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 100+ menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
@@ -81,7 +81,7 @@ This rule keeps code organized, manageable, and easy to navigate. Apply this hie
 
 ### Data Flow
 ```text
-Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV or SQLite)
+Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV / SQLite / ArangoDB+Redis)
                                                  -> Rate Limiting -> Retry Logic
 ```
 
@@ -131,7 +131,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 1. **API Discovery**: Check `mistapi.api.v1.orgs.*` or `mistapi.api.v1.sites.*`
 2. **Primary Key Strategy**: Add to `ENDPOINT_PRIMARY_KEY_STRATEGIES` with appropriate type (see Database Strategy section)
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
-4. **Dual Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
+4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
 6. **Version Changelog**: Update `CHANGELOG.md` with `version YY.MM.DD.HH.MM` format (UTC timestamp)
 7. **Git Workflow**: Execute full deployment pipeline (see below)
@@ -246,7 +246,7 @@ def validate_hostname(hostname: str) -> bool:
 - **All outputs**: `data/` directory (enforced at runtime)
 - **SSH logs**: `data/per-host-logs/`
 - **CSV commands**: `data/SSH_COMMANDS.CSV` (fallback supported at root)
-- **Database**: `data/mist_data.db`
+- **Database**: `data/mist_data.db` (SQLite), ArangoDB and Redis run as containers
 
 ---
 
@@ -386,7 +386,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 | `requirements.txt` | Python dependencies (pip compatibility) | ~30 |
 | `uv.lock` | UV package lock file (if using UV) | Generated |
 | `.env` (git-ignored) | Credentials & config | N/A |
-| `data/mist_data.db` | SQLite persistence | Generated |
+| `data/mist_data.db` | SQLite persistence (local fallback) | Generated |
 
 ---
 

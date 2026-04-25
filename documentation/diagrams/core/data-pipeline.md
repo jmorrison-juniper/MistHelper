@@ -2,7 +2,7 @@
 
 # Data Pipeline
 
-Traces the complete data flow from menu selection through API calls, pagination, rate limiting, data transformation, to dual-format output (CSV/SQLite).
+Traces the complete data flow from menu selection through API calls, pagination, rate limiting, data transformation, to multi-format output (CSV/SQLite/ArangoDB/Redis).
 
 ## Happy-Path Sequence
 
@@ -49,6 +49,8 @@ sequenceDiagram
         Export->>Export: Write to data/{filename}.csv
     else SQLite Output
         Export->>Export: Upsert to data/mist_data.db
+    else Polyglot Output
+        Export->>Export: Route via DatabaseRouter to ArangoDB/Redis
     end
     
     Export-->>User: Operation complete
@@ -97,6 +99,8 @@ flowchart TD
     O --> P{Output Format?}
     P -->|CSV| Q[Write CSV to data/ directory]
     P -->|SQLite| R{PK Strategy?}
+    P -->|Polyglot| W[DatabaseRouter]
+    W --> X[ArangoDB / Redis]
     
     R -->|natural_pk| S[INSERT OR REPLACE by UUID]
     R -->|composite_pk| T[INSERT OR REPLACE by composite key]
@@ -125,6 +129,7 @@ flowchart TD
 | Data Transform | `DataProcessingUtils` | `flatten_dict()`, `sanitize_filename()` |
 | CSV Output | `DataExporter` | `write_with_format_selection()` |
 | SQLite Output | `SQLiteDatabaseWriter` | `upsert_records()` with PK strategies |
+| Polyglot Output | `DatabaseRouter` | Routes to ArangoDB (documents) or Redis (time-series) |
 
 ---
 
@@ -132,5 +137,6 @@ flowchart TD
 
 - [Architecture Overview](architecture-overview.md) - System-level component map
 - [Database Strategy](database-strategy.md) - PK strategy details for SQLite upserts
+- [Data Persistence Routing](data-persistence-routing.md) - Polyglot routing decision tree
 - [Operations Reference](../operations/operations-reference.md) - Operation lifecycle states
 - [Class Hierarchy: Utilities](../class-hierarchy/utilities.md) - DataProcessingUtils detail

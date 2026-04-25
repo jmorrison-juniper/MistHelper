@@ -32,7 +32,7 @@ When opening an issue, include:
 - MistHelper version
 - Python version
 - Operating system
-- Output format (CSV or SQLite)
+- Output format (CSV, SQLite, or polyglot)
 - Relevant log excerpt from `data/script.log`
 - Steps to reproduce
 
