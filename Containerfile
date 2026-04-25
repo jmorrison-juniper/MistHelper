@@ -76,6 +76,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 # Copy application files
 COPY MistHelper.py __init__.py maps_manager.py wsgi.py ./
+COPY src/ ./src/
 COPY web_portal/ ./web_portal/
 
 # Set ownership and switch to non-root user for application files

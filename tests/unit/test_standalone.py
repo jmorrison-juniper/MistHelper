@@ -18,7 +18,10 @@ class TestStandaloneConfig:
     def test_standalone_false_by_default(self) -> None:
         from src.db import DatabaseConfig
 
-        with patch.dict("os.environ", {}, clear=True):
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("src.db._hosts_unreachable", return_value=False),
+        ):
             config = DatabaseConfig.from_env()
             assert config.standalone_mode is False
 

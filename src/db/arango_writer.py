@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import socket
 import time
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 from arango import ArangoClient  # type: ignore[attr-defined]
 
@@ -56,6 +58,11 @@ class ArangoDBWriter:
 
     def __init__(self, config: DatabaseConfig) -> None:
         """Initialize ArangoDB connection and ensure database exists."""
+        hostname = urlparse(config.arango_host).hostname or "arangodb"
+        try:
+            socket.getaddrinfo(hostname, None)
+        except socket.gaierror as dns_error:
+            raise ConnectionError(f"ArangoDB host '{hostname}' not resolvable") from dns_error
         self._client = ArangoClient(hosts=config.arango_host)
         self._config = config
         self._ensure_database()

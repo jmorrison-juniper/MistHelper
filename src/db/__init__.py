@@ -8,7 +8,9 @@ configuration.
 from __future__ import annotations
 
 import os
+import socket
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import structlog
 
@@ -55,19 +57,60 @@ class DatabaseConfig:
 
     @classmethod
     def from_env(cls) -> DatabaseConfig:
-        """Build config from environment variables."""
+        """Build config from environment variables.
+
+        Auto-detects standalone mode when database hosts are unreachable,
+        preventing noisy retry loops when running outside a container.
+        """
+        explicit_standalone = os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true"
+        arango_host = os.environ.get("ARANGO_HOST", "http://arangodb:8529")
+        redis_host = os.environ.get("REDIS_HOST", "redis-stack")
+        redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+
+        standalone = explicit_standalone or _hosts_unreachable(arango_host, redis_host)
+
         return cls(
-            arango_host=os.environ.get("ARANGO_HOST", "http://arangodb:8529"),
+            arango_host=arango_host,
             arango_database=os.environ.get("ARANGO_DATABASE", "misthelper"),
             arango_username=os.environ.get("ARANGO_USERNAME", "root"),
             arango_password=os.environ.get("ARANGO_ROOT_PASSWORD", ""),
-            redis_host=os.environ.get("REDIS_HOST", "redis-stack"),
-            redis_port=int(os.environ.get("REDIS_PORT", "6379")),
+            redis_host=redis_host,
+            redis_port=redis_port,
             redis_password=os.environ.get("REDIS_PASSWORD", ""),
-            standalone_mode=os.environ.get("MISTHELPER_STANDALONE", "false").lower() == "true",
+            standalone_mode=standalone,
             webhook_enabled=os.environ.get("WEBHOOK_ENABLED", "true").lower() == "true",
             webhook_secret=os.environ.get("WEBHOOK_SECRET", ""),
         )
+
+
+def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
+    """Return True if both ArangoDB and Redis hostnames fail DNS resolution.
+
+    Uses a fast DNS-only check (no TCP connection) with a short timeout
+    so the caller never blocks on retries.
+    """
+    arango_hostname = urlparse(arango_url).hostname or "arangodb"
+    arango_ok = _can_resolve(arango_hostname)
+    redis_ok = _can_resolve(redis_host)
+    if not arango_ok and not redis_ok:
+        log = get_logger(__name__)
+        log.info(
+            "standalone_auto_detected",
+            msg="Database hosts unreachable, using CSV/SQLite only",
+            arango_host=arango_hostname,
+            redis_host=redis_host,
+        )
+        return True
+    return False
+
+
+def _can_resolve(hostname: str) -> bool:
+    """Check whether a hostname resolves via DNS (no connection attempt)."""
+    try:
+        socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return True
+    except socket.gaierror:
+        return False
 
 
 @dataclass

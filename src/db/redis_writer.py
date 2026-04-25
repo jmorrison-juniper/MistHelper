@@ -12,6 +12,7 @@ Both use pipelined batch operations for high-throughput bulk imports.
 from __future__ import annotations
 
 import os
+import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -50,6 +51,10 @@ class RedisTimeSeriesWriter:
     def __init__(self, config: DatabaseConfig) -> None:
         """Initialize Redis TimeSeries connection and verify module."""
         self._log = get_logger("redis_writer")
+        try:
+            socket.getaddrinfo(config.redis_host, None)
+        except socket.gaierror as dns_error:
+            raise ConnectionError(f"Redis host '{config.redis_host}' not resolvable") from dns_error
         self._client = redis.Redis(
             host=config.redis_host,
             port=config.redis_port,
@@ -494,6 +499,10 @@ class RedisJSONWriter:
     def __init__(self, config: DatabaseConfig) -> None:
         """Initialize Redis JSON connection and verify module."""
         self._log = get_logger("redis_json_writer")
+        try:
+            socket.getaddrinfo(config.redis_host, None)
+        except socket.gaierror as dns_error:
+            raise ConnectionError(f"Redis host '{config.redis_host}' not resolvable") from dns_error
         self._client = redis.Redis(
             host=config.redis_host,
             port=config.redis_port,
