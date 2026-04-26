@@ -1,5 +1,4 @@
-"""
-Organization Data Collector
+"""Organization Data Collector.
 
 Bulk-collects all org-level read (list/search/get/count) API endpoints to
 populate ArangoDB, Redis TimeSeries, and SQLite backends in a single pass.
