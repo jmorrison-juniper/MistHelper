@@ -6,7 +6,7 @@ Operation distribution, rate limiting behavior, data flow volumes, and version h
 
 ## Operation Category Distribution
 
-How MistHelper's 164 operations break down by safety classification.
+How MistHelper's 166 operations break down by safety classification.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -27,13 +27,13 @@ How MistHelper's 164 operations break down by safety classification.
   'pieTitleTextColor': '#E0E0E0',
   'pieSectionTextColor': '#E0E0E0'
 }, 'pie': {'textPosition': 0.75}}}%%
-pie title Operation Safety Classification (164 total)
+pie title Operation Safety Classification (166 total)
     "Safe (51)" : 51
     "Destructive (32)" : 32
-    "Interactive (26)" : 26
+    "Interactive (27)" : 27
     "WebSocket (22)" : 22
     "Interactive Safe (24)" : 24
-    "Resource Intensive (7)" : 7
+    "Resource Intensive (8)" : 8
     "Continuous (2)" : 2
 ```
 
@@ -177,7 +177,7 @@ timeline
                 : Auto-merge workflow
                 : Web portal (Gunicorn)
     section Current
-        2025 : 164 operations
+        2025 : 166 operations
              : SpecKit integration
              : Mermaid documentation suite
              : Polyglot backends (ArangoDB/Redis)
