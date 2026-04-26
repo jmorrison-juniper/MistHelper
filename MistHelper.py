@@ -78,6 +78,7 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.org_data_collector import OrgDataCollector
 from src.wan_hub_group_manager import WanHubGroupNumberManager
 from src.wan_vpn_builder import WanVpnBuilder
 
@@ -3695,6 +3696,881 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["old_template_id", "status"],
         "unique_constraints": [],
         "description": "Old SSID disable results for SSID consolidation",
+    },
+    # ========================================================================
+    # ORG DATA COLLECTOR -- bulk collection endpoints (menu 165)
+    # ========================================================================
+    # -- Security Profiles (natural_pk) --------------------------------------
+    "listOrgAAMWProfiles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization Advanced Anti-Malware profiles",
+    },
+    "listOrgAntivirusProfiles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization antivirus profiles",
+    },
+    "listOrgIdpProfiles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization IDP profiles",
+    },
+    # -- Network & VPN (natural_pk) ------------------------------------------
+    "listOrgVpns": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization VPN configurations",
+    },
+    "listOrgEvpnTopologies": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization EVPN topology configurations",
+    },
+    "listOrgWxTunnels": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization WxLAN tunnel configurations",
+    },
+    # -- Wireless Policy (natural_pk) ----------------------------------------
+    "listOrgWxRules": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "order"],
+        "unique_constraints": [],
+        "description": "Organization WxLAN rules",
+    },
+    "listOrgWxTags": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization WxLAN tags",
+    },
+    # -- Edge Infrastructure -------------------------------------------------
+    "listOrgMxEdgeClusters": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization MxEdge cluster configurations",
+    },
+    "listOrgMxEdgeUpgrades": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "mxedge_id", "status"],
+        "unique_constraints": [],
+        "description": "MxEdge firmware upgrade records",
+    },
+    # -- Device Management ---------------------------------------------------
+    "listOrgDeviceUpgrades": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "site_id", "status"],
+        "unique_constraints": [],
+        "description": "Device firmware upgrade records",
+    },
+    "listOrgOtherDevices": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "mac", "vendor"],
+        "unique_constraints": [],
+        "description": "Non-Juniper devices tracked by the organization",
+    },
+    # -- Assets & Inventory --------------------------------------------------
+    "listOrgAssets": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "mac", "site_id"],
+        "unique_constraints": [],
+        "description": "Organization BLE asset definitions",
+    },
+    "listOrgAssetFilters": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization asset filter rules",
+    },
+    "listOrgAssetsStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization BLE asset statistics",
+    },
+    # -- JSI (Juniper Support Insights) --------------------------------------
+    "listOrgJsiDevices": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "serial", "mac"],
+        "unique_constraints": [],
+        "description": "JSI-tracked device inventory",
+    },
+    "listOrgJsiPastPurchases": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "JSI historical purchase records",
+    },
+    # -- Access & Auth -------------------------------------------------------
+    "listOrgCertificates": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization TLS/SSL certificates",
+    },
+    "listOrgSsoRoles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization SSO role mappings",
+    },
+    "listOrgSsoLatestFailures": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "timestamp"],
+        "unique_constraints": [],
+        "description": "Latest SSO authentication failures",
+    },
+    "listOrgIssuedClientCertificates": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Client certificates issued by the organization",
+    },
+    "listOrgNacPortalSsoLatestFailures": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "timestamp"],
+        "unique_constraints": [],
+        "description": "NAC portal SSO authentication failures",
+    },
+    "listOrgGuestAuthorizations": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "site_id", "mac"],
+        "unique_constraints": [],
+        "description": "Guest network authorization records",
+    },
+    # -- PSK Portals ---------------------------------------------------------
+    "listOrgPskPortals": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization PSK portal configurations",
+    },
+    "listOrgPskPortalLogs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["org_id", "psk_portal_id"],
+        "unique_constraints": [],
+        "description": "PSK portal access log entries",
+    },
+    # -- SDK & Invites -------------------------------------------------------
+    "listSdkInvites": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "SDK invite records",
+    },
+    "listSdkTemplates": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "SDK template definitions",
+    },
+    "listOrgMarvisClientInvites": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Marvis client invite records",
+    },
+    # -- Alarms & Tickets ----------------------------------------------------
+    "listOrgSuppressedAlarms": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Suppressed alarm rules",
+    },
+    "listOrgTickets": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "status", "type"],
+        "unique_constraints": [],
+        "description": "Organization support tickets",
+    },
+    # -- Dashboards & UI -----------------------------------------------------
+    "listOrgPmaDashboards": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "PMA dashboard configurations",
+    },
+    "listOrgUiSettings": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization UI preference settings",
+    },
+    # -- Search Endpoints (composite_pk for time-series/event data) ----------
+    "searchOrgDevices": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "model", "type", "hostname"],
+        "unique_constraints": [],
+        "description": "Organization device search results",
+    },
+    "searchOrgDeviceLastConfigs": {
+        "type": "composite_pk",
+        "primary_key": ["device_id", "timestamp"],
+        "indexes": ["org_id", "site_id", "name"],
+        "unique_constraints": [],
+        "description": "Last pushed device configurations",
+    },
+    "searchOrgInventory": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "serial", "model", "type"],
+        "unique_constraints": [],
+        "description": "Organization inventory search results",
+    },
+    "searchOrgWirelessClientEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type", "ap"],
+        "unique_constraints": [],
+        "description": "Wireless client event search results",
+    },
+    "searchOrgWirelessClientSessions": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "ap", "ssid"],
+        "unique_constraints": [],
+        "description": "Wireless client session search results",
+    },
+    "searchOrgWanClientEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "WAN client event search results",
+    },
+    "searchOrgWanClients": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "hostname"],
+        "unique_constraints": [],
+        "description": "WAN client search results",
+    },
+    "searchOrgMistEdgeEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mxedge_id", "timestamp"],
+        "indexes": ["org_id", "type"],
+        "unique_constraints": [],
+        "description": "MistEdge event search results",
+    },
+    "searchOrgOtherDeviceEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "Other device event search results",
+    },
+    "searchOrgMxEdges": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "name", "model"],
+        "unique_constraints": [],
+        "description": "MxEdge search results",
+    },
+    "searchOrgSites": {
+        "type": "composite_pk",
+        "primary_key": ["id", "name"],
+        "indexes": ["org_id", "country_code"],
+        "unique_constraints": [],
+        "description": "Organization site search results",
+    },
+    "searchOrgOspfStats": {
+        "type": "composite_pk",
+        "primary_key": ["device_id", "neighbor", "timestamp"],
+        "indexes": ["org_id", "site_id", "state"],
+        "unique_constraints": [],
+        "description": "OSPF neighbor statistics search results",
+    },
+    "searchOrgUserMacs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization user MAC address search results",
+    },
+    "searchOrgPskPortalLogs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["org_id", "psk_portal_id"],
+        "unique_constraints": [],
+        "description": "PSK portal log search results",
+    },
+    "searchOrgJsiAssetsAndContracts": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "serial"],
+        "unique_constraints": [],
+        "description": "JSI assets and contract search results",
+    },
+    "searchOrgJsiPbn": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "JSI PBN search results",
+    },
+    "searchOrgJsiSirt": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "JSI SIRT search results",
+    },
+    "searchOrgVars": {
+        "type": "composite_pk",
+        "primary_key": ["site_id", "name"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization variable search results",
+    },
+    "searchOrgWebhooksDeliveries": {
+        "type": "composite_pk",
+        "primary_key": ["id", "webhook_id", "timestamp"],
+        "indexes": ["org_id", "status_code"],
+        "unique_constraints": [],
+        "description": "Webhook delivery search results",
+    },
+    # -- GET Endpoints (org-level summaries) ---------------------------------
+    "getOrgSettings": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization settings snapshot",
+    },
+    "getOrgStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization-level statistics snapshot",
+    },
+    "getOrgApplicationList": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization application definitions",
+    },
+    # -- Count Endpoints (aggregated counts → auto_increment) ------------------
+    "countOrgAlarms": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Organization alarm count aggregates",
+    },
+    "countOrgAssetsByDistanceField": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Asset count by distance field aggregates",
+    },
+    "countOrgAuditLogs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Audit log count aggregates",
+    },
+    "countOrgBgpStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "BGP statistics count aggregates",
+    },
+    "countOrgDeviceEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Device event count aggregates",
+    },
+    "countOrgDeviceLastConfigs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Device last config count aggregates",
+    },
+    "countOrgDevices": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Device count aggregates",
+    },
+    "countOrgGuestAuthorizations": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Guest authorization count aggregates",
+    },
+    "countOrgInventory": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Inventory count aggregates",
+    },
+    "countOrgJsiAssetsAndContracts": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "JSI assets and contracts count aggregates",
+    },
+    "countOrgJsiPbn": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "JSI PBN count aggregates",
+    },
+    "countOrgJsiSirt": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "JSI SIRT count aggregates",
+    },
+    "countOrgMxEdges": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "MxEdge count aggregates",
+    },
+    "countOrgNacClientEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "NAC client event count aggregates",
+    },
+    "countOrgNacClients": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "NAC client count aggregates",
+    },
+    "countOrgOspfStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "OSPF statistics count aggregates",
+    },
+    "countOrgOtherDeviceEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Other device event count aggregates",
+    },
+    "countOrgPeerPathStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Peer path statistics count aggregates",
+    },
+    "countOrgPskPortalLogs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "PSK portal log count aggregates",
+    },
+    "countOrgSiteMxEdgeEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Site MxEdge event count aggregates",
+    },
+    "countOrgSites": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Site count aggregates",
+    },
+    "countOrgSwOrGwPorts": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Switch/gateway port count aggregates",
+    },
+    "countOrgSystemEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "System event count aggregates",
+    },
+    "countOrgTickets": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Ticket count aggregates",
+    },
+    "countOrgTunnelsStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Tunnel statistics count aggregates",
+    },
+    "countOrgUserMacs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "User MAC address count aggregates",
+    },
+    "countOrgWanClients": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "WAN client count aggregates",
+    },
+    "countOrgWiredClients": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Wired client count aggregates",
+    },
+    "countOrgWirelessClientEvents": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Wireless client event count aggregates",
+    },
+    "countOrgWirelessClients": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Wireless client count aggregates",
+    },
+    "countOrgWirelessClientsSessions": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Wireless client session count aggregates",
+    },
+    # -- GET Endpoints (additional org-level data) ---------------------------
+    "getOrg": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization details snapshot",
+    },
+    "getOrgCapturingStatus": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization packet capture status",
+    },
+    "getOrgLicensesBySite": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "site_id"],
+        "unique_constraints": [],
+        "description": "License allocation by site",
+    },
+    # -- LIST Endpoints (additional org-level entities) ----------------------
+    "listOrgAdmins": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "email"],
+        "unique_constraints": [],
+        "description": "Organization administrator accounts",
+    },
+    "listOrgAlarmTemplates": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization alarm template configurations",
+    },
+    "listOrgApiTokens": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization API token records",
+    },
+    "listOrgApsMacs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "mac"],
+        "unique_constraints": [],
+        "description": "Organization AP MAC address list",
+    },
+    "listOrgAuditLogs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["org_id", "admin_name", "message"],
+        "unique_constraints": [],
+        "description": "Organization audit log entries",
+    },
+    "listOrgAvailableDeviceVersions": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "model", "version"],
+        "unique_constraints": [],
+        "description": "Available firmware versions for org devices",
+    },
+    "listOrgAvailableSsrVersions": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "version"],
+        "unique_constraints": [],
+        "description": "Available SSR firmware versions",
+    },
+    "listOrgDeviceProfiles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Organization device profile configurations",
+    },
+    "listOrgDevices": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "site_id", "mac", "serial", "model"],
+        "unique_constraints": [],
+        "description": "Organization devices list",
+    },
+    "listOrgDevicesSummary": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization device summary statistics",
+    },
+    "listOrgMxEdges": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "model"],
+        "unique_constraints": [],
+        "description": "Organization MxEdge appliances",
+    },
+    "listOrgMxEdgesStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "name", "model"],
+        "unique_constraints": [],
+        "description": "Organization MxEdge statistics",
+    },
+    "listOrgMxTunnels": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization Mist tunnel configurations",
+    },
+    "listOrgNacPortals": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization NAC portal configurations",
+    },
+    "listOrgNacRules": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "order"],
+        "unique_constraints": [],
+        "description": "Organization NAC rules",
+    },
+    "listOrgNacTags": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Organization NAC tags",
+    },
+    "listOrgNetworks": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization network definitions",
+    },
+    "listOrgPacketCaptures": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "Organization packet capture records",
+    },
+    "listOrgSecIntelProfiles": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization security intelligence profiles",
+    },
+    "listOrgServicePolicies": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization service policy configurations",
+    },
+    "listOrgServices": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Organization service definitions",
+    },
+    "listOrgSiteGroups": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization site group configurations",
+    },
+    "listOrgSiteStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "name"],
+        "indexes": ["org_id", "country_code"],
+        "unique_constraints": [],
+        "description": "Organization site statistics",
+    },
+    "listOrgSsos": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization SSO configurations",
+    },
+    "listOrgSsrUpgrades": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "device_id", "status"],
+        "unique_constraints": [],
+        "description": "SSR firmware upgrade records",
+    },
+    "listOrgTemplates": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization WLAN template configurations",
+    },
+    "listOrgWlans": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "ssid"],
+        "unique_constraints": [],
+        "description": "Organization WLAN configurations",
+    },
+    # -- SEARCH Endpoints (additional) --------------------------------------
+    "searchOrgAssets": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "name"],
+        "unique_constraints": [],
+        "description": "Organization asset search results",
+    },
+    "searchOrgBgpStats": {
+        "type": "composite_pk",
+        "primary_key": ["device_id", "neighbor", "timestamp"],
+        "indexes": ["org_id", "site_id", "state"],
+        "unique_constraints": [],
+        "description": "BGP neighbor statistics search results",
+    },
+    "searchOrgEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "Organization event search results",
+    },
+    "searchOrgGuestAuthorization": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id"],
+        "unique_constraints": [],
+        "description": "Guest authorization search results",
+    },
+    "searchOrgNacClientEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "NAC client event search results",
+    },
+    "searchOrgNacClients": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id"],
+        "unique_constraints": [],
+        "description": "NAC client search results",
+    },
+    "searchOrgTunnelsStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "device_id", "timestamp"],
+        "indexes": ["org_id", "site_id"],
+        "unique_constraints": [],
+        "description": "Tunnel statistics search results",
     },
     # Default fallback strategy for unclassified endpoints
     # Uses auto-increment with unique constraint on API id field if present
@@ -7537,7 +8413,7 @@ class SFPTransceiverDataProcessor:
         This logic was previously a standalone function (`process_and_merge_csv_for_sfp_address`).
         It is only invoked by menu option 77 and has no tight coupling with most runtime state.
         Encapsulating it in a class improves hierarchy and opens the door for future extensions
-        (e.g., JSON export, filtering, unit tests) without growing the monolithic global scope.
+        (e.g., JSON export, filtering, unit tests) without growing the legacy global scope.
 
     SECURITY:
         Operates only on locally generated CSV artifacts inside the controlled `data/` directory.
@@ -16206,7 +17082,7 @@ class OrgExportUtils:
     """
 
     @staticmethod
-    def export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]
+    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # type: ignore[no-untyped-def]
         """
         Generic function to export organization-specific data to CSV.
 
@@ -16214,6 +17090,7 @@ class OrgExportUtils:
             api_call: The mistapi function to call
             data_type: Description of the data type (e.g., "licenses", "templates")
             sort_key: Field to sort results by
+            limit: Page size for paginated APIs. Pass None to omit (non-paginated APIs).
             **api_kwargs: Additional arguments to pass to the API call
 
         Returns:
@@ -16225,13 +17102,16 @@ class OrgExportUtils:
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()
         filename = f"Org{safe_data_type}.csv"
 
+        fetcher_kwargs = dict(api_kwargs)
+        if limit is not None:
+            fetcher_kwargs["limit"] = limit
+
         APIDataFetcher(
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
             sort_key=sort_key,
-            limit=1000,
-            **api_kwargs,
+            **fetcher_kwargs,
         ).execute()
 
     @staticmethod
@@ -58141,6 +59021,13 @@ menu_actions = {
         lambda: WanVpnBuilder.execute(apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input),
         "WAN Hub-Spoke VPN Builder",
     ),
+    # > Bulk Data Collection
+    "165": (
+        lambda: OrgDataCollector.execute(
+            OrgExportUtils.export_data, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+        ),
+        "Bulk Org Data Collection (populate ArangoDB/Redis/SQLite with all org-level APIs)",
+    ),
 }
 
 
@@ -58887,6 +59774,10 @@ class OperationRegistry:
         "164": {
             "category": "interactive",
             "skip_reason": "Interactive VPN builder with API writes",
+        },
+        "165": {
+            "category": "resource_intensive",
+            "skip_reason": "Bulk org data collection - runs 57 API calls, resource intensive",
         },
     }
 

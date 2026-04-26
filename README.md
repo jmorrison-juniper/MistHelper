@@ -4,7 +4,7 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 165 actionable menu entries (0-164) with some gaps for future expansion.
+**Operation Count:** The code currently defines 166 actionable menu entries (0-165) with some gaps for future expansion.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -104,7 +104,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-  root((MistHelper<br/>165 Operations))
+  root((MistHelper<br/>166 Operations))
     Safe (51)
       Org Sites
       Device Inventory
@@ -133,9 +133,10 @@ mindmap
       SSR Firmware
       AP Reboots
       VC Conversion
-    Resource Intensive (7)
+    Resource Intensive (8)
       Port Stats
       Full Site Config
+      Bulk Org Data
     Continuous (2)
       Monitoring Loops
 ```
@@ -166,7 +167,8 @@ mindmap
 
 | Path | Purpose |
 |------|---------|
-| `MistHelper.py` | Primary monolithic implementation (menu, exports, SSH, persistence) |
+| `MistHelper.py` | Legacy entrypoint -- actively being decomposed into `src/` modules (see Architecture Evolution below) |
+| `src/` | Extracted modules mirroring the Mist API / mistapi hierarchy (db, output, constants, WAN builders) |
 | `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
 | `CombinedInventory_ByWeek/` | Time-series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
@@ -177,6 +179,61 @@ mindmap
 | `agents.md` | Internal "Agents Guide" (style, safety, refactor guidance) |
 
 All export CSVs are now written inside `data/` (the code enforces a data directory even if a legacy doc claims root CSV placement).
+
+---
+
+## Architecture Evolution
+
+MistHelper started as a single-file script (`MistHelper.py`) and is being incrementally decomposed into a modular `src/` package. The target structure mirrors both the **Mist Cloud API hierarchy** (from the OpenAPI spec) and **Thomas Munzer's mistapi library** (`tmunzer/mistapi_python`), so that MistHelper's internal organization matches the APIs it consumes.
+
+### Target `src/` Layout
+
+```text
+src/
+├── api/                    # Mirrors mistapi.api.v1 -- operation modules
+│   ├── orgs/               # Org-scoped operations (80 resources in Mist API)
+│   │   ├── devices.py
+│   │   ├── clients.py
+│   │   ├── inventory.py
+│   │   └── ...
+│   ├── sites/              # Site-scoped operations (61 resources in Mist API)
+│   │   ├── devices.py
+│   │   ├── wlans.py
+│   │   ├── stats.py
+│   │   └── ...
+│   └── const/              # Constants and enums (27 resources)
+├── db/                     # Database backends (DONE: arango_writer, redis_writer, retention, router)
+├── output/                 # Output formatting (DONE: writer)
+├── websockets/             # Real-time WebSocket operations
+├── device_utils/           # SSH runner, device diagnostics
+├── auth/                   # Authentication and session management
+├── ui/                     # Web portal components
+├── constants.py            # DONE: Shared constants
+├── wan_hub_group_manager.py  # DONE: WAN hub/group operations
+└── wan_vpn_builder.py      # DONE: WAN VPN builder
+```
+
+### Decomposition Status
+
+| Module | Status | Description |
+|--------|--------|-------------|
+| `src/db/` | **Done** | ArangoDB writer, Redis writer, retention, routing |
+| `src/output/` | **Done** | Output writer |
+| `src/constants.py` | **Done** | Shared constants |
+| `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
+| `src/api/orgs/` | Planned | Org-scoped data extraction operations |
+| `src/api/sites/` | Planned | Site-scoped data extraction operations |
+| `src/websockets/` | Planned | WebSocket manager extraction |
+| `src/device_utils/` | Planned | SSH runner, packet capture |
+| `src/auth/` | Planned | Authentication flows |
+| `src/ui/` | Planned | Web portal extraction |
+
+### Guiding Principles
+
+- **New features go in `src/`**, not `MistHelper.py`
+- **One module per API resource** (e.g., `src/api/orgs/devices.py` handles org device operations)
+- **MistHelper.py remains the entrypoint** but delegates to `src/` modules
+- **Incremental migration** -- extract one class/feature at a time, keep tests green
 
 ---
 

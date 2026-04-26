@@ -23,7 +23,7 @@ flowchart TB
     ci_system(["CI/CD System<br/>GitHub Actions"])
 
     subgraph misthelper["MistHelper"]
-        mh["Python CLI tool<br/>164 operations"]
+        mh["Python CLI tool<br/>166 operations"]
     end
 
     mist_cloud["Juniper Mist Cloud<br/>REST API + WebSocket"]

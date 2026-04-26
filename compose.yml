@@ -19,14 +19,23 @@ services:
       - .env
     environment:
       # Container-specific environment variables (override .env if needed)
-      - OUTPUT_FORMAT=sqlite
+      - OUTPUT_FORMAT=polyglot
       - DATABASE_PATH=/app/data/mist_data.db
       - PYTHONUNBUFFERED=1
       # Web portal port (must match exposed port)
       - WEB_PORT=8055
+      # Database connection (container names resolve via compose network)
+      - ARANGO_HOST=http://arangodb:8529
+      - REDIS_HOST=redis-stack
+      - REDIS_PORT=6379
       # SSL settings for UV downloads (if needed)
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    depends_on:
+      arangodb:
+        condition: service_healthy
+      redis-stack:
+        condition: service_healthy
     networks:
       - misthelper-network
     restart: unless-stopped
@@ -53,6 +62,46 @@ services:
   #     context: .
   #     dockerfile: Dockerfile  # Docker-compatible version with HEALTHCHECK
   #   # ... same config as above
+
+  arangodb:
+    image: docker.io/arangodb/arangodb:3.12
+    container_name: arangodb
+    ports:
+      - "8529:8529"
+    volumes:
+      - arangodb-data:/var/lib/arangodb3
+    environment:
+      - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-}
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "arangosh", "--server.password", "${ARANGO_ROOT_PASSWORD:-}", "--javascript.execute-string", "print(1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  redis-stack:
+    image: docker.io/redis/redis-stack:latest
+    container_name: redis-stack
+    ports:
+      - "6379:6379"
+      # RedisInsight web UI for browsing data
+      - "8001:8001"
+    volumes:
+      - redis-data:/data
+    environment:
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-}
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   ollama:
     image: docker.io/ollama/ollama
@@ -94,6 +143,10 @@ networks:
 
 volumes:
   misthelper-data:
+    driver: local
+  arangodb-data:
+    driver: local
+  redis-data:
     driver: local
   # Persistent model storage for the local Ollama instance.
   # Models survive container restarts, upgrades, and `podman rm`.
