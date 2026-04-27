@@ -78,7 +78,123 @@ EDGE_DEFINITIONS = [
     {
         "edge_collection": "ConfigSnapshotForEntity",
         "from_vertex_collections": ["config_snapshots"],
-        "to_vertex_collections": ["sites", "devices", "templates", "wlans"],
+        "to_vertex_collections": [
+            "sites",
+            "devices",
+            "templates",
+            "wlans",
+            "networks",
+            "nac_rules",
+            "security_policies",
+            "psks",
+            "webhooks",
+        ],
+    },
+    # -- Client relationships --
+    {
+        "edge_collection": "ClientConnectedToWlan",
+        "from_vertex_collections": ["clients"],
+        "to_vertex_collections": ["wlans"],
+    },
+    {
+        "edge_collection": "ClientBelongsToSite",
+        "from_vertex_collections": ["clients"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- Org-level entity ownership --
+    {
+        "edge_collection": "NetworkBelongsToOrg",
+        "from_vertex_collections": ["networks"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "ServiceBelongsToOrg",
+        "from_vertex_collections": ["services"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "VpnBelongsToOrg",
+        "from_vertex_collections": ["vpns"],
+        "to_vertex_collections": ["orgs"],
+    },
+    # -- Events and alarms --
+    {
+        "edge_collection": "AlarmBelongsToSite",
+        "from_vertex_collections": ["alarms"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "EventBelongsToSite",
+        "from_vertex_collections": ["events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "EventOccurredOnDevice",
+        "from_vertex_collections": ["events"],
+        "to_vertex_collections": ["devices"],
+    },
+    # -- Security and NAC --
+    {
+        "edge_collection": "NACRuleMatchesSite",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "NACRuleMatchesSiteGroup",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "NACTagBelongsToPortal",
+        "from_vertex_collections": ["nac_tags"],
+        "to_vertex_collections": ["nac_portals"],
+    },
+    {
+        "edge_collection": "SecurityPolicyBelongsToOrg",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["orgs"],
+    },
+    # -- Assets and config --
+    {
+        "edge_collection": "PSKBelongsToSite",
+        "from_vertex_collections": ["psks"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "AssetBelongsToSite",
+        "from_vertex_collections": ["assets"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "AssetOnMap",
+        "from_vertex_collections": ["assets"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "WebhookBelongsToSite",
+        "from_vertex_collections": ["webhooks"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SiteGroupContainsSite",
+        "from_vertex_collections": ["sitegroups"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- WLAN and template relationships --
+    {
+        "edge_collection": "WlanUsesMxTunnel",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "TemplateAppliedToSite",
+        "from_vertex_collections": ["templates"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "TemplateAppliedToSiteGroup",
+        "from_vertex_collections": ["templates"],
+        "to_vertex_collections": ["sitegroups"],
     },
 ]
 
@@ -97,6 +213,12 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgDeviceProfiles": "templates",
     "getOrgWlans": "wlans",
     "listOrgWlans": "wlans",
+    "listOrgNetworks": "networks",
+    "listOrgNacRules": "nac_rules",
+    "listOrgSecPolicies": "security_policies",
+    "listOrgServicePolicies": "security_policies",
+    "listOrgPsks": "psks",
+    "listOrgWebhooks": "webhooks",
 }
 
 # Maps API collection names to graph vertex + edge relationships.
@@ -159,6 +281,13 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_field": "device_mac",
                 "to_key_lookup": "mac",
             },
+            {
+                "edge_col": "ClientBelongsToSite",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
         ],
     },
     "searchOrgWirelessClients": {
@@ -172,6 +301,20 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "devices",
                 "to_field": "ap",
                 "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "ClientConnectedToWlan",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+            {
+                "edge_col": "ClientBelongsToSite",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
             },
         ],
     },
@@ -192,6 +335,13 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "templates",
                 "to_field": "template_id",
+            },
+            {
+                "edge_col": "WlanUsesMxTunnel",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mxtunnel_id",
             },
         ],
     },
@@ -214,6 +364,252 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
             },
         ],
         "ensure_target_vertices": [("mxcluster_id", "mxclusters")],
+    },
+    "searchOrgNacClients": {
+        "vertex": "clients",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "ClientConnectedToDevice",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "device_mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "ClientBelongsToSite",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgAlarms": {
+        "vertex": "alarms",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AlarmBelongsToSite",
+                "from_col": "alarms",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgDeviceEvents": {
+        "vertex": "events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "EventBelongsToSite",
+                "from_col": "events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "EventOccurredOnDevice",
+                "from_col": "events",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listOrgNetworks": {
+        "vertex": "networks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "NetworkBelongsToOrg",
+                "from_col": "networks",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgServices": {
+        "vertex": "services",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "ServiceBelongsToOrg",
+                "from_col": "services",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgVpns": {
+        "vertex": "vpns",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "VpnBelongsToOrg",
+                "from_col": "vpns",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgNacRules": {
+        "vertex": "nac_rules",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "NACRuleMatchesSite",
+                "from_col": "nac_rules",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "matching.site_ids",
+            },
+            {
+                "edge_col": "NACRuleMatchesSiteGroup",
+                "from_col": "nac_rules",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "matching.sitegroup_ids",
+            },
+        ],
+    },
+    "listOrgNacTags": {
+        "vertex": "nac_tags",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "NACTagBelongsToPortal",
+                "from_col": "nac_tags",
+                "from_field": "id",
+                "to_col": "nac_portals",
+                "to_field": "nacportal_id",
+            },
+        ],
+        "ensure_target_vertices": [("nacportal_id", "nac_portals")],
+    },
+    "listOrgSecPolicies": {
+        "vertex": "security_policies",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SecurityPolicyBelongsToOrg",
+                "from_col": "security_policies",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgServicePolicies": {
+        "vertex": "security_policies",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SecurityPolicyBelongsToOrg",
+                "from_col": "security_policies",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgPsks": {
+        "vertex": "psks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PSKBelongsToSite",
+                "from_col": "psks",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listOrgAssets": {
+        "vertex": "assets",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AssetBelongsToSite",
+                "from_col": "assets",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "AssetOnMap",
+                "from_col": "assets",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listOrgWebhooks": {
+        "vertex": "webhooks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WebhookBelongsToSite",
+                "from_col": "webhooks",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listOrgSiteGroups": {
+        "vertex": "sitegroups",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SiteGroupContainsSite",
+                "from_col": "sitegroups",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_ids",
+            },
+        ],
+    },
+    "listOrgMxEdgeClusters": {
+        "vertex": "mxclusters",
+        "key_field": "id",
+    },
+    "listOrgNacPortals": {
+        "vertex": "nac_portals",
+        "key_field": "id",
+    },
+    "listOrgAuditLogs": {
+        "vertex": "audit_logs",
+        "key_field": "id",
+    },
+    "listOrgWlanTemplates": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "TemplateAppliedToSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "applies.site_ids",
+            },
+            {
+                "edge_col": "TemplateAppliedToSiteGroup",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "applies.sitegroup_ids",
+            },
+        ],
     },
 }
 
@@ -427,8 +823,8 @@ class ArangoDBWriter:
         to_key_lookup = self._build_key_lookup(to_col, edge_config.get("to_key_lookup", ""))
 
         for record in data:
-            from_value = record.get(from_field)
-            to_raw = record.get(to_field)
+            from_value = self._resolve_nested_field(record, from_field) if "." in from_field else record.get(from_field)
+            to_raw = self._resolve_nested_field(record, to_field) if "." in to_field else record.get(to_field)
             if not from_value or not to_raw:
                 continue
             to_values = to_raw if isinstance(to_raw, list) else [to_raw]
@@ -535,6 +931,18 @@ class ArangoDBWriter:
         return hashlib.sha256(
             f"{from_id}:{to_id}".encode(),
         ).hexdigest()[:16]
+
+    @staticmethod
+    def _resolve_nested_field(record: dict, field_path: str) -> Any:
+        """Resolve dot-separated field paths (e.g., 'matching.site_ids')."""
+        parts = field_path.split(".")
+        value: Any = record
+        for part in parts:
+            if isinstance(value, dict):
+                value = value.get(part)
+            else:
+                return None
+        return value
 
     @staticmethod
     def _sanitize_key(key: str) -> str:
