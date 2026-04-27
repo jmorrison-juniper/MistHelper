@@ -450,6 +450,12 @@ class TestArangoDBWriterEdgeDefinitions:
             "WanEventForClient",
             "NACRuleUsesTag",
             "ServicePolicyUsesService",
+            # Issue #169: Complete edge coverage for unmapped org-level endpoints
+            "PskPortalServesSiteGroup",
+            "SuppressedAlarmBelongsToSite",
+            "DeviceConfigBelongsToSite",
+            "DeviceConfigForDevice",
+            "SiteStatsBelongsToSite",
         }
         assert edge_names == expected
 
