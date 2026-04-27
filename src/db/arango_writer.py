@@ -88,6 +88,16 @@ EDGE_DEFINITIONS = [
             "security_policies",
             "psks",
             "webhooks",
+            "device_profiles",
+            "alarm_templates",
+            "guests",
+            "mx_tunnels",
+            "wx_rules",
+            "wx_tags",
+            "tickets",
+            "other_devices",
+            "evpn_topologies",
+            "packet_captures",
         ],
     },
     # -- Client relationships --
@@ -196,6 +206,191 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["templates"],
         "to_vertex_collections": ["sitegroups"],
     },
+    # -- Tier 1: High-value entity relationships --
+    {
+        "edge_collection": "DeviceUsesProfile",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["device_profiles"],
+    },
+    {
+        "edge_collection": "PSKBelongsToWlan",
+        "from_vertex_collections": ["psks"],
+        "to_vertex_collections": ["wlans"],
+    },
+    {
+        "edge_collection": "AlarmOnDevice",
+        "from_vertex_collections": ["alarms"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "NacPortalServesSiteGroup",
+        "from_vertex_collections": ["nac_portals"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "MxTunnelUsesCluster",
+        "from_vertex_collections": ["mx_tunnels"],
+        "to_vertex_collections": ["mxclusters"],
+    },
+    {
+        "edge_collection": "AuditLogBelongsToSite",
+        "from_vertex_collections": ["audit_logs"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "GuestBelongsToSite",
+        "from_vertex_collections": ["guests"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "GuestAuthorizedOnWlan",
+        "from_vertex_collections": ["guests"],
+        "to_vertex_collections": ["wlans"],
+    },
+    # -- Tier 2: Event/search entity relationships --
+    {
+        "edge_collection": "ClientEventBelongsToSite",
+        "from_vertex_collections": ["client_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "ClientEventOnDevice",
+        "from_vertex_collections": ["client_events"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "SessionBelongsToSite",
+        "from_vertex_collections": ["client_sessions"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SessionOnWlan",
+        "from_vertex_collections": ["client_sessions"],
+        "to_vertex_collections": ["wlans"],
+    },
+    {
+        "edge_collection": "SessionOnDevice",
+        "from_vertex_collections": ["client_sessions"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "NacEventBelongsToSite",
+        "from_vertex_collections": ["nac_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WanEventBelongsToSite",
+        "from_vertex_collections": ["wan_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "MxEdgeEventBelongsToSite",
+        "from_vertex_collections": ["mxedge_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "OtherEventBelongsToSite",
+        "from_vertex_collections": ["other_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "OrgEventBelongsToSite",
+        "from_vertex_collections": ["org_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SystemEventBelongsToSite",
+        "from_vertex_collections": ["system_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- Tier 3: Stats/telemetry relationships --
+    {
+        "edge_collection": "DeviceStatsBelongsToSite",
+        "from_vertex_collections": ["device_stats"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DeviceStatsForDevice",
+        "from_vertex_collections": ["device_stats"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "BgpStatsBelongsToSite",
+        "from_vertex_collections": ["bgp_stats"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "OspfStatsBelongsToSite",
+        "from_vertex_collections": ["ospf_stats"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "PeerPathBelongsToSite",
+        "from_vertex_collections": ["peer_paths"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "PortBelongsToSite",
+        "from_vertex_collections": ["ports"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "PortBelongsToDevice",
+        "from_vertex_collections": ["ports"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "TunnelBelongsToSite",
+        "from_vertex_collections": ["tunnels"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "MxEdgeStatsBelongsToSite",
+        "from_vertex_collections": ["mxedge_stats"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- Tier 4: WxLAN policy relationships --
+    {
+        "edge_collection": "WxRuleBelongsToTemplate",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["templates"],
+    },
+    {
+        "edge_collection": "WxRuleMatchesSrcTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    {
+        "edge_collection": "WxRuleAllowsDstTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    {
+        "edge_collection": "WxRuleDeniesDstTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    # -- Tier 5: Remaining entity relationships --
+    {
+        "edge_collection": "TicketBelongsToSite",
+        "from_vertex_collections": ["tickets"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "PacketCaptureBelongsToSite",
+        "from_vertex_collections": ["packet_captures"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "OtherDeviceBelongsToSite",
+        "from_vertex_collections": ["other_devices"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "EvpnBelongsToSite",
+        "from_vertex_collections": ["evpn_topologies"],
+        "to_vertex_collections": ["sites"],
+    },
 ]
 
 # Maps entity_type (API function name) to the vertex collection
@@ -210,7 +405,8 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgNetworkTemplates": "templates",
     "listOrgAptemplates": "templates",
     "listOrgSiteTemplates": "templates",
-    "listOrgDeviceProfiles": "templates",
+    "listOrgTemplates": "templates",
+    "listOrgDeviceProfiles": "device_profiles",
     "getOrgWlans": "wlans",
     "listOrgWlans": "wlans",
     "listOrgNetworks": "networks",
@@ -219,6 +415,15 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgServicePolicies": "security_policies",
     "listOrgPsks": "psks",
     "listOrgWebhooks": "webhooks",
+    "listOrgGuestAuthorizations": "guests",
+    "listOrgMxTunnels": "mx_tunnels",
+    "listOrgAlarmTemplates": "alarm_templates",
+    "listOrgWxRules": "wx_rules",
+    "listOrgWxTags": "wx_tags",
+    "listOrgTickets": "tickets",
+    "listOrgOtherDevices": "other_devices",
+    "listOrgEvpnTopologies": "evpn_topologies",
+    "listOrgPacketCaptures": "packet_captures",
 }
 
 # Maps API collection names to graph vertex + edge relationships.
@@ -262,7 +467,15 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "site_id",
                 "to_col": "devices",
             },
+            {
+                "edge_col": "DeviceUsesProfile",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "device_profiles",
+                "to_field": "deviceprofile_id",
+            },
         ],
+        "ensure_target_vertices": [("deviceprofile_id", "device_profiles")],
     },
     "listOrgGatewayTemplates": {"vertex": "templates", "key_field": "id"},
     "listOrgRfTemplates": {"vertex": "templates", "key_field": "id"},
@@ -397,6 +610,13 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "sites",
                 "to_field": "site_id",
             },
+            {
+                "edge_col": "AlarmOnDevice",
+                "from_col": "alarms",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "device_id",
+            },
         ],
     },
     "searchOrgDeviceEvents": {
@@ -530,6 +750,13 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "sites",
                 "to_field": "site_id",
             },
+            {
+                "edge_col": "PSKBelongsToWlan",
+                "from_col": "psks",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
         ],
     },
     "listOrgAssets": {
@@ -586,12 +813,30 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
     "listOrgNacPortals": {
         "vertex": "nac_portals",
         "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "NacPortalServesSiteGroup",
+                "from_col": "nac_portals",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "sitegroup_ids",
+            },
+        ],
     },
     "listOrgAuditLogs": {
         "vertex": "audit_logs",
         "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AuditLogBelongsToSite",
+                "from_col": "audit_logs",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
     },
-    "listOrgWlanTemplates": {
+    "listOrgTemplates": {
         "vertex": "templates",
         "key_field": "id",
         "edges": [
@@ -608,6 +853,408 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "sitegroups",
                 "to_field": "applies.sitegroup_ids",
+            },
+        ],
+    },
+    # -- Tier 1: Guest authorizations, MxTunnels, device profiles, alarm templates --
+    "listOrgGuestAuthorizations": {
+        "vertex": "guests",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "GuestBelongsToSite",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "GuestAuthorizedOnWlan",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+        ],
+    },
+    "listOrgMxTunnels": {
+        "vertex": "mx_tunnels",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MxTunnelUsesCluster",
+                "from_col": "mx_tunnels",
+                "from_field": "id",
+                "to_col": "mxclusters",
+                "to_field": "mxcluster_id",
+            },
+        ],
+        "ensure_target_vertices": [("mxcluster_id", "mxclusters")],
+    },
+    "listOrgAlarmTemplates": {"vertex": "alarm_templates", "key_field": "id"},
+    "listOrgDeviceProfiles": {"vertex": "device_profiles", "key_field": "id"},
+    # -- Tier 2: Event/search entities --
+    "searchOrgWanClients": {
+        "vertex": "clients",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "ClientConnectedToDevice",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "device_mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "ClientBelongsToSite",
+                "from_col": "clients",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgWirelessClientEvents": {
+        "vertex": "client_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "ClientEventBelongsToSite",
+                "from_col": "client_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "ClientEventOnDevice",
+                "from_col": "client_events",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "ap",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchOrgWirelessClientSessions": {
+        "vertex": "client_sessions",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SessionBelongsToSite",
+                "from_col": "client_sessions",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "SessionOnWlan",
+                "from_col": "client_sessions",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+            {
+                "edge_col": "SessionOnDevice",
+                "from_col": "client_sessions",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "ap",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchOrgNacClientEvents": {
+        "vertex": "nac_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "NacEventBelongsToSite",
+                "from_col": "nac_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgWanClientEvents": {
+        "vertex": "wan_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WanEventBelongsToSite",
+                "from_col": "wan_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgMistEdgeEvents": {
+        "vertex": "mxedge_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MxEdgeEventBelongsToSite",
+                "from_col": "mxedge_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgOtherDeviceEvents": {
+        "vertex": "other_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OtherEventBelongsToSite",
+                "from_col": "other_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgEvents": {
+        "vertex": "org_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OrgEventBelongsToSite",
+                "from_col": "org_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgSystemEvents": {
+        "vertex": "system_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SystemEventBelongsToSite",
+                "from_col": "system_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Tier 3: Stats/telemetry --
+    "listOrgDevicesStats": {
+        "vertex": "device_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DeviceStatsBelongsToSite",
+                "from_col": "device_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "DeviceStatsForDevice",
+                "from_col": "device_stats",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listOrgMxEdgesStats": {
+        "vertex": "mxedge_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MxEdgeStatsBelongsToSite",
+                "from_col": "mxedge_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgBgpStats": {
+        "vertex": "bgp_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "BgpStatsBelongsToSite",
+                "from_col": "bgp_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgOspfStats": {
+        "vertex": "ospf_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OspfStatsBelongsToSite",
+                "from_col": "ospf_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgPeerPathStats": {
+        "vertex": "peer_paths",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PeerPathBelongsToSite",
+                "from_col": "peer_paths",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgSwOrGwPorts": {
+        "vertex": "ports",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PortBelongsToSite",
+                "from_col": "ports",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "PortBelongsToDevice",
+                "from_col": "ports",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchOrgTunnelsStats": {
+        "vertex": "tunnels",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "TunnelBelongsToSite",
+                "from_col": "tunnels",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Tier 4: WxLAN policy --
+    "listOrgWxRules": {
+        "vertex": "wx_rules",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WxRuleBelongsToTemplate",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "templates",
+                "to_field": "template_id",
+            },
+            {
+                "edge_col": "WxRuleMatchesSrcTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "src_wxtags",
+            },
+            {
+                "edge_col": "WxRuleAllowsDstTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "dst_allow_wxtags",
+            },
+            {
+                "edge_col": "WxRuleDeniesDstTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "dst_deny_wxtags",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("src_wxtags", "wx_tags"),
+            ("dst_allow_wxtags", "wx_tags"),
+            ("dst_deny_wxtags", "wx_tags"),
+        ],
+    },
+    "listOrgWxTags": {"vertex": "wx_tags", "key_field": "id"},
+    "listOrgWxTunnels": {"vertex": "mx_tunnels", "key_field": "id"},
+    # -- Tier 5: Remaining entities --
+    "listOrgTickets": {
+        "vertex": "tickets",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "TicketBelongsToSite",
+                "from_col": "tickets",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listOrgPacketCaptures": {
+        "vertex": "packet_captures",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PacketCaptureBelongsToSite",
+                "from_col": "packet_captures",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listOrgOtherDevices": {
+        "vertex": "other_devices",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OtherDeviceBelongsToSite",
+                "from_col": "other_devices",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listOrgEvpnTopologies": {
+        "vertex": "evpn_topologies",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "EvpnBelongsToSite",
+                "from_col": "evpn_topologies",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgAssets": {
+        "vertex": "assets",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AssetBelongsToSite",
+                "from_col": "assets",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
             },
         ],
     },

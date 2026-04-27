@@ -395,6 +395,47 @@ class TestArangoDBWriterEdgeDefinitions:
             "WlanUsesMxTunnel",
             "TemplateAppliedToSite",
             "TemplateAppliedToSiteGroup",
+            # Tier 1: High-value entity relationships
+            "DeviceUsesProfile",
+            "PSKBelongsToWlan",
+            "AlarmOnDevice",
+            "NacPortalServesSiteGroup",
+            "MxTunnelUsesCluster",
+            "AuditLogBelongsToSite",
+            "GuestBelongsToSite",
+            "GuestAuthorizedOnWlan",
+            # Tier 2: Event/search entity relationships
+            "ClientEventBelongsToSite",
+            "ClientEventOnDevice",
+            "SessionBelongsToSite",
+            "SessionOnWlan",
+            "SessionOnDevice",
+            "NacEventBelongsToSite",
+            "WanEventBelongsToSite",
+            "MxEdgeEventBelongsToSite",
+            "OtherEventBelongsToSite",
+            "OrgEventBelongsToSite",
+            "SystemEventBelongsToSite",
+            # Tier 3: Stats/telemetry relationships
+            "DeviceStatsBelongsToSite",
+            "DeviceStatsForDevice",
+            "BgpStatsBelongsToSite",
+            "OspfStatsBelongsToSite",
+            "PeerPathBelongsToSite",
+            "PortBelongsToSite",
+            "PortBelongsToDevice",
+            "TunnelBelongsToSite",
+            "MxEdgeStatsBelongsToSite",
+            # Tier 4: WxLAN policy relationships
+            "WxRuleBelongsToTemplate",
+            "WxRuleMatchesSrcTag",
+            "WxRuleAllowsDstTag",
+            "WxRuleDeniesDstTag",
+            # Tier 5: Remaining entity relationships
+            "TicketBelongsToSite",
+            "PacketCaptureBelongsToSite",
+            "OtherDeviceBelongsToSite",
+            "EvpnBelongsToSite",
         }
         assert edge_names == expected
 
