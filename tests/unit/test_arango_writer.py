@@ -352,11 +352,12 @@ class TestArangoDBWriterWlanGraph:
 class TestArangoDBWriterEdgeDefinitions:
     """Tests for EDGE_DEFINITIONS completeness."""
 
-    def test_all_eleven_edge_definitions(self):
+    def test_all_edge_definitions(self):
         from src.db.arango_writer import EDGE_DEFINITIONS
 
         edge_names = {d["edge_collection"] for d in EDGE_DEFINITIONS}
         expected = {
+            # Original 11
             "OrgContainsSite",
             "OrgContainsDevice",
             "SiteContainsDevice",
@@ -368,6 +369,32 @@ class TestArangoDBWriterEdgeDefinitions:
             "SiteBelongsToSiteGroup",
             "MxEdgeBelongsToCluster",
             "ConfigSnapshotForEntity",
+            # Client relationships
+            "ClientConnectedToWlan",
+            "ClientBelongsToSite",
+            # Org-level entity ownership
+            "NetworkBelongsToOrg",
+            "ServiceBelongsToOrg",
+            "VpnBelongsToOrg",
+            # Events and alarms
+            "AlarmBelongsToSite",
+            "EventBelongsToSite",
+            "EventOccurredOnDevice",
+            # Security and NAC
+            "NACRuleMatchesSite",
+            "NACRuleMatchesSiteGroup",
+            "NACTagBelongsToPortal",
+            "SecurityPolicyBelongsToOrg",
+            # Assets and config
+            "PSKBelongsToSite",
+            "AssetBelongsToSite",
+            "AssetOnMap",
+            "WebhookBelongsToSite",
+            "SiteGroupContainsSite",
+            # WLAN and template relationships
+            "WlanUsesMxTunnel",
+            "TemplateAppliedToSite",
+            "TemplateAppliedToSiteGroup",
         }
         assert edge_names == expected
 
@@ -423,6 +450,47 @@ class TestArangoDBWriterEdgeKey:
         writer = ArangoDBWriter(config)
         key = writer._edge_key("orgs/abc", "sites/xyz")
         assert len(key) == 16
+
+
+class TestResolveNestedField:
+    """Tests for _resolve_nested_field dot-path FK resolution."""
+
+    def test_simple_field(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"site_id": "abc123"}
+        assert ArangoDBWriter._resolve_nested_field(record, "site_id") == "abc123"
+
+    def test_nested_field(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"matching": {"site_ids": ["s1", "s2"]}}
+        result = ArangoDBWriter._resolve_nested_field(record, "matching.site_ids")
+        assert result == ["s1", "s2"]
+
+    def test_missing_top_level(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"other": "value"}
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None
+
+    def test_missing_nested(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"matching": {"other": "value"}}
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None
+
+    def test_deeply_nested(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"a": {"b": {"c": "deep"}}}
+        assert ArangoDBWriter._resolve_nested_field(record, "a.b.c") == "deep"
+
+    def test_non_dict_intermediate(self):
+        from src.db.arango_writer import ArangoDBWriter
+
+        record = {"matching": "not_a_dict"}
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None
 
 
 class TestArangoDBWriterSanitizeKey:
