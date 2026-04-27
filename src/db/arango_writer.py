@@ -98,6 +98,14 @@ EDGE_DEFINITIONS = [
             "other_devices",
             "evpn_topologies",
             "packet_captures",
+            "psk_portals",
+            "suppressed_alarms",
+            "device_configs",
+            "certificates",
+            "aamw_profiles",
+            "av_profiles",
+            "idp_profiles",
+            "secIntel_profiles",
         ],
     },
     # -- Client relationships --
@@ -457,6 +465,32 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["security_policies"],
         "to_vertex_collections": ["services"],
     },
+    # -- Unmapped entity relationships --
+    {
+        "edge_collection": "PskPortalServesSiteGroup",
+        "from_vertex_collections": ["psk_portals"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "SuppressedAlarmBelongsToSite",
+        "from_vertex_collections": ["suppressed_alarms"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DeviceConfigBelongsToSite",
+        "from_vertex_collections": ["device_configs"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DeviceConfigForDevice",
+        "from_vertex_collections": ["device_configs"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "SiteStatsBelongsToSite",
+        "from_vertex_collections": ["site_stats"],
+        "to_vertex_collections": ["sites"],
+    },
 ]
 
 # Derived set: names of all edge collections declared in EDGE_DEFINITIONS.
@@ -497,7 +531,7 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgNacTags": "nac_tags",
     "listOrgNacPortals": "nac_portals",
     "listOrgSiteGroups": "sitegroups",
-    "listOrgMxEdges": "mxedges",
+    "listOrgMxEdges": "devices",
     "listOrgMxEdgeClusters": "mxclusters",
     "listOrgServices": "services",
     "listOrgVpns": "vpns",
@@ -505,6 +539,23 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgAuditLogs": "audit_logs",
     "searchOrgAssets": "assets",
     "searchOrgDevices": "devices",
+    # -- Unmapped entity types --
+    "listOrgAdmins": "admins",
+    "listOrgApiTokens": "api_tokens",
+    "listOrgSsos": "ssos",
+    "listOrgSsoRoles": "sso_roles",
+    "listOrgAAMWProfiles": "aamw_profiles",
+    "listOrgAntivirusProfiles": "av_profiles",
+    "listOrgIdpProfiles": "idp_profiles",
+    "listOrgSecIntelProfiles": "secIntel_profiles",
+    "listOrgCertificates": "certificates",
+    "listOrgPskPortals": "psk_portals",
+    "listOrgSuppressedAlarms": "suppressed_alarms",
+    "searchOrgDeviceLastConfigs": "device_configs",
+    "listOrgSiteStats": "site_stats",
+    "searchOrgGuestAuthorization": "guests",
+    "searchOrgMxEdges": "devices",
+    "searchOrgSites": "sites",
 }
 
 # Maps API collection names to graph vertex + edge relationships.
@@ -1462,6 +1513,77 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    # -- Unmapped entities: with edges --
+    "listOrgPskPortals": {
+        "vertex": "psk_portals",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PskPortalServesSiteGroup",
+                "from_col": "psk_portals",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "sitegroup_ids",
+            },
+        ],
+    },
+    "listOrgSuppressedAlarms": {
+        "vertex": "suppressed_alarms",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SuppressedAlarmBelongsToSite",
+                "from_col": "suppressed_alarms",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchOrgDeviceLastConfigs": {
+        "vertex": "device_configs",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DeviceConfigBelongsToSite",
+                "from_col": "device_configs",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "DeviceConfigForDevice",
+                "from_col": "device_configs",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "device_mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listOrgSiteStats": {
+        "vertex": "site_stats",
+        "key_field": "site_id",
+        "edges": [
+            {
+                "edge_col": "SiteStatsBelongsToSite",
+                "from_col": "site_stats",
+                "from_field": "site_id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Unmapped entities: vertex-only (org-level, no site FK) --
+    "listOrgAdmins": {"vertex": "admins", "key_field": "id"},
+    "listOrgApiTokens": {"vertex": "api_tokens", "key_field": "id"},
+    "listOrgSsos": {"vertex": "ssos", "key_field": "id"},
+    "listOrgSsoRoles": {"vertex": "sso_roles", "key_field": "id"},
+    "listOrgCertificates": {"vertex": "certificates", "key_field": "id"},
+    "listOrgAAMWProfiles": {"vertex": "aamw_profiles", "key_field": "id"},
+    "listOrgAntivirusProfiles": {"vertex": "av_profiles", "key_field": "id"},
+    "listOrgIdpProfiles": {"vertex": "idp_profiles", "key_field": "id"},
+    "listOrgSecIntelProfiles": {"vertex": "secIntel_profiles", "key_field": "id"},
 }
 
 TEMPLATE_ID_FIELDS = [
