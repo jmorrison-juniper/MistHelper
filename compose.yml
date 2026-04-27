@@ -71,12 +71,18 @@ services:
     volumes:
       - arangodb-data:/var/lib/arangodb3
     environment:
-      - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-}
+      # CRITICAL: ArangoDB only reads ARANGO_ROOT_PASSWORD on FIRST boot
+      # (when /var/lib/arangodb3 is empty). Changing this value after the
+      # volume is initialized has NO effect. To reset the password:
+      #   podman stop arangodb && podman rm arangodb
+      #   podman volume rm arangodb-data
+      #   podman compose up -d arangodb
+      - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-misthelper}
     networks:
       - misthelper-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "arangosh", "--server.password", "${ARANGO_ROOT_PASSWORD:-}", "--javascript.execute-string", "print(1)"]
+      test: ["CMD", "arangosh", "--server.password", "${ARANGO_ROOT_PASSWORD:-misthelper}", "--javascript.execute-string", "print(1)"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -92,12 +98,12 @@ services:
     volumes:
       - redis-data:/data
     environment:
-      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-}
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-misthelper}
     networks:
       - misthelper-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-misthelper}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

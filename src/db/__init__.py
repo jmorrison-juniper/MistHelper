@@ -47,10 +47,10 @@ class DatabaseConfig:
     arango_host: str = "http://arangodb:8529"
     arango_database: str = "misthelper"
     arango_username: str = "root"
-    arango_password: str = ""
+    arango_password: str = "misthelper"
     redis_host: str = "redis-stack"
     redis_port: int = 6379
-    redis_password: str = ""
+    redis_password: str = "misthelper"
     standalone_mode: bool = False
     webhook_enabled: bool = True
     webhook_secret: str = ""
@@ -73,10 +73,10 @@ class DatabaseConfig:
             arango_host=arango_host,
             arango_database=os.environ.get("ARANGO_DATABASE", "misthelper"),
             arango_username=os.environ.get("ARANGO_USERNAME", "root"),
-            arango_password=os.environ.get("ARANGO_ROOT_PASSWORD", ""),
+            arango_password=os.environ.get("ARANGO_ROOT_PASSWORD", "misthelper"),
             redis_host=redis_host,
             redis_port=redis_port,
-            redis_password=os.environ.get("REDIS_PASSWORD", ""),
+            redis_password=os.environ.get("REDIS_PASSWORD", "misthelper"),
             standalone_mode=standalone,
             webhook_enabled=os.environ.get("WEBHOOK_ENABLED", "true").lower() == "true",
             webhook_secret=os.environ.get("WEBHOOK_SECRET", ""),

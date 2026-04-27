@@ -391,7 +391,77 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["evpn_topologies"],
         "to_vertex_collections": ["sites"],
     },
+    # -- Edges added for full relationship coverage --
+    {
+        "edge_collection": "AlarmTemplateAssignedToSite",
+        "from_vertex_collections": ["alarm_templates"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SecurityPolicyAssignedToSite",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DeviceConnectedToDevice",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "ProfileAppliedToSite",
+        "from_vertex_collections": ["device_profiles"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "ProfileAppliedToSiteGroup",
+        "from_vertex_collections": ["device_profiles"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "AlarmTemplateBelongsToOrg",
+        "from_vertex_collections": ["alarm_templates"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "WlanAppliedToSite",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WlanAppliedToSiteGroup",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "SessionForClient",
+        "from_vertex_collections": ["client_sessions"],
+        "to_vertex_collections": ["clients"],
+    },
+    {
+        "edge_collection": "NacEventForClient",
+        "from_vertex_collections": ["nac_events"],
+        "to_vertex_collections": ["clients"],
+    },
+    {
+        "edge_collection": "WanEventForClient",
+        "from_vertex_collections": ["wan_events"],
+        "to_vertex_collections": ["clients"],
+    },
+    {
+        "edge_collection": "NACRuleUsesTag",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["nac_tags"],
+    },
+    {
+        "edge_collection": "ServicePolicyUsesService",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["services"],
+    },
 ]
+
+# Derived set: names of all edge collections declared in EDGE_DEFINITIONS.
+# Used by _ensure_collection() to create them with the correct ArangoDB type.
+_EDGE_COLLECTION_NAMES: set[str] = {d["edge_collection"] for d in EDGE_DEFINITIONS}
 
 # Maps entity_type (API function name) to the vertex collection
 # that holds the entity.  Used by snapshot() to create
@@ -424,6 +494,17 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listOrgOtherDevices": "other_devices",
     "listOrgEvpnTopologies": "evpn_topologies",
     "listOrgPacketCaptures": "packet_captures",
+    "listOrgNacTags": "nac_tags",
+    "listOrgNacPortals": "nac_portals",
+    "listOrgSiteGroups": "sitegroups",
+    "listOrgMxEdges": "mxedges",
+    "listOrgMxEdgeClusters": "mxclusters",
+    "listOrgServices": "services",
+    "listOrgVpns": "vpns",
+    "listOrgAssets": "assets",
+    "listOrgAuditLogs": "audit_logs",
+    "searchOrgAssets": "assets",
+    "searchOrgDevices": "devices",
 }
 
 # Maps API collection names to graph vertex + edge relationships.
@@ -447,9 +528,25 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "sitegroups",
                 "to_field": "sitegroup_ids",
             },
+            {
+                "edge_col": "AlarmTemplateAssignedToSite",
+                "from_col": "alarm_templates",
+                "from_field": "alarmtemplate_id",
+                "to_col": "sites",
+            },
+            {
+                "edge_col": "SecurityPolicyAssignedToSite",
+                "from_col": "security_policies",
+                "from_field": "secpolicy_id",
+                "to_col": "sites",
+            },
         ],
         "template_edges": True,
-        "ensure_target_vertices": [("sitegroup_ids", "sitegroups")],
+        "ensure_target_vertices": [
+            ("sitegroup_ids", "sitegroups"),
+            ("alarmtemplate_id", "alarm_templates"),
+            ("secpolicy_id", "security_policies"),
+        ],
     },
     "getOrgInventory": {
         "vertex": "devices",
@@ -474,8 +571,18 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "device_profiles",
                 "to_field": "deviceprofile_id",
             },
+            {
+                "edge_col": "DeviceConnectedToDevice",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "connected_device_id",
+            },
         ],
-        "ensure_target_vertices": [("deviceprofile_id", "device_profiles")],
+        "ensure_target_vertices": [
+            ("deviceprofile_id", "device_profiles"),
+            ("connected_device_id", "devices"),
+        ],
     },
     "listOrgGatewayTemplates": {"vertex": "templates", "key_field": "id"},
     "listOrgRfTemplates": {"vertex": "templates", "key_field": "id"},
@@ -556,6 +663,24 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "devices",
                 "to_field": "mxtunnel_id",
             },
+            {
+                "edge_col": "WlanAppliedToSite",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "applies.site_ids",
+            },
+            {
+                "edge_col": "WlanAppliedToSiteGroup",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "applies.sitegroup_ids",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("applies.site_ids", "sites"),
+            ("applies.sitegroup_ids", "sitegroups"),
         ],
     },
     "listOrgMxEdges": {
@@ -697,6 +822,16 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "sitegroups",
                 "to_field": "matching.sitegroup_ids",
             },
+            {
+                "edge_col": "NACRuleUsesTag",
+                "from_col": "nac_rules",
+                "from_field": "id",
+                "to_col": "nac_tags",
+                "to_field": "matching.nactags",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("matching.nactags", "nac_tags"),
         ],
     },
     "listOrgNacTags": {
@@ -737,6 +872,16 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "orgs",
                 "to_field": "org_id",
             },
+            {
+                "edge_col": "ServicePolicyUsesService",
+                "from_col": "security_policies",
+                "from_field": "id",
+                "to_col": "services",
+                "to_field": "services",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("services", "services"),
         ],
     },
     "listOrgPsks": {
@@ -891,8 +1036,43 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
         ],
         "ensure_target_vertices": [("mxcluster_id", "mxclusters")],
     },
-    "listOrgAlarmTemplates": {"vertex": "alarm_templates", "key_field": "id"},
-    "listOrgDeviceProfiles": {"vertex": "device_profiles", "key_field": "id"},
+    "listOrgAlarmTemplates": {
+        "vertex": "alarm_templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AlarmTemplateBelongsToOrg",
+                "from_col": "alarm_templates",
+                "from_field": "id",
+                "to_col": "orgs",
+                "to_field": "org_id",
+            },
+        ],
+    },
+    "listOrgDeviceProfiles": {
+        "vertex": "device_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "ProfileAppliedToSite",
+                "from_col": "device_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "applies.site_ids",
+            },
+            {
+                "edge_col": "ProfileAppliedToSiteGroup",
+                "from_col": "device_profiles",
+                "from_field": "id",
+                "to_col": "sitegroups",
+                "to_field": "applies.sitegroup_ids",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("applies.site_ids", "sites"),
+            ("applies.sitegroup_ids", "sitegroups"),
+        ],
+    },
     # -- Tier 2: Event/search entities --
     "searchOrgWanClients": {
         "vertex": "clients",
@@ -962,6 +1142,14 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_field": "ap",
                 "to_key_lookup": "mac",
             },
+            {
+                "edge_col": "SessionForClient",
+                "from_col": "client_sessions",
+                "from_field": "id",
+                "to_col": "clients",
+                "to_field": "client_mac",
+                "to_key_lookup": "mac",
+            },
         ],
     },
     "searchOrgNacClientEvents": {
@@ -975,6 +1163,14 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "sites",
                 "to_field": "site_id",
             },
+            {
+                "edge_col": "NacEventForClient",
+                "from_col": "nac_events",
+                "from_field": "id",
+                "to_col": "clients",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
         ],
     },
     "searchOrgWanClientEvents": {
@@ -987,6 +1183,14 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "sites",
                 "to_field": "site_id",
+            },
+            {
+                "edge_col": "WanEventForClient",
+                "from_col": "wan_events",
+                "from_field": "id",
+                "to_col": "clients",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
             },
         ],
     },
@@ -1318,10 +1522,11 @@ class ArangoDBWriter:
         self._backfill_snapshot_edges()
 
     def _ensure_collection(self, name: str) -> Any:
-        """Return collection, creating it if needed."""
+        """Return collection, creating it if needed (edge-aware)."""
         if not self._db.has_collection(name):
-            self._db.create_collection(name)
-            logger.info("collection_created", name=name)
+            is_edge = name in _EDGE_COLLECTION_NAMES
+            self._db.create_collection(name, edge=is_edge)
+            logger.info("collection_created", name=name, edge=is_edge)
         return self._db.collection(name)
 
     def write(self, data: list[dict], collection_name: str, strategy: dict) -> WriteResult:
@@ -1437,20 +1642,20 @@ class ArangoDBWriter:
                 self._batch_import(edge_col, edge_docs)
 
     def _build_vertices(self, data: list[dict], key_field: str) -> list[dict]:
-        """Build lightweight vertex documents from raw API records."""
+        """Build full vertex documents from raw API records.
+
+        Stores the complete API response in the vertex so graph
+        traversals return rich data without joining back to the
+        document collection.
+        """
         vertices: list[dict] = []
         for record in data:
             key_value = record.get(key_field)
             if not key_value:
                 continue
-            vertex: dict[str, Any] = {
-                "_key": self._sanitize_key(str(key_value)),
-                "name": record.get("name", ""),
-                "_misthelper_updated_at": int(time.time()),
-            }
-            for field in ("org_id", "site_id", "type", "model", "serial", "mac", "ip"):
-                if field in record:
-                    vertex[field] = record[field]
+            vertex = dict(record)
+            vertex["_key"] = self._sanitize_key(str(key_value))
+            vertex["_misthelper_updated_at"] = int(time.time())
             vertices.append(vertex)
         return vertices
 
@@ -1531,7 +1736,7 @@ class ArangoDBWriter:
             col = self._ensure_collection(vertex_col_name)
             stubs: list[dict] = []
             for record in data:
-                raw = record.get(fk_field)
+                raw = self._resolve_nested_field(record, fk_field) if "." in fk_field else record.get(fk_field)
                 if not raw:
                     continue
                 values = raw if isinstance(raw, list) else [raw]
