@@ -461,7 +461,7 @@ EDGE_DEFINITIONS = [
 
 # Derived set: names of all edge collections declared in EDGE_DEFINITIONS.
 # Used by _ensure_collection() to create them with the correct ArangoDB type.
-_EDGE_COLLECTION_NAMES: set[str] = {d["edge_collection"] for d in EDGE_DEFINITIONS}
+_EDGE_COLLECTION_NAMES: set[str] = {str(d["edge_collection"]) for d in EDGE_DEFINITIONS}
 
 # Maps entity_type (API function name) to the vertex collection
 # that holds the entity.  Used by snapshot() to create

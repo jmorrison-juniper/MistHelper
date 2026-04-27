@@ -100,7 +100,7 @@ class TestArangoDBWriterWrite:
         data = [{"id": "uuid-1", "name": "Test"}]
         result = writer.write(data, "new_collection", strategy)
 
-        mock_db.create_collection.assert_called_once_with("new_collection")
+        mock_db.create_collection.assert_called_once_with("new_collection", edge=False)
         assert result.success is True
 
     def test_auto_increment_with_unique(self, config, mock_arango_client):
@@ -436,6 +436,20 @@ class TestArangoDBWriterEdgeDefinitions:
             "PacketCaptureBelongsToSite",
             "OtherDeviceBelongsToSite",
             "EvpnBelongsToSite",
+            # New edge definitions for alarm templates, security, profiles, etc.
+            "AlarmTemplateAssignedToSite",
+            "SecurityPolicyAssignedToSite",
+            "DeviceConnectedToDevice",
+            "ProfileAppliedToSite",
+            "ProfileAppliedToSiteGroup",
+            "AlarmTemplateBelongsToOrg",
+            "WlanAppliedToSite",
+            "WlanAppliedToSiteGroup",
+            "SessionForClient",
+            "NacEventForClient",
+            "WanEventForClient",
+            "NACRuleUsesTag",
+            "ServicePolicyUsesService",
         }
         assert edge_names == expected
 
