@@ -3471,6 +3471,56 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "ts_value_fields": ["latency", "jitter", "loss"],
         "ts_label_fields": ["from_device", "to_device", "org_id"],
     },
+    # -- Issue #177: Site routing / network topology endpoints --
+    "searchSiteBgpStats": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "neighbor", "timestamp"],
+        "indexes": ["site_id", "org_id", "state", "neighbor_as"],
+        "unique_constraints": [],
+        "description": "Site BGP peering statistics",
+    },
+    "searchSiteOspfStats": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "peer_ip", "timestamp"],
+        "indexes": ["site_id", "org_id", "state", "port_id"],
+        "unique_constraints": [],
+        "description": "Site OSPF adjacency statistics",
+    },
+    "listSiteEvpnTopologies": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "name"],
+        "unique_constraints": [],
+        "description": "Site EVPN topology definitions",
+    },
+    "searchSiteDiscoveredSwitches": {
+        "type": "composite_pk",
+        "primary_key": ["system_name", "mgmt_addr", "timestamp"],
+        "indexes": ["site_id", "org_id", "vendor", "model"],
+        "unique_constraints": [],
+        "description": "Site discovered (unadopted) switches",
+    },
+    "listSiteDiscoveredSwitchesMetrics": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id", "org_id"],
+        "unique_constraints": [],
+        "description": "Site discovered switch aggregate metrics",
+    },
+    "searchSiteDiscoveredSwitchesMetrics": {
+        "type": "composite_pk",
+        "primary_key": ["system_name", "type", "timestamp"],
+        "indexes": ["site_id", "org_id", "scope", "score"],
+        "unique_constraints": [],
+        "description": "Site discovered switch metric search results",
+    },
+    "listSiteCurrentRrmNeighbors": {
+        "type": "composite_pk",
+        "primary_key": ["mac"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Site RRM AP neighbor relationships",
+    },
     # Map-related endpoints
     "listSiteMaps": {
         "type": "natural_pk",
