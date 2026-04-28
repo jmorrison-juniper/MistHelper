@@ -466,6 +466,11 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["guests"],
         "to_vertex_collections": ["wlans"],
     },
+    {
+        "edge_collection": "GuestConnectedToAP",
+        "from_vertex_collections": ["guests"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 2: Event/search entity relationships --
     {
         "edge_collection": "ClientEventBelongsToSite",
@@ -765,6 +770,8 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchOrgDeviceLastConfigs": "device_configs",
     "listOrgSiteStats": "site_stats",
     "searchOrgGuestAuthorization": "guests",
+    "listSiteAllGuestAuthorizations": "guests",
+    "searchSiteGuestAuthorization": "guests",
     "searchOrgMxEdges": "devices",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
@@ -1289,6 +1296,63 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "sites",
                 "to_field": "site_id",
+            },
+            {
+                "edge_col": "GuestAuthorizedOnWlan",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+        ],
+    },
+    # -- Site-level guest authorizations --
+    "listSiteAllGuestAuthorizations": {
+        "vertex": "guests",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "GuestBelongsToSite",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "GuestConnectedToAP",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "ap_mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "GuestAuthorizedOnWlan",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+        ],
+    },
+    "searchSiteGuestAuthorization": {
+        "vertex": "guests",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "GuestBelongsToSite",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "GuestConnectedToAP",
+                "from_col": "guests",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "ap_mac",
+                "to_key_lookup": "mac",
             },
             {
                 "edge_col": "GuestAuthorizedOnWlan",
