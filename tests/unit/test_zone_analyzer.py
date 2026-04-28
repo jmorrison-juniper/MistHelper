@@ -9,19 +9,38 @@ from unittest.mock import MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
-# Mock mistapi before importing the module under test
+# Mock mistapi before importing the module under test.
+# We save/restore previous sys.modules entries so we don't pollute other
+# test files that expect ``import mistapi`` to raise ImportError.
 # ---------------------------------------------------------------------------
 _mock_mistapi = MagicMock()
-sys.modules["mistapi"] = _mock_mistapi
-sys.modules["mistapi.api"] = _mock_mistapi.api
-sys.modules["mistapi.api.v1"] = _mock_mistapi.api.v1
-sys.modules["mistapi.api.v1.sites"] = _mock_mistapi.api.v1.sites
-sys.modules["mistapi.api.v1.sites.setting"] = _mock_mistapi.api.v1.sites.setting
-sys.modules["mistapi.api.v1.sites.zones"] = _mock_mistapi.api.v1.sites.zones
+
+_MOCKED_MODULES = {
+    "mistapi": _mock_mistapi,
+    "mistapi.api": _mock_mistapi.api,
+    "mistapi.api.v1": _mock_mistapi.api.v1,
+    "mistapi.api.v1.sites": _mock_mistapi.api.v1.sites,
+    "mistapi.api.v1.sites.setting": _mock_mistapi.api.v1.sites.setting,
+    "mistapi.api.v1.sites.zones": _mock_mistapi.api.v1.sites.zones,
+}
+
+# Remember what was there before (if anything)
+_saved: dict[str, Any] = {}
+_absent: list[str] = []
+for _key, _val in _MOCKED_MODULES.items():
+    if _key in sys.modules:
+        _saved[_key] = sys.modules[_key]
+    else:
+        _absent.append(_key)
+    sys.modules[_key] = _val
 
 # Mock tqdm to avoid import issues in CI
 _mock_tqdm_mod = MagicMock()
 _mock_tqdm_mod.tqdm = lambda items, **_kw: items
+if "tqdm" not in sys.modules:
+    _absent.append("tqdm")
+elif "tqdm" in sys.modules:
+    _saved["tqdm"] = sys.modules["tqdm"]
 sys.modules["tqdm"] = _mock_tqdm_mod
 
 from src.analytics.zone_analyzer import (
@@ -39,6 +58,17 @@ from src.analytics.zone_analyzer import (
     _occupancy_config_key,
     _track_custom_names,
 )
+
+
+# ---------------------------------------------------------------------------
+# Module teardown -- restore sys.modules so mocks don't leak into other tests
+# ---------------------------------------------------------------------------
+def teardown_module() -> None:
+    """Restore sys.modules to pre-test state."""
+    for key in _absent:
+        sys.modules.pop(key, None)
+    for key, val in _saved.items():
+        sys.modules[key] = val
 
 
 # ---------------------------------------------------------------------------
