@@ -529,6 +529,9 @@ class TestArangoDBWriterEdgeDefinitions:
             "UnconnectedClientDetectedByAP",
             # Issue #171: Site-level device relationships
             "SpectrumAnalysisForDevice",
+            # Issue #184: Derived config relationships
+            "DerivedConfigForSite",
+            "DerivedFromTemplate",
         }
         assert edge_names == expected
 
@@ -2461,3 +2464,188 @@ class TestSiteDevicesGraphStorage:
             if isinstance(mapping, dict):
                 found.add(mapping["vertex"])
         assert new_vertices.issubset(found)
+
+
+class TestDerivedConfigGraphStorage:
+    """Tests for Issue #184: Derived config graph storage."""
+
+    DERIVED_OPS = [
+        "listSiteWlansDerived",
+        "listSiteNetworksDerived",
+        "listSiteVpnsDerived",
+        "listSiteServicesDerived",
+        "listSiteServicePoliciesDerived",
+        "listSiteUiSettingDerived",
+        "listSiteAllGuestAuthorizationsDerived",
+        "listSiteApTemplatesDerived",
+        "listSiteRfTemplatesDerived",
+        "listSiteNetworkTemplatesDerived",
+        "listSiteGatewayTemplatesDerived",
+        "listSiteSiteTemplatesDerived",
+        "listSiteDeviceProfilesDerived",
+        "listSiteIdpProfilesDerived",
+        "listSiteAAMWProfilesDerived",
+        "listSiteAntivirusProfilesDerived",
+        "listSiteSecIntelProfilesDerived",
+    ]
+
+    def test_entity_type_mappings(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        expected = {
+            "listSiteWlansDerived": "wlans",
+            "listSiteNetworksDerived": "networks",
+            "listSiteVpnsDerived": "vpns",
+            "listSiteServicesDerived": "services",
+            "listSiteServicePoliciesDerived": "security_policies",
+            "listSiteUiSettingDerived": "ui_settings",
+            "listSiteAllGuestAuthorizationsDerived": "guests",
+            "listSiteApTemplatesDerived": "templates",
+            "listSiteRfTemplatesDerived": "templates",
+            "listSiteNetworkTemplatesDerived": "templates",
+            "listSiteGatewayTemplatesDerived": "templates",
+            "listSiteSiteTemplatesDerived": "templates",
+            "listSiteDeviceProfilesDerived": "device_profiles",
+            "listSiteIdpProfilesDerived": "idp_profiles",
+            "listSiteAAMWProfilesDerived": "aamw_profiles",
+            "listSiteAntivirusProfilesDerived": "av_profiles",
+            "listSiteSecIntelProfilesDerived": "secIntel_profiles",
+        }
+        for operation_id, vertex in expected.items():
+            assert ENTITY_TYPE_TO_VERTEX.get(operation_id) == vertex
+
+    def test_all_ops_in_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        for op in self.DERIVED_OPS:
+            assert op in COLLECTION_VERTEX_MAP, f"{op} missing from COLLECTION_VERTEX_MAP"
+
+    def test_wlans_derived_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWlansDerived"]
+        assert mapping["vertex"] == "wlans"
+        assert mapping["key_field"] == "id"
+
+    def test_wlans_derived_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWlansDerived"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "DerivedConfigForSite" in edge_cols
+        assert "DerivedFromTemplate" in edge_cols
+
+    def test_networks_derived_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteNetworksDerived"]
+        assert mapping["vertex"] == "networks"
+        assert mapping["key_field"] == "id"
+
+    def test_service_policies_derived_uses_security_policies(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteServicePoliciesDerived"]
+        assert mapping["vertex"] == "security_policies"
+
+    def test_guest_authorizations_derived_key(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteAllGuestAuthorizationsDerived"]
+        assert mapping["vertex"] == "guests"
+        assert mapping["key_field"] == "mac"
+
+    def test_ui_setting_derived_no_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteUiSettingDerived"]
+        assert mapping["vertex"] == "ui_settings"
+        assert mapping["key_field"] == "key"
+        assert "edges" not in mapping
+
+    def test_template_derived_ops_share_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        template_ops = [
+            "listSiteApTemplatesDerived",
+            "listSiteRfTemplatesDerived",
+            "listSiteNetworkTemplatesDerived",
+            "listSiteGatewayTemplatesDerived",
+            "listSiteSiteTemplatesDerived",
+        ]
+        for op in template_ops:
+            assert COLLECTION_VERTEX_MAP[op]["vertex"] == "templates"
+
+    def test_security_profile_derived_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        expected = {
+            "listSiteIdpProfilesDerived": "idp_profiles",
+            "listSiteAAMWProfilesDerived": "aamw_profiles",
+            "listSiteAntivirusProfilesDerived": "av_profiles",
+            "listSiteSecIntelProfilesDerived": "secIntel_profiles",
+        }
+        for op, vertex in expected.items():
+            assert COLLECTION_VERTEX_MAP[op]["vertex"] == vertex
+
+    def test_derived_config_for_site_edge_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "DerivedConfigForSite" in edge_names
+
+    def test_derived_from_template_edge_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "DerivedFromTemplate" in edge_names
+
+    def test_derived_config_for_site_structure(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")
+        assert "sites" in edge["to_vertex_collections"]
+        assert "wlans" in edge["from_vertex_collections"]
+        assert "networks" in edge["from_vertex_collections"]
+        assert "security_policies" in edge["from_vertex_collections"]
+
+    def test_derived_from_template_structure(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedFromTemplate")
+        assert "templates" in edge["to_vertex_collections"]
+        assert "wlans" in edge["from_vertex_collections"]
+
+    def test_all_edged_ops_have_derived_config_for_site(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edged_ops = [op for op in self.DERIVED_OPS if "edges" in COLLECTION_VERTEX_MAP.get(op, {})]
+        for op in edged_ops:
+            edge_cols = {e["edge_col"] for e in COLLECTION_VERTEX_MAP[op]["edges"]}
+            assert "DerivedConfigForSite" in edge_cols, f"{op} missing DerivedConfigForSite edge"
+
+    def test_only_wlans_has_derived_from_template(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        ops_with_template_edge = []
+        for op in self.DERIVED_OPS:
+            mapping = COLLECTION_VERTEX_MAP.get(op, {})
+            if "edges" in mapping:
+                edge_cols = {e["edge_col"] for e in mapping["edges"]}
+                if "DerivedFromTemplate" in edge_cols:
+                    ops_with_template_edge.append(op)
+        assert "listSiteWlansDerived" in ops_with_template_edge
+
+    def test_new_vertex_collections_in_edge_defs(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")
+        from_cols = set(edge["from_vertex_collections"])
+        expected_new = {
+            "ui_settings",
+            "idp_profiles",
+            "aamw_profiles",
+            "av_profiles",
+            "secIntel_profiles",
+        }
+        assert expected_new.issubset(from_cols)
