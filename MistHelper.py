@@ -3869,6 +3869,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Guest network authorization records",
     },
+    "listSiteAllGuestAuthorizations": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "wlan_id", "ap_mac"],
+        "unique_constraints": [],
+        "description": "Site-level guest WiFi authorization records",
+    },
     # -- PSK Portals ---------------------------------------------------------
     "listOrgPskPortals": {
         "type": "natural_pk",
@@ -4550,6 +4557,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "site_id"],
         "unique_constraints": [],
         "description": "Guest authorization search results",
+    },
+    "searchSiteGuestAuthorization": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["site_id", "wlan_id", "ap_mac"],
+        "unique_constraints": [],
+        "description": "Site-level guest authorization search results",
     },
     "searchOrgNacClientEvents": {
         "type": "composite_pk",

@@ -888,3 +888,54 @@ class TestArangoDBWriterPopulateGraph:
 
         # Should have attempted to import org vertex + site vertex + edges
         assert mock_collection.import_bulk.called
+
+
+class TestArangoDBWriterSiteGuestGraph:
+    """Tests for site-level guest authorization graph storage (issue #179)."""
+
+    def test_site_guest_list_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteAllGuestAuthorizations" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteAllGuestAuthorizations"]
+        assert mapping["vertex"] == "guests"
+        assert mapping["key_field"] == "id"
+
+    def test_site_guest_search_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteGuestAuthorization" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteGuestAuthorization"]
+        assert mapping["vertex"] == "guests"
+        assert mapping["key_field"] == "id"
+
+    def test_site_guest_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteAllGuestAuthorizations"]
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "GuestBelongsToSite" in edge_cols
+        assert "GuestConnectedToAP" in edge_cols
+        assert "GuestAuthorizedOnWlan" in edge_cols
+
+    def test_guest_ap_edge_uses_mac_lookup(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteAllGuestAuthorizations"]["edges"]
+        ap_edge = next(e for e in edges if e["edge_col"] == "GuestConnectedToAP")
+        assert ap_edge["from_col"] == "guests"
+        assert ap_edge["to_col"] == "devices"
+        assert ap_edge["to_field"] == "ap_mac"
+        assert ap_edge["to_key_lookup"] == "mac"
+
+    def test_guest_edge_definition_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = [e["edge_collection"] for e in EDGE_DEFINITIONS]
+        assert "GuestConnectedToAP" in edge_names
+
+    def test_site_guest_entity_type_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteAllGuestAuthorizations"] == "guests"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteGuestAuthorization"] == "guests"
