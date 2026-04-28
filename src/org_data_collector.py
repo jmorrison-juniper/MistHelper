@@ -16,6 +16,7 @@ import mistapi.api.v1.orgs.aamwprofiles
 import mistapi.api.v1.orgs.admins
 import mistapi.api.v1.orgs.alarms
 import mistapi.api.v1.orgs.alarmtemplates
+import mistapi.api.v1.orgs.aos
 import mistapi.api.v1.orgs.apitokens
 import mistapi.api.v1.orgs.aptemplates
 import mistapi.api.v1.orgs.assetfilters
@@ -23,6 +24,7 @@ import mistapi.api.v1.orgs.assets
 import mistapi.api.v1.orgs.avprofiles
 import mistapi.api.v1.orgs.cert
 import mistapi.api.v1.orgs.clients
+import mistapi.api.v1.orgs.crl
 import mistapi.api.v1.orgs.deviceprofiles
 import mistapi.api.v1.orgs.devices
 import mistapi.api.v1.orgs.events
@@ -30,6 +32,7 @@ import mistapi.api.v1.orgs.evpn_topologies
 import mistapi.api.v1.orgs.gatewaytemplates
 import mistapi.api.v1.orgs.guests
 import mistapi.api.v1.orgs.idpprofiles
+import mistapi.api.v1.orgs.insights
 import mistapi.api.v1.orgs.inventory
 import mistapi.api.v1.orgs.jsi
 import mistapi.api.v1.orgs.licenses
@@ -61,6 +64,7 @@ import mistapi.api.v1.orgs.setting
 import mistapi.api.v1.orgs.sitegroups
 import mistapi.api.v1.orgs.sites
 import mistapi.api.v1.orgs.sitetemplates
+import mistapi.api.v1.orgs.ssl_proxy_cert
 import mistapi.api.v1.orgs.ssoroles
 import mistapi.api.v1.orgs.ssos
 import mistapi.api.v1.orgs.ssr
@@ -71,6 +75,7 @@ import mistapi.api.v1.orgs.uisettings
 import mistapi.api.v1.orgs.usermacs
 import mistapi.api.v1.orgs.vars
 import mistapi.api.v1.orgs.vpns
+import mistapi.api.v1.orgs.wan_client
 import mistapi.api.v1.orgs.wan_clients
 import mistapi.api.v1.orgs.webhooks
 import mistapi.api.v1.orgs.wired_clients
@@ -421,6 +426,12 @@ _LIST_OPERATIONS: list[dict[str, Any]] = [
     {
         "api_call": mistapi.api.v1.orgs.jsi.listOrgJsiDevices,
         "data_type": "jsi devices",
+        "sort_key": None,
+        "category": "JSI",
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.jsi.listOrgJsiPastPurchases,
+        "data_type": "jsi past purchases",
         "sort_key": None,
         "category": "JSI",
     },
@@ -798,6 +809,95 @@ _GET_OPERATIONS: list[dict[str, Any]] = [
         "category": "Organization Info",
         "paginated": False,
     },
+    # -- Integration Settings ------------------------------------------------
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgJseInfo,
+        "data_type": "jse info",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgJseIntegration,
+        "data_type": "jse integration",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgSkyAtpIntegration,
+        "data_type": "sky atp integration",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgZscalerIntegration,
+        "data_type": "zscaler integration",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgMistScep,
+        "data_type": "mist scep",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.setting.getOrgNacCrl,
+        "data_type": "nac crl",
+        "sort_key": None,
+        "category": "Integration Settings",
+        "paginated": False,
+    },
+    # -- Certificates & Security ---------------------------------------------
+    {
+        "api_call": mistapi.api.v1.orgs.crl.getOrgCrlFile,
+        "data_type": "crl file",
+        "sort_key": None,
+        "category": "Certificates & Security",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.ssl_proxy_cert.getOrgSslProxyCert,
+        "data_type": "ssl proxy cert",
+        "sort_key": None,
+        "category": "Certificates & Security",
+        "paginated": False,
+    },
+    # -- Device Registration -------------------------------------------------
+    {
+        "api_call": mistapi.api.v1.orgs.aos.getOrgAosRegisterCmd,
+        "data_type": "aos register cmd",
+        "sort_key": None,
+        "category": "Device Registration",
+        "paginated": False,
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.ssr.getOrgSsrRegistrationCommands,
+        "data_type": "ssr registration commands",
+        "sort_key": None,
+        "category": "Device Registration",
+        "paginated": False,
+    },
+    # -- Edge Infrastructure (GET) -------------------------------------------
+    {
+        "api_call": mistapi.api.v1.orgs.mxedges.getOrgMxEdgeUpgradeInfo,
+        "data_type": "mxedge upgrade info",
+        "sort_key": None,
+        "category": "Edge Infrastructure",
+        "paginated": False,
+    },
+    # -- SLE -----------------------------------------------------------------
+    {
+        "api_call": mistapi.api.v1.orgs.insights.getOrgSitesSle,
+        "data_type": "sites sle",
+        "sort_key": None,
+        "category": "SLE",
+        "paginated": False,
+    },
 ]
 
 _COUNT_OPERATIONS: list[dict[str, Any]] = [
@@ -987,6 +1087,12 @@ _COUNT_OPERATIONS: list[dict[str, Any]] = [
     {
         "api_call": mistapi.api.v1.orgs.stats.countOrgAssetsByDistanceField,
         "data_type": "assets by distance count",
+        "sort_key": None,
+        "category": "Counts",
+    },
+    {
+        "api_call": mistapi.api.v1.orgs.wan_client.countOrgWanClientEvents,
+        "data_type": "wan client events count",
         "sort_key": None,
         "category": "Counts",
     },
