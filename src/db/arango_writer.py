@@ -808,6 +808,27 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["anomaly_events"],
         "to_vertex_collections": ["sites"],
     },
+    # -- Tier 7: Config history, synthetic tests, webhook deliveries (issue #181) --
+    {
+        "edge_collection": "ConfigHistoryForDevice",
+        "from_vertex_collections": ["config_history"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "SyntheticTestOnDevice",
+        "from_vertex_collections": ["synthetic_tests"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "WebhookDeliveryFromWebhook",
+        "from_vertex_collections": ["webhook_deliveries"],
+        "to_vertex_collections": ["webhooks"],
+    },
+    {
+        "edge_collection": "PacketCaptureOnDevice",
+        "from_vertex_collections": ["packet_captures"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -1069,6 +1090,12 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteRoamingEvents": "roaming_events",
     "listSiteRrmEvents": "rrm_events",
     "listSiteAnomalyEvents": "anomaly_events",
+    # -- Issue #181: Config history, synthetic tests, webhook deliveries --
+    "searchSiteDeviceConfigHistory": "config_history",
+    "searchSiteDeviceLastConfigs": "config_history",
+    "searchSiteSyntheticTest": "synthetic_tests",
+    "searchSiteWebhooksDeliveries": "webhook_deliveries",
+    "listSitePacketCaptures": "packet_captures",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -2904,6 +2931,83 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
             {
                 "edge_col": "AssetBelongsToSite",
                 "from_col": "assets",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Issue #181: Config history, synthetic tests, webhook deliveries --
+    "searchSiteDeviceConfigHistory": {
+        "vertex": "config_history",
+        "key_field": "timestamp",
+        "edges": [
+            {
+                "edge_col": "ConfigHistoryForDevice",
+                "from_col": "config_history",
+                "from_field": "timestamp",
+                "to_col": "devices",
+                "to_field": "device_mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteDeviceLastConfigs": {
+        "vertex": "config_history",
+        "key_field": "timestamp",
+        "edges": [
+            {
+                "edge_col": "ConfigHistoryForDevice",
+                "from_col": "config_history",
+                "from_field": "timestamp",
+                "to_col": "devices",
+                "to_field": "device_mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteSyntheticTest": {
+        "vertex": "synthetic_tests",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SyntheticTestOnDevice",
+                "from_col": "synthetic_tests",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteWebhooksDeliveries": {
+        "vertex": "webhook_deliveries",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WebhookDeliveryFromWebhook",
+                "from_col": "webhook_deliveries",
+                "from_field": "id",
+                "to_col": "webhooks",
+                "to_field": "webhook_id",
+            },
+        ],
+    },
+    "listSitePacketCaptures": {
+        "vertex": "packet_captures",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PacketCaptureOnDevice",
+                "from_col": "packet_captures",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "ap_macs",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "PacketCaptureBelongsToSite",
+                "from_col": "packet_captures",
                 "from_field": "id",
                 "to_col": "sites",
                 "to_field": "site_id",

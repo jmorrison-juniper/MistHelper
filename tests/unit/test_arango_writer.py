@@ -511,6 +511,11 @@ class TestArangoDBWriterEdgeDefinitions:
             "RrmEventBelongsToSite",
             "RrmEventOnDevice",
             "AnomalyEventBelongsToSite",
+            # Issue #181: Config history, synthetic tests, webhook deliveries
+            "ConfigHistoryForDevice",
+            "SyntheticTestOnDevice",
+            "WebhookDeliveryFromWebhook",
+            "PacketCaptureOnDevice",
         }
         assert edge_names == expected
 
@@ -1913,3 +1918,87 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:
         mapping = COLLECTION_VERTEX_MAP["searchSiteServicePathEvents"]
         targets = mapping.get("ensure_target_vertices", [])
         assert ("vpn_name", "vpns") in targets
+
+
+class TestConfigHistorySyntheticTestGraphStorage:
+    """Issue #181: Config history, synthetic tests, webhook deliveries."""
+
+    def test_config_history_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceConfigHistory"] == "config_history"
+
+    def test_last_configs_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceLastConfigs"] == "config_history"
+
+    def test_synthetic_test_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteSyntheticTest"] == "synthetic_tests"
+
+    def test_webhook_deliveries_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWebhooksDeliveries"] == "webhook_deliveries"
+
+    def test_packet_captures_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSitePacketCaptures"] == "packet_captures"
+
+    def test_config_history_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDeviceConfigHistory"]
+        assert mapping["vertex"] == "config_history"
+        edges = mapping["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "ConfigHistoryForDevice" in edge_cols
+
+    def test_last_configs_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDeviceLastConfigs"]
+        assert mapping["vertex"] == "config_history"
+        edges = mapping["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "ConfigHistoryForDevice" in edge_cols
+
+    def test_synthetic_test_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteSyntheticTest"]
+        assert mapping["vertex"] == "synthetic_tests"
+        edges = mapping["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "SyntheticTestOnDevice" in edge_cols
+
+    def test_webhook_deliveries_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWebhooksDeliveries"]
+        assert mapping["vertex"] == "webhook_deliveries"
+        edges = mapping["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "WebhookDeliveryFromWebhook" in edge_cols
+
+    def test_packet_captures_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSitePacketCaptures"]
+        assert mapping["vertex"] == "packet_captures"
+        edges = mapping["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "PacketCaptureOnDevice" in edge_cols
+        assert "PacketCaptureBelongsToSite" in edge_cols
+
+    def test_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "ConfigHistoryForDevice" in edge_names
+        assert "SyntheticTestOnDevice" in edge_names
+        assert "WebhookDeliveryFromWebhook" in edge_names
+        assert "PacketCaptureOnDevice" in edge_names
