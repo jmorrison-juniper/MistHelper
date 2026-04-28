@@ -471,6 +471,36 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["guests"],
         "to_vertex_collections": ["devices"],
     },
+    {
+        "edge_collection": "RogueAPDetectedBySite",
+        "from_vertex_collections": ["rogue_aps"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RogueAPDetectedByAP",
+        "from_vertex_collections": ["rogue_aps"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "RogueClientDetectedByAP",
+        "from_vertex_collections": ["rogue_clients"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "RogueClientOnBSSID",
+        "from_vertex_collections": ["rogue_clients"],
+        "to_vertex_collections": ["rogue_aps"],
+    },
+    {
+        "edge_collection": "RogueEventBelongsToSite",
+        "from_vertex_collections": ["rogue_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RogueEventOnDevice",
+        "from_vertex_collections": ["rogue_events"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 2: Event/search entity relationships --
     {
         "edge_collection": "ClientEventBelongsToSite",
@@ -772,6 +802,9 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchOrgGuestAuthorization": "guests",
     "listSiteAllGuestAuthorizations": "guests",
     "searchSiteGuestAuthorization": "guests",
+    "listSiteRogueAPs": "rogue_aps",
+    "listSiteRogueClients": "rogue_clients",
+    "searchSiteRogueEvents": "rogue_events",
     "searchOrgMxEdges": "devices",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
@@ -1360,6 +1393,70 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "wlans",
                 "to_field": "wlan_id",
+            },
+        ],
+    },
+    # -- Site-level rogue detection --
+    "listSiteRogueAPs": {
+        "vertex": "rogue_aps",
+        "key_field": "bssid",
+        "edges": [
+            {
+                "edge_col": "RogueAPDetectedBySite",
+                "from_col": "rogue_aps",
+                "from_field": "bssid",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "RogueAPDetectedByAP",
+                "from_col": "rogue_aps",
+                "from_field": "bssid",
+                "to_col": "devices",
+                "to_field": "ap_mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteRogueClients": {
+        "vertex": "rogue_clients",
+        "key_field": "client_mac",
+        "edges": [
+            {
+                "edge_col": "RogueClientDetectedByAP",
+                "from_col": "rogue_clients",
+                "from_field": "client_mac",
+                "to_col": "devices",
+                "to_field": "ap_mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "RogueClientOnBSSID",
+                "from_col": "rogue_clients",
+                "from_field": "client_mac",
+                "to_col": "rogue_aps",
+                "to_field": "bssid",
+            },
+        ],
+    },
+    "searchSiteRogueEvents": {
+        "vertex": "rogue_events",
+        "key_field": "bssid",
+        "edges": [
+            {
+                "edge_col": "RogueEventBelongsToSite",
+                "from_col": "rogue_events",
+                "from_field": "bssid",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "RogueEventOnDevice",
+                "from_col": "rogue_events",
+                "from_field": "bssid",
+                "to_col": "devices",
+                "to_field": "ap",
+                "to_key_lookup": "mac",
             },
         ],
     },
