@@ -828,6 +828,36 @@ class TestArangoDBWriterBuildVertices:
         vertices = writer._build_vertices(data, "id")
         assert len(vertices) == 0
 
+    def test_preserves_all_api_fields(self, config, mock_arango_client):
+        """Issue #182: vertex must contain ALL fields from API response."""
+        from src.db.arango_writer import ArangoDBWriter
+
+        writer = ArangoDBWriter(config)
+        data = [
+            {
+                "id": "dev-1",
+                "name": "AP-Lobby",
+                "org_id": "org-1",
+                "site_id": "site-1",
+                "type": "ap",
+                "model": "AP45",
+                "serial": "ABC123",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "ip": "10.0.0.1",
+                "firmware_version": "0.14.29411",
+                "last_seen": 1700000000,
+                "lldp_stat": {"chassis_id": "aa:bb:cc"},
+                "custom_field": "extra-data",
+            }
+        ]
+        vertices = writer._build_vertices(data, "id")
+        vertex = vertices[0]
+        for field in data[0]:
+            assert field in vertex, f"Field '{field}' missing from vertex"
+        assert vertex["firmware_version"] == "0.14.29411"
+        assert vertex["lldp_stat"] == {"chassis_id": "aa:bb:cc"}
+        assert vertex["custom_field"] == "extra-data"
+
 
 class TestArangoDBWriterPopulateGraph:
     """Tests for _populate_graph end-to-end with mocked collections."""
