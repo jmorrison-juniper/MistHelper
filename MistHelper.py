@@ -3876,6 +3876,21 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site-level guest WiFi authorization records",
     },
+    # -- Site Rogues (insight-based, no API id field) -------------------------
+    "listSiteRogueAPs": {
+        "type": "composite_pk",
+        "primary_key": ["bssid", "ap_mac"],
+        "indexes": ["site_id", "ssid", "channel"],
+        "unique_constraints": [],
+        "description": "Rogue APs detected at a site via RF scanning",
+    },
+    "listSiteRogueClients": {
+        "type": "composite_pk",
+        "primary_key": ["client_mac", "bssid"],
+        "indexes": ["site_id", "ap_mac", "band"],
+        "unique_constraints": [],
+        "description": "Rogue clients detected at a site via RF scanning",
+    },
     # -- PSK Portals ---------------------------------------------------------
     "listOrgPskPortals": {
         "type": "natural_pk",
@@ -4564,6 +4579,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["site_id", "wlan_id", "ap_mac"],
         "unique_constraints": [],
         "description": "Site-level guest authorization search results",
+    },
+    "searchSiteRogueEvents": {
+        "type": "composite_pk",
+        "primary_key": ["bssid", "timestamp"],
+        "indexes": ["site_id", "ap", "ssid"],
+        "unique_constraints": [],
+        "description": "Rogue AP/client event search results",
     },
     "searchOrgNacClientEvents": {
         "type": "composite_pk",

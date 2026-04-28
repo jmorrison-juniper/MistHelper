@@ -457,6 +457,13 @@ class TestArangoDBWriterEdgeDefinitions:
             "DeviceConfigBelongsToSite",
             "DeviceConfigForDevice",
             "SiteStatsBelongsToSite",
+            # Issue #180: Site rogue detection edges
+            "RogueAPDetectedBySite",
+            "RogueAPDetectedByAP",
+            "RogueClientDetectedByAP",
+            "RogueClientOnBSSID",
+            "RogueEventBelongsToSite",
+            "RogueEventOnDevice",
         }
         assert edge_names == expected
 
@@ -940,3 +947,82 @@ class TestArangoDBWriterSiteGuestGraph:
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteAllGuestAuthorizations"] == "guests"
         assert ENTITY_TYPE_TO_VERTEX["searchSiteGuestAuthorization"] == "guests"
+
+
+class TestArangoDBWriterSiteRogueGraph:
+    """Tests for site-level rogue detection graph storage (issue #180)."""
+
+    def test_rogue_ap_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRogueAPs" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRogueAPs"]
+        assert mapping["vertex"] == "rogue_aps"
+        assert mapping["key_field"] == "bssid"
+
+    def test_rogue_client_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRogueClients" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRogueClients"]
+        assert mapping["vertex"] == "rogue_clients"
+        assert mapping["key_field"] == "client_mac"
+
+    def test_rogue_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteRogueEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteRogueEvents"]
+        assert mapping["vertex"] == "rogue_events"
+        assert mapping["key_field"] == "bssid"
+
+    def test_rogue_ap_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRogueAPs"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "RogueAPDetectedBySite" in edge_cols
+        assert "RogueAPDetectedByAP" in edge_cols
+
+    def test_rogue_ap_edge_uses_mac_lookup(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRogueAPs"]["edges"]
+        ap_edge = next(e for e in edges if e["edge_col"] == "RogueAPDetectedByAP")
+        assert ap_edge["to_col"] == "devices"
+        assert ap_edge["to_field"] == "ap_mac"
+        assert ap_edge["to_key_lookup"] == "mac"
+
+    def test_rogue_client_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRogueClients"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "RogueClientDetectedByAP" in edge_cols
+        assert "RogueClientOnBSSID" in edge_cols
+
+    def test_rogue_client_bssid_edge_targets_rogue_aps(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRogueClients"]["edges"]
+        bssid_edge = next(e for e in edges if e["edge_col"] == "RogueClientOnBSSID")
+        assert bssid_edge["to_col"] == "rogue_aps"
+        assert bssid_edge["to_field"] == "bssid"
+
+    def test_rogue_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "RogueAPDetectedBySite" in edge_names
+        assert "RogueAPDetectedByAP" in edge_names
+        assert "RogueClientDetectedByAP" in edge_names
+        assert "RogueClientOnBSSID" in edge_names
+        assert "RogueEventBelongsToSite" in edge_names
+        assert "RogueEventOnDevice" in edge_names
+
+    def test_rogue_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRogueAPs"] == "rogue_aps"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRogueClients"] == "rogue_clients"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteRogueEvents"] == "rogue_events"
