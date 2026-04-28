@@ -4,22 +4,13 @@ Your mission: take my high-level request and independently deliver a complete, p
 
 When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
 
-### Autonomous Workflow:
-1. **Internal Requirement Analysis** – Parse my request, infer missing details, and make reasonable assumptions.  
-2. **Architecture & Design Plan** – Decide on structure, algorithms, and libraries.  
-3. **Initial Implementation** – Write complete, functional, and well-documented code.  
-4. **Self-Instrumentation** –  
-    - Embed **test points** and logging hooks in the code to verify correctness of individual components.  
-    - Include assertions and sanity checks for critical logic paths.  
-5. **Self-Testing Loop** –  
-    - Write comprehensive **unit tests**, **integration tests**, and **edge-case tests**.  
-    - Run all tests internally.  
-    - If any fail, debug, refactor, and re-run until all pass.  
-6. **Self-Prod Simulation** –  
-    - Deploy the code in a simulated production environment.  
-    - Run synthetic load tests and monitor performance.  
-    - Optimize if bottlenecks are detected.  
-7. **Final Output** – Present only the *final, improved, fully tested version* of the code.  
+### Autonomous Workflow
+1. **Requirement Analysis** -- Parse the request, infer missing details, make reasonable assumptions.
+2. **Architecture & Design** -- Decide on structure, algorithms, and libraries.
+3. **Implementation** -- Write complete, functional, well-documented code.
+4. **Self-Instrumentation** -- Embed test points, logging hooks, assertions for critical logic paths.
+5. **Self-Testing** -- Write unit, integration, and edge-case tests. Run them. Debug until all pass.
+6. **Final Output** -- Present only the final, improved, fully tested version.
 
 ### Output Format:
 1. **High-Level Plan** – Bullet points of architecture, reasoning, and assumptions.  
@@ -368,25 +359,19 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 ---
 
-## Documentation Structure
-- **README.md**: User-facing operations guide (comprehensive)
-- **agents.md**: Internal agent guide (attached, ~350 lines)
-- **SSH_GUIDE.md**: SSH runner detailed usage
-- **CHANGELOG.md**: Version history ([Keep a Changelog](https://keepachangelog.com/) format)
-- **documentation/**: Sample files, API specs
-
----
-
-## Key Files Reference
-| File | Purpose | Lines |
-|------|---------|-------|
-| `MistHelper.py` | Main implementation | ~28K |
-| `CHANGELOG.md` | Version history (Keep a Changelog format) | ~1K |
-| `agents.md` | Agent coding guide | ~350 |
-| `requirements.txt` | Python dependencies (pip compatibility) | ~30 |
-| `uv.lock` | UV package lock file (if using UV) | Generated |
-| `.env` (git-ignored) | Credentials & config | N/A |
-| `data/mist_data.db` | SQLite persistence (local fallback) | Generated |
+## Key Files & Documentation
+| File | Purpose |
+|------|---------|
+| `MistHelper.py` | Main implementation (~28K lines) |
+| `CHANGELOG.md` | Version history (Keep a Changelog format) |
+| `agents.md` | VS Code Chat agent supplement (points here) |
+| `README.md` | User-facing operations guide |
+| `SSH_GUIDE.md` | SSH runner detailed usage |
+| `requirements.txt` | Python dependencies (pip compatibility) |
+| `uv.lock` | UV package lock file (if using UV) |
+| `.env` (git-ignored) | Credentials & config |
+| `data/mist_data.db` | SQLite persistence (local fallback) |
+| `documentation/` | Sample files, API specs (`mist-api-openapi3*`) |
 
 ---
 
@@ -485,6 +470,123 @@ When multiple AI agents work on MistHelper simultaneously:
    `git rebase main` before pushing updates.
 5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass,
    **including CodeQL** (takes 2-3 minutes). Use `gh pr checks <pr> --watch` to confirm.
+
+### Agent Isolation (One Agent = One Worktree = One Branch = One PR)
+
+Every concurrent AI agent MUST operate in its own isolated worktree. This prevents
+file-lock collisions, avoids cross-agent contamination, and ensures each agent has
+a clean working directory.
+
+**The isolation rule**: One agent, one worktree, one branch, one PR, one concern.
+
+```
+MistHelper/                    # main checkout (human or merge agent only)
+../MistHelper-agent-1/         # worktree for Agent 1 (feat/101-new-menu)
+../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
+../MistHelper-agent-3/         # worktree for Agent 3 (chore/103-docs)
+```
+
+**Setup per agent**:
+```powershell
+# Agent claims issue #101, creates its isolated worktree
+git worktree add ../MistHelper-agent-1 -b feat/101-new-menu main
+cd ../MistHelper-agent-1
+```
+
+**Teardown after merge**:
+```powershell
+cd ../MistHelper
+git worktree remove ../MistHelper-agent-1
+git branch -D feat/101-new-menu
+git pull origin main
+```
+
+**Why worktrees over branches**: On Windows, VS Code and OneDrive hold file locks that
+block `git checkout`. Worktrees sidestep this entirely -- each agent has its own directory,
+its own index, and its own working tree. No lock contention, no stale file handles.
+
+### Copilot Coding Agent, Spaces & Scratchpads
+
+| Scenario | Surface |
+| - | - |
+| Well-defined issue, single concern | Copilot Coding Agent (assign to issue) |
+| Multi-step feature, needs planning | Copilot Space + SpecKit workflow |
+| Quick prototype or API exploration | Scratchpad |
+| Local implementation with testing | VS Code Copilot Chat + worktree |
+| Complex refactor touching hot files | VS Code Copilot Chat + worktree (human oversight) |
+
+**Copilot Coding Agent**: Triggered by assigning Copilot to an issue. Creates branch,
+implements, opens PR -- all autonomously on GitHub infrastructure (not behind Zscaler).
+Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no API creds in CI).
+
+**Copilot Spaces**: Persistent shared context across sessions. Attach `agents.md`,
+`MistHelper.py`, `CHANGELOG.md` for deep project context. Best for planning and architecture.
+
+**Scratchpads**: Throwaway exploration. No git. Discard after use.
+
+### Conflict Resolution Playbook
+
+When multiple agents produce PRs that conflict (especially on `MistHelper.py`),
+do NOT fight merge conflicts. Follow this playbook:
+
+**Strategy 1 -- Sequential Merge (preferred)**:
+1. Merge the cleanest PR first (fewest files, best coverage, most isolated).
+2. All other agents rebase onto updated `main`: `git fetch origin && git rebase origin/main`.
+3. Repeat: merge next cleanest, rebase remaining.
+
+**Strategy 2 -- Merge Agent (complex conflicts)**:
+Designate one agent as the reconciliation owner. It reviews competing PRs,
+produces a single reconciled branch incorporating all changes. Other agents
+stop pushing once the merge agent takes over.
+
+**Strategy 3 -- Redesign the Boundary (recurring conflicts)**:
+If the same files keep conflicting, extract contested code into separate modules
+so agents work on non-overlapping files. Refactoring investment that pays off
+across all future multi-agent work.
+
+**Conflict resolution rules**:
+- Never force-push to someone else's branch.
+- Always rebase, never merge `main` into feature branches.
+- Prefer `--force-with-lease` over `--force` for rebased branches.
+- If conflicts are extensive (>20 lines), abandon and re-implement from fresh `main`.
+- Let Copilot propose conflict resolutions -- paste both versions into chat.
+
+### Agent Observability & Efficiency
+
+Every AI agent interaction must be observable and cost-accountable.
+
+**Logging Requirements**:
+- Log every agent call: timestamp, model, prompt hash, token counts (input/output), latency
+- Log every subagent spawn: parent agent, child agent name, task description, model used
+- Log reasoning traces: key decision points and tool selections for post-mortem analysis
+- Store agent logs in `data/agent_logs/` with structured JSON format
+- Include session ID to correlate multi-agent workflows across a single task
+
+**Token & Cost Tracking**:
+- Maintain a running token/dollar meter per session (input tokens, output tokens, total cost)
+- Log per-call cost estimates using model-specific pricing
+- Alert when a single session exceeds cost thresholds (configurable via `.env`)
+- Track cumulative daily/weekly spend for budget visibility
+
+**Subagent Best Practices**:
+- **Small focused contexts**: Give subagents only the files and context they need. Never dump
+  the full codebase into a subagent prompt. Specify exactly what to search for or implement.
+- **Model routing**: Use cheaper/faster models for simple tasks (search, grep, file reads).
+  Reserve expensive models for complex reasoning (architecture, multi-file refactors).
+  Match model capability to task complexity.
+- **Prompt caching**: Keep system prompts stable across calls to maximize cache hits.
+  Do not inject variable data (timestamps, random IDs) into system prompts.
+  Move volatile content to user messages instead.
+
+**Failure Detection**:
+
+| Signal | Action |
+| - | - |
+| Cache miss rate > 50% | Audit system prompt for instability; remove volatile content |
+| Subagent called > 3x for same query | Break the loop; escalate to human or try different approach |
+| MCP tool result > 50KB | Truncate or filter before passing to model; log the oversized result |
+| Token count > 100K in single call | Split task into smaller subtasks; review context window usage |
+| Same error repeated 3x | Stop retrying; log the failure pattern and try alternative approach |
 
 ### Windows Branch Switching (File Locking)
 
@@ -689,34 +791,20 @@ Security tool findings (bandit, pip-audit, CodeQL) must be **resolved**, not sup
 Never suppress legitimate findings. If a finding requires more than a trivial fix,
 create a GitHub issue and track it.
 
-### Exact Tools, Modules & Actions
+### Toolchain Reference
 
-**Editor & AI**:
-- VS Code + GitHub Copilot + Copilot Chat (multi-file edits, agent workflows)
-- GitHub Copilot Workspace (issue -> plan -> implement -> PR from browser)
-- VS Code Browser Agent Tools (autonomous web UI interaction -- see below)
-
-**Python Quality Gates**:
-- `ruff` -- linter + formatter (replaces flake8/isort/black)
-- `mypy` -- static type checker
-- `pytest` + `pytest-cov` -- tests + coverage reporting
-- `hypothesis` -- property-based testing
-- `bandit` -- security linting (AST rules)
-- `pip-audit` -- dependency CVE scanning
-
-**Code Scanning & Supply Chain**:
-- GitHub CodeQL -- static analysis including Actions workflow scanning
-- Dependabot -- automated dependency/security update PRs
-
-**Packaging & Release**:
-- `actions/setup-python` -- CI Python environment + caching
-- `docker/build-push-action` + `docker/login-action` -- container image build + GHCR push
-- `softprops/action-gh-release` -- attach release artifacts (wheel, zip) to GitHub Releases
-
-**Runtime (no cloud)**:
-- `python-dotenv` -- `.env` loading for standalone host runs
-- Docker Compose with `env_file:` -- container token injection
-- Podman + Quadlet -- declarative systemd-managed containers (preferred)
+| Category | Tools |
+| - | - |
+| Editor & AI | VS Code + Copilot Chat, Copilot Workspace, VS Code Browser Agent Tools |
+| Lint + Format | `ruff` (replaces flake8/isort/black) |
+| Type Safety | `mypy` (strict optional) |
+| Tests + Coverage | `pytest` + `pytest-cov`, `hypothesis` (property-based) |
+| Security | `bandit` (AST rules), `pip-audit` (dependency CVEs) |
+| Code Scanning | GitHub CodeQL, Dependabot (weekly pip updates) |
+| CI Setup | `actions/setup-python` (caching) |
+| Container | `docker/build-push-action` + `docker/login-action` → GHCR |
+| Release | `softprops/action-gh-release` (wheel, zip artifacts) |
+| Runtime | `python-dotenv`, Docker Compose `env_file:`, Podman + Quadlet |
 
 ### Delivery Artifacts (Per Release Tag)
 
@@ -783,35 +871,25 @@ VS Code ships built-in browser automation tools for AI agents. These allow Copil
 
 ### How the AI Operates on the Web UI
 
-**3.1 Open & Inspect**:
-- Start MistHelper locally (or in container with port mapping: `-p 8055:8055`).
-- In VS Code Chat, instruct the agent: "Open http://localhost:8055 in the browser and verify the page loads successfully."
-- Agent uses `openBrowserPage` / `navigatePage` to open the URL.
-- Agent reads the page (`readPage`) and may capture screenshots (`screenshotPage`) for context or failure evidence.
+**Open & Inspect**: Start MistHelper locally or in container (`-p 8055:8055`). Agent uses
+`openBrowserPage`/`navigatePage` to open the URL, `readPage` to extract DOM structure, and
+`screenshotPage` for context or failure evidence.
 
-**3.2 Interact & Validate**:
-- Agent performs actions (`clickElement`, `typeInPage`, `hoverElement`, `dragElement`, `handleDialog`) to execute user journeys described in the Spec.
-- Agent inspects the DOM and checks console errors as part of validation.
-- Agent verifies expected state changes (new rows appear, status messages, button state transitions).
+**Interact & Validate**: Agent executes user journeys from the Spec using `clickElement`,
+`typeInPage`, `hoverElement`, `dragElement`, `handleDialog`. Inspects DOM state and console
+errors to verify expected behavior (new rows, status messages, button transitions).
 
-**3.3 Codify as Playwright Tests**:
-- Agent generates Playwright tests and runs them via `runPlaywrightCode`.
-- Agent uses Playwright Trace Viewer for debugging and stabilization.
-- Tests are saved to `tests/e2e/` and committed with the PR.
-- The `gunicorn_server` fixture in `tests/e2e/conftest.py` handles server lifecycle automatically (starts on random port, tears down after tests).
+**Codify as Playwright Tests**: Agent generates Playwright tests via `runPlaywrightCode`,
+uses Trace Viewer for debugging, saves tests to `tests/e2e/`. The `gunicorn_server` fixture
+in `tests/e2e/conftest.py` handles server lifecycle (starts on random port, tears down after).
 
 ### Autonomous Testing Scenarios
 
-The AI agent can perform these without human presence:
-- Load the web UI and validate page structure renders correctly
-- Click workflow trigger buttons (start jobs, run operations)
-- Fill forms with test data (site selection, device filters, command inputs)
-- Inspect network responses from the Gunicorn backend
-- Detect JavaScript/console errors
-- Capture screenshots automatically for failure evidence
-- Generate Playwright regression tests and save to `tests/e2e/`
-- Run the tests during CI (the `playwright` job in `ci.yml` handles this)
-- Auto-repair failing tests using Copilot + Playwright integration
+Without human presence, the agent can: load and validate page structure, click workflow
+triggers, fill forms with test data, inspect network responses, detect JS/console errors,
+capture screenshots for failure evidence, generate Playwright regression tests (saved to
+`tests/e2e/`), run them in CI (`playwright` job), and auto-repair failing tests using
+Copilot + Playwright integration.
 
 ### Specifying: UI Section in Feature Specs
 
@@ -835,11 +913,11 @@ In addition to the standard checklist, PRs that touch web UI must include:
 
 ### Best Practices for UI Autonomy
 
-- **Make selectors intentional**: Use `data-testid` attributes, not brittle CSS/XPath. This helps agents generate resilient tests.
-- **Capture evidence by default**: On failures, keep screenshots and Playwright traces as first-class debug artifacts.
-- **Spec-first**: Describe interactions and expected states in the Issue; the agent converts that into executable steps.
-- **Continuous hardening**: The agent iteratively fixes failing tests and improves assertions using Copilot + Playwright workflow.
-- **Keep E2E fast**: The Gunicorn fixture (`tests/e2e/conftest.py`) starts a single-worker server on a random port. Tests should clean up after themselves.
+Use `data-testid` attributes for stable selectors (not brittle CSS/XPath). Capture screenshots
+and Playwright traces on failures as first-class debug artifacts. Describe interactions and
+expected states in the Spec; the agent converts those into executable steps. The Gunicorn fixture
+(`tests/e2e/conftest.py`) starts a single-worker server on a random port -- tests should clean
+up after themselves.
 
 ---
 
