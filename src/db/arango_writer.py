@@ -628,6 +628,37 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["mxedge_stats"],
         "to_vertex_collections": ["sites"],
     },
+    # -- Issue #177: Routing / network topology --
+    {
+        "edge_collection": "DeviceHasBGPPeer",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["bgp_stats"],
+    },
+    {
+        "edge_collection": "DeviceHasOSPFNeighbor",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["ospf_stats"],
+    },
+    {
+        "edge_collection": "PortConnectsToDevice",
+        "from_vertex_collections": ["ports"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "EVPNTopologyContainsSwitch",
+        "from_vertex_collections": ["evpn_topologies"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "DiscoveredSwitchBelongsToSite",
+        "from_vertex_collections": ["discovered_switches"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RrmNeighborBelongsToSite",
+        "from_vertex_collections": ["rrm_neighbors"],
+        "to_vertex_collections": ["sites"],
+    },
     # -- Issue #183: Applications, calls, WAN usage, fingerprints --
     {
         "edge_collection": "ApplicationOnSite",
@@ -911,6 +942,15 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteSleImpactedWirelessClients": "sle_impacted_entities",
     "listSiteSleImpactedWiredClients": "sle_impacted_entities",
     "listSiteSleImpactedApplications": "sle_impacted_entities",
+    # -- Issue #177: Routing / network topology --
+    "searchSiteBgpStats": "bgp_stats",
+    "searchSiteOspfStats": "ospf_stats",
+    "searchSiteSwOrGwPorts": "ports",
+    "listSiteEvpnTopologies": "evpn_topologies",
+    "searchSiteDiscoveredSwitches": "discovered_switches",
+    "listSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
+    "searchSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
+    "listSiteCurrentRrmNeighbors": "rrm_neighbors",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -1872,6 +1912,127 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "app",
                 "to_col": "applications",
                 "to_field": "key",
+            },
+        ],
+    },
+    # -- Issue #177: Routing / network topology --
+    "searchSiteBgpStats": {
+        "vertex": "bgp_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "BgpStatsBelongsToSite",
+                "from_col": "bgp_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "DeviceHasBGPPeer",
+                "from_col": "devices",
+                "from_field": "mac",
+                "to_col": "bgp_stats",
+                "to_field": "id",
+                "from_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteOspfStats": {
+        "vertex": "ospf_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OspfStatsBelongsToSite",
+                "from_col": "ospf_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "DeviceHasOSPFNeighbor",
+                "from_col": "devices",
+                "from_field": "mac",
+                "to_col": "ospf_stats",
+                "to_field": "id",
+                "from_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteSwOrGwPorts": {
+        "vertex": "ports",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PortBelongsToSite",
+                "from_col": "ports",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "PortBelongsToDevice",
+                "from_col": "ports",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "PortConnectsToDevice",
+                "from_col": "ports",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "neighbor_mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteEvpnTopologies": {
+        "vertex": "evpn_topologies",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "EvpnBelongsToSite",
+                "from_col": "evpn_topologies",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchSiteDiscoveredSwitches": {
+        "vertex": "discovered_switches",
+        "key_field": "system_name",
+        "edges": [
+            {
+                "edge_col": "DiscoveredSwitchBelongsToSite",
+                "from_col": "discovered_switches",
+                "from_field": "system_name",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteDiscoveredSwitchesMetrics": {
+        "vertex": "discovered_switch_metrics",
+        "key_field": "id",
+        "edges": [],
+    },
+    "searchSiteDiscoveredSwitchesMetrics": {
+        "vertex": "discovered_switch_metrics",
+        "key_field": "system_name",
+        "edges": [],
+    },
+    "listSiteCurrentRrmNeighbors": {
+        "vertex": "rrm_neighbors",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "RrmNeighborBelongsToSite",
+                "from_col": "rrm_neighbors",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
             },
         ],
     },

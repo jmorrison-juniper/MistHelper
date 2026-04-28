@@ -483,6 +483,13 @@ class TestArangoDBWriterEdgeDefinitions:
             "SLEImpactedClient",
             "SLEImpactedApplication",
             "SLEImpactedBySite",
+            # Issue #177: Routing / network topology
+            "DeviceHasBGPPeer",
+            "DeviceHasOSPFNeighbor",
+            "PortConnectsToDevice",
+            "EVPNTopologyContainsSwitch",
+            "DiscoveredSwitchBelongsToSite",
+            "RrmNeighborBelongsToSite",
         }
         assert edge_names == expected
 
@@ -1442,3 +1449,130 @@ class TestArangoDBWriterSLEImpactedGraph:
         assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWirelessClients"] == "sle_impacted_entities"
         assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWiredClients"] == "sle_impacted_entities"
         assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedApplications"] == "sle_impacted_entities"
+
+
+class TestArangoDBWriterSiteRoutingGraph:
+    """Tests for site-level routing / network topology graph storage (issue #177)."""
+
+    def test_bgp_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteBgpStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteBgpStats"]
+        assert mapping["vertex"] == "bgp_stats"
+        assert mapping["key_field"] == "id"
+
+    def test_ospf_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteOspfStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteOspfStats"]
+        assert mapping["vertex"] == "ospf_stats"
+        assert mapping["key_field"] == "id"
+
+    def test_site_ports_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteSwOrGwPorts" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteSwOrGwPorts"]
+        assert mapping["vertex"] == "ports"
+        assert mapping["key_field"] == "id"
+
+    def test_evpn_topologies_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteEvpnTopologies" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteEvpnTopologies"]
+        assert mapping["vertex"] == "evpn_topologies"
+        assert mapping["key_field"] == "id"
+
+    def test_discovered_switches_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteDiscoveredSwitches" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDiscoveredSwitches"]
+        assert mapping["vertex"] == "discovered_switches"
+        assert mapping["key_field"] == "system_name"
+
+    def test_discovered_switch_metrics_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteDiscoveredSwitchesMetrics" in COLLECTION_VERTEX_MAP
+        assert "searchSiteDiscoveredSwitchesMetrics" in COLLECTION_VERTEX_MAP
+
+    def test_rrm_neighbors_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteCurrentRrmNeighbors" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteCurrentRrmNeighbors"]
+        assert mapping["vertex"] == "rrm_neighbors"
+        assert mapping["key_field"] == "mac"
+
+    def test_bgp_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteBgpStats"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "BgpStatsBelongsToSite" in edge_cols
+        assert "DeviceHasBGPPeer" in edge_cols
+
+    def test_ospf_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteOspfStats"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "OspfStatsBelongsToSite" in edge_cols
+        assert "DeviceHasOSPFNeighbor" in edge_cols
+
+    def test_site_ports_edges_include_lldp(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteSwOrGwPorts"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "PortConnectsToDevice" in edge_cols
+        assert "PortBelongsToSite" in edge_cols
+        assert "PortBelongsToDevice" in edge_cols
+
+    def test_evpn_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteEvpnTopologies"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "EvpnBelongsToSite" in edge_cols
+
+    def test_discovered_switches_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteDiscoveredSwitches"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "DiscoveredSwitchBelongsToSite" in edge_cols
+
+    def test_rrm_neighbors_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteCurrentRrmNeighbors"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "RrmNeighborBelongsToSite" in edge_cols
+
+    def test_routing_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "DeviceHasBGPPeer" in edge_names
+        assert "DeviceHasOSPFNeighbor" in edge_names
+        assert "PortConnectsToDevice" in edge_names
+        assert "EVPNTopologyContainsSwitch" in edge_names
+        assert "DiscoveredSwitchBelongsToSite" in edge_names
+        assert "RrmNeighborBelongsToSite" in edge_names
+
+    def test_routing_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteBgpStats"] == "bgp_stats"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteOspfStats"] == "ospf_stats"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteSwOrGwPorts"] == "ports"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteEvpnTopologies"] == "evpn_topologies"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDiscoveredSwitches"] == "discovered_switches"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteDiscoveredSwitchesMetrics"] == "discovered_switch_metrics"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDiscoveredSwitchesMetrics"] == "discovered_switch_metrics"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteCurrentRrmNeighbors"] == "rrm_neighbors"
