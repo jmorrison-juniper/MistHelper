@@ -471,6 +471,12 @@ class TestArangoDBWriterEdgeDefinitions:
             "AssetFilterBelongsToSite",
             "DiscoveredAssetOnMap",
             "AssetTrackedByAP",
+            # Issue #183: Applications, calls, WAN usage, fingerprints
+            "ApplicationOnSite",
+            "CallOnDevice",
+            "WanUsageOnDevice",
+            "WanUsagePeerDevice",
+            "TroubleshootCallOnDevice",
         }
         assert edge_names == expected
 
@@ -1197,3 +1203,112 @@ class TestArangoDBWriterSiteAssetGraph:
         assert "ensure_target_vertices" in mapping
         targets = mapping["ensure_target_vertices"]
         assert ("map_id", "maps") in targets
+
+
+class TestArangoDBWriterSiteAppsCallsGraph:
+    """Tests for site-level apps, calls, WAN usage, fingerprints graph storage (issue #183)."""
+
+    def test_site_apps_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteApps" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteApps"]
+        assert mapping["vertex"] == "applications"
+        assert mapping["key_field"] == "key"
+
+    def test_site_calls_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteCalls" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteCalls"]
+        assert mapping["vertex"] == "calls"
+        assert mapping["key_field"] == "mac"
+
+    def test_site_wan_usage_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteWanUsage" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWanUsage"]
+        assert mapping["vertex"] == "wan_usage"
+        assert mapping["key_field"] == "mac"
+
+    def test_fingerprints_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchOrgClientFingerprints" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]
+        assert mapping["vertex"] == "fingerprints"
+        assert mapping["key_field"] == "mac"
+
+    def test_ui_settings_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteUiSettings" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteUiSettings"]
+        assert mapping["vertex"] == "ui_settings"
+        assert mapping["key_field"] == "id"
+
+    def test_troubleshoot_calls_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteTroubleshootCalls" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteTroubleshootCalls"]
+        assert mapping["vertex"] == "troubleshoot_calls"
+        assert mapping["key_field"] == "mac"
+
+    def test_site_calls_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteCalls"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "CallOnDevice" in edge_cols
+
+    def test_wan_usage_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteWanUsage"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "WanUsageOnDevice" in edge_cols
+        assert "WanUsagePeerDevice" in edge_cols
+
+    def test_troubleshoot_calls_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteTroubleshootCalls"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "TroubleshootCallOnDevice" in edge_cols
+
+    def test_apps_calls_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "ApplicationOnSite" in edge_names
+        assert "CallOnDevice" in edge_names
+        assert "WanUsageOnDevice" in edge_names
+        assert "WanUsagePeerDevice" in edge_names
+        assert "TroubleshootCallOnDevice" in edge_names
+
+    def test_apps_calls_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteApps"] == "applications"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteCalls"] == "calls"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWanUsage"] == "wan_usage"
+        assert ENTITY_TYPE_TO_VERTEX["searchOrgClientFingerprints"] == "fingerprints"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteUiSettings"] == "ui_settings"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteTroubleshootCalls"] == "troubleshoot_calls"
+
+    def test_apps_no_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert COLLECTION_VERTEX_MAP["listSiteApps"]["edges"] == []
+
+    def test_fingerprints_no_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []
+
+    def test_ui_settings_no_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert COLLECTION_VERTEX_MAP["listSiteUiSettings"]["edges"] == []

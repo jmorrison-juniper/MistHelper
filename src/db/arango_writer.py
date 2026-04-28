@@ -628,6 +628,32 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["mxedge_stats"],
         "to_vertex_collections": ["sites"],
     },
+    # -- Issue #183: Applications, calls, WAN usage, fingerprints --
+    {
+        "edge_collection": "ApplicationOnSite",
+        "from_vertex_collections": ["applications"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "CallOnDevice",
+        "from_vertex_collections": ["calls"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "WanUsageOnDevice",
+        "from_vertex_collections": ["wan_usage"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "WanUsagePeerDevice",
+        "from_vertex_collections": ["wan_usage"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "TroubleshootCallOnDevice",
+        "from_vertex_collections": ["troubleshoot_calls"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -841,6 +867,13 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteAssetsStats": "assets",
     "listSiteDiscoveredAssets": "discovered_assets",
     "listSiteAssetFilters": "asset_filters",
+    # -- Issue #183: Applications, calls, WAN usage, fingerprints --
+    "listSiteApps": "applications",
+    "searchSiteCalls": "calls",
+    "searchSiteWanUsage": "wan_usage",
+    "searchOrgClientFingerprints": "fingerprints",
+    "listSiteUiSettings": "ui_settings",
+    "listSiteTroubleshootCalls": "troubleshoot_calls",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -1624,6 +1657,72 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "id",
                 "to_col": "sites",
                 "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Issue #183: Applications, calls, WAN usage, fingerprints --
+    "listSiteApps": {
+        "vertex": "applications",
+        "key_field": "key",
+        "edges": [],
+    },
+    "searchSiteCalls": {
+        "vertex": "calls",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "CallOnDevice",
+                "from_col": "calls",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteWanUsage": {
+        "vertex": "wan_usage",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "WanUsageOnDevice",
+                "from_col": "wan_usage",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "WanUsagePeerDevice",
+                "from_col": "wan_usage",
+                "from_field": "peer_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchOrgClientFingerprints": {
+        "vertex": "fingerprints",
+        "key_field": "mac",
+        "edges": [],
+    },
+    "listSiteUiSettings": {
+        "vertex": "ui_settings",
+        "key_field": "id",
+        "edges": [],
+    },
+    "listSiteTroubleshootCalls": {
+        "vertex": "troubleshoot_calls",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "TroubleshootCallOnDevice",
+                "from_col": "troubleshoot_calls",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
             },
         ],
     },
