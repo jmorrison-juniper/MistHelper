@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import sys
 import time
 from unittest.mock import MagicMock, patch
 
@@ -614,7 +615,8 @@ class TestEdgeCases:
             "perceived_requests": 0,
             "initialized": True,
         }
-        RateLimitingUtils._refresh_api_usage(None, cache, time.time())
+        with patch.dict(sys.modules, {"mistapi": None}):
+            RateLimitingUtils._refresh_api_usage(None, cache, time.time())
         assert cache["used"] == 100
 
     def test_hour_boundary_resets_integral(self):
