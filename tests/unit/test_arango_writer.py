@@ -404,6 +404,7 @@ class TestArangoDBWriterEdgeDefinitions:
             "AuditLogBelongsToSite",
             "GuestBelongsToSite",
             "GuestAuthorizedOnWlan",
+            "GuestConnectedToAP",
             # Tier 2: Event/search entity relationships
             "ClientEventBelongsToSite",
             "ClientEventOnDevice",
