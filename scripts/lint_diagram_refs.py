@@ -251,10 +251,14 @@ class DiagramReferenceValidator:
         """Execute full validation pipeline. Returns exit code."""
         for source_path in config.source_files:
             path = Path(source_path)
-            if not path.exists():
+            if path.is_dir():
+                for py_file in path.rglob("*.py"):
+                    self.python_symbols.update(self.extract_python_symbols(py_file))
+            elif path.exists():
+                self.python_symbols.update(self.extract_python_symbols(path))
+            else:
                 logger.error("Source file not found: %s", path)
                 return 2
-            self.python_symbols.update(self.extract_python_symbols(path))
 
         if not self.python_symbols:
             logger.error("No Python symbols extracted")
@@ -323,8 +327,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--source-files",
         nargs="*",
-        default=["MistHelper.py"],
-        help="Python source files to extract symbols from",
+        default=["MistHelper.py", "src/"],
+        help="Python source files or directories to extract symbols from",
     )
     parser.add_argument(
         "--allowlist",
