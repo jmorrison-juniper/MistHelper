@@ -556,6 +556,21 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchOrgGuestAuthorization": "guests",
     "searchOrgMxEdges": "devices",
     "searchOrgSites": "sites",
+    # -- New operations for complete SDK coverage ----------------------------
+    "listOrgJsiPastPurchases": "jsi_purchases",
+    "getOrgJseInfo": "org_settings",
+    "getOrgJseIntegration": "org_settings",
+    "getOrgSkyAtpIntegration": "org_settings",
+    "getOrgZscalerIntegration": "org_settings",
+    "getOrgMistScep": "org_settings",
+    "getOrgNacCrl": "org_settings",
+    "getOrgCrlFile": "org_settings",
+    "getOrgSslProxyCert": "org_settings",
+    "getOrgAosRegisterCmd": "org_settings",
+    "getOrgSsrRegistrationCommands": "org_settings",
+    "getOrgMxEdgeUpgradeInfo": "org_settings",
+    "getOrgSitesSle": "org_sle",
+    "countOrgWanClientEvents": "counts",
 }
 
 # Maps API collection names to graph vertex + edge relationships.
