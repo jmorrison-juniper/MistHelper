@@ -711,6 +711,57 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["sle_impacted_entities"],
         "to_vertex_collections": ["sites"],
     },
+    # -- Tier 5: Maps, zones & location --
+    {
+        "edge_collection": "MapBelongsToSite",
+        "from_vertex_collections": ["maps"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "ZoneBelongsToMap",
+        "from_vertex_collections": ["zones"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "ZoneBelongsToSite",
+        "from_vertex_collections": ["zones"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RssiZoneBelongsToMap",
+        "from_vertex_collections": ["rssizones"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "BeaconOnMap",
+        "from_vertex_collections": ["beacons"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "BeaconBelongsToSite",
+        "from_vertex_collections": ["beacons"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "VBeaconOnMap",
+        "from_vertex_collections": ["vbeacons"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "DeviceOnMap",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "ZoneSessionInZone",
+        "from_vertex_collections": ["zone_sessions"],
+        "to_vertex_collections": ["zones"],
+    },
+    {
+        "edge_collection": "ZoneSessionOnMap",
+        "from_vertex_collections": ["zone_sessions"],
+        "to_vertex_collections": ["maps"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -951,6 +1002,17 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
     "searchSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
     "listSiteCurrentRrmNeighbors": "rrm_neighbors",
+    # -- Issue #175: Maps, zones & location --
+    "listSiteMaps": "maps",
+    "getSiteMap": "maps",
+    "listSiteMapStacks": "map_stacks",
+    "listSiteZones": "zones",
+    "listSiteZonesStats": "zone_stats",
+    "listSiteRssiZones": "rssizones",
+    "listSiteRssiZonesStats": "rssizone_stats",
+    "listSiteBeacons": "beacons",
+    "listSiteVBeacons": "vbeacons",
+    "searchSiteZoneSessions": "zone_sessions",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -2035,6 +2097,157 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_field": "site_id",
             },
         ],
+    },
+    # -- Issue #175: Maps, zones & location --
+    "listSiteMaps": {
+        "vertex": "maps",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MapBelongsToSite",
+                "from_col": "maps",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "getSiteMap": {
+        "vertex": "maps",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MapBelongsToSite",
+                "from_col": "maps",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteMapStacks": {
+        "vertex": "map_stacks",
+        "key_field": "id",
+        "edges": [],
+    },
+    "listSiteZones": {
+        "vertex": "zones",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "ZoneBelongsToMap",
+                "from_col": "zones",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+            {
+                "edge_col": "ZoneBelongsToSite",
+                "from_col": "zones",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteZonesStats": {
+        "vertex": "zone_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "ZoneBelongsToMap",
+                "from_col": "zones",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps"), ("id", "zones")],
+    },
+    "listSiteRssiZones": {
+        "vertex": "rssizones",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "RssiZoneBelongsToMap",
+                "from_col": "rssizones",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteRssiZonesStats": {
+        "vertex": "rssizone_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "RssiZoneBelongsToMap",
+                "from_col": "rssizones",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps"), ("id", "rssizones")],
+    },
+    "listSiteBeacons": {
+        "vertex": "beacons",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "BeaconOnMap",
+                "from_col": "beacons",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+            {
+                "edge_col": "BeaconBelongsToSite",
+                "from_col": "beacons",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteVBeacons": {
+        "vertex": "vbeacons",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "VBeaconOnMap",
+                "from_col": "vbeacons",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "searchSiteZoneSessions": {
+        "vertex": "zone_sessions",
+        "key_field": "zone_id",
+        "edges": [
+            {
+                "edge_col": "ZoneSessionInZone",
+                "from_col": "zone_sessions",
+                "from_field": "zone_id",
+                "to_col": "zones",
+                "to_field": "zone_id",
+            },
+            {
+                "edge_col": "ZoneSessionOnMap",
+                "from_col": "zone_sessions",
+                "from_field": "zone_id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("zone_id", "zones"), ("map_id", "maps")],
     },
     "listOrgMxTunnels": {
         "vertex": "mx_tunnels",

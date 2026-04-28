@@ -490,6 +490,17 @@ class TestArangoDBWriterEdgeDefinitions:
             "EVPNTopologyContainsSwitch",
             "DiscoveredSwitchBelongsToSite",
             "RrmNeighborBelongsToSite",
+            # Issue #175: Maps, zones & location
+            "MapBelongsToSite",
+            "ZoneBelongsToMap",
+            "ZoneBelongsToSite",
+            "RssiZoneBelongsToMap",
+            "BeaconOnMap",
+            "BeaconBelongsToSite",
+            "VBeaconOnMap",
+            "DeviceOnMap",
+            "ZoneSessionInZone",
+            "ZoneSessionOnMap",
         }
         assert edge_names == expected
 
@@ -1576,3 +1587,154 @@ class TestArangoDBWriterSiteRoutingGraph:
         assert ENTITY_TYPE_TO_VERTEX["listSiteDiscoveredSwitchesMetrics"] == "discovered_switch_metrics"
         assert ENTITY_TYPE_TO_VERTEX["searchSiteDiscoveredSwitchesMetrics"] == "discovered_switch_metrics"
         assert ENTITY_TYPE_TO_VERTEX["listSiteCurrentRrmNeighbors"] == "rrm_neighbors"
+
+
+class TestArangoDBWriterSiteMapsZonesGraph:
+    """Tests for site maps, zones & location graph storage (issue #175)."""
+
+    def test_maps_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteMaps" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteMaps"]
+        assert mapping["vertex"] == "maps"
+        assert mapping["key_field"] == "id"
+
+    def test_get_site_map_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "getSiteMap" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["getSiteMap"]
+        assert mapping["vertex"] == "maps"
+        assert mapping["key_field"] == "id"
+
+    def test_map_stacks_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteMapStacks" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteMapStacks"]
+        assert mapping["vertex"] == "map_stacks"
+        assert mapping["key_field"] == "id"
+
+    def test_zones_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteZones" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteZones"]
+        assert mapping["vertex"] == "zones"
+        assert mapping["key_field"] == "id"
+
+    def test_zone_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteZonesStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteZonesStats"]
+        assert mapping["vertex"] == "zone_stats"
+        assert mapping["key_field"] == "id"
+
+    def test_rssi_zones_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRssiZones" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRssiZones"]
+        assert mapping["vertex"] == "rssizones"
+        assert mapping["key_field"] == "id"
+
+    def test_rssi_zone_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRssiZonesStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRssiZonesStats"]
+        assert mapping["vertex"] == "rssizone_stats"
+        assert mapping["key_field"] == "id"
+
+    def test_beacons_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteBeacons" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteBeacons"]
+        assert mapping["vertex"] == "beacons"
+        assert mapping["key_field"] == "id"
+
+    def test_vbeacons_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteVBeacons" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteVBeacons"]
+        assert mapping["vertex"] == "vbeacons"
+        assert mapping["key_field"] == "id"
+
+    def test_zone_sessions_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteZoneSessions" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteZoneSessions"]
+        assert mapping["vertex"] == "zone_sessions"
+        assert mapping["key_field"] == "zone_id"
+
+    def test_map_edges_include_site(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteMaps"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "MapBelongsToSite" in edge_cols
+
+    def test_zone_edges_include_map_and_site(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteZones"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "ZoneBelongsToMap" in edge_cols
+        assert "ZoneBelongsToSite" in edge_cols
+
+    def test_beacon_edges_include_map_and_site(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteBeacons"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "BeaconOnMap" in edge_cols
+        assert "BeaconBelongsToSite" in edge_cols
+
+    def test_vbeacon_edges_include_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteVBeacons"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "VBeaconOnMap" in edge_cols
+
+    def test_zone_session_edges_include_zone_and_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteZoneSessions"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "ZoneSessionInZone" in edge_cols
+        assert "ZoneSessionOnMap" in edge_cols
+
+    def test_maps_zones_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "MapBelongsToSite" in edge_names
+        assert "ZoneBelongsToMap" in edge_names
+        assert "ZoneBelongsToSite" in edge_names
+        assert "RssiZoneBelongsToMap" in edge_names
+        assert "BeaconOnMap" in edge_names
+        assert "BeaconBelongsToSite" in edge_names
+        assert "VBeaconOnMap" in edge_names
+        assert "DeviceOnMap" in edge_names
+        assert "ZoneSessionInZone" in edge_names
+        assert "ZoneSessionOnMap" in edge_names
+
+    def test_maps_zones_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteMaps"] == "maps"
+        assert ENTITY_TYPE_TO_VERTEX["getSiteMap"] == "maps"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteMapStacks"] == "map_stacks"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteZones"] == "zones"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteZonesStats"] == "zone_stats"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRssiZones"] == "rssizones"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRssiZonesStats"] == "rssizone_stats"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteBeacons"] == "beacons"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteVBeacons"] == "vbeacons"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteZoneSessions"] == "zone_sessions"
