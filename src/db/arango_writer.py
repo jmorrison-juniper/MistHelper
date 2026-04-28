@@ -24,6 +24,217 @@ logger = get_logger(__name__)
 GRAPH_NAME = "mist_network_topology"
 IMPORT_BATCH_SIZE = 5000
 
+# Core config & hierarchy edges registered in the named graph for visualization.
+# Models the Mist config inheritance tree from the OpenAPI spec:
+#   Org -> Sitegroups -> Sites -> Devices -> Ports
+#   Org -> Templates -> Sites (assigned via site.*template_id fields)
+#   Org -> Device Profiles -> Devices (assigned via device.deviceprofile_id)
+#   Org -> Config objects (Networks, Services, VPNs, NAC, WxLAN, Security)
+#   Org -> Infrastructure (MxClusters, MxTunnels, MxEdges)
+# Events, stats, telemetry, clients, and sessions are excluded from the
+# graph view but their edge collections are still created and populated.
+GRAPH_EDGE_DEFINITIONS = [
+    # -- Containment: Org -> Site -> Device -> Port --
+    {
+        "edge_collection": "OrgContainsSite",
+        "from_vertex_collections": ["orgs"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "OrgContainsDevice",
+        "from_vertex_collections": ["orgs"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "SiteContainsDevice",
+        "from_vertex_collections": ["sites"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "DeviceHasPort",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["ports"],
+    },
+    {
+        "edge_collection": "DeviceConnectedToDevice",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["devices"],
+    },
+    # -- Logical grouping: Sites <-> Sitegroups --
+    {
+        "edge_collection": "SiteBelongsToSiteGroup",
+        "from_vertex_collections": ["sites"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "SiteGroupContainsSite",
+        "from_vertex_collections": ["sitegroups"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- Template assignment (site.*template_id fields) --
+    # Templates are org-level config that gets assigned to sites
+    {
+        "edge_collection": "TemplateAssignedToSite",
+        "from_vertex_collections": ["templates"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "TemplateAppliedToSite",
+        "from_vertex_collections": ["templates"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "TemplateAppliedToSiteGroup",
+        "from_vertex_collections": ["templates"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "AlarmTemplateAssignedToSite",
+        "from_vertex_collections": ["alarm_templates"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SecurityPolicyAssignedToSite",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["sites"],
+    },
+    # -- Device config: profiles assigned to devices --
+    {
+        "edge_collection": "DeviceUsesProfile",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["device_profiles"],
+    },
+    {
+        "edge_collection": "ProfileAppliedToSite",
+        "from_vertex_collections": ["device_profiles"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "ProfileAppliedToSiteGroup",
+        "from_vertex_collections": ["device_profiles"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    # -- Wireless config: WLANs belong to sites or templates --
+    {
+        "edge_collection": "WlanBelongsToSite",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WlanUsesTemplate",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["templates"],
+    },
+    {
+        "edge_collection": "WlanUsesMxTunnel",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "PSKBelongsToSite",
+        "from_vertex_collections": ["psks"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "PSKBelongsToWlan",
+        "from_vertex_collections": ["psks"],
+        "to_vertex_collections": ["wlans"],
+    },
+    # -- Org-level config objects --
+    {
+        "edge_collection": "NetworkBelongsToOrg",
+        "from_vertex_collections": ["networks"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "ServiceBelongsToOrg",
+        "from_vertex_collections": ["services"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "VpnBelongsToOrg",
+        "from_vertex_collections": ["vpns"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "SecurityPolicyBelongsToOrg",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "AlarmTemplateBelongsToOrg",
+        "from_vertex_collections": ["alarm_templates"],
+        "to_vertex_collections": ["orgs"],
+    },
+    {
+        "edge_collection": "ServicePolicyUsesService",
+        "from_vertex_collections": ["security_policies"],
+        "to_vertex_collections": ["services"],
+    },
+    # -- NAC: rules reference tags, tags reference portals --
+    {
+        "edge_collection": "NACRuleUsesTag",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["nac_tags"],
+    },
+    {
+        "edge_collection": "NACRuleMatchesSite",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "NACRuleMatchesSiteGroup",
+        "from_vertex_collections": ["nac_rules"],
+        "to_vertex_collections": ["sitegroups"],
+    },
+    {
+        "edge_collection": "NACTagBelongsToPortal",
+        "from_vertex_collections": ["nac_tags"],
+        "to_vertex_collections": ["nac_portals"],
+    },
+    # -- WxLAN policy: rules reference tags and templates --
+    {
+        "edge_collection": "WxRuleBelongsToTemplate",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["templates"],
+    },
+    {
+        "edge_collection": "WxRuleMatchesSrcTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    {
+        "edge_collection": "WxRuleAllowsDstTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    {
+        "edge_collection": "WxRuleDeniesDstTag",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["wx_tags"],
+    },
+    # -- Edge infrastructure: MxEdge clusters and tunnels --
+    {
+        "edge_collection": "MxEdgeBelongsToCluster",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["mxclusters"],
+    },
+    {
+        "edge_collection": "MxTunnelUsesCluster",
+        "from_vertex_collections": ["mx_tunnels"],
+        "to_vertex_collections": ["mxclusters"],
+    },
+    # -- EVPN fabric topology --
+    {
+        "edge_collection": "EvpnBelongsToSite",
+        "from_vertex_collections": ["evpn_topologies"],
+        "to_vertex_collections": ["sites"],
+    },
+]
+
+# Full edge definitions: ALL relationship types including events, stats,
+# telemetry, and operational data.  Used for collection creation and data
+# writing -- every edge collection below is created and populated.
 EDGE_DEFINITIONS = [
     {
         "edge_collection": "OrgContainsSite",
@@ -1643,18 +1854,23 @@ class ArangoDBWriter:
             logger.info("database_created", name=self._config.arango_database)
 
     def _ensure_graph(self) -> None:
-        """Create or update the network topology graph."""
+        """Create or update the network topology graph.
+
+        Uses GRAPH_EDGE_DEFINITIONS (core config/hierarchy only) for the
+        named graph visualization.  All edge collections from the full
+        EDGE_DEFINITIONS are still created and populated separately.
+        """
         if self._db.has_graph(GRAPH_NAME):
             graph = self._db.graph(GRAPH_NAME)
             edge_defs: list[dict] = graph.edge_definitions()  # type: ignore[assignment]
             existing = {d["edge_collection"] for d in edge_defs}
-            expected = {d["edge_collection"] for d in EDGE_DEFINITIONS}
+            expected = {d["edge_collection"] for d in GRAPH_EDGE_DEFINITIONS}
             if existing != expected:
                 self._db.delete_graph(GRAPH_NAME, drop_collections=False)
-                self._db.create_graph(GRAPH_NAME, edge_definitions=EDGE_DEFINITIONS)
+                self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)
                 logger.info("graph_updated", name=GRAPH_NAME)
         else:
-            self._db.create_graph(GRAPH_NAME, edge_definitions=EDGE_DEFINITIONS)
+            self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)
             logger.info("graph_created", name=GRAPH_NAME)
         self._backfill_snapshot_edges()
 
@@ -1968,10 +2184,7 @@ class ArangoDBWriter:
         collection = self._ensure_collection("config_snapshots")
 
         cursor = self._db.aql.execute(
-            "FOR doc IN config_snapshots "
-            "FILTER doc.entity_id == @eid "
-            "SORT doc.timestamp DESC LIMIT 1 "
-            "RETURN doc",
+            "FOR doc IN config_snapshots FILTER doc.entity_id == @eid SORT doc.timestamp DESC LIMIT 1 RETURN doc",
             bind_vars={"eid": entity_id},
         )
         for existing in cursor:  # type: ignore[union-attr]
@@ -2035,9 +2248,7 @@ class ArangoDBWriter:
             return
 
         cursor = self._db.aql.execute(
-            "FOR s IN config_snapshots RETURN {"
-            "  key: s._key, entity_type: s.entity_type, entity_id: s.entity_id"
-            "}",
+            "FOR s IN config_snapshots RETURN {  key: s._key, entity_type: s.entity_type, entity_id: s.entity_id}",
         )
         edges: list[dict] = []
         for snap in cursor:  # type: ignore[union-attr]
