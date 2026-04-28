@@ -3659,6 +3659,42 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site anomaly detection events",
     },
+    # Type 3b: Config history, synthetic tests, webhook deliveries, packet captures
+    "searchSiteDeviceConfigHistory": {
+        "type": "composite_pk",
+        "primary_key": ["timestamp"],
+        "indexes": ["site_id", "version", "channel_24", "channel_5"],
+        "unique_constraints": [],
+        "description": "Site device config change history",
+    },
+    "searchSiteDeviceLastConfigs": {
+        "type": "composite_pk",
+        "primary_key": ["timestamp"],
+        "indexes": ["site_id", "version", "channel_24", "channel_5"],
+        "unique_constraints": [],
+        "description": "Site device last known configurations",
+    },
+    "searchSiteSyntheticTest": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["site_id", "mac", "type", "status", "port_id"],
+        "unique_constraints": [],
+        "description": "Site synthetic test results",
+    },
+    "searchSiteWebhooksDeliveries": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": ["site_id", "org_id", "webhook_id", "status", "topic"],
+        "unique_constraints": [],
+        "description": "Site webhook delivery audit records",
+    },
+    "listSitePacketCaptures": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "type", "timestamp"],
+        "unique_constraints": [],
+        "description": "Site packet capture metadata",
+    },
     # Type 4: Client search APIs (special handling for large datasets)
     "searchOrgWirelessClients": {
         "type": "composite_pk",
