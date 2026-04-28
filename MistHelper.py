@@ -4609,6 +4609,42 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site MxEdge event search results",
     },
+    # -- Site Config History & Synthetic Tests (issue #181) --
+    "searchSiteDeviceConfigHistory": {
+        "type": "composite_pk",
+        "primary_key": ["device_mac", "timestamp"],
+        "indexes": ["site_id", "device_id", "admin_id"],
+        "unique_constraints": [],
+        "description": "Device configuration change history",
+    },
+    "searchSiteDeviceLastConfigs": {
+        "type": "composite_pk",
+        "primary_key": ["timestamp", "version"],
+        "indexes": ["channel_24", "channel_5", "secpolicy_violated"],
+        "unique_constraints": [],
+        "description": "Device last known configurations",
+    },
+    "searchSiteSyntheticTest": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["type", "status", "vlan_id"],
+        "unique_constraints": [],
+        "description": "Synthetic test results",
+    },
+    "searchSiteWebhooksDeliveries": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "webhook_id", "status_code", "topic"],
+        "unique_constraints": [],
+        "description": "Webhook delivery audit records",
+    },
+    "listSitePacketCaptures": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "type", "timestamp"],
+        "unique_constraints": [],
+        "description": "Site packet capture metadata",
+    },
     "searchOrgNacClientEvents": {
         "type": "composite_pk",
         "primary_key": ["id", "mac", "timestamp"],
