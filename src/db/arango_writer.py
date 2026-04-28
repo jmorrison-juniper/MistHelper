@@ -654,6 +654,32 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["troubleshoot_calls"],
         "to_vertex_collections": ["devices"],
     },
+    # -- Issue #185: SLE impacted entity relationships --
+    {
+        "edge_collection": "SLEMetricForSite",
+        "from_vertex_collections": ["sle_metrics"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SLEImpactedDevice",
+        "from_vertex_collections": ["sle_impacted_entities"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "SLEImpactedClient",
+        "from_vertex_collections": ["sle_impacted_entities"],
+        "to_vertex_collections": ["clients"],
+    },
+    {
+        "edge_collection": "SLEImpactedApplication",
+        "from_vertex_collections": ["sle_impacted_entities"],
+        "to_vertex_collections": ["applications"],
+    },
+    {
+        "edge_collection": "SLEImpactedBySite",
+        "from_vertex_collections": ["sle_impacted_entities"],
+        "to_vertex_collections": ["sites"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -874,6 +900,17 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchOrgClientFingerprints": "fingerprints",
     "listSiteUiSettings": "ui_settings",
     "listSiteTroubleshootCalls": "troubleshoot_calls",
+    # -- Issue #185: SLE impacted entity endpoints --
+    "listSiteSlesMetrics": "sle_metrics",
+    "listSiteSleMetricClassifiers": "sle_classifiers",
+    "listSiteSleImpactedAps": "sle_impacted_entities",
+    "listSiteSleImpactedSwitches": "sle_impacted_entities",
+    "listSiteSleImpactedGateways": "sle_impacted_entities",
+    "listSiteSleImpactedInterfaces": "sle_impacted_entities",
+    "listSiteSleImpactedChassis": "sle_impacted_entities",
+    "listSiteSleImpactedWirelessClients": "sle_impacted_entities",
+    "listSiteSleImpactedWiredClients": "sle_impacted_entities",
+    "listSiteSleImpactedApplications": "sle_impacted_entities",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -1723,6 +1760,118 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "devices",
                 "to_field": "mac",
                 "to_key_lookup": "mac",
+            },
+        ],
+    },
+    # -- Issue #185: SLE impacted entity endpoints --
+    "listSiteSleImpactedAps": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "ap_mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedDevice",
+                "from_col": "sle_impacted_entities",
+                "from_field": "ap_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedSwitches": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "switch_mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedDevice",
+                "from_col": "sle_impacted_entities",
+                "from_field": "switch_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedGateways": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "gateway_mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedDevice",
+                "from_col": "sle_impacted_entities",
+                "from_field": "gateway_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedInterfaces": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "switch_mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedDevice",
+                "from_col": "sle_impacted_entities",
+                "from_field": "switch_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedChassis": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "switch_mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedDevice",
+                "from_col": "sle_impacted_entities",
+                "from_field": "switch_mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedWirelessClients": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedClient",
+                "from_col": "sle_impacted_entities",
+                "from_field": "mac",
+                "to_col": "clients",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedWiredClients": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedClient",
+                "from_col": "sle_impacted_entities",
+                "from_field": "mac",
+                "to_col": "clients",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteSleImpactedApplications": {
+        "vertex": "sle_impacted_entities",
+        "key_field": "app",
+        "edges": [
+            {
+                "edge_col": "SLEImpactedApplication",
+                "from_col": "sle_impacted_entities",
+                "from_field": "app",
+                "to_col": "applications",
+                "to_field": "key",
             },
         ],
     },
