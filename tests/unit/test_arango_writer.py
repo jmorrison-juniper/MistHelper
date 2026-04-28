@@ -516,6 +516,11 @@ class TestArangoDBWriterEdgeDefinitions:
             "SyntheticTestOnDevice",
             "WebhookDeliveryFromWebhook",
             "PacketCaptureOnDevice",
+            # Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies
+            "WxRuleBelongsToSite",
+            "WxTagBelongsToSite",
+            "WxTunnelBelongsToSite",
+            "WlanUsesWxTunnel",
         }
         assert edge_names == expected
 
@@ -2002,3 +2007,108 @@ class TestConfigHistorySyntheticTestGraphStorage:
         assert "SyntheticTestOnDevice" in edge_names
         assert "WebhookDeliveryFromWebhook" in edge_names
         assert "PacketCaptureOnDevice" in edge_names
+
+
+class TestSiteWlansPsksWebhooksGraphStorage:
+    """Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies."""
+
+    def test_site_wlans_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWlans"] == "wlans"
+
+    def test_site_psks_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSitePsks"] == "psks"
+
+    def test_site_webhooks_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWebhooks"] == "webhooks"
+
+    def test_site_wxrules_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWxRules"] == "wx_rules"
+
+    def test_site_wxtags_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWxTags"] == "wx_tags"
+
+    def test_site_wxtunnels_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWxTunnels"] == "mx_tunnels"
+
+    def test_site_wlans_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWlans"]
+        assert mapping["vertex"] == "wlans"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WlanBelongsToSite" in edge_cols
+        assert "WlanUsesWxTunnel" in edge_cols
+
+    def test_site_psks_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSitePsks"]
+        assert mapping["vertex"] == "psks"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "PSKBelongsToSite" in edge_cols
+        assert "PSKBelongsToWlan" in edge_cols
+
+    def test_site_webhooks_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWebhooks"]
+        assert mapping["vertex"] == "webhooks"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WebhookBelongsToSite" in edge_cols
+
+    def test_site_wxrules_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWxRules"]
+        assert mapping["vertex"] == "wx_rules"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WxRuleBelongsToSite" in edge_cols
+        assert "WxRuleMatchesSrcTag" in edge_cols
+        assert "WxRuleAllowsDstTag" in edge_cols
+        assert "WxRuleDeniesDstTag" in edge_cols
+
+    def test_site_wxrules_ensure_target_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWxRules"]
+        targets = mapping.get("ensure_target_vertices", [])
+        assert ("src_wxtags", "wx_tags") in targets
+        assert ("dst_allow_wxtags", "wx_tags") in targets
+        assert ("dst_deny_wxtags", "wx_tags") in targets
+
+    def test_site_wxtags_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWxTags"]
+        assert mapping["vertex"] == "wx_tags"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WxTagBelongsToSite" in edge_cols
+
+    def test_site_wxtunnels_collection_vertex_map(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteWxTunnels"]
+        assert mapping["vertex"] == "mx_tunnels"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WxTunnelBelongsToSite" in edge_cols
+
+    def test_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "WxRuleBelongsToSite" in edge_names
+        assert "WxTagBelongsToSite" in edge_names
+        assert "WxTunnelBelongsToSite" in edge_names
+        assert "WlanUsesWxTunnel" in edge_names

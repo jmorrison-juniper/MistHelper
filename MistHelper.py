@@ -3695,6 +3695,49 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site packet capture metadata",
     },
+    # Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies
+    "listSiteWlans": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "ssid", "template_id"],
+        "unique_constraints": [],
+        "description": "Site-level WLAN configurations",
+    },
+    "listSitePsks": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "ssid", "name"],
+        "unique_constraints": [],
+        "description": "Site-level pre-shared key configurations",
+    },
+    "listSiteWebhooks": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Site-level webhook configurations",
+    },
+    "listSiteWxRules": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "order"],
+        "unique_constraints": [],
+        "description": "Site-level WxLAN rules",
+    },
+    "listSiteWxTags": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Site-level WxLAN tags",
+    },
+    "listSiteWxTunnels": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "org_id", "name"],
+        "unique_constraints": [],
+        "description": "Site-level WxLAN tunnel configurations",
+    },
     # Type 4: Client search APIs (special handling for large datasets)
     "searchOrgWirelessClients": {
         "type": "composite_pk",
