@@ -3536,6 +3536,65 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Individual site map with stable UUID identifier",
     },
+    "listSiteMapStacks": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "name", "created_time", "modified_time"],
+        "unique_constraints": [],
+        "description": "Site map stacks (multi-floor groupings)",
+    },
+    # Zone and RSSI zone endpoints
+    "listSiteZones": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "map_id", "name"],
+        "unique_constraints": [],
+        "description": "Zones defined on site maps",
+    },
+    "listSiteZonesStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "map_id"],
+        "indexes": ["site_id", "map_id", "name", "num_clients"],
+        "unique_constraints": [],
+        "description": "Zone statistics with client counts",
+    },
+    "listSiteRssiZones": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "name"],
+        "unique_constraints": [],
+        "description": "RSSI-based zones for location analytics",
+    },
+    "listSiteRssiZonesStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "map_id"],
+        "indexes": ["site_id", "map_id", "name"],
+        "unique_constraints": [],
+        "description": "RSSI zone statistics",
+    },
+    # Beacon endpoints
+    "listSiteBeacons": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "map_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "BLE beacons deployed on site maps",
+    },
+    "listSiteVBeacons": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "map_id", "name"],
+        "unique_constraints": [],
+        "description": "Virtual BLE beacons on site maps",
+    },
+    # Zone session search
+    "searchSiteZoneSessions": {
+        "type": "composite_pk",
+        "primary_key": ["zone_id", "mac", "enter"],
+        "indexes": ["site_id", "map_id", "zone_id", "mac", "enter", "exit"],
+        "unique_constraints": [],
+        "description": "Client zone session events for location analytics",
+    },
     # Type 4: Client search APIs (special handling for large datasets)
     "searchOrgWirelessClients": {
         "type": "composite_pk",
