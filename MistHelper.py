@@ -4609,6 +4609,42 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site MxEdge event search results",
     },
+    # -- Site Asset endpoints (issue #176) --
+    "listSiteAssets": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "map_id", "name"],
+        "unique_constraints": [],
+        "description": "Site BLE asset definitions",
+    },
+    "searchSiteAssets": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "map_id"],
+        "indexes": ["site_id", "name", "device_name"],
+        "unique_constraints": [],
+        "description": "Site asset search results",
+    },
+    "listSiteAssetsStats": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "map_id"],
+        "indexes": ["site_id", "name", "device_name"],
+        "unique_constraints": [],
+        "description": "Site BLE asset statistics",
+    },
+    "listSiteDiscoveredAssets": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "map_id", "name"],
+        "unique_constraints": [],
+        "description": "Site discovered BLE assets",
+    },
+    "listSiteAssetFilters": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "name", "ap_mac"],
+        "unique_constraints": [],
+        "description": "Site asset filter rules",
+    },
     "searchOrgNacClientEvents": {
         "type": "composite_pk",
         "primary_key": ["id", "mac", "timestamp"],

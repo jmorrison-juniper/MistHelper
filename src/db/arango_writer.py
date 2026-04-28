@@ -400,6 +400,21 @@ EDGE_DEFINITIONS = [
         "to_vertex_collections": ["maps"],
     },
     {
+        "edge_collection": "AssetFilterBelongsToSite",
+        "from_vertex_collections": ["asset_filters"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DiscoveredAssetOnMap",
+        "from_vertex_collections": ["discovered_assets"],
+        "to_vertex_collections": ["maps"],
+    },
+    {
+        "edge_collection": "AssetTrackedByAP",
+        "from_vertex_collections": ["assets"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
         "edge_collection": "WebhookBelongsToSite",
         "from_vertex_collections": ["webhooks"],
         "to_vertex_collections": ["sites"],
@@ -820,6 +835,12 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteMxEdges": "devices",
     "listSiteMxEdgesStats": "mxedge_stats",
     "searchSiteMistEdgeEvents": "mxedge_events",
+    # Issue #176: Site Asset endpoints
+    "listSiteAssets": "assets",
+    "searchSiteAssets": "assets",
+    "listSiteAssetsStats": "assets",
+    "listSiteDiscoveredAssets": "discovered_assets",
+    "listSiteAssetFilters": "asset_filters",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -1526,6 +1547,83 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "from_field": "mxedge_id",
                 "to_col": "devices",
                 "to_field": "mxedge_id",
+            },
+        ],
+    },
+    # Issue #176: Site Asset graph mappings
+    "listSiteAssets": {
+        "vertex": "assets",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AssetBelongsToSite",
+                "from_col": "assets",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "AssetOnMap",
+                "from_col": "assets",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "searchSiteAssets": {
+        "vertex": "assets",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "AssetOnMap",
+                "from_col": "assets",
+                "from_field": "mac",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteAssetsStats": {
+        "vertex": "assets",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "AssetOnMap",
+                "from_col": "assets",
+                "from_field": "mac",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteDiscoveredAssets": {
+        "vertex": "discovered_assets",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DiscoveredAssetOnMap",
+                "from_col": "discovered_assets",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [("map_id", "maps")],
+    },
+    "listSiteAssetFilters": {
+        "vertex": "asset_filters",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AssetFilterBelongsToSite",
+                "from_col": "asset_filters",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
             },
         ],
     },
