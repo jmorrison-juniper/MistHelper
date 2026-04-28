@@ -464,6 +464,9 @@ class TestArangoDBWriterEdgeDefinitions:
             "RogueClientOnBSSID",
             "RogueEventBelongsToSite",
             "RogueEventOnDevice",
+            # Issue #178: Site MxEdge edges
+            "MxEdgeBelongsToSite",
+            "MxEdgeEventOnDevice",
         }
         assert edge_names == expected
 
@@ -1026,3 +1029,76 @@ class TestArangoDBWriterSiteRogueGraph:
         assert ENTITY_TYPE_TO_VERTEX["listSiteRogueAPs"] == "rogue_aps"
         assert ENTITY_TYPE_TO_VERTEX["listSiteRogueClients"] == "rogue_clients"
         assert ENTITY_TYPE_TO_VERTEX["searchSiteRogueEvents"] == "rogue_events"
+
+
+class TestArangoDBWriterSiteMxEdgeGraph:
+    """Tests for site-level MxEdge graph storage (issue #178)."""
+
+    def test_mxedge_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteMxEdges" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteMxEdges"]
+        assert mapping["vertex"] == "devices"
+        assert mapping["key_field"] == "id"
+
+    def test_mxedge_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteMxEdgesStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteMxEdgesStats"]
+        assert mapping["vertex"] == "mxedge_stats"
+        assert mapping["key_field"] == "id"
+
+    def test_mxedge_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteMistEdgeEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteMistEdgeEvents"]
+        assert mapping["vertex"] == "mxedge_events"
+        assert mapping["key_field"] == "mxedge_id"
+
+    def test_mxedge_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteMxEdges"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "MxEdgeBelongsToSite" in edge_cols
+        assert "MxEdgeBelongsToCluster" in edge_cols
+
+    def test_mxedge_stats_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteMxEdgesStats"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "MxEdgeStatsBelongsToSite" in edge_cols
+
+    def test_mxedge_events_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteMistEdgeEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "MxEdgeEventBelongsToSite" in edge_cols
+        assert "MxEdgeEventOnDevice" in edge_cols
+
+    def test_mxedge_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "MxEdgeBelongsToSite" in edge_names
+        assert "MxEdgeEventOnDevice" in edge_names
+
+    def test_mxedge_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteMxEdges"] == "devices"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteMxEdgesStats"] == "mxedge_stats"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteMistEdgeEvents"] == "mxedge_events"
+
+    def test_mxedge_ensure_target_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteMxEdges"]
+        assert "ensure_target_vertices" in mapping
+        targets = mapping["ensure_target_vertices"]
+        assert ("mxcluster_id", "mxclusters") in targets
