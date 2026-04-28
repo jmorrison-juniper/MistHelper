@@ -501,6 +501,16 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["rogue_events"],
         "to_vertex_collections": ["devices"],
     },
+    {
+        "edge_collection": "MxEdgeBelongsToSite",
+        "from_vertex_collections": ["devices"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "MxEdgeEventOnDevice",
+        "from_vertex_collections": ["mxedge_events"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 2: Event/search entity relationships --
     {
         "edge_collection": "ClientEventBelongsToSite",
@@ -806,6 +816,10 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteRogueClients": "rogue_clients",
     "searchSiteRogueEvents": "rogue_events",
     "searchOrgMxEdges": "devices",
+    # Issue #178: Site MxEdge endpoints
+    "listSiteMxEdges": "devices",
+    "listSiteMxEdgesStats": "mxedge_stats",
+    "searchSiteMistEdgeEvents": "mxedge_events",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -1457,6 +1471,61 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_col": "devices",
                 "to_field": "ap",
                 "to_key_lookup": "mac",
+            },
+        ],
+    },
+    # Issue #178: Site MxEdge graph mappings
+    "listSiteMxEdges": {
+        "vertex": "devices",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MxEdgeBelongsToSite",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "MxEdgeBelongsToCluster",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "mxclusters",
+                "to_field": "mxcluster_id",
+            },
+        ],
+        "ensure_target_vertices": [("mxcluster_id", "mxclusters")],
+    },
+    "listSiteMxEdgesStats": {
+        "vertex": "mxedge_stats",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "MxEdgeStatsBelongsToSite",
+                "from_col": "mxedge_stats",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchSiteMistEdgeEvents": {
+        "vertex": "mxedge_events",
+        "key_field": "mxedge_id",
+        "edges": [
+            {
+                "edge_col": "MxEdgeEventBelongsToSite",
+                "from_col": "mxedge_events",
+                "from_field": "mxedge_id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "MxEdgeEventOnDevice",
+                "from_col": "mxedge_events",
+                "from_field": "mxedge_id",
+                "to_col": "devices",
+                "to_field": "mxedge_id",
             },
         ],
     },

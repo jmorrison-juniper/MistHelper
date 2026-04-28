@@ -4587,6 +4587,28 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Rogue AP/client event search results",
     },
+    # -- Site MxEdge endpoints (issue #178) --
+    "listSiteMxEdges": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "mxcluster_id"],
+        "unique_constraints": [],
+        "description": "Site MxEdge appliances",
+    },
+    "listSiteMxEdgesStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["site_id", "name", "status"],
+        "unique_constraints": [],
+        "description": "Site MxEdge statistics",
+    },
+    "searchSiteMistEdgeEvents": {
+        "type": "composite_pk",
+        "primary_key": ["mxedge_id", "timestamp"],
+        "indexes": ["site_id", "mac", "type"],
+        "unique_constraints": [],
+        "description": "Site MxEdge event search results",
+    },
     "searchOrgNacClientEvents": {
         "type": "composite_pk",
         "primary_key": ["id", "mac", "timestamp"],
