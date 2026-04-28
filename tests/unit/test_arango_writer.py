@@ -467,6 +467,10 @@ class TestArangoDBWriterEdgeDefinitions:
             # Issue #178: Site MxEdge edges
             "MxEdgeBelongsToSite",
             "MxEdgeEventOnDevice",
+            # Issue #176: Site Asset edges
+            "AssetFilterBelongsToSite",
+            "DiscoveredAssetOnMap",
+            "AssetTrackedByAP",
         }
         assert edge_names == expected
 
@@ -1102,3 +1106,94 @@ class TestArangoDBWriterSiteMxEdgeGraph:
         assert "ensure_target_vertices" in mapping
         targets = mapping["ensure_target_vertices"]
         assert ("mxcluster_id", "mxclusters") in targets
+
+
+class TestArangoDBWriterSiteAssetGraph:
+    """Tests for site-level Asset graph storage (issue #176)."""
+
+    def test_site_assets_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteAssets" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteAssets"]
+        assert mapping["vertex"] == "assets"
+        assert mapping["key_field"] == "id"
+
+    def test_search_assets_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteAssets" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteAssets"]
+        assert mapping["vertex"] == "assets"
+        assert mapping["key_field"] == "mac"
+
+    def test_assets_stats_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteAssetsStats" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteAssetsStats"]
+        assert mapping["vertex"] == "assets"
+        assert mapping["key_field"] == "mac"
+
+    def test_discovered_assets_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteDiscoveredAssets" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteDiscoveredAssets"]
+        assert mapping["vertex"] == "discovered_assets"
+        assert mapping["key_field"] == "id"
+
+    def test_asset_filters_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteAssetFilters" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteAssetFilters"]
+        assert mapping["vertex"] == "asset_filters"
+        assert mapping["key_field"] == "id"
+
+    def test_site_assets_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteAssets"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "AssetBelongsToSite" in edge_cols
+        assert "AssetOnMap" in edge_cols
+
+    def test_discovered_assets_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteDiscoveredAssets"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "DiscoveredAssetOnMap" in edge_cols
+
+    def test_asset_filters_edges_complete(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteAssetFilters"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "AssetFilterBelongsToSite" in edge_cols
+
+    def test_asset_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "AssetFilterBelongsToSite" in edge_names
+        assert "DiscoveredAssetOnMap" in edge_names
+        assert "AssetTrackedByAP" in edge_names
+
+    def test_asset_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteAssets"] == "assets"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteAssets"] == "assets"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteAssetsStats"] == "assets"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteDiscoveredAssets"] == "discovered_assets"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteAssetFilters"] == "asset_filters"
+
+    def test_site_assets_ensure_target_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteAssets"]
+        assert "ensure_target_vertices" in mapping
+        targets = mapping["ensure_target_vertices"]
+        assert ("map_id", "maps") in targets
