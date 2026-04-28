@@ -762,6 +762,52 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["zone_sessions"],
         "to_vertex_collections": ["maps"],
     },
+    # -- Tier 6: Events & alarms (issue #174) --
+    {
+        "edge_collection": "ServicePathEventOnDevice",
+        "from_vertex_collections": ["service_path_events"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "ServicePathEventUsesVPN",
+        "from_vertex_collections": ["service_path_events"],
+        "to_vertex_collections": ["vpns"],
+    },
+    {
+        "edge_collection": "ServicePathEventBelongsToSite",
+        "from_vertex_collections": ["service_path_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "SkyatpEventBelongsToSite",
+        "from_vertex_collections": ["skyatp_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RoamingEventBelongsToSite",
+        "from_vertex_collections": ["roaming_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RoamingEventOnDevice",
+        "from_vertex_collections": ["roaming_events"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "RrmEventBelongsToSite",
+        "from_vertex_collections": ["rrm_events"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "RrmEventOnDevice",
+        "from_vertex_collections": ["rrm_events"],
+        "to_vertex_collections": ["devices"],
+    },
+    {
+        "edge_collection": "AnomalyEventBelongsToSite",
+        "from_vertex_collections": ["anomaly_events"],
+        "to_vertex_collections": ["sites"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -1013,6 +1059,16 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteBeacons": "beacons",
     "listSiteVBeacons": "vbeacons",
     "searchSiteZoneSessions": "zone_sessions",
+    # -- Issue #174: Site events & alarms --
+    "searchSiteAlarms": "alarms",
+    "searchSiteDeviceEvents": "events",
+    "searchSiteSystemEvents": "system_events",
+    "searchSiteOtherDeviceEvents": "other_events",
+    "searchSiteSkyatpEvents": "skyatp_events",
+    "searchSiteServicePathEvents": "service_path_events",
+    "listSiteRoamingEvents": "roaming_events",
+    "listSiteRrmEvents": "rrm_events",
+    "listSiteAnomalyEvents": "anomaly_events",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -2248,6 +2304,171 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
             },
         ],
         "ensure_target_vertices": [("zone_id", "zones"), ("map_id", "maps")],
+    },
+    # -- Issue #174: Site events & alarms --
+    "searchSiteAlarms": {
+        "vertex": "alarms",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "AlarmBelongsToSite",
+                "from_col": "alarms",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "AlarmOnDevice",
+                "from_col": "alarms",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteDeviceEvents": {
+        "vertex": "events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "EventBelongsToSite",
+                "from_col": "events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "EventOccurredOnDevice",
+                "from_col": "events",
+                "from_field": "id",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "searchSiteSystemEvents": {
+        "vertex": "system_events",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SystemEventBelongsToSite",
+                "from_col": "system_events",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchSiteOtherDeviceEvents": {
+        "vertex": "other_events",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "OtherEventBelongsToSite",
+                "from_col": "other_events",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchSiteSkyatpEvents": {
+        "vertex": "skyatp_events",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SkyatpEventBelongsToSite",
+                "from_col": "skyatp_events",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "searchSiteServicePathEvents": {
+        "vertex": "service_path_events",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "ServicePathEventBelongsToSite",
+                "from_col": "service_path_events",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "ServicePathEventOnDevice",
+                "from_col": "service_path_events",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+            {
+                "edge_col": "ServicePathEventUsesVPN",
+                "from_col": "service_path_events",
+                "from_field": "mac",
+                "to_col": "vpns",
+                "to_field": "vpn_name",
+            },
+        ],
+        "ensure_target_vertices": [("vpn_name", "vpns")],
+    },
+    "listSiteRoamingEvents": {
+        "vertex": "roaming_events",
+        "key_field": "client_mac",
+        "edges": [
+            {
+                "edge_col": "RoamingEventBelongsToSite",
+                "from_col": "roaming_events",
+                "from_field": "client_mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "RoamingEventOnDevice",
+                "from_col": "roaming_events",
+                "from_field": "client_mac",
+                "to_col": "devices",
+                "to_field": "ap",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteRrmEvents": {
+        "vertex": "rrm_events",
+        "key_field": "ap_id",
+        "edges": [
+            {
+                "edge_col": "RrmEventBelongsToSite",
+                "from_col": "rrm_events",
+                "from_field": "ap_id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "RrmEventOnDevice",
+                "from_col": "rrm_events",
+                "from_field": "ap_id",
+                "to_col": "devices",
+                "to_field": "ap_id",
+            },
+        ],
+    },
+    "listSiteAnomalyEvents": {
+        "vertex": "anomaly_events",
+        "key_field": "timestamp",
+        "edges": [
+            {
+                "edge_col": "AnomalyEventBelongsToSite",
+                "from_col": "anomaly_events",
+                "from_field": "timestamp",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
     },
     "listOrgMxTunnels": {
         "vertex": "mx_tunnels",

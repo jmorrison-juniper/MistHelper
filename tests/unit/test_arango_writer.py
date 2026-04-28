@@ -501,6 +501,16 @@ class TestArangoDBWriterEdgeDefinitions:
             "DeviceOnMap",
             "ZoneSessionInZone",
             "ZoneSessionOnMap",
+            # Issue #174: Events & alarms
+            "ServicePathEventOnDevice",
+            "ServicePathEventUsesVPN",
+            "ServicePathEventBelongsToSite",
+            "SkyatpEventBelongsToSite",
+            "RoamingEventBelongsToSite",
+            "RoamingEventOnDevice",
+            "RrmEventBelongsToSite",
+            "RrmEventOnDevice",
+            "AnomalyEventBelongsToSite",
         }
         assert edge_names == expected
 
@@ -1738,3 +1748,168 @@ class TestArangoDBWriterSiteMapsZonesGraph:
         assert ENTITY_TYPE_TO_VERTEX["listSiteBeacons"] == "beacons"
         assert ENTITY_TYPE_TO_VERTEX["listSiteVBeacons"] == "vbeacons"
         assert ENTITY_TYPE_TO_VERTEX["searchSiteZoneSessions"] == "zone_sessions"
+
+
+class TestArangoDBWriterSiteEventsAlarmsGraph:
+    """Tests for site events & alarms graph storage (issue #174)."""
+
+    def test_site_alarms_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteAlarms" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteAlarms"]
+        assert mapping["vertex"] == "alarms"
+        assert mapping["key_field"] == "id"
+
+    def test_site_alarms_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteAlarms"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "AlarmBelongsToSite" in edge_cols
+        assert "AlarmOnDevice" in edge_cols
+
+    def test_site_device_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteDeviceEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDeviceEvents"]
+        assert mapping["vertex"] == "events"
+        assert mapping["key_field"] == "id"
+
+    def test_site_device_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteDeviceEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "EventBelongsToSite" in edge_cols
+        assert "EventOccurredOnDevice" in edge_cols
+
+    def test_site_system_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteSystemEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteSystemEvents"]
+        assert mapping["vertex"] == "system_events"
+        assert mapping["key_field"] == "id"
+
+    def test_site_system_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteSystemEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "SystemEventBelongsToSite" in edge_cols
+
+    def test_site_other_device_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteOtherDeviceEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteOtherDeviceEvents"]
+        assert mapping["vertex"] == "other_events"
+        assert mapping["key_field"] == "mac"
+
+    def test_site_skyatp_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteSkyatpEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteSkyatpEvents"]
+        assert mapping["vertex"] == "skyatp_events"
+        assert mapping["key_field"] == "mac"
+
+    def test_site_service_path_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "searchSiteServicePathEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["searchSiteServicePathEvents"]
+        assert mapping["vertex"] == "service_path_events"
+        assert mapping["key_field"] == "mac"
+
+    def test_site_service_path_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["searchSiteServicePathEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "ServicePathEventBelongsToSite" in edge_cols
+        assert "ServicePathEventOnDevice" in edge_cols
+        assert "ServicePathEventUsesVPN" in edge_cols
+
+    def test_site_roaming_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRoamingEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRoamingEvents"]
+        assert mapping["vertex"] == "roaming_events"
+        assert mapping["key_field"] == "client_mac"
+
+    def test_site_roaming_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRoamingEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "RoamingEventBelongsToSite" in edge_cols
+        assert "RoamingEventOnDevice" in edge_cols
+
+    def test_site_rrm_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteRrmEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteRrmEvents"]
+        assert mapping["vertex"] == "rrm_events"
+        assert mapping["key_field"] == "ap_id"
+
+    def test_site_rrm_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteRrmEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "RrmEventBelongsToSite" in edge_cols
+        assert "RrmEventOnDevice" in edge_cols
+
+    def test_site_anomaly_events_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteAnomalyEvents" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteAnomalyEvents"]
+        assert mapping["vertex"] == "anomaly_events"
+        assert mapping["key_field"] == "timestamp"
+
+    def test_site_anomaly_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteAnomalyEvents"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "AnomalyEventBelongsToSite" in edge_cols
+
+    def test_events_alarms_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "ServicePathEventOnDevice" in edge_names
+        assert "ServicePathEventUsesVPN" in edge_names
+        assert "ServicePathEventBelongsToSite" in edge_names
+        assert "SkyatpEventBelongsToSite" in edge_names
+        assert "RoamingEventBelongsToSite" in edge_names
+        assert "RoamingEventOnDevice" in edge_names
+        assert "RrmEventBelongsToSite" in edge_names
+        assert "RrmEventOnDevice" in edge_names
+        assert "AnomalyEventBelongsToSite" in edge_names
+
+    def test_events_alarms_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteAlarms"] == "alarms"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceEvents"] == "events"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteSystemEvents"] == "system_events"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteOtherDeviceEvents"] == "other_events"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteSkyatpEvents"] == "skyatp_events"
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteServicePathEvents"] == "service_path_events"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRoamingEvents"] == "roaming_events"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteRrmEvents"] == "rrm_events"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteAnomalyEvents"] == "anomaly_events"
+
+    def test_service_path_ensure_target_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteServicePathEvents"]
+        targets = mapping.get("ensure_target_vertices", [])
+        assert ("vpn_name", "vpns") in targets
