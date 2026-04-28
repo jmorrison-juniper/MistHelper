@@ -876,6 +876,12 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["unconnected_clients"],
         "to_vertex_collections": ["devices"],
     },
+    # -- Tier 10: Site-level device relationships (Issue #171) --
+    {
+        "edge_collection": "SpectrumAnalysisForDevice",
+        "from_vertex_collections": ["spectrum_analysis"],
+        "to_vertex_collections": ["devices"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -1161,6 +1167,14 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchSiteWanClientEvents": "wan_events",
     "listSiteWirelessClientsStats": "clients",
     "listSiteUnconnectedClientStats": "unconnected_clients",
+    # -- Issue #171: Site-level device endpoints --
+    "searchSiteDevices": "devices",
+    "listSiteDevicesStats": "devices",
+    "listSiteOtherDevices": "other_devices",
+    "listSiteAvailableDeviceVersions": "device_versions",
+    "listSiteSpectrumAnalysis": "spectrum_analysis",
+    "listSiteDeviceRadioChannels": "radio_channels",
+    "listSiteDeviceUpgrades": "device_upgrades",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -3424,6 +3438,107 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
                 "to_key_lookup": "mac",
             },
         ],
+    },
+    # -- Issue #171: Site-level device endpoints --
+    "listSiteDevices": {
+        "vertex": "devices",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SiteContainsDevice",
+                "from_col": "sites",
+                "from_field": "site_id",
+                "to_col": "devices",
+            },
+            {
+                "edge_col": "DeviceUsesProfile",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "device_profiles",
+                "to_field": "deviceprofile_id",
+            },
+            {
+                "edge_col": "DeviceOnMap",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "maps",
+                "to_field": "map_id",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("deviceprofile_id", "device_profiles"),
+            ("map_id", "maps"),
+        ],
+    },
+    "searchSiteDevices": {
+        "vertex": "devices",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SiteContainsDevice",
+                "from_col": "sites",
+                "from_field": "site_id",
+                "to_col": "devices",
+            },
+        ],
+    },
+    "listSiteDevicesStats": {
+        "vertex": "devices",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "SiteContainsDevice",
+                "from_col": "sites",
+                "from_field": "site_id",
+                "to_col": "devices",
+            },
+            {
+                "edge_col": "DeviceUsesProfile",
+                "from_col": "devices",
+                "from_field": "id",
+                "to_col": "device_profiles",
+                "to_field": "deviceprofile_id",
+            },
+        ],
+    },
+    "listSiteOtherDevices": {
+        "vertex": "other_devices",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "OtherDeviceBelongsToSite",
+                "from_col": "other_devices",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteAvailableDeviceVersions": {
+        "vertex": "device_versions",
+        "key_field": "model",
+    },
+    "listSiteSpectrumAnalysis": {
+        "vertex": "spectrum_analysis",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "SpectrumAnalysisForDevice",
+                "from_col": "spectrum_analysis",
+                "from_field": "mac",
+                "to_col": "devices",
+                "to_field": "mac",
+                "to_key_lookup": "mac",
+            },
+        ],
+    },
+    "listSiteDeviceRadioChannels": {
+        "vertex": "radio_channels",
+        "key_field": "key",
+    },
+    "listSiteDeviceUpgrades": {
+        "vertex": "device_upgrades",
+        "key_field": "id",
     },
     # -- Unmapped entities: with edges --
     "listOrgPskPortals": {

@@ -527,6 +527,8 @@ class TestArangoDBWriterEdgeDefinitions:
             "ClientEventForClient",
             "UnconnectedClientOnMap",
             "UnconnectedClientDetectedByAP",
+            # Issue #171: Site-level device relationships
+            "SpectrumAnalysisForDevice",
         }
         assert edge_names == expected
 
@@ -2277,3 +2279,185 @@ class TestSiteClientsGraphStorage:
         assert "ClientEventForClient" in edge_names
         assert "UnconnectedClientOnMap" in edge_names
         assert "UnconnectedClientDetectedByAP" in edge_names
+
+
+class TestSiteDevicesGraphStorage:
+    """Tests for Issue #171: Site-level device graph storage."""
+
+    def test_entity_type_mappings(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        expected = {
+            "searchSiteDevices": "devices",
+            "listSiteDevicesStats": "devices",
+            "listSiteOtherDevices": "other_devices",
+            "listSiteAvailableDeviceVersions": "device_versions",
+            "listSiteSpectrumAnalysis": "spectrum_analysis",
+            "listSiteDeviceRadioChannels": "radio_channels",
+            "listSiteDeviceUpgrades": "device_upgrades",
+        }
+        for operation_id, vertex in expected.items():
+            assert ENTITY_TYPE_TO_VERTEX.get(operation_id) == vertex
+
+    def test_existing_device_mapping_preserved(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX.get("listSiteDevices") == "devices"
+
+    def test_collection_vertex_map_entries(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        expected_ops = [
+            "listSiteDevices",
+            "searchSiteDevices",
+            "listSiteDevicesStats",
+            "listSiteOtherDevices",
+            "listSiteAvailableDeviceVersions",
+            "listSiteSpectrumAnalysis",
+            "listSiteDeviceRadioChannels",
+            "listSiteDeviceUpgrades",
+        ]
+        for op in expected_ops:
+            assert op in COLLECTION_VERTEX_MAP
+
+    def test_list_site_devices_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDevices"]
+        assert mapping["vertex"] == "devices"
+        assert mapping["key_field"] == "id"
+
+    def test_list_site_devices_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDevices"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "SiteContainsDevice" in edge_cols
+        assert "DeviceUsesProfile" in edge_cols
+        assert "DeviceOnMap" in edge_cols
+
+    def test_list_site_devices_ensure_target_vertices(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDevices"]
+        assert "ensure_target_vertices" in mapping
+        targets = mapping["ensure_target_vertices"]
+        target_fields = {t[0] for t in targets}
+        assert "deviceprofile_id" in target_fields
+        assert "map_id" in target_fields
+
+    def test_search_site_devices_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDevices"]
+        assert mapping["vertex"] == "devices"
+        assert mapping["key_field"] == "mac"
+
+    def test_search_site_devices_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteDevices"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "SiteContainsDevice" in edge_cols
+
+    def test_list_site_devices_stats_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDevicesStats"]
+        assert mapping["vertex"] == "devices"
+        assert mapping["key_field"] == "id"
+
+    def test_list_site_devices_stats_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDevicesStats"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "SiteContainsDevice" in edge_cols
+        assert "DeviceUsesProfile" in edge_cols
+
+    def test_list_site_other_devices_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteOtherDevices"]
+        assert mapping["vertex"] == "other_devices"
+        assert mapping["key_field"] == "id"
+
+    def test_list_site_other_devices_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteOtherDevices"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "OtherDeviceBelongsToSite" in edge_cols
+
+    def test_list_site_available_device_versions(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteAvailableDeviceVersions"]
+        assert mapping["vertex"] == "device_versions"
+        assert mapping["key_field"] == "model"
+        assert "edges" not in mapping
+
+    def test_list_site_spectrum_analysis_vertex(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteSpectrumAnalysis"]
+        assert mapping["vertex"] == "spectrum_analysis"
+        assert mapping["key_field"] == "mac"
+
+    def test_list_site_spectrum_analysis_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteSpectrumAnalysis"]
+        edge_cols = {e["edge_col"] for e in mapping["edges"]}
+        assert "SpectrumAnalysisForDevice" in edge_cols
+
+    def test_spectrum_analysis_edge_uses_mac_lookup(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteSpectrumAnalysis"]
+        spectrum_edge = next(e for e in mapping["edges"] if e["edge_col"] == "SpectrumAnalysisForDevice")
+        assert spectrum_edge["to_key_lookup"] == "mac"
+
+    def test_list_site_device_radio_channels(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDeviceRadioChannels"]
+        assert mapping["vertex"] == "radio_channels"
+        assert mapping["key_field"] == "key"
+        assert "edges" not in mapping
+
+    def test_list_site_device_upgrades(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteDeviceUpgrades"]
+        assert mapping["vertex"] == "device_upgrades"
+        assert mapping["key_field"] == "id"
+        assert "edges" not in mapping
+
+    def test_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "SpectrumAnalysisForDevice" in edge_names
+
+    def test_spectrum_analysis_edge_structure(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "SpectrumAnalysisForDevice")
+        assert edge["from_vertex_collections"] == ["spectrum_analysis"]
+        assert edge["to_vertex_collections"] == ["devices"]
+
+    def test_new_vertex_collections_referenced(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        new_vertices = {
+            "device_versions",
+            "spectrum_analysis",
+            "radio_channels",
+            "device_upgrades",
+        }
+        found = set()
+        for mapping in COLLECTION_VERTEX_MAP.values():
+            if isinstance(mapping, dict):
+                found.add(mapping["vertex"])
+        assert new_vertices.issubset(found)
