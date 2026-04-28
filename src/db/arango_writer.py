@@ -882,6 +882,35 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["spectrum_analysis"],
         "to_vertex_collections": ["devices"],
     },
+    # -- Tier 11: Derived config relationships (Issue #184) --
+    {
+        "edge_collection": "DerivedConfigForSite",
+        "from_vertex_collections": [
+            "wlans",
+            "networks",
+            "vpns",
+            "services",
+            "security_policies",
+            "ui_settings",
+            "guests",
+            "templates",
+            "device_profiles",
+            "idp_profiles",
+            "aamw_profiles",
+            "av_profiles",
+            "secIntel_profiles",
+        ],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "DerivedFromTemplate",
+        "from_vertex_collections": [
+            "wlans",
+            "templates",
+            "device_profiles",
+        ],
+        "to_vertex_collections": ["templates"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -1175,6 +1204,24 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "listSiteSpectrumAnalysis": "spectrum_analysis",
     "listSiteDeviceRadioChannels": "radio_channels",
     "listSiteDeviceUpgrades": "device_upgrades",
+    # -- Issue #184: Derived config endpoints --
+    "listSiteWlansDerived": "wlans",
+    "listSiteNetworksDerived": "networks",
+    "listSiteVpnsDerived": "vpns",
+    "listSiteServicesDerived": "services",
+    "listSiteServicePoliciesDerived": "security_policies",
+    "listSiteUiSettingDerived": "ui_settings",
+    "listSiteAllGuestAuthorizationsDerived": "guests",
+    "listSiteApTemplatesDerived": "templates",
+    "listSiteRfTemplatesDerived": "templates",
+    "listSiteNetworkTemplatesDerived": "templates",
+    "listSiteGatewayTemplatesDerived": "templates",
+    "listSiteSiteTemplatesDerived": "templates",
+    "listSiteDeviceProfilesDerived": "device_profiles",
+    "listSiteIdpProfilesDerived": "idp_profiles",
+    "listSiteAAMWProfilesDerived": "aamw_profiles",
+    "listSiteAntivirusProfilesDerived": "av_profiles",
+    "listSiteSecIntelProfilesDerived": "secIntel_profiles",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -3539,6 +3586,226 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
     "listSiteDeviceUpgrades": {
         "vertex": "device_upgrades",
         "key_field": "id",
+    },
+    # -- Issue #184: Derived config (effective merged config at site) --
+    "listSiteWlansDerived": {
+        "vertex": "wlans",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "DerivedFromTemplate",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "templates",
+                "to_field": "wlan_template_id",
+            },
+        ],
+    },
+    "listSiteNetworksDerived": {
+        "vertex": "networks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "networks",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteVpnsDerived": {
+        "vertex": "vpns",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "vpns",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteServicesDerived": {
+        "vertex": "services",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "services",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteServicePoliciesDerived": {
+        "vertex": "security_policies",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "security_policies",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteUiSettingDerived": {
+        "vertex": "ui_settings",
+        "key_field": "key",
+    },
+    "listSiteAllGuestAuthorizationsDerived": {
+        "vertex": "guests",
+        "key_field": "mac",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "guests",
+                "from_field": "mac",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteApTemplatesDerived": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteRfTemplatesDerived": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteNetworkTemplatesDerived": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteGatewayTemplatesDerived": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteSiteTemplatesDerived": {
+        "vertex": "templates",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "templates",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteDeviceProfilesDerived": {
+        "vertex": "device_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "device_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteIdpProfilesDerived": {
+        "vertex": "idp_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "idp_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteAAMWProfilesDerived": {
+        "vertex": "aamw_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "aamw_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteAntivirusProfilesDerived": {
+        "vertex": "av_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "av_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteSecIntelProfilesDerived": {
+        "vertex": "secIntel_profiles",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "DerivedConfigForSite",
+                "from_col": "secIntel_profiles",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
     },
     # -- Unmapped entities: with edges --
     "listOrgPskPortals": {
