@@ -477,6 +477,12 @@ class TestArangoDBWriterEdgeDefinitions:
             "WanUsageOnDevice",
             "WanUsagePeerDevice",
             "TroubleshootCallOnDevice",
+            # Issue #185: SLE impacted entity relationships
+            "SLEMetricForSite",
+            "SLEImpactedDevice",
+            "SLEImpactedClient",
+            "SLEImpactedApplication",
+            "SLEImpactedBySite",
         }
         assert edge_names == expected
 
@@ -1312,3 +1318,127 @@ class TestArangoDBWriterSiteAppsCallsGraph:
         from src.db.arango_writer import COLLECTION_VERTEX_MAP
 
         assert COLLECTION_VERTEX_MAP["listSiteUiSettings"]["edges"] == []
+
+
+class TestArangoDBWriterSLEImpactedGraph:
+    """Tests for SLE impacted entity graph storage (issue #185)."""
+
+    def test_sle_impacted_aps_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedAps" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedAps"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "ap_mac"
+
+    def test_sle_impacted_switches_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedSwitches" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedSwitches"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "switch_mac"
+
+    def test_sle_impacted_gateways_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedGateways" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedGateways"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "gateway_mac"
+
+    def test_sle_impacted_interfaces_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedInterfaces" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedInterfaces"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "switch_mac"
+
+    def test_sle_impacted_chassis_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedChassis" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedChassis"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "switch_mac"
+
+    def test_sle_impacted_wireless_clients_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedWirelessClients" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedWirelessClients"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "mac"
+
+    def test_sle_impacted_wired_clients_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedWiredClients" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedWiredClients"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "mac"
+
+    def test_sle_impacted_applications_mapping_exists(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        assert "listSiteSleImpactedApplications" in COLLECTION_VERTEX_MAP
+        mapping = COLLECTION_VERTEX_MAP["listSiteSleImpactedApplications"]
+        assert mapping["vertex"] == "sle_impacted_entities"
+        assert mapping["key_field"] == "app"
+
+    def test_sle_impacted_device_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        for endpoint in [
+            "listSiteSleImpactedAps",
+            "listSiteSleImpactedSwitches",
+            "listSiteSleImpactedGateways",
+            "listSiteSleImpactedInterfaces",
+            "listSiteSleImpactedChassis",
+        ]:
+            edges = COLLECTION_VERTEX_MAP[endpoint]["edges"]
+            edge_cols = [e["edge_col"] for e in edges]
+            assert "SLEImpactedDevice" in edge_cols, f"{endpoint} missing SLEImpactedDevice"
+
+    def test_sle_impacted_client_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        for endpoint in [
+            "listSiteSleImpactedWirelessClients",
+            "listSiteSleImpactedWiredClients",
+        ]:
+            edges = COLLECTION_VERTEX_MAP[endpoint]["edges"]
+            edge_cols = [e["edge_col"] for e in edges]
+            assert "SLEImpactedClient" in edge_cols, f"{endpoint} missing SLEImpactedClient"
+
+    def test_sle_impacted_application_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        edges = COLLECTION_VERTEX_MAP["listSiteSleImpactedApplications"]["edges"]
+        edge_cols = [e["edge_col"] for e in edges]
+        assert "SLEImpactedApplication" in edge_cols
+
+    def test_sle_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "SLEMetricForSite" in edge_names
+        assert "SLEImpactedDevice" in edge_names
+        assert "SLEImpactedClient" in edge_names
+        assert "SLEImpactedApplication" in edge_names
+        assert "SLEImpactedBySite" in edge_names
+
+    def test_sle_entity_types_mapped(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSlesMetrics"] == "sle_metrics"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleMetricClassifiers"] == "sle_classifiers"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedAps"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedSwitches"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedGateways"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedInterfaces"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedChassis"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWirelessClients"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWiredClients"] == "sle_impacted_entities"
+        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedApplications"] == "sle_impacted_entities"
