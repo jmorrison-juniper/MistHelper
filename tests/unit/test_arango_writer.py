@@ -521,6 +521,12 @@ class TestArangoDBWriterEdgeDefinitions:
             "WxTagBelongsToSite",
             "WxTunnelBelongsToSite",
             "WlanUsesWxTunnel",
+            # Issue #172: Site-level client relationships
+            "ClientUsedPSK",
+            "ClientMatchedNACRule",
+            "ClientEventForClient",
+            "UnconnectedClientOnMap",
+            "UnconnectedClientDetectedByAP",
         }
         assert edge_names == expected
 
@@ -2112,3 +2118,162 @@ class TestSiteWlansPsksWebhooksGraphStorage:
         assert "WxTagBelongsToSite" in edge_names
         assert "WxTunnelBelongsToSite" in edge_names
         assert "WlanUsesWxTunnel" in edge_names
+
+
+class TestSiteClientsGraphStorage:
+    """Issue #172: Site-level client search endpoints."""
+
+    def test_wireless_clients_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClients"] == "clients"
+
+    def test_wired_clients_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWiredClients"] == "clients"
+
+    def test_wan_clients_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWanClients"] == "clients"
+
+    def test_nac_clients_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteNacClients"] == "clients"
+
+    def test_nac_client_events_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteNacClientEvents"] == "nac_events"
+
+    def test_wireless_client_events_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientEvents"] == "client_events"
+
+    def test_wireless_client_sessions_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientSessions"] == "client_sessions"
+
+    def test_wan_client_events_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWanClientEvents"] == "wan_events"
+
+    def test_wireless_clients_stats_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteWirelessClientsStats"] == "clients"
+
+    def test_unconnected_clients_entity_type(self):
+        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
+
+        assert ENTITY_TYPE_TO_VERTEX["listSiteUnconnectedClientStats"] == "unconnected_clients"
+
+    def test_wireless_clients_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWirelessClients"]
+        assert mapping["vertex"] == "clients"
+        assert mapping["key_field"] == "mac"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "ClientConnectedToDevice" in edge_cols
+        assert "ClientConnectedToWlan" in edge_cols
+        assert "ClientBelongsToSite" in edge_cols
+        assert "ClientUsedPSK" in edge_cols
+
+    def test_wired_clients_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWiredClients"]
+        assert mapping["vertex"] == "clients"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "ClientConnectedToDevice" in edge_cols
+        assert "ClientBelongsToSite" in edge_cols
+
+    def test_wan_clients_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWanClients"]
+        assert mapping["vertex"] == "clients"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "ClientBelongsToSite" in edge_cols
+
+    def test_nac_clients_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteNacClients"]
+        assert mapping["vertex"] == "clients"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "ClientConnectedToDevice" in edge_cols
+        assert "ClientBelongsToSite" in edge_cols
+        assert "ClientMatchedNACRule" in edge_cols
+
+    def test_nac_client_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteNacClientEvents"]
+        assert mapping["vertex"] == "nac_events"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "NacEventBelongsToSite" in edge_cols
+        assert "NacEventForClient" in edge_cols
+
+    def test_wireless_client_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWirelessClientEvents"]
+        assert mapping["vertex"] == "client_events"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "ClientEventBelongsToSite" in edge_cols
+        assert "ClientEventOnDevice" in edge_cols
+        assert "ClientEventForClient" in edge_cols
+
+    def test_wireless_client_events_ensure_targets(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWirelessClientEvents"]
+        targets = mapping.get("ensure_target_vertices", [])
+        assert ("mac", "clients") in targets
+
+    def test_wireless_client_sessions_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWirelessClientSessions"]
+        assert mapping["vertex"] == "client_sessions"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "SessionBelongsToSite" in edge_cols
+        assert "SessionOnWlan" in edge_cols
+        assert "SessionOnDevice" in edge_cols
+        assert "SessionForClient" in edge_cols
+
+    def test_wan_client_events_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["searchSiteWanClientEvents"]
+        assert mapping["vertex"] == "wan_events"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "WanEventBelongsToSite" in edge_cols
+        assert "WanEventForClient" in edge_cols
+
+    def test_unconnected_clients_edges(self):
+        from src.db.arango_writer import COLLECTION_VERTEX_MAP
+
+        mapping = COLLECTION_VERTEX_MAP["listSiteUnconnectedClientStats"]
+        assert mapping["vertex"] == "unconnected_clients"
+        assert mapping["key_field"] == "mac"
+        edge_cols = [e["edge_col"] for e in mapping["edges"]]
+        assert "UnconnectedClientOnMap" in edge_cols
+        assert "UnconnectedClientDetectedByAP" in edge_cols
+
+    def test_edge_definitions_registered(self):
+        from src.db.arango_writer import EDGE_DEFINITIONS
+
+        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
+        assert "ClientUsedPSK" in edge_names
+        assert "ClientMatchedNACRule" in edge_names
+        assert "ClientEventForClient" in edge_names
+        assert "UnconnectedClientOnMap" in edge_names
+        assert "UnconnectedClientDetectedByAP" in edge_names
