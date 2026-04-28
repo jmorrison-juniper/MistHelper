@@ -33751,558 +33751,63 @@ class WANProbeDeviceOverrideManager:
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
 class VirtualChassisManager:
-    """
-    Manages virtual chassis to virtual MAC conversion operations.
+    """Virtual chassis to virtual MAC conversion operations (Menus 92-94).
 
-    Provides functionality to convert virtual chassis switches to virtual MAC
-    addressing, check conversion status, and perform bulk conversions.
-    All methods are static to avoid unnecessary object instantiation.
+    Implementation extracted to src/device/virtual_chassis.py.
+    This stub delegates to the extracted module while providing
+    access to MistHelper globals (apisession, utility classes).
     """
 
     @staticmethod
     def convert_single(dry_run: bool = False) -> None:
-        """
-        Interactively convert a single virtual chassis switch to virtual MAC.
+        """Convert a single VC switch to virtual MAC (Menu 92)."""
+        from src.device.virtual_chassis import (
+            VirtualChassisManager as _VC,
+        )
 
-        Presents site selection, then shows available switches, and converts
-        the selected device after confirmation.
-        """
-        mode_label = "[DRY RUN] " if dry_run else ""
-        print(f"\n  {mode_label}DESTRUCTIVE: Virtual Chassis to Virtual MAC Conversion")
-        print("=" * 60)
-        if dry_run:
-            print("  DRY RUN MODE: No changes will be made. Showing what would happen.")
-
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print(" No site selected.")
-            return
-
-        site_name = VirtualChassisManager._get_site_name(site_id)
-        print(f"\n  Selected Site: {site_name} ({site_id})")
-
-        switches = VirtualChassisManager._load_site_switches(site_id)
-        if not switches:
-            print(f"! No virtual chassis switches found at site '{site_name}'.")
-            print(" Virtual chassis switches must have a device ID assigned.")
-            logging.warning(f"No virtual chassis switches found at site {site_id}.")
-            return
-
-        selected = VirtualChassisManager._prompt_switch_selection(switches, site_name)
-        if not selected:
-            return
-
-        device_id = selected.get("id")
-        if not device_id:
-            print(" Missing device_id for selected switch.")
-            logging.warning("Missing device_id for selected switch.")
-            return
-
-        if not VirtualChassisManager._preflight_check(selected):
-            return
-
-        if dry_run:
-            print(f"\n  [DRY RUN] Would convert switch '{selected.get('name', '')}' at site '{site_name}'")
-            print(f"  [DRY RUN] Device ID: {device_id}")
-            print(f"  [DRY RUN] MAC: {selected.get('mac', '')}")
-            print("  [DRY RUN] No API call made. Use without --dry-run to execute.")
-            logging.info(f"DRY RUN: Would convert {device_id} at site {site_id}")
-            return
-
-        if not VirtualChassisManager._confirm_conversion(selected, site_name, device_id):
-            print(" Operation cancelled.")
-            return
-
-        VirtualChassisManager._execute_conversion(site_id, device_id, selected.get("name", ""), site_name)
+        _VC.convert_single(
+            apisession=apisession,
+            select_site_fn=PromptUtils.select_site,
+            safe_input_fn=InputUtils.safe_input,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            inventory_generator=OrgInventoryExporter.inventory,
+            dry_run=dry_run,
+        )
 
     @staticmethod
     def convert_by_site_list() -> None:
-        """
-        Bulk convert virtual chassis switches from sites listed in VCConvert.CSV.
-
-        Reads site names from CSV file, finds all VC switches in those sites,
-        displays them for confirmation, and converts all if confirmed.
-        """
-        logging.info("Starting bulk virtual chassis to virtual MAC conversion by site list...")
-
-        site_names = VirtualChassisManager._load_site_names_from_csv()
-        if not site_names:
-            return
-
-        print(f"! Loaded {len(site_names)} site names from VCConvert.CSV:")
-        for idx, site_name in enumerate(site_names):
-            print(f"  [{idx + 1}] {site_name}")
-
-        CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-
-        site_name_to_id = VirtualChassisManager._load_site_name_mapping()
-        if not site_name_to_id:
-            return
-
-        target_site_ids, missing_sites = VirtualChassisManager._resolve_site_ids(site_names, site_name_to_id)
-
-        if missing_sites:
-            print("! Warning: The following sites were not found in the organization:")
-            for site in missing_sites:
-                print(f"   - {site}")
-
-        if not target_site_ids:
-            print(" No valid sites found. Exiting.")
-            logging.error("No valid sites found for VC conversion.")
-            return
-
-        switches_to_convert = VirtualChassisManager._load_switches_for_sites(target_site_ids, site_name_to_id)
-        if not switches_to_convert:
-            print(" No virtual chassis switches found in the specified sites.")
-            logging.warning("No virtual chassis switches found in target sites.")
-            return
-
-        VirtualChassisManager._display_switches_for_conversion(switches_to_convert)
-
-        confirm = InputUtils.safe_input(
-            "\nType 'CONVERT' to proceed with bulk conversion or anything else to cancel: ",
-            context="vc_bulk_conversion",
+        """Bulk convert VC switches from site list CSV (Menu 93)."""
+        from src.device.virtual_chassis import (
+            VirtualChassisManager as _VC,
         )
-        if confirm != "CONVERT":
-            print(" Conversion cancelled by user.")
-            logging.info("Virtual chassis conversion cancelled by user.")
-            return
 
-        VirtualChassisManager._execute_bulk_conversion(switches_to_convert)
+        _VC.convert_by_site_list(
+            apisession=apisession,
+            safe_input_fn=InputUtils.safe_input,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            create_csv_template_fn=FilePathUtils.create_csv_template,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            inventory_generator=OrgInventoryExporter.inventory,
+            sites_generator=OrgSiteExporter.sites,
+        )
 
     @staticmethod
     def check_status() -> None:
-        """
-        Check conversion status of all virtual chassis switches in organization.
-
-        Analyzes vc_mac prefixes to determine which switches have been converted
-        (prefix '020003') vs not converted. Exports results to CSV.
-        """
-        print("\n  Virtual Chassis to Virtual MAC Conversion Status Check")
-        print("=" * 70)
-        print(" Checking all switches for virtual chassis conversion status...")
-        print(" Converted switches have vc_mac starting with '020003'")
-
-        logging.info("Starting virtual chassis conversion status check...")
-
-        CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
-
-        switches_with_vc_mac = VirtualChassisManager._load_vc_switches()
-        if not switches_with_vc_mac:
-            print(" No switches with vc_mac found in the organization.")
-            print(" Only virtual chassis switches have vc_mac assigned.")
-            logging.warning("No switches with vc_mac found.")
-            return
-
-        site_id_to_name = VirtualChassisManager._load_site_id_mapping()
-        converted, not_converted = VirtualChassisManager._analyze_conversion_status(
-            switches_with_vc_mac, site_id_to_name
+        """Check conversion status of all VC switches (Menu 94)."""
+        from src.device.virtual_chassis import (
+            VirtualChassisManager as _VC,
         )
 
-        VirtualChassisManager._display_status_summary(converted, not_converted)
-        VirtualChassisManager._export_status_results(converted + not_converted)
-
-        print("\n  Usage Notes:")
-        print("   !? Use option 92 to convert individual switches")
-        print("   !? Use option 93 for bulk conversion by site list")
-        print("   !? Virtual chassis switches without '020003' vc_mac prefix can be converted")
-
-    # ========================================================================
-    # HELPER METHODS
-    # ========================================================================
-
-    @staticmethod
-    def _get_site_name(site_id: str) -> str:
-        """Get site name from API."""
-        try:
-            response = mistapi.api.v1.sites.getSite(apisession, site_id)
-            if response.data:
-                return response.data.get("name", site_id)  # type: ignore[no-any-return]
-        except Exception as exception:
-            logging.warning(f"Could not fetch site name for {site_id}: {exception}")
-        return "Unknown Site"
-
-    @staticmethod
-    def _load_site_switches(site_id: str) -> list[dict]:  # type: ignore[type-arg]
-        """Load switches at a specific site from cached inventory."""
-        CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
-        inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-
-        with open(inventory_path, encoding="utf-8") as csvfile:
-            reader = list(csv.DictReader(csvfile))
-            return [
-                row
-                for row in reader
-                if (row.get("type") == "switch" and row.get("id", "").strip() and row.get("site_id") == site_id)
-            ]
-
-    @staticmethod
-    def _prompt_switch_selection(switches: list[dict], site_name: str) -> dict | None:  # type: ignore[type-arg]
-        """Display switches and prompt user for selection."""
-        print(f"\n  Available Virtual Chassis Switches at '{site_name}':")
-        print("-" * 80)
-
-        index_to_device = {}
-        name_to_device = {}
-        for idx, switch in enumerate(switches):
-            print(
-                f"[{idx}] {switch.get('name', ''):20} MAC: {switch.get('mac', ''):17} "
-                f"Model: {switch.get('model', ''):10} Serial: {switch.get('serial', ''):15} ID: {switch.get('id', '')}"
-            )
-            index_to_device[idx] = switch
-            name_to_device[switch.get("name", "")] = switch
-
-        user_input = InputUtils.safe_input(
-            f"\nEnter the index or switch name to convert to virtual MAC [0-{len(switches) - 1}]: ",
-            context="vc_switch_selection",
-        ).strip()
-
-        if user_input.isdigit():
-            return index_to_device.get(int(user_input))
-        return name_to_device.get(user_input)
-
-    @staticmethod
-    def _preflight_check(switch: dict) -> bool:  # type: ignore[type-arg]
-        """Validate switch is eligible for VC-to-virtual-MAC conversion."""
-        device_type = switch.get("type", "")
-        if device_type != "switch":
-            print(f"! Preflight FAILED: Device type is '{device_type}', expected 'switch'.")
-            logging.error(f"Preflight: wrong device type '{device_type}' for VC conversion")
-            return False
-
-        device_id = switch.get("id", "").strip()
-        if not device_id:
-            print("! Preflight FAILED: Device has no assigned device ID.")
-            logging.error("Preflight: missing device_id for VC conversion")
-            return False
-
-        vc_mac = switch.get("vc_mac", "").strip()
-        if vc_mac and vc_mac.startswith("020003"):
-            print(f"! Preflight WARNING: Switch '{switch.get('name', '')}' appears already converted.")
-            print(f"   vc_mac '{vc_mac}' starts with '020003' (virtual MAC prefix).")
-            proceed = (
-                InputUtils.safe_input("   Continue anyway? (y/n): ", context="vc_preflight_already_converted")
-                .strip()
-                .lower()
-            )
-            if proceed not in ["y", "yes"]:
-                return False
-
-        logging.info(f"Preflight passed for switch '{switch.get('name', '')}' (id={device_id})")
-        return True
-
-    @staticmethod
-    def _confirm_conversion(switch: dict, site_name: str, device_id: str) -> bool:  # type: ignore[type-arg]
-        """Display warning and get confirmation for destructive operation."""
-        print("\n   DESTRUCTIVE OPERATION WARNING ")
-        print(f"You are about to convert switch '{switch.get('name', '')}' to virtual MAC.")
-        print(f"Site: {site_name}")
-        print(f"Device ID: {device_id}")
-        print(f"MAC: {switch.get('mac', '')}")
-        print("This operation cannot be undone!")
-
-        confirm = InputUtils.safe_input(
-            "\nType 'CONVERT' to proceed or anything else to cancel: ", "", True, "virtual MAC conversion confirmation"
+        _VC.check_status(
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            inventory_generator=OrgInventoryExporter.inventory,
+            sites_generator=OrgSiteExporter.sites,
+            flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,
+            escape_multiline_fn=DataProcessingUtils.escape_multiline,
+            save_data_fn=DataExporter.save_data_to_output,
         )
-        return confirm == "CONVERT"
-
-    @staticmethod
-    def _execute_conversion(site_id: str, device_id: str, switch_name: str, site_name: str) -> None:
-        """Execute the API call to convert a switch to virtual MAC."""
-        print(f"! Converting switch '{switch_name}' (device_id: {device_id}) at site '{site_name}' to virtual MAC...")
-        try:
-            response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
-                apisession, site_id, device_id
-            )
-
-            if hasattr(response, "status_code") and response.status_code >= 400:
-                print(f"! Conversion failed (HTTP {response.status_code}): {getattr(response, 'data', '')}")
-                logging.error(
-                    f"Conversion to virtual MAC failed for device {device_id} at site {site_id}. Response: {getattr(response, 'data', '')}"  # noqa: E501
-                )
-            elif isinstance(getattr(response, "data", None), dict) and "detail" in response.data:
-                print(f"! Conversion failed: {response.data['detail']}")
-                logging.error(
-                    f"Conversion to virtual MAC failed for device {device_id} at site_id {site_id}. Detail: {response.data['detail']}"  # noqa: E501
-                )
-            else:
-                print(" Conversion to virtual MAC triggered successfully!")
-                print(" Check the device status in the Mist UI to monitor progress.")
-                print("\n  Rollback Guidance:")
-                print("   If the conversion causes issues, contact Juniper TAC.")
-                print("   The device may need a factory reset and re-adoption to revert.")
-                print("   Use Menu 94 to verify conversion status after the device reboots.")
-                logging.info(
-                    f"Conversion to virtual MAC triggered for device {device_id} at site {site_id}. Response: {getattr(response, 'data', '')}"  # noqa: E501
-                )
-        except Exception as exception:
-            print(f"! Failed to convert to virtual MAC: {exception}")
-            logging.error(f"Failed to convert to virtual MAC: {exception}")
-
-    @staticmethod
-    def _load_site_names_from_csv() -> list[str]:
-        """Load site names from VCConvert.CSV file."""
-        csv_file_path = FilePathUtils.get_csv_path("VCConvert.CSV")
-        if not os.path.exists(csv_file_path):
-            print("! File 'VCConvert.CSV' not found.")
-            print(f"   Please create this file at: {csv_file_path}")
-            print("   This file should contain site names (one per line, no header).")
-
-            user_input = (
-                InputUtils.safe_input(
-                    "   Would you like to create an empty file to get started? (y/n): ",
-                    context="vc_csv_create",
-                )
-                .strip()
-                .lower()
-            )
-            if user_input in ["y", "yes"]:
-                try:
-                    template_path = FilePathUtils.create_csv_template("VCConvert.CSV")
-                    print(f"! Empty file created at: {template_path}")
-                    print("   Please edit the file to add your site names and run the script again.")
-                except Exception as exception:
-                    print(f"! Failed to create file: {exception}")
-
-            logging.error("VCConvert.CSV file not found.")
-            return []
-
-        try:
-            site_names = []
-            with open(csv_file_path, encoding="utf-8") as csvfile:
-                reader = csv.reader(csvfile)
-                for row in reader:
-                    if row and row[0].strip():
-                        site_names.append(row[0].strip())
-            return site_names
-        except Exception as exception:
-            print(f"! Error reading VCConvert.CSV: {exception}")
-            logging.error(f"Error reading VCConvert.CSV: {exception}")
-            return []
-
-    @staticmethod
-    def _load_site_name_mapping() -> dict[str, str]:
-        """Load site name to ID mapping from cached CSV."""
-        try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                return {row.get("name", ""): row.get("id", "") for row in reader}
-        except Exception as exception:
-            print(f"! Error reading SiteList.csv: {exception}")
-            logging.error(f"Error reading SiteList.csv: {exception}")
-            return {}
-
-    @staticmethod
-    def _resolve_site_ids(site_names: list[str], site_name_to_id: dict[str, str]) -> tuple[list[str], list[str]]:
-        """Resolve site names to IDs, returning valid IDs and missing names."""
-        target_site_ids = []
-        missing_sites = []
-        for site_name in site_names:
-            site_id = site_name_to_id.get(site_name)
-            if site_id:
-                target_site_ids.append(site_id)
-            else:
-                missing_sites.append(site_name)
-        return target_site_ids, missing_sites
-
-    @staticmethod
-    def _load_switches_for_sites(target_site_ids: list[str], site_name_to_id: dict[str, str]) -> list[dict]:  # type: ignore[type-arg]
-        """Load switches from inventory for specific sites."""
-        try:
-            inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-            switches = []
-            with open(inventory_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    if (
-                        row.get("type") == "switch"
-                        and row.get("site_id") in target_site_ids
-                        and row.get("id", "").strip()
-                    ):
-                        site_name = next(
-                            (name for name, id_ in site_name_to_id.items() if id_ == row.get("site_id")), "Unknown Site"
-                        )
-                        row["site_name"] = site_name
-                        switches.append(row)
-            return switches
-        except Exception as exception:
-            print(f"! Error reading OrgInventory.csv: {exception}")
-            logging.error(f"Error reading OrgInventory.csv: {exception}")
-            return []
-
-    @staticmethod
-    def _display_switches_for_conversion(switches: list[dict]) -> None:  # type: ignore[type-arg]
-        """Display switches that will be converted."""
-        print(f"\n  Found {len(switches)} virtual chassis switches to convert:")
-        print("=" * 100)
-        for idx, switch in enumerate(switches):
-            print(
-                f"[{idx + 1:2}] Site: {switch.get('site_name', ''):25} | "
-                f"Name: {switch.get('name', ''):20} | "
-                f"MAC: {switch.get('mac', ''):17} | "
-                f"Model: {switch.get('model', ''):12} | "
-                f"Serial: {switch.get('serial', '')}"
-            )
-
-        print(f"\n  This will convert {len(switches)} virtual chassis switches to virtual MAC.")
-        print(" This operation cannot be undone easily.")
-
-    @staticmethod
-    def _execute_bulk_conversion(switches: list[dict]) -> None:  # type: ignore[type-arg]
-        """Execute conversion for multiple switches."""
-        print(f"\n  Starting conversion of {len(switches)} switches...")
-        successful_conversions = 0
-        failed_conversions = 0
-
-        for idx, switch in enumerate(switches):
-            site_id = switch.get("site_id")
-            device_id = switch.get("id")
-            switch_name = switch.get("name", "")
-            site_name = switch.get("site_name", "")
-
-            print(f"\n[{idx + 1}/{len(switches)}] Converting '{switch_name}' at site '{site_name}'...")
-
-            try:
-                response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(
-                    apisession, site_id, device_id
-                )
-
-                if hasattr(response, "status_code") and response.status_code >= 400:
-                    print(f"! Conversion failed (HTTP {response.status_code}): {getattr(response, 'data', '')}")
-                    logging.error(f"Conversion failed for {switch_name} at {site_name}. HTTP {response.status_code}")
-                    failed_conversions += 1
-                elif isinstance(getattr(response, "data", None), dict) and "detail" in response.data:
-                    print(f"! Conversion failed: {response.data['detail']}")
-                    logging.error(
-                        f"Conversion failed for {switch_name} at {site_name}. Detail: {response.data['detail']}"
-                    )
-                    failed_conversions += 1
-                else:
-                    print("! Conversion triggered successfully.")
-                    logging.info(f"Conversion triggered for {switch_name} at {site_name}.")
-                    successful_conversions += 1
-
-            except Exception as exception:
-                print(f"! Exception during conversion: {exception}")
-                logging.error(f"Exception during conversion of {switch_name} at {site_name}: {exception}")
-                failed_conversions += 1
-
-        print("\n  Conversion Summary:")
-        print(f"   Successful conversions: {successful_conversions}")
-        print(f"   Failed conversions: {failed_conversions}")
-        print(f"   Total switches processed: {len(switches)}")
-
-        if successful_conversions > 0:
-            print("\n  Note: Successful conversions may take a few minutes to complete.")
-            print("   Monitor the devices in the Mist portal to confirm the conversion status.")
-
-        logging.info(f"Bulk VC conversion completed: {successful_conversions} successful, {failed_conversions} failed")
-
-    @staticmethod
-    def _load_vc_switches() -> list[dict]:  # type: ignore[type-arg]
-        """Load all switches with vc_mac from inventory."""
-        try:
-            inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-            switches = []
-            with open(inventory_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    if row.get("type") == "switch" and row.get("vc_mac", "").strip():
-                        switches.append(row)
-            return switches
-        except Exception as exception:
-            print(f"! Error reading OrgInventory.csv: {exception}")
-            logging.error(f"Error reading OrgInventory.csv: {exception}")
-            return []
-
-    @staticmethod
-    def _load_site_id_mapping() -> dict[str, str]:
-        """Load site ID to name mapping from cached CSV."""
-        try:
-            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                return {row.get("id", ""): row.get("name", "Unknown Site") for row in reader}
-        except Exception as exception:
-            logging.warning(f"Could not load site names: {exception}")
-            return {}
-
-    @staticmethod
-    def _analyze_conversion_status(
-        switches: list[dict],  # type: ignore[type-arg]
-        site_id_to_name: dict[str, str],
-    ) -> tuple[list[dict], list[dict]]:  # type: ignore[type-arg]
-        """Analyze switches to determine conversion status."""
-        converted = []
-        not_converted = []
-
-        for switch in switches:
-            vc_mac = switch.get("vc_mac", "")
-            site_id = switch.get("site_id", "")
-
-            enhanced_switch = switch.copy()
-            enhanced_switch["site_name"] = site_id_to_name.get(site_id, "Unknown Site")
-
-            if vc_mac.startswith("020003"):
-                enhanced_switch["conversion_status"] = "CONVERTED"
-                enhanced_switch["conversion_notes"] = "vc_mac starts with 020003 - converted to virtual MAC"
-                converted.append(enhanced_switch)
-            else:
-                enhanced_switch["conversion_status"] = "NOT_CONVERTED"
-                enhanced_switch["conversion_notes"] = f"vc_mac starts with {vc_mac[:6]} - not converted to virtual MAC"
-                not_converted.append(enhanced_switch)
-
-        return converted, not_converted
-
-    @staticmethod
-    def _display_status_summary(converted: list[dict], not_converted: list[dict]) -> None:  # type: ignore[type-arg]
-        """Display conversion status summary."""
-        total = len(converted) + len(not_converted)
-
-        print("\n  Virtual Chassis Conversion Status Summary:")
-        print(f"   Total virtual chassis switches: {total}")
-        print(f"   Converted to virtual MAC: {len(converted)}")
-        print(f"   Not converted: {len(not_converted)}")
-
-        if converted:
-            print("\n Converted Switches (vc_mac starts with '020003'):")
-            for switch in converted[:10]:
-                print(
-                    f"   !? {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}..."  # noqa: E501
-                )
-            if len(converted) > 10:
-                print(f"   ... and {len(converted) - 10} more")
-
-        if not_converted:
-            print("\n Not Converted Switches (vc_mac does NOT start with '020003'):")
-            for switch in not_converted[:10]:
-                print(
-                    f"   !? {switch.get('name', 'Unnamed'):20} | Site: {switch.get('site_name', ''):25} | vc_mac: {switch.get('vc_mac', '')[:8]}..."  # noqa: E501
-                )
-            if len(not_converted) > 10:
-                print(f"   ... and {len(not_converted) - 10} more")
-
-    @staticmethod
-    def _export_status_results(all_switches: list[dict]) -> None:  # type: ignore[type-arg]
-        """Export conversion status results to CSV."""
-        try:
-            flattened = DataProcessingUtils.flatten_nested_fields(all_switches)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-
-            filename = "VirtualChassisConversionStatus.csv"
-            DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
-
-            print(f"\n  Results exported to: {filename}")
-            print(f"   Location: {FilePathUtils.get_csv_path(filename)}")
-
-            logging.info(f"Virtual chassis conversion status exported to {filename}")
-
-        except Exception as exception:
-            print(f"! Error exporting results: {exception}")
-            logging.error(f"Error exporting conversion status results: {exception}")
 
 
 # ============================================================================
