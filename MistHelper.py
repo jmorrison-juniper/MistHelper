@@ -3802,6 +3802,49 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Unconnected client statistics per map",
     },
+    # Issue #171: Site-level device endpoints
+    "searchSiteDevices": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["mac", "timestamp", "site_id", "model", "type"],
+        "unique_constraints": [],
+        "description": "Site-level device search results",
+    },
+    "listSiteOtherDevices": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "device_mac", "vendor", "model"],
+        "unique_constraints": [],
+        "description": "Non-Juniper devices discovered at site",
+    },
+    "listSiteAvailableDeviceVersions": {
+        "type": "composite_pk",
+        "primary_key": ["model", "version"],
+        "indexes": ["model", "tag"],
+        "unique_constraints": [],
+        "description": "Available firmware versions per device model",
+    },
+    "listSiteSpectrumAnalysis": {
+        "type": "composite_pk",
+        "primary_key": ["mac", "timestamp"],
+        "indexes": ["mac", "timestamp", "band"],
+        "unique_constraints": [],
+        "description": "RF spectrum analysis data from AP radios",
+    },
+    "listSiteDeviceRadioChannels": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["key", "name", "code"],
+        "unique_constraints": [],
+        "description": "AP radio channel configuration per country",
+    },
+    "listSiteDeviceUpgrades": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["status", "target_version", "strategy"],
+        "unique_constraints": [],
+        "description": "Device firmware upgrade status and progress",
+    },
     # Type 4: Client search APIs (special handling for large datasets)
     "searchOrgWirelessClients": {
         "type": "composite_pk",
