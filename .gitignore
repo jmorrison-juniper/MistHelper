@@ -53,9 +53,9 @@ OUTPUT/
 exports/
 Exports/
 EXPORTS/
-reports/
-Reports/
-REPORTS/
+/reports/
+/Reports/
+/REPORTS/
 
 # Database Files - Exclude database files
 *.db
