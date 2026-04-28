@@ -829,6 +829,27 @@ EDGE_DEFINITIONS = [
         "from_vertex_collections": ["packet_captures"],
         "to_vertex_collections": ["devices"],
     },
+    # -- Tier 8: Site-level WLANs, PSKs, Webhooks, WxLAN policies (Issue #173) --
+    {
+        "edge_collection": "WxRuleBelongsToSite",
+        "from_vertex_collections": ["wx_rules"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WxTagBelongsToSite",
+        "from_vertex_collections": ["wx_tags"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WxTunnelBelongsToSite",
+        "from_vertex_collections": ["mx_tunnels"],
+        "to_vertex_collections": ["sites"],
+    },
+    {
+        "edge_collection": "WlanUsesWxTunnel",
+        "from_vertex_collections": ["wlans"],
+        "to_vertex_collections": ["mx_tunnels"],
+    },
     # -- Tier 4: WxLAN policy relationships --
     {
         "edge_collection": "WxRuleBelongsToTemplate",
@@ -1096,6 +1117,13 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
     "searchSiteSyntheticTest": "synthetic_tests",
     "searchSiteWebhooksDeliveries": "webhook_deliveries",
     "listSitePacketCaptures": "packet_captures",
+    # -- Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies --
+    "listSiteWlans": "wlans",
+    "listSitePsks": "psks",
+    "listSiteWebhooks": "webhooks",
+    "listSiteWxRules": "wx_rules",
+    "listSiteWxTags": "wx_tags",
+    "listSiteWxTunnels": "mx_tunnels",
     "searchOrgSites": "sites",
     # -- New operations for complete SDK coverage ----------------------------
     "listOrgJsiPastPurchases": "jsi_purchases",
@@ -3008,6 +3036,125 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
             {
                 "edge_col": "PacketCaptureBelongsToSite",
                 "from_col": "packet_captures",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    # -- Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies --
+    "listSiteWlans": {
+        "vertex": "wlans",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WlanBelongsToSite",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "WlanUsesWxTunnel",
+                "from_col": "wlans",
+                "from_field": "id",
+                "to_col": "mx_tunnels",
+                "to_field": "wxtunnel_id",
+            },
+        ],
+    },
+    "listSitePsks": {
+        "vertex": "psks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "PSKBelongsToSite",
+                "from_col": "psks",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "PSKBelongsToWlan",
+                "from_col": "psks",
+                "from_field": "id",
+                "to_col": "wlans",
+                "to_field": "wlan_id",
+            },
+        ],
+    },
+    "listSiteWebhooks": {
+        "vertex": "webhooks",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WebhookBelongsToSite",
+                "from_col": "webhooks",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteWxRules": {
+        "vertex": "wx_rules",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WxRuleBelongsToSite",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+            {
+                "edge_col": "WxRuleMatchesSrcTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "src_wxtags",
+            },
+            {
+                "edge_col": "WxRuleAllowsDstTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "dst_allow_wxtags",
+            },
+            {
+                "edge_col": "WxRuleDeniesDstTag",
+                "from_col": "wx_rules",
+                "from_field": "id",
+                "to_col": "wx_tags",
+                "to_field": "dst_deny_wxtags",
+            },
+        ],
+        "ensure_target_vertices": [
+            ("src_wxtags", "wx_tags"),
+            ("dst_allow_wxtags", "wx_tags"),
+            ("dst_deny_wxtags", "wx_tags"),
+        ],
+    },
+    "listSiteWxTags": {
+        "vertex": "wx_tags",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WxTagBelongsToSite",
+                "from_col": "wx_tags",
+                "from_field": "id",
+                "to_col": "sites",
+                "to_field": "site_id",
+            },
+        ],
+    },
+    "listSiteWxTunnels": {
+        "vertex": "mx_tunnels",
+        "key_field": "id",
+        "edges": [
+            {
+                "edge_col": "WxTunnelBelongsToSite",
+                "from_col": "mx_tunnels",
                 "from_field": "id",
                 "to_col": "sites",
                 "to_field": "site_id",
