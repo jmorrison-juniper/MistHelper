@@ -61,8 +61,15 @@ from src.analytics.zone_analyzer import (
 
 
 # ---------------------------------------------------------------------------
-# Module teardown -- restore sys.modules so mocks don't leak into other tests
+# Module setup/teardown -- ensure mocks survive pytest collection ordering
 # ---------------------------------------------------------------------------
+def setup_module() -> None:
+    """Re-assert mocks in sys.modules before tests run."""
+    for key, val in _MOCKED_MODULES.items():
+        sys.modules[key] = val
+    sys.modules["tqdm"] = _mock_tqdm_mod
+
+
 def teardown_module() -> None:
     """Restore sys.modules to pre-test state."""
     for key in _absent:
