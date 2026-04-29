@@ -53,6 +53,7 @@ class RoutingUtils:
         websocket_manager_factory: WebSocketManagerFactory,
         is_debug_mode_fn: IsDebugModeFn,
     ) -> None:
+        """Initialize RoutingUtils with injected dependencies."""
         self.apisession = apisession
         self.select_site_fn = select_site_fn
         self.select_device_fn = select_device_fn
@@ -66,70 +67,68 @@ class RoutingUtils:
 
     def _parse_forwarding_table(self, raw_output: str) -> list[dict[str, Any]]:
         """Parse raw forwarding table output into structured entries."""
-        entries: list[dict[str, Any]] = []
         if not raw_output:
-            return entries
+            return []
 
+        json_result = self._try_parse_forwarding_json(raw_output)
+        if json_result is not None:
+            return json_result
+
+        return self._parse_forwarding_text(raw_output)
+
+    def _try_parse_forwarding_json(self, raw_output: str) -> list[dict[str, Any]] | None:
+        """Try parsing forwarding output as JSON. Returns None if not JSON."""
         try:
             data = json.loads(raw_output)
-            if isinstance(data, list):
-                for item in data:
-                    entry = {
-                        "destination": item.get("prefix", item.get("destination", "")),
-                        "next_hop": item.get("nextHop", item.get("next_hop", "")),
-                        "interface": item.get("interface", item.get("dev", "")),
-                        "service": item.get("service", item.get("serviceName", "")),
-                        "table": item.get("table", ""),
-                        "type": item.get("type", ""),
-                    }
-                    entries.append(entry)
-                return entries
-            if isinstance(data, dict):
-                for _key, value in data.items():
-                    if isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, dict):
-                                entry = {
-                                    "destination": item.get(
-                                        "prefix",
-                                        item.get("destination", ""),
-                                    ),
-                                    "next_hop": item.get(
-                                        "nextHop",
-                                        item.get("next_hop", ""),
-                                    ),
-                                    "interface": item.get(
-                                        "interface",
-                                        item.get("dev", ""),
-                                    ),
-                                    "service": item.get(
-                                        "service",
-                                        item.get("serviceName", ""),
-                                    ),
-                                    "table": item.get("table", ""),
-                                    "type": item.get("type", ""),
-                                }
-                                entries.append(entry)
-                return entries
         except (json.JSONDecodeError, TypeError):
-            pass
+            return None
 
+        if isinstance(data, list):
+            return [self._normalize_forwarding_entry(item) for item in data]
+        if isinstance(data, dict):
+            return self._extract_forwarding_from_dict(data)
+        return None
+
+    def _normalize_forwarding_entry(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Normalize a single forwarding entry from JSON."""
+        return {
+            "destination": item.get("prefix", item.get("destination", "")),
+            "next_hop": item.get("nextHop", item.get("next_hop", "")),
+            "interface": item.get("interface", item.get("dev", "")),
+            "service": item.get("service", item.get("serviceName", "")),
+            "table": item.get("table", ""),
+            "type": item.get("type", ""),
+        }
+
+    def _extract_forwarding_from_dict(self, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract forwarding entries from a JSON dict with list values."""
+        entries: list[dict[str, Any]] = []
+        for _key, value in data.items():
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        entries.append(self._normalize_forwarding_entry(item))
+        return entries
+
+    def _parse_forwarding_text(self, raw_output: str) -> list[dict[str, Any]]:
+        """Parse text-format forwarding table lines."""
+        entries: list[dict[str, Any]] = []
         for line in raw_output.strip().split("\n"):
             line = line.strip()
             if not line or line.startswith("#") or line.startswith("---"):
                 continue
             parts = line.split()
             if len(parts) >= 2:  # noqa: PLR2004
-                entry = {
-                    "destination": parts[0],
-                    "next_hop": parts[1] if len(parts) > 1 else "",
-                    "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004
-                    "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004
-                    "table": "",
-                    "type": "",
-                }
-                entries.append(entry)
-
+                entries.append(
+                    {
+                        "destination": parts[0],
+                        "next_hop": parts[1] if len(parts) > 1 else "",
+                        "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004
+                        "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004
+                        "table": "",
+                        "type": "",
+                    }
+                )
         return entries
 
     def _display_forwarding_summary(self, entries: list[dict[str, Any]]) -> None:
@@ -139,7 +138,29 @@ class RoutingUtils:
             return
 
         print(f"-> Total forwarding entries: {len(entries)}")
+        stats = self._collect_forwarding_stats(entries)
 
+        if stats["services"]:
+            top_services = sorted(stats["services"].items(), key=lambda x: x[1], reverse=True)[:5]
+            service_str = ", ".join([f"{svc}({cnt})" for svc, cnt in top_services])
+            print(f"-> Top services: {service_str}")
+
+        if len(stats["tables"]) > 1:
+            print(f"-> Forwarding tables: {', '.join(sorted(stats['tables']))}")
+
+        print(f"-> Unique next hops: {len(stats['next_hops'])}")
+        print(f"-> Unique interfaces: {len(stats['interfaces'])}")
+
+        self._display_prefix_groups(entries)
+
+        print("\n-> Forwarding table entries:")
+        self._display_prefix_table_impl(entries)
+
+    def _collect_forwarding_stats(
+        self,
+        entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Collect summary statistics from forwarding table entries."""
         services: dict[str, int] = {}
         tables: set[str] = set()
         next_hops: set[str] = set()
@@ -156,17 +177,15 @@ class RoutingUtils:
             if entry.get("interface") and entry["interface"] != "-":
                 interfaces.add(entry["interface"])
 
-        if services:
-            top_services = sorted(services.items(), key=lambda x: x[1], reverse=True)[:5]
-            service_str = ", ".join([f"{svc}({cnt})" for svc, cnt in top_services])
-            print(f"-> Top services: {service_str}")
+        return {
+            "services": services,
+            "tables": tables,
+            "next_hops": next_hops,
+            "interfaces": interfaces,
+        }
 
-        if len(tables) > 1:
-            print(f"-> Forwarding tables: {', '.join(sorted(tables))}")
-
-        print(f"-> Unique next hops: {len(next_hops)}")
-        print(f"-> Unique interfaces: {len(interfaces)}")
-
+    def _display_prefix_groups(self, entries: list[dict[str, Any]]) -> None:
+        """Analyze and display top prefix groups from entries."""
         prefix_groups: dict[str, int] = {}
         for entry in entries:
             dest = entry.get("destination", "")
@@ -182,9 +201,6 @@ class RoutingUtils:
             print("\n-> Top prefix groups:")
             for group, count in top_groups:
                 print(f"  - {group}: {count} entries")
-
-        print("\n-> Forwarding table entries:")
-        self._display_prefix_table_impl(entries)
 
     def _display_prefix_table_impl(self, entries: list[dict[str, Any]]) -> None:
         """Display forwarding table entries using PrettyTable."""
@@ -225,69 +241,71 @@ class RoutingUtils:
                 svc = entry.get("service", "-")
                 print(f"  {dest} -> {nhop} via {iface} [{svc}]")
 
-    def _parse_routing_table(self, raw_output: str) -> list[dict[str, Any]]:  # noqa: C901
+    def _parse_routing_table(self, raw_output: str) -> list[dict[str, Any]]:
         """Parse routing table output supporting multiple formats."""
         if not raw_output:
             return []
 
-        try:
-            data = json.loads(raw_output)
-            if isinstance(data, list):
-                return [self._normalize_json_route_entry(item) for item in data if isinstance(item, dict)]
-            if isinstance(data, dict):
-                routes: list[dict[str, Any]] = []
-                for _key, value in data.items():
-                    if isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, dict):
-                                routes.append(self._normalize_json_route_entry(item))
-                return routes
-        except (json.JSONDecodeError, TypeError):
-            pass
+        json_result = self._try_parse_routing_json(raw_output)
+        if json_result is not None:
+            return json_result
 
         lines = raw_output.strip().split("\n")
         if any("inet.0" in line or "inet6.0" in line for line in lines[:20]):
             return self._parse_juniper_routing(raw_output)
 
+        return self._parse_routing_text_lines(lines)
+
+    def _try_parse_routing_json(self, raw_output: str) -> list[dict[str, Any]] | None:
+        """Try parsing routing output as JSON. Returns None if not JSON."""
+        try:
+            data = json.loads(raw_output)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        if isinstance(data, list):
+            return [self._normalize_json_route_entry(item) for item in data if isinstance(item, dict)]
+        if isinstance(data, dict):
+            return self._extract_routes_from_json_dict(data)
+        return None
+
+    def _extract_routes_from_json_dict(self, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract route entries from a JSON dict with list values."""
+        routes: list[dict[str, Any]] = []
+        for _key, value in data.items():
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        routes.append(self._normalize_json_route_entry(item))
+        return routes
+
+    def _parse_routing_text_lines(self, lines: list[str]) -> list[dict[str, Any]]:
+        """Parse text-format routing lines into route entries."""
         route_entries: list[dict[str, Any]] = []
         for line in lines:
             line = line.strip()
             if not line or line.startswith("#") or line.startswith("---"):
                 continue
-            if "via" in line or "dev" in line or "proto" in line:
-                entry = self._parse_standard_route_line(line)
-                if entry:
-                    route_entries.append(entry)
-            elif "BGP" in line or "OSPF" in line or "static" in line:
-                entry = self._parse_protocol_route_line(line)
-                if entry:
-                    route_entries.append(entry)
-            else:
-                parts = line.split()
-                if len(parts) >= 2:  # noqa: PLR2004
-                    entry = self._parse_tabular_route_line(line)
-                    if entry:
-                        route_entries.append(entry)
-
+            entry = self._classify_and_parse_route_line(line)
+            if entry:
+                route_entries.append(entry)
         return route_entries
+
+    def _classify_and_parse_route_line(self, line: str) -> dict[str, Any] | None:
+        """Classify a route line and dispatch to the correct parser."""
+        if "via" in line or "dev" in line or "proto" in line:
+            return self._parse_standard_route_line(line)
+        if "BGP" in line or "OSPF" in line or "static" in line:
+            return self._parse_protocol_route_line(line)
+        parts = line.split()
+        if len(parts) >= 2:  # noqa: PLR2004
+            return self._parse_tabular_route_line(line)
+        return None
 
     def _parse_standard_route_line(self, line: str) -> dict[str, Any] | None:
         """Parse a route line with via/dev/proto keywords."""
-        entry: dict[str, Any] = {
-            "destination": "",
-            "next_hop": "",
-            "interface": "",
-            "protocol": "",
-            "admin_distance": "",
-            "metric": "",
-            "active": False,
-            "selected": False,
-        }
-
-        if line.startswith(">") or line.startswith("*"):
-            entry["active"] = ">" in line[:3]
-            entry["selected"] = "*" in line[:3]
-            line = line.lstrip(">* ")
+        entry = self._make_empty_route_entry()
+        entry, line = self._extract_route_flags(entry, line)
 
         parts = line.split()
         if parts:
@@ -309,7 +327,21 @@ class RoutingUtils:
 
     def _parse_protocol_route_line(self, line: str) -> dict[str, Any] | None:
         """Parse a route line with BGP/OSPF/static protocol indicators."""
-        entry: dict[str, Any] = {
+        entry = self._make_empty_route_entry()
+        entry, line = self._extract_route_flags(entry, line)
+
+        parts = line.split()
+        if not parts:
+            return None
+
+        for part in parts:
+            self._classify_route_part(entry, part)
+
+        return entry if entry["destination"] else None
+
+    def _make_empty_route_entry(self) -> dict[str, Any]:
+        """Create a blank route entry dict with default values."""
+        return {
             "destination": "",
             "next_hop": "",
             "interface": "",
@@ -320,30 +352,32 @@ class RoutingUtils:
             "selected": False,
         }
 
+    def _extract_route_flags(
+        self,
+        entry: dict[str, Any],
+        line: str,
+    ) -> tuple[dict[str, Any], str]:
+        """Extract active/selected flags from line prefix."""
         if line.startswith(">") or line.startswith("*"):
             entry["active"] = ">" in line[:3]
             entry["selected"] = "*" in line[:3]
             line = line.lstrip(">* ")
+        return entry, line
 
-        parts = line.split()
-        if not parts:
-            return None
-
-        for _i, part in enumerate(parts):
-            upper = part.upper()
-            if upper in ("BGP", "OSPF", "STATIC", "DIRECT", "LOCAL"):
-                entry["protocol"] = upper
-            elif "/" in part and "." in part:
+    def _classify_route_part(self, entry: dict[str, Any], part: str) -> None:
+        """Classify a single token from a protocol route line."""
+        upper = part.upper()
+        if upper in ("BGP", "OSPF", "STATIC", "DIRECT", "LOCAL"):
+            entry["protocol"] = upper
+        elif "/" in part and "." in part:
+            entry["destination"] = part
+        elif re.match(r"\d+\.\d+\.\d+\.\d+", part):
+            if not entry["destination"]:
                 entry["destination"] = part
-            elif re.match(r"\d+\.\d+\.\d+\.\d+", part):
-                if not entry["destination"]:
-                    entry["destination"] = part
-                elif not entry["next_hop"]:
-                    entry["next_hop"] = part
-            elif part.startswith(("eth", "ge-", "xe-", "et-", "lo", "irb")):
-                entry["interface"] = part
-
-        return entry if entry["destination"] else None
+            elif not entry["next_hop"]:
+                entry["next_hop"] = part
+        elif part.startswith(("eth", "ge-", "xe-", "et-", "lo", "irb")):
+            entry["interface"] = part
 
     def _parse_tabular_route_line(self, line: str) -> dict[str, Any] | None:
         """Parse a space-separated tabular route line."""
@@ -392,7 +426,7 @@ class RoutingUtils:
             "selected": item.get("selected", False),
         }
 
-    def _parse_juniper_routing(self, raw_output: str) -> list[dict[str, Any]]:  # noqa: C901, PLR0912
+    def _parse_juniper_routing(self, raw_output: str) -> list[dict[str, Any]]:
         """Parse Juniper inet.0/inet6.0 multi-line routing format."""
         routes: list[dict[str, Any]] = []
         current_route: dict[str, Any] = {}
@@ -400,62 +434,92 @@ class RoutingUtils:
 
         for line in raw_output.strip().split("\n"):
             line_stripped = line.strip()
-
-            table_match = re.match(r"^(\S+\.0):\s", line_stripped)
-            if table_match:
-                if current_route:
-                    routes.append(current_route)
-                    current_route = {}
-                current_table = table_match.group(1)
-                continue
-
-            dest_match = re.match(
-                r"^([>*\s]*)([\d\.]+/\d+|[\da-f:]+/\d+)\s",
+            current_route, current_table = self._process_juniper_line(
                 line_stripped,
+                routes,
+                current_route,
+                current_table,
             )
-            if dest_match:
-                if current_route:
-                    routes.append(current_route)
-                flags = dest_match.group(1).strip()
-                current_route = {
-                    "destination": dest_match.group(2),
-                    "next_hop": "",
-                    "interface": "",
-                    "protocol": "",
-                    "admin_distance": "",
-                    "metric": "",
-                    "active": ">" in flags,
-                    "selected": "*" in flags,
-                    "table": current_table,
-                }
-
-                proto_match = re.search(r"\[(\w+)/(\d+)\]", line_stripped)
-                if proto_match:
-                    current_route["protocol"] = proto_match.group(1)
-                    current_route["admin_distance"] = proto_match.group(2)
-                continue
-
-            if current_route:
-                via_match = re.search(r"via\s+(\S+)", line_stripped)
-                if via_match:
-                    via_parts = via_match.group(1).rstrip(",")
-                    if re.match(r"\d+\.\d+\.\d+\.\d+", via_parts):
-                        current_route["next_hop"] = via_parts
-                    else:
-                        if "." in via_parts and "/" not in via_parts:
-                            current_route["interface"] = via_parts.strip()
-                        else:
-                            current_route["next_hop"] = via_parts.strip()
-
-                elif line_stripped in ["Local"]:
-                    current_route["next_hop"] = "Local"
-                elif "." in line_stripped and len(line_stripped.split()) == 1:
-                    current_route["interface"] = line_stripped
 
         if current_route:
             routes.append(current_route)
 
         return routes
+
+    def _process_juniper_line(
+        self,
+        line_stripped: str,
+        routes: list[dict[str, Any]],
+        current_route: dict[str, Any],
+        current_table: str,
+    ) -> tuple[dict[str, Any], str]:
+        """Process a single line of Juniper routing output."""
+        table_match = re.match(r"^(\S+\.0):\s", line_stripped)
+        if table_match:
+            if current_route:
+                routes.append(current_route)
+            return {}, table_match.group(1)
+
+        dest_match = re.match(
+            r"^([>*\s]*)([\d\.]+/\d+|[\da-f:]+/\d+)\s",
+            line_stripped,
+        )
+        if dest_match:
+            if current_route:
+                routes.append(current_route)
+            return self._build_juniper_route(dest_match, line_stripped, current_table), current_table
+
+        if current_route:
+            self._update_juniper_via(current_route, line_stripped)
+
+        return current_route, current_table
+
+    def _build_juniper_route(
+        self,
+        dest_match: re.Match[str],
+        line_stripped: str,
+        current_table: str,
+    ) -> dict[str, Any]:
+        """Build a new route entry from a Juniper destination line."""
+        flags = dest_match.group(1).strip()
+        route: dict[str, Any] = {
+            "destination": dest_match.group(2),
+            "next_hop": "",
+            "interface": "",
+            "protocol": "",
+            "admin_distance": "",
+            "metric": "",
+            "active": ">" in flags,
+            "selected": "*" in flags,
+            "table": current_table,
+        }
+
+        proto_match = re.search(r"\[(\w+)/(\d+)\]", line_stripped)
+        if proto_match:
+            route["protocol"] = proto_match.group(1)
+            route["admin_distance"] = proto_match.group(2)
+
+        return route
+
+    def _update_juniper_via(
+        self,
+        current_route: dict[str, Any],
+        line_stripped: str,
+    ) -> None:
+        """Update current route with via/interface info from continuation line."""
+        via_match = re.search(r"via\s+(\S+)", line_stripped)
+        if via_match:
+            via_parts = via_match.group(1).rstrip(",")
+            if re.match(r"\d+\.\d+\.\d+\.\d+", via_parts):
+                current_route["next_hop"] = via_parts
+            elif "." in via_parts and "/" not in via_parts:
+                current_route["interface"] = via_parts.strip()
+            else:
+                current_route["next_hop"] = via_parts.strip()
+        elif line_stripped in ["Local"]:
+            current_route["next_hop"] = "Local"
+        elif "." in line_stripped and len(line_stripped.split()) == 1:
+            current_route["interface"] = line_stripped
 
     def _parse_ssr_routing(self, json_data: str) -> list[dict[str, Any]]:
         """Parse SSR/SRX routing table JSON from the dedicated API."""
@@ -500,22 +564,49 @@ class RoutingUtils:
     # DISPLAY METHODS
     # =====================================================================
 
-    def _display_routing_summary(  # noqa: C901, PLR0912
+    def _display_routing_summary(
         self,
         route_entries: list[dict[str, Any]],
         query_params: dict[str, Any] | None = None,
     ) -> None:
         """Display formatted summary of routing table entries."""
         if not route_entries:
-            print("-> No routing table entries found")
-            if query_params:
-                print("  -> Try adjusting query parameters:")
-                for key, value in query_params.items():
-                    print(f"    - {key}: {value}")
+            self._display_empty_routing(query_params)
             return
 
         print(f"-> Total routing table entries: {len(route_entries)}")
+        stats = self._collect_routing_stats(route_entries)
 
+        if stats["protocols"]:
+            proto_str = ", ".join([f"{p}({c})" for p, c in stats["protocols"].items()])
+            print(f"-> Protocols: {proto_str}")
+
+        if len(stats["tables"]) > 1:
+            print(f"-> Routing tables: {', '.join(sorted(stats['tables']))}")
+
+        print(f"-> Unique destinations: {len(stats['destinations'])}")
+        print(f"-> Unique next hops: {len(stats['next_hops'])}")
+        print(f"-> Unique interfaces: {len(stats['interfaces'])}")
+
+        if stats["active_routes"] > 0:
+            print(f"-> Active routes (marked with >): {stats['active_routes']}")
+
+        print("\n-> Detailed routing table:")
+        self._display_routing_details(route_entries)
+
+    def _display_empty_routing(self, query_params: dict[str, Any] | None) -> None:
+        """Display message when no routing entries found."""
+        print("-> No routing table entries found")
+        if query_params:
+            print("  -> Try adjusting query parameters:")
+            for key, value in query_params.items():
+                print(f"    - {key}: {value}")
+
+    def _collect_routing_stats(
+        self,
+        route_entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Collect summary statistics from routing table entries."""
         protocols: dict[str, int] = {}
         destinations: set[str] = set()
         next_hops: set[str] = set()
@@ -524,45 +615,49 @@ class RoutingUtils:
         active_routes = 0
 
         for entry in route_entries:
-            protocol = entry.get("protocol", "Unknown").upper()
-            if protocol and protocol != "UNKNOWN":
-                protocols[protocol] = protocols.get(protocol, 0) + 1
-
-            if entry.get("destination") and entry.get("destination") != "-":
-                destinations.add(entry["destination"])
-            if entry.get("next_hop") and entry.get("next_hop") not in [
-                "-",
-                "",
-            ]:
-                next_hops.add(entry["next_hop"])
-            if entry.get("interface") and entry.get("interface") not in [
-                "-",
-                "",
-            ]:
-                interfaces.add(entry["interface"])
-            if entry.get("table"):
-                tables.add(entry["table"])
+            self._accumulate_route_stats(
+                entry,
+                protocols,
+                destinations,
+                next_hops,
+                interfaces,
+                tables,
+            )
             if entry.get("active"):
                 active_routes += 1
 
-        if protocols:
-            proto_str = ", ".join([f"{p}({c})" for p, c in protocols.items()])
-            print(f"-> Protocols: {proto_str}")
+        return {
+            "protocols": protocols,
+            "destinations": destinations,
+            "next_hops": next_hops,
+            "interfaces": interfaces,
+            "tables": tables,
+            "active_routes": active_routes,
+        }
 
-        if len(tables) > 1:
-            print(f"-> Routing tables: {', '.join(sorted(tables))}")
+    def _accumulate_route_stats(
+        self,
+        entry: dict[str, Any],
+        protocols: dict[str, int],
+        destinations: set[str],
+        next_hops: set[str],
+        interfaces: set[str],
+        tables: set[str],
+    ) -> None:
+        """Accumulate statistics from a single route entry."""
+        protocol = entry.get("protocol", "Unknown").upper()
+        if protocol and protocol != "UNKNOWN":
+            protocols[protocol] = protocols.get(protocol, 0) + 1
+        if entry.get("destination") and entry.get("destination") != "-":
+            destinations.add(entry["destination"])
+        if entry.get("next_hop") and entry.get("next_hop") not in ["-", ""]:
+            next_hops.add(entry["next_hop"])
+        if entry.get("interface") and entry.get("interface") not in ["-", ""]:
+            interfaces.add(entry["interface"])
+        if entry.get("table"):
+            tables.add(entry["table"])
 
-        print(f"-> Unique destinations: {len(destinations)}")
-        print(f"-> Unique next hops: {len(next_hops)}")
-        print(f"-> Unique interfaces: {len(interfaces)}")
-
-        if active_routes > 0:
-            print(f"-> Active routes (marked with >): {active_routes}")
-
-        print("\n-> Detailed routing table:")
-        self._display_routing_details(route_entries)
-
-    def _display_routing_details(self, route_entries: list[dict[str, Any]]) -> None:  # noqa: C901
+    def _display_routing_details(self, route_entries: list[dict[str, Any]]) -> None:
         """Display detailed routing table in a formatted table."""
         if not route_entries:
             return
@@ -580,14 +675,7 @@ class RoutingUtils:
             table.align = "l"
 
             for entry in route_entries:
-                status = ""
-                if entry.get("active"):
-                    status += ">"
-                if entry.get("selected"):
-                    status += "*"
-                if not status:
-                    status = " "
-
+                status = self._format_route_status(entry)
                 table.add_row(
                     [
                         status,
@@ -600,53 +688,67 @@ class RoutingUtils:
                 )
 
             print(table)
-
             print("\nStatus Legend:")
             print("  > = Active route (installed in forwarding table)")
             print("  * = Selected route (best route among alternatives)")
 
         except Exception:
-            header = "   Status | Destination              " "| Next Hop        | Interface       " "| Protocol | Dist"
-            print(header)
-            print("   " + "-" * 95)
-            for entry in route_entries:
-                status = ""
-                if entry.get("active"):
-                    status += ">"
-                if entry.get("selected"):
-                    status += "*"
-                if not status:
-                    status = " "
+            self._display_routing_details_fallback(route_entries)
 
-                dest = entry.get("destination", "-")
-                next_hop = entry.get("next_hop", "-")
-                interface = entry.get("interface", "-")
-                protocol = entry.get("protocol", "-")
-                admin_dist = entry.get("admin_distance", "-")
-                print(
-                    f"   {status:<6} | {dest:<25} | {next_hop:<15}"
-                    f" | {interface:<15} | {protocol:<8}"
-                    f" | {admin_dist}"
-                )
+    def _format_route_status(self, entry: dict[str, Any]) -> str:
+        """Format the status indicator for a route entry."""
+        status = ""
+        if entry.get("active"):
+            status += ">"
+        if entry.get("selected"):
+            status += "*"
+        return status if status else " "
 
-            print("\nStatus Legend:")
-            print("  > = Active route, * = Selected route")
+    def _display_routing_details_fallback(
+        self,
+        route_entries: list[dict[str, Any]],
+    ) -> None:
+        """Fallback text display when PrettyTable is unavailable."""
+        header = "   Status | Destination              " "| Next Hop        | Interface       " "| Protocol | Dist"
+        print(header)
+        print("   " + "-" * 95)
+        for entry in route_entries:
+            status = self._format_route_status(entry)
+            dest = entry.get("destination", "-")
+            next_hop = entry.get("next_hop", "-")
+            interface = entry.get("interface", "-")
+            protocol = entry.get("protocol", "-")
+            admin_dist = entry.get("admin_distance", "-")
+            print(
+                f"   {status:<6} | {dest:<25} | {next_hop:<15}" f" | {interface:<15} | {protocol:<8}" f" | {admin_dist}"
+            )
 
-    def _display_ssr_routing(  # noqa: PLR0915
+        print("\nStatus Legend:")
+        print("  > = Active route, * = Selected route")
+
+    def _display_ssr_routing(
         self,
         route_entries: list[dict[str, Any]],
         query_params: dict[str, Any] | None = None,
     ) -> None:
         """Display SSR/SRX routing table with BGP-specific columns."""
         if not route_entries:
-            print("-> No routing table entries found")
-            if query_params:
-                print("  -> Try adjusting query parameters:")
-                for key, value in query_params.items():
-                    print(f"    - {key}: {value}")
+            self._display_empty_routing(query_params)
             return
 
-        total_routes = len(route_entries)
+        stats = self._collect_ssr_stats(route_entries)
+        print(f"-> Total routing table entries: {len(route_entries)}")
+        print(f"-> Protocols: {stats['protocol_summary']}")
+        print(f"-> VRFs: {stats['vrf_summary']}")
+        print(f"-> Unique next hops: {len(stats['next_hops'])}")
+
+        self._display_ssr_table(route_entries)
+
+    def _collect_ssr_stats(
+        self,
+        route_entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Collect summary statistics from SSR routing entries."""
         protocols: dict[str, int] = {}
         vrfs: dict[str, int] = {}
         next_hops: set[str] = set()
@@ -654,24 +756,20 @@ class RoutingUtils:
         for entry in route_entries:
             protocol = entry.get("protocol", "Unknown")
             protocols[protocol] = protocols.get(protocol, 0) + 1
-
             vrf = entry.get("vrf", "default")
             vrfs[vrf] = vrfs.get(vrf, 0) + 1
-
             next_hop = entry.get("next_hop", "")
             if next_hop and next_hop != "0.0.0.0":  # nosec B104
                 next_hops.add(next_hop)
 
-        print(f"-> Total routing table entries: {total_routes}")
+        return {
+            "protocol_summary": ", ".join([f"{p}({c})" for p, c in protocols.items()]),
+            "vrf_summary": ", ".join([f"{v}({c})" for v, c in vrfs.items()]),
+            "next_hops": next_hops,
+        }
 
-        protocol_summary = ", ".join([f"{p}({c})" for p, c in protocols.items()])
-        print(f"-> Protocols: {protocol_summary}")
-
-        vrf_summary = ", ".join([f"{v}({c})" for v, c in vrfs.items()])
-        print(f"-> VRFs: {vrf_summary}")
-
-        print(f"-> Unique next hops: {len(next_hops)}")
-
+    def _display_ssr_table(self, route_entries: list[dict[str, Any]]) -> None:
+        """Display SSR routing entries using PrettyTable with fallback."""
         try:
             table = PrettyTable()
             table.field_names = [
@@ -710,35 +808,42 @@ class RoutingUtils:
             print(table)
 
         except Exception:
-            print("\n-> Detailed routing table:")
-            header = (
-                "   Destination | Next Hop | Protocol"
-                " | Route Name | Status"
-                " | Selection Reason | Weight"
-                " | Metric | Local Pref"
-                " | AS Path | VRF"
+            self._display_ssr_table_fallback(route_entries)
+
+    def _display_ssr_table_fallback(
+        self,
+        route_entries: list[dict[str, Any]],
+    ) -> None:
+        """Fallback text display for SSR routing entries."""
+        print("\n-> Detailed routing table:")
+        header = (
+            "   Destination | Next Hop | Protocol"
+            " | Route Name | Status"
+            " | Selection Reason | Weight"
+            " | Metric | Local Pref"
+            " | AS Path | VRF"
+        )
+        print(header)
+        print("   " + "-" * 140)
+        for entry in route_entries:
+            dest = entry.get("destination", "-")
+            nhop = entry.get("next_hop", "-")
+            proto = entry.get("protocol", "-")
+            name = entry.get("name", "-")
+            status = entry.get("status", "-")
+            reason = entry.get("selection_reason", "-")
+            weight = entry.get("weight", "-")
+            metric = entry.get("metric", "-")
+            lpref = entry.get("local_preference", "-")
+            aspath = entry.get("as_path", "-")
+            vrf = entry.get("vrf", "default")
+            print(
+                f"   {dest} | {nhop} | {proto}"
+                f" | {name} | {status}"
+                f" | {reason} | {weight}"
+                f" | {metric} | {lpref}"
+                f" | {aspath} | {vrf}"
             )
-            print(header)
-            print("   " + "-" * 140)
-            for entry in route_entries:
-                dest = entry.get("destination", "-")
-                nhop = entry.get("next_hop", "-")
-                proto = entry.get("protocol", "-")
-                name = entry.get("name", "-")
-                status = entry.get("status", "-")
-                reason = entry.get("selection_reason", "-")
-                weight = entry.get("weight", "-")
-                metric = entry.get("metric", "-")
-                lpref = entry.get("local_preference", "-")
-                aspath = entry.get("as_path", "-")
-                vrf = entry.get("vrf", "default")
-                print(
-                    f"   {dest} | {nhop} | {proto}"
-                    f" | {name} | {status}"
-                    f" | {reason} | {weight}"
-                    f" | {metric} | {lpref}"
-                    f" | {aspath} | {vrf}"
-                )
 
     # =====================================================================
     # ORCHESTRATOR: FORWARDING TABLE
@@ -924,6 +1029,46 @@ class RoutingUtils:
 
         return payload
 
+    def _post_device_command(
+        self,
+        site_id: str,
+        device_id: str,
+        endpoint: str,
+        payload: dict[str, Any],
+        debug_mode: bool,
+    ) -> tuple[str | None, str | None]:
+        """POST a command to a device REST endpoint. Returns (session_id, error_msg)."""
+        mist_host = getattr(self.apisession, "host", None) or os.getenv("MIST_HOST")
+        mist_apitoken = getattr(self.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+
+        if not mist_host or not mist_apitoken:
+            return None, "Mist host or API token not found in session or environment"
+
+        url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}"
+        headers = {
+            "Authorization": f"Token {mist_apitoken}",
+            "Content-Type": "application/json",
+        }
+
+        if debug_mode:
+            print(f"[DEBUG] POST URL = {url}")
+
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+
+        if debug_mode:
+            print(f"[DEBUG] HTTP Response Status = {response.status_code}")
+            print(f"[DEBUG] HTTP Response Body = {response.text}")
+
+        if response.status_code != 200:  # noqa: PLR2004
+            return None, f"HTTP {response.status_code}: {response.text}"
+
+        response_data = response.json()
+        session_id: str | None = response_data.get("session")
+        if not session_id:
+            return None, "No session ID returned"
+
+        return session_id, None
+
     def _execute_forwarding_table_command(
         self,
         site_id: str,
@@ -938,40 +1083,19 @@ class RoutingUtils:
         if debug_mode:
             print(f"[DEBUG] Forwarding table payload = {payload}")
 
-        mist_host = getattr(self.apisession, "host", None) or os.getenv("MIST_HOST")
-        mist_apitoken = getattr(self.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        session_id, error_msg = self._post_device_command(
+            site_id,
+            device_id,
+            "show_forwarding_table",
+            payload,
+            debug_mode,
+        )
 
-        if not mist_host or not mist_apitoken:
-            print("! Mist host or API token not found" " in session or environment")
+        if error_msg:
+            print(f"! Failed to issue show forwarding table command: {error_msg}")
             return None
 
-        url = f"https://{mist_host}/api/v1/sites/{site_id}" f"/devices/{device_id}/show_forwarding_table"
-        headers = {
-            "Authorization": f"Token {mist_apitoken}",
-            "Content-Type": "application/json",
-        }
-
-        if debug_mode:
-            print(f"[DEBUG] POST URL = {url}")
-
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-
-        if debug_mode:
-            print(f"[DEBUG] HTTP Response Status" f" = {response.status_code}")
-            print(f"[DEBUG] HTTP Response Body = {response.text}")
-
-        if response.status_code != 200:  # noqa: PLR2004
-            print(f"! Failed to issue show forwarding table command:" f" {response.status_code}")
-            print(f"! Response: {response.text}")
-            return None
-
-        response_data = response.json()
-        session_id: str | None = response_data.get("session")
-        if not session_id:
-            print("! No session ID returned from" " show forwarding table command")
-            return None
-
-        print(f"-> Show forwarding table command issued" f" (session: {session_id[:8]}...)")
+        print(f"-> Show forwarding table command issued (session: {session_id[:8]}...)")  # type: ignore[index]
         print("-> Waiting for forwarding table results...")
 
         if debug_mode:
@@ -1003,6 +1127,41 @@ class RoutingUtils:
         else:
             self._display_forwarding_table_timeout(device_info)
 
+    def _display_debug_result_fields(
+        self,
+        result: dict[str, Any],
+        debug_mode: bool,
+    ) -> None:
+        """Display debug fields from WebSocket result if debug mode is on."""
+        if not debug_mode:
+            return
+        available = [k for k in result if k not in ["raw", "Output", "session"]]
+        if available:
+            print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available}")
+            for field in available:
+                if result.get(field):
+                    print(f"[DEBUG] {field}: {result.get(field)}")
+
+    def _display_no_data_message(self, result: dict[str, Any], label: str) -> None:
+        """Display message when no raw or Output data is present."""
+        raw_output = result.get("raw", "")
+        output_fields = result.get("Output", "")
+        if not raw_output and not output_fields:
+            print(f"! No {label} data received")
+            print(f"Available result keys: {list(result.keys())}")
+
+    def _log_command_completion(
+        self,
+        operation: str,
+        device_id: str,
+        device_info: dict[str, Any] | None,
+    ) -> None:
+        """Log successful command completion with device context."""
+        device_context = f"device {device_id}"
+        if device_info:
+            device_context = f"{device_info.get('type', 'unknown')}" f" {device_info.get('name', device_id[:8])}"
+        logging.info(f"WebSocket {operation} completed successfully for {device_context}")
+
     def _display_forwarding_table_output(
         self,
         result: dict[str, Any],
@@ -1028,24 +1187,11 @@ class RoutingUtils:
             additional = self._parse_forwarding_table(output_fields)
             self._display_forwarding_summary(additional)
 
-        if debug_mode:
-            available = [k for k in result if k not in ["raw", "Output", "session"]]
-            if available:
-                print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available}")
-                for field in available:
-                    if result.get(field):
-                        print(f"[DEBUG] {field}: {result.get(field)}")
-
-        if not raw_output and not output_fields:
-            print("! No forwarding table data received")
-            print(f"Available result keys: {list(result.keys())}")
+        self._display_debug_result_fields(result, debug_mode)
+        self._display_no_data_message(result, "forwarding table")
 
         print("=" * 80)
-
-        device_context = f"device {device_id}"
-        if device_info:
-            device_context = f"{device_info.get('type', 'unknown')}" f" {device_info.get('name', device_id[:8])}"
-        logging.info(f"WebSocket show forwarding table completed" f" successfully for {device_context}")
+        self._log_command_completion("show forwarding table", device_id, device_info)
 
     def _display_forwarding_table_timeout(self, device_info: dict[str, Any] | None) -> None:
         """Display timeout message with troubleshooting guidance."""
@@ -1201,7 +1347,7 @@ class RoutingUtils:
         user_choice = self.safe_input_fn("Continue with switch routing command anyway? (y/N): ").strip().lower()
         return user_choice in ["y", "yes"]
 
-    def _get_routing_table_params(self) -> dict[str, Any]:  # noqa: C901
+    def _get_routing_table_params(self) -> dict[str, Any]:
         """Get user input for routing table query parameters."""
         print("\n=== Routing Table Query Parameters ===")
         print("Configure the routing table query" " (all parameters are optional):")
@@ -1226,18 +1372,31 @@ class RoutingUtils:
 
         node_input = self.safe_input_fn("Enter node" " (node0/node1 for HA, press Enter to skip): ").strip()
 
+        payload = self._build_routing_payload(
+            prefix_input,
+            protocol_input,
+            vrf_input,
+            neighbor_input,
+            route_direction,
+            node_input,
+        )
+        return payload
+
+    def _build_routing_payload(
+        self,
+        prefix_input: str,
+        protocol_input: str,
+        vrf_input: str,
+        neighbor_input: str,
+        route_direction: str,
+        node_input: str,
+    ) -> dict[str, Any]:
+        """Build routing table API payload from user inputs."""
         payload: dict[str, Any] = {}
         if prefix_input:
             payload["prefix"] = prefix_input
 
-        valid_protocols = [
-            "bgp",
-            "ospf",
-            "static",
-            "direct",
-            "evpn",
-            "any",
-        ]
+        valid_protocols = ["bgp", "ospf", "static", "direct", "evpn", "any"]
         if protocol_input and protocol_input.lower() in valid_protocols:
             payload["protocol"] = protocol_input.lower()
         else:
@@ -1269,40 +1428,19 @@ class RoutingUtils:
         if debug_mode:
             print(f"[DEBUG] Route payload = {payload}")
 
-        mist_host = getattr(self.apisession, "host", None) or os.getenv("MIST_HOST")
-        mist_apitoken = getattr(self.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        session_id, error_msg = self._post_device_command(
+            site_id,
+            device_id,
+            "show_route",
+            payload,
+            debug_mode,
+        )
 
-        if not mist_host or not mist_apitoken:
-            print("! Mist host or API token not found" " in session or environment")
+        if error_msg:
+            print(f"! Failed to issue show route command: {error_msg}")
             return None
 
-        url = f"https://{mist_host}/api/v1/sites/{site_id}" f"/devices/{device_id}/show_route"
-        headers = {
-            "Authorization": f"Token {mist_apitoken}",
-            "Content-Type": "application/json",
-        }
-
-        if debug_mode:
-            print(f"[DEBUG] POST URL = {url}")
-
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-
-        if debug_mode:
-            print(f"[DEBUG] HTTP Response Status" f" = {response.status_code}")
-            print(f"[DEBUG] HTTP Response Body = {response.text}")
-
-        if response.status_code != 200:  # noqa: PLR2004
-            print(f"! Failed to issue show route command:" f" {response.status_code}")
-            print(f"! Response: {response.text}")
-            return None
-
-        response_data = response.json()
-        session_id: str | None = response_data.get("session")
-        if not session_id:
-            print("! No session ID returned" " from show route command")
-            return None
-
-        print(f"-> Show route command issued" f" (session: {session_id[:8]}...)")
+        print(f"-> Show route command issued (session: {session_id[:8]}...)")  # type: ignore[index]
         print("-> Waiting for routing table results...")
 
         if debug_mode:
@@ -1365,24 +1503,11 @@ class RoutingUtils:
             additional = self._parse_routing_table(output_fields)
             self._display_routing_summary(additional, payload)
 
-        if debug_mode:
-            available = [k for k in result if k not in ["raw", "Output", "session"]]
-            if available:
-                print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available}")
-                for field in available:
-                    if result.get(field):
-                        print(f"[DEBUG] {field}: {result.get(field)}")
-
-        if not raw_output and not output_fields:
-            print("! No routing table data received")
-            print(f"Available result keys: {list(result.keys())}")
+        self._display_debug_result_fields(result, debug_mode)
+        self._display_no_data_message(result, "routing table")
 
         print("=" * 80)
-
-        device_context = f"device {device_id}"
-        if device_info:
-            device_context = f"{device_info.get('type', 'unknown')}" f" {device_info.get('name', device_id[:8])}"
-        logging.info(f"WebSocket show routing table completed" f" successfully for {device_context}")
+        self._log_command_completion("show routing table", device_id, device_info)
 
     # =====================================================================
     # ORCHESTRATOR: SSR/SRX ROUTES
@@ -1484,7 +1609,7 @@ class RoutingUtils:
         user_choice = self.safe_input_fn("Continue anyway? (y/N): ").strip().lower()
         return user_choice in ["y", "yes"]
 
-    def _get_ssr_route_params(self) -> dict[str, Any]:  # noqa: C901
+    def _get_ssr_route_params(self) -> dict[str, Any]:
         """Get user input for SSR/SRX routing table parameters."""
         print("\n=== SSR/SRX Routing Table Query Parameters ===")
         print("Configure the routing table query" " (all parameters are optional):")
@@ -1494,62 +1619,90 @@ class RoutingUtils:
         print("  X  Neighbor: BGP neighbor IP for route analysis")
         print("  X  Node: For HA clusters (node0/node1)")
 
-        request_body: dict[str, Any] = {}
-
         print("\nProtocol options:" " bgp, any, ospf, static, direct, evpn, (none)")
         protocol_input = self.safe_input_fn("Enter protocol" " (press Enter for API default): ").strip().lower()
-        valid_protocols = [
-            "any",
-            "bgp",
-            "ospf",
-            "static",
-            "direct",
-            "evpn",
-        ]
-        if protocol_input and protocol_input in valid_protocols:
-            request_body["protocol"] = protocol_input
 
         prefix_input = self.safe_input_fn(
             "\nEnter route prefix" " (e.g., 192.168.1.0/24," " press Enter to skip): "
         ).strip()
-        if prefix_input:
-            request_body["prefix"] = prefix_input
 
         vrf_input = self.safe_input_fn("Enter VRF name" " (press Enter for default VRF): ").strip()
-        if vrf_input:
-            request_body["vrf"] = vrf_input
-
         neighbor_input = self.safe_input_fn("Enter BGP neighbor IP" " (press Enter to skip): ").strip()
+
+        route_direction = ""
         if neighbor_input:
-            request_body["neighbor"] = neighbor_input
             print("\nRoute direction:" " received, advertised, (empty for both)")
             route_direction = self.safe_input_fn("Enter route direction" " (press Enter for both): ").strip().lower()
-            valid_directions = ["received", "advertised"]
-            if route_direction and route_direction in valid_directions:
-                request_body["route"] = route_direction
 
         node_input = self.safe_input_fn("Enter HA cluster node" " (node0/node1, press Enter to skip): ").strip().lower()
-        if node_input and node_input in ["node0", "node1"]:
-            request_body["node"] = {"node": node_input}
 
         print("\nReal-time refresh options:")
         interval_input = self.safe_input_fn("Refresh interval in seconds" " (0-10, press Enter for one-time): ").strip()
-        if interval_input and interval_input.isdigit():
-            interval_val = int(interval_input)
-            if 0 <= interval_val <= 10:  # noqa: PLR2004
-                request_body["interval"] = interval_val
-                if interval_val > 0:
-                    duration_input = self.safe_input_fn(
-                        "Refresh duration in seconds" " (0-300, press Enter for 30): "
-                    ).strip()
-                    if duration_input and duration_input.isdigit():
-                        duration_val = int(duration_input)
-                        if 0 <= duration_val <= 300:  # noqa: PLR2004
-                            request_body["duration"] = duration_val
-                    else:
-                        request_body["duration"] = 30
+        duration_input = ""
+        if interval_input and interval_input.isdigit() and 0 < int(interval_input) <= 10:  # noqa: PLR2004
+            duration_input = self.safe_input_fn("Refresh duration in seconds" " (0-300, press Enter for 30): ").strip()
 
+        return self._build_ssr_payload(
+            protocol_input,
+            prefix_input,
+            vrf_input,
+            neighbor_input,
+            route_direction,
+            node_input,
+            interval_input,
+            duration_input,
+        )
+
+    def _build_ssr_payload(  # noqa: PLR0913
+        self,
+        protocol_input: str,
+        prefix_input: str,
+        vrf_input: str,
+        neighbor_input: str,
+        route_direction: str,
+        node_input: str,
+        interval_input: str,
+        duration_input: str,
+    ) -> dict[str, Any]:
+        """Build SSR/SRX routing API request body from user inputs."""
+        request_body: dict[str, Any] = {}
+        valid_protocols = ["any", "bgp", "ospf", "static", "direct", "evpn"]
+        if protocol_input and protocol_input in valid_protocols:
+            request_body["protocol"] = protocol_input
+        if prefix_input:
+            request_body["prefix"] = prefix_input
+        if vrf_input:
+            request_body["vrf"] = vrf_input
+        if neighbor_input:
+            request_body["neighbor"] = neighbor_input
+            if route_direction and route_direction in ["received", "advertised"]:
+                request_body["route"] = route_direction
+        if node_input and node_input in ["node0", "node1"]:
+            request_body["node"] = {"node": node_input}
+        self._apply_ssr_refresh_params(request_body, interval_input, duration_input)
         return request_body
+
+    def _apply_ssr_refresh_params(
+        self,
+        request_body: dict[str, Any],
+        interval_input: str,
+        duration_input: str,
+    ) -> None:
+        """Apply refresh interval and duration to SSR request body."""
+        if not (interval_input and interval_input.isdigit()):
+            return
+        interval_val = int(interval_input)
+        if not (0 <= interval_val <= 10):  # noqa: PLR2004
+            return
+        request_body["interval"] = interval_val
+        if interval_val == 0:
+            return
+        if duration_input and duration_input.isdigit():
+            duration_val = int(duration_input)
+            if 0 <= duration_val <= 300:  # noqa: PLR2004
+                request_body["duration"] = duration_val
+                return
+        request_body["duration"] = 30
 
     def _execute_ssr_route_command(
         self,
@@ -1565,6 +1718,16 @@ class RoutingUtils:
         if debug_mode:
             print(f"[DEBUG] Request body = {request_body}")
 
+        return self._call_ssr_api(site_id, device_id, request_body, debug_mode)
+
+    def _call_ssr_api(
+        self,
+        site_id: str,
+        device_id: str,
+        request_body: dict[str, Any],
+        debug_mode: bool,
+    ) -> str | None:
+        """Call the SSR/SRX routing table API and return session ID."""
         try:
             print("-> Calling dedicated" " SSR/SRX routing table API...")
             if debug_mode:
@@ -1582,18 +1745,7 @@ class RoutingUtils:
                 if hasattr(response, "data"):
                     print(f"[DEBUG] Response data: {response.data}")
 
-            if hasattr(response, "data") and response.data:
-                session_id: str | None = response.data.get("session")
-                if session_id:
-                    print(f"-> Command initiated" f" (session: {session_id[:8]}...)")
-                    print("-> Waiting for SSR/SRX" " routing table results...")
-                    if debug_mode:
-                        print(f"[DEBUG] Full session ID:" f" {session_id}")
-                    return session_id
-                print("! No session ID returned" " from SSR/SRX routing API")
-                return None
-            print("! Unexpected API response format")
-            return None
+            return self._extract_ssr_session_id(response, debug_mode)
 
         except Exception as api_error:
             print(f"! Error calling SSR/SRX" f" routing table API: {api_error}")
@@ -1604,6 +1756,25 @@ class RoutingUtils:
                 traceback.print_exc()
             print("\n-> Try the generic routing table command" " (Menu 7) as fallback")
             return None
+
+    def _extract_ssr_session_id(
+        self,
+        response: Any,
+        debug_mode: bool,
+    ) -> str | None:
+        """Extract session ID from SSR API response."""
+        if not (hasattr(response, "data") and response.data):
+            print("! Unexpected API response format")
+            return None
+        session_id: str | None = response.data.get("session")
+        if not session_id:
+            print("! No session ID returned" " from SSR/SRX routing API")
+            return None
+        print(f"-> Command initiated" f" (session: {session_id[:8]}...)")
+        print("-> Waiting for SSR/SRX" " routing table results...")
+        if debug_mode:
+            print(f"[DEBUG] Full session ID:" f" {session_id}")
+        return session_id
 
     def _process_ssr_route_results(  # noqa: PLR0913
         self,
@@ -1637,7 +1808,7 @@ class RoutingUtils:
             print("! Timeout waiting for" " SSR/SRX routing table results")
             print("! Try the generic routing table command" " (Menu 7) as fallback")
 
-    def _display_ssr_route_output(  # noqa: C901, PLR0913
+    def _display_ssr_route_output(  # noqa: PLR0913
         self,
         result: dict[str, Any],
         device_id: str,
@@ -1652,40 +1823,30 @@ class RoutingUtils:
 
         raw_output = result.get("raw", "")
         if raw_output:
-            entries = self._parse_ssr_routing(raw_output)
-            if entries:
-                self._display_ssr_routing(entries, request_body)
-            else:
-                entries = self._parse_routing_table(raw_output)
-                self._display_routing_summary(entries, request_body)
+            self._display_ssr_parsed_section(raw_output, request_body)
 
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
             print("\n" + "=" * 40)
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
-            additional = self._parse_ssr_routing(output_fields)
-            if additional:
-                self._display_ssr_routing(additional, request_body)
-            else:
-                additional = self._parse_routing_table(output_fields)
-                self._display_routing_summary(additional, request_body)
+            self._display_ssr_parsed_section(output_fields, request_body)
 
-        if debug_mode:
-            available = [k for k in result if k not in ["raw", "Output", "session"]]
-            if available:
-                print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available}")
-                for field in available:
-                    if result.get(field):
-                        print(f"[DEBUG] {field}: {result.get(field)}")
-
-        if not raw_output and not output_fields:
-            print("! No routing table data received")
-            print(f"Available result keys: {list(result.keys())}")
+        self._display_debug_result_fields(result, debug_mode)
+        self._display_no_data_message(result, "routing table")
 
         print("=" * 80)
+        self._log_command_completion("SSR/SRX routing table", device_id, device_info)
 
-        device_context = f"device {device_id}"
-        if device_info:
-            device_context = f"{device_info.get('type', 'unknown')}" f" {device_info.get('name', device_id[:8])}"
-        logging.info(f"SSR/SRX routing table completed" f" successfully for {device_context}")
+    def _display_ssr_parsed_section(
+        self,
+        output: str,
+        request_body: dict[str, Any],
+    ) -> None:
+        """Parse and display an SSR output section with fallback."""
+        entries = self._parse_ssr_routing(output)
+        if entries:
+            self._display_ssr_routing(entries, request_body)
+        else:
+            entries = self._parse_routing_table(output)
+            self._display_routing_summary(entries, request_body)
