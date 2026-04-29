@@ -19770,7 +19770,6 @@ class ServicePingManager:
             logging.debug("EXIT: ServicePingManager.execute")
 
 
-
 # ============================================================================
 # ROUTING UTILITIES - Extracted to src/network/routing_utils.py (Issue #207)
 # ============================================================================
@@ -19812,7 +19811,6 @@ class RoutingUtils:
     def execute_show_ssr_routes():  # type: ignore[no-untyped-def]
         """Execute SSR/SRX routing table via dedicated API."""
         _get_routing_utils_instance().execute_show_ssr_routes()
-
 
 
 # ============================================================================
