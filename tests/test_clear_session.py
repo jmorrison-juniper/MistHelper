@@ -9,16 +9,28 @@ These tests cover:
 - 400 API error handling
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-import MistHelper
+from src.device.utility_commands import DeviceUtilityCommands
+
+
+def _make_duc(safe_input_fn):
+    """Create a DeviceUtilityCommands instance with mocked dependencies."""
+    return DeviceUtilityCommands(
+        apisession=MagicMock(),
+        select_site_fn=MagicMock(return_value="site1"),
+        select_device_fn=MagicMock(return_value="dev1"),
+        safe_input_fn=safe_input_fn,
+        write_export_fn=MagicMock(),
+        websocket_manager_factory=MagicMock(),
+    )
 
 
 def _stub_selection(monkeypatch):
     monkeypatch.setattr(
-        MistHelper.DeviceUtilityCommands,
+        DeviceUtilityCommands,
         "_select_site_and_device",
-        lambda action, *args, **kwargs: ("site1", "dev1", "Device1"),
+        lambda self, action, *args, **kwargs: ("site1", "dev1", "Device1"),
     )
 
 
@@ -36,8 +48,9 @@ def test_clear_session_with_service_name(monkeypatch):
             return ""
         return ""
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
-    monkeypatch.setattr(MistHelper.DeviceUtilityCommands, "_confirm_destructive", lambda *args, **kwargs: True)
+    duc = _make_duc(fake_safe_input)
+    monkeypatch.setattr(duc, "_select_site_and_device", lambda action, *a, **kw: ("site1", "dev1", "Device1"))
+    monkeypatch.setattr(duc, "_confirm_destructive", lambda *args, **kwargs: True)
 
     captured = {}
 
@@ -45,9 +58,9 @@ def test_clear_session_with_service_name(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
-
-    MistHelper.DeviceUtilityCommands.clear_session()
+    with patch("src.device.utility_commands.mistapi") as mock_api:
+        mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
+        duc.clear_session()
 
     assert captured.get("body") == {"service_name": "svc1"}
 
@@ -66,8 +79,9 @@ def test_clear_session_with_session_ids(monkeypatch):
             return ""
         return ""
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
-    monkeypatch.setattr(MistHelper.DeviceUtilityCommands, "_confirm_destructive", lambda *args, **kwargs: True)
+    duc = _make_duc(fake_safe_input)
+    monkeypatch.setattr(duc, "_select_site_and_device", lambda action, *a, **kw: ("site1", "dev1", "Device1"))
+    monkeypatch.setattr(duc, "_confirm_destructive", lambda *args, **kwargs: True)
 
     captured = {}
 
@@ -75,9 +89,9 @@ def test_clear_session_with_session_ids(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
-
-    MistHelper.DeviceUtilityCommands.clear_session()
+    with patch("src.device.utility_commands.mistapi") as mock_api:
+        mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
+        duc.clear_session()
 
     assert captured.get("body") == {"session_ids": ["s1", "s2", "s3"]}
 
@@ -89,7 +103,8 @@ def test_clear_session_cancel_clear_all(monkeypatch, capsys):
         # No inputs provided, and confirmation left blank to cancel
         return ""
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
+    duc = _make_duc(fake_safe_input)
+    monkeypatch.setattr(duc, "_select_site_and_device", lambda action, *a, **kw: ("site1", "dev1", "Device1"))
 
     called = {"api": False}
 
@@ -97,9 +112,9 @@ def test_clear_session_cancel_clear_all(monkeypatch, capsys):
         called["api"] = True
         return MagicMock()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
-
-    MistHelper.DeviceUtilityCommands.clear_session()
+    with patch("src.device.utility_commands.mistapi") as mock_api:
+        mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
+        duc.clear_session()
 
     captured_out = capsys.readouterr().out
     assert "Cancelled: No service name or session IDs provided." in captured_out
@@ -114,8 +129,9 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
             return "CLEAR ALL"
         return ""
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
-    monkeypatch.setattr(MistHelper.DeviceUtilityCommands, "_confirm_destructive", lambda *args, **kwargs: True)
+    duc = _make_duc(fake_safe_input)
+    monkeypatch.setattr(duc, "_select_site_and_device", lambda action, *a, **kw: ("site1", "dev1", "Device1"))
+    monkeypatch.setattr(duc, "_confirm_destructive", lambda *args, **kwargs: True)
 
     captured = {}
 
@@ -123,9 +139,9 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear)
-
-    MistHelper.DeviceUtilityCommands.clear_session()
+    with patch("src.device.utility_commands.mistapi") as mock_api:
+        mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
+        duc.clear_session()
 
     # No service_name or session_ids provided, and node skipped -> empty body
     assert captured.get("body") == {}
@@ -145,8 +161,9 @@ def test_clear_session_handles_400(monkeypatch, capsys):
             return ""
         return ""
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", fake_safe_input)
-    monkeypatch.setattr(MistHelper.DeviceUtilityCommands, "_confirm_destructive", lambda *args, **kwargs: True)
+    duc = _make_duc(fake_safe_input)
+    monkeypatch.setattr(duc, "_select_site_and_device", lambda action, *a, **kw: ("site1", "dev1", "Device1"))
+    monkeypatch.setattr(duc, "_confirm_destructive", lambda *args, **kwargs: True)
 
     class FakeErr(Exception):
         def __init__(self):
@@ -158,9 +175,9 @@ def test_clear_session_handles_400(monkeypatch, capsys):
     def fake_clear_raise(apisession, site_id, device_id, body):
         raise FakeErr()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDeviceSession", fake_clear_raise)
-
-    MistHelper.DeviceUtilityCommands.clear_session()
+    with patch("src.device.utility_commands.mistapi") as mock_api:
+        mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear_raise
+        duc.clear_session()
 
     captured_out = capsys.readouterr().out
     assert "API returned 400" in captured_out
