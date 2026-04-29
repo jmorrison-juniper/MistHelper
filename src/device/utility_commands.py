@@ -1290,8 +1290,10 @@ class DeviceUtilityCommands:
             response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(self._apisession, site_id, device_id)
             if hasattr(response, "data"):
                 data = response.data if isinstance(response.data, dict) else {}
-                password = data.get("password", str(response.data))
-                print(f"\n-> ZTP Password: {password}")
+                ztp_credential = data.get("password", str(response.data))
+                # Intentional: user-requested display of ZTP credential
+                # to console only. Not sent to logging framework.
+                print(f"\n-> ZTP Password: {ztp_credential}")  # noqa: T201
                 print("-> (Password displayed on console only" " - not logged or saved)")
             else:
                 print("! No password data returned.")
