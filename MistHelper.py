@@ -22895,1351 +22895,214 @@ class RoutingUtils:
 
 # ============================================================================
 # DEVICE UTILITY COMMANDS - Complete Mist API Coverage (Menus 123-157)
+# Implementation extracted to src/device/utility_commands.py (Issue #210)
 # ============================================================================
 
 
+def _get_duc_instance():  # type: ignore[no-untyped-def]
+    """Create DeviceUtilityCommands instance with MistHelper globals."""
+    from src.device.utility_commands import (
+        DeviceUtilityCommands as _DUC,
+    )
+
+    return _DUC(
+        apisession=apisession,
+        select_site_fn=PromptUtils.select_site_id_from_csv,
+        select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
+        safe_input_fn=InputUtils.safe_input,
+        write_export_fn=lambda data, fn, api: DataExporter.write_with_format_selection(data, fn, api_function_name=api),
+        websocket_manager_factory=WebSocketManager,
+    )
+
+
 class DeviceUtilityCommands:
-    """
-    Device utility commands covering 35 Mist API endpoints.
+    """Device utility commands (Menus 123-157).
 
-    Categories: diagnostics, show commands, device management, clear/reset,
-    hardware operations. All methods are static and use the mistapi SDK.
-
-    Menu range: 123-157. Device type validation before every API call.
-    Three-tier confirmation: none (read-only), y/N (port bounce, reprovision),
-    typed 'CLEAR' (clear/reset operations).
+    Implementation extracted to src/device/utility_commands.py.
+    This stub delegates to the extracted module while providing
+    access to MistHelper globals (apisession, utility classes).
     """
 
-    DEVICE_TYPE_COMPATIBILITY_MAP: dict[str, list[str]] = {
-        "traceroute": ["ap", "switch", "gateway"],
-        "show_ospf_neighbors": ["gateway"],
-        "show_ospf_interfaces": ["gateway"],
-        "show_ospf_database": ["gateway"],
-        "show_ospf_summary": ["gateway"],
-        "show_session": ["gateway"],
-        "show_service_path": ["gateway"],
-        "show_bgp_summary": ["switch", "gateway"],
-        "show_arp_table": ["switch", "gateway"],
-        "show_dhcp_leases": ["switch", "gateway"],
-        "show_dot1x": ["switch"],
-        "show_evpn_database": ["switch", "gateway"],
-        "resolve_dns": ["gateway"],
-        "monitor_traffic": ["switch", "gateway"],
-        "run_top": ["switch", "gateway"],
-        "locate": ["ap", "switch"],
-        "unlocate": ["ap", "switch"],
-        "bounce_port": ["switch", "gateway"],
-        "cable_test": ["switch"],
-        "reprovision": ["switch", "gateway"],
-        "readopt": ["switch"],
-        "ztp_password": ["switch", "gateway"],
-        "config_cmd": ["switch"],
-        "support_upload": ["switch", "gateway"],
-        "clear_arp": ["switch", "gateway"],
-        "clear_bgp": ["gateway"],
-        "clear_session": ["gateway"],
-        "clear_mac_table": ["switch", "gateway"],
-        "clear_bpdu_error": ["switch"],
-        "clear_macs": ["switch"],
-        "clear_policy_hit_count": ["gateway"],
-        "release_dhcp": ["switch", "gateway"],
-        "release_dhcp_ssr": ["gateway"],
-        "poll_stats": ["switch"],
-        "snapshot": ["switch"],
-    }
+    from src.device.utility_commands import (
+        DeviceUtilityCommands as _Extracted,
+    )
 
-    @staticmethod
-    def _validate_device_type(device_type: str, command_name: str) -> bool:
-        """Check device type against compatibility map. Return True if valid."""
-        allowed = DeviceUtilityCommands.DEVICE_TYPE_COMPATIBILITY_MAP.get(command_name, [])
-        if device_type not in allowed:
-            allowed_str = ", ".join(allowed)
-            print(f"! This command is only available on: {allowed_str}")
-            print(f"! The selected device is a {device_type}.")
-            return False
-        return True
-
-    @staticmethod
-    def _select_site_and_device(command_name: str, device_type_filter: str = "all") -> tuple[str, str, str] | None:
-        """Select site and device, validate type, warn if offline."""
-        site_id = PromptUtils.select_site_id_from_csv()
-        if not site_id:
-            print("! No site selected. Operation cancelled.")
-            return None
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type=device_type_filter)
-        if not device_id:
-            print("! No device selected. Operation cancelled.")
-            return None
-        device_info = DeviceUtilityCommands._get_device_info(site_id, device_id)
-        if not device_info:
-            print("! Could not retrieve device info from stats API.")
-            return None
-        device_type = device_info.get("type")
-        if not device_type:
-            print("! Could not determine device type.")
-            return None
-        if not DeviceUtilityCommands._validate_device_type(device_type, command_name):
-            return None
-        status = device_info.get("status", "unknown")
-        if status != "connected":
-            print(f"[WARNING] Device status is '{status}' - command may not succeed.")
-        return (site_id, device_id, device_type)
-
-    @staticmethod
-    def _get_device_info(site_id: str, device_id: str) -> dict[str, Any] | None:
-        """Fetch device type and status from stats API (single call)."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                return response.data
-        except Exception as error:
-            logging.error(f"Failed to get device stats: {error}")
-        return None
-
-    @staticmethod
-    def _select_port_from_device(site_id: str, device_id: str) -> str | None:
-        """Fetch ports from device stats, display list, return selected port."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            if not hasattr(response, "data") or not isinstance(response.data, dict):
-                return DeviceUtilityCommands._manual_port_entry()
-            ports = response.data.get("ports", [])
-            if ports:
-                return DeviceUtilityCommands._display_and_select_port(ports)
-            if_stat = response.data.get("if_stat", {})
-            if isinstance(if_stat, dict) and if_stat:
-                return DeviceUtilityCommands._display_and_select_ifstat(if_stat)
-            return DeviceUtilityCommands._manual_port_entry()
-        except Exception as error:
-            logging.debug(f"Could not fetch port list: {error}")
-            return DeviceUtilityCommands._manual_port_entry()
-
-    @staticmethod
-    def _display_and_select_port(ports: list[dict[str, Any]]) -> str | None:
-        """Display numbered port list and get selection."""
-        print("\nAvailable ports:")
-        for index, port in enumerate(ports, 1):
-            port_name = port.get("port_id", port.get("name", f"port_{index}"))
-            port_status = port.get("up", "unknown")
-            status_str = "UP" if port_status else "DOWN"
-            speed = port.get("speed", "")
-            print(f"  {index}. {port_name} [{status_str}] {speed}")
-        selection = InputUtils.safe_input("\nSelect port by number or type port name: ", context="port_selection")
-        if not selection:
-            print("! No port selected.")
-            return None
-        if selection.isdigit():
-            idx = int(selection) - 1
-            if 0 <= idx < len(ports):
-                result: str = str(ports[idx].get("port_id", ports[idx].get("name", "")))
-                return result
-            print("! Invalid port number.")
-            return None
-        return selection
-
-    @staticmethod
-    def _display_and_select_ifstat(if_stat: dict[str, Any]) -> str | None:
-        """Display interfaces from if_stat dict, filter to physical ports."""
-        physical = [name for name in if_stat if name.startswith(("ge-", "xe-", "et-", "mge-"))]
-        if not physical:
-            physical = list(if_stat.keys())
-        physical.sort()
-        print("\nAvailable ports/interfaces:")
-        for idx, name in enumerate(physical, 1):
-            info = if_stat.get(name, {})
-            up = "UP" if info.get("up") else "DOWN"
-            print(f"  {idx}. {name} [{up}]")
-        selection = InputUtils.safe_input("\nSelect by number or type port name: ", context="ifstat_selection")
-        if not selection:
-            print("! No port selected.")
-            return None
-        if selection.isdigit():
-            sel_idx = int(selection) - 1
-            if 0 <= sel_idx < len(physical):
-                base = physical[sel_idx]
-                return base.split(".")[0] if "." in base else base
-            print("! Invalid port number.")
-            return None
-        return selection
-
-    @staticmethod
-    def _manual_port_entry() -> str | None:
-        """Prompt for manual port name entry."""
-        port = InputUtils.safe_input("Enter port name (e.g., ge-0/0/0): ", context="manual_port_entry")
-        return port if port else None
-
-    @staticmethod
-    def _select_port_optional(site_id: str, device_id: str) -> str:
-        """Show port list and let user pick or skip. Returns port name or empty."""
-        port_names: list[str] = []
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                ports = response.data.get("ports", [])
-                if ports:
-                    print("\nAvailable ports:")
-                    for idx, port in enumerate(ports, 1):
-                        name = port.get("port_id", port.get("name", f"port_{idx}"))
-                        up = "UP" if port.get("up") else "DOWN"
-                        print(f"  {idx}. {name} [{up}]")
-                        port_names.append(name)
-                else:
-                    if_stat = response.data.get("if_stat", {})
-                    if isinstance(if_stat, dict) and if_stat:
-                        physical = sorted(n for n in if_stat if n.startswith(("ge-", "xe-", "et-", "mge-")))
-                        if physical:
-                            print("\nAvailable ports:")
-                            for idx, name in enumerate(physical, 1):
-                                info = if_stat.get(name, {})
-                                up = "UP" if info.get("up") else "DOWN"
-                                print(f"  {idx}. {name} [{up}]")
-                                port_names.append(name)
-        except Exception:  # nosec B110
-            pass
-        selection = InputUtils.safe_input("Port (number, name, or Enter to skip): ", context="port_optional")
-        if not selection:
-            return ""
-        if selection.isdigit() and port_names:
-            idx = int(selection) - 1
-            if 0 <= idx < len(port_names):
-                base = port_names[idx]
-                return base.split(".")[0] if "." in base else base
-        return selection
-
-    @staticmethod
-    def _select_interface_from_device(site_id: str, device_id: str) -> str | None:
-        """Fetch network interfaces from device stats, display list, return selection."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-            if not hasattr(response, "data") or not isinstance(response.data, dict):
-                return DeviceUtilityCommands._manual_interface_entry()
-            if_stat = response.data.get("if_stat", {})
-            ip_stat = response.data.get("ip_stat", {})
-            ports = response.data.get("ports", [])
-            interfaces: list[str] = []
-            if isinstance(if_stat, dict) and if_stat:
-                interfaces = list(if_stat.keys())
-            if not interfaces and isinstance(ip_stat, dict) and ip_stat:
-                iface_prefixes = ("ge-", "xe-", "et-", "mge-", "lte-", "irb", "lo")
-                iface_keys = [k for k in ip_stat if k.startswith(iface_prefixes)]
-                if iface_keys:
-                    interfaces = iface_keys
-            if not interfaces and ports:
-                interfaces = [p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")]
-            if not interfaces:
-                return DeviceUtilityCommands._manual_interface_entry()
-            print("\nAvailable interfaces:")
-            for idx, iface in enumerate(interfaces, 1):
-                extra = ""
-                if isinstance(if_stat, dict) and iface in if_stat:
-                    entry = if_stat[iface]
-                    ips = entry.get("ips", [])
-                    if ips:
-                        extra = f" ({', '.join(ips)})"
-                elif isinstance(ip_stat, dict) and iface in ip_stat:
-                    ip_info = ip_stat[iface]
-                    ip_addr = ip_info.get("ip", "")
-                    if ip_addr:
-                        extra = f" ({ip_addr})"
-                print(f"  {idx}. {iface}{extra}")
-            selection = InputUtils.safe_input(
-                "\nSelect interface by number or type name: ", context="interface_selection"
-            )
-            if not selection:
-                print("! No interface selected.")
-                return None
-            if selection.isdigit():
-                sel_idx = int(selection) - 1
-                if 0 <= sel_idx < len(interfaces):
-                    return interfaces[sel_idx]
-                print("! Invalid interface number.")
-                return None
-            return selection
-        except Exception as error:
-            logging.debug(f"Could not fetch interface list: {error}")
-            return DeviceUtilityCommands._manual_interface_entry()
-
-    @staticmethod
-    def _manual_interface_entry() -> str | None:
-        """Prompt for manual interface name entry."""
-        iface = InputUtils.safe_input(
-            "Enter interface name (e.g., ge-0/0/0, wan0): ", context="manual_interface_entry", allow_empty=False
-        )
-        return iface if iface else None
-
-    @staticmethod
-    def _select_network_from_device(site_id: str, device_id: str) -> str:
-        """Fetch DHCP/network config from device, display available networks."""
-        network_names: list[str] = []
-        network_labels: list[str] = []
-        try:
-            response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                dhcpd_config = response.data.get("dhcpd_config", {})
-                if isinstance(dhcpd_config, dict):
-                    for net_name in dhcpd_config:
-                        network_names.append(net_name)
-                        network_labels.append(f"{net_name} (dhcp server)")
-                ip_config = response.data.get("ip_config", {})
-                if isinstance(ip_config, dict):
-                    for net_name, net_cfg in ip_config.items():
-                        if net_name not in network_names:
-                            network_names.append(net_name)
-                            ip_addr = net_cfg.get("ip", "") if isinstance(net_cfg, dict) else ""
-                            label = f"{net_name} ({ip_addr})" if ip_addr else net_name
-                            network_labels.append(label)
-        except Exception as error:
-            logging.debug(f"Could not fetch network config: {error}")
-        if network_names:
-            print("\nAvailable networks:")
-            for idx, label in enumerate(network_labels, 1):
-                print(f"  {idx}. {label}")
-            if len(network_names) == 1:
-                print(f"\n-> Auto-selecting: {network_names[0]}")
-                return network_names[0]
-        selection = InputUtils.safe_input(
-            "Select network (number or name, required): ", context="dhcp_network", allow_empty=False
-        )
-        if not selection:
-            return ""
-        if selection.isdigit() and network_names:
-            sel_idx = int(selection) - 1
-            if 0 <= sel_idx < len(network_names):
-                return network_names[sel_idx]
-        return selection
-
-    @staticmethod
-    def _run_websocket_command(
-        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
-        """Execute WebSocket command pattern: POST -> subscribe -> await result."""
-        websocket_manager = WebSocketManager(apisession)
-        if not websocket_manager.connect():
-            print("! Failed to establish WebSocket connection.")
-            return None
-        channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(channel):
-            print("! Failed to subscribe to device command channel.")
-            websocket_manager.disconnect()
-            return None
-        time.sleep(1)
-        try:
-            if body is not None:
-                response = sdk_method(apisession, site_id, device_id, body)
-            else:
-                response = sdk_method(apisession, site_id, device_id)
-            if not hasattr(response, "data"):
-                print("! No response data from API.")
-                websocket_manager.disconnect()
-                return None
-            response_data = response.data if isinstance(response.data, dict) else {}
-            session_id = response_data.get("session")
-            if not session_id:
-                print("! No session ID returned from command.")
-                websocket_manager.disconnect()
-                return None
-            print(f"-> Command issued (session: {session_id[:8]}...)")
-            print("-> Waiting for results...")
-            result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=120)
-            return result
-        except Exception as error:
-            logging.error(f"WebSocket command failed: {error}", exc_info=True)
-            print(f"! Command failed: {error}")
-            return None
-        finally:
-            websocket_manager.disconnect()
-
-    @staticmethod
-    def _run_streaming_command(
-        site_id: str, device_id: str, sdk_method: Any, body: dict[str, Any] | None = None, timeout_seconds: int = 120
-    ) -> None:
-        """Execute streaming WebSocket command with incremental output display."""
-        websocket_manager = WebSocketManager(apisession)
-        if not websocket_manager.connect():
-            print("! Failed to establish WebSocket connection.")
-            return
-        channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(channel):
-            print("! Failed to subscribe to device command channel.")
-            websocket_manager.disconnect()
-            return
-        time.sleep(1)
-        try:
-            if body is not None:
-                response = sdk_method(apisession, site_id, device_id, body)
-            else:
-                response = sdk_method(apisession, site_id, device_id)
-            if not hasattr(response, "data"):
-                print("! No response data from API.")
-                return
-            response_data = response.data if isinstance(response.data, dict) else {}
-            session_id = response_data.get("session")
-            if not session_id:
-                print("! No session ID returned.")
-                return
-            print(f"-> Streaming started (session: {session_id[:8]}...)")
-            print("-> Press Ctrl+C to stop.\n")
-            result = websocket_manager.wait_for_command_result(
-                session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=30
-            )
-            if result:
-                raw = result.get("raw", "")
-                if raw:
-                    print(raw)
-        except KeyboardInterrupt:
-            print("\n-> Streaming stopped by user.")
-        except Exception as error:
-            logging.error(f"Streaming command failed: {error}", exc_info=True)
-            print(f"! Streaming failed: {error}")
-        finally:
-            websocket_manager.disconnect()
-
-    @staticmethod
-    def _display_and_export_result(
-        result: dict[str, Any] | None,
-        command_name: str,
-        site_id: str,
-        device_id: str,
-        api_function_name: str,
-        filename: str,
-    ) -> None:
-        """Display WebSocket result and write to dual output."""
-        if not result:
-            print("! No results received (timeout or error).")
-            return
-        print("\n" + "=" * 60)
-        print(f"{command_name.upper()} RESULTS:")
-        print("=" * 60)
-        raw_output = result.get("raw", "")
-        if raw_output:
-            print(raw_output)
-        other_output = result.get("Output", "")
-        if other_output and other_output != raw_output:
-            print(other_output)
-        export_data = {
-            "device_id": device_id,
-            "site_id": site_id,
-            "command": command_name,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "raw_output": raw_output or other_output or str(result),
-        }
-        DataExporter.write_with_format_selection([export_data], filename, api_function_name=api_function_name)
-
-    @staticmethod
-    def _confirm_destructive(prompt: str, keyword: str, context: str) -> bool:
-        """Require typed keyword confirmation for destructive operations."""
-        confirmation = InputUtils.safe_input(prompt, context=context)
-        if confirmation != keyword:
-            print("! Operation cancelled - confirmation not matched.")
-            return False
-        return True
-
-    @staticmethod
-    def _print_api_result(response: Any, success_msg: str, fail_msg: str) -> bool:
-        """Check API response status code and print appropriate message."""
-        if hasattr(response, "status_code") and response.status_code >= 400:
-            detail = ""
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                detail = response.data.get("detail", "")
-            error_text = f"! {fail_msg} (HTTP {response.status_code})"
-            if detail:
-                error_text += f": {detail}"
-            print(error_text)
-            return False
-        print(f"-> {success_msg}")
-        return True
-
-    # ===== DIAGNOSTIC COMMANDS =====
+    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP
 
     @staticmethod
     def traceroute() -> None:
-        """Menu 123: Run traceroute from device to destination host."""
-        logging.info("Menu #123: Traceroute from device")
-        selection = DeviceUtilityCommands._select_site_and_device("traceroute")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        host = InputUtils.safe_input(
-            "Enter destination host or IP (required): ", context="traceroute_host", allow_empty=False
-        )
-        if not host:
-            print("! Destination host is required.")
-            return
-        protocol = InputUtils.safe_input(
-            "Protocol (udp/icmp, default: udp): ", default_value="udp", context="traceroute_protocol"
-        )
-        body: dict[str, Any] = {"host": host}
-        if protocol and protocol.lower() in ("udp", "icmp"):
-            body["protocol"] = protocol.lower()
-        print(f"\n-> Running traceroute to {host}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.tracerouteFromDevice, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Traceroute", site_id, device_id, "tracerouteFromDevice", "DeviceTraceroute.csv"
-        )
+        """Menu 123: Traceroute from device to destination host."""
+        _get_duc_instance().traceroute()
 
     @staticmethod
     def show_ospf_neighbors() -> None:
         """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
-        logging.info("Menu #124: Show OSPF Neighbors")
-        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_neighbors", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="ospf_vrf")
-        if vrf:
-            body["vrf"] = vrf
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="ospf_node")
-        if node:
-            body["node"] = node
-        neighbor = InputUtils.safe_input("Neighbor IP (Enter to skip): ", context="ospf_neighbor")
-        if neighbor:
-            body["neighbor"] = neighbor
-        print("\n-> Fetching OSPF neighbors...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfNeighbors, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Neighbors", site_id, device_id, "showSiteGatewayOspfNeighbors", "DeviceOspfNeighbors.csv"
-        )
+        _get_duc_instance().show_ospf_neighbors()
 
     @staticmethod
     def show_ospf_interfaces() -> None:
         """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
-        logging.info("Menu #125: Show OSPF Interfaces")
-        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_interfaces", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="ospf_vrf")
-        if vrf:
-            body["vrf"] = vrf
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="ospf_node")
-        if node:
-            body["node"] = node
-        port_id = DeviceUtilityCommands._select_port_optional(site_id, device_id)
-        if port_id:
-            body["port_id"] = port_id
-        print("\n-> Fetching OSPF interfaces...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfInterfaces, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Interfaces", site_id, device_id, "showSiteGatewayOspfInterfaces", "DeviceOspfInterfaces.csv"
-        )
+        _get_duc_instance().show_ospf_interfaces()
 
     @staticmethod
     def show_ospf_database() -> None:
         """Menu 126: Show OSPF database on SSR/SRX gateway."""
-        logging.info("Menu #126: Show OSPF Database")
-        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_database", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="ospf_vrf")
-        if vrf:
-            body["vrf"] = vrf
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="ospf_node")
-        if node:
-            body["node"] = node
-        self_orig = InputUtils.safe_input("Show self-originated only? (y/N): ", context="ospf_self_originate")
-        if self_orig and self_orig.lower() == "y":
-            body["self_originate"] = True
-        print("\n-> Fetching OSPF database...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfDatabase, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Database", site_id, device_id, "showSiteGatewayOspfDatabase", "DeviceOspfDatabase.csv"
-        )
+        _get_duc_instance().show_ospf_database()
 
     @staticmethod
     def show_ospf_summary() -> None:
         """Menu 127: Show OSPF summary on SSR/SRX gateway."""
-        logging.info("Menu #127: Show OSPF Summary")
-        selection = DeviceUtilityCommands._select_site_and_device("show_ospf_summary", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="ospf_vrf")
-        if vrf:
-            body["vrf"] = vrf
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="ospf_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching OSPF summary...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteGatewayOspfSummary, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "OSPF Summary", site_id, device_id, "showSiteGatewayOspfSummary", "DeviceOspfSummary.csv"
-        )
+        _get_duc_instance().show_ospf_summary()
 
     @staticmethod
     def resolve_dns() -> None:
         """Menu 135: Test DNS resolution on SSR gateway."""
-        logging.info("Menu #135: Resolve DNS")
-        selection = DeviceUtilityCommands._select_site_and_device("resolve_dns", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        print("\n-> Testing DNS resolution on device...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.testSiteSsrDnsResolution
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "DNS Resolution", site_id, device_id, "testSiteSsrDnsResolution", "DeviceDnsResolution.csv"
-        )
+        _get_duc_instance().resolve_dns()
 
     @staticmethod
     def monitor_traffic() -> None:
-        """Menu 136: Monitor traffic on switch/SRX port (streaming)."""
-        logging.info("Menu #136: Monitor Traffic (streaming)")
-        selection = DeviceUtilityCommands._select_site_and_device("monitor_traffic", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_from_device(site_id, device_id)
-        if not port_id:
-            return
-        body: dict[str, Any] = {"port_id": port_id}
-        duration_str = InputUtils.safe_input(
-            "Duration in seconds (default: 60): ", default_value="60", context="monitor_duration"
-        )
-        try:
-            duration = int(duration_str) if duration_str else 60
-        except ValueError:
-            duration = 60
-        body["duration"] = duration
-        print(f"\n-> Monitoring traffic on port {port_id}...")
-        DeviceUtilityCommands._run_streaming_command(
-            site_id,
-            device_id,
-            mistapi.api.v1.sites.devices.monitorSiteDeviceTraffic,
-            body,
-            timeout_seconds=duration + 30,
-        )
+        """Menu 136: Monitor traffic on switch/SRX port."""
+        _get_duc_instance().monitor_traffic()
 
     @staticmethod
     def run_top() -> None:
-        """Menu 137: Run top command on switch/SRX (streaming)."""
-        logging.info("Menu #137: Run Top (streaming)")
-        selection = DeviceUtilityCommands._select_site_and_device("run_top", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        print("\n-> Running top command...")
-        DeviceUtilityCommands._run_streaming_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.runSiteSrxTopCommand, timeout_seconds=120
-        )
-
-    # ===== SHOW COMMANDS =====
+        """Menu 137: Run top command on switch/SRX."""
+        _get_duc_instance().run_top()
 
     @staticmethod
     def show_session() -> None:
         """Menu 128: Show sessions on SSR/SRX gateway."""
-        logging.info("Menu #128: Show Sessions")
-        selection = DeviceUtilityCommands._select_site_and_device("show_session", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        service = InputUtils.safe_input("Service name filter (Enter to skip): ", context="session_service")
-        if service:
-            body["service_name"] = service
-        session = InputUtils.safe_input("Session ID filter (Enter to skip): ", context="session_id_filter")
-        if session:
-            body["session_id"] = session
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="session_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching device sessions...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrAndSrxSessions, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Sessions", site_id, device_id, "showSiteSsrAndSrxSessions", "DeviceSessions.csv"
-        )
+        _get_duc_instance().show_session()
 
     @staticmethod
     def show_service_path() -> None:
         """Menu 129: Show service path on SSR gateway."""
-        logging.info("Menu #129: Show Service Path")
-        selection = DeviceUtilityCommands._select_site_and_device("show_service_path", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        service = InputUtils.safe_input("Service name (Enter to skip): ", context="service_path_name")
-        if service:
-            body["service_name"] = service
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="service_path_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching service path...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteSsrServicePath, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Service Path", site_id, device_id, "showSiteSsrServicePath", "DeviceServicePath.csv"
-        )
+        _get_duc_instance().show_service_path()
 
     @staticmethod
     def show_bgp_summary() -> None:
         """Menu 130: Show BGP summary on switch or gateway."""
-        logging.info("Menu #130: Show BGP Summary")
-        selection = DeviceUtilityCommands._select_site_and_device("show_bgp_summary")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="bgp_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching BGP summary...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceBgpSummary, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "BGP Summary", site_id, device_id, "showSiteDeviceBgpSummary", "DeviceBgpSummary.csv"
-        )
+        _get_duc_instance().show_bgp_summary()
 
     @staticmethod
     def show_arp_table() -> None:
         """Menu 131: Show ARP table on switch or gateway."""
-        logging.info("Menu #131: Show ARP Table")
-        selection = DeviceUtilityCommands._select_site_and_device("show_arp_table")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="arp_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching ARP table...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceArpTable, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "ARP Table", site_id, device_id, "showSiteDeviceArpTable", "DeviceArpTable.csv"
-        )
+        _get_duc_instance().show_arp_table()
 
     @staticmethod
     def show_dhcp_leases() -> None:
         """Menu 132: Show DHCP leases on switch or gateway."""
-        logging.info("Menu #132: Show DHCP Leases")
-        selection = DeviceUtilityCommands._select_site_and_device("show_dhcp_leases")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        network = DeviceUtilityCommands._select_network_from_device(site_id, device_id)
-        if network:
-            body["network"] = network
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="dhcp_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching DHCP leases...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDhcpLeases, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "DHCP Leases", site_id, device_id, "showSiteDeviceDhcpLeases", "DeviceDhcpLeases.csv"
-        )
+        _get_duc_instance().show_dhcp_leases()
 
     @staticmethod
     def show_dot1x() -> None:
         """Menu 133: Show 802.1X table on switch."""
-        logging.info("Menu #133: Show 802.1X Table")
-        selection = DeviceUtilityCommands._select_site_and_device("show_dot1x", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="dot1x_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching 802.1X table...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceDot1xTable, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "802.1X Table", site_id, device_id, "showSiteDeviceDot1xTable", "DeviceDot1xTable.csv"
-        )
+        _get_duc_instance().show_dot1x()
 
     @staticmethod
     def show_evpn_database() -> None:
         """Menu 134: Show EVPN database on switch or gateway."""
-        logging.info("Menu #134: Show EVPN Database")
-        selection = DeviceUtilityCommands._select_site_and_device("show_evpn_database")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="evpn_node")
-        if node:
-            body["node"] = node
-        print("\n-> Fetching EVPN database...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.showSiteDeviceEvpnDatabase, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "EVPN Database", site_id, device_id, "showSiteDeviceEvpnDatabase", "DeviceEvpnDatabase.csv"
-        )
-
-    # ===== MANAGEMENT COMMANDS =====
+        _get_duc_instance().show_evpn_database()
 
     @staticmethod
     def locate_device() -> None:
         """Menu 138: Locate device by blinking LED."""
-        logging.info("Menu #138: Locate Device")
-        selection = DeviceUtilityCommands._select_site_and_device("locate")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        duration_str = InputUtils.safe_input(
-            "LED blink duration in minutes (1-120, default 5): ", default_value="5", context="locate_duration"
-        )
-        try:
-            duration = max(1, min(120, int(duration_str)))
-        except ValueError:
-            duration = 5
-        body: dict[str, Any] = {"duration": duration}
-        try:
-            response = mistapi.api.v1.sites.devices.startSiteLocateDevice(apisession, site_id, device_id, body)
-            if DeviceUtilityCommands._print_api_result(
-                response, f"Device LED blinking for {duration} minutes.", "Locate device failed"
-            ):
-                print("-> Use 'Unlocate Device' (menu 139) to stop.")
-        except Exception as error:
-            logging.error(f"Locate device failed: {error}", exc_info=True)
-            print(f"! Locate failed: {error}")
+        _get_duc_instance().locate_device()
 
     @staticmethod
     def unlocate_device() -> None:
         """Menu 139: Stop device LED blinking."""
-        logging.info("Menu #139: Unlocate Device")
-        selection = DeviceUtilityCommands._select_site_and_device("unlocate")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        try:
-            response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(apisession, site_id, device_id)
-            DeviceUtilityCommands._print_api_result(response, "Device LED blinking stopped.", "Unlocate failed")
-        except Exception as error:
-            logging.error(f"Unlocate device failed: {error}", exc_info=True)
-            print(f"! Unlocate failed: {error}")
+        _get_duc_instance().unlocate_device()
 
     @staticmethod
     def bounce_port() -> None:
-        """Menu 140: Bounce switch/gateway port (y/N confirmation)."""
-        logging.info("Menu #140: Bounce Port")
-        selection = DeviceUtilityCommands._select_site_and_device("bounce_port")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_from_device(site_id, device_id)
-        if not port_id:
-            return
-        blocked_prefixes = ("vme", "ae", "irb")
-        if port_id.startswith(blocked_prefixes):
-            print(f"! Port '{port_id}' cannot be bounced (management/aggregate/IRB port).")
-            return
-        confirm = InputUtils.safe_input(
-            f"Bounce port {port_id}? This will briefly disrupt traffic. (y/N): ", context="bounce_port"
-        )
-        if confirm.lower() != "y":
-            print("! Operation cancelled.")
-            return
-        body: dict[str, Any] = {"ports": [port_id]}
-        print(f"\n-> Bouncing port {port_id}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.bounceDevicePort, body
-        )
-        if result:
-            print("-> Port bounce complete.")
-        else:
-            print("! Port bounce may have timed out. Check device status.")
+        """Menu 140: Bounce switch/gateway port."""
+        _get_duc_instance().bounce_port()
 
     @staticmethod
     def cable_test() -> None:
         """Menu 141: Run cable test on switch port."""
-        logging.info("Menu #141: Cable Test")
-        selection = DeviceUtilityCommands._select_site_and_device("cable_test", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_from_device(site_id, device_id)
-        if not port_id:
-            return
-        body: dict[str, Any] = {"port": port_id}
-        print(f"\n-> Running cable test on port {port_id}...")
-        result = DeviceUtilityCommands._run_websocket_command(
-            site_id, device_id, mistapi.api.v1.sites.devices.cableTestFromSwitch, body
-        )
-        DeviceUtilityCommands._display_and_export_result(
-            result, "Cable Test", site_id, device_id, "cableTestFromSwitch", "DeviceCableTest.csv"
-        )
+        _get_duc_instance().cable_test()
 
     @staticmethod
     def reprovision_device() -> None:
-        """Menu 142: Reprovision switch/gateway (y/N confirmation)."""
-        logging.info("Menu #142: Reprovision Device")
-        selection = DeviceUtilityCommands._select_site_and_device("reprovision")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        confirm = InputUtils.safe_input(
-            "Reprovision this device? This will push fresh config. (y/N): ", context="reprovision"
-        )
-        if confirm.lower() != "y":
-            print("! Operation cancelled.")
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(apisession, site_id, device_id)
-            DeviceUtilityCommands._print_api_result(response, "Device reprovisioning initiated.", "Reprovision failed")
-        except Exception as error:
-            logging.error(f"Reprovision failed: {error}", exc_info=True)
-            print(f"! Reprovision failed: {error}")
+        """Menu 142: Reprovision switch/gateway."""
+        _get_duc_instance().reprovision_device()
 
     @staticmethod
     def readopt_device() -> None:
-        """Menu 143: Re-adopt switch device.
-
-        Preflight the device's Virtual Chassis (VC) membership before calling
-        the readopt API to avoid a `400` response for non-VC switches.
-        """
-        logging.info("Menu #143: Re-adopt Device")
-        selection = DeviceUtilityCommands._select_site_and_device("readopt", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-
-        # Preflight: check if device is part of a virtual chassis
-        try:
-            vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
-            vc_data = getattr(vc_resp, "data", None) or {}
-            is_vc = vc_data.get("is_virtual_chassis", False)
-            if not is_vc:
-                print("! Device is not a Virtual Chassis member. 'readopt' applies only to VC devices. Skipping.")
-                return
-        except Exception as error:
-            # If the preflight check fails (e.g., permission or API change), log and attempt readopt
-            logging.warning(f"VC preflight check failed: {error}", exc_info=True)
-
-        try:
-            response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(apisession, site_id, device_id)
-            DeviceUtilityCommands._print_api_result(response, "Device re-adoption initiated.", "Re-adopt failed")
-        except Exception as error:
-            logging.error(f"Re-adopt failed: {error}", exc_info=True)
-            print(f"! Re-adopt failed: {error}")
+        """Menu 143: Re-adopt switch device."""
+        _get_duc_instance().readopt_device()
 
     @staticmethod
     def get_ztp_password() -> None:
-        """Menu 144: Get ZTP password for switch/gateway (console only)."""
-        logging.info("Menu #144: Get ZTP Password")
-        selection = DeviceUtilityCommands._select_site_and_device("ztp_password")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        try:
-            response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(apisession, site_id, device_id)
-            if hasattr(response, "data"):
-                data = response.data if isinstance(response.data, dict) else {}
-                password = data.get("password", str(response.data))
-                print(f"\n-> ZTP Password: {password}")
-                print("-> (Password displayed on console only - not logged or saved)")
-            else:
-                print("! No password data returned.")
-        except Exception as error:
-            logging.error(f"ZTP password request failed: {error}", exc_info=True)
-            print(f"! ZTP password request failed: {error}")
+        """Menu 144: Get ZTP password for switch/gateway."""
+        _get_duc_instance().get_ztp_password()
 
     @staticmethod
     def get_config_commands() -> None:
-        """Menu 145: Get configuration CLI commands for switch adoption."""
-        logging.info("Menu #145: Get Config CLI Commands")
-        selection = DeviceUtilityCommands._select_site_and_device("config_cmd", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        try:
-            response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(apisession, site_id, device_id)
-            if hasattr(response, "data"):
-                data = response.data
-                print("\n" + "=" * 60)
-                print("CONFIGURATION CLI COMMANDS:")
-                print("=" * 60)
-                if isinstance(data, dict):
-                    for key, value in data.items():
-                        print(f"\n--- {key} ---")
-                        print(str(value))
-                else:
-                    print(str(data))
-            else:
-                print("! No configuration commands returned.")
-        except Exception as error:
-            logging.error(f"Config commands request failed: {error}", exc_info=True)
-            print(f"! Config commands request failed: {error}")
+        """Menu 145: Get configuration CLI commands for switch."""
+        _get_duc_instance().get_config_commands()
 
     @staticmethod
     def upload_support_file() -> None:
         """Menu 146: Upload support file from switch/gateway."""
-        logging.info("Menu #146: Upload Support File")
-        selection = DeviceUtilityCommands._select_site_and_device("support_upload")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        file_types = ["full", "process", "outbound-ssh", "messages", "core-dumps", "var-logs", "jma-logs"]
-        print("\nSupport file types:")
-        for idx, ft in enumerate(file_types, 1):
-            print(f"  {idx}. {ft}")
-        type_input = InputUtils.safe_input(
-            "Select type (1-7, default: 1 = full): ", default_value="1", context="support_type"
-        )
-        try:
-            type_idx = int(type_input) - 1
-            info = file_types[type_idx] if 0 <= type_idx < len(file_types) else "full"
-        except (ValueError, IndexError):
-            info = "full"
-        body: dict[str, Any] = {"info": info}
-        node = InputUtils.safe_input("Node (node0/node1, Enter for both): ", context="support_node")
-        if node:
-            body["node"] = node
-        try:
-            response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(apisession, site_id, device_id, body)
-            if DeviceUtilityCommands._print_api_result(
-                response, f"Support file upload ({info}) initiated.", "Support file upload failed"
-            ):
-                print("-> Files will be available in the Mist dashboard.")
-        except Exception as error:
-            logging.error(f"Support file upload failed: {error}", exc_info=True)
-            print(f"! Support file upload failed: {error}")
-
-    # ===== CLEAR/RESET COMMANDS =====
+        _get_duc_instance().upload_support_file()
 
     @staticmethod
     def clear_arp_cache() -> None:
-        """Menu 147: Clear ARP cache (typed 'CLEAR' confirmation)."""
-        logging.info("Menu #147: Clear ARP Cache")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_arp")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_arp_node")
-        if node:
-            body["node"] = node
-        port_id = DeviceUtilityCommands._select_port_optional(site_id, device_id)
-        if port_id:
-            body["port_id"] = port_id
-        ip_addr = InputUtils.safe_input("IP address to clear (Enter for all): ", context="clear_arp_ip")
-        if ip_addr:
-            body["ip"] = ip_addr
-        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp"):
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(response, "ARP cache cleared.", "Clear ARP cache failed")
-        except Exception as error:
-            logging.error(f"Clear ARP cache failed: {error}", exc_info=True)
-            print(f"! Clear ARP cache failed: {error}")
+        """Menu 147: Clear ARP cache."""
+        _get_duc_instance().clear_arp_cache()
 
     @staticmethod
     def clear_bgp_routes() -> None:
-        """Menu 148: Clear BGP routes (typed 'CLEAR' confirmation)."""
-        logging.info("Menu #148: Clear BGP Routes")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_bgp", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        neighbor = InputUtils.safe_input(
-            "BGP neighbor IP (required): ", context="clear_bgp_neighbor", allow_empty=False
-        )
-        if not neighbor:
-            print("! Neighbor IP is required.")
-            return
-        body["neighbor"] = neighbor
-        bgp_type = InputUtils.safe_input("Type (in/out, Enter for both): ", context="clear_bgp_type")
-        if bgp_type and bgp_type.lower() in ("in", "out"):
-            body["type"] = bgp_type.lower()
-        vrf = InputUtils.safe_input("VRF (Enter to skip): ", context="clear_bgp_vrf")
-        if vrf:
-            body["vrf"] = vrf
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_bgp_node")
-        if node:
-            body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive("Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp"):
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(response, "BGP routes cleared.", "Clear BGP routes failed")
-        except Exception as error:
-            logging.error(f"Clear BGP routes failed: {error}", exc_info=True)
-            print(f"! Clear BGP routes failed: {error}")
+        """Menu 148: Clear BGP routes."""
+        _get_duc_instance().clear_bgp_routes()
 
     @staticmethod
     def clear_session() -> None:
-        logging.info("Menu #149: Clear Session")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_session", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        service_name = InputUtils.safe_input(
-            "Service name to clear (Enter to skip): ", context="clear_session_service_name"
-        )
-        session_ids_input = InputUtils.safe_input(
-            "Session IDs to clear (comma-separated, Enter to skip): ",
-            context="clear_session_ids",
-        )
-        if service_name:
-            body["service_name"] = service_name
-        elif session_ids_input:
-            session_ids = [s.strip() for s in session_ids_input.split(",") if s.strip()]
-            if session_ids:
-                body["session_ids"] = session_ids
-        else:
-            confirm_all = InputUtils.safe_input(
-                "No service name or session IDs provided. This may attempt to clear ALL sessions."
-                " Type 'CLEAR ALL' to proceed or press Enter to cancel: ",
-                context="clear_session_confirm_all",
-            )
-            if confirm_all != "CLEAR ALL":
-                print("Cancelled: No service name or session IDs provided.")
-                return
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_session_node")
-        if node:
-            body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"
-        ):
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(response, "Session(s) cleared.", "Clear session failed")
-        except Exception as error:
-            logging.error(f"Clear session failed: {error}", exc_info=True)
-            try:
-                code = getattr(error, "status_code", None) or getattr(
-                    getattr(error, "response", None), "status_code", None
-                )
-                if code == 400:
-                    print(
-                        "! API returned 400. The API expects either 'service_name'"
-                        " or 'session_ids' in the request body."
-                    )
-                    print("  Provide a service name or a comma-separated list of session IDs, and retry.")
-                else:
-                    print(f"! Clear session failed: {error}")
-            except Exception:
-                print(f"! Clear session failed: {error}")
+        """Menu 149: Clear session on SSR/SRX gateway."""
+        _get_duc_instance().clear_session()
 
     @staticmethod
     def clear_mac_table() -> None:
-        """Menu 150: Clear MAC table (typed 'CLEAR' confirmation)."""
-        logging.info("Menu #150: Clear MAC Table")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_mac_table")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_mac_node")
-        if node:
-            body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear MAC table: ", "CLEAR", "clear_mac_table"
-        ):
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(response, "MAC table cleared.", "Clear MAC table failed")
-        except Exception as error:
-            logging.error(f"Clear MAC table failed: {error}", exc_info=True)
-            print(f"! Clear MAC table failed: {error}")
+        """Menu 150: Clear MAC table."""
+        _get_duc_instance().clear_mac_table()
 
     @staticmethod
     def clear_bpdu_error() -> None:
-        """Menu 151: Clear BPDU errors on switch (typed 'CLEAR' confirmation)."""
-        logging.info("Menu #151: Clear BPDU Errors")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_bpdu_error", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_optional(site_id, device_id)
-        port_target = port_id if port_id else "all"
-        if not DeviceUtilityCommands._confirm_destructive(
-            f"Type 'CLEAR' to clear BPDU errors on port {port_target}: ", "CLEAR", "clear_bpdu_error"
-        ):
-            return
-        body: dict[str, Any] = {"port": port_target}
-        try:
-            response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(response, "BPDU errors cleared.", "Clear BPDU errors failed")
-        except Exception as error:
-            logging.error(f"Clear BPDU errors failed: {error}", exc_info=True)
-            print(f"! Clear BPDU errors failed: {error}")
+        """Menu 151: Clear BPDU errors on switch."""
+        _get_duc_instance().clear_bpdu_error()
 
     @staticmethod
     def clear_learned_macs() -> None:
-        """Menu 152: Clear learned MACs from switch port (typed 'CLEAR')."""
-        logging.info("Menu #152: Clear Learned MACs")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_macs", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_from_device(site_id, device_id)
-        if not port_id:
-            print("! Port selection is required for clearing learned MACs.")
-            return
-        port_with_unit = port_id if "." in port_id else f"{port_id}.0"
-        if not DeviceUtilityCommands._confirm_destructive(
-            f"Type 'CLEAR' to clear learned MACs on port {port_with_unit}: ", "CLEAR", "clear_macs"
-        ):
-            return
-        body: dict[str, Any] = {"ports": [port_with_unit]}
-        try:
-            response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
-                apisession, site_id, device_id, body
-            )
-            DeviceUtilityCommands._print_api_result(
-                response, f"Learned MACs cleared from port {port_with_unit}.", "Clear learned MACs failed"
-            )
-        except Exception as error:
-            logging.error(f"Clear learned MACs failed: {error}", exc_info=True)
-            print(f"! Clear learned MACs failed: {error}")
+        """Menu 152: Clear learned MACs from switch port."""
+        _get_duc_instance().clear_learned_macs()
 
     @staticmethod
     def clear_policy_hit_count() -> None:
-        """Menu 153: Clear policy hit count on SSR (typed 'CLEAR')."""
-        # TODO: Returns 400 on DC-West SSR120. Investigate API requirements -
-        #   may need node param, or may be unsupported on SSR120 model.
-        logging.info("Menu #153: Clear Policy Hit Count")
-        selection = DeviceUtilityCommands._select_site_and_device("clear_policy_hit_count", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="clear_policy_node")
-        if node:
-            body["node"] = node
-        if not DeviceUtilityCommands._confirm_destructive(
-            "Type 'CLEAR' to clear policy hit count: ", "CLEAR", "clear_policy_hit_count"
-        ):
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, "Policy hit count cleared.", "Clear policy hit count failed"
-            )
-        except Exception as error:
-            logging.error(f"Clear policy hit count failed: {error}", exc_info=True)
-            print(f"! Clear policy hit count failed: {error}")
+        """Menu 153: Clear policy hit count on SSR."""
+        _get_duc_instance().clear_policy_hit_count()
 
     @staticmethod
     def release_dhcp_lease() -> None:
-        """Menu 154: Release DHCP lease on switch/gateway (y/N confirmation)."""
-        logging.info("Menu #154: Release DHCP Lease")
-        selection = DeviceUtilityCommands._select_site_and_device("release_dhcp")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_port_from_device(site_id, device_id)
-        if not port_id:
-            print("! Port selection is required.")
-            return
-        body: dict[str, Any] = {"port_id": port_id}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="release_dhcp_node")
-        if node:
-            body["node"] = node
-        confirm = InputUtils.safe_input(f"Release DHCP lease on port {port_id}? (y/N): ", context="release_dhcp")
-        if confirm.lower() != "y":
-            print("! Operation cancelled.")
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, f"DHCP lease released on port {port_id}.", "Release DHCP lease failed"
-            )
-        except Exception as error:
-            logging.error(f"Release DHCP lease failed: {error}", exc_info=True)
-            print(f"! Release DHCP lease failed: {error}")
+        """Menu 154: Release DHCP lease on switch/gateway."""
+        _get_duc_instance().release_dhcp_lease()
 
     @staticmethod
     def release_dhcp_ssr() -> None:
-        """Menu 155: Release DHCP lease on SSR/SRX (y/N confirmation)."""
-        logging.info("Menu #155: Release DHCP Lease (SSR)")
-        selection = DeviceUtilityCommands._select_site_and_device("release_dhcp_ssr", "gateway")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        port_id = DeviceUtilityCommands._select_interface_from_device(site_id, device_id)
-        if not port_id:
-            print("! Network interface is required.")
-            return
-        body: dict[str, Any] = {"port_id": port_id}
-        node = InputUtils.safe_input("Node (node0/node1, Enter to skip): ", context="release_dhcp_ssr_node")
-        if node:
-            body["node"] = node
-        confirm = InputUtils.safe_input(
-            f"Release DHCP lease on interface {port_id}? (y/N): ", context="release_dhcp_ssr"
-        )
-        if confirm.lower() != "y":
-            print("! Operation cancelled.")
-            return
-        try:
-            response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(apisession, site_id, device_id, body)
-            DeviceUtilityCommands._print_api_result(
-                response, f"SSR DHCP lease released on interface {port_id}.", "Release SSR DHCP lease failed"
-            )
-        except Exception as error:
-            logging.error(f"Release SSR DHCP lease failed: {error}", exc_info=True)
-            print(f"! Release SSR DHCP lease failed: {error}")
-
-    # ===== HARDWARE COMMANDS =====
+        """Menu 155: Release DHCP lease on SSR/SRX."""
+        _get_duc_instance().release_dhcp_ssr()
 
     @staticmethod
     def poll_switch_stats() -> None:
         """Menu 156: Poll fresh statistics from switch."""
-        logging.info("Menu #156: Poll Switch Stats")
-        selection = DeviceUtilityCommands._select_site_and_device("poll_stats", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        try:
-            response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(apisession, site_id, device_id)
-            if DeviceUtilityCommands._print_api_result(
-                response, "Fresh statistics polled from switch.", "Poll switch stats failed"
-            ):
-                print("-> Updated stats will appear in next stats export.")
-        except Exception as error:
-            logging.error(f"Poll switch stats failed: {error}", exc_info=True)
-            print(f"! Poll switch stats failed: {error}")
+        _get_duc_instance().poll_switch_stats()
 
     @staticmethod
     def create_device_snapshot() -> None:
         """Menu 157: Create device snapshot on switch."""
-        logging.info("Menu #157: Create Device Snapshot")
-        selection = DeviceUtilityCommands._select_site_and_device("snapshot", "switch")
-        if not selection:
-            return
-        site_id, device_id, _ = selection
-        try:
-            response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(apisession, site_id, device_id)
-            DeviceUtilityCommands._print_api_result(
-                response, "Device snapshot created successfully.", "Create snapshot failed"
-            )
-        except Exception as error:
-            logging.error(f"Create snapshot failed: {error}", exc_info=True)
-            print(f"! Create snapshot failed: {error}")
+        _get_duc_instance().create_device_snapshot()
 
 
 # ==============================
