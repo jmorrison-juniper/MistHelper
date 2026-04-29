@@ -26,6 +26,11 @@ sys.modules["mistapi"] = _our_mock
 from src.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader
 
 
+def setup_module() -> None:
+    """Re-assert mocks in sys.modules before tests run."""
+    sys.modules["mistapi"] = _our_mock
+
+
 def teardown_module() -> None:
     """Restore sys.modules only if our mock is still installed."""
     if sys.modules.get("mistapi") is not _our_mock:

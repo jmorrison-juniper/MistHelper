@@ -24,6 +24,16 @@ DiagramReferenceValidator = lint_diagram_refs.DiagramReferenceValidator
 BUILT_IN_ALLOWLIST = lint_diagram_refs.BUILT_IN_ALLOWLIST
 
 
+def setup_module() -> None:
+    """Re-assert mocks in sys.modules before tests run."""
+    sys.modules["lint_diagram_refs"] = lint_diagram_refs
+
+
+def teardown_module() -> None:
+    """Remove our mock from sys.modules."""
+    sys.modules.pop("lint_diagram_refs", None)
+
+
 @pytest.fixture
 def validator():
     """Create a fresh validator instance."""

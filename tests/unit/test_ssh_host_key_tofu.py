@@ -20,6 +20,16 @@ except SystemExit:
     pass
 
 
+def setup_module() -> None:
+    """Re-assert mocks in sys.modules before tests run."""
+    sys.modules["MistHelper"] = MistHelper
+
+
+def teardown_module() -> None:
+    """Remove our mock from sys.modules."""
+    sys.modules.pop("MistHelper", None)
+
+
 class FakeHostKeys:
     """Minimal host-key store used to exercise TOFU enrollment logic."""
 
