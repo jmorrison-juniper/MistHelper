@@ -234,40 +234,60 @@ class DeviceUtilityCommands:
 
     def _select_port_optional(self, site_id: str, device_id: str) -> str:
         """Show port list and let user pick or skip."""
-        port_names: list[str] = []
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                ports = response.data.get("ports", [])
-                if ports:
-                    print("\nAvailable ports:")
-                    for idx, port in enumerate(ports, 1):
-                        name = port.get(
-                            "port_id",
-                            port.get("name", f"port_{idx}"),
-                        )
-                        up = "UP" if port.get("up") else "DOWN"
-                        print(f"  {idx}. {name} [{up}]")
-                        port_names.append(name)
-                else:
-                    if_stat = response.data.get("if_stat", {})
-                    if isinstance(if_stat, dict) and if_stat:
-                        physical = sorted(n for n in if_stat if n.startswith(("ge-", "xe-", "et-", "mge-")))
-                        if physical:
-                            print("\nAvailable ports:")
-                            for idx, name in enumerate(physical, 1):
-                                info = if_stat.get(name, {})
-                                up = "UP" if info.get("up") else "DOWN"
-                                print(f"  {idx}. {name} [{up}]")
-                                port_names.append(name)
-        except Exception:  # nosec B110
-            pass
+        port_names = self._discover_ports(site_id, device_id)
         selection = self._safe_input_fn(
             "Port (number, name, or Enter to skip): ",
             context="port_optional",
         )
         if not selection:
             return ""
+        return self._resolve_port_selection(selection, port_names)
+
+    def _discover_ports(self, site_id: str, device_id: str) -> list[str]:
+        """Fetch and display available ports from device stats."""
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
+            if not hasattr(response, "data") or not isinstance(response.data, dict):
+                return []
+            ports = response.data.get("ports", [])
+            if ports:
+                return self._display_ports_from_list(ports)
+            return self._display_ports_from_if_stat(response.data.get("if_stat", {}))
+        except Exception:  # nosec B110
+            return []
+
+    @staticmethod
+    def _display_ports_from_list(ports: list[dict[str, Any]]) -> list[str]:
+        """Display ports from the ports array in stats response."""
+        port_names: list[str] = []
+        print("\nAvailable ports:")
+        for idx, port in enumerate(ports, 1):
+            name = port.get("port_id", port.get("name", f"port_{idx}"))
+            up = "UP" if port.get("up") else "DOWN"
+            print(f"  {idx}. {name} [{up}]")
+            port_names.append(name)
+        return port_names
+
+    @staticmethod
+    def _display_ports_from_if_stat(if_stat: Any) -> list[str]:
+        """Display physical ports from if_stat dict as fallback."""
+        if not isinstance(if_stat, dict) or not if_stat:
+            return []
+        physical = sorted(n for n in if_stat if n.startswith(("ge-", "xe-", "et-", "mge-")))
+        if not physical:
+            return []
+        port_names: list[str] = []
+        print("\nAvailable ports:")
+        for idx, name in enumerate(physical, 1):
+            info = if_stat.get(name, {})
+            up = "UP" if info.get("up") else "DOWN"
+            print(f"  {idx}. {name} [{up}]")
+            port_names.append(name)
+        return port_names
+
+    @staticmethod
+    def _resolve_port_selection(selection: str, port_names: list[str]) -> str:
+        """Resolve user selection to a port name."""
         if selection.isdigit() and port_names:
             idx = int(selection) - 1
             if 0 <= idx < len(port_names):
@@ -284,24 +304,7 @@ class DeviceUtilityCommands:
             if_stat = response.data.get("if_stat", {})
             ip_stat = response.data.get("ip_stat", {})
             ports = response.data.get("ports", [])
-            interfaces: list[str] = []
-            if isinstance(if_stat, dict) and if_stat:
-                interfaces = list(if_stat.keys())
-            if not interfaces and isinstance(ip_stat, dict) and ip_stat:
-                iface_prefixes = (
-                    "ge-",
-                    "xe-",
-                    "et-",
-                    "mge-",
-                    "lte-",
-                    "irb",
-                    "lo",
-                )
-                iface_keys = [k for k in ip_stat if k.startswith(iface_prefixes)]
-                if iface_keys:
-                    interfaces = iface_keys
-            if not interfaces and ports:
-                interfaces = [p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")]
+            interfaces = self._extract_interfaces(if_stat, ip_stat, ports)
             if not interfaces:
                 return self._manual_interface_entry()
             self._print_interface_list(interfaces, if_stat, ip_stat)
@@ -309,6 +312,28 @@ class DeviceUtilityCommands:
         except Exception as error:
             logging.debug(f"Could not fetch interface list: {error}")
             return self._manual_interface_entry()
+
+    @staticmethod
+    def _extract_interfaces(
+        if_stat: Any,
+        ip_stat: Any,
+        ports: list[dict[str, Any]],
+    ) -> list[str]:
+        """Extract interface names from stats, trying multiple sources."""
+        if isinstance(if_stat, dict) and if_stat:
+            return list(if_stat.keys())
+        ip_interfaces = DeviceUtilityCommands._interfaces_from_ip_stat(ip_stat)
+        if ip_interfaces:
+            return ip_interfaces
+        return [p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")]
+
+    @staticmethod
+    def _interfaces_from_ip_stat(ip_stat: Any) -> list[str]:
+        """Extract interface names from ip_stat dict."""
+        if not isinstance(ip_stat, dict) or not ip_stat:
+            return []
+        iface_prefixes = ("ge-", "xe-", "et-", "mge-", "lte-", "irb", "lo")
+        return [k for k in ip_stat if k.startswith(iface_prefixes)]
 
     def _print_interface_list(
         self,
@@ -360,30 +385,9 @@ class DeviceUtilityCommands:
 
     def _select_network_from_device(self, site_id: str, device_id: str) -> str:
         """Fetch DHCP/network config from device."""
-        network_names: list[str] = []
-        network_labels: list[str] = []
-        try:
-            response = mistapi.api.v1.sites.devices.getSiteDevice(self._apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                dhcpd_config = response.data.get("dhcpd_config", {})
-                if isinstance(dhcpd_config, dict):
-                    for net_name in dhcpd_config:
-                        network_names.append(net_name)
-                        network_labels.append(f"{net_name} (dhcp server)")
-                ip_config = response.data.get("ip_config", {})
-                if isinstance(ip_config, dict):
-                    for net_name, net_cfg in ip_config.items():
-                        if net_name not in network_names:
-                            network_names.append(net_name)
-                            ip_addr = net_cfg.get("ip", "") if isinstance(net_cfg, dict) else ""
-                            label = f"{net_name} ({ip_addr})" if ip_addr else net_name
-                            network_labels.append(label)
-        except Exception as error:
-            logging.debug(f"Could not fetch network config: {error}")
+        network_names, network_labels = self._discover_networks(site_id, device_id)
         if network_names:
-            print("\nAvailable networks:")
-            for idx, label in enumerate(network_labels, 1):
-                print(f"  {idx}. {label}")
+            self._display_network_list(network_names, network_labels)
             if len(network_names) == 1:
                 print(f"\n-> Auto-selecting: {network_names[0]}")
                 return network_names[0]
@@ -394,6 +398,68 @@ class DeviceUtilityCommands:
         )
         if not selection:
             return ""
+        return self._resolve_network_selection(selection, network_names)
+
+    def _discover_networks(self, site_id: str, device_id: str) -> tuple[list[str], list[str]]:
+        """Fetch network names and labels from device config."""
+        network_names: list[str] = []
+        network_labels: list[str] = []
+        try:
+            response = mistapi.api.v1.sites.devices.getSiteDevice(self._apisession, site_id, device_id)
+            if hasattr(response, "data") and isinstance(response.data, dict):
+                self._collect_dhcp_networks(
+                    response.data.get("dhcpd_config", {}),
+                    network_names,
+                    network_labels,
+                )
+                self._collect_ip_networks(
+                    response.data.get("ip_config", {}),
+                    network_names,
+                    network_labels,
+                )
+        except Exception as error:
+            logging.debug(f"Could not fetch network config: {error}")
+        return network_names, network_labels
+
+    @staticmethod
+    def _collect_dhcp_networks(
+        dhcpd_config: Any,
+        names: list[str],
+        labels: list[str],
+    ) -> None:
+        """Add DHCP server networks to the lists."""
+        if not isinstance(dhcpd_config, dict):
+            return
+        for net_name in dhcpd_config:
+            names.append(net_name)
+            labels.append(f"{net_name} (dhcp server)")
+
+    @staticmethod
+    def _collect_ip_networks(
+        ip_config: Any,
+        names: list[str],
+        labels: list[str],
+    ) -> None:
+        """Add IP config networks (not already in DHCP) to the lists."""
+        if not isinstance(ip_config, dict):
+            return
+        for net_name, net_cfg in ip_config.items():
+            if net_name not in names:
+                names.append(net_name)
+                ip_addr = net_cfg.get("ip", "") if isinstance(net_cfg, dict) else ""
+                label = f"{net_name} ({ip_addr})" if ip_addr else net_name
+                labels.append(label)
+
+    @staticmethod
+    def _display_network_list(network_names: list[str], network_labels: list[str]) -> None:
+        """Print numbered list of available networks."""
+        print("\nAvailable networks:")
+        for idx, label in enumerate(network_labels, 1):
+            print(f"  {idx}. {label}")
+
+    @staticmethod
+    def _resolve_network_selection(selection: str, network_names: list[str]) -> str:
+        """Resolve user selection to a network name."""
         if selection.isdigit() and network_names:
             sel_idx = int(selection) - 1
             if 0 <= sel_idx < len(network_names):
@@ -1408,38 +1474,9 @@ class DeviceUtilityCommands:
         if not selection:
             return
         site_id, device_id, _ = selection
-        body: dict[str, Any] = {}
-        service_name = self._safe_input_fn(
-            "Service name to clear (Enter to skip): ",
-            context="clear_session_service_name",
-        )
-        session_ids_input = self._safe_input_fn(
-            "Session IDs to clear (comma-separated, Enter to skip): ",
-            context="clear_session_ids",
-        )
-        if service_name:
-            body["service_name"] = service_name
-        elif session_ids_input:
-            session_ids = [s.strip() for s in session_ids_input.split(",") if s.strip()]
-            if session_ids:
-                body["session_ids"] = session_ids
-        else:
-            confirm_all = self._safe_input_fn(
-                "No service name or session IDs provided."
-                " This may attempt to clear ALL sessions."
-                " Type 'CLEAR ALL' to proceed"
-                " or press Enter to cancel: ",
-                context="clear_session_confirm_all",
-            )
-            if confirm_all != "CLEAR ALL":
-                print("Cancelled: No service name or session IDs" " provided.")
-                return
-        node = self._safe_input_fn(
-            "Node (node0/node1, Enter to skip): ",
-            context="clear_session_node",
-        )
-        if node:
-            body["node"] = node
+        body = self._build_clear_session_body()
+        if body is None:
+            return
         if not self._confirm_destructive(
             "Type 'CLEAR' to clear session(s): ",
             "CLEAR",
@@ -1456,6 +1493,51 @@ class DeviceUtilityCommands:
         except Exception as error:
             logging.error(f"Clear session failed: {error}", exc_info=True)
             self._handle_clear_session_error(error)
+
+    def _build_clear_session_body(self) -> dict[str, Any] | None:
+        """Gather clear-session parameters from user input.
+
+        Returns None if the user cancels.
+        """
+        body: dict[str, Any] = {}
+        service_name = self._safe_input_fn(
+            "Service name to clear (Enter to skip): ",
+            context="clear_session_service_name",
+        )
+        session_ids_input = self._safe_input_fn(
+            "Session IDs to clear (comma-separated, Enter to skip): ",
+            context="clear_session_ids",
+        )
+        if service_name:
+            body["service_name"] = service_name
+        elif session_ids_input:
+            session_ids = [s.strip() for s in session_ids_input.split(",") if s.strip()]
+            if session_ids:
+                body["session_ids"] = session_ids
+        else:
+            if not self._confirm_clear_all_sessions():
+                return None
+        node = self._safe_input_fn(
+            "Node (node0/node1, Enter to skip): ",
+            context="clear_session_node",
+        )
+        if node:
+            body["node"] = node
+        return body
+
+    def _confirm_clear_all_sessions(self) -> bool:
+        """Confirm clearing all sessions when no filter provided."""
+        confirm_all = self._safe_input_fn(
+            "No service name or session IDs provided."
+            " This may attempt to clear ALL sessions."
+            " Type 'CLEAR ALL' to proceed"
+            " or press Enter to cancel: ",
+            context="clear_session_confirm_all",
+        )
+        if confirm_all != "CLEAR ALL":
+            print("Cancelled: No service name or session IDs provided.")
+            return False
+        return True
 
     @staticmethod
     def _handle_clear_session_error(error: Exception) -> None:
