@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from src.utils.address_utils import (
     AddressBusinessNameUtils,
@@ -23,7 +20,6 @@ from src.utils.address_utils import (
     _detect_zip,
     _parse_address_parts,
 )
-
 
 # ============================================================================
 # AddressValidationConfig

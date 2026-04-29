@@ -41,7 +41,7 @@ except ImportError:  # pragma: no cover
 try:
     from scourgify import normalize_address_record
 except ImportError:  # pragma: no cover
-    normalize_address_record = None  # type: ignore[assignment]
+    normalize_address_record = None
 
 
 @dataclass
@@ -223,15 +223,15 @@ class AddressUtils:
         """Normalize state names/abbreviations to lowercase abbreviation."""
         if not state_str:
             return ""
-        state = state_str.lower().strip()
-        return _STATE_MAPPING.get(state, state)
+        state: str = str(state_str).lower().strip()
+        return str(_STATE_MAPPING.get(state, state))
 
     @staticmethod
     def _normalize_address(address_str: Any) -> str:
         """Normalize an address string for comparison."""
         if not address_str:
             return ""
-        normalized = unicodedata.normalize("NFKD", address_str)
+        normalized: str = str(unicodedata.normalize("NFKD", address_str))
         normalized = normalized.casefold().strip()
         normalized = re.sub(r"\s+", " ", normalized)
         for full_form, abbrev in _ADDRESS_ABBREVIATIONS.items():
@@ -241,7 +241,7 @@ class AddressUtils:
         return normalized
 
     @staticmethod
-    def _parse_components(  # noqa: C901, PLR0912, PLR0915
+    def _parse_components(
         address_string: str | None,
         debug: bool = False,
     ) -> dict[str, Any]:
@@ -321,7 +321,7 @@ class AddressUtils:
         return difflib.SequenceMatcher(None, norm1, norm2).ratio() * 100
 
     @staticmethod
-    def check_should_skip(  # noqa: C901, PLR0912
+    def check_should_skip(
         comparison_address: dict[str, Any],
         skip_addresses: list[dict[str, Any]],
         debug: bool = False,
@@ -347,7 +347,7 @@ class AddressUtils:
         return False, ""
 
     @staticmethod
-    def compare_with_threshold(  # noqa: C901, PLR0912
+    def compare_with_threshold(
         mist_address: dict[str, Any],
         comparison_address: dict[str, Any],
         threshold: float,
@@ -383,20 +383,28 @@ class AddressUtils:
         }
 
     @staticmethod
-    def apply_business_context_rules(  # noqa: C901
+    def _classify_place_type(place_type: str) -> tuple[bool, bool]:
+        """Classify a place type as (is_business, is_residential)."""
+        business_types = ["commercial", "office", "retail", "building", "shop", "store"]
+        residential_types = ["house", "residential", "apartment"]
+        place_lower = place_type.lower()
+        is_biz = any(t in place_lower for t in business_types)
+        is_res = any(t in place_lower for t in residential_types)
+        return is_biz, is_res
+
+    @staticmethod
+    def apply_business_context_rules(
         mist_result: dict[str, Any],
         comparison_result: dict[str, Any],
         debug: bool = False,
     ) -> str:
         """Apply business context rules for address tiebreaking."""
-        business_types = ["commercial", "office", "retail", "building", "shop", "store"]
-        residential_types = ["house", "residential", "apartment"]
-        mist_place = mist_result.get("place_type", "").lower()
-        comp_place = comparison_result.get("place_type", "").lower()
-        mist_biz = any(t in mist_place for t in business_types)
-        comp_biz = any(t in comp_place for t in business_types)
-        mist_res = any(t in mist_place for t in residential_types)
-        comp_res = any(t in comp_place for t in residential_types)
+        mist_biz, mist_res = AddressUtils._classify_place_type(
+            mist_result.get("place_type", ""),
+        )
+        comp_biz, comp_res = AddressUtils._classify_place_type(
+            comparison_result.get("place_type", ""),
+        )
         if mist_biz and comp_res:
             return "mist"
         if comp_biz and mist_res:
@@ -414,17 +422,10 @@ class AddressUtils:
 # ---------------------------------------------------------------------------
 
 
-def _parse_address_parts(
-    cleaned_input: str,
-    result: dict[str, Any],
-    debug: bool,
-) -> dict[str, Any]:
-    """Inner parser for _parse_components (extracted for CC reduction)."""
-    normalized = unicodedata.normalize("NFKD", cleaned_input)
-    parts = [p.strip() for p in normalized.split(",") if p.strip()]
-    if not parts:
-        result["parse_reason"] = "no_parts_after_cleaning"
-        return result
+def _extract_address_components(
+    parts: list[str],
+) -> dict[str, str | None]:
+    """Extract country, zip, state, city, address from comma-split parts."""
     remaining = parts[:]
     country = _detect_country(remaining)
     if country:
@@ -439,17 +440,30 @@ def _parse_address_parts(
     if city:
         remaining = remaining[:-1]
     address = ", ".join(remaining).strip() if remaining else None
-    result.update(
-        {
-            "address": address,
-            "city": city,
-            "state": state,
-            "zip": zip_code,
-            "country": country,
-            "is_parseable": True,
-            "parse_reason": "success",
-        }
-    )
+    return {
+        "address": address,
+        "city": city,
+        "state": state,
+        "zip": zip_code,
+        "country": country,
+    }
+
+
+def _parse_address_parts(
+    cleaned_input: str,
+    result: dict[str, Any],
+    debug: bool,
+) -> dict[str, Any]:
+    """Inner parser for _parse_components (extracted for CC reduction)."""
+    normalized = unicodedata.normalize("NFKD", cleaned_input)
+    parts = [p.strip() for p in normalized.split(",") if p.strip()]
+    if not parts:
+        result["parse_reason"] = "no_parts_after_cleaning"
+        return result
+    components = _extract_address_components(parts)
+    result.update(components)
+    result["is_parseable"] = True
+    result["parse_reason"] = "success"
     if debug:
         logging.debug(f"PARSE_ADDRESS: Parsed result: {result}")
     return result
@@ -532,6 +546,28 @@ def _check_single_skip(
     )
 
 
+def _count_field_matches(
+    comp_fields: list[str],
+    skip_fields: list[str],
+) -> int:
+    """Count how many non-empty skip fields match comparison fields."""
+    return sum(
+        bool(skip_val and comp_val == skip_val) for comp_val, skip_val in zip(comp_fields, skip_fields, strict=True)
+    )
+
+
+def _is_sufficient_match(
+    matching: int,
+    skip_fields: list[str],
+) -> bool:
+    """Determine if matching field count warrants a skip."""
+    empty_fields = sum(1 for f in skip_fields if not f)
+    populated = len(skip_fields) - empty_fields
+    if empty_fields >= 3 and matching == 1:
+        return True
+    return populated >= 2 and matching >= max(2, populated // 2)
+
+
 def _check_partial_skip(
     comp_addr: str,
     comp_city: str,
@@ -545,25 +581,14 @@ def _check_partial_skip(
     debug: bool,
 ) -> tuple[bool, str]:
     """Check partial/wildcard skip match."""
-    matching = sum(
-        [
-            bool(skip_addr and comp_addr == skip_addr),
-            bool(skip_city and comp_city == skip_city),
-            bool(skip_state and comp_state == skip_state),
-            bool(skip_zip and comp_zip == skip_zip),
-        ]
-    )
+    comp_fields = [comp_addr, comp_city, comp_state, comp_zip]
+    skip_fields = [skip_addr, skip_city, skip_state, skip_zip]
+    matching = _count_field_matches(comp_fields, skip_fields)
     if matching == 0:
         return False, ""
-    empty_fields = sum(1 for f in [skip_addr, skip_city, skip_state, skip_zip] if not f)
-    populated = 4 - empty_fields
-    if empty_fields >= 3 and matching == 1:
+    if _is_sufficient_match(matching, skip_fields):
         if debug:
-            logging.debug(f"ADDRESS_SKIP: Wildcard match - {comp_addr}")
-        return True, skip_reason
-    if populated >= 2 and matching >= max(2, populated // 2):
-        if debug:
-            logging.debug(f"ADDRESS_SKIP: Specific match - {comp_addr}")
+            logging.debug(f"ADDRESS_SKIP: Partial match - {comp_addr}")
         return True, skip_reason
     return False, ""
 
@@ -776,7 +801,7 @@ class NominatimValidator:
             "error": error,
         }
 
-    def _make_api_request(  # noqa: C901
+    def _make_api_request(
         self,
         address_string: str,
         source: str,
@@ -784,7 +809,7 @@ class NominatimValidator:
         """Make Nominatim API request with retry logic."""
         if requests is None:
             return None
-        params = {
+        params: dict[str, str | int] = {
             "format": "json",
             "q": address_string,
             "limit": 1,
