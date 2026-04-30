@@ -66,7 +66,7 @@ class SpecParser:
 
     def __init__(self, spec_path: Path) -> None:
         logger.info("Parsing OpenAPI spec from %s ...", spec_path)
-        with open(spec_path, encoding="utf-8") as fh:
+        with open(spec_path, "r", encoding="utf-8") as fh:
             raw = json.load(fh)
         self.schemas: dict = raw.get("components", {}).get("schemas", {})
         self.tags: list[dict] = raw.get("tags", [])

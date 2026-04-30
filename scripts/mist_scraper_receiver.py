@@ -18,7 +18,9 @@ Endpoints:
 
 import csv
 import json
+import os
 import re
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -263,7 +265,7 @@ def main():
     print(f"[SERVER] Mist Ideas Scraper Receiver starting on http://localhost:{PORT}")
     print(f"[SERVER] CSV output: {CSV_PATH}")
     print(f"[SERVER] Progress: {done_count}/{total_count} ideas already scraped")
-    print("[SERVER] Press Ctrl+C to stop")
+    print(f"[SERVER] Press Ctrl+C to stop")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

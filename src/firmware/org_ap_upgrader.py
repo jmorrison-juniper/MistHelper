@@ -71,7 +71,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self.org_id = org_id
         self.apisession = apisession
         self.dry_run = dry_run
-        self._input_fn = safe_input_fn or input
+        self._input_fn = safe_input_fn or (lambda prompt, _context="": input(prompt))
         self._check_stop_fn = check_stop_fn
         self._get_org_id_fn = get_org_id_fn
         self._fetch_sites_fn = fetch_sites_fn
@@ -160,7 +160,8 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     def _resolve_org_id(self) -> str | None:
         """Resolve org ID via the injected function."""
         if self._get_org_id_fn:
-            return self._get_org_id_fn()
+            result: str | None = self._get_org_id_fn()
+            return result
         return self.org_id if self.org_id else None
 
     # =========================================================================
@@ -362,21 +363,34 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             return []
 
         if selection == "" and default_idx and self._selected_msp is not None:
-            print(f"  + Using current MSP: {self._selected_msp.get('msp_name', 'Unknown')}")
-            logging.debug(f"Using default MSP: {self._selected_msp.get('msp_name')}")
-            return [self._selected_msp]
+            return self._use_default_msp()
         if selection in ["q", ""]:
             print("  Cancelled.")
             logging.info("MSP selection cancelled")
             return []
         if selection == "all":
-            print("")
-            print(f"  + Selected ALL {len(self._msp_privileges)} MSP(s):")
-            for msp in self._msp_privileges:
-                print(f"      - {msp.get('msp_name', 'Unknown')}")
-            logging.info(f"User selected ALL {len(self._msp_privileges)} MSP(s)")
-            return list(self._msp_privileges)
+            return self._select_all_msps()
 
+        return self._select_msps_by_indices(selection)
+
+    def _use_default_msp(self) -> list[Any]:
+        """Return the currently selected MSP as a list."""
+        msp = self._selected_msp or {}
+        print(f"  + Using current MSP: {msp.get('msp_name', 'Unknown')}")
+        logging.debug(f"Using default MSP: {msp.get('msp_name')}")
+        return [self._selected_msp]
+
+    def _select_all_msps(self) -> list[Any]:
+        """Select all available MSPs."""
+        print("")
+        print(f"  + Selected ALL {len(self._msp_privileges)} MSP(s):")
+        for msp in self._msp_privileges:
+            print(f"      - {msp.get('msp_name', 'Unknown')}")
+        logging.info(f"User selected ALL {len(self._msp_privileges)} MSP(s)")
+        return list(self._msp_privileges)
+
+    def _select_msps_by_indices(self, selection: str) -> list[Any]:
+        """Select MSPs by parsed index selection."""
         indices = self._parse_selection(selection, len(self._msp_privileges))
         if not indices:
             print("  X Invalid selection")
@@ -502,42 +516,56 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     # =========================================================================
 
     @staticmethod
-    def _parse_selection(selection: str, max_items: int) -> list[int]:  # noqa: C901
+    def _parse_selection(selection: str, max_items: int) -> list[int]:
         """Parse selection string into list of indices."""
         indices: list[int] = []
         parts = selection.replace(",", " ").split()
 
         for part in parts:
-            if "-" in part and not part.startswith("-"):
-                try:
-                    start, end = part.split("-", 1)
-                    start_idx = int(start) - 1
-                    end_idx = int(end) - 1
-                    if 0 <= start_idx <= end_idx < max_items:
-                        indices.extend(range(start_idx, end_idx + 1))
-                except ValueError:
-                    continue
-            elif "through" in part.lower():
-                continue
-            else:
-                try:
-                    idx = int(part) - 1
-                    if 0 <= idx < max_items:
-                        indices.append(idx)
-                except ValueError:
-                    continue
+            indices.extend(OrgLevelAPFirmwareUpgrader._parse_selection_part(part, max_items))
 
-        through_match = re.search(r"(\d+)\s*through\s*(\d+)", selection, re.IGNORECASE)
-        if through_match:
-            try:
-                start_idx = int(through_match.group(1)) - 1
-                end_idx = int(through_match.group(2)) - 1
-                if 0 <= start_idx <= end_idx < max_items:
-                    indices = list(range(start_idx, end_idx + 1))
-            except ValueError:
-                pass
+        through_indices = OrgLevelAPFirmwareUpgrader._parse_through_range(selection, max_items)
+        if through_indices:
+            indices = through_indices
 
         return sorted(set(indices))
+
+    @staticmethod
+    def _parse_selection_part(part: str, max_items: int) -> list[int]:
+        """Parse a single selection part (number or range)."""
+        if "-" in part and not part.startswith("-"):
+            try:
+                start, end = part.split("-", 1)
+                start_idx, end_idx = int(start) - 1, int(end) - 1
+                if 0 <= start_idx <= end_idx < max_items:
+                    return list(range(start_idx, end_idx + 1))
+            except ValueError:
+                pass
+            return []
+        if "through" in part.lower():
+            return []
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < max_items:
+                return [idx]
+        except ValueError:
+            pass
+        return []
+
+    @staticmethod
+    def _parse_through_range(selection: str, max_items: int) -> list[int]:
+        """Parse 'X through Y' range from selection string."""
+        through_match = re.search(r"(\d+)\s*through\s*(\d+)", selection, re.IGNORECASE)
+        if not through_match:
+            return []
+        try:
+            start_idx = int(through_match.group(1)) - 1
+            end_idx = int(through_match.group(2)) - 1
+            if 0 <= start_idx <= end_idx < max_items:
+                return list(range(start_idx, end_idx + 1))
+        except ValueError:
+            pass
+        return []
 
     @staticmethod
     def _print_msp_summary(results: list[dict[str, Any]], dry_run: bool) -> None:
@@ -720,64 +748,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _parse_selection_input(self, selection: str, max_items: int) -> list[int]:
         """Parse selection input with support for ranges and multiple selections."""
-        indices: list[int] = []
-        parts = [part.strip() for part in selection.replace(",", " ").split()]
-
-        for part in parts:
-            indices.extend(self._parse_selection_part(part, max_items))
-
-        through_indices = self._parse_through_pattern(selection, max_items)
-        if through_indices:
-            indices = through_indices
-
-        return sorted(set(indices))
-
-    def _parse_selection_part(self, part: str, max_items: int) -> list[int]:
-        """Parse a single selection part (range or index)."""
-        if "-" in part and not part.startswith("-"):
-            return self._parse_range_part(part, max_items)
-        if "through" in part.lower():
-            return []
-        return self._parse_single_index(part, max_items)
-
-    @staticmethod
-    def _parse_range_part(part: str, max_items: int) -> list[int]:
-        """Parse range like '1-5'."""
-        try:
-            start, end = part.split("-", 1)
-            start_idx = int(start) - 1
-            end_idx = int(end) - 1
-            if 0 <= start_idx <= end_idx < max_items:
-                return list(range(start_idx, end_idx + 1))
-        except ValueError:
-            pass
-        return []
-
-    @staticmethod
-    def _parse_single_index(part: str, max_items: int) -> list[int]:
-        """Parse single index like '3'."""
-        try:
-            idx = int(part) - 1
-            if 0 <= idx < max_items:
-                return [idx]
-        except ValueError:
-            pass
-        return []
-
-    @staticmethod
-    def _parse_through_pattern(selection: str, max_items: int) -> list[int]:
-        """Parse 'X through Y' pattern."""
-        if "through" not in selection.lower():
-            return []
-        try:
-            before, after = selection.lower().split("through")
-            start_idx = int(before.strip()) - 1
-            end_idx = int(after.strip()) - 1
-            if 0 <= start_idx <= end_idx < max_items:
-                return list(range(start_idx, end_idx + 1))
-        except (ValueError, IndexError):
-            pass
-        return []
+        return self._parse_selection(selection, max_items)
 
     # =========================================================================
     # STEP 2: DEVICE DISCOVERY
@@ -1127,7 +1098,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         return self._apply_version_selection(model, devices, model_versions, user_input)
 
-    def _display_model_options(  # noqa: PLR0912
+    def _display_model_options(
         self,
         model: str,
         devices: list[Any],
@@ -1136,21 +1107,28 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     ) -> None:
         """Display available firmware versions for a model."""
         print(f"\n  Model: {model} ({len(devices)} devices)")
-
-        if "Unknown" in current_versions:
-            unknown_devs = [d for d in devices if self.ap_versions.get(d.get("mac"), "Unknown") == "Unknown"]
-            known_versions = sorted([v for v in current_versions if v != "Unknown"], reverse=True)
-            offline_names = ", ".join([d.get("name", d.get("mac", "unnamed")[:8]) for d in unknown_devs[:3]])
-            if len(unknown_devs) > 3:
-                offline_names += f" +{len(unknown_devs) - 3} more"
-            if known_versions:
-                print(f"    Current: {', '.join(known_versions)}")
-            print(f"    Offline ({len(unknown_devs)}): {offline_names}")
-        else:
-            print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
-
+        self._print_current_versions(devices, current_versions)
         print("    Available versions:")
+        self._print_version_list(model_versions, current_versions)
 
+    def _print_current_versions(self, devices: list[Any], current_versions: set[str]) -> None:
+        """Print current version info including offline devices."""
+        if "Unknown" not in current_versions:
+            print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
+            return
+
+        unknown_devs = [d for d in devices if self.ap_versions.get(d.get("mac"), "Unknown") == "Unknown"]
+        known_versions = sorted([v for v in current_versions if v != "Unknown"], reverse=True)
+        offline_names = ", ".join([d.get("name", d.get("mac", "unnamed")[:8]) for d in unknown_devs[:3]])
+        if len(unknown_devs) > 3:
+            offline_names += f" +{len(unknown_devs) - 3} more"
+        if known_versions:
+            print(f"    Current: {', '.join(known_versions)}")
+        print(f"    Offline ({len(unknown_devs)}): {offline_names}")
+
+    @staticmethod
+    def _print_version_list(model_versions: list[Any], current_versions: set[str]) -> None:
+        """Print numbered list of available firmware versions."""
         for idx, version_info in enumerate(model_versions):
             version_num = version_info.get("version", "Unknown")
             indicators: list[str] = []
@@ -1354,7 +1332,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         return None
 
-    def _parse_time_input(  # noqa: C901, PLR0912
+    def _parse_time_input(
         self,
         time_str: str,
         base_datetime: datetime | None = None,
@@ -1367,31 +1345,53 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         time_str = time_str.strip()
         use_site_local = self.upgrade_config.get("use_site_local_time", False)
 
-        relative_offset = self._parse_relative_offset(time_str)
-        if relative_offset:
-            if use_site_local and is_for_reboot:
-                print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
-                return None
-            if base_datetime:
-                target_dt = base_datetime + relative_offset
-            else:
-                target_dt = datetime.now(UTC) + relative_offset
-            return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        relative_result = self._try_parse_relative(time_str, base_datetime, is_for_reboot, use_site_local)
+        if relative_result is not None:
+            return relative_result if relative_result != "" else None
 
-        time_str_lower = time_str.lower()
-        if "after" in time_str_lower:
-            if use_site_local and is_for_reboot:
-                print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
-                return None
-            after_idx = time_str_lower.find("after")
-            time_portion = time_str[:after_idx].strip()
-            relative_offset = self._parse_relative_offset(time_portion)
-            if relative_offset and base_datetime:
-                target_dt = base_datetime + relative_offset
-                return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-            return None
+        after_result = self._try_parse_after(time_str, base_datetime, is_for_reboot, use_site_local)
+        if after_result is not None:
+            return after_result if after_result != "" else None
 
         return self._parse_absolute_time(time_str, use_site_local)
+
+    def _try_parse_relative(
+        self,
+        time_str: str,
+        base_datetime: datetime | None,
+        is_for_reboot: bool,
+        use_site_local: bool,
+    ) -> str | None:
+        """Try parsing as relative offset. Returns None if not relative, '' to signal no result."""
+        relative_offset = self._parse_relative_offset(time_str)
+        if not relative_offset:
+            return None
+        if use_site_local and is_for_reboot:
+            print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
+            return ""
+        target_dt = (base_datetime or datetime.now(UTC)) + relative_offset
+        return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _try_parse_after(
+        self,
+        time_str: str,
+        base_datetime: datetime | None,
+        is_for_reboot: bool,
+        use_site_local: bool,
+    ) -> str | None:
+        """Try parsing 'X after' format. Returns None if not matching, '' for no result."""
+        if "after" not in time_str.lower():
+            return None
+        if use_site_local and is_for_reboot:
+            print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")
+            return ""
+        after_idx = time_str.lower().find("after")
+        time_portion = time_str[:after_idx].strip()
+        relative_offset = self._parse_relative_offset(time_portion)
+        if relative_offset and base_datetime:
+            target_dt = base_datetime + relative_offset
+            return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return ""
 
     def _parse_absolute_time(self, time_str: str, use_site_local: bool) -> str | None:
         """Parse absolute HH:MM time input."""
@@ -1452,6 +1452,10 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         if relative_offset:
             return datetime.now(UTC) + relative_offset
 
+        return self._parse_download_absolute(time_str)
+
+    def _parse_download_absolute(self, time_str: str) -> datetime | None:
+        """Parse absolute time string into datetime for download scheduling."""
         is_utc = time_str.upper().endswith(" UTC")
         if is_utc:
             time_str = time_str[:-4].strip()
@@ -1466,23 +1470,41 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 return None
 
             if is_utc:
-                now = datetime.now(UTC)
-                target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                if target_dt <= now:
-                    target_dt += timedelta(days=1)
-                return target_dt
-            now_utc = datetime.now(UTC)
-            local_now = datetime.now()
-            target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if target_local <= local_now:
-                target_local += timedelta(days=1)
-            offset = now_utc.replace(tzinfo=None) - local_now
-            return target_local + offset
+                return self._resolve_utc_datetime(hour, minute)
+            return self._resolve_local_to_utc_datetime(hour, minute)
         except (ValueError, IndexError):
             return None
 
-    def _configure_scheduling(self) -> bool:  # noqa: C901, PLR0912, PLR0915
+    @staticmethod
+    def _resolve_utc_datetime(hour: int, minute: int) -> datetime:
+        """Resolve hour:minute in UTC to next occurrence."""
+        now = datetime.now(UTC)
+        target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target_dt <= now:
+            target_dt += timedelta(days=1)
+        return target_dt
+
+    @staticmethod
+    def _resolve_local_to_utc_datetime(hour: int, minute: int) -> datetime:
+        """Resolve local hour:minute to UTC datetime."""
+        now_utc = datetime.now(UTC)
+        local_now = datetime.now()
+        target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target_local <= local_now:
+            target_local += timedelta(days=1)
+        offset = now_utc.replace(tzinfo=None) - local_now
+        return target_local + offset
+
+    def _configure_scheduling(self) -> bool:
         """Configure download and reboot scheduling."""
+        if not self._configure_time_mode():
+            return False
+        if not self._configure_download_schedule():
+            return False
+        return self._configure_reboot_schedule()
+
+    def _configure_time_mode(self) -> bool:
+        """Prompt for UTC vs site-local time mode."""
         print("\n  Time Zone Mode:")
         print("    [1] Global (UTC) - All sites upgrade at the same instant")
         print("    [2] Site-Local - Each site upgrades at that time in its timezone")
@@ -1498,9 +1520,26 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             print("    + Using site-local time (rolling upgrade across timezones)")
         else:
             print("    + Using global UTC time (all sites at same instant)")
+        return True
 
+    def _configure_download_schedule(self) -> bool:
+        """Prompt for download start time."""
+        self._print_download_time_help()
+
+        try:
+            download_input = self._input_fn("  Download start time [now]: ", "sched_download").strip()
+        except SystemExit:
+            return False
+
+        self.upgrade_config["start_datetime"] = self._parse_time_input(download_input, is_for_reboot=False)
+        self.upgrade_config["_download_dt"] = self._parse_download_datetime(download_input)
+        self._print_download_confirmation()
+        return True
+
+    def _print_download_time_help(self) -> None:
+        """Print download scheduling help text."""
         print("\n  Download Scheduling:")
-        if self.upgrade_config["use_site_local_time"]:
+        if self.upgrade_config.get("use_site_local_time"):
             print("    Absolute: 'HH:MM' (24-hour, site-local)")
             print("    Relative: 'in 15 minutes', '+3h', '+2m' (converts to UTC)")
             print("    Note: Relative times start download immediately across all sites;")
@@ -1510,49 +1549,52 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             print("    Relative: 'in 15 minutes', 'in 3 hours', 'in 2 days', '+3h'")
         print("    Immediate: blank or 'now'")
 
-        try:
-            download_input = self._input_fn("  Download start time [now]: ", "sched_download").strip()
-        except SystemExit:
-            return False
-
-        self.upgrade_config["start_datetime"] = self._parse_time_input(download_input, is_for_reboot=False)
-        download_dt = self._parse_download_datetime(download_input)
-
-        if self.upgrade_config["start_datetime"]:
-            download_is_utc = self.upgrade_config["start_datetime"].endswith("Z")
-            if download_is_utc and self.upgrade_config["use_site_local_time"]:
-                print(f"    + Download scheduled: {self.upgrade_config['start_datetime']} (UTC - immediate start)")
+    def _print_download_confirmation(self) -> None:
+        """Print download time confirmation."""
+        start_dt = self.upgrade_config.get("start_datetime")
+        if start_dt:
+            is_utc = start_dt.endswith("Z")
+            use_site_local = self.upgrade_config.get("use_site_local_time", False)
+            if is_utc and use_site_local:
+                print(f"    + Download scheduled: {start_dt} (UTC - immediate start)")
             else:
-                time_suffix = " (site-local)" if self.upgrade_config["use_site_local_time"] else " (UTC)"
-                print(f"    + Download scheduled: {self.upgrade_config['start_datetime']}{time_suffix}")
+                time_suffix = " (site-local)" if use_site_local else " (UTC)"
+                print(f"    + Download scheduled: {start_dt}{time_suffix}")
         else:
             print("    + Download: immediate")
 
-        print("\n    Reboot time options:")
-        if self.upgrade_config["use_site_local_time"]:
-            print("      Time format: 'HH:MM' (24-hour, site-local)")
-            print("      Example: '02:00' = 2am at each site's local time")
-        else:
-            print("      Absolute: '21:30', '19:45 UTC'")
-            if self.upgrade_config["start_datetime"]:
-                print("      Relative to download: '+4h', '4 hours after', 'in 6 hours'")
-        print("      Immediate (after download): blank or 'now'")
+    def _configure_reboot_schedule(self) -> bool:
+        """Prompt for reboot start time."""
+        self._print_reboot_time_help()
 
         try:
             reboot_input = self._input_fn("  Reboot start time [immediate]: ", "sched_reboot").strip()
         except SystemExit:
             return False
 
+        download_dt = self.upgrade_config.pop("_download_dt", None)
         parsed_reboot = self._parse_time_input(reboot_input, base_datetime=download_dt, is_for_reboot=True)
         self.upgrade_config["reboot_datetime"] = parsed_reboot if parsed_reboot else None
 
         if self.upgrade_config["reboot_datetime"]:
-            time_suffix = " (site-local)" if self.upgrade_config["use_site_local_time"] else " (UTC)"
+            time_suffix = " (site-local)" if self.upgrade_config.get("use_site_local_time") else " (UTC)"
             print(f"    + Reboot scheduled: {self.upgrade_config['reboot_datetime']}{time_suffix}")
         else:
             print("    + Reboot: immediate (after download completes)")
 
         return True
+
+    def _print_reboot_time_help(self) -> None:
+        """Print reboot scheduling help text."""
+        print("\n    Reboot time options:")
+        if self.upgrade_config.get("use_site_local_time"):
+            print("      Time format: 'HH:MM' (24-hour, site-local)")
+            print("      Example: '02:00' = 2am at each site's local time")
+        else:
+            print("      Absolute: '21:30', '19:45 UTC'")
+            if self.upgrade_config.get("start_datetime"):
+                print("      Relative to download: '+4h', '4 hours after', 'in 6 hours'")
+        print("      Immediate (after download): blank or 'now'")
 
     def _apply_default_settings(self) -> bool:  # noqa: PLR0912
         """Apply default upgrade settings with optional user prompts."""
@@ -1796,47 +1838,57 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         """Execute dry-run simulation."""
         print("")
         for version, data in sorted(self.upgrade_plan.items()):
-            models_str = ", ".join(data["models"])
-            print("  [DRY-RUN] Would call upgradeOrgDevices:")
-            print(f"      Version: {version}")
-            print(f"      Models: {models_str}")
-            print(f"      Devices: {len(data['device_ids'])}")
-            scope = "all_sites=true" if self.target_all_sites else f"{len(self.selected_site_ids)} site_ids"
-            print(f"      Site Scope: {scope}")
-            use_site_local = self.upgrade_config.get("use_site_local_time", False)
-            time_mode = "Site-Local" if use_site_local else "Global (UTC)"
-            print(f"      Time Mode: {time_mode}")
-            start_dt = self.upgrade_config.get("start_datetime")
-            reboot_dt = self.upgrade_config.get("reboot_datetime")
-            print(f"      Download Time: {start_dt if start_dt else 'Immediate'}")
-            print(f"      Reboot Time: {reboot_dt if reboot_dt else ('Same as download' if start_dt else 'Immediate')}")
-            if "canary_phases" in self.upgrade_config:
-                phases_str = ", ".join(str(p) for p in self.upgrade_config["canary_phases"])
-                print(f"      Canary Phases: [{phases_str}]%")
-            if self.upgrade_config.get("enable_p2p"):
-                print(
-                    f"      P2P: Enabled (cluster: {self.upgrade_config.get('p2p_cluster_size', 5)}, "
-                    f"parallel: {self.upgrade_config.get('p2p_parallelism', 100)})"
-                )
-
-            self.successful_api_calls += 1
-            self.total_devices_upgraded += len(data["device_ids"])
-
-            for device_id in data["device_ids"]:
-                self.results.append(
-                    {
-                        "org_id": self.org_id,
-                        "version": version,
-                        "device_id": device_id,
-                        "status": "DRY-RUN: Would upgrade",
-                    }
-                )
+            self._print_dry_run_entry(version, data)
+            self._record_dry_run_results(version, data)
 
         print("")
         print("  DRY-RUN Complete:")
         print(f"    - API Calls (simulated): {self.successful_api_calls}")
         print(f"    - Devices (simulated): {self.total_devices_upgraded}")
         return True
+
+    def _print_dry_run_entry(self, version: str, data: dict[str, Any]) -> None:
+        """Print a single dry-run upgrade entry."""
+        models_str = ", ".join(data["models"])
+        scope = "all_sites=true" if self.target_all_sites else f"{len(self.selected_site_ids)} site_ids"
+        use_site_local = self.upgrade_config.get("use_site_local_time", False)
+        start_dt = self.upgrade_config.get("start_datetime")
+        reboot_dt = self.upgrade_config.get("reboot_datetime")
+
+        print("  [DRY-RUN] Would call upgradeOrgDevices:")
+        print(f"      Version: {version}")
+        print(f"      Models: {models_str}")
+        print(f"      Devices: {len(data['device_ids'])}")
+        print(f"      Site Scope: {scope}")
+        print(f"      Time Mode: {'Site-Local' if use_site_local else 'Global (UTC)'}")
+        print(f"      Download Time: {start_dt or 'Immediate'}")
+        print(f"      Reboot Time: {reboot_dt or ('Same as download' if start_dt else 'Immediate')}")
+        self._print_dry_run_extras()
+
+    def _print_dry_run_extras(self) -> None:
+        """Print optional dry-run config details (canary, P2P)."""
+        if "canary_phases" in self.upgrade_config:
+            phases_str = ", ".join(str(p) for p in self.upgrade_config["canary_phases"])
+            print(f"      Canary Phases: [{phases_str}]%")
+        if self.upgrade_config.get("enable_p2p"):
+            print(
+                f"      P2P: Enabled (cluster: {self.upgrade_config.get('p2p_cluster_size', 5)}, "
+                f"parallel: {self.upgrade_config.get('p2p_parallelism', 100)})"
+            )
+
+    def _record_dry_run_results(self, version: str, data: dict[str, Any]) -> None:
+        """Record dry-run results for a version."""
+        self.successful_api_calls += 1
+        self.total_devices_upgraded += len(data["device_ids"])
+        for device_id in data["device_ids"]:
+            self.results.append(
+                {
+                    "org_id": self.org_id,
+                    "version": version,
+                    "device_id": device_id,
+                    "status": "DRY-RUN: Would upgrade",
+                }
+            )
 
     def _execute_upgrades(self) -> bool:  # noqa: C901, PLR0912
         """Execute actual org-level upgrades."""

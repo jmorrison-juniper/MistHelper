@@ -256,9 +256,12 @@ class TestAPDiscovery:
         u = _make_upgrader()
         u.target_all_sites = True
         mock_resp = _make_api_response([SAMPLE_AP, SAMPLE_AP_2])
-        _mock_mistapi.get_all.return_value = [SAMPLE_AP, SAMPLE_AP_2]
 
-        with patch("importlib.import_module") as mock_import:
+        with (
+            patch.dict(sys.modules, {"mistapi": _mock_mistapi}),
+            patch("importlib.import_module") as mock_import,
+            patch.object(_mock_mistapi, "get_all", return_value=[SAMPLE_AP, SAMPLE_AP_2]),
+        ):
             mock_inv = MagicMock()
             mock_inv.getOrgInventory.return_value = mock_resp
             mock_import.return_value = mock_inv
@@ -271,9 +274,12 @@ class TestAPDiscovery:
     def test_no_aps_found(self):
         u = _make_upgrader()
         u.target_all_sites = True
-        _mock_mistapi.get_all.return_value = []
 
-        with patch("importlib.import_module") as mock_import:
+        with (
+            patch.dict(sys.modules, {"mistapi": _mock_mistapi}),
+            patch("importlib.import_module") as mock_import,
+            patch.object(_mock_mistapi, "get_all", return_value=[]),
+        ):
             mock_inv = MagicMock()
             mock_inv.getOrgInventory.return_value = _make_api_response([])
             mock_import.return_value = mock_inv
@@ -339,9 +345,12 @@ class TestFirmwareStats:
             {"mac": "aa:bb:cc:dd:ee:01", "version": "0.14.29000"},
             {"mac": "aa:bb:cc:dd:ee:02", "version": "0.14.29411"},
         ]
-        _mock_mistapi.get_all.return_value = stats
 
-        with patch("importlib.import_module") as mock_import:
+        with (
+            patch.dict(sys.modules, {"mistapi": _mock_mistapi}),
+            patch("importlib.import_module") as mock_import,
+            patch.object(_mock_mistapi, "get_all", return_value=stats),
+        ):
             mock_stats = MagicMock()
             mock_stats.listOrgDevicesStats.return_value = _make_api_response(stats)
             mock_import.return_value = mock_stats
@@ -501,7 +510,9 @@ class TestUpgradeConfig:
     """Tests for _step6_configure_upgrade."""
 
     def test_basic_config(self):
-        inputs = iter(["1", "1", "1", "", "", "", "Y", "", ""])
+        # Order: dl_strategy, rb_strategy, time_mode, dl_time, rb_time,
+        #        p2p_enable, cluster, parallelism, failure_threshold
+        inputs = iter(["1", "1", "1", "", "", "Y", "", "", ""])
         u = _make_upgrader(safe_input_fn=MagicMock(side_effect=inputs))
         result = u._step6_configure_upgrade()
         assert result is True
@@ -509,7 +520,8 @@ class TestUpgradeConfig:
         assert u.upgrade_config["reboot_strategy"] == "big_bang"
 
     def test_serial_strategies(self):
-        inputs = iter(["2", "2", "1", "", "", "", "n", ""])
+        # Order: dl_strategy, rb_strategy, time_mode, dl_time, rb_time, p2p_enable, failure_threshold
+        inputs = iter(["2", "2", "1", "", "", "n", ""])
         u = _make_upgrader(safe_input_fn=MagicMock(side_effect=inputs))
         result = u._step6_configure_upgrade()
         assert result is True
@@ -517,7 +529,9 @@ class TestUpgradeConfig:
         assert u.upgrade_config["reboot_strategy"] == "serial"
 
     def test_canary_config(self):
-        inputs = iter(["3", "4", "1", "", "", "1,5,25,50,100", "", "Y", "", ""])
+        # Order: dl_strategy, rb_strategy, time_mode, dl_time, rb_time,
+        #        p2p_enable, cluster, parallelism, canary_phases, failure_threshold
+        inputs = iter(["3", "4", "1", "", "", "Y", "", "", "1,5,25,50,100", ""])
         u = _make_upgrader(safe_input_fn=MagicMock(side_effect=inputs))
         result = u._step6_configure_upgrade()
         assert result is True

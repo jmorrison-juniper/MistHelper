@@ -524,8 +524,8 @@ class AiBackendDetector:
     @staticmethod
     def _health_check() -> bool:
         """Check Ollama API is responsive with retries."""
-        import urllib.error
         import urllib.request
+        import urllib.error
 
         url = f"http://localhost:{OLLAMA_PORT}/api/tags"
         for attempt in range(1, OLLAMA_HEALTH_RETRIES + 1):
@@ -1732,8 +1732,8 @@ def _ollama_api_call(
     timeout: int = 30,
 ) -> dict | None:
     """Make an HTTP call to the Ollama API. Returns parsed JSON or None."""
-    import urllib.error
     import urllib.request
+    import urllib.error
 
     api_base = base_url.replace("/v1", "")
     url = f"{api_base}{endpoint}"

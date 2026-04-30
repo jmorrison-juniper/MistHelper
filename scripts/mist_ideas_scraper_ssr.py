@@ -14,12 +14,14 @@ Usage:
 import csv
 import json
 import logging
+import os
 import re
 import ssl
 import sys
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 try:
     from bs4 import BeautifulSoup
