@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa
 #!/usr/bin/env python3
 """
 Enhanced SSH Runner - Connect to network devices with advanced command execution
@@ -830,7 +830,7 @@ class EnhancedSSHRunner:
                         try:
                             shell.recv(4096)  # Drain any remaining output quickly
                             time.sleep(0.1)
-                        except:
+                        except Exception:
                             break
                     else:
                         time.sleep(0.1)
