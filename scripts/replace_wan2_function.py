@@ -1,5 +1,4 @@
 """One-time script to replace function in MistHelper.py with delegation stub."""
-import sys
 
 filepath = "MistHelper.py"
 lines = open(filepath, encoding="utf-8").readlines()

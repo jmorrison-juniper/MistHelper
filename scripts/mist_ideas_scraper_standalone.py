@@ -12,13 +12,9 @@ Usage:
 import csv
 import json
 import logging
-import os
 import re
-import sys
 import time
 from pathlib import Path
-from urllib.request import Request, urlopen
-from urllib.error import URLError
 
 logging.basicConfig(
     level=logging.INFO,

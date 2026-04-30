@@ -4,7 +4,6 @@
 # .venv\Scripts\python.exe scripts\create_decomposition_issues.py
 
 import subprocess
-import sys
 
 OWNER = "jmorrison-juniper"
 REPO = "MistHelper"

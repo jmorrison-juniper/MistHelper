@@ -4,7 +4,7 @@ import re
 
 
 def audit():
-    with open("data/mist_ideas.csv", "r", encoding="utf-8-sig") as f:
+    with open("data/mist_ideas.csv", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
     total = len(rows)
@@ -71,7 +71,7 @@ def audit():
     # Status field analysis (what's in there when not empty)
     non_empty_status = [r.get("status", "").strip() for r in rows if r.get("status", "").strip()]
     if non_empty_status:
-        print(f"=== STATUS VALUES (first 5 non-empty, truncated) ===")
+        print("=== STATUS VALUES (first 5 non-empty, truncated) ===")
         for s in non_empty_status[:5]:
             print(f"  [{s[:80]}]")
         print()

@@ -14,12 +14,13 @@ Security / Safety Notes:
     - We avoid SELinux relabel flags for Docker which does not support ":Z" uniformly.
 """
 
-import sys
-import subprocess
 import os
-import shutil
 import platform
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
 
 # ---------------------------------------------------------------------------
 # Local .env loader (lightweight, no external dependency)
@@ -53,7 +54,7 @@ def load_local_env_file(env_file_path: Path, override: bool = False) -> int:
                 key = key.strip()
                 value = value.strip()
                 # Strip symmetrical quotes
-                if (value.startswith("\"") and value.endswith("\"")) or (value.startswith("'") and value.endswith("'")):
+                if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
                     value = value[1:-1]
                 if not override and key in os.environ:
                     continue
@@ -64,9 +65,11 @@ def load_local_env_file(env_file_path: Path, override: bool = False) -> int:
         print(f"[WARNING] Failed to parse .env file '{env_file_path}': {exc}")
     return applied_count
 
+
 # Engine detection results will be stored here after initialization
 CONTAINER_ENGINE_EXECUTABLE = None
 CONTAINER_ENGINE_NAME = None  # "podman" or "docker"
+
 
 def detect_container_engine(preference: str = "auto"):
     """Detect an available container engine.
@@ -97,6 +100,7 @@ def detect_container_engine(preference: str = "auto"):
     print("[ACTION] Install Podman or Docker and ensure it is on PATH.")
     sys.exit(1)
 
+
 def host_network_supported(engine_name: str) -> bool:
     """Return True if host networking can provide meaningful LAN exposure.
 
@@ -109,6 +113,7 @@ def host_network_supported(engine_name: str) -> bool:
     if system_name == "linux":
         return True  # Native Linux: both podman and docker host mode meaningful
     return False
+
 
 def setup_networking(bridge_mode: bool = False, engine_name: str = "podman", engine_exe: str = "podman"):
     """Set up container networking.
@@ -142,7 +147,16 @@ def setup_networking(bridge_mode: bool = False, engine_name: str = "podman", eng
     if network_name not in existing:
         print(f"[NETWORK] Creating network: {network_name}")
         # Subnet creation works for both; if it fails we fall back.
-        create_cmd = [engine_exe, "network", "create", "--driver", network_driver, "--subnet", network_subnet, network_name]
+        create_cmd = [
+            engine_exe,
+            "network",
+            "create",
+            "--driver",
+            network_driver,
+            "--subnet",
+            network_subnet,
+            network_name,
+        ]
         create_result = subprocess.run(create_cmd, capture_output=True, text=True)
         if create_result.returncode != 0:
             print("[WARNING] Failed to create custom network; using default engine network.")
@@ -154,12 +168,14 @@ def setup_networking(bridge_mode: bool = False, engine_name: str = "podman", eng
 
     return network_name
 
+
 def cleanup_container(container_name: str):
     """Remove existing container with the same name if it exists."""
     global CONTAINER_ENGINE_EXECUTABLE
     print(f"[CLEANUP] Removing any existing container: {container_name}")
     cleanup_cmd = [CONTAINER_ENGINE_EXECUTABLE, "rm", "-f", container_name]
     subprocess.run(cleanup_cmd, capture_output=True)  # Suppress output, ignore errors
+
 
 def show_network_info():
     """Show network information for MistHelper containers (engine agnostic)."""
@@ -176,7 +192,13 @@ def show_network_info():
     ssh_container_name = os.environ.get("MISTHELPER_SSH_CONTAINER_NAME", "misthelper-ssh")
     main_container_name = os.environ.get("MISTHELPER_MAIN_CONTAINER_NAME", "misthelper-main")
     for container_name in [main_container_name, ssh_container_name]:
-        inspect_cmd = [CONTAINER_ENGINE_EXECUTABLE, "inspect", container_name, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"]
+        inspect_cmd = [
+            CONTAINER_ENGINE_EXECUTABLE,
+            "inspect",
+            container_name,
+            "--format",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+        ]
         result = subprocess.run(inspect_cmd, capture_output=True, text=True)
         if result.returncode == 0 and result.stdout.strip():
             print(f"{container_name}: {result.stdout.strip()}")
@@ -188,6 +210,7 @@ def show_network_info():
     print("=" * 60)
     network_cmd = [CONTAINER_ENGINE_EXECUTABLE, "network", "inspect", network_name]
     subprocess.run(network_cmd)
+
 
 def cleanup_all():
     """Clean up all MistHelper containers and networks."""
@@ -209,7 +232,10 @@ def cleanup_all():
     subprocess.run(network_rm_cmd, capture_output=True)
     print("[CLEANUP] Cleanup completed!")
 
-def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug=False, no_env=False, ssh_mode=False, bridge_mode=False):
+
+def run_misthelper(
+    output_format="csv", menu=None, test=False, fast=False, debug=False, no_env=False, ssh_mode=False, bridge_mode=False
+):
     """Run MistHelper in a container (Podman or Docker)."""
     global CONTAINER_ENGINE_EXECUTABLE, CONTAINER_ENGINE_NAME
 
@@ -217,7 +243,7 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     data_dir_name = os.environ.get("MISTHELPER_DATA_DIR", "data")
     script_log_name = os.environ.get("MISTHELPER_SCRIPT_LOG", "script.log")
     env_file_name = os.environ.get("MISTHELPER_ENV_FILE", ".env")
-    
+
     data_dir = Path(f"./{data_dir_name}")
     data_dir.mkdir(exist_ok=True)
     script_log_path = Path(f"./{script_log_name}")
@@ -302,7 +328,7 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     container_data_path = os.environ.get("MISTHELPER_CONTAINER_DATA_PATH", "/app/data")
     container_env_path = os.environ.get("MISTHELPER_CONTAINER_ENV_PATH", "/app/.env")
     container_log_path = os.environ.get("MISTHELPER_CONTAINER_LOG_PATH", "/app/script.log")
-    
+
     volumes = [
         f"{cwd}/{data_dir}:{container_data_path}{selinux_label}",
         f"{cwd}/{env_file}:{container_env_path}{selinux_label}",
@@ -330,7 +356,6 @@ def run_misthelper(output_format="csv", menu=None, test=False, fast=False, debug
     ssh_username_masked_for_later = None  # Stored for final connection instructions
     if ssh_mode:
         run_cmd.append("-d")
-
 
     # ------------------------------------------------------------------
     # SSH credential handling (read from environment / .env)
@@ -434,17 +459,48 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Cross-platform MistHelper container runner (Podman or Docker)")
-    parser.add_argument("--output-format", default="csv", choices=["csv", "sqlite"], help="Output format (default: csv)")
+    parser.add_argument(
+        "--output-format", default="csv", choices=["csv", "sqlite"], help="Output format (default: csv)"
+    )
     parser.add_argument("--menu", default=None, help="Menu option to execute (default: interactive mode)")
     parser.add_argument("--test", action="store_true", default=False, help="Enable test mode (default: disabled)")
     parser.add_argument("--fast", action="store_true", default=False, help="Enable fast mode (default: disabled)")
     parser.add_argument("--debug", action="store_true", default=False, help="Enable debug output (default: disabled)")
-    parser.add_argument("--no-env", action="store_true", default=False, help="Disable .env file loading for SSH operations (default: disabled)")
-    parser.add_argument("--ssh", action="store_true", default=False, dest="ssh_mode", help="Run container with SSH server on port 2200 (default: disabled)")
-    parser.add_argument("--bridge", action="store_true", default=False, dest="bridge_mode", help="Attempt host network (only effective on native Linux)")
-    parser.add_argument("--network-info", action="store_true", default=False, help="Show network information for running MistHelper containers")
-    parser.add_argument("--cleanup", action="store_true", default=False, help="Clean up all MistHelper containers and networks")
-    parser.add_argument("--engine", default="auto", choices=["auto", "podman", "docker"], help="Container engine preference (default: auto)")
+    parser.add_argument(
+        "--no-env",
+        action="store_true",
+        default=False,
+        help="Disable .env file loading for SSH operations (default: disabled)",
+    )
+    parser.add_argument(
+        "--ssh",
+        action="store_true",
+        default=False,
+        dest="ssh_mode",
+        help="Run container with SSH server on port 2200 (default: disabled)",
+    )
+    parser.add_argument(
+        "--bridge",
+        action="store_true",
+        default=False,
+        dest="bridge_mode",
+        help="Attempt host network (only effective on native Linux)",
+    )
+    parser.add_argument(
+        "--network-info",
+        action="store_true",
+        default=False,
+        help="Show network information for running MistHelper containers",
+    )
+    parser.add_argument(
+        "--cleanup", action="store_true", default=False, help="Clean up all MistHelper containers and networks"
+    )
+    parser.add_argument(
+        "--engine",
+        default="auto",
+        choices=["auto", "podman", "docker"],
+        help="Container engine preference (default: auto)",
+    )
 
     args = parser.parse_args()
 

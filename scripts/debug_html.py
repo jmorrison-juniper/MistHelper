@@ -1,6 +1,5 @@
 """Dump the raw HTML of a single idea page to diagnose what we're getting."""
 import ssl
-import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 

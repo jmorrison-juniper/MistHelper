@@ -1,5 +1,6 @@
 """Small runner to exercise Phase 1 locally without the full CLI."""
 import argparse
+
 from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
 
 

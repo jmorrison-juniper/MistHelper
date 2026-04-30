@@ -4,9 +4,8 @@ Extracts all classes, methods, and top-level functions, counts their call sites,
 and identifies the least-called non-core functions suitable for extraction.
 """
 
-import re
 import ast
-import sys
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -79,7 +78,7 @@ def analyze_monolith():
 
     # Print summary
     print(f"{'='*80}")
-    print(f"MistHelper.py Analysis Report")
+    print("MistHelper.py Analysis Report")
     print(f"{'='*80}")
     print(f"Total lines: {total_lines}")
     print(f"Total classes: {len(classes)}")
@@ -90,7 +89,7 @@ def analyze_monolith():
 
     # Print classes sorted by size (largest first)
     print(f"{'='*80}")
-    print(f"CLASSES (sorted by size, largest first)")
+    print("CLASSES (sorted by size, largest first)")
     print(f"{'='*80}")
     for cls in sorted(classes, key=lambda c: c["size"], reverse=True):
         ref_count = name_refs.get(cls["name"], 0)
@@ -108,7 +107,7 @@ def analyze_monolith():
 
     # Print top-level functions sorted by call count (least first)
     print(f"\n{'='*80}")
-    print(f"TOP-LEVEL FUNCTIONS (sorted by call count, least first)")
+    print("TOP-LEVEL FUNCTIONS (sorted by call count, least first)")
     print(f"{'='*80}")
     for func in sorted(top_level_funcs, key=lambda f: call_counts.get(f["name"], 0)):
         cc = call_counts.get(func["name"], 0)
@@ -126,8 +125,8 @@ def analyze_monolith():
     }
 
     print(f"\n{'='*80}")
-    print(f"DECOMPOSITION CANDIDATES")
-    print(f"(methods called <= 3 times, >= 20 lines, not dunder/core)")
+    print("DECOMPOSITION CANDIDATES")
+    print("(methods called <= 3 times, >= 20 lines, not dunder/core)")
     print(f"{'='*80}")
 
     candidates = []
@@ -178,7 +177,7 @@ def analyze_monolith():
 
     # Now find where each candidate is actually called (line numbers)
     print(f"\n{'='*80}")
-    print(f"CALL SITE DETAILS (where each candidate is invoked)")
+    print("CALL SITE DETAILS (where each candidate is invoked)")
     print(f"{'='*80}")
 
     for c in candidates[:50]:  # Top 50 biggest
@@ -202,7 +201,7 @@ def analyze_monolith():
             for ln, text in call_lines:
                 print(f"    Line {ln}: {text}")
         else:
-            print(f"    NO EXTERNAL CALL SITES FOUND (dead code?)")
+            print("    NO EXTERNAL CALL SITES FOUND (dead code?)")
 
 
 if __name__ == "__main__":

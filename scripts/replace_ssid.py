@@ -1,7 +1,6 @@
 """Replace SSIDTemplateConsolidationManager class with thin stub."""
-import sys
 
-lines = open('MistHelper.py', 'r', encoding='utf-8').readlines()
+lines = open('MistHelper.py', encoding='utf-8').readlines()
 start = 14678  # 0-indexed for line 14679
 end = 16124    # 0-indexed for line 16125 (E911 class line, exclusive)
 

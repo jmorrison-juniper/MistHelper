@@ -1,15 +1,16 @@
-import os
 import json
-from lxml import etree
+import os
+
+from dotenv import load_dotenv
 from jnpr.junos import Device
 from jnpr.junos.exception import ConnectError
-from dotenv import load_dotenv
 
 # Load credentials from .env file
 load_dotenv()
-rpcuser = os.getenv('rpcuser')
-rpcpassword = os.getenv('rpcpassword')
-rpchost = os.getenv('rpchost')
+rpcuser = os.getenv("rpcuser")
+rpcpassword = os.getenv("rpcpassword")
+rpchost = os.getenv("rpchost")
+
 
 def extract_show_commands():
     try:
@@ -21,7 +22,7 @@ def extract_show_commands():
         root = response
 
         # Extract <output> tags
-        outputs = root.xpath('//output')
+        outputs = root.xpath("//output")
         commands = {}
         i = 0
         while i < len(outputs) - 1:
@@ -41,6 +42,7 @@ def extract_show_commands():
         print(f"❌ Failed to connect to device: {e}")
     except Exception as e:
         print(f"❌ Error: {e}")
+
 
 if __name__ == "__main__":
     extract_show_commands()
