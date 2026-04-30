@@ -72,7 +72,7 @@ def check_and_install_grpcio() -> tuple[bool, str]:
     """
     try:
         # Try importing grpcio to check if it exists
-        import google.protobuf
+        import google.protobuf  # noqa: F401
         import grpc
 
         print(f"gRPC packages found: grpcio {grpc.__version__}")
@@ -258,7 +258,7 @@ fix_qt_plugin_path()
 # Now safe to import PyQt6
 try:
     from PyQt6.QtCore import QSize, Qt, QTimer
-    from PyQt6.QtGui import QColor, QFont, QIcon, QPalette
+    from PyQt6.QtGui import QColor, QFont, QIcon, QPalette  # noqa: F401
     from PyQt6.QtWidgets import (
         QApplication,
         QComboBox,
@@ -270,7 +270,7 @@ try:
         QLineEdit,
         QMainWindow,
         QMessageBox,
-        QProgressBar,
+        QProgressBar,  # noqa: F401
         QPushButton,
         QStatusBar,
         QVBoxLayout,
@@ -978,37 +978,37 @@ class StarlinkDashboard(QMainWindow):
         """Update metric widget colors based on theme."""
         if theme == "Light":
             title_color = "#5F6368"
-            value_color = "#1A73E8"
+            _value_color = "#1A73E8"
             unit_color = "#80868B"
-            good_color = "#137333"
-            bad_color = "#C5221F"
+            _good_color = "#137333"
+            _bad_color = "#C5221F"
             status_bg = "#F8F9FA"
             status_fg = "#202124"
             section_header_color = "#1A73E8"
         elif theme == "TRON":
             title_color = "#00CCCC"
-            value_color = "#00FFFF"
+            _value_color = "#00FFFF"
             unit_color = "#009999"
-            good_color = "#FFD700"
-            bad_color = "#FF6600"
+            _good_color = "#FFD700"
+            _bad_color = "#FF6600"
             status_bg = "#0A0A0A"
             status_fg = "#00FFFF"
             section_header_color = "#FFD700"
         elif theme == "Hackers":
             title_color = "#00CC00"
-            value_color = "#00FF00"
+            _value_color = "#00FF00"
             unit_color = "#009900"
-            good_color = "#00FF00"
-            bad_color = "#FF0000"
+            _good_color = "#00FF00"
+            _bad_color = "#FF0000"
             status_bg = "#001100"
             status_fg = "#00FF00"
             section_header_color = "#00FF00"
         else:  # Dark
-            title_color = "#9AA0A6"
-            value_color = "#8AB4F8"
+            title_color = "#9AA0A6"  # noqa: F841
+            _value_color = "#8AB4F8"
             unit_color = "#80868B"
-            good_color = "#81C995"
-            bad_color = "#F28B82"
+            _good_color = "#81C995"
+            _bad_color = "#F28B82"
             status_bg = "#202124"
             status_fg = "#E8EAED"
             section_header_color = "#8AB4F8"
@@ -1240,9 +1240,8 @@ class StarlinkDashboard(QMainWindow):
                     print(f"Software Version: {diag.software_version if hasattr(diag, 'software_version') else 'N/A'}")
                     print(f"Hardware Version: {diag.hardware_version if hasattr(diag, 'hardware_version') else 'N/A'}")
                     print(f"UTC Offset: {diag.utc_offset_s if hasattr(diag, 'utc_offset_s') else 'N/A'} seconds")
-                    print(
-                        f"Hardware Self Test: {diag.hardware_self_test if hasattr(diag, 'hardware_self_test') else 'N/A'}"
-                    )
+                    hw_test = diag.hardware_self_test if hasattr(diag, "hardware_self_test") else "N/A"
+                    print(f"Hardware Self Test: {hw_test}")
                     print(f"Disablement Code: {diag.disablement_code if hasattr(diag, 'disablement_code') else 'N/A'}")
                     print(f"Stowed: {diag.stowed if hasattr(diag, 'stowed') else 'N/A'}")
 
@@ -1363,7 +1362,8 @@ class StarlinkDashboard(QMainWindow):
                 self.dish_connected = is_operational
 
                 logger.debug(
-                    f"Retrieved Starlink diagnostics: connected={is_operational}, service={service_status}, obstruction={obstruction_status}"
+                    f"Retrieved Starlink diagnostics: connected={is_operational}, "
+                    f"service={service_status}, obstruction={obstruction_status}"
                 )
                 return stats
             else:
@@ -1535,7 +1535,7 @@ class StarlinkDashboard(QMainWindow):
         # Calculate alignment accuracy and color code
         azimuth_diff = abs(azimuth_current - azimuth_target)
         elevation_diff = abs(elevation_current - elevation_target)
-        well_aligned = azimuth_diff < 5.0 and elevation_diff < 5.0
+        _well_aligned = azimuth_diff < 5.0 and elevation_diff < 5.0
 
         self.azimuth_current.set_status_color(azimuth_diff < 5.0)
         self.elevation_current.set_status_color(elevation_diff < 5.0)

@@ -263,7 +263,9 @@ class StarlinkTUI:
                     "elevation_current": elevation_current,
                     "azimuth_target": azimuth_target,
                     "elevation_target": elevation_target,
-                    "status_message": f"Terminal ID: {terminal_id}\nSelf Test: {hardware_test}\nService: {service_status}",
+                    "status_message": (
+                        f"Terminal ID: {terminal_id}\n" f"Self Test: {hardware_test}\n" f"Service: {service_status}"
+                    ),
                 }
 
             return default_stats
