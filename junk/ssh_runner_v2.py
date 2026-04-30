@@ -277,7 +277,7 @@ class EnhancedSSHRunner:
         Parse comma-separated command list from .env file with validation
 
         Args:
-            commands_str: String containing comma-separated commands (e.g., 'show ver,show route' or '"show ver","show route"')
+            commands_str: Comma-separated commands string  # noqa: E501
 
         Returns:
             list: List of validated commands
@@ -710,7 +710,8 @@ class EnhancedSSHRunner:
                     # Hard timeout detection - if we've been running too long, force completion
                     if current_duration > 90:  # 90 second hard timeout
                         print(
-                            f"⏰ [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, forcing completion"
+                            f"⏰ [{hostname}] HANG DETECTED: "
+                            f"Command running for {current_duration:.0f}s, forcing completion"
                         )
                         self.logger.warning(
                             f"Command hang detected after {current_duration:.0f}s, forcing completion: {command}"
@@ -722,7 +723,8 @@ class EnhancedSSHRunner:
                     if current_duration > 30:  # Show progress after 30 seconds
                         if chunk_count % 150 == 0:  # Every 150 chunks after 30 seconds
                             print(
-                                f"⏱️ [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)"
+                                f"⏱️ [{hostname}] Long-running command... "
+                                f"{current_duration:.0f}s elapsed (Ctrl+C to interrupt)"
                             )
 
                     if shell.recv_ready():
@@ -740,13 +742,15 @@ class EnhancedSSHRunner:
                             # Print progress for user feedback on large outputs
                             if output_mb > 5:
                                 print(
-                                    f"📥 [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)"
+                                    f"📥 [{hostname}] Receiving large output... "
+                                    f"{output_mb:.1f}MB (Press Ctrl+C to interrupt)"
                                 )
 
                         # Check output size limit - but keep draining to prevent blocking
                         if len(output) > max_output_size:
                             self.logger.warning(
-                                f"Output size limit ({max_output_size // (1024*1024)}MB) reached, draining remaining data..."
+                                f"Output size limit ({max_output_size // (1024*1024)}MB) "
+                                "reached, draining remaining data..."
                             )
                             output += (
                                 f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024*1024)}MB reached]\n"
