@@ -2436,6 +2436,36 @@ class MapsManager:
             print(f"\n! Error generating report: {e}")
 
     # Placeholder methods for future implementation
+    def _collect_property_input(self, prompt, current_value, value_type=str):
+        """Collect a single property update from user with type validation."""
+        raw = input(f"{prompt} [{current_value}]: ").strip()
+        if not raw:
+            return None
+        if value_type is str:
+            return raw
+        try:
+            return value_type(raw)
+        except ValueError:
+            print("! Invalid value, skipping")
+            return None
+
+    def _collect_map_updates(self, current_map):
+        """Collect all map property updates from user input."""
+        print("\nEnter new values (press Enter to keep current value):")
+        fields = [
+            ("name", "Map name", current_map.get("name", ""), str),
+            ("width", "Width in pixels", current_map.get("width", ""), int),
+            ("height", "Height in pixels", current_map.get("height", ""), int),
+            ("ppm", "Pixels per meter", current_map.get("ppm", ""), float),
+            ("orientation", "Orientation in degrees", current_map.get("orientation", 0), int),
+        ]
+        payload = {}
+        for key, label, current, vtype in fields:
+            value = self._collect_property_input(label, current, vtype)
+            if value is not None:
+                payload[key] = value
+        return payload
+
     def update_map_properties(self):
         """Update existing map properties (name, dimensions, orientation, etc.)."""
         print("\n" + "-" * 80)
@@ -2447,78 +2477,32 @@ class MapsManager:
             return
 
         try:
-            # Get map selection
             map_id = self._select_map_from_site(site_id, site_name)
             if not map_id:
                 return
 
-            # Fetch current map details
             map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-
             if map_response.status_code != 200:
                 print(f"\n! Failed to fetch map details: HTTP {map_response.status_code}")
                 return
 
             current_map = map_response.data
 
-            # Display current properties
             print("\nCurrent Map Properties:")
             print(f"{'-' * 80}")
-            print(f"Name: {current_map.get('name', 'N/A')}")
-            print(f"Type: {current_map.get('type', 'N/A')}")
+            for label, key in [("Name", "name"), ("Type", "type")]:
+                print(f"{label}: {current_map.get(key, 'N/A')}")
             print(f"Width: {current_map.get('width', 'N/A')} pixels")
             print(f"Height: {current_map.get('height', 'N/A')} pixels")
             print(f"PPM (Pixels per meter): {current_map.get('ppm', 'N/A')}")
             print(f"Orientation: {current_map.get('orientation', 0)} degrees")
             print(f"{'-' * 80}")
 
-            # Build update payload
-            update_payload = {}
-
-            print("\nEnter new values (press Enter to keep current value):")
-
-            # Map name
-            new_name = input(f"Map name [{current_map.get('name', '')}]: ").strip()
-            if new_name:
-                update_payload["name"] = new_name
-
-            # Width
-            new_width = input(f"Width in pixels [{current_map.get('width', '')}]: ").strip()
-            if new_width:
-                try:
-                    update_payload["width"] = int(new_width)
-                except ValueError:
-                    print("! Invalid width, skipping")
-
-            # Height
-            new_height = input(f"Height in pixels [{current_map.get('height', '')}]: ").strip()
-            if new_height:
-                try:
-                    update_payload["height"] = int(new_height)
-                except ValueError:
-                    print("! Invalid height, skipping")
-
-            # PPM
-            new_ppm = input(f"Pixels per meter [{current_map.get('ppm', '')}]: ").strip()
-            if new_ppm:
-                try:
-                    update_payload["ppm"] = float(new_ppm)
-                except ValueError:
-                    print("! Invalid PPM, skipping")
-
-            # Orientation
-            new_orientation = input(f"Orientation in degrees [{current_map.get('orientation', 0)}]: ").strip()
-            if new_orientation:
-                try:
-                    update_payload["orientation"] = int(new_orientation)
-                except ValueError:
-                    print("! Invalid orientation, skipping")
-
+            update_payload = self._collect_map_updates(current_map)
             if not update_payload:
                 print("\n! No changes specified")
                 return
 
-            # Confirm update
             print(f"\n{'-' * 80}")
             print("Changes to apply:")
             for key, value in update_payload.items():
@@ -2530,12 +2514,10 @@ class MapsManager:
                 print("\n! Update cancelled")
                 return
 
-            # Apply update
             print("\nApplying changes...")
             update_response = mistapi.api.v1.sites.maps.updateSiteMap(
                 self.apisession, site_id=site_id, map_id=map_id, body=update_payload
             )
-
             if update_response.status_code in [200, 201]:
                 print(f"\n{'-' * 80}")
                 print("Map updated successfully!")
@@ -2543,7 +2525,7 @@ class MapsManager:
                 logging.info(f"Updated map {map_id} for site {site_id}")
             else:
                 print(f"\n! Failed to update map: HTTP {update_response.status_code}")
-                logging.error(f"Map update failed: {update_response.status_code} - {update_response.data}")
+                logging.error(f"Map update failed: {update_response.status_code}")
 
         except EOFError:
             logging.info("EOF detected during map update")
