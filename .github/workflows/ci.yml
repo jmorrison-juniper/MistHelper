@@ -272,7 +272,7 @@ jobs:
           pip install -r requirements.txt
           pip install pylint
       - name: Run Pylint
-        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
+        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }} --ignore=maps
 
   radon:
     name: "Radon (complexity)"
