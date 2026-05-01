@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-MapsManager - Interactive Map Viewer for Mist Networks
+"""MapsManager - Interactive Map Viewer for Mist Networks.
 
 This module contains the MapsManager class for managing site floor plans
 and maps in Juniper Mist Cloud. It provides:
@@ -58,7 +57,8 @@ try:
     from tqdm import tqdm
 except ImportError:
 
-    def tqdm(iterable, **kwargs):
+    def tqdm(iterable, **_kwargs):
+        """No-op fallback for tqdm progress bar."""
         return iterable
 
 
@@ -114,92 +114,114 @@ def sanitize_filename(filename: str) -> str:
     return filename[:100] if filename else "unnamed"
 
 
+def _check_env_override() -> bool:
+    """Check explicit container override environment variables."""
+    true_values = {"1", "true", "yes", "on"}
+    for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
+        value = os.environ.get(explicit_var, "").strip().lower()
+        if value in true_values:
+            logging.debug(f"Container detection: override via {explicit_var}={value}")
+            return True
+    return False
+
+
+def _check_sentinel_files() -> bool:
+    """Check for container sentinel files."""
+    if os.path.exists("/.dockerenv"):
+        logging.debug("Container detection: /.dockerenv present")
+        return True
+    return False
+
+
+def _check_container_env_vars() -> bool:
+    """Check well-known container environment variables."""
+    container_env_vars = [
+        "CONTAINER",
+        "DOCKER_CONTAINER",
+        "PODMAN_CONTAINER",
+        "KUBERNETES_SERVICE_HOST",
+        "CONTAINERD_NAMESPACE",
+    ]
+    for env_var in container_env_vars:
+        if os.environ.get(env_var):
+            logging.debug(f"Container detection: environment variable {env_var} present")
+            return True
+    return False
+
+
+def _check_cgroup_markers() -> bool:
+    """Check cgroup content for container indicators."""
+    try:
+        with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:
+            cgroup_content = cgroup_file.read().lower()
+            for indicator in ("docker", "containerd", "podman", "lxc"):
+                if indicator in cgroup_content:
+                    logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
+                    return True
+    except (FileNotFoundError, PermissionError):
+        pass
+    return False
+
+
+def _check_runtime_user() -> bool:
+    """Check if running as container user 'misthelper'."""
+    try:
+        import pwd  # Unix only
+
+        current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
+        if current_user_name == "misthelper":
+            logging.debug("Container detection: running as user 'misthelper'")
+            return True
+    except Exception:
+        logging.debug("Container detection: user lookup failed (non-Unix or unavailable)")
+    return False
+
+
+def _check_app_path() -> bool:
+    """Check for canonical container path /app with sshd presence."""
+    try:
+        this_file_dir = os.path.abspath(os.path.dirname(__file__))
+        if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):
+            if os.path.exists("/usr/sbin/sshd"):
+                logging.debug("Container detection: /app path with MistHelper.py and sshd present")
+                return True
+    except Exception:
+        logging.debug("Container detection: path heuristic check failed")
+    return False
+
+
 def is_running_in_container() -> bool:
     """Determine if execution appears to be inside a container.
 
     Detection strategy is deliberately multi-factor and conservative. A positive
     result enables continuous interactive looping behavior.
 
-    Order of checks (first positive returns immediately):
-      1. Explicit override environment variables
-      2. Standard /.dockerenv sentinel file
-      3. Well-known container environment variables
-      4. cgroup markers
-      5. Runtime user name 'misthelper'
-      6. /app path detection with sshd presence
-
     SECURITY: Only boolean enabling of loop behavior; no privileged actions.
     """
+    checks = [
+        _check_env_override,
+        _check_sentinel_files,
+        _check_container_env_vars,
+        _check_cgroup_markers,
+        _check_runtime_user,
+        _check_app_path,
+    ]
     try:
-        true_values = {"1", "true", "yes", "on"}
-        # Explicit operator override (most reliable and fastest)
-        for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
-            value = os.environ.get(explicit_var, "").strip().lower()
-            if value in true_values:
-                logging.debug(f"Container detection: override via {explicit_var}={value}")
+        for check in checks:
+            if check():
                 return True
-
-        # /.dockerenv sentinel
-        if os.path.exists("/.dockerenv"):
-            logging.debug("Container detection: /.dockerenv present")
-            return True
-
-        container_env_vars = [
-            "CONTAINER",
-            "DOCKER_CONTAINER",
-            "PODMAN_CONTAINER",
-            "KUBERNETES_SERVICE_HOST",
-            "CONTAINERD_NAMESPACE",
-        ]
-        for env_var in container_env_vars:
-            if os.environ.get(env_var):
-                logging.debug(f"Container detection: environment variable {env_var} present")
-                return True
-
-        # cgroup heuristic
-        try:
-            with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:
-                cgroup_content = cgroup_file.read().lower()
-                for indicator in ("docker", "containerd", "podman", "lxc"):
-                    if indicator in cgroup_content:
-                        logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
-                        return True
-        except (FileNotFoundError, PermissionError):
-            # Not Linux or insufficient permissions; ignore silently
-            pass
-
-        # Runtime user name heuristic
-        try:
-            import pwd  # Unix only
-
-            current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
-            if current_user_name == "misthelper":
-                logging.debug("Container detection: running as user 'misthelper'")
-                return True
-        except Exception:
-            # Non-Unix or lookup failure; treat as non-container for this heuristic step
-            logging.debug("Container detection: user lookup failed (non-Unix or unavailable)")
-
-        # Heuristic: application installed in canonical container path /app and script present
-        try:
-            this_file_dir = os.path.abspath(os.path.dirname(__file__))
-            if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):
-                # Additional guard: presence of sshd in typical container location indicates container packaging
-                if os.path.exists("/usr/sbin/sshd"):
-                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")
-                    return True
-        except Exception:
-            logging.debug("Container detection: path heuristic check failed")
     except Exception as container_detection_error:
         logging.debug(f"Container detection failed with exception: {container_detection_error}")
 
-    # If we reach here, no container indicators were found
     logging.debug("Container detection: no container indicators found - running in direct mode")
     return False
 
 
 def write_data_with_format_selection(
-    data: list[dict[str, Any]], filename: str, format_override: str | None = None, api_function_name: str | None = None
+    data: list[dict[str, Any]],
+    filename: str,
+    _format_override: str | None = None,
+    _api_function_name: str | None = None,
 ) -> bool:
     """Write data to CSV format (standalone mode)."""
     if not data:
@@ -232,8 +254,7 @@ def write_data_with_format_selection(
 
 
 class MapsManager:
-    """
-    Comprehensive Maps Management System for Mist Sites
+    """Comprehensive Maps Management System for Mist Sites.
 
     Provides interactive management of site floor plans and maps including:
     - Map inventory and export operations
@@ -244,7 +265,7 @@ class MapsManager:
     """
 
     def __init__(self, api_session, organization_id):
-        """Initialize MapsManager with API session and org context"""
+        """Initialize MapsManager with API session and org context."""
         self.apisession = api_session
         self.org_id = organization_id
         self.current_site_id = None
@@ -252,7 +273,7 @@ class MapsManager:
         logging.info(f"MapsManager initialized for organization: {self.org_id}")
 
     def _fetch_sites(self):
-        """Fetch all sites using instance API session (not global)"""
+        """Fetch all sites using instance API session (not global)."""
         try:
             resp = mistapi.api.v1.orgs.sites.listOrgSites(  # type: ignore[union-attr]
                 self.apisession, self.org_id, limit=DEFAULT_API_PAGE_LIMIT
@@ -263,7 +284,7 @@ class MapsManager:
             return []
 
     def select_site(self):
-        """Prompt user to select a site and cache the selection"""
+        """Prompt user to select a site and cache the selection."""
         # Use instance method to fetch sites (works in standalone mode)
         sites = self._fetch_sites()
         if not sites:
@@ -317,7 +338,7 @@ class MapsManager:
             return False
 
     def get_current_site(self):
-        """Get current site selection, prompting if not set"""
+        """Get current site selection, prompting if not set."""
         if not self.current_site_id:
             print("\n! No site currently selected. Please select a site first.")
             if not self.select_site():
@@ -325,7 +346,10 @@ class MapsManager:
         return self.current_site_id, self.current_site_name
 
     def _select_map_from_site(self, site_id, site_name, return_all_maps=False):
-        """Helper method to select a map from a site - returns map_id or None, optionally returns (map_id, maps_list)"""
+        """Select a map from a site.
+
+        Returns map_id or None, optionally returns (map_id, maps_list).
+        """
         try:
             # Fetch maps for the site
             maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
@@ -382,40 +406,151 @@ class MapsManager:
             print(f"\n! Error selecting map: {e}")
             return (None, []) if return_all_maps else None
 
+    def _backup_download_image(self, map_data, map_name, backup_reason):
+        """Download map image for backup. Returns (filename, content) or (None, None)."""
+        from datetime import datetime
+
+        import requests
+
+        image_url = map_data.get("url")
+        if not image_url:
+            return None, None
+
+        try:
+            file_ext = ".png"
+            if "." in image_url:
+                url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()
+                if url_ext in ["png", "jpg", "jpeg", "gif", "svg", "webp"]:
+                    file_ext = f".{url_ext}"
+
+            safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
+            safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            image_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}{file_ext}"
+
+            data_dir = os.path.join(os.getcwd(), "data")
+            os.makedirs(data_dir, exist_ok=True)
+
+            response = requests.get(image_url, timeout=60)
+            if response.status_code == 200:
+                image_path = os.path.join(data_dir, image_filename)
+                with open(image_path, "wb") as img_file:
+                    img_file.write(response.content)
+                image_size_kb = len(response.content) / 1024
+                logging.info(f"Map image backed up: {image_filename} ({image_size_kb:.1f} KB)")
+                return image_filename, (safe_map_name, timestamp)
+            logging.warning(f"Could not download map image: HTTP {response.status_code}")
+        except Exception as img_err:
+            logging.warning(f"Image backup failed: {img_err}")
+        return None, None
+
+    def _backup_fetch_items(self, api_session, site_id, map_id, api_call, item_name):
+        """Fetch items from API and filter to map. Returns list of matching items."""
+        try:
+            response = api_call(api_session, site_id=site_id)
+            if response.status_code == 200:
+                all_items = response.data if isinstance(response.data, list) else []
+                map_items = [item for item in all_items if item.get("map_id") == map_id]
+                logging.debug(f"Backup includes {len(map_items)} {item_name} for map {map_id}")
+                return map_items
+            logging.warning(f"Could not fetch {item_name} for backup: HTTP {response.status_code}")
+        except Exception as err:
+            logging.debug(f"{item_name} backup skipped: {err}")
+        return []
+
+    def _backup_fetch_device_placements(self, api_session, site_id, map_id):
+        """Fetch device placements on a specific map."""
+        try:
+            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(api_session, site_id=site_id, type="all")
+            if devices_response.status_code == 200:
+                all_devices = devices_response.data if isinstance(devices_response.data, list) else []
+                placements = []
+                for device in all_devices:
+                    if device.get("map_id") == map_id and ("x" in device or "y" in device):
+                        placements.append(
+                            {
+                                "id": device.get("id"),
+                                "name": device.get("name"),
+                                "mac": device.get("mac"),
+                                "type": device.get("type"),
+                                "model": device.get("model"),
+                                "map_id": device.get("map_id"),
+                                "x": device.get("x"),
+                                "y": device.get("y"),
+                                "orientation": device.get("orientation"),
+                                "height": device.get("height"),
+                            }
+                        )
+                logging.debug(f"Backup includes {len(placements)} device placements for map {map_id}")
+                return placements
+            logging.warning(f"Could not fetch devices for backup: HTTP {devices_response.status_code}")
+        except Exception as device_err:
+            logging.warning(f"Device placement backup failed: {device_err}")
+        return []
+
+    def _backup_write_file(self, geometry_backup, map_name, backup_reason, name_timestamp=None):
+        """Write backup data to JSON file. Returns file path."""
+        import json
+        from datetime import datetime
+
+        if name_timestamp:
+            safe_map_name, timestamp = name_timestamp
+        else:
+            safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
+            safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        backup_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}.json"
+        data_dir = os.path.join(os.getcwd(), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        backup_path = os.path.join(data_dir, backup_filename)
+
+        with open(backup_path, "w", encoding="utf-8") as backup_file:
+            json.dump(geometry_backup, backup_file, indent=2, ensure_ascii=False)
+        return backup_path, backup_filename
+
+    def _backup_print_summary(self, backup_filename, image_filename, geometry_backup):
+        """Print backup summary to console."""
+        counts = [
+            ("Image", "Yes" if image_filename else None),
+            ("Walls", len((geometry_backup.get("geometry") or {}).get("wall_path", {}).get("nodes", [])) or None),
+            (
+                "Wayfinding",
+                len((geometry_backup.get("geometry") or {}).get("wayfinding_path", {}).get("nodes", [])) or None,
+            ),
+            ("Zones", len(geometry_backup.get("zones", [])) or None),
+            ("Devices", len(geometry_backup.get("device_placements", [])) or None),
+            ("Beacons", len(geometry_backup.get("beacons", [])) or None),
+            ("VBeacons", len(geometry_backup.get("vbeacons", [])) or None),
+        ]
+        summary = ", ".join(f"{k}: {v}" for k, v in counts if v) or "Empty map"
+        logging.info(f"Map backup saved: {backup_filename} ({summary})")
+        print(f"\n   [*] Map backup saved: {backup_filename}")
+        if image_filename:
+            print(f"       Image: {image_filename}")
+        print(f"       {summary}")
+
     def _backup_map_geometry(self, api_session, site_id, map_id, map_name, backup_reason="manual"):
-        """
-        Backup map geometry data (walls, zones, wayfinding paths) to JSON file.
+        """Backup map geometry data (walls, zones, wayfinding paths) to JSON file.
 
         Called automatically before destructive operations (delete) and during cloning
         to preserve geometry data that would otherwise be lost.
 
-        Args:
-            api_session: The authenticated Mist API session
-            site_id: Site ID containing the map
-            map_id: Map ID to backup
-            map_name: Human-readable map name for the backup filename
-            backup_reason: Reason for backup (delete, clone, manual) for logging
-
         Returns:
-            str: Path to backup file if successful, None if failed
+            str: Path to backup file if successful, None if failed.
         """
-        import json
-        import os
         from datetime import datetime
 
         try:
             logging.info(f"Map geometry backup initiated - map: {map_name} ({map_id}), reason: {backup_reason}")
 
-            # Fetch complete map data from API
             map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-
             if map_response.status_code != 200:
                 logging.error(f"Map backup failed: Could not fetch map data - HTTP {map_response.status_code}")
                 return None
 
             map_data = map_response.data
 
-            # Extract ALL map data needed for complete reconstruction
             geometry_backup = {
                 "backup_info": {
                     "timestamp": datetime.now().isoformat(),
@@ -425,33 +560,28 @@ class MapsManager:
                     "site_id": site_id,
                 },
                 "map_properties": {
-                    # Core identity
-                    "name": map_data.get("name"),
-                    "type": map_data.get("type"),
-                    # Dimensions (pixels)
-                    "width": map_data.get("width"),
-                    "height": map_data.get("height"),
-                    # Dimensions (meters) - critical for scaling
-                    "width_m": map_data.get("width_m"),
-                    "height_m": map_data.get("height_m"),
-                    # Pixels per meter - critical for coordinate translation
-                    "ppm": map_data.get("ppm"),
-                    # Orientation and origin - critical for geo-positioning
-                    "orientation": map_data.get("orientation"),
-                    "origin_x": map_data.get("origin_x"),
-                    "origin_y": map_data.get("origin_y"),
-                    # Geo-coordinates (all corners for proper alignment)
-                    "latlng": map_data.get("latlng"),
-                    "latlng_tl": map_data.get("latlng_tl"),
-                    "latlng_br": map_data.get("latlng_br"),
-                    # Map settings
-                    "locked": map_data.get("locked"),
-                    "view": map_data.get("view"),
-                    "occupancy_limit": map_data.get("occupancy_limit"),
-                    "flags": map_data.get("flags"),
-                    # Image URLs (for reference)
-                    "url": map_data.get("url"),
-                    "thumbnail_url": map_data.get("thumbnail_url"),
+                    key: map_data.get(key)
+                    for key in [
+                        "name",
+                        "type",
+                        "width",
+                        "height",
+                        "width_m",
+                        "height_m",
+                        "ppm",
+                        "orientation",
+                        "origin_x",
+                        "origin_y",
+                        "latlng",
+                        "latlng_tl",
+                        "latlng_br",
+                        "locked",
+                        "view",
+                        "occupancy_limit",
+                        "flags",
+                        "url",
+                        "thumbnail_url",
+                    ]
                 },
                 "geometry": {
                     "wall_path": map_data.get("wall_path"),
@@ -461,182 +591,28 @@ class MapsManager:
                 },
             }
 
-            # Download and save the actual floor plan image
-            image_filename = None
-            if map_data.get("url"):
-                try:
-                    import requests
-
-                    image_url = map_data.get("url")
-
-                    # Determine file extension from URL
-                    file_ext = ".png"
-                    if image_url and "." in image_url:
-                        url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()
-                        if url_ext in ["png", "jpg", "jpeg", "gif", "svg", "webp"]:
-                            file_ext = f".{url_ext}"
-
-                    # Generate image filename matching the JSON backup
-                    safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
-                    safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    image_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}{file_ext}"
-
-                    # Ensure data directory exists
-                    data_dir = os.path.join(os.getcwd(), "data")
-                    if not os.path.exists(data_dir):
-                        os.makedirs(data_dir)
-
-                    image_path = os.path.join(data_dir, image_filename)
-
-                    # Download the image (image_url verified by outer if condition)
-                    response = requests.get(image_url, timeout=60)  # type: ignore[arg-type]
-                    if response.status_code == 200:
-                        with open(image_path, "wb") as img_file:
-                            img_file.write(response.content)
-                        image_size_kb = len(response.content) / 1024
-                        logging.info(f"Map image backed up: {image_filename} ({image_size_kb:.1f} KB)")
-                        geometry_backup["backup_info"]["image_file"] = image_filename
-                    else:
-                        logging.warning(f"Could not download map image: HTTP {response.status_code}")
-                        image_filename = None
-                except Exception as img_err:
-                    logging.warning(f"Image backup failed: {img_err}")
-                    image_filename = None
-
-            # Count geometry elements for logging
-            wall_nodes = len(map_data.get("wall_path", {}).get("nodes", []))
-            wayfinding_nodes = len(map_data.get("wayfinding_path", {}).get("nodes", []))
-
-            # Fetch device placements (APs, switches, gateways with x/y positions on this map)
-            device_placements = []
-            try:
-                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    api_session, site_id=site_id, type="all"
-                )
-                if devices_response.status_code == 200:
-                    all_devices = devices_response.data if isinstance(devices_response.data, list) else []
-                    # Filter to devices placed on this map (have map_id and x/y coordinates)
-                    for device in all_devices:
-                        if device.get("map_id") == map_id and ("x" in device or "y" in device):
-                            device_placements.append(
-                                {
-                                    "id": device.get("id"),
-                                    "name": device.get("name"),
-                                    "mac": device.get("mac"),
-                                    "type": device.get("type"),
-                                    "model": device.get("model"),
-                                    "map_id": device.get("map_id"),
-                                    "x": device.get("x"),
-                                    "y": device.get("y"),
-                                    "orientation": device.get("orientation"),
-                                    "height": device.get("height"),
-                                }
-                            )
-                    geometry_backup["device_placements"] = device_placements
-                    logging.debug(f"Backup includes {len(device_placements)} device placements for map {map_id}")
-                else:
-                    geometry_backup["device_placements"] = []
-                    logging.warning(f"Could not fetch devices for backup: HTTP {devices_response.status_code}")
-            except Exception as device_err:
-                geometry_backup["device_placements"] = []
-                logging.warning(f"Device placement backup failed: {device_err}")
-
-            # Fetch zones separately (they're not in the map response)
-            try:
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
-                if zones_response.status_code == 200:
-                    # Filter zones belonging to this map
-                    all_zones = zones_response.data if isinstance(zones_response.data, list) else []
-                    map_zones = [z for z in all_zones if z.get("map_id") == map_id]
-                    geometry_backup["zones"] = map_zones
-                    logging.debug(f"Backup includes {len(map_zones)} zones for map {map_id}")
-                else:
-                    geometry_backup["zones"] = []
-                    logging.warning(f"Could not fetch zones for backup: HTTP {zones_response.status_code}")
-            except Exception as zone_err:
-                geometry_backup["zones"] = []
-                logging.warning(f"Zone backup failed: {zone_err}")
-
-            # Fetch beacons placed on this map (BLE beacons with x/y positions)
-            try:
-                beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons(api_session, site_id=site_id)
-                if beacons_response.status_code == 200:
-                    all_beacons = beacons_response.data if isinstance(beacons_response.data, list) else []
-                    map_beacons = [b for b in all_beacons if b.get("map_id") == map_id]
-                    geometry_backup["beacons"] = map_beacons
-                    logging.debug(f"Backup includes {len(map_beacons)} beacons for map {map_id}")
-                else:
-                    geometry_backup["beacons"] = []
-                    logging.debug(f"Could not fetch beacons for backup: HTTP {beacons_response.status_code}")
-            except Exception as beacon_err:
-                geometry_backup["beacons"] = []
-                logging.debug(f"Beacon backup skipped: {beacon_err}")
-
-            # Fetch virtual beacons placed on this map
-            try:
-                vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(api_session, site_id=site_id)
-                if vbeacons_response.status_code == 200:
-                    all_vbeacons = vbeacons_response.data if isinstance(vbeacons_response.data, list) else []
-                    map_vbeacons = [vb for vb in all_vbeacons if vb.get("map_id") == map_id]
-                    geometry_backup["vbeacons"] = map_vbeacons
-                    logging.debug(f"Backup includes {len(map_vbeacons)} virtual beacons for map {map_id}")
-                else:
-                    geometry_backup["vbeacons"] = []
-                    logging.debug(f"Could not fetch vbeacons for backup: HTTP {vbeacons_response.status_code}")
-            except Exception as vbeacon_err:
-                geometry_backup["vbeacons"] = []
-                logging.debug(f"VBeacon backup skipped: {vbeacon_err}")
-
-            zone_count = len(geometry_backup.get("zones", []))
-            device_count = len(geometry_backup.get("device_placements", []))
-            beacon_count = len(geometry_backup.get("beacons", []))
-            vbeacon_count = len(geometry_backup.get("vbeacons", []))
-
-            # Use same timestamp for JSON filename (image already saved with this timestamp)
-            # Initialize safe_map_name and timestamp here; they may have been set earlier during image backup
-            if not image_filename:
-                # Generate timestamp if image wasn't saved (safe_map_name/timestamp not set in image block)
-                safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
-                safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # safe_map_name and timestamp are now guaranteed to be defined
-            backup_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}.json"  # type: ignore[possibly-undefined]
-
-            # Ensure data directory exists
-            data_dir = os.path.join(os.getcwd(), "data")
-            if not os.path.exists(data_dir):
-                os.makedirs(data_dir)
-
-            backup_path = os.path.join(data_dir, backup_filename)
-
-            # Write backup to JSON file
-            with open(backup_path, "w", encoding="utf-8") as backup_file:
-                json.dump(geometry_backup, backup_file, indent=2, ensure_ascii=False)
-
-            # Build summary line
-            summary_parts = []
+            # Download image
+            image_filename, name_timestamp = self._backup_download_image(map_data, map_name, backup_reason)
             if image_filename:
-                summary_parts.append("Image: Yes")
-            if wall_nodes > 0:
-                summary_parts.append(f"Walls: {wall_nodes}")
-            if wayfinding_nodes > 0:
-                summary_parts.append(f"Wayfinding: {wayfinding_nodes}")
-            if zone_count > 0:
-                summary_parts.append(f"Zones: {zone_count}")
-            if device_count > 0:
-                summary_parts.append(f"Devices: {device_count}")
-            if beacon_count > 0:
-                summary_parts.append(f"Beacons: {beacon_count}")
-            if vbeacon_count > 0:
-                summary_parts.append(f"VBeacons: {vbeacon_count}")
+                geometry_backup["backup_info"]["image_file"] = image_filename
 
-            summary = ", ".join(summary_parts) if summary_parts else "Empty map"
-            logging.info(f"Map backup saved: {backup_path} ({summary})")
-            print(f"\n   [*] Map backup saved: {backup_filename}")
-            if image_filename:
-                print(f"       Image: {image_filename}")
-            print(f"       {summary}")
+            # Fetch related entities
+            geometry_backup["device_placements"] = self._backup_fetch_device_placements(api_session, site_id, map_id)
+            geometry_backup["zones"] = self._backup_fetch_items(
+                api_session, site_id, map_id, mistapi.api.v1.sites.zones.listSiteZones, "zones"
+            )
+            geometry_backup["beacons"] = self._backup_fetch_items(
+                api_session, site_id, map_id, mistapi.api.v1.sites.beacons.listSiteBeacons, "beacons"
+            )
+            geometry_backup["vbeacons"] = self._backup_fetch_items(
+                api_session, site_id, map_id, mistapi.api.v1.sites.vbeacons.listSiteVBeacons, "vbeacons"
+            )
+
+            # Write and summarize
+            backup_path, backup_filename = self._backup_write_file(
+                geometry_backup, map_name, backup_reason, name_timestamp
+            )
+            self._backup_print_summary(backup_filename, image_filename, geometry_backup)
 
             return backup_path
 
@@ -646,8 +622,7 @@ class MapsManager:
             return None
 
     def run_systematic_test(self) -> bool:
-        """
-        Run systematic test of safe, non-destructive Maps Manager operations.
+        """Run systematic test of safe, non-destructive Maps Manager operations.
 
         Tests read-only operations that don't require user input:
         - Fetching sites
@@ -748,7 +723,7 @@ class MapsManager:
         return all_passed
 
     def _test_fetch_sites(self) -> bool:
-        """Test fetching sites list"""
+        """Test fetching sites list."""
         sites = self._fetch_sites()
         if sites is None:
             return False
@@ -756,7 +731,7 @@ class MapsManager:
         return True
 
     def _test_list_all_org_maps(self) -> bool:
-        """Test listing all org maps (non-interactive version)"""
+        """Test listing all org maps (non-interactive version)."""
         try:
             sites = self._fetch_sites()
             if not sites:
@@ -788,7 +763,7 @@ class MapsManager:
             return False
 
     def _test_export_all_site_maps(self) -> bool:
-        """Test export all site maps functionality (collect data without writing)"""
+        """Test export all site maps functionality (collect data without writing)."""
         try:
             sites = self._fetch_sites()
             if not sites:
@@ -824,7 +799,7 @@ class MapsManager:
             return False
 
     def _test_maps_without_images(self) -> bool:
-        """Test maps without images report (data collection only)"""
+        """Test maps without images report (data collection only)."""
         try:
             sites = self._fetch_sites()
             if not sites:
@@ -854,9 +829,78 @@ class MapsManager:
             logging.error(f"_test_maps_without_images failed: {e}")
             return False
 
+    def _build_menu_dispatch(self) -> dict:
+        """Build menu choice to handler mapping."""
+        return {
+            "S": self.select_site,
+            "1": self.list_site_maps,
+            "2": self.export_site_maps,
+            "3": self.view_map_details,
+            "4": self.create_site_map,
+            "5": self.update_map_properties,
+            "6": self.delete_site_map,
+            "7": self.upload_map_image,
+            "8": self.view_devices_on_map,
+            "9": self.auto_place_aps,
+            "10": self.auto_orient_aps,
+            "11": self.set_device_location,
+            "12": self.clone_map,
+            "13": self.intelligent_map_replacement_wizard,
+            "20": self.list_all_org_maps,
+            "21": self.export_all_site_maps,
+            "22": self.export_maps_with_images,
+            "23": self.bulk_download_org_images,
+            "24": self.backup_all_maps,
+            "25": self.maps_without_images_report,
+            "30": self.map_coverage_analytics,
+            "31": self.device_density_analytics,
+            "32": self.map_usage_statistics,
+            "40": self.interactive_map_viewer,
+        }
+
+    def _print_menu(self) -> None:
+        """Display the Maps Manager menu."""
+        print("\n" + "=" * 80)
+        print("MAPS MANAGER - Site Floorplan & Map Operations")
+        if self.current_site_name:
+            print(f"Current Site: {self.current_site_name}")
+        print("=" * 80)
+        print("\nSite Selection:")
+        print("  S. Select different site")
+        print("\nMap Inventory & Export:")
+        print("  1. List maps for current site")
+        print("  2. Export maps for current site to CSV/SQLite")
+        print("  3. View detailed map information")
+        print("\nMap Creation & Modification:")
+        print("  4. Create new site map")
+        print("  5. Update map properties")
+        print("  6. Delete site map")
+        print("  7. Upload/replace map image")
+        print("  12. Clone/duplicate map")
+        print("  13. Intelligent map replacement wizard")
+        print("\nDevice Placement:")
+        print("  8. View devices on map")
+        print("  9. Auto-place APs on map")
+        print("  10. Auto-orient APs on map")
+        print("  11. Set AP/device location manually")
+        print("\nBulk Operations (All Sites):")
+        print("  20. List all site maps across organization")
+        print("  21. Export all site maps to CSV/SQLite")
+        print("  22. Export maps with image metadata")
+        print("  23. Download all org map images")
+        print("  24. Backup all maps (metadata + images)")
+        print("  25. Maps without images report")
+        print("\nAnalytics & Reporting:")
+        print("  30. Map coverage analytics")
+        print("  31. Device density by map")
+        print("  32. Map usage statistics")
+        print("\nVisualization & Editing:")
+        print("  40. Interactive map viewer (view/edit devices, walls, zones)")
+        print("\n  0. Return to main menu")
+        print("=" * 80)
+
     def run_interactive_menu(self):
-        """Main interactive menu loop for Maps Manager"""
-        # Initial site selection
+        """Main interactive menu loop for Maps Manager."""
         print("\n" + "=" * 80)
         print("MAPS MANAGER - Initial Site Selection")
         print("=" * 80)
@@ -865,45 +909,10 @@ class MapsManager:
             print("\n! Site selection required. Returning to main menu.")
             return
 
+        dispatch = self._build_menu_dispatch()
+
         while True:
-            print("\n" + "=" * 80)
-            print("MAPS MANAGER - Site Floorplan & Map Operations")
-            if self.current_site_name:
-                print(f"Current Site: {self.current_site_name}")
-            print("=" * 80)
-            print("\nSite Selection:")
-            print("  S. Select different site")
-            print("\nMap Inventory & Export:")
-            print("  1. List maps for current site")
-            print("  2. Export maps for current site to CSV/SQLite")
-            print("  3. View detailed map information")
-            print("\nMap Creation & Modification:")
-            print("  4. Create new site map")
-            print("  5. Update map properties")
-            print("  6. Delete site map")
-            print("  7. Upload/replace map image")
-            print("  12. Clone/duplicate map")
-            print("  13. Intelligent map replacement wizard")
-            print("\nDevice Placement:")
-            print("  8. View devices on map")
-            print("  9. Auto-place APs on map")
-            print("  10. Auto-orient APs on map")
-            print("  11. Set AP/device location manually")
-            print("\nBulk Operations (All Sites):")
-            print("  20. List all site maps across organization")
-            print("  21. Export all site maps to CSV/SQLite")
-            print("  22. Export maps with image metadata")
-            print("  23. Download all org map images")
-            print("  24. Backup all maps (metadata + images)")
-            print("  25. Maps without images report")
-            print("\nAnalytics & Reporting:")
-            print("  30. Map coverage analytics")
-            print("  31. Device density by map")
-            print("  32. Map usage statistics")
-            print("\nVisualization & Editing:")
-            print("  40. Interactive map viewer (view/edit devices, walls, zones)")
-            print("\n  0. Return to main menu")
-            print("=" * 80)
+            self._print_menu()
 
             try:
                 choice = input("\nEnter your selection number now: ").strip().upper()
@@ -914,60 +923,16 @@ class MapsManager:
             if choice == "0":
                 logging.info("Exiting Maps Manager")
                 return
-            elif choice == "S":
-                self.select_site()
-            elif choice == "1":
-                self.list_site_maps()
-            elif choice == "2":
-                self.export_site_maps()
-            elif choice == "3":
-                self.view_map_details()
-            elif choice == "4":
-                self.create_site_map()
-            elif choice == "5":
-                self.update_map_properties()
-            elif choice == "6":
-                self.delete_site_map()
-            elif choice == "7":
-                self.upload_map_image()
-            elif choice == "8":
-                self.view_devices_on_map()
-            elif choice == "9":
-                self.auto_place_aps()
-            elif choice == "10":
-                self.auto_orient_aps()
-            elif choice == "11":
-                self.set_device_location()
-            elif choice == "12":
-                self.clone_map()
-            elif choice == "13":
-                self.intelligent_map_replacement_wizard()
-            elif choice == "20":
-                self.list_all_org_maps()
-            elif choice == "21":
-                self.export_all_site_maps()
-            elif choice == "22":
-                self.export_maps_with_images()
-            elif choice == "23":
-                self.bulk_download_org_images()
-            elif choice == "24":
-                self.backup_all_maps()
-            elif choice == "25":
-                self.maps_without_images_report()
-            elif choice == "30":
-                self.map_coverage_analytics()
-            elif choice == "31":
-                self.device_density_analytics()
-            elif choice == "32":
-                self.map_usage_statistics()
-            elif choice == "40":
-                self.interactive_map_viewer()
+
+            handler = dispatch.get(choice)
+            if handler:
+                handler()
             else:
                 print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
                 logging.warning(f"Invalid Maps Manager menu selection: {choice}")
 
     def list_site_maps(self):
-        """Display list of maps for currently selected site"""
+        """Display list of maps for currently selected site."""
         print("\n" + "-" * 80)
         print("LIST SITE MAPS - Current Site")
         print("-" * 80)
@@ -1013,7 +978,7 @@ class MapsManager:
             print(f"\n! Error listing maps: {e}")
 
     def list_all_org_maps(self):
-        """Display summary list of all maps across organization sites"""
+        """Display summary list of all maps across organization sites."""
         print("\n" + "-" * 80)
         print("LIST ALL ORGANIZATION MAPS - All Sites")
         print("-" * 80)
@@ -1077,7 +1042,7 @@ class MapsManager:
             print(f"\n! Error listing maps: {e}")
 
     def export_site_maps(self):
-        """Export maps for currently selected site to CSV/SQLite"""
+        """Export maps for currently selected site to CSV/SQLite."""
         print("\n" + "-" * 80)
         print("EXPORT SITE MAPS - Current Site")
         print("-" * 80)
@@ -1123,7 +1088,7 @@ class MapsManager:
             print(f"\n! Error during export: {e}")
 
     def export_all_site_maps(self):
-        """Export all site maps across organization to CSV/SQLite with full metadata"""
+        """Export all site maps across organization to CSV/SQLite with full metadata."""
         print("\n" + "-" * 80)
         print("EXPORT ALL ORGANIZATION MAPS - All Sites")
         print("-" * 80)
@@ -1172,7 +1137,7 @@ class MapsManager:
             print(f"\n! Error during export: {e}")
 
     def export_maps_with_images(self):
-        """Export maps metadata focusing on image information"""
+        """Export maps metadata focusing on image information."""
         print("\n" + "-" * 80)
         print("EXPORT MAPS WITH IMAGE METADATA")
         print("-" * 80)
@@ -1220,7 +1185,7 @@ class MapsManager:
             print(f"\n! Error during export: {e}")
 
     def download_site_map_images(self):
-        """Download map images to local disk"""
+        """Download map images to local disk."""
         print("\n" + "-" * 80)
         print("DOWNLOAD SITE MAP IMAGES")
         print("-" * 80)
@@ -1306,7 +1271,7 @@ class MapsManager:
             print(f"\n! Error downloading images: {e}")
 
     def view_map_details(self):
-        """View detailed information for a specific map"""
+        """View detailed information for a specific map."""
         print("\n" + "-" * 80)
         print("VIEW MAP DETAILS")
         print("-" * 80)
@@ -1400,7 +1365,7 @@ class MapsManager:
             print(f"\n! Error viewing map details: {e}")
 
     def create_site_map(self):
-        """Create a new site map with basic configuration"""
+        """Create a new site map with basic configuration."""
         print("\n" + "-" * 80)
         print("CREATE NEW SITE MAP")
         print("-" * 80)
@@ -1484,7 +1449,7 @@ class MapsManager:
             print(f"\n! Error creating map: {e}")
 
     def clone_map(self):
-        """Clone/duplicate an existing map at the current site including image, walls, paths, and zones"""
+        """Clone/duplicate an existing map at the current site including image, walls, paths, and zones."""
         logging.info("clone_map operation initiated")
         print("\n" + "-" * 80)
         print("CLONE/DUPLICATE MAP")
@@ -1796,8 +1761,7 @@ class MapsManager:
             print(f"\n! Error cloning map: {e}")
 
     def intelligent_map_replacement_wizard(self):
-        """
-        Intelligent Map Replacement Wizard
+        """Intelligent Map Replacement Wizard.
 
         Replaces a floor plan image while intelligently preserving and translating:
         - Device placements (APs, switches, gateways) with coordinate scaling
@@ -2398,7 +2362,7 @@ class MapsManager:
             print(f"\n! Error: {e}")
 
     def maps_without_images_report(self):
-        """Generate report of maps that don't have uploaded images"""
+        """Generate report of maps that don't have uploaded images."""
         print("\n" + "-" * 80)
         print("MAPS WITHOUT IMAGES REPORT")
         print("-" * 80)
@@ -2473,7 +2437,7 @@ class MapsManager:
 
     # Placeholder methods for future implementation
     def update_map_properties(self):
-        """Update existing map properties (name, dimensions, orientation, etc.)"""
+        """Update existing map properties (name, dimensions, orientation, etc.)."""
         print("\n" + "-" * 80)
         print("UPDATE MAP PROPERTIES")
         print("-" * 80)
@@ -2589,7 +2553,7 @@ class MapsManager:
             print(f"\n! Error updating map: {e}")
 
     def delete_site_map(self):
-        """Delete a site map with confirmation"""
+        """Delete a site map with confirmation."""
         print("\n" + "-" * 80)
         print("DELETE SITE MAP")
         print("-" * 80)
@@ -2652,7 +2616,7 @@ class MapsManager:
             print(f"\n! Error deleting map: {e}")
 
     def upload_map_image(self):
-        """Upload or replace map image file (multipart upload)"""
+        """Upload or replace map image file (multipart upload)."""
         logging.info("upload_map_image operation initiated")
         print("\n" + "-" * 80)
         print("UPLOAD/REPLACE MAP IMAGE")
@@ -2746,7 +2710,7 @@ class MapsManager:
             print(f"\n! Error uploading image: {e}")
 
     def view_devices_on_map(self):
-        """Display all devices placed on a specific map"""
+        """Display all devices placed on a specific map."""
         print("\n" + "-" * 80)
         print("VIEW DEVICES ON MAP")
         print("-" * 80)
@@ -2825,22 +2789,22 @@ class MapsManager:
             print(f"\n! Error viewing devices: {e}")
 
     def auto_place_aps(self):
-        """Automatically place APs on map using Mist auto-placement"""
+        """Automatically place APs on map using Mist auto-placement."""
         print("\n! Feature coming soon: Auto-place APs")
         logging.info("auto_place_aps called (placeholder)")
 
     def auto_orient_aps(self):
-        """Automatically orient APs on map"""
+        """Automatically orient APs on map."""
         print("\n! Feature coming soon: Auto-orient APs")
         logging.info("auto_orient_aps called (placeholder)")
 
     def set_device_location(self):
-        """Manually set AP/device coordinates on map"""
+        """Manually set AP/device coordinates on map."""
         print("\n! Feature coming soon: Set device location")
         logging.info("set_device_location called (placeholder)")
 
     def bulk_download_org_images(self):
-        """Download all map images across entire organization"""
+        """Download all map images across entire organization."""
         print("\n" + "-" * 80)
         print("BULK DOWNLOAD ORG MAP IMAGES")
         print("-" * 80)
@@ -2940,28 +2904,29 @@ class MapsManager:
             print(f"\n! Error during bulk download: {e}")
 
     def backup_all_maps(self):
-        """Complete backup of all maps (metadata + images)"""
+        """Complete backup of all maps (metadata + images)."""
         print("\n! Feature coming soon: Backup all maps")
         logging.info("backup_all_maps called (placeholder)")
 
     def map_coverage_analytics(self):
-        """Analyze RF coverage patterns by map"""
+        """Analyze RF coverage patterns by map."""
         print("\n! Feature coming soon: Map coverage analytics")
         logging.info("map_coverage_analytics called (placeholder)")
 
     def device_density_analytics(self):
-        """Analyze device density and distribution by map"""
+        """Analyze device density and distribution by map."""
         print("\n! Feature coming soon: Device density analytics")
         logging.info("device_density_analytics called (placeholder)")
 
     def map_usage_statistics(self):
-        """Generate usage statistics for maps"""
+        """Generate usage statistics for maps."""
         print("\n! Feature coming soon: Map usage statistics")
         logging.info("map_usage_statistics called (placeholder)")
 
     def interactive_map_viewer(self):
-        """
-        Interactive map viewer with Plotly/Dash for viewing and editing:
+        """Interactive map viewer with Plotly/Dash for viewing and editing.
+
+        Supports:
         - Floor plan image display
         - Toggleable overlays: walls, zones, wayfinding paths
         - Device visualization: APs, switches, gateways with orientation indicators
@@ -3273,7 +3238,7 @@ class MapsManager:
         all_maps=None,
         all_sites=None,
     ):
-        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap"""
+        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
         coverage_count = len(coverage_data.get("results", [])) if coverage_data else 0
         all_maps = all_maps or []
         all_sites = all_sites or []
@@ -5581,7 +5546,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def handle_site_switch_from_dropdown(selected_site_id, config, available_sites, current_fig):
-            """Handle site switching when user selects a new site from dropdown - no page reload needed"""
+            """Handle site switching when user selects a new site from dropdown - no page reload needed."""
             # EXTENSIVE DEBUGGING
             print(f"\n{'=' * 60}")
             print("[DEBUG] handle_site_switch_from_dropdown TRIGGERED")
@@ -5796,7 +5761,7 @@ class MapsManager:
             prevent_initial_call="initial_duplicate",
         )
         def handle_site_from_url(url_search, config, available_sites):
-            """Handle site selection when URL contains site_id parameter (for bookmarks/links)"""
+            """Handle site selection when URL contains site_id parameter (for bookmarks/links)."""
             import urllib.parse
 
             if not url_search:
@@ -5830,7 +5795,7 @@ class MapsManager:
             prevent_initial_call=False,  # Must run on initial load
         )
         def sync_dropdown_with_url(url_search, available_maps, current_dropdown_value):
-            """Sync dropdown selection with URL parameter on page load"""
+            """Sync dropdown selection with URL parameter on page load."""
             import urllib.parse
 
             if not url_search:
@@ -5871,8 +5836,8 @@ class MapsManager:
             ],
             prevent_initial_call="initial_duplicate",
         )
-        def handle_url_map_switch(url_search, config, current_fig, available_maps, dropdown_value):
-            """Handle map switching when URL contains map_id parameter"""
+        def handle_url_map_switch(url_search, config, current_fig, available_maps, _dropdown_value):
+            """Handle map switching when URL contains map_id parameter."""
             import urllib.parse
 
             if not url_search:
@@ -6755,7 +6720,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def update_shape_labels(relayoutData, current_fig):
-            """Add multi-unit measurement labels to drawn shapes"""
+            """Add multi-unit measurement labels to drawn shapes."""
             if not relayoutData:
                 return current_fig
 
@@ -6805,7 +6770,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def set_scale(n_clicks, actual_length_m, current_fig):
-            """Calculate and update PPM based on drawn line and known length"""
+            """Calculate and update PPM based on drawn line and known length."""
             if not n_clicks or not actual_length_m or actual_length_m <= 0:
                 return "[!] Please enter a valid length in meters", current_fig
 
@@ -6865,7 +6830,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def toggle_origin_mode(n_clicks, current_style):
-            """Toggle origin setting mode on/off with visual feedback"""
+            """Toggle origin setting mode on/off with visual feedback."""
             if n_clicks % 2 == 1:  # Odd clicks = mode active
                 current_style["backgroundColor"] = "#667eea"
                 current_style["border"] = "2px solid #00bfff"
@@ -6883,7 +6848,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def set_origin_from_click(clickData, mode_clicks, current_fig):
-            """Set origin point when map is clicked in origin-setting mode"""
+            """Set origin point when map is clicked in origin-setting mode."""
             # Check if origin mode is active (odd number of clicks)
             if not mode_clicks or mode_clicks % 2 == 0:
                 # Mode not active - return current status
@@ -6950,7 +6915,7 @@ class MapsManager:
             Output("zone-name-container", "style"), Input("drawing-mode-dropdown", "value"), prevent_initial_call=True
         )
         def toggle_zone_name_input(mode):
-            """Show zone name input only when zone mode is selected"""
+            """Show zone name input only when zone mode is selected."""
             if mode == "zone":
                 return {"display": "block", "marginBottom": "10px"}
             return {"display": "none"}
@@ -6976,19 +6941,19 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def handle_drawing_tools(
-            save_clicks,
-            clear_clicks,
+            _save_clicks,
+            _clear_clicks,
             del_path_clicks,
-            del_wayfinding_clicks,
+            _del_wayfinding_clicks,
             del_wall_clicks,
-            del_zone_clicks,
+            _del_zone_clicks,
             drawing_mode,
             zone_name,
             current_fig,
             config,
             cache_bust_data,
         ):
-            """Handle drawing tool actions - save shapes to Mist or delete from Mist"""
+            """Handle drawing tool actions - save shapes to Mist or delete from Mist."""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return "", no_update
@@ -7352,8 +7317,8 @@ class MapsManager:
             ],
             prevent_initial_call=True,
         )
-        def handle_utilities(auto_zone_clicks, change_clicks, remove_clicks, rename_clicks):
-            """Handle utilities button clicks"""
+        def handle_utilities(_auto_zone_clicks, _change_clicks, _remove_clicks, _rename_clicks):
+            """Handle utilities button clicks."""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return ""
@@ -7396,8 +7361,8 @@ class MapsManager:
             [State("delete-panel", "style"), State("map-config-store", "data")],
             prevent_initial_call=True,
         )
-        def toggle_delete_panel(delete_clicks, cancel_clicks, confirm_clicks, current_style, config):
-            """Show or hide the delete confirmation panel and update map name"""
+        def toggle_delete_panel(_delete_clicks, _cancel_clicks, confirm_clicks, current_style, config):
+            """Show or hide the delete confirmation panel and update map name."""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return current_style, no_update
@@ -7444,7 +7409,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def execute_delete_map(confirm_clicks, cache_bust_data, config):
-            """Actually delete the map via Mist API - creates backup first"""
+            """Actually delete the map via Mist API - creates backup first."""
             current_trigger = cache_bust_data.get("trigger", 0) if cache_bust_data else 0
 
             if not confirm_clicks:
@@ -7512,8 +7477,8 @@ class MapsManager:
             [State("clone-panel", "style")],
             prevent_initial_call=True,
         )
-        def toggle_clone_panel(clone_clicks, cancel_clicks, execute_clicks, current_style):
-            """Show or hide the clone input panel"""
+        def toggle_clone_panel(_clone_clicks, _cancel_clicks, _execute_clicks, current_style):
+            """Show or hide the clone input panel."""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return current_style
@@ -7548,7 +7513,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def toggle_individual_zones(selected_zone_ids, current_fig):
-            """Show/hide individual zones based on checklist"""
+            """Show/hide individual zones based on checklist."""
             if not zones:
                 return current_fig
 
@@ -7581,8 +7546,8 @@ class MapsManager:
             [State("selected-zone-store", "data")],
             prevent_initial_call=True,
         )
-        def handle_zone_actions(edit_clicks, remove_clicks, clickData, selected_zone_data):
-            """Handle zone edit/remove and display selected zone info"""
+        def handle_zone_actions(_edit_clicks, _remove_clicks, clickData, selected_zone_data):
+            """Handle zone edit/remove and display selected zone info."""
             ctx = dash.callback_context
             if not ctx.triggered:
                 return html.P(
@@ -7752,7 +7717,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def toggle_auto_refresh(toggle_value):
-            """Enable or disable auto-refresh intervals based on checkbox"""
+            """Enable or disable auto-refresh intervals based on checkbox."""
             import time
 
             is_enabled = "enabled" in (toggle_value or [])
@@ -7779,7 +7744,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def update_countdown_display(n_intervals, refresh_times, toggle_value):
-            """Update the countdown display every second"""
+            """Update the countdown display every second."""
             import time
 
             if not refresh_times or "enabled" not in (toggle_value or []):
@@ -7810,7 +7775,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def execute_clone_operation(n_clicks, new_name, config, cache_bust_data):
-            """Clone the current map with all properties, image, and zones"""
+            """Clone the current map with all properties, image, and zones."""
             import os
             import tempfile
 
@@ -8024,8 +7989,8 @@ class MapsManager:
             [State("map-config-store", "data")],
             prevent_initial_call=False,  # Run on initial load to get fresh data
         )
-        def refresh_map_dropdown(cache_bust_data, manual_clicks, url_search, config):
-            """Fetch fresh map list from API after clone/delete, manual refresh, or page load"""
+        def refresh_map_dropdown(cache_bust_data, _manual_clicks, url_search, config):
+            """Fetch fresh map list from API after clone/delete, manual refresh, or page load."""
             site_id_local = config.get("site_id") if config else None
 
             if not site_id_local:
@@ -8074,8 +8039,8 @@ class MapsManager:
             ],
             prevent_initial_call=True,
         )
-        def refresh_client_positions(n_intervals, manual_clicks, config, current_fig, client_layers, refresh_times):
-            """Refresh client positions from Mist API"""
+        def refresh_client_positions(n_intervals, _manual_clicks, config, current_fig, client_layers, refresh_times):
+            """Refresh client positions from Mist API."""
             import time
 
             ctx = dash.callback_context
@@ -8316,7 +8281,7 @@ class MapsManager:
             prevent_initial_call=True,
         )
         def refresh_rf_coverage(n_intervals, config, current_fig, layer_values, refresh_times):
-            """Refresh RF coverage heatmap from Mist API"""
+            """Refresh RF coverage heatmap from Mist API."""
             import time
 
             if n_intervals == 0:
@@ -8476,7 +8441,7 @@ class MapsManager:
             import webbrowser
 
             def open_browser():
-                """Wait for server to start, then open browser"""
+                """Wait for server to start, then open browser."""
                 time.sleep(1.5)  # Wait for Dash server to initialize
                 webbrowser.open(f"http://127.0.0.1:{dash_port}")
                 logging.debug(f"Browser opened to http://127.0.0.1:{dash_port}")
@@ -8506,7 +8471,7 @@ class MapsManager:
     def _launch_flask_viewer(
         self, initial_site_id: str, initial_map_id: str, all_sites: list[dict], all_maps: list[dict]
     ):
-        """Launch interactive Flask-based map viewer (simpler alternative to Dash)
+        """Launch interactive Flask-based map viewer (simpler alternative to Dash).
 
         This viewer uses Flask for server-side rendering and Plotly.js for client-side
         map display. Site/map switching is handled via JavaScript fetch() calls to
@@ -9536,7 +9501,7 @@ class MapsManager:
 
         @flask_app.route("/")
         def index():
-            """Serve the main viewer page"""
+            """Serve the main viewer page."""
             # Prepare sites JSON (sorted by name)
             sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
             sites_json = json_module.dumps(
@@ -9556,7 +9521,7 @@ class MapsManager:
 
         @flask_app.route("/api/site/<site_id>/maps")
         def get_site_maps(site_id):
-            """API endpoint to get maps for a site"""
+            """API endpoint to get maps for a site."""
             logging.info(f"[Flask API] Fetching maps for site {site_id}")
             try:
                 maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
@@ -9571,7 +9536,7 @@ class MapsManager:
 
         @flask_app.route("/api/map-image/<site_id>/<map_id>")
         def get_map_image(site_id, map_id):
-            """Proxy endpoint to serve map images with authentication"""
+            """Proxy endpoint to serve map images with authentication."""
             logging.info(f"[Flask API] Fetching map image for site {site_id}, map {map_id}")
             try:
                 # Get the map to find the image URL
@@ -9609,7 +9574,7 @@ class MapsManager:
 
         @flask_app.route("/api/map/<site_id>/<map_id>")
         def get_map_data(site_id, map_id):
-            """API endpoint to get full map data including devices, zones, clients"""
+            """API endpoint to get full map data including devices, zones, clients."""
             logging.info(f"[Flask API] Fetching map data for site {site_id}, map {map_id}")
             try:
                 # Get site name
@@ -9828,7 +9793,7 @@ class MapsManager:
                 # Coverage API: /api/v1/sites/{site_id}/location/coverage
                 # Types: 'client' (WiFi), 'asset' (BLE), 'sdkclient' (App)
                 def fetch_coverage(coverage_type, ppm_value):
-                    """Fetch coverage heatmap data for a specific type and convert to pixels"""
+                    """Fetch coverage heatmap data for a specific type and convert to pixels."""
                     try:
                         coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
                         coverage_params = {
@@ -9986,7 +9951,7 @@ class MapsManager:
             print(f"\n! Error running map viewer: {e}")
 
     def _create_static_plotly_map(self, map_data, devices):
-        """Create static Plotly HTML map when Dash is not available"""
+        """Create static Plotly HTML map when Dash is not available."""
         import os
         import tempfile
         import webbrowser
@@ -10051,7 +10016,7 @@ class MapsManager:
         logging.debug("Browser launched with static map")
 
     def _launch_matplotlib_viewer(self, map_data, devices):
-        """Fallback matplotlib viewer (view-only)"""
+        """Fallback matplotlib viewer (view-only)."""
         logging.info("_launch_matplotlib_viewer called - basic fallback mode")
         from math import cos, radians, sin
 
@@ -10112,8 +10077,7 @@ class MapsManager:
         logging.info("Matplotlib map viewer closed by user")
 
     def launch_viewer_standalone(self, requested_site_id: str = None, requested_map_id: str = None):
-        """
-        Launch the interactive map viewer directly without CLI site selection.
+        """Launch the interactive map viewer directly without CLI site selection.
 
         This method is designed for standalone usage (e.g., maps_manager.py --viewer)
         where the user wants to skip the CLI menu and select sites/maps directly
