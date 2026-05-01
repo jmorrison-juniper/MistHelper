@@ -190,8 +190,7 @@ omit = [
     ".venv/*",
     "setup.py",
     "*/site-packages/*",
-    "src/maps/*",
-    "src/ssh/*"
+    "src/maps/*"
 ]
 
 [tool.coverage.report]
