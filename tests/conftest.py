@@ -25,6 +25,8 @@ if _mh_path.exists() and (_existing is None or _is_init):
         _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
     except SystemExit:
         pass  # MistHelper.py calls sys.exit(); ignore during import
+    except (ImportError, ModuleNotFoundError):
+        pass  # Missing dependencies (e.g., mistapi); tests for src/ still work
 
 
 @pytest.fixture

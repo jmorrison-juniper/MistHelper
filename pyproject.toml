@@ -96,7 +96,7 @@ packages = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs"]
+extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs", "src/maps"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
@@ -125,7 +125,7 @@ ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = false
 explicit_package_bases = true
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests"]
+exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests", "src/maps"]
 
 [[tool.mypy.overrides]]
 # Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
