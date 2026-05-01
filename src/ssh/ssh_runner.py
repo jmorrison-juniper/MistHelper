@@ -54,11 +54,10 @@ class SSHExecutionConfig:
 
 
 class EnhancedSSHRunner:
-    """Advanced SSH connection and command execution handler with comprehensive validation"""
+    """Advanced SSH connection and command execution handler with comprehensive validation."""
 
     def __init__(self, timeout: int = 30, logger: logging.Logger | None = None):
-        """
-        Initialize SSH runner
+        """Initialize SSH runner.
 
         Args:
             timeout: Connection timeout in seconds
@@ -162,8 +161,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_hostname(hostname: str) -> bool:
-        """
-        Validate hostname or IP address format
+        """Validate hostname or IP address format.
 
         Args:
             hostname: Hostname or IP address to validate
@@ -201,8 +199,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_port(port: int) -> bool:
-        """
-        Validate port number is in valid range
+        """Validate port number is in valid range.
 
         Args:
             port: Port number to validate
@@ -214,8 +211,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_timeout(timeout: int) -> bool:
-        """
-        Validate timeout value is reasonable
+        """Validate timeout value is reasonable.
 
         Args:
             timeout: Timeout in seconds
@@ -227,8 +223,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_username(username: str) -> bool:
-        """
-        Validate SSH username format
+        """Validate SSH username format.
 
         Args:
             username: Username to validate
@@ -249,8 +244,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def sanitize_filename(filename: str) -> str:
-        """
-        Sanitize filename to prevent directory traversal and invalid characters
+        """Sanitize filename to prevent directory traversal and invalid characters.
 
         Args:
             filename: Original filename
@@ -289,8 +283,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_command(command: str) -> bool:
-        """
-        Basic validation for SSH commands
+        """Basic validation for SSH commands.
 
         Args:
             command: Command to validate
@@ -313,8 +306,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _validate_thread_count(thread_count: int, max_hosts: int) -> int:
-        """
-        Validate and adjust thread count to reasonable limits
+        """Validate and adjust thread count to reasonable limits.
 
         Args:
             thread_count: Requested thread count
@@ -332,8 +324,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _parse_host_list(hosts_str: str) -> list:  # type: ignore[type-arg]
-        """
-        Parse comma-separated host list from .env file with validation
+        """Parse comma-separated host list from .env file with validation.
 
         Args:
             hosts_str: String containing comma-separated hosts (e.g., '192.168.1.1,192.168.1.2')
@@ -380,8 +371,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _parse_command_list(commands_str: str) -> list:  # type: ignore[type-arg]
-        """
-        Parse comma-separated command list from .env file with validation
+        """Parse comma-separated command list from .env file with validation.
 
         Args:
             commands_str: String containing comma-separated commands
@@ -434,8 +424,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def load_commands_from_csv(csv_file_path: str = "data/SSH_COMMANDS.CSV") -> list:  # type: ignore[type-arg]  # noqa: C901, PLR0912
-        """
-        Load SSH commands from a CSV file as fallback when .env has no commands.
+        """Load SSH commands from a CSV file as fallback when .env has no commands.
 
         Expected CSV format:
         - First column: command
@@ -523,8 +512,7 @@ class EnhancedSSHRunner:
         return commands
 
     def _create_secure_log_file(self, hostname: str) -> tuple:  # type: ignore[type-arg]
-        """
-        Create a secure per-host log file with proper sanitization
+        """Create a secure per-host log file with proper sanitization.
 
         Args:
             hostname: Original hostname
@@ -554,7 +542,7 @@ class EnhancedSSHRunner:
         host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
 
         def write_to_host_log(message: str):  # type: ignore[no-untyped-def]
-            """Write message to host-specific log file only (not console)"""
+            """Write message to host-specific log file only (not console)."""
             if not message:
                 return
 
@@ -583,8 +571,7 @@ class EnhancedSSHRunner:
         return host_log_file, write_to_host_log
 
     def _connect(self, hostname: str, username: str, password: str, port: int = 22) -> bool:  # noqa: C901, PLR0915
-        """
-        Establish SSH connection to remote host with input validation
+        """Establish SSH connection to remote host with input validation.
 
         Args:
             hostname: IP address or hostname
@@ -697,8 +684,7 @@ class EnhancedSSHRunner:
     def _execute_command(
         self, command: str, use_shell: bool = False, hostname: str = "unknown"
     ) -> tuple[bool, str, str]:
-        """
-        Execute command on remote host
+        """Execute command on remote host.
 
         Args:
             command: Command to execute
@@ -743,7 +729,7 @@ class EnhancedSSHRunner:
         start_time: float,
         hostname: str = "unknown",
     ) -> tuple[bool, str, str]:  # nosec B101
-        """Execute command using exec_command with PTY support"""
+        """Execute command using exec_command with PTY support."""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
             # Try with PTY first (better for network devices)  # nosec B601
@@ -797,7 +783,7 @@ class EnhancedSSHRunner:
         start_time: float,
         hostname: str = "unknown",
     ) -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
-        """Execute command using interactive shell with device type detection"""
+        """Execute command using interactive shell with device type detection."""
         assert self.client is not None, "No active SSH connection"  # nosec B101
         try:
             self.logger.debug("Using interactive shell mode")
@@ -1159,7 +1145,7 @@ class EnhancedSSHRunner:
             return False, "", error_msg
 
     def _disconnect(self):  # type: ignore[no-untyped-def]
-        """Close SSH connection"""
+        """Close SSH connection."""
         if self.client:
             self.logger.debug("Closing SSH connection")
             self.client.close()
@@ -1170,8 +1156,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def load_ssh_config_from_env(env_file: str = ".env") -> dict:  # type: ignore[type-arg]  # noqa: C901, PLR0912, PLR0915
-        """
-        Load SSH configuration from .env file with comprehensive validation
+        """Load SSH configuration from .env file with comprehensive validation.
 
         Args:
             env_file: Path to the .env file (default: ".env")
@@ -1283,8 +1268,7 @@ class EnhancedSSHRunner:
 
     @staticmethod
     def _setup_logging(log_level: str = "INFO") -> logging.Logger:
-        """
-        Setup comprehensive logging configuration with syslog-style levels
+        """Setup comprehensive logging configuration with syslog-style levels.
 
         Args:
             log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -1319,8 +1303,7 @@ class EnhancedSSHRunner:
         config: SSHConnectionConfig | None = None,
         exec_config: SSHExecutionConfig | None = None,
     ) -> bool:
-        """
-        Connect via SSH and execute multiple commands with interactive prompt support
+        """Connect via SSH and execute multiple commands with interactive prompt support.
 
         Handles password prompts and interactive sequences like:
         1. su -> Password: -> (send password) -> root prompt
@@ -1387,7 +1370,7 @@ class EnhancedSSHRunner:
         print(f"** [{hostname}] Logging to: {host_log_file}")
 
         def write_to_host_log(message: str):  # type: ignore[no-untyped-def]
-            """Write message to host-specific log file only (not console)"""
+            """Write message to host-specific log file only (not console)."""
             if not message:
                 return
 
@@ -1672,8 +1655,7 @@ Log file: {host_log_file}
         config: SSHConnectionConfig | None = None,
         exec_config: SSHExecutionConfig | None = None,
     ) -> bool:
-        """
-        Connect via SSH and execute multiple commands sequentially
+        """Connect via SSH and execute multiple commands sequentially.
 
         Args:
             hostname: IP address or hostname (deprecated, use config)
@@ -1737,7 +1719,7 @@ Log file: {host_log_file}
         print(f"- [{hostname}] Logging to: {host_log_file}")
 
         def write_to_host_log(message: str):  # type: ignore[no-untyped-def]
-            """Write message to host-specific log file only (not console)"""
+            """Write message to host-specific log file only (not console)."""
             if not message:
                 return
 
@@ -1892,8 +1874,7 @@ Log file: {host_log_file}
         use_shell: bool = False,
         config: SSHConnectionConfig | None = None,
     ) -> bool:
-        """
-        Connect via SSH and execute a command
+        """Connect via SSH and execute a command.
 
         Args:
             hostname: IP address or hostname (deprecated, use config)
@@ -1951,7 +1932,7 @@ Log file: {host_log_file}
         print(f"- [{hostname}] Logging to: {host_log_file}")
 
         def write_to_host_log(message: str):  # type: ignore[no-untyped-def]
-            """Write message to host-specific log file only (not console)"""
+            """Write message to host-specific log file only (not console)."""
             if not message:
                 return
 
@@ -2083,8 +2064,7 @@ Log file: {host_log_file}
         config: SSHConnectionConfig | None = None,
         exec_config: SSHExecutionConfig | None = None,
     ) -> tuple:  # type: ignore[type-arg]
-        """
-        Run SSH commands on a single host (for multi-threading)
+        """Run SSH commands on a single host (for multi-threading).
 
         Args:
             hostname: IP address or hostname (deprecated, use config)
@@ -2185,8 +2165,7 @@ Log file: {host_log_file}
         config: SSHConnectionConfig | None = None,
         exec_config: SSHExecutionConfig | None = None,
     ) -> dict:  # type: ignore[type-arg]
-        """
-        Run SSH commands on multiple hosts concurrently using threading
+        """Run SSH commands on multiple hosts concurrently using threading.
 
         Args:
             hosts: List of hostnames/IPs
@@ -2324,7 +2303,7 @@ Log file: {host_log_file}
 
     @staticmethod
     def run_application(args):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """Main application logic - handles all the SSH runner functionality"""
+        """Main application logic - handles all the SSH runner functionality."""
         # Determine logging level (--debug flag overrides --log-level)
         log_level = "DEBUG" if args.debug else args.log_level
 
@@ -2343,7 +2322,7 @@ Log file: {host_log_file}
                 CLASS_START = 14300  # approximate lower bound (keep generous)
                 CLASS_END = 16600  # approximate upper bound
 
-                def _ssh_line_tracer(frame, event, arg):  # type: ignore[no-untyped-def]
+                def _ssh_line_tracer(frame, event, _arg):  # type: ignore[no-untyped-def]
                     if event == "line":
                         try:
                             if frame.f_code.co_filename == runner_file and CLASS_START <= frame.f_lineno <= CLASS_END:
@@ -2613,7 +2592,7 @@ Log file: {host_log_file}
 
     @staticmethod
     def _create_argument_parser():  # type: ignore[no-untyped-def]
-        """Create and configure the argument parser"""
+        """Create and configure the argument parser."""
         parser = argparse.ArgumentParser(
             description="Enhanced SSH Command Runner v2 - Execute commands on remote hosts via SSH",
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2721,7 +2700,7 @@ SECURITY NOTES:
 
     @staticmethod
     def _interactive_mode():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """Interactive mode for SSH command execution with input validation"""
+        """Interactive mode for SSH command execution with input validation."""
         print("- Enhanced SSH Command Runner v2 - Interactive Mode")
         print("=" * 60)
 
