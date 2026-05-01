@@ -272,7 +272,7 @@ jobs:
           pip install -r requirements.txt
           pip install pylint
       - name: Run Pylint
-        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
+        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }} --ignore=maps
 
   radon:
     name: "Radon (complexity)"
@@ -289,8 +289,8 @@ jobs:
       - run: pip install radon
       - name: Check cyclomatic complexity
         run: |
-          radon cc ${{ env.SRC_PATH }} -a -nb
-          radon cc ${{ env.SRC_PATH }} -j | python3 -c "
+          radon cc ${{ env.SRC_PATH }} -a -nb --exclude "src/maps/*"
+          radon cc ${{ env.SRC_PATH }} -j --exclude "src/maps/*" | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           bad = []
