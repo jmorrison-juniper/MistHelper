@@ -247,3 +247,6 @@ configs/
 *.deb
 *.rpm
 interrogate_badge.svg
+
+# SpaceX Enterprise API reference (upstream clone, not MistHelper code)
+starlink-api-reference/
