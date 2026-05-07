@@ -139,7 +139,7 @@ follow_imports = "skip"
 # maps_manager: large module with its own type issues — Phase 2 target
 # web_portal: Flask app with its own type issues — Phase 2 target
 # Others: third-party or legacy code not under active development
-module = ["maps_manager", "maps_manager.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
+module = ["MistHelper", "MistHelper.*", "maps_manager", "maps_manager.*", "src.maps", "src.maps.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]

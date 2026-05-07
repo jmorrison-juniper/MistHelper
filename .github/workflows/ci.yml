@@ -12,6 +12,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
   workflow_call:
     inputs:
       python-version:
@@ -150,7 +151,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install mypy types-requests types-paramiko types-tqdm
+          pip install 'mypy<2.0' 'types-requests<2.33.0.20260503' types-paramiko types-tqdm
       - name: Run mypy
         run: mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
 
